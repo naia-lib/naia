@@ -49,7 +49,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --no-deps -- -D warnings -Aclippy::new_without_default -Aclippy::derive-partial-eq-without-eq
 
       - name: Test
         uses: actions-rs/cargo@v1

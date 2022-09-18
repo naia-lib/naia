@@ -199,8 +199,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                         .expect("connection does not have a tick buffer")
                         .send_message(&client_tick, channel, message.protocol_copy());
                 }
-            } else {
-                return;
             }
         } else if let Some(connection) = &mut self.server_connection {
             connection

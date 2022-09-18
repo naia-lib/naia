@@ -64,7 +64,7 @@ impl<T: Serde> Property<T> {
     }
 
     fn read_inner(reader: &mut BitReader) -> Result<T, SerdeErr> {
-        Ok(T::de(reader)?)
+        T::de(reader)
     }
 
     // Comparison

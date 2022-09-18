@@ -99,7 +99,7 @@ impl<P: Protocolize> HandshakeManager<P> {
                     HandshakeResult::Success(None)
                 }
             } else {
-                return HandshakeResult::Invalid;
+                HandshakeResult::Invalid
             }
         } else {
             HandshakeResult::Invalid
