@@ -220,7 +220,7 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
     }
 
     #[test]
@@ -237,9 +237,9 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
     }
 
     #[test]
@@ -262,15 +262,15 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
     }
 
     #[test]
@@ -300,22 +300,22 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
     }
 
     #[test]
@@ -348,25 +348,25 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(!reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
 
-        assert!(reader.read_bit());
-        assert!(!reader.read_bit());
-        assert!(reader.read_bit());
-        assert!(reader.read_bit());
+        assert!(reader.read_bit().unwrap());
+        assert!(!reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
+        assert!(reader.read_bit().unwrap());
     }
 
     #[test]
@@ -381,7 +381,7 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert_eq!(123, reader.read_byte());
+        assert_eq!(123, reader.read_byte().unwrap());
     }
 
     #[test]
@@ -400,10 +400,10 @@ mod tests {
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-        assert_eq!(48, reader.read_byte());
-        assert_eq!(151, reader.read_byte());
-        assert_eq!(62, reader.read_byte());
-        assert_eq!(34, reader.read_byte());
-        assert_eq!(2, reader.read_byte());
+        assert_eq!(48, reader.read_byte().unwrap());
+        assert_eq!(151, reader.read_byte().unwrap());
+        assert_eq!(62, reader.read_byte().unwrap());
+        assert_eq!(34, reader.read_byte().unwrap());
+        assert_eq!(2, reader.read_byte().unwrap());
     }
 }

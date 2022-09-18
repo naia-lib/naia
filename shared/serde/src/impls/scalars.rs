@@ -51,7 +51,7 @@ impl Serde for bool {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        Ok(reader.read_bit()?)
+        reader.read_bit()
     }
 }
 
@@ -209,7 +209,7 @@ impl Serde for u8 {
     }
 
     fn de(reader: &mut BitReader) -> Result<u8, SerdeErr> {
-        Ok(reader.read_byte()?)
+        reader.read_byte()
     }
 }
 
@@ -221,7 +221,7 @@ impl Serde for i8 {
     }
 
     fn de(reader: &mut BitReader) -> Result<i8, SerdeErr> {
-        let byte = [reader.read_byte()];
+        let byte = [reader.read_byte()?];
         let mut container = [0_i8];
         unsafe {
             std::ptr::copy_nonoverlapping(

@@ -48,7 +48,7 @@ fn read_write_protocol() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let out_1 = SomeProtocol::read(&mut reader, &FakeEntityConverter);
+    let out_1 = SomeProtocol::read(&mut reader, &FakeEntityConverter).expect("should deserialize correctly");
 
     let typed_in_1 = in_1.cast_ref::<StringHolder>().unwrap();
     let typed_out_1 = out_1.cast_ref::<StringHolder>().unwrap();
