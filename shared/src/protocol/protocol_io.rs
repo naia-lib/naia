@@ -2,7 +2,7 @@ use crate::{
     messages::message_channel::{ChannelReader, ChannelWriter},
     NetEntityHandleConverter, Protocolize,
 };
-use naia_serde::{BitReader, BitWrite};
+use naia_serde::{BitReader, BitWrite, SerdeErr};
 
 pub struct ProtocolIo<'c> {
     converter: &'c dyn NetEntityHandleConverter,
@@ -21,7 +21,7 @@ impl<'c, P: Protocolize> ChannelWriter<P> for ProtocolIo<'c> {
 }
 
 impl<'c, P: Protocolize> ChannelReader<P> for ProtocolIo<'c> {
-    fn read(&self, reader: &mut BitReader) -> P {
+    fn read(&self, reader: &mut BitReader) -> Result<P, SerdeErr> {
         P::read(reader, self.converter)
     }
 }

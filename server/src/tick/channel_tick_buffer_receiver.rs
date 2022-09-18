@@ -62,7 +62,7 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
             last_read_message_id = message_id;
 
             // read payload
-            let new_message = channel_reader.read(reader);
+            let new_message = channel_reader.read(reader)?;
 
             if !self
                 .incoming_messages

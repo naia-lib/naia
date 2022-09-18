@@ -1,4 +1,4 @@
-use naia_serde::BitWrite;
+use naia_serde::{BitWrite, SerdeErr};
 
 use super::{
     component_update::ComponentUpdate,
@@ -56,7 +56,7 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
         &mut self,
         converter: &dyn NetEntityHandleConverter,
         update: ComponentUpdate<P::Kind>,
-    );
+    ) -> Result<(), SerdeErr>;
     /// Returns whether has any EntityProperties
     fn has_entity_properties(&self) -> bool;
     /// Returns a list of Entities contained within the Replica's properties

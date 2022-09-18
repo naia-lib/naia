@@ -6,7 +6,7 @@ mod inner {
     use naia_shared::{
         ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
         ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
-        WorldMutType, WorldRefType,
+        WorldMutType, WorldRefType, serde::SerdeErr
     };
 
     pub type EmptyEntity = u8;
@@ -145,7 +145,7 @@ mod inner {
             _entity: &EmptyEntity,
             _component_kind: &P::Kind,
             _update: ComponentUpdate<P::Kind>,
-        ) {
+        ) -> Result<(), SerdeErr> {
             unimplemented!()
         }
 

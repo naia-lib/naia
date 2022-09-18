@@ -3,6 +3,7 @@ use hecs::{Entity, World};
 use naia_shared::{
     ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize, ReplicaDynRefWrapper,
     ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+    serde::SerdeErr
 };
 
 use super::{
@@ -189,12 +190,13 @@ impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
         entity: &Entity,
         component_kind: &P::Kind,
         update: ComponentUpdate<P::Kind>,
-    ) {
+    ) -> Result<(), SerdeErr> {
         if let Some(access) = self.world_data.component_access(component_kind) {
             if let Some(mut component) = access.component_mut(self.world, entity) {
-                component.read_apply_update(converter, update);
+                component.read_apply_update(converter, update)?;
             }
         }
+        Ok(())
     }
 
     fn mirror_entities(&mut self, new_entity: &Entity, old_entity: &Entity) {

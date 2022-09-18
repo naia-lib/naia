@@ -87,8 +87,11 @@ impl<P: Protocolize> HandshakeManager<P> {
                 self.address_to_timestamp_map.insert(*address, timestamp);
 
                 if has_auth {
-                    let auth_message = P::read(reader, &FakeEntityConverter);
-                    HandshakeResult::Success(Some(auth_message))
+                    if let Ok(auth_message) = P::read(reader, &FakeEntityConverter) {
+                        HandshakeResult::Success(Some(auth_message))
+                    } else {
+                        HandshakeResult::Invalid
+                    }
                 } else {
                     HandshakeResult::Success(None)
                 }

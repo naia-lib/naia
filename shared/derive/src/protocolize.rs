@@ -28,8 +28,10 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
         use naia_shared::{ProtocolInserter, ProtocolKindType, ReplicateSafe, ComponentUpdate,
-            DiffMask, ReplicaDynRef, ReplicaDynMut, Replicate, derive_serde, serde, serde::Serde,
-            NetEntityHandleConverter};
+            DiffMask, ReplicaDynRef, ReplicaDynMut, Replicate, derive_serde,
+            NetEntityHandleConverter,
+            serde, serde::{Serde, SerdeErr},
+        };
 
         #kind_enum_def
 
@@ -186,8 +188,8 @@ pub fn read_method(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
     }
 
     quote! {
-        fn read(reader: &mut serde::BitReader, converter: &dyn NetEntityHandleConverter) -> Self {
-            let protocol_kind: Self::Kind = Self::Kind::de(reader).unwrap();
+        fn read(reader: &mut serde::BitReader, converter: &dyn NetEntityHandleConverter) -> Result<Self, SerdeErr> {
+            let protocol_kind: Self::Kind = Self::Kind::de(reader)?;
             match protocol_kind {
                 #variants_build
             }
@@ -215,8 +217,8 @@ pub fn read_create_update_method(enum_name: &Ident, variants: &Vec<Ident>) -> To
     }
 
     quote! {
-        fn read_create_update(reader: &mut serde::BitReader) -> ComponentUpdate<Self::Kind> {
-            let protocol_kind: Self::Kind = Self::Kind::de(reader).unwrap();
+        fn read_create_update(reader: &mut serde::BitReader) -> Result<ComponentUpdate<Self::Kind>, SerdeErr> {
+            let protocol_kind: Self::Kind = Self::Kind::de(reader)?;
             match protocol_kind {
                 #variants_build
             }

@@ -25,5 +25,5 @@ pub trait ChannelWriter<T> {
 }
 
 pub trait ChannelReader<T> {
-    fn read(&self, reader: &mut BitReader) -> T;
+    fn read(&self, reader: &mut BitReader) -> Result<T, SerdeErr>;
 }

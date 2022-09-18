@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::{
     bigmap::BigMapKey,
@@ -42,30 +42,32 @@ impl EntityProperty {
         reader: &mut BitReader,
         mutator_index: u8,
         converter: &dyn NetEntityHandleConverter,
-    ) -> Self {
-        if let Some(net_entity) = Option::<NetEntity>::de(reader).unwrap() {
+    ) -> Result<Self, SerdeErr> {
+        if let Some(net_entity) = Option::<NetEntity>::de(reader)? {
             let handle = converter.net_entity_to_handle(&net_entity);
             let mut new_prop = Self::new(mutator_index);
             *new_prop.handle_prop = Some(handle);
-            new_prop
+            Ok(new_prop)
         } else {
             let mut new_prop = Self::new(mutator_index);
             *new_prop.handle_prop = None;
-            new_prop
+            Ok(new_prop)
         }
     }
 
-    pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) {
-        Option::<NetEntity>::de(reader).unwrap().ser(writer);
+    pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
+        Option::<NetEntity>::de(reader)?.ser(writer);
+        Ok(())
     }
 
-    pub fn read(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) {
-        if let Some(net_entity) = Option::<NetEntity>::de(reader).unwrap() {
+    pub fn read(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<(), SerdeErr> {
+        if let Some(net_entity) = Option::<NetEntity>::de(reader)? {
             let handle = converter.net_entity_to_handle(&net_entity);
             *self.handle_prop = Some(handle);
         } else {
             *self.handle_prop = None;
         }
+        Ok(())
     }
 
     // Comparison

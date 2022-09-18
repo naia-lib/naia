@@ -43,7 +43,7 @@ impl<P> ReliableReceiver<P> {
         };
 
         // read payload
-        let new_message = channel_reader.read(reader);
+        let new_message = channel_reader.read(reader)?;
 
         Ok((message_id, new_message))
     }

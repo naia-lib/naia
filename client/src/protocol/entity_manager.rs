@@ -96,7 +96,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
                 let components_num = UnsignedVariableInteger::<3>::de(reader)?.get();
                 let mut component_kinds = Vec::new();
                 for _ in 0..components_num {
-                    let new_component = P::read(reader, self);
+                    let new_component = P::read(reader, self)?;
                     let new_component_kind = new_component.dyn_ref().kind();
                     self.received_components
                         .insert((net_entity, new_component_kind), new_component);
@@ -120,7 +120,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
             EntityActionType::InsertComponent => {
                 // read all data
                 let net_entity = NetEntity::de(reader)?;
-                let new_component = P::read(reader, self);
+                let new_component = P::read(reader, self)?;
                 let new_component_kind = new_component.dyn_ref().kind();
 
                 self.receiver.buffer_action(
@@ -305,11 +305,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
         for _ in 0..components_number {
             // read incoming update
-            let component_update = P::read_create_update(reader);
+            let component_update = P::read_create_update(reader)?;
             let component_kind = component_update.kind;
 
             if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
-                world.component_apply_update(self, world_entity, &component_kind, component_update);
+                world.component_apply_update(self, world_entity, &component_kind, component_update)?;
 
                 event_stream.push_back(Ok(Event::UpdateComponent(
                     server_tick,
