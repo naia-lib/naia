@@ -12,6 +12,7 @@ on:
       - ".github/dependabot.yml"
 env:
   CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings -Aclippy::new_without_default -Aclippy::derive-partial-eq-without-eq"
 
 jobs:
 
@@ -49,7 +50,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --no-deps -- -D warnings -Aclippy::new_without_default -Aclippy::derive-partial-eq-without-eq
+          args: --package ${{ matrix.package }} --no-deps --
 
       - name: Test
         uses: actions-rs/cargo@v1
@@ -80,7 +81,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --no-deps --
 
       - name: Test
         uses: actions-rs/cargo@v1
@@ -116,7 +117,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --features ${{ matrix.features }} --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --features ${{ matrix.features }} --no-deps --
 
       - name: Test
         uses: actions-rs/cargo@v1
@@ -153,7 +154,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --no-deps --
 
       - name: Test
         uses: actions-rs/cargo@v1
@@ -186,7 +187,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --no-deps --
 
   client-demos:
     name: Client Demos
@@ -238,4 +239,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: clippy
-          args: --package ${{ matrix.package }} --target ${{ matrix.target }} ${{ matrix.additional-arguments }} --no-deps -- -D warnings
+          args: --package ${{ matrix.package }} --target ${{ matrix.target }} ${{ matrix.additional-arguments }} --no-deps --
