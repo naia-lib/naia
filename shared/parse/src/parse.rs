@@ -210,6 +210,8 @@ fn next_fields(body: &mut Peekable<impl Iterator<Item = TokenTree>>, named: bool
             break;
         }
 
+        skip_doc_string(body);
+
         let _visibility = next_visibility_modifier(body);
         let field_name = if named {
             let field_name = next_ident(body).expect("Field name expected");
