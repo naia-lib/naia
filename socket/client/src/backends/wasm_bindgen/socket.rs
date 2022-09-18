@@ -29,7 +29,7 @@ impl Socket {
         Socket {
             config: config.clone(),
             io: None,
-            server_addr: AddrCell::default(),
+            server_addr: AddrCell::new(),
         }
     }
 

@@ -66,12 +66,17 @@ impl App {
 
                 if message_from_server.eq(PONG_MSG) {
                     self.message_count += 1;
+
+                    if self.message_count == 10 {
+                        info!("Client finished sending messages");
+                    }
                 }
             }
             Ok(None) => {
-                if self.timer.ringing() {
-                    self.timer.reset();
-                    if self.message_count < 10 {
+                if self.message_count < 10 {
+                    if self.timer.ringing() {
+                        self.timer.reset();
+
                         let message_to_server: String = PING_MSG.to_string();
 
                         let server_addr = match self.packet_receiver.server_addr() {
@@ -81,8 +86,6 @@ impl App {
                         info!("Client send -> {}: {}", server_addr, message_to_server);
 
                         self.packet_sender.send(message_to_server.as_bytes());
-                    } else {
-                        info!("Client finished sending messages");
                     }
                 }
             }

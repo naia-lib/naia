@@ -12,7 +12,7 @@ pub struct AddrCell {
 }
 
 impl AddrCell {
-    fn new() -> Self {
+    pub fn new() -> Self {
         AddrCell {
             cell: Rc::new(RefCell::new(MaybeAddr(ServerAddr::Finding))),
         }
