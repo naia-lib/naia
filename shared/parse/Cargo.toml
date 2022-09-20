@@ -1,6 +1,6 @@
 [package]
 name = "naia-parse"
-version = "0.10.0"
+version = "0.13.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>", "Fedor <not.fl3@gmail.com>", "makepad <info@makepad.nl>"]
 workspace = "../.."
 description = "Parser for naia-serde & derive methods"

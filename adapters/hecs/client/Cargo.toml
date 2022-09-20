@@ -1,6 +1,6 @@
 [package]
 name = "naia-hecs-client"
-version = "0.12.0"
+version = "0.13.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia_client & Hecs interop"
@@ -19,6 +19,6 @@ wbindgen = [ "naia-client/wbindgen", "naia-hecs-shared/wbindgen" ]
 mquad = [ "naia-client/mquad", "naia-hecs-shared/mquad" ]
 
 [dependencies]
-naia-client = { version = "0.12.0", path = "../../../client" }
-naia-hecs-shared = { version = "0.12.0", path = "../shared" }
+naia-client = { version = "0.13.0", path = "../../../client" }
+naia-hecs-shared = { version = "0.13.0", path = "../shared" }
 hecs = { version = "0.9" }

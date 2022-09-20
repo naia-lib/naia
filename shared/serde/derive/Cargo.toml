@@ -1,6 +1,6 @@
 [package]
 name = "naia-serde-derive"
-version = "0.10.0"
+version = "0.13.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>", "Fedor <not.fl3@gmail.com>", "makepad <info@makepad.nl>"]
 workspace = "../../.."
 description = "Derive methods for naia-serde"
@@ -21,6 +21,6 @@ proc-macro = true
 [features]
 
 [dependencies]
-naia-parse = { version = "0.10", path = "../../parse" }
+naia-parse = { version = "0.13", path = "../../parse" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }

@@ -1,6 +1,6 @@
 [package]
 name = "naia-derive"
-version = "0.10.0"
+version = "0.13.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 description = "Procedural macros to simplify implementation of Naia Replicate & Protocolize traits"
@@ -21,8 +21,8 @@ proc-macro = true
 [features]
 
 [dependencies]
-naia-serde-derive = { version = "0.10", path = "../serde/derive" }
-naia-parse = { version = "0.10", path = "../parse" }
+naia-serde-derive = { version = "0.13", path = "../serde/derive" }
+naia-parse = { version = "0.13", path = "../parse" }
 proc-macro2 = "1.0"
 syn = { version = "1.0.86", features = ["clone-impls"] }
 quote = "1.0"
