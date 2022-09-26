@@ -12,12 +12,16 @@ pub fn candidate_to_addr(candidate_str: &str) -> ServerAddr {
         .captures(candidate_str)
         .expect("regex failed to find SocketAddr string");
 
-    let ip_addr = captures["ip_addr"]
-        .parse::<Ipv4Addr>()
-        .expect("not a valid ip address..");
     let port = &captures["port"].parse::<u16>().expect("not a valid port..");
+    if let Ok(ip_addr) = captures["ip_addr"].parse::<Ipv6Addr>() {
+        ServerAddr::Found(SocketAddr::new(IpAddr::V6(ip_addr), *port))
+    } else {
+        let ip_addr = captures["ip_addr"]
+            .parse::<Ipv4Addr>()
+            .expect("not a valid ip address..");
 
-    ServerAddr::Found(SocketAddr::new(IpAddr::V4(ip_addr), *port))
+        ServerAddr::Found(SocketAddr::new(IpAddr::V4(ip_addr), *port))
+    }
 }
 
 #[cfg(test)]
