@@ -12,5 +12,5 @@ naia-server = { path = "../../../server" }
 naia-demo-world = { path = "../../demo_utils/demo_world" }
 naia-basic-demo-shared = { path = "../shared" }
 log = { version = "0.4" }
-simple_logger = { version = "2.1", default-features = false, features = ["timestamps"] }
+simple_logger = { version = "3.0", default-features = false, features = ["timestamps"] }
 smol = { version = "1.2" }
