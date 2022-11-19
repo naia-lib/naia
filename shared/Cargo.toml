@@ -1,6 +1,6 @@
 [package]
 name = "naia-shared"
-version = "0.13.1"
+version = "0.14.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "Common functionality shared between naia-server & naia-client crates"
@@ -23,7 +23,7 @@ bevy_support = [ "bevy_ecs" ]
 zstd_support = [ "zstd" ]
 
 [dependencies]
-naia-socket-shared = { version = "0.10.1", path = "../socket/shared" }
+naia-socket-shared = { version = "0.10", path = "../socket/shared" }
 naia-derive = { version = "0.13", path = "derive" }
 naia-serde = { version = "0.13", path = "serde" }
 log = { version = "0.4" }
