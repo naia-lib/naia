@@ -6,8 +6,8 @@ use std::{
 
 use bevy_ecs::{
     entity::Entity,
-    world::{FromWorld, World},
     prelude::Resource,
+    world::{FromWorld, World},
 };
 
 use naia_shared::{Protocolize, ReplicateSafe};
