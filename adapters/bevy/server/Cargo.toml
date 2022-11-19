@@ -15,5 +15,5 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 naia-server = { version = "0.13.0", path = "../../../server", features = ["bevy_support"] }
 naia-bevy-shared = { version = "0.13.0", path = "../shared" }
-bevy_app = { version = "0.8", default-features=false }
-bevy_ecs = { version = "0.8", default-features=false }
+bevy_app = { version = "0.9", default-features=false }
+bevy_ecs = { version = "0.9", default-features=false }

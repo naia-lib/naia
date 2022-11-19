@@ -1,7 +1,7 @@
 use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 
 use bevy_app::{App, CoreStage, Plugin as PluginType};
-use bevy_ecs::{entity::Entity, schedule::SystemStage, system::IntoExclusiveSystem};
+use bevy_ecs::{entity::Entity, schedule::SystemStage};
 
 use naia_server::{
     shared::{ChannelIndex, Protocolize, SharedConfig},
@@ -88,7 +88,7 @@ impl<P: Protocolize, C: ChannelIndex> PluginType for Plugin<P, C> {
             // SYSTEMS //
             .add_system_to_stage(
                 PrivateStage::BeforeReceiveEvents,
-                before_receive_events::<P, C>.exclusive_system(),
+                before_receive_events::<P, C>,
             )
             .add_system_to_stage(PrivateStage::AfterTick, finish_tick);
     }

@@ -124,7 +124,7 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
 
 impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
     fn spawn_entity(&mut self) -> Entity {
-        let entity = self.world.spawn().id();
+        let entity = self.world.spawn_empty().id();
 
         let mut world_data = world_data_unchecked_mut::<P>(self.world);
         world_data.spawn_entity(&entity);

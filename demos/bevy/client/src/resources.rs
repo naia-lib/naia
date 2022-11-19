@@ -1,6 +1,6 @@
 use std::default::Default;
 
-use bevy::ecs::entity::Entity;
+use bevy::ecs::{entity::Entity, prelude::Resource};
 
 use naia_bevy_client::CommandHistory;
 
@@ -20,7 +20,7 @@ impl OwnedEntity {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Resource)]
 pub struct Global {
     pub owned_entity: Option<OwnedEntity>,
     pub queued_command: Option<KeyCommand>,

@@ -7,12 +7,14 @@ use std::{
 use bevy_ecs::{
     entity::Entity,
     world::{FromWorld, World},
+    prelude::Resource,
 };
 
 use naia_shared::{Protocolize, ReplicateSafe};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
+#[derive(Resource)]
 pub struct WorldData<P: Protocolize> {
     entities: HashSet<Entity>,
     kind_to_accessor_map: HashMap<P::Kind, Box<dyn Any>>,
