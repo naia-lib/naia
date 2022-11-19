@@ -21,8 +21,8 @@ bevy_support = ["naia-shared/bevy_support","bevy_ecs"]
 zstd_support = ["naia-shared/zstd_support"]
 
 [dependencies]
-naia-server-socket = { version = "0.13.0", path = "../socket/server" }
-naia-shared = { version = "0.13.0", path = "../shared" }
+naia-server-socket = { version = "0.13", path = "../socket/server" }
+naia-shared = { version = "0.13", path = "../shared" }
 log = { version = "0.4" }
 ring = { version = "0.16.15" }
 fastrand = { version = "1.7.0" }

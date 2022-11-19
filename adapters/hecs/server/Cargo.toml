@@ -15,6 +15,6 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-naia-server = { version = "0.13.0", path = "../../../server" }
-naia-hecs-shared = { version = "0.13.0", path = "../shared" }
+naia-server = { version = "0.13", path = "../../../server" }
+naia-hecs-shared = { version = "0.13", path = "../shared" }
 hecs = { version = "0.9" }
