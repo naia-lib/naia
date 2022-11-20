@@ -1,8 +1,8 @@
 //! Very limited rust parser
 //!
-//! https://doc.rust-lang.org/reference/expressions/struct-expr.html
-//! https://docs.rs/syn/0.15.44/syn/enum.Type.html
-//! https://ziglang.org/documentation/0.5.0/#toc-typeInfo
+//! <https://doc.rust-lang.org/reference/expressions/struct-expr.html>
+//! <https://docs.rs/syn/0.15.44/syn/enum.Type.html>
+//! <https://ziglang.org/documentation/0.5.0/#toc-typeInfo>
 
 use proc_macro::{Delimiter, Group, TokenStream, TokenTree};
 
