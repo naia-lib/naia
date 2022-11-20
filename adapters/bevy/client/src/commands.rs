@@ -17,7 +17,7 @@ pub trait CommandsExt<'w, 's, P: Protocolize> {
 
 impl<'w, 's, P: Protocolize> CommandsExt<'w, 's, P> for Commands<'w, 's> {
     fn duplicate_entity<'a>(&'a mut self, entity: Entity) -> EntityCommands<'w, 's, 'a> {
-        let new_entity = self.spawn().id();
+        let new_entity = self.spawn_empty().id();
         let command = DuplicateComponents::<P>::new(new_entity, entity);
         self.add(command);
         self.entity(new_entity)

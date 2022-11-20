@@ -16,7 +16,6 @@ mod client;
 mod client_config;
 mod command_history;
 mod connection;
-mod constants;
 mod error;
 mod event;
 mod protocol;

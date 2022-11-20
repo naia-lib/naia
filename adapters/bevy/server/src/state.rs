@@ -22,7 +22,7 @@ pub struct State<P: Protocolize, C: ChannelIndex> {
 impl<P: Protocolize, C: ChannelIndex> State<P, C> {
     pub fn apply(&mut self, world: &mut World) {
         // Have to do this to get around 'world.flush()' only being crate-public
-        world.spawn().despawn();
+        world.spawn_empty().despawn();
 
         // resource scope
         world.resource_scope(

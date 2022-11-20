@@ -69,7 +69,7 @@ pub fn insert_component_event(
                     }
                 };
 
-                local.entity(*entity).insert_bundle(SpriteBundle {
+                local.entity(*entity).insert(SpriteBundle {
                     sprite: Sprite {
                         custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
                         color,
@@ -144,7 +144,7 @@ pub fn receive_message_event(
 
                 let prediction_entity =
                     CommandsExt::<Protocol>::duplicate_entity(&mut local, entity)
-                        .insert_bundle(SpriteBundle {
+                        .insert(SpriteBundle {
                             sprite: Sprite {
                                 custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
                                 color: BevyColor::WHITE,

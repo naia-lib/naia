@@ -1,5 +1,8 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
+#[cfg(feature = "bevy_support")]
+use bevy_ecs::prelude::Resource;
+
 use naia_client_socket::Socket;
 
 pub use naia_shared::{
@@ -23,6 +26,7 @@ use super::{client_config::ClientConfig, error::NaiaClientError, event::Event};
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
+#[cfg_attr(feature = "bevy_support", derive(Resource))]
 pub struct Client<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     // Config
     client_config: ClientConfig,

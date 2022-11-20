@@ -6,6 +6,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+#[cfg(feature = "bevy_support")]
+use bevy_ecs::prelude::Resource;
+
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     serde::{BitWriter, Serde},
@@ -45,6 +48,7 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
+#[cfg_attr(feature = "bevy_support", derive(Resource))]
 pub struct Server<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
     // Config
     server_config: ServerConfig,
