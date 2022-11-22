@@ -1,4 +1,4 @@
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{error::TrySendError, Sender};
 use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
 use crate::server_addr::ServerAddr;
@@ -21,9 +21,13 @@ impl PacketSender {
     }
 
     /// Send a Packet to the Server
-    pub fn send(&self, payload: &[u8]) {
-        let _result = self.sender_channel.blocking_send(payload.into());
-        // TODO: handle result
+    pub fn send(&self, payload: &[u8]) -> Result<(), naia_socket_shared::TrySendError<()>> {
+        self.sender_channel
+            .try_send(payload.into())
+            .map_err(|err| match err {
+                TrySendError::Full(_) => naia_socket_shared::TrySendError::Full(()),
+                TrySendError::Closed(_) => naia_socket_shared::TrySendError::Closed(()),
+            })
     }
 
     /// Get the Server's Socket address

@@ -7,13 +7,14 @@ pub struct PacketSender;
 
 impl PacketSender {
     /// Send a Packet to the Server
-    pub fn send(&self, payload: &[u8]) {
+    pub fn send(&self, payload: &[u8]) -> Result<(), naia_socket_shared::TrySendError<()>> {
         unsafe {
             let ptr = payload.as_ptr();
             let len = payload.len();
             let js_obj = naia_create_u8_array(ptr as _, len as _);
             naia_send(js_obj);
         }
+        Ok(())
     }
 
     /// Get the Server's Socket address

@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use smol::channel::Sender;
+use smol::channel::{Sender, TrySendError};
 
 /// Used to send packets to the Server Socket
 #[derive(Clone)]
@@ -15,9 +15,16 @@ impl PacketSender {
     }
 
     /// Sends a packet to the Server Socket
-    pub fn send(&self, address: &SocketAddr, payload: &[u8]) {
+    pub fn send(
+        &self,
+        address: &SocketAddr,
+        payload: &[u8],
+    ) -> Result<(), naia_socket_shared::TrySendError<()>> {
         self.channel_sender
             .try_send((*address, payload.into()))
-            .unwrap(); //TODO: handle result..
+            .map_err(|err| match err {
+                TrySendError::Full(_) => naia_socket_shared::TrySendError::Full(()),
+                TrySendError::Closed(_) => naia_socket_shared::TrySendError::Closed(()),
+            })
     }
 }

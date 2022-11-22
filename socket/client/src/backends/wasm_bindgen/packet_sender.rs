@@ -22,11 +22,12 @@ impl PacketSender {
     }
 
     /// Send a Packet to the Server
-    pub fn send(&self, payload: &[u8]) {
+    pub fn send(&self, payload: &[u8]) -> Result<(), naia_socket_shared::TrySendError<()>> {
         let uarray: Uint8Array = payload.into();
         self.message_port
             .post_message(&uarray)
             .expect("Failed to send message");
+        Ok(())
     }
 
     /// Get the Server's Socket address
