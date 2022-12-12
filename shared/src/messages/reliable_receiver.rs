@@ -29,7 +29,7 @@ impl<P> ReliableReceiver<P> {
         Ok(output)
     }
 
-    fn read_incoming_message(
+    pub fn read_incoming_message(
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
         last_read_id: &Option<MessageId>,

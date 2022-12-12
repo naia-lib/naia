@@ -14,6 +14,8 @@ use super::{
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
+    sequenced_unreliable_receiver::SequencedUnreliableReceiver,
+    sequenced_unreliable_sender::SequencedUnreliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
     unordered_unreliable_receiver::UnorderedUnreliableReceiver,
     unordered_unreliable_sender::UnorderedUnreliableSender,
@@ -55,6 +57,12 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                         Box::new(UnorderedUnreliableSender::new()),
                     );
                 }
+                ChannelMode::SequencedUnreliable => {
+                    channel_senders.insert(
+                        channel_index.clone(),
+                        Box::new(SequencedUnreliableSender::new()),
+                    );
+                }
                 ChannelMode::UnorderedReliable(settings) => {
                     channel_senders.insert(
                         channel_index.clone(),
@@ -92,6 +100,12 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                     channel_receivers.insert(
                         channel_index.clone(),
                         Box::new(UnorderedUnreliableReceiver::new()),
+                    );
+                }
+                ChannelMode::SequencedUnreliable => {
+                    channel_receivers.insert(
+                        channel_index.clone(),
+                        Box::new(SequencedUnreliableReceiver::new()),
                     );
                 }
                 ChannelMode::UnorderedReliable(_) => {
