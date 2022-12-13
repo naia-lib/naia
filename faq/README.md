@@ -2,22 +2,24 @@
 
 ## Table of contents
 
-- [General questions](#general-questions)
-  * [What is the difference between the different crates?](#what-is-the-difference-between-the-different-crates-)
-  * [Is naia compatible with other transport layers](#is-naia-compatible-with-other-transport-layers)
-  * [What game networking concept does naia provide?](#what-game-networking-concept-does-naia-provide-)
-- [ECS replication system questions](#ecs-replication-system-questions)
-  * [How can I have different replication frequencies per entity/component?](#how-can-i-have-different-replication-frequencies-per-entity-component-)
-  * [What is the tick for?](#what-is-the-tick-for-)
-  * [What is the difference between `duplicate_entity` and `mirror_entity`?](#what-is-the-difference-between--duplicate-entity--and--mirror-entity--)
-  * [How can I know the type of entity that I am replicating?](#how-can-i-know-the-type-of-entity-that-i-am-replicating-)
-- [Message/Event passing](#message-event-passing)
-  * [Can any message be passed through a channel? Can I send any struct as an Event?](#can-any-message-be-passed-through-a-channel--can-i-send-any-struct-as-an-event-)
-  * [What is `Property<>`](#what-is--property---)
-  * [What does `Protocolize` provide?](#what-does--protocolize--provide-)
-  * [Can I have multiple `Protocolize` enums?](#can-i-have-multiple--protocolize--enums-)
+<!-- TOC -->
+  * [General question?](#general-question)
+    * [What is the difference between the different crates?](#what-is-the-difference-between-the-different-crates)
+    * [Is naia compatible with other transport layers?](#is-naia-compatible-with-other-transport-layers)
+    * [What game networking concept does naia provide?](#what-game-networking-concept-does-naia-provide)
+  * [ECS replication system questions](#ecs-replication-system-questions)
+    * [How can I have different replication frequencies per entity or component?](#how-can-i-have-different-replication-frequencies-per-entity-or-component)
+    * [What is the tick for?](#what-is-the-tick-for)
+    * [What is the difference between `duplicate_entity` and `mirror_entity`](#what-is-the-difference-between-duplicateentity-and-mirrorentity)
+    * [How can I know the type of entity that I am replicating?](#how-can-i-know-the-type-of-entity-that-i-am-replicating)
+  * [Message/Event passing](#messageevent-passing)
+    * [Can any message be passed through a channel? Can I send any struct as an Event?](#can-any-message-be-passed-through-a-channel-can-i-send-any-struct-as-an-event)
+    * [What is `Property<>`?](#what-is-property-)
+    * [What does `Protocolize` provide?](#what-does-protocolize-provide)
+    * [Can I have multiple `Protocolize` enums?](#can-i-have-multiple-protocolize-enums)
+<!-- TOC -->
 
-## General questions
+## General question?
 
 ### What is the difference between the different crates?
 
@@ -32,7 +34,7 @@
   - There is a plan to separate those two parts
 - `adapters` contains actual ECS implementations. Naia doesn't work as is and needs to combine with an external ECS tool.
 
-### Is naia compatible with other transport layers
+### Is naia compatible with other transport layers?
 
 No. Naia is currently only compatible with `naia-socket`, but there are plans to make it abstract over any transport layer.
 
@@ -51,7 +53,7 @@ Naia does NOT provide:
 
 ## ECS replication system questions
 
-### How can I have different replication frequencies per entity/component?
+### How can I have different replication frequencies per entity or component?
 
 This is not possible right now, it is a future intended feature.
 
@@ -60,7 +62,7 @@ This is not possible right now, it is a future intended feature.
 On the server, the tick is simply the frequency at which the packets will be sent. (every tick, we call `send_all_updates`).
 On the client, the tick information is used to sync up the `update_components` event to happen on the same tick as the server.
 
-### What is the difference between `duplicate_entity` and `mirror_entity`?
+### What is the difference between `duplicate_entity` and `mirror_entity`
 
 `duplicate_entity`: create a new entity on the client and copy all the components from the server entity.
 `mirror_entity`: take an existing client entity, and copy all the component values from the server entity. (for their common components)
@@ -82,7 +84,7 @@ There are 2 options:
 
 The structs that can be passed as messages/events need to implement `Replicate`. As such, the fields of the struct need to use the `Property<>` wrapper.
 
-### What is `Property<>`
+### What is `Property<>`?
 
 `Property<>` is a wrapper that enables change-detection. It is useful only for ECS replication, where `naia` uses it to perform delta-compression: if a component did not change, only 0 or 1 bit of data can be sent through the network.
 Messages/Event struct fields still need to have `Property<>`, even though it has no effect in that case.
