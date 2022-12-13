@@ -37,18 +37,21 @@ impl<P: Send + Sync> ChannelReceiver<P> for SequencedUnreliableReceiver<P> {
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let message_count = message_list_header::read(reader)?;
+        let mut last_read_id: Option<MessageId> = None;
 
         for _x in 0..message_count {
             let (message_id, message) = ReliableReceiver::read_incoming_message(
-                channel_reader, reader, &self.most_recent_received_message_id)?;
+                channel_reader, reader, &last_read_id)?;
+            last_read_id = Some(id_w_msg.0);
 
-            // only process the message if it is the most recent one
+            // only process the message if it is the most recent one, or if it's the first message received
             if let Some(most_recent_id) = self.most_recent_received_message_id {
                 if sequence_greater_than(message_id, most_recent_id) {
                     self.recv_message(message);
                     self.most_recent_received_message_id = Some(message_id);
                 }
             } else {
+                self.recv_message(message);
                 self.most_recent_received_message_id = Some(message_id);
             }
         }
