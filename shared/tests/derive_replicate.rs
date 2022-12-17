@@ -6,7 +6,7 @@ mod some_protocol {
     #[derive(Protocolize)]
     pub enum SomeProtocol {
         NamedStringHolder(NamedStringHolder),
-        TupleStringHolder(TupleStringHolder)
+        TupleStringHolder(TupleStringHolder),
     }
 }
 
@@ -32,10 +32,7 @@ mod some_tuple_replica {
 
     #[derive(Replicate)]
     #[protocol_path = "super::some_protocol::SomeProtocol"]
-    pub struct TupleStringHolder(
-        pub Property<String>,
-        pub Property<String>,
-    );
+    pub struct TupleStringHolder(pub Property<String>, pub Property<String>);
 
     impl TupleStringHolder {
         pub fn new(string_1: &str, string_2: &str) -> Self {
@@ -49,8 +46,8 @@ use naia_shared::{
     FakeEntityConverter, Protocolize,
 };
 
-use some_protocol::SomeProtocol;
 use some_named_replica::NamedStringHolder;
+use some_protocol::SomeProtocol;
 use some_tuple_replica::TupleStringHolder;
 
 #[test]
@@ -58,7 +55,8 @@ fn read_write_named_replica() {
     // Write
     let mut writer = BitWriter::new();
 
-    let in_1 = SomeProtocol::NamedStringHolder(NamedStringHolder::new("hello world", "goodbye world"));
+    let in_1 =
+        SomeProtocol::NamedStringHolder(NamedStringHolder::new("hello world", "goodbye world"));
 
     in_1.write(&mut writer, &FakeEntityConverter);
 
@@ -86,7 +84,8 @@ fn read_write_tuple_replica() {
     // Write
     let mut writer = BitWriter::new();
 
-    let in_1 = SomeProtocol::TupleStringHolder(TupleStringHolder::new("hello world", "goodbye world"));
+    let in_1 =
+        SomeProtocol::TupleStringHolder(TupleStringHolder::new("hello world", "goodbye world"));
 
     in_1.write(&mut writer, &FakeEntityConverter);
 

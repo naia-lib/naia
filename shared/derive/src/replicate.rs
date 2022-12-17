@@ -1,9 +1,11 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Lit, Meta, Path, PathArguments, Result, Type, Index, Member};
+use syn::{
+    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Index, Lit, Member, Meta,
+    Path, PathArguments, Result, Type,
+};
 
 const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
-
 
 pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -24,8 +26,19 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let property_enum_definition = property_enum(&enum_name, &properties);
 
     // Replica Methods
-    let new_complete_method = new_complete_method(&replica_name, &enum_name, &properties, is_replica_tuple_struct);
-    let read_method = read_method(&protocol_name, &replica_name, &enum_name, &properties, is_replica_tuple_struct);
+    let new_complete_method = new_complete_method(
+        &replica_name,
+        &enum_name,
+        &properties,
+        is_replica_tuple_struct,
+    );
+    let read_method = read_method(
+        &protocol_name,
+        &replica_name,
+        &enum_name,
+        &properties,
+        is_replica_tuple_struct,
+    );
     let read_create_update_method =
         read_create_update_method(&replica_name, &protocol_kind_name, &properties);
 
@@ -43,9 +56,15 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let to_protocol_method = into_protocol_method(&protocol_name, &replica_name);
     let protocol_copy_method = protocol_copy_method(&protocol_name, &replica_name);
     let clone_method = clone_method(&replica_name, &properties, is_replica_tuple_struct);
-    let mirror_method = mirror_method(&protocol_name, &replica_name, &properties, is_replica_tuple_struct);
+    let mirror_method = mirror_method(
+        &protocol_name,
+        &replica_name,
+        &properties,
+        is_replica_tuple_struct,
+    );
     let set_mutator_method = set_mutator_method(&properties, is_replica_tuple_struct);
-    let read_apply_update_method = read_apply_update_method(&protocol_kind_name, &properties, is_replica_tuple_struct);
+    let read_apply_update_method =
+        read_apply_update_method(&protocol_kind_name, &properties, is_replica_tuple_struct);
     let write_method = write_method(&properties, is_replica_tuple_struct);
     let write_update_method = write_update_method(&enum_name, &properties, is_replica_tuple_struct);
     let has_entity_properties = has_entity_properties_method(&properties);
@@ -115,10 +134,7 @@ pub enum Property {
 
 /// Create a variable name for unnamed fields
 fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
-    Ident::new(
-        &format!("{}{}", UNNAMED_FIELD_PREFIX, index),
-        span
-    )
+    Ident::new(&format!("{}{}", UNNAMED_FIELD_PREFIX, index), span)
 }
 
 /// Get the field name as a TokenStream
@@ -126,7 +142,7 @@ fn get_field_name(property: &Property, index: usize, is_replica_tuple_struct: bo
     if is_replica_tuple_struct {
         let index = Index {
             index: index as u32,
-            span: property.variable_name().span()
+            span: property.variable_name().span(),
         };
         Member::from(index)
     } else {
@@ -208,7 +224,8 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
                     if let Type::Path(type_path) = &field.ty {
                         if let Some(property_seg) = type_path.path.segments.first() {
                             let property_type = property_seg.ident.clone();
-                            let variable_name = get_variable_name_for_unnamed_field(index, property_type.span());
+                            let variable_name =
+                                get_variable_name_for_unnamed_field(index, property_type.span());
                             if property_type == "EntityProperty" {
                                 fields.push(Property::entity(variable_name));
                                 continue;
@@ -218,10 +235,8 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
                                 if let Some(GenericArgument::Type(inner_type)) =
                                     angle_args.args.first()
                                 {
-                                    fields.push(Property::normal(
-                                        variable_name,
-                                        inner_type.clone(),
-                                    ));
+                                    fields
+                                        .push(Property::normal(variable_name, inner_type.clone()));
                                     continue;
                                 }
                             }
@@ -240,7 +255,6 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
     fields
 }
 
-
 /// Returns true if the struct to replicate is a tuple struct, returns false if it contains
 /// named fields
 fn is_replica_tuple_struct(input: &DeriveInput) -> bool {
@@ -248,7 +262,7 @@ fn is_replica_tuple_struct(input: &DeriveInput) -> bool {
         return match &data_struct.fields {
             Fields::Named(_) => false,
             _ => true,
-        }
+        };
     }
     false
 }
@@ -351,7 +365,11 @@ pub fn dyn_mut_method(protocol_name: &Ident) -> TokenStream {
     }
 }
 
-fn clone_method(replica_name: &Ident, properties: &[Property], is_replica_tuple_struct: bool) -> TokenStream {
+fn clone_method(
+    replica_name: &Ident,
+    properties: &[Property],
+    is_replica_tuple_struct: bool,
+) -> TokenStream {
     let mut output = quote! {};
     let mut entity_property_output = quote! {};
 
@@ -445,7 +463,7 @@ pub fn new_complete_method(
     replica_name: &Ident,
     enum_name: &Ident,
     properties: &[Property],
-    is_replica_tuple_struct: bool
+    is_replica_tuple_struct: bool,
 ) -> TokenStream {
     let mut args = quote! {};
     for property in properties.iter() {
@@ -653,7 +671,11 @@ pub fn read_create_update_method(
     }
 }
 
-fn read_apply_update_method(kind_name: &Ident, properties: &[Property], is_replica_tuple_struct: bool) -> TokenStream {
+fn read_apply_update_method(
+    kind_name: &Ident,
+    properties: &[Property],
+    is_replica_tuple_struct: bool,
+) -> TokenStream {
     let mut output = quote! {};
 
     for (index, property) in properties.iter().enumerate() {
@@ -724,7 +746,11 @@ fn write_method(properties: &[Property], is_replica_tuple_struct: bool) -> Token
     }
 }
 
-fn write_update_method(enum_name: &Ident, properties: &[Property], is_replica_tuple_struct: bool) -> TokenStream {
+fn write_update_method(
+    enum_name: &Ident,
+    properties: &[Property],
+    is_replica_tuple_struct: bool,
+) -> TokenStream {
     let mut output = quote! {};
 
     for (index, property) in properties.iter().enumerate() {
