@@ -1,15 +1,16 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Lit, Meta, Path,
-    PathArguments, Result, Type,
-};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Lit, Meta, Path, PathArguments, Result, Type, Index, Member};
+
+const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
+
 
 pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     // Helper Properties
     let properties = properties(&input);
+    let is_replica_tuple_struct = is_replica_tuple_struct(&input);
 
     // Paths
     let (protocol_path, protocol_name) = protocol_path(&input);
@@ -23,8 +24,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let property_enum_definition = property_enum(&enum_name, &properties);
 
     // Replica Methods
-    let new_complete_method = new_complete_method(&replica_name, &enum_name, &properties);
-    let read_method = read_method(&protocol_name, &replica_name, &enum_name, &properties);
+    let new_complete_method = new_complete_method(&replica_name, &enum_name, &properties, is_replica_tuple_struct);
+    let read_method = read_method(&protocol_name, &replica_name, &enum_name, &properties, is_replica_tuple_struct);
     let read_create_update_method =
         read_create_update_method(&replica_name, &protocol_kind_name, &properties);
 
@@ -41,12 +42,12 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let dyn_mut_method = dyn_mut_method(&protocol_name);
     let to_protocol_method = into_protocol_method(&protocol_name, &replica_name);
     let protocol_copy_method = protocol_copy_method(&protocol_name, &replica_name);
-    let clone_method = clone_method(&replica_name, &properties);
-    let mirror_method = mirror_method(&protocol_name, &replica_name, &properties);
-    let set_mutator_method = set_mutator_method(&properties);
-    let read_apply_update_method = read_apply_update_method(&protocol_kind_name, &properties);
-    let write_method = write_method(&properties);
-    let write_update_method = write_update_method(&enum_name, &properties);
+    let clone_method = clone_method(&replica_name, &properties, is_replica_tuple_struct);
+    let mirror_method = mirror_method(&protocol_name, &replica_name, &properties, is_replica_tuple_struct);
+    let set_mutator_method = set_mutator_method(&properties, is_replica_tuple_struct);
+    let read_apply_update_method = read_apply_update_method(&protocol_kind_name, &properties, is_replica_tuple_struct);
+    let write_method = write_method(&properties, is_replica_tuple_struct);
+    let write_update_method = write_update_method(&enum_name, &properties, is_replica_tuple_struct);
     let has_entity_properties = has_entity_properties_method(&properties);
     let entities = entities_method(&properties);
 
@@ -112,6 +113,27 @@ pub enum Property {
     Entity(EntityProperty),
 }
 
+/// Create a variable name for unnamed fields
+fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
+    Ident::new(
+        &format!("{}{}", UNNAMED_FIELD_PREFIX, index),
+        span
+    )
+}
+
+/// Get the field name as a TokenStream
+fn get_field_name(property: &Property, index: usize, is_replica_tuple_struct: bool) -> Member {
+    if is_replica_tuple_struct {
+        let index = Index {
+            index: index as u32,
+            span: property.variable_name().span()
+        };
+        Member::from(index)
+    } else {
+        Member::from(property.variable_name().clone())
+    }
+}
+
 impl Property {
     pub fn normal(variable_name: Ident, inner_type: Type) -> Self {
         Self::Normal(NormalProperty {
@@ -153,14 +175,42 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
     let mut fields = Vec::new();
 
     if let Data::Struct(data_struct) = &input.data {
-        if let Fields::Named(fields_named) = &data_struct.fields {
-            for field in fields_named.named.iter() {
-                if let Some(variable_name) = &field.ident {
+        match &data_struct.fields {
+            Fields::Named(fields_named) => {
+                for field in fields_named.named.iter() {
+                    if let Some(variable_name) = &field.ident {
+                        if let Type::Path(type_path) = &field.ty {
+                            if let Some(property_seg) = type_path.path.segments.first() {
+                                let property_type = property_seg.ident.clone();
+                                if property_type == "EntityProperty" {
+                                    fields.push(Property::entity(variable_name.clone()));
+                                    continue;
+                                } else if let PathArguments::AngleBracketed(angle_args) =
+                                    &property_seg.arguments
+                                {
+                                    if let Some(GenericArgument::Type(inner_type)) =
+                                        angle_args.args.first()
+                                    {
+                                        fields.push(Property::normal(
+                                            variable_name.clone(),
+                                            inner_type.clone(),
+                                        ));
+                                        continue;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Fields::Unnamed(fields_unnamed) => {
+                for (index, field) in fields_unnamed.unnamed.iter().enumerate() {
                     if let Type::Path(type_path) = &field.ty {
                         if let Some(property_seg) = type_path.path.segments.first() {
                             let property_type = property_seg.ident.clone();
+                            let variable_name = get_variable_name_for_unnamed_field(index, property_type.span());
                             if property_type == "EntityProperty" {
-                                fields.push(Property::entity(variable_name.clone()));
+                                fields.push(Property::entity(variable_name));
                                 continue;
                             } else if let PathArguments::AngleBracketed(angle_args) =
                                 &property_seg.arguments
@@ -169,7 +219,7 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
                                     angle_args.args.first()
                                 {
                                     fields.push(Property::normal(
-                                        variable_name.clone(),
+                                        variable_name,
                                         inner_type.clone(),
                                     ));
                                     continue;
@@ -179,10 +229,28 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
                     }
                 }
             }
+            Fields::Unit => {
+                panic!("Cannot derive Replicate on unit structs");
+            }
         }
+    } else {
+        panic!("Can only derive Replicate on a struct");
     }
 
     fields
+}
+
+
+/// Returns true if the struct to replicate is a tuple struct, returns false if it contains
+/// named fields
+fn is_replica_tuple_struct(input: &DeriveInput) -> bool {
+    if let Data::Struct(data_struct) = &input.data {
+        return match &data_struct.fields {
+            Fields::Named(_) => false,
+            _ => true,
+        }
+    }
+    false
 }
 
 fn protocol_path(input: &DeriveInput) -> (Path, Ident) {
@@ -230,6 +298,7 @@ fn property_enum(enum_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut variant_list = quote! {};
 
     for (index, property) in properties.iter().enumerate() {
+        let index = syn::Index::from(index);
         let uppercase_variant_name = property.uppercase_variable_name();
 
         let new_output_right = quote! {
@@ -282,14 +351,14 @@ pub fn dyn_mut_method(protocol_name: &Ident) -> TokenStream {
     }
 }
 
-fn clone_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
+fn clone_method(replica_name: &Ident, properties: &[Property], is_replica_tuple_struct: bool) -> TokenStream {
     let mut output = quote! {};
     let mut entity_property_output = quote! {};
 
-    for property in properties.iter() {
+    for (index, property) in properties.iter().enumerate() {
+        let field_name = get_field_name(property, index, is_replica_tuple_struct);
         match property {
-            Property::Normal(property) => {
-                let field_name = &property.variable_name;
+            Property::Normal(_) => {
                 let new_output_right = quote! {
                     (*self.#field_name).clone(),
                 };
@@ -299,8 +368,7 @@ fn clone_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
                 };
                 output = new_output_result;
             }
-            Property::Entity(property) => {
-                let field_name = &property.variable_name;
+            Property::Entity(_) => {
                 let new_output_right = quote! {
                     new_clone.#field_name.mirror(&self.#field_name);
                 };
@@ -326,11 +394,12 @@ fn mirror_method(
     protocol_name: &Ident,
     replica_name: &Ident,
     properties: &[Property],
+    is_replica_tuple_struct: bool,
 ) -> TokenStream {
     let mut output = quote! {};
 
-    for property in properties.iter() {
-        let field_name = property.variable_name();
+    for (index, property) in properties.iter().enumerate() {
+        let field_name = get_field_name(property, index, is_replica_tuple_struct);
         let new_output_right = quote! {
             self.#field_name.mirror(&replica.#field_name);
         };
@@ -350,13 +419,13 @@ fn mirror_method(
     }
 }
 
-fn set_mutator_method(properties: &[Property]) -> TokenStream {
+fn set_mutator_method(properties: &[Property], is_replica_tuple_struct: bool) -> TokenStream {
     let mut output = quote! {};
 
-    for property in properties.iter() {
-        let field_name = property.variable_name();
+    for (index, property) in properties.iter().enumerate() {
+        let field_name = get_field_name(property, index, is_replica_tuple_struct);
         let new_output_right = quote! {
-            self.#field_name.set_mutator(mutator);
+                self.#field_name.set_mutator(mutator);
         };
         let new_output_result = quote! {
             #output
@@ -376,6 +445,7 @@ pub fn new_complete_method(
     replica_name: &Ident,
     enum_name: &Ident,
     properties: &[Property],
+    is_replica_tuple_struct: bool
 ) -> TokenStream {
     let mut args = quote! {};
     for property in properties.iter() {
@@ -406,15 +476,27 @@ pub fn new_complete_method(
                 let field_name = &property.variable_name;
                 let field_type = &property.inner_type;
                 let uppercase_variant_name = &property.uppercase_variable_name;
-                quote! {
-                    #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
+                if is_replica_tuple_struct {
+                    quote! {
+                        Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
+                    }
+                } else {
+                    quote! {
+                        #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
+                    }
                 }
             }
             Property::Entity(property) => {
                 let field_name = &property.variable_name;
                 let uppercase_variant_name = &property.uppercase_variable_name;
-                quote! {
-                    #field_name: EntityProperty::new(#enum_name::#uppercase_variant_name as u8)
+                if is_replica_tuple_struct {
+                    quote! {
+                        EntityProperty::new(#enum_name::#uppercase_variant_name as u8)
+                    }
+                } else {
+                    quote! {
+                        #field_name: EntityProperty::new(#enum_name::#uppercase_variant_name as u8)
+                    }
                 }
             }
         };
@@ -426,11 +508,23 @@ pub fn new_complete_method(
         fields = new_output_result;
     }
 
-    quote! {
-        pub fn new_complete(#args) -> #replica_name {
+    let fn_inner = if is_replica_tuple_struct {
+        quote! {
+            #replica_name (
+                #fields
+            )
+        }
+    } else {
+        quote! {
             #replica_name {
                 #fields
             }
+        }
+    };
+
+    quote! {
+        pub fn new_complete(#args) -> #replica_name {
+            #fn_inner
         }
     }
 }
@@ -440,6 +534,7 @@ pub fn read_method(
     replica_name: &Ident,
     enum_name: &Ident,
     properties: &[Property],
+    is_replica_tuple_struct: bool,
 ) -> TokenStream {
     let mut prop_names = quote! {};
     for property in properties.iter() {
@@ -456,9 +551,9 @@ pub fn read_method(
 
     let mut prop_reads = quote! {};
     for property in properties.iter() {
+        let field_name = property.variable_name();
         let new_output_right = match property {
             Property::Normal(property) => {
-                let field_name = &property.variable_name;
                 let field_type = &property.inner_type;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
@@ -466,7 +561,6 @@ pub fn read_method(
                 }
             }
             Property::Entity(property) => {
-                let field_name = &property.variable_name;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
                     let #field_name = EntityProperty::new_read(reader, #enum_name::#uppercase_variant_name as u8, converter)?;
@@ -481,13 +575,25 @@ pub fn read_method(
         prop_reads = new_output_result;
     }
 
+    let replica_build = if is_replica_tuple_struct {
+        quote! (
+            #replica_name (
+                #prop_names
+            )
+        )
+    } else {
+        quote! (
+            #replica_name {
+                #prop_names
+            }
+        )
+    };
+
     quote! {
         pub fn read(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<#protocol_name, SerdeErr> {
             #prop_reads
 
-            return Ok(#protocol_name::#replica_name(#replica_name {
-                #prop_names
-            }));
+            return Ok(#protocol_name::#replica_name(#replica_build));
         }
     }
 }
@@ -547,21 +653,20 @@ pub fn read_create_update_method(
     }
 }
 
-fn read_apply_update_method(kind_name: &Ident, properties: &[Property]) -> TokenStream {
+fn read_apply_update_method(kind_name: &Ident, properties: &[Property], is_replica_tuple_struct: bool) -> TokenStream {
     let mut output = quote! {};
 
-    for property in properties.iter() {
+    for (index, property) in properties.iter().enumerate() {
+        let field_name = get_field_name(property, index, is_replica_tuple_struct);
         let new_output_right = match property {
-            Property::Normal(property) => {
-                let field_name = &property.variable_name;
+            Property::Normal(_) => {
                 quote! {
                     if bool::de(reader)? {
                         Property::read(&mut self.#field_name, reader)?;
                     }
                 }
             }
-            Property::Entity(property) => {
-                let field_name = &property.variable_name;
+            Property::Entity(_) => {
                 quote! {
                     if bool::de(reader)? {
                         EntityProperty::read(&mut self.#field_name, reader, converter)?;
@@ -586,19 +691,18 @@ fn read_apply_update_method(kind_name: &Ident, properties: &[Property]) -> Token
     }
 }
 
-fn write_method(properties: &[Property]) -> TokenStream {
+fn write_method(properties: &[Property], is_replica_tuple_struct: bool) -> TokenStream {
     let mut property_writes = quote! {};
 
-    for property in properties.iter() {
+    for (index, property) in properties.iter().enumerate() {
+        let field_name = get_field_name(property, index, is_replica_tuple_struct);
         let new_output_right = match property {
-            Property::Normal(property) => {
-                let field_name = &property.variable_name;
+            Property::Normal(_) => {
                 quote! {
                     Property::write(&self.#field_name, bit_writer);
                 }
             }
-            Property::Entity(property) => {
-                let field_name = &property.variable_name;
+            Property::Entity(_) => {
                 quote! {
                     EntityProperty::write(&self.#field_name, bit_writer, converter);
                 }
@@ -620,13 +724,13 @@ fn write_method(properties: &[Property]) -> TokenStream {
     }
 }
 
-fn write_update_method(enum_name: &Ident, properties: &[Property]) -> TokenStream {
+fn write_update_method(enum_name: &Ident, properties: &[Property], is_replica_tuple_struct: bool) -> TokenStream {
     let mut output = quote! {};
 
-    for property in properties.iter() {
+    for (index, property) in properties.iter().enumerate() {
+        let field_name = get_field_name(property, index, is_replica_tuple_struct);
         let new_output_right = match property {
             Property::Normal(property) => {
-                let field_name = &property.variable_name;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
                     if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
@@ -638,7 +742,6 @@ fn write_update_method(enum_name: &Ident, properties: &[Property]) -> TokenStrea
                 }
             }
             Property::Entity(property) => {
-                let field_name = &property.variable_name;
                 let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
                     if let Some(true) = diff_mask.bit(#enum_name::#uppercase_variant_name as u8) {
