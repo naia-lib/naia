@@ -49,7 +49,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let write_method = write_method(&properties, is_replica_tuple_struct);
     let write_update_method = write_update_method(&enum_name, &properties, is_replica_tuple_struct);
     let has_entity_properties = has_entity_properties_method(&properties);
-    let entities = entities_method(&properties);
+    let entities = entities_method(&properties, is_replica_tuple_struct);
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
@@ -807,12 +807,12 @@ fn has_entity_properties_method(properties: &[Property]) -> TokenStream {
     }
 }
 
-fn entities_method(properties: &[Property]) -> TokenStream {
+fn entities_method(properties: &[Property], is_replica_tuple_struct: bool) -> TokenStream {
     let mut body = quote! {};
 
-    for property in properties.iter() {
-        if let Property::Entity(entity_prop) = property {
-            let field_name = &entity_prop.variable_name;
+    for (index, property) in properties.iter().enumerate() {
+        if let Property::Entity(_) = property {
+            let field_name = get_field_name(property, index, is_replica_tuple_struct);
             let body_add_right = quote! {
                 output.extend(self.#field_name.entities());
             };

@@ -132,7 +132,8 @@ impl ReplicableEntityProperty for EntityProperty {
 // to be alerted whenever anything changes in the VecDeque
 
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "bevy_support", derive(Reflect))]
+// Reflect not supported for VecDeque
+// #[cfg_attr(feature = "bevy_support", derive(Reflect))]
 pub struct VecDequeEntityProperty(Property<VecDeque<EntityHandle>>);
 
 impl VecDequeEntityProperty {
@@ -152,6 +153,16 @@ impl VecDequeEntityProperty {
             queue.push_back(new_handle);
         });
         *self.0 = queue;
+    }
+
+    pub fn push_front<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entity: &E) {
+        let new_handle = handler.entity_to_handle(entity);
+        self.0.push_front(new_handle);
+    }
+
+    pub fn push_back<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entity: &E) {
+        let new_handle = handler.entity_to_handle(entity);
+        self.0.push_back(new_handle);
     }
 }
 
