@@ -1,4 +1,5 @@
 mod some_protocol {
+    use super::some_entity_replica::EntityPropertyHolder;
     use super::some_named_replica::NamedStringHolder;
     use super::some_tuple_replica::TupleStringHolder;
     use naia_shared::Protocolize;
@@ -6,7 +7,8 @@ mod some_protocol {
     #[derive(Protocolize)]
     pub enum SomeProtocol {
         NamedStringHolder(NamedStringHolder),
-        TupleStringHolder(TupleStringHolder)
+        TupleStringHolder(TupleStringHolder),
+        EntityPropertyHolder(EntityPropertyHolder),
     }
 }
 
@@ -44,12 +46,29 @@ mod some_tuple_replica {
     }
 }
 
-use naia_shared::{
-    serde::{BitReader, BitWriter},
-    FakeEntityConverter, Protocolize,
-};
+mod some_entity_replica {
+    use naia_shared::{EntityProperty, Replicate, VecDequeEntityProperty};
+
+    #[derive(Replicate)]
+    #[protocol_path = "super::some_protocol::SomeProtocol"]
+    pub struct EntityPropertyHolder{
+        pub entity_1: EntityProperty,
+        pub vec_entity_1: VecDequeEntityProperty,
+    }
+
+    impl EntityPropertyHolder {
+        pub fn new() -> Self {
+            return EntityPropertyHolder::new_complete();
+        }
+    }
+}
+
+use std::collections::VecDeque;
+use naia_shared::{serde::{BitReader, BitWriter}, FakeEntityConverter, Protocolize, EntityHandleConverter, EntityHandle, BigMapKey, ReplicableEntityProperty, ReplicableProperty, NetEntityHandleConverter, NetEntity, ReplicateSafe};
+
 
 use some_protocol::SomeProtocol;
+use some_entity_replica::EntityPropertyHolder;
 use some_named_replica::NamedStringHolder;
 use some_tuple_replica::TupleStringHolder;
 
@@ -107,4 +126,78 @@ fn read_write_tuple_replica() {
     assert_eq!(*typed_in_1.1, "goodbye world".to_string());
     assert_eq!(*typed_out_1.0, "hello world".to_string());
     assert_eq!(*typed_out_1.1, "goodbye world".to_string());
+}
+
+#[test]
+fn read_write_entity_replica() {
+
+    pub struct TestEntityConverter;
+
+    impl EntityHandleConverter<u64> for TestEntityConverter {
+        fn handle_to_entity(&self, entity_handle: &EntityHandle) -> u64 {
+            entity_handle.to_u64()
+        }
+
+        fn entity_to_handle(&self, entity: &u64) -> EntityHandle {
+            EntityHandle::from_u64(*entity)
+        }
+    }
+
+    impl NetEntityHandleConverter for TestEntityConverter {
+        fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
+            NetEntity::from(entity_handle.to_u64() as u16)
+        }
+
+        fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle {
+            let net_entity_u16: u16 = (*net_entity).into();
+            EntityHandle::from_u64(net_entity_u16 as u64)
+        }
+    }
+
+    // Write
+    let mut writer = BitWriter::new();
+
+    let mut in_1 = EntityPropertyHolder::new();
+    in_1.entity_1.set(&TestEntityConverter, &1);
+    let vec_entities: VecDeque<u64> = VecDeque::from([2, 3]);
+    in_1.vec_entity_1.set(&TestEntityConverter, &vec_entities);
+    let in_1 = SomeProtocol::EntityPropertyHolder(in_1);
+
+
+    in_1.write(&mut writer, &TestEntityConverter);
+
+    let (buffer_length, buffer) = writer.flush();
+
+    // Read
+    let mut reader = BitReader::new(&buffer[..buffer_length]);
+
+    let out_1 = SomeProtocol::read(&mut reader, &TestEntityConverter)
+        .expect("should deserialize correctly");
+
+    let typed_in_1 = in_1.cast_ref::<EntityPropertyHolder>().unwrap();
+    let typed_out_1 = out_1.cast_ref::<EntityPropertyHolder>().unwrap();
+    assert!(typed_in_1.entity_1.equals(&typed_out_1.entity_1));
+    assert!(typed_in_1.vec_entity_1.equals(&typed_out_1.vec_entity_1));
+
+    let entity_handles = Vec::<EntityHandle>::from(
+        [EntityHandle::from_u64(1),
+            EntityHandle::from_u64(2),
+            EntityHandle::from_u64(3),
+        ]
+    );
+    assert_eq!(typed_in_1.entities(), entity_handles);
+    assert_eq!(typed_out_1.entities(), entity_handles);
+
+    assert_eq!(typed_in_1.entity_1.get(&TestEntityConverter).unwrap(), 1);
+    assert_eq!(typed_in_1.entity_1.handle().unwrap().to_u64(), 1);
+
+    assert_eq!(typed_in_1.vec_entity_1.get(&TestEntityConverter), VecDeque::<Option<u64>>::from(
+        [Some(2), Some(3)]
+    ));
+
+    assert_eq!(typed_out_1.entity_1.get(&TestEntityConverter).unwrap(), 1);
+    assert_eq!(typed_out_1.entity_1.handle().unwrap().to_u64(), 1);
+    assert_eq!(typed_in_1.vec_entity_1.get(&TestEntityConverter), VecDeque::<Option<u64>>::from(
+        [Some(2), Some(3)]
+    ));
 }

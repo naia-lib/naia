@@ -74,7 +74,7 @@ pub use protocol::{
     entity_handle::EntityHandle,
     entity_property::{
         EntityConverter, EntityHandleConverter, EntityProperty, FakeEntityConverter,
-        NetEntityConverter, NetEntityHandleConverter,
+        NetEntityConverter, NetEntityHandleConverter, VecDequeEntityProperty,
     },
     net_entity::NetEntity,
     property::Property,
@@ -86,6 +86,7 @@ pub use protocol::{
         ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
         ReplicaRefWrapper,
     },
+    replicable_property::{ReplicableProperty, ReplicableEntityProperty},
     replicate::{Replicate, ReplicateSafe},
 };
 

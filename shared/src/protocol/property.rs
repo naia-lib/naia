@@ -3,6 +3,7 @@ use std::ops::{Deref, DerefMut};
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::protocol::property_mutate::PropertyMutator;
+use crate::protocol::replicable_property::ReplicableProperty;
 
 /// A Property of an Component/Message, that contains data
 /// which must be tracked for updates
@@ -15,8 +16,17 @@ pub struct Property<T: Serde> {
 
 // should be shared
 impl<T: Serde> Property<T> {
+    fn read_inner(reader: &mut BitReader) -> Result<T, SerdeErr> {
+        T::de(reader)
+    }
+}
+
+// should be shared
+impl<T: Serde> ReplicableProperty for Property<T> {
+    type Inner = T;
+
     /// Create a new Property
-    pub fn new(value: T, mutator_index: u8) -> Property<T> {
+    fn new(value: Self::Inner, mutator_index: u8) -> Self {
         Property::<T> {
             inner: value,
             mutator: None,
@@ -26,20 +36,20 @@ impl<T: Serde> Property<T> {
 
     /// Set value to the value of another Property, queues for update if value
     /// changes
-    pub fn mirror(&mut self, other: &Property<T>) {
+    fn mirror(&mut self, other: &Self) {
         **self = (**other).clone();
     }
 
     // Serialization / deserialization
 
     /// Writes contained value into outgoing byte stream
-    pub fn write(&self, writer: &mut dyn BitWrite) {
+    fn write(&self, writer: &mut dyn BitWrite) {
         self.inner.ser(writer);
     }
 
     /// Given a cursor into incoming packet data, initializes the Property with
     /// the synced value
-    pub fn new_read(reader: &mut BitReader, mutator_index: u8) -> Result<Self, SerdeErr> {
+    fn new_read(reader: &mut BitReader, mutator_index: u8) -> Result<Self, SerdeErr> {
         let inner = Self::read_inner(reader)?;
 
         Ok(Property::<T> {
@@ -51,33 +61,29 @@ impl<T: Serde> Property<T> {
 
     /// Reads from a stream and immediately writes to a stream
     /// Used to buffer updates for later
-    pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
+    fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
         T::de(reader)?.ser(writer);
         Ok(())
     }
 
     /// Given a cursor into incoming packet data, updates the Property with the
     /// synced value
-    pub fn read(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
+    fn read(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
         self.inner = Self::read_inner(reader)?;
         Ok(())
-    }
-
-    fn read_inner(reader: &mut BitReader) -> Result<T, SerdeErr> {
-        T::de(reader)
     }
 
     // Comparison
 
     /// Compare to another property
-    pub fn equals(&self, other: &Property<T>) -> bool {
+    fn equals(&self, other: &Self) -> bool {
         self.inner == other.inner
     }
 
     // Internal
 
     /// Set an PropertyMutator to track changes to the Property
-    pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
+    fn set_mutator(&mut self, mutator: &PropertyMutator) {
         self.mutator = Some(mutator.clone_new());
     }
 }

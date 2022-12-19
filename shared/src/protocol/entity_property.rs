@@ -1,6 +1,7 @@
+use std::collections::VecDeque;
 use std::hash::Hash;
 
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr, UnsignedVariableInteger};
 
 use crate::{
     bigmap::BigMapKey,
@@ -10,35 +11,49 @@ use crate::{
     },
 };
 
+use crate::protocol::replicable_property::{ReplicableEntityProperty, ReplicableProperty};
+
 #[derive(Clone)]
 pub struct EntityProperty {
     handle_prop: Property<Option<EntityHandle>>,
 }
 
 impl EntityProperty {
-    pub fn new(mutator_index: u8) -> Self {
+    pub fn handle(&self) -> Option<EntityHandle> {
+        *self.handle_prop
+    }
+
+    pub fn get<E: Copy + Eq + Hash>(&self, handler: &dyn EntityHandleConverter<E>) -> Option<E> {
+        (*self.handle_prop).map(|handle| handler.handle_to_entity(&handle))
+    }
+
+    pub fn set<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entity: &E) {
+        let new_handle = handler.entity_to_handle(entity);
+        *self.handle_prop = Some(new_handle);
+    }
+}
+
+
+impl ReplicableEntityProperty for EntityProperty {
+    fn new(mutator_index: u8) -> Self {
         Self {
             handle_prop: Property::<Option<EntityHandle>>::new(None, mutator_index),
         }
     }
 
-    pub fn mirror(&mut self, other: &EntityProperty) {
+    fn mirror(&mut self, other: &Self) {
         *self.handle_prop = other.handle();
-    }
-
-    pub fn handle(&self) -> Option<EntityHandle> {
-        *self.handle_prop
     }
 
     // Serialization / deserialization
 
-    pub fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+    fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
         (*self.handle_prop)
             .map(|handle| converter.handle_to_net_entity(&handle))
             .ser(writer);
     }
 
-    pub fn new_read(
+    fn new_read(
         reader: &mut BitReader,
         mutator_index: u8,
         converter: &dyn NetEntityHandleConverter,
@@ -55,12 +70,12 @@ impl EntityProperty {
         }
     }
 
-    pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
+    fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
         Option::<NetEntity>::de(reader)?.ser(writer);
         Ok(())
     }
 
-    pub fn read(
+    fn read(
         &mut self,
         reader: &mut BitReader,
         converter: &dyn NetEntityHandleConverter,
@@ -76,7 +91,7 @@ impl EntityProperty {
 
     // Comparison
 
-    pub fn equals(&self, other: &EntityProperty) -> bool {
+    fn equals(&self, other: &EntityProperty) -> bool {
         if let Some(handle) = *self.handle_prop {
             if let Some(other_handle) = *other.handle_prop {
                 return handle == other_handle;
@@ -86,21 +101,121 @@ impl EntityProperty {
         other.handle_prop.is_none()
     }
 
+    // Entities
+
+    fn entities(&self) -> Vec<EntityHandle> {
+        let mut output = Vec::new();
+        if let Some(handle) = self.handle() {
+            output.push(handle);
+        }
+        output
+    }
+
     // Internal
 
-    pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
+    fn set_mutator(&mut self, mutator: &PropertyMutator) {
         self.handle_prop.set_mutator(mutator);
     }
+}
 
-    pub fn get<E: Copy + Eq + Hash>(&self, handler: &dyn EntityHandleConverter<E>) -> Option<E> {
-        (*self.handle_prop).map(|handle| handler.handle_to_entity(&handle))
+
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "bevy_support", derive(Reflect))]
+pub struct VecDequeEntityProperty(VecDeque<EntityProperty>);
+
+impl VecDequeEntityProperty {
+    // TODO: should we get rid of this clone?
+    pub fn inner(&self) -> VecDeque<EntityProperty> {
+        self.0.clone()
     }
 
-    pub fn set<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entity: &E) {
-        let new_handle = handler.entity_to_handle(entity);
-        *self.handle_prop = Some(new_handle);
+    pub fn get<E: Copy + Eq + Hash>(&self, handler: &dyn EntityHandleConverter<E>) -> VecDeque<Option<E>> {
+        self.inner().iter().map(|handle| handle.get(handler)).collect()
+    }
+
+    pub fn set<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entities: &VecDeque<E>) {
+        let mut queue = VecDeque::<EntityProperty>::new();
+        entities.iter().for_each(|e| {
+            let mut entity = EntityProperty::default();
+            entity.set(handler, e);
+            queue.push_back(entity);
+        });
+        self.0 = queue;
     }
 }
+
+
+// TODO: maybe use a wrapper instead of directly using deque?
+//  because we cannot shadow some functions like 'new', and because Self has to be Sized
+impl ReplicableEntityProperty for VecDequeEntityProperty {
+    fn new(mutator_index: u8) -> Self {
+        Self(VecDeque::from([EntityProperty::new(mutator_index)]))
+    }
+
+    fn mirror(&mut self, other: &Self) {
+        self.0.iter_mut()
+            .zip(&other.0)
+            .for_each(|(e, other_entity)| e.mirror(other_entity));
+    }
+
+    fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+        let length = UnsignedVariableInteger::<5>::new(self.0.len() as u64);
+        length.ser(writer);
+        self.0.iter().for_each(|e| e.write(writer, converter));
+    }
+
+    fn new_read(reader: &mut BitReader, mutator_index: u8, converter: &dyn NetEntityHandleConverter) -> Result<Self, SerdeErr> {
+        let length_int = UnsignedVariableInteger::<5>::de(reader)?;
+        let length_usize = length_int.get() as usize;
+        let mut output: Self = Self(VecDeque::with_capacity(length_usize));
+        for _ in 0..length_usize {
+            output.0.push_back(EntityProperty::new_read(reader, mutator_index, converter)?);
+        }
+        Ok(output)
+    }
+
+    fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
+        let length_int = UnsignedVariableInteger::<5>::de(reader)?;
+        length_int.ser(writer);
+
+        let length_usize = length_int.get() as usize;
+        for _ in 0..length_usize {
+            EntityProperty::read_write(reader, writer)?;
+        }
+        Ok(())
+    }
+
+    fn read(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<(), SerdeErr> {
+        let length_int = UnsignedVariableInteger::<5>::de(reader)?;
+        let length_usize = length_int.get() as usize;
+        if length_usize != self.0.len() {
+            return Err(SerdeErr)
+        }
+        for e in self.0.iter_mut() {
+            EntityProperty::read(e, reader, converter)?;
+        }
+        Ok(())
+    }
+
+    fn equals(&self, other: &Self) -> bool {
+        self.0.iter()
+            .zip(&other.0)
+            .all(|(e, other_entity)| e.equals(other_entity))
+    }
+
+    fn entities(&self) -> Vec<EntityHandle> {
+        let mut output = Vec::new();
+        self.0.iter().for_each(|e| {
+            output.extend(e.entities());
+        });
+        output
+    }
+
+    fn set_mutator(&mut self, mutator: &PropertyMutator) {
+        self.0.iter_mut().for_each(|e| e.set_mutator(mutator));
+    }
+}
+
 
 pub trait EntityHandleConverter<E: Copy + Eq + Hash> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E;
