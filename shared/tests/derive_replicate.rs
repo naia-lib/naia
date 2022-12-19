@@ -191,13 +191,13 @@ fn read_write_entity_replica() {
     assert_eq!(typed_in_1.entity_1.get(&TestEntityConverter).unwrap(), 1);
     assert_eq!(typed_in_1.entity_1.handle().unwrap().to_u64(), 1);
 
-    assert_eq!(typed_in_1.vec_entity_1.get(&TestEntityConverter), VecDeque::<Option<u64>>::from(
-        [Some(2), Some(3)]
+    assert_eq!(typed_in_1.vec_entity_1.get(&TestEntityConverter), VecDeque::<u64>::from(
+        [2, 3]
     ));
 
     assert_eq!(typed_out_1.entity_1.get(&TestEntityConverter).unwrap(), 1);
     assert_eq!(typed_out_1.entity_1.handle().unwrap().to_u64(), 1);
-    assert_eq!(typed_in_1.vec_entity_1.get(&TestEntityConverter), VecDeque::<Option<u64>>::from(
-        [Some(2), Some(3)]
+    assert_eq!(typed_in_1.vec_entity_1.get(&TestEntityConverter), VecDeque::<u64>::from(
+        [2, 3]
     ));
 }

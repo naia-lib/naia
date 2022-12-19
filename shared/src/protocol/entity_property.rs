@@ -15,6 +15,11 @@ use crate::protocol::replicable_property::{ReplicableEntityProperty, ReplicableP
 
 #[derive(Clone)]
 pub struct EntityProperty {
+    // note: the Option<> is there just because we initialize the value as None.
+    // I think it would be easier to never use 0 as entityHandle, and just use the default-value as
+    // uninitialized
+    // We should also update the new_complete function to directly support entity initialization as well
+    // We don't really allow partial replicate messages anyway!
     handle_prop: Property<Option<EntityHandle>>,
 }
 
@@ -119,28 +124,34 @@ impl ReplicableEntityProperty for EntityProperty {
 }
 
 
+// NOTE: I would have liked to implement this as
+// VecDeque<EntityProperty> so that I could simply re-use all the EntityProperty functions
+// Figure out a better way to re-use code
+
+// However we need Property<VecDeque<EntityHandle>> because we need the mutator (via DerefMut)
+// to be alerted whenever anything changes in the VecDeque
+
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "bevy_support", derive(Reflect))]
-pub struct VecDequeEntityProperty(VecDeque<EntityProperty>);
+pub struct VecDequeEntityProperty(Property<VecDeque<EntityHandle>>);
 
 impl VecDequeEntityProperty {
-    // TODO: should we get rid of this clone?
-    pub fn inner(&self) -> VecDeque<EntityProperty> {
-        self.0.clone()
+    pub fn inner(&self) -> VecDeque<EntityHandle> {
+        // TODO: should we get rid of this clone?
+        (*self.0).clone()
     }
 
-    pub fn get<E: Copy + Eq + Hash>(&self, handler: &dyn EntityHandleConverter<E>) -> VecDeque<Option<E>> {
-        self.inner().iter().map(|handle| handle.get(handler)).collect()
+    pub fn get<E: Copy + Eq + Hash>(&self, handler: &dyn EntityHandleConverter<E>) -> VecDeque<E> {
+        self.0.iter().map(|handle| handler.handle_to_entity(handle)).collect()
     }
 
     pub fn set<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entities: &VecDeque<E>) {
-        let mut queue = VecDeque::<EntityProperty>::new();
+        let mut queue = VecDeque::<EntityHandle>::new();
         entities.iter().for_each(|e| {
-            let mut entity = EntityProperty::default();
-            entity.set(handler, e);
-            queue.push_back(entity);
+            let new_handle = handler.entity_to_handle(e);
+            queue.push_back(new_handle);
         });
-        self.0 = queue;
+        *self.0 = queue;
     }
 }
 
@@ -149,13 +160,11 @@ impl VecDequeEntityProperty {
 //  because we cannot shadow some functions like 'new', and because Self has to be Sized
 impl ReplicableEntityProperty for VecDequeEntityProperty {
     fn new(mutator_index: u8) -> Self {
-        Self(VecDeque::from([EntityProperty::new(mutator_index)]))
+        Self(Property::<VecDeque<EntityHandle>>::new(VecDeque::new(), mutator_index))
     }
 
     fn mirror(&mut self, other: &Self) {
-        self.0.iter_mut()
-            .zip(&other.0)
-            .for_each(|(e, other_entity)| e.mirror(other_entity));
+        *self.0 = other.inner();
     }
 
     fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
@@ -167,20 +176,22 @@ impl ReplicableEntityProperty for VecDequeEntityProperty {
     fn new_read(reader: &mut BitReader, mutator_index: u8, converter: &dyn NetEntityHandleConverter) -> Result<Self, SerdeErr> {
         let length_int = UnsignedVariableInteger::<5>::de(reader)?;
         let length_usize = length_int.get() as usize;
-        let mut output: Self = Self(VecDeque::with_capacity(length_usize));
+        let mut output = VecDeque::with_capacity(length_usize);
         for _ in 0..length_usize {
-            output.0.push_back(EntityProperty::new_read(reader, mutator_index, converter)?);
+            let entity_handle = EntityHandle::read(reader, converter)?;
+            output.push_back(entity_handle);
         }
-        Ok(output)
+        let mut res = Self::new(mutator_index);
+        *res.0 = output;
+        Ok(res)
     }
 
     fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
         let length_int = UnsignedVariableInteger::<5>::de(reader)?;
         length_int.ser(writer);
-
         let length_usize = length_int.get() as usize;
         for _ in 0..length_usize {
-            EntityProperty::read_write(reader, writer)?;
+            EntityHandle::read_write(reader, writer)?;
         }
         Ok(())
     }
@@ -188,31 +199,25 @@ impl ReplicableEntityProperty for VecDequeEntityProperty {
     fn read(&mut self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<(), SerdeErr> {
         let length_int = UnsignedVariableInteger::<5>::de(reader)?;
         let length_usize = length_int.get() as usize;
-        if length_usize != self.0.len() {
-            return Err(SerdeErr)
+        let mut output = VecDeque::with_capacity(length_usize);
+        for _ in 0..length_usize {
+            let entity_handle = EntityHandle::read(reader, converter)?;
+            output.push_back(entity_handle);
         }
-        for e in self.0.iter_mut() {
-            EntityProperty::read(e, reader, converter)?;
-        }
+        *self.0 = output;
         Ok(())
     }
 
     fn equals(&self, other: &Self) -> bool {
-        self.0.iter()
-            .zip(&other.0)
-            .all(|(e, other_entity)| e.equals(other_entity))
+        *self.0 == *other.0
     }
 
     fn entities(&self) -> Vec<EntityHandle> {
-        let mut output = Vec::new();
-        self.0.iter().for_each(|e| {
-            output.extend(e.entities());
-        });
-        output
+        self.inner().into()
     }
 
     fn set_mutator(&mut self, mutator: &PropertyMutator) {
-        self.0.iter_mut().for_each(|e| e.set_mutator(mutator));
+        self.0.set_mutator(mutator)
     }
 }
 
