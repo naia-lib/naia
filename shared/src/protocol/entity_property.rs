@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::hash::Hash;
+use std::ops::{Deref, DerefMut};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr, UnsignedVariableInteger};
 
@@ -231,6 +232,21 @@ impl ReplicableEntityProperty for VecDequeEntityProperty {
         self.0.set_mutator(mutator)
     }
 }
+
+impl Deref for VecDequeEntityProperty {
+    type Target = Property<VecDeque<EntityHandle>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for VecDequeEntityProperty{
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 
 
 pub trait EntityHandleConverter<E: Copy + Eq + Hash> {
