@@ -238,9 +238,7 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
                     }
                 }
             }
-            Fields::Unit => {
-                panic!("Cannot derive Replicate on unit structs");
-            }
+            Fields::Unit => {}
         }
     } else {
         panic!("Can only derive Replicate on a struct");
