@@ -36,11 +36,14 @@ mod some_named_replica {
     pub struct NamedStringHolder {
         pub string_1: Property<String>,
         pub string_2: Property<String>,
+        pub extra_string: String,
     }
 
     impl NamedStringHolder {
-        pub fn new(string_1: &str, string_2: &str) -> Self {
-            return NamedStringHolder::new_complete(string_1.to_string(), string_2.to_string());
+        pub fn new(string_1: &str, string_2: &str, extra_string: &str) -> Self {
+            let mut res =  NamedStringHolder::new_complete(string_1.to_string(), string_2.to_string());
+            res.extra_string = extra_string.to_string();
+            res
         }
     }
 }
@@ -50,14 +53,13 @@ mod some_tuple_replica {
 
     #[derive(Replicate)]
     #[protocol_path = "super::some_protocol::SomeProtocol"]
-    pub struct TupleStringHolder(
-        pub Property<String>,
-        pub Property<String>,
-    );
+    pub struct TupleStringHolder(pub Property<String>, pub Property<String>, pub String);
 
     impl TupleStringHolder {
-        pub fn new(string_1: &str, string_2: &str) -> Self {
-            return TupleStringHolder::new_complete(string_1.to_string(), string_2.to_string());
+        pub fn new(string_1: &str, string_2: &str, extra_string: &str) -> Self {
+            let mut res =  TupleStringHolder::new_complete(string_1.to_string(), string_2.to_string());
+            res.2 = extra_string.to_string();
+            res
         }
     }
 }
@@ -94,7 +96,7 @@ fn read_write_named_replica() {
     // Write
     let mut writer = BitWriter::new();
 
-    let in_1 = SomeProtocol::NamedStringHolder(NamedStringHolder::new("hello world", "goodbye world"));
+    let in_1 = SomeProtocol::NamedStringHolder(NamedStringHolder::new("hello world", "goodbye world", "extra"));
 
     in_1.write(&mut writer, &FakeEntityConverter);
 
@@ -113,8 +115,10 @@ fn read_write_named_replica() {
     assert!(typed_in_1.string_2.equals(&typed_out_1.string_2));
     assert_eq!(*typed_in_1.string_1, "hello world".to_string());
     assert_eq!(*typed_in_1.string_2, "goodbye world".to_string());
+    assert_eq!(*typed_in_1.extra_string, "extra".to_string());
     assert_eq!(*typed_out_1.string_1, "hello world".to_string());
     assert_eq!(*typed_out_1.string_2, "goodbye world".to_string());
+    assert_eq!(*typed_out_1.extra_string, "".to_string());
 }
 
 #[test]
@@ -144,7 +148,7 @@ fn read_write_tuple_replica() {
     // Write
     let mut writer = BitWriter::new();
 
-    let in_1 = SomeProtocol::TupleStringHolder(TupleStringHolder::new("hello world", "goodbye world"));
+    let in_1 = SomeProtocol::TupleStringHolder(TupleStringHolder::new("hello world", "goodbye world", "extra"));
 
     in_1.write(&mut writer, &FakeEntityConverter);
 
@@ -163,8 +167,10 @@ fn read_write_tuple_replica() {
     assert!(typed_in_1.1.equals(&typed_out_1.1));
     assert_eq!(*typed_in_1.0, "hello world".to_string());
     assert_eq!(*typed_in_1.1, "goodbye world".to_string());
+    assert_eq!(*typed_in_1.2, "extra".to_string());
     assert_eq!(*typed_out_1.0, "hello world".to_string());
     assert_eq!(*typed_out_1.1, "goodbye world".to_string());
+    assert_eq!(*typed_out_1.2, "".to_string());
 }
 
 #[test]
