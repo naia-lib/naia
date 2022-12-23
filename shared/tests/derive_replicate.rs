@@ -2,6 +2,7 @@ mod some_protocol {
     use super::some_entity_replica::EntityPropertyHolder;
     use super::some_named_replica::NamedStringHolder;
     use super::some_tuple_replica::TupleStringHolder;
+    use super::some_unit_replica::UnitHolder;
     use naia_shared::Protocolize;
 
     #[derive(Protocolize)]
@@ -9,6 +10,21 @@ mod some_protocol {
         NamedStringHolder(NamedStringHolder),
         TupleStringHolder(TupleStringHolder),
         EntityPropertyHolder(EntityPropertyHolder),
+        UnitHolder(UnitHolder),
+    }
+}
+
+mod some_unit_replica {
+    use naia_shared::{Replicate};
+
+    #[derive(Replicate)]
+    #[protocol_path = "super::some_protocol::SomeProtocol"]
+    pub struct UnitHolder;
+
+    impl UnitHolder {
+        pub fn new() -> Self {
+            return UnitHolder::new_complete();
+        }
     }
 }
 
@@ -71,6 +87,7 @@ use some_protocol::SomeProtocol;
 use some_entity_replica::EntityPropertyHolder;
 use some_named_replica::NamedStringHolder;
 use some_tuple_replica::TupleStringHolder;
+use some_unit_replica::UnitHolder;
 
 #[test]
 fn read_write_named_replica() {
@@ -98,6 +115,28 @@ fn read_write_named_replica() {
     assert_eq!(*typed_in_1.string_2, "goodbye world".to_string());
     assert_eq!(*typed_out_1.string_1, "hello world".to_string());
     assert_eq!(*typed_out_1.string_2, "goodbye world".to_string());
+}
+
+#[test]
+fn read_write_unit_replica() {
+    // Write
+    let mut writer = BitWriter::new();
+
+    let in_1 = SomeProtocol::UnitHolder(UnitHolder::new());
+
+    in_1.write(&mut writer, &FakeEntityConverter);
+
+    let (buffer_length, buffer) = writer.flush();
+
+    // Read
+
+    let mut reader = BitReader::new(&buffer[..buffer_length]);
+
+    let out_1 = SomeProtocol::read(&mut reader, &FakeEntityConverter)
+        .expect("should deserialize correctly");
+
+    let _typed_in_1 = in_1.cast_ref::<UnitHolder>().unwrap();
+    let _typed_out_1 = out_1.cast_ref::<UnitHolder>().unwrap();
 }
 
 #[test]
@@ -130,7 +169,6 @@ fn read_write_tuple_replica() {
 
 #[test]
 fn read_write_entity_replica() {
-
     pub struct TestEntityConverter;
 
     impl EntityHandleConverter<u64> for TestEntityConverter {
