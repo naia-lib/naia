@@ -1,5 +1,3 @@
-extern crate log;
-
 use std::{cell::RefCell, collections::VecDeque, rc::Rc};
 
 use wasm_bindgen::{closure::Closure, JsCast};

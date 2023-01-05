@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 
-use smol::channel::Sender;
+use smol::channel::{Sender, TrySendError};
+
+use naia_socket_shared::ChannelClosedError;
 
 /// Used to send packets to the Server Socket
 #[derive(Clone)]
@@ -15,9 +17,12 @@ impl PacketSender {
     }
 
     /// Sends a packet to the Server Socket
-    pub fn send(&self, address: &SocketAddr, payload: &[u8]) {
+    pub fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), ChannelClosedError<()>> {
         self.channel_sender
             .try_send((*address, payload.into()))
-            .unwrap(); //TODO: handle result..
+            .map_err(|err| match err {
+                TrySendError::Full(_) => unreachable!("the channel is expected to be unbound"),
+                TrySendError::Closed(_) => ChannelClosedError(()),
+            })
     }
 }

@@ -20,5 +20,3 @@ impl fmt::Display for NaiaServerSocketError {
 }
 
 impl Error for NaiaServerSocketError {}
-//unsafe impl Send for NaiaServerSocketError {}
-//unsafe impl Sync for NaiaServerSocketError {}

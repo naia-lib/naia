@@ -28,7 +28,7 @@ impl PacketReceiver {
 // Trait
 
 /// Used to receive packets from the Client Socket
-pub trait PacketReceiverTrait: PacketReceiverClone + Send + Sync {
+pub trait PacketReceiverTrait: PacketReceiverClone {
     /// Receives a packet from the Client Socket
     fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError>;
     /// Get the Server's Socket address

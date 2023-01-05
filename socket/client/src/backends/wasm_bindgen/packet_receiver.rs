@@ -47,6 +47,3 @@ impl PacketReceiverTrait for PacketReceiverImpl {
         self.server_addr.get()
     }
 }
-
-unsafe impl Send for PacketReceiverImpl {}
-unsafe impl Sync for PacketReceiverImpl {}

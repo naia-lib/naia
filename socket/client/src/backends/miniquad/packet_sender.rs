@@ -7,7 +7,7 @@ pub struct PacketSender;
 
 impl PacketSender {
     /// Send a Packet to the Server
-    pub fn send(&self, payload: &[u8]) {
+    pub fn send(&self, payload: &[u8]) -> Result<(), naia_socket_shared::ChannelClosedError<()>> {
         unsafe {
             let ptr = payload.as_ptr();
             let len = payload.len();
