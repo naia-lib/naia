@@ -28,34 +28,6 @@ pub use socket_config::SocketConfig;
 pub use time_queue::TimeQueue;
 pub use url_parse::{parse_server_url, url_to_socket_addr};
 
-/// This enumeration is the list of the possible error outcomes for the `send` method of packet
-/// senders.
-#[derive(Debug, Eq, PartialEq)]
-pub enum TrySendError<T> {
-    /// The data could not be sent on the channel because the channel is
-    /// currently full and sending would require blocking.
-    Full(T),
-
-    /// The receive half of the channel was explicitly closed or has been
-    /// dropped.
-    Closed(T),
-}
-
-impl<T: std::fmt::Debug> std::error::Error for TrySendError<T> {}
-
-impl<T> std::fmt::Display for TrySendError<T> {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            fmt,
-            "{}",
-            match self {
-                TrySendError::Full(..) => "no available capacity",
-                TrySendError::Closed(..) => "channel closed",
-            }
-        )
-    }
-}
-
 #[derive(Debug, Eq, PartialEq)]
 pub struct ChannelClosedError<T>(pub T);
 
