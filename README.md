@@ -59,8 +59,3 @@ To run the WebRTC client demo on Web: (that will be able to communicate with a W
 To run a miniquad client you will require the following be installed
 
     sudo apt-get install libxi-dev libgl1-mesa-dev
-
-### A big thanks to our generous Sponsor for making this work sustainable:
-<a href="https://meetkai.com">
-    <img src="assets/sponsors/meetkai_metaverse_banner_purple_900x250.png" width="600" height="166" />
-</a>
