@@ -1,31 +1,17 @@
 use crate::{
-    error::{SerdeErr, WriteOverflowError},
+    error::SerdeErr,
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
 
 impl<T: Serde> Serde for Option<T> {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         if let Some(value) = self {
-            {
-                let result = writer.write_bit(true);
-                if result.is_err() {
-                    return result;
-                }
-            }
-            {
-                let result = value.ser(writer);
-                if result.is_err() {
-                    return result;
-                }
-            }
+            writer.write_bit(true);
+            value.ser(writer);
         } else {
-            let result = writer.write_bit(false);
-            if result.is_err() {
-                return result;
-            }
+            writer.write_bit(false);
         }
-        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<Option<T>, SerdeErr> {
@@ -54,8 +40,8 @@ mod tests {
         let in_1 = Some(123);
         let in_2: Option<f32> = None;
 
-        in_1.ser(&mut writer).unwrap();
-        in_2.ser(&mut writer).unwrap();
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 

@@ -1,5 +1,5 @@
 use crate::{
-    error::{SerdeErr, WriteOverflowError},
+    error::SerdeErr,
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
@@ -7,9 +7,7 @@ use crate::{
 // Unit //
 
 impl Serde for () {
-    fn ser(&self, _: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
-        Ok(())
-    }
+    fn ser(&self, _: &mut dyn BitWrite) {}
 
     fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
         Ok(())
@@ -32,7 +30,7 @@ mod unit_tests {
 
         let in_unit = ();
 
-        in_unit.ser(&mut writer).unwrap();
+        in_unit.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -48,8 +46,8 @@ mod unit_tests {
 // Boolean //
 
 impl Serde for bool {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
-        writer.write_bit(*self)
+    fn ser(&self, writer: &mut dyn BitWrite) {
+        writer.write_bit(*self);
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -74,8 +72,8 @@ mod bool_tests {
         let in_1 = true;
         let in_2 = false;
 
-        in_1.ser(&mut writer).unwrap();
-        in_2.ser(&mut writer).unwrap();
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -94,16 +92,12 @@ mod bool_tests {
 // Characters //
 
 impl Serde for char {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let u32char = *self as u32;
         let bytes = unsafe { std::mem::transmute::<&u32, &[u8; 4]>(&u32char) };
         for byte in bytes {
-            let result = writer.write_byte(*byte);
-            if result.is_err() {
-                return result;
-            }
+            writer.write_byte(*byte);
         }
-        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -145,8 +139,8 @@ mod char_tests {
         let in_1 = 'O';
         let in_2 = '!';
 
-        in_1.ser(&mut writer).unwrap();
-        in_2.ser(&mut writer).unwrap();
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -167,19 +161,15 @@ mod char_tests {
 macro_rules! impl_serde_for {
     ($impl_type:ident) => {
         impl Serde for $impl_type {
-            fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+            fn ser(&self, writer: &mut dyn BitWrite) {
                 let du8 = unsafe {
                     std::mem::transmute::<&$impl_type, &[u8; std::mem::size_of::<$impl_type>()]>(
                         &self,
                     )
                 };
                 for byte in du8 {
-                    let result = writer.write_byte(*byte);
-                    if result.is_err() {
-                        return result;
-                    }
+                    writer.write_byte(*byte);
                 }
-                Ok(())
             }
 
             fn de(reader: &mut BitReader) -> Result<$impl_type, SerdeErr> {
@@ -214,8 +204,8 @@ impl_serde_for!(f64);
 
 // u8
 impl Serde for u8 {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
-        writer.write_byte(*self)
+    fn ser(&self, writer: &mut dyn BitWrite) {
+        writer.write_byte(*self);
     }
 
     fn de(reader: &mut BitReader) -> Result<u8, SerdeErr> {
@@ -225,9 +215,9 @@ impl Serde for u8 {
 
 // i8
 impl Serde for i8 {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let du8 = unsafe { std::mem::transmute::<&i8, &u8>(self) };
-        writer.write_byte(*du8)
+        writer.write_byte(*du8);
     }
 
     fn de(reader: &mut BitReader) -> Result<i8, SerdeErr> {
@@ -246,16 +236,12 @@ impl Serde for i8 {
 
 // usize
 impl Serde for usize {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let u64usize = *self as u64;
         let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
         for byte in du8 {
-            let result = writer.write_byte(*byte);
-            if result.is_err() {
-                return result;
-            }
+            writer.write_byte(*byte);
         }
-        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<usize, SerdeErr> {
@@ -277,16 +263,12 @@ impl Serde for usize {
 
 // isize
 impl Serde for isize {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let u64usize = *self as u64;
         let du8 = unsafe { std::mem::transmute::<&u64, &[u8; 8]>(&u64usize) };
         for byte in du8 {
-            let result = writer.write_byte(*byte);
-            if result.is_err() {
-                return result;
-            }
+            writer.write_byte(*byte);
         }
-        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<isize, SerdeErr> {
@@ -322,7 +304,7 @@ macro_rules! test_serde_for {
 
             let in_1: $impl_type = 123 as $impl_type;
 
-            in_1.ser(&mut writer).unwrap();
+            in_1.ser(&mut writer);
 
             let (buffer_length, buffer) = writer.flush();
 

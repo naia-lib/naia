@@ -1,5 +1,5 @@
 use crate::{
-    error::{SerdeErr, WriteOverflowError},
+    error::SerdeErr,
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
@@ -65,18 +65,13 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8>
 impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
     for SerdeInteger<SIGNED, VARIABLE, BITS>
 {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let mut value: u128;
         let negative = self.inner < 0;
 
         if SIGNED {
             // 1 if negative, 0 if positive
-            {
-                let result = writer.write_bit(negative);
-                if result.is_err() {
-                    return result;
-                }
-            }
+            writer.write_bit(negative);
             if negative {
                 value = -self.inner as u128;
             } else {
@@ -94,36 +89,22 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
                 } else {
                     proceed = false;
                 }
-                {
-                    let result = writer.write_bit(proceed);
-                    if result.is_err() {
-                        return result;
-                    }
-                }
+                writer.write_bit(proceed);
 
                 for _ in 0..BITS {
-                    {
-                        let result = writer.write_bit(value & 1 != 0);
-                        if result.is_err() {
-                            return result;
-                        }
-                    }
+                    writer.write_bit(value & 1 != 0);
                     value >>= 1;
                 }
                 if !proceed {
-                    return Ok(());
+                    return;
                 }
             }
         } else {
             for _ in 0..BITS {
-                let result = writer.write_bit(value & 1 != 0);
-                if result.is_err() {
-                    return result;
-                }
+                writer.write_bit(value & 1 != 0);
                 value >>= 1;
             }
         }
-        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -213,9 +194,9 @@ mod tests {
         let in_2 = UnsignedInteger::<20>::new(535221);
         let in_3 = UnsignedInteger::<2>::new(3);
 
-        in_1.ser(&mut writer).unwrap();
-        in_2.ser(&mut writer).unwrap();
-        in_3.ser(&mut writer).unwrap();
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
+        in_3.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -241,9 +222,9 @@ mod tests {
         let in_2 = SignedInteger::<20>::new(53);
         let in_3 = SignedInteger::<2>::new(-3);
 
-        in_1.ser(&mut writer).unwrap();
-        in_2.ser(&mut writer).unwrap();
-        in_3.ser(&mut writer).unwrap();
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
+        in_3.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -269,9 +250,9 @@ mod tests {
         let in_2 = UnsignedVariableInteger::<5>::new(153);
         let in_3 = UnsignedVariableInteger::<2>::new(3);
 
-        in_1.ser(&mut writer).unwrap();
-        in_2.ser(&mut writer).unwrap();
-        in_3.ser(&mut writer).unwrap();
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
+        in_3.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -297,9 +278,9 @@ mod tests {
         let in_2 = SignedVariableInteger::<6>::new(53735);
         let in_3 = SignedVariableInteger::<2>::new(-3);
 
-        in_1.ser(&mut writer).unwrap();
-        in_2.ser(&mut writer).unwrap();
-        in_3.ser(&mut writer).unwrap();
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
+        in_3.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 

@@ -1,28 +1,19 @@
 use std::collections::VecDeque;
 
 use crate::{
-    error::{SerdeErr, WriteOverflowError},
+    error::SerdeErr,
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
     UnsignedVariableInteger,
 };
 
 impl<T: Serde> Serde for Vec<T> {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
-        {
-            let result = length.ser(writer);
-            if result.is_err() {
-                return result;
-            }
-        }
+        length.ser(writer);
         for item in self {
-            let result = item.ser(writer);
-            if result.is_err() {
-                return result;
-            }
+            item.ser(writer);
         }
-        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -37,21 +28,12 @@ impl<T: Serde> Serde for Vec<T> {
 }
 
 impl<T: Serde> Serde for VecDeque<T> {
-    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
-        {
-            let result = length.ser(writer);
-            if result.is_err() {
-                return result;
-            }
-        }
+        length.ser(writer);
         for item in self {
-            let result = item.ser(writer);
-            if result.is_err() {
-                return result;
-            }
+            item.ser(writer);
         }
-        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -83,8 +65,8 @@ mod tests {
         let in_1 = vec![5, 3, 2, 7];
         let in_2 = vec![false, false, true, false, true, true, false, true];
 
-        in_1.ser(&mut writer).unwrap();
-        in_2.ser(&mut writer).unwrap();
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -120,8 +102,8 @@ mod tests {
         in_2.push_back(true);
         in_2.push_back(true);
 
-        in_1.ser(&mut writer).unwrap();
-        in_2.ser(&mut writer).unwrap();
+        in_1.ser(&mut writer);
+        in_2.ser(&mut writer);
 
         let (buffer_length, buffer) = writer.flush();
 
