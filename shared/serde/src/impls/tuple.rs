@@ -1,13 +1,19 @@
 use crate::{
-    error::SerdeErr,
+    error::{SerdeErr, WriteOverflowError},
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
 macro_rules! impl_reflect_tuple {
     {$($index:tt : $name:tt),*} => {
         impl<$($name : Serde,)*> Serde for ($($name,)*) {
-            fn ser(&self, writer: &mut dyn BitWrite) {
-                $(self.$index.ser(writer);)*
+            fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
+                $({
+                    let result = self.$index.ser(writer);
+                    if result.is_err() {
+                        return result;
+                    }
+                })*
+                Ok(())
             }
             fn de(reader: &mut BitReader) -> Result<($($name,)*), SerdeErr> {
                 Ok(($($name::de(reader)?, )*))
@@ -49,10 +55,10 @@ mod tests {
         let in_3 = (true, false, true, None, 4815, "Tuples tuples..".to_string());
         let in_4 = (332, "Goodbye tuple...".to_string());
 
-        in_1.ser(&mut writer);
-        in_2.ser(&mut writer);
-        in_3.ser(&mut writer);
-        in_4.ser(&mut writer);
+        in_1.ser(&mut writer).unwrap();
+        in_2.ser(&mut writer).unwrap();
+        in_3.ser(&mut writer).unwrap();
+        in_4.ser(&mut writer).unwrap();
 
         let (buffer_length, buffer) = writer.flush();
 

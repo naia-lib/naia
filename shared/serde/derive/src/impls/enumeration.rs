@@ -143,7 +143,7 @@ pub fn derive_serde_enum(enum_: &Enum) -> String {
             use super::serde::*;
             use super::{name};
             impl Serde for {name} {{
-                fn ser(&self, writer: &mut dyn BitWrite) {{
+                fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {{
                     match self {{
                       {ser_variants}
                     }}

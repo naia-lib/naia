@@ -21,7 +21,7 @@ impl From<u16> for NetEntity {
 }
 
 impl serde::Serde for NetEntity {
-    fn ser(&self, writer: &mut dyn BitWrite) {
+    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
         UnsignedVariableInteger::<7>::new(self.0).ser(writer);
     }
 

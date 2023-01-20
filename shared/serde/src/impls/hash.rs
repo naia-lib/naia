@@ -1,5 +1,5 @@
 use crate::{
-    error::SerdeErr,
+    error::{SerdeErr, WriteOverflowError},
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
     UnsignedVariableInteger,
@@ -10,12 +10,21 @@ use std::{
 };
 
 impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
-    fn ser(&self, writer: &mut dyn BitWrite) {
+    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
-        length.ser(writer);
-        for value in self {
-            value.ser(writer);
+        {
+            let result = length.ser(writer);
+            if result.is_err() {
+                return result;
+            }
         }
+        for value in self {
+            let result = value.ser(writer);
+            if result.is_err() {
+                return result;
+            }
+        }
+        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -31,13 +40,29 @@ impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
 }
 
 impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
-    fn ser(&self, writer: &mut dyn BitWrite) {
+    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
         let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
-        length.ser(writer);
-        for (key, value) in self {
-            key.ser(writer);
-            value.ser(writer);
+        {
+            let result = length.ser(writer);
+            if result.is_err() {
+                return result;
+            }
         }
+        for (key, value) in self {
+            {
+                let result = key.ser(writer);
+                if result.is_err() {
+                    return result;
+                }
+            }
+            {
+                let result = value.ser(writer);
+                if result.is_err() {
+                    return result;
+                }
+            }
+        }
+        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -79,8 +104,8 @@ mod tests {
         in_2.insert(21, true);
         in_2.insert(67, false);
 
-        in_1.ser(&mut writer);
-        in_2.ser(&mut writer);
+        in_1.ser(&mut writer).unwrap();
+        in_2.ser(&mut writer).unwrap();
 
         let (buffer_length, buffer) = writer.flush();
 
@@ -111,8 +136,8 @@ mod tests {
         in_2.insert(21);
         in_2.insert(67);
 
-        in_1.ser(&mut writer);
-        in_2.ser(&mut writer);
+        in_1.ser(&mut writer).unwrap();
+        in_2.ser(&mut writer).unwrap();
 
         let (buffer_length, buffer) = writer.flush();
 

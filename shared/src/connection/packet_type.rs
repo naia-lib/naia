@@ -33,7 +33,7 @@ pub enum PacketType {
 // Most packets should be Data, so lets compress this a bit more.
 // Could do this with another enum, but code would get messy.
 impl crate::serde::Serde for PacketType {
-    fn ser(&self, writer: &mut dyn BitWrite) {
+    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
         let is_data = *self == PacketType::Data;
         is_data.ser(writer);
 

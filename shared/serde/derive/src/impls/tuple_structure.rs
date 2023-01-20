@@ -22,7 +22,7 @@ pub fn derive_serde_tuple_struct(struct_: &Struct) -> String {
             use super::serde::*;
             use super::{name};
             impl Serde for {name} {{
-                fn ser(&self, writer: &mut dyn BitWrite) {{
+                fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {{
                     {ser_body}
                 }}
                 fn de(reader: &mut BitReader) -> std::result::Result<Self, SerdeErr> {{

@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use naia_client::internal::{HandshakeManager as ClientHandshakeManager, HandshakeState};
 use naia_server::internal::{HandshakeManager as ServerHandshakeManager, HandshakeResult};
-use naia_shared::{
-    serde::{BitReader, BitWriter, Serde},
-    PacketType, Protocolize, StandardHeader,
-};
+use naia_shared::{serde::{BitReader, BitWriter, Serde}, PacketType, Protocolize, StandardHeader, MTU_SIZE_BYTES_USIZE};
 use naia_test::{Auth, Protocol};
 
 #[test]
@@ -13,7 +10,7 @@ fn end_to_end_handshake_w_auth() {
     let mut client = ClientHandshakeManager::<Protocol>::new(Duration::new(0, 0));
     let mut server = ServerHandshakeManager::<Protocol>::new(true);
     let mut message_length: usize;
-    let mut message_buffer: [u8; 508];
+    let mut message_buffer: [u8; MTU_SIZE_BYTES_USIZE];
     let mut writer: BitWriter;
     let mut reader: BitReader;
 

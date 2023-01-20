@@ -1,18 +1,27 @@
 use crate::{
-    error::SerdeErr,
+    error::{SerdeErr, WriteOverflowError},
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
     UnsignedInteger,
 };
 
 impl Serde for String {
-    fn ser(&self, writer: &mut dyn BitWrite) {
+    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
         let length = UnsignedInteger::<9>::new(self.len() as u64);
-        length.ser(writer);
+        {
+            let result = length.ser(writer);
+            if result.is_err() {
+                return result;
+            }
+        }
         let bytes = self.as_bytes();
         for byte in bytes {
-            writer.write_byte(*byte);
+            let result = writer.write_byte(*byte);
+            if result.is_err() {
+                return result;
+            }
         }
+        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -45,8 +54,8 @@ mod tests {
         let in_1 = "Hello world!".to_string();
         let in_2 = "This is a string.".to_string();
 
-        in_1.ser(&mut writer);
-        in_2.ser(&mut writer);
+        in_1.ser(&mut writer).unwrap();
+        in_2.ser(&mut writer).unwrap();
 
         let (buffer_length, buffer) = writer.flush();
 

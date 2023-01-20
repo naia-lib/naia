@@ -1,11 +1,7 @@
-use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
-};
+use crate::{error::{SerdeErr, WriteOverflowError}, reader_writer::{BitReader, BitWrite}, serde::Serde};
 
 impl<T: Serde> Serde for Box<T> {
-    fn ser(&self, writer: &mut dyn BitWrite) {
+    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
         (**self).ser(writer)
     }
 
@@ -31,8 +27,8 @@ mod tests {
         let in_1 = Box::new(123);
         let in_2 = Box::new(true);
 
-        in_1.ser(&mut writer);
-        in_2.ser(&mut writer);
+        in_1.ser(&mut writer).unwrap();
+        in_2.ser(&mut writer).unwrap();
 
         let (buffer_length, buffer) = writer.flush();
 

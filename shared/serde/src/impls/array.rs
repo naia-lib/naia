@@ -1,14 +1,18 @@
 use crate::{
-    error::SerdeErr,
+    error::{SerdeErr, WriteOverflowError},
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
 
 impl<T: Serde> Serde for &[T] {
-    fn ser(&self, writer: &mut dyn BitWrite) {
+    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
         for item in *self {
-            item.ser(writer);
+            let result = item.ser(writer);
+            if result.is_err() {
+                return result;
+            }
         }
+        Ok(())
     }
 
     fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -17,10 +21,14 @@ impl<T: Serde> Serde for &[T] {
 }
 
 impl<T: Serde, const N: usize> Serde for [T; N] {
-    fn ser(&self, writer: &mut dyn BitWrite) {
+    fn ser(&self, writer: &mut dyn BitWrite) -> Result<(), WriteOverflowError> {
         for item in self {
-            item.ser(writer);
+            let result = item.ser(writer);
+            if result.is_err() {
+                return result;
+            }
         }
+        Ok(())
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -52,8 +60,8 @@ mod tests {
         let in_1: [i32; 4] = [5, 11, 52, 8];
         let in_2: [bool; 3] = [true, false, true];
 
-        in_1.ser(&mut writer);
-        in_2.ser(&mut writer);
+        in_1.ser(&mut writer).unwrap();
+        in_2.ser(&mut writer).unwrap();
 
         let (buffer_length, buffer) = writer.flush();
 
