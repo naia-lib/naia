@@ -44,7 +44,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Cache crates
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Clippy
         uses: actions-rs/cargo@v1
@@ -75,7 +75,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Cache crates
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Clippy
         uses: actions-rs/cargo@v1
@@ -111,7 +111,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Cache crates
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Clippy
         uses: actions-rs/cargo@v1
@@ -148,7 +148,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Cache crates
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Clippy
         uses: actions-rs/cargo@v1
@@ -181,7 +181,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Cache crates
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Clippy
         uses: actions-rs/cargo@v1
@@ -233,7 +233,7 @@ jobs:
         run: rustup target add wasm32-unknown-unknown
 
       - name: Cache crates
-        uses: Swatinem/rust-cache@v1
+        uses: Swatinem/rust-cache@v2
 
       - name: Clippy
         uses: actions-rs/cargo@v1
