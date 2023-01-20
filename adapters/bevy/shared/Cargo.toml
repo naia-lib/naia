@@ -4,8 +4,8 @@ version = "0.14.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia & Bevy interop, functionality shared by client & server versions"
-homepage = "https://github.com/naia-rs/naia"
-repository = "https://github.com/naia-rs/naia"
+homepage = "https://github.com/naia-lib/naia"
+repository = "https://github.com/naia-lib/naia"
 license = "MIT OR Apache-2.0"
 edition = "2021"
 
