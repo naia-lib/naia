@@ -1,15 +1,12 @@
 use std::{collections::VecDeque, mem, time::Duration};
 
-use naia_serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger};
+use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
 use naia_socket_shared::Instant;
 
-use crate::{constants::MTU_SIZE_BITS, types::MessageId, wrapping_diff};
+use crate::{types::MessageId, wrapping_diff};
 
-use super::{
-    message_channel::{ChannelSender, ChannelWriter},
-    message_list_header,
-};
+use super::message_channel::{ChannelSender, ChannelWriter};
 
 // Sender
 
@@ -17,7 +14,7 @@ pub struct ReliableSender<P: Send + Sync> {
     rtt_resend_factor: f32,
     sending_messages: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
     next_send_message_id: MessageId,
-    next_send_messages: VecDeque<(MessageId, P)>,
+    outgoing_messages: VecDeque<(MessageId, P)>,
 }
 
 impl<P: Send + Sync> ReliableSender<P> {
@@ -26,7 +23,7 @@ impl<P: Send + Sync> ReliableSender<P> {
             rtt_resend_factor,
             next_send_message_id: 0,
             sending_messages: VecDeque::new(),
-            next_send_messages: VecDeque::new(),
+            outgoing_messages: VecDeque::new(),
         }
     }
 
@@ -69,7 +66,7 @@ impl<P: Send + Sync> ReliableSender<P> {
     }
 
     pub fn take_next_messages(&mut self) -> VecDeque<(MessageId, P)> {
-        mem::take(&mut self.next_send_messages)
+        mem::take(&mut self.outgoing_messages)
     }
 
     // Called when a message has been delivered
@@ -126,7 +123,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
                 should_send = true;
             }
             if should_send {
-                self.next_send_messages
+                self.outgoing_messages
                     .push_back((*message_id, message.clone()));
                 *last_sent_opt = Some(now.clone());
             }
@@ -134,7 +131,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
     }
 
     fn has_messages(&self) -> bool {
-        !self.next_send_messages.is_empty()
+        !self.outgoing_messages.is_empty()
     }
 
     fn write_messages(
@@ -142,80 +139,51 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>> {
-        let mut message_count: u16 = 0;
 
-        // Header
-        {
-            // Measure
-            let current_packet_size = bit_writer.bit_count();
-            if current_packet_size > MTU_SIZE_BITS {
-                message_list_header::write(bit_writer, 0);
-                return None;
+        let mut last_written_id: Option<MessageId> = None;
+        let mut message_ids = Vec::new();
+
+        loop {
+
+            if self.outgoing_messages.is_empty() {
+                break;
             }
 
-            let mut counter = BitCounter::new();
+            // check that we can write the next message
+            let (message_id, message) = self.outgoing_messages.front().unwrap();
+            let mut counter = bit_writer.counter();
+            self.write_outgoing_message(
+                channel_writer,
+                &mut counter,
+                &last_written_id,
+                &message_id,
+                &message,
+            );
 
-            //TODO: message_count is inaccurate here and may be different than final, does
-            // this matter?
-            message_list_header::write(&mut counter, 123);
-
-            // Check for overflow
-            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                message_list_header::write(bit_writer, 0);
-                return None;
+            // if we can, start writing
+            if !counter.is_valid() {
+                break;
             }
 
-            // Find how many messages will fit into the packet
-            let mut last_written_id: Option<MessageId> = None;
-            let mut index = 0;
-            loop {
-                if index >= self.next_send_messages.len() {
-                    break;
-                }
+            // write MessageContinue bit
+            true.ser(bit_writer);
 
-                let (message_id, message) = self.next_send_messages.get(index).unwrap();
-                self.write_outgoing_message(
-                    channel_writer,
-                    &mut counter,
-                    &last_written_id,
-                    message_id,
-                    message,
-                );
-                last_written_id = Some(*message_id);
-                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
-                    message_count += 1;
-                } else {
-                    break;
-                }
+            // write data
+            self.write_outgoing_message(
+                channel_writer,
+                bit_writer,
+                &last_written_id,
+                &message_id,
+                &message,
+            );
 
-                index += 1;
-            }
+            message_ids.push(*message_id);
+            last_written_id = Some(*message_id);
+
+            // pop message we've written
+            self.outgoing_messages.pop_front();
         }
-
-        // Write header
-        message_list_header::write(bit_writer, message_count);
-
-        // Messages
-        {
-            let mut last_written_id: Option<MessageId> = None;
-            let mut message_ids = Vec::new();
-
-            for _ in 0..message_count {
-                // Pop and write message
-                let (message_id, message) = self.next_send_messages.pop_front().unwrap();
-                self.write_outgoing_message(
-                    channel_writer,
-                    bit_writer,
-                    &last_written_id,
-                    &message_id,
-                    &message,
-                );
-
-                message_ids.push(message_id);
-                last_written_id = Some(message_id);
-            }
-            Some(message_ids)
-        }
+        Some(message_ids)
     }
 
     fn notify_message_delivered(&mut self, message_id: &MessageId) {

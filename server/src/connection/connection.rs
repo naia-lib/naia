@@ -6,7 +6,7 @@ use std::{
 
 use naia_shared::{
     sequence_greater_than,
-    serde::{BitReader, BitWriter, SerdeErr},
+    serde::{BitReader, BitWriter, SerdeErr, Serde},
     BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, HostType,
     Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldRefType,
 };
@@ -144,9 +144,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
 
             let mut bit_writer = BitWriter::new();
 
+            // Reserve bits we know will be required to finish the message:
+            // 1. Messages finish bit
+            // 2. Updates finish bit
+            // 3. Actions finish bit
+            bit_writer.reserve_bits(3);
+
             // write header
-            self.base
-                .write_outgoing_header(PacketType::Data, &mut bit_writer);
+            self.base.write_outgoing_header(PacketType::Data, &mut bit_writer);
 
             // write server tick
             if let Some(tick_manager) = tick_manager_opt {
@@ -167,16 +172,41 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                     &mut bit_writer,
                     next_packet_index,
                 );
+
+                // finish messages
+                false.ser(&mut bit_writer);
+                bit_writer.release_bits(1);
+            }
+
+            // write entity updates
+            {
+                self.entity_manager.write_updates(
+                    now,
+                    &mut bit_writer,
+                    &next_packet_index,
+                    world,
+                    world_record,
+                );
+
+                // finish updates
+                false.ser(&mut bit_writer);
+                bit_writer.release_bits(1);
             }
 
             // write entity actions
-            self.entity_manager.write_all(
-                now,
-                &mut bit_writer,
-                &next_packet_index,
-                world,
-                world_record,
-            );
+            {
+                self.entity_manager.write_actions(
+                    now,
+                    &mut bit_writer,
+                    &next_packet_index,
+                    world,
+                    world_record,
+                );
+
+                // finish actions
+                false.ser(&mut bit_writer);
+                bit_writer.release_bits(1);
+            }
 
             //info!("--------------\n");
 

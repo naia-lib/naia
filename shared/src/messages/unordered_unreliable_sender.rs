@@ -1,14 +1,11 @@
 use std::collections::VecDeque;
 
-use naia_serde::{BitCounter, BitWrite, BitWriter};
+use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::{constants::MTU_SIZE_BITS, types::MessageId};
+use crate::types::MessageId;
 
-use super::{
-    message_channel::{ChannelSender, ChannelWriter},
-    message_list_header::write,
-};
+use super::message_channel::{ChannelSender, ChannelWriter};
 
 pub struct UnorderedUnreliableSender<P: Send> {
     outgoing_messages: VecDeque<P>,
@@ -21,7 +18,7 @@ impl<P: Send> UnorderedUnreliableSender<P> {
         }
     }
 
-    fn write_message<S: BitWrite>(
+    fn write_outgoing_message<S: BitWrite>(
         &self,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut S,
@@ -49,60 +46,35 @@ impl<P: Send + Sync> ChannelSender<P> for UnorderedUnreliableSender<P> {
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>> {
-        let mut message_count: u16 = 0;
 
-        // Header
-        {
-            // Measure
-            let current_packet_size = bit_writer.bit_count();
-            if current_packet_size > MTU_SIZE_BITS {
-                write(bit_writer, 0);
-                return None;
+        loop {
+
+            if self.outgoing_messages.is_empty() {
+                break;
             }
 
-            let mut counter = BitCounter::new();
+            // Check that we can write the next message
+            let message = self.outgoing_messages.front().unwrap();
+            let mut counter = bit_writer.counter();
+            self.write_outgoing_message(
+                channel_writer,
+                &mut counter,
+                &message,
+            );
 
-            //TODO: message_count is inaccurate here and may be different than final, does
-            // this matter?
-            write(&mut counter, 123);
+            // if we can, start writing
+            if !counter.is_valid() { break; }
 
-            // Check for overflow
-            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                write(bit_writer, 0);
-                return None;
-            }
+            // write MessageContinue bit
+            true.ser(bit_writer);
 
-            // Find how many messages will fit into the packet
-            let mut index = 0;
-            loop {
-                if index >= self.outgoing_messages.len() {
-                    break;
-                }
+            // write data
+            self.write_outgoing_message(channel_writer, bit_writer, &message);
 
-                let message = self.outgoing_messages.get(index).unwrap();
-                self.write_message(channel_writer, &mut counter, message);
-                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
-                    message_count += 1;
-                } else {
-                    break;
-                }
-
-                index += 1;
-            }
+            // pop message we've written
+            self.outgoing_messages.pop_front();
         }
-
-        // Write header
-        write(bit_writer, message_count);
-
-        // Messages
-        {
-            for _ in 0..message_count {
-                // Pop and write message
-                let message = self.outgoing_messages.pop_front().unwrap();
-                self.write_message(channel_writer, bit_writer, &message);
-            }
-            None
-        }
+        None
     }
 
     fn notify_message_delivered(&mut self, _: &MessageId) {

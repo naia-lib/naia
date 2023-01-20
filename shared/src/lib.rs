@@ -90,7 +90,7 @@ pub use protocol::{
 };
 
 pub use bigmap::{BigMap, BigMapKey};
-pub use constants::{MESSAGE_HISTORY_SIZE, MTU_SIZE_BITS, MTU_SIZE_BYTES};
+pub use constants::MESSAGE_HISTORY_SIZE;
 pub use key_generator::KeyGenerator;
 pub use shared_config::SharedConfig;
 pub use types::{HostType, MessageId, PacketIndex, ShortMessageId, Tick};

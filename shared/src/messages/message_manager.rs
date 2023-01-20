@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_serde::{BitReader, BitWriter, Serde, SerdeErr, UnsignedVariableInteger};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr, UnsignedVariableInteger};
 use naia_socket_shared::Instant;
 
 use crate::{
@@ -149,22 +149,29 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
     ) {
-        let mut channels_to_write = Vec::new();
-        for (channel_index, channel) in &self.channel_senders {
-            if channel.has_messages() {
-                channels_to_write.push(channel_index.clone());
-            }
-        }
 
-        // write channel count
-        UnsignedVariableInteger::<3>::new(channels_to_write.len() as u64).ser(bit_writer);
+        for (channel_index, channel) in &mut self.channel_senders {
 
-        for channel_index in channels_to_write {
-            let channel = self.channel_senders.get_mut(&channel_index).unwrap();
+            if !channel.has_messages() { continue; }
 
-            // write channel index
+            // check that we can at least write a ChannelIndex and a MessageContinue bit
+            let mut counter = bit_writer.counter();
+            channel_index.ser(&mut counter);
+            counter.write_bit(false);
+
+            // if we can, start writing
+            if !counter.is_valid() { break; }
+
+            // write ChannelContinue bit
+            true.ser(bit_writer);
+
+            // reserve MessageContinue bit
+            bit_writer.reserve_bits(1);
+
+            // write ChannelIndex
             channel_index.ser(bit_writer);
 
+            // write Messages
             if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer) {
                 self.packet_to_message_map
                     .entry(packet_index)
@@ -172,6 +179,10 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
                 channel_list.push((channel_index.clone(), message_ids));
             }
+
+            // write MessageContinue finish bit, release
+            false.ser(bit_writer);
+            bit_writer.release_bits(1);
         }
     }
 

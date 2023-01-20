@@ -1,47 +1,41 @@
-use crate::consts::MAX_BUFFER_SIZE;
+use crate::constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
 use crate::SerdeErr;
 
 // BitWrite
-
 pub trait BitWrite {
     fn write_bit(&mut self, bit: bool);
     fn write_byte(&mut self, byte: u8);
-    fn bit_count(&self) -> u16;
 }
 
 // BitCounter
 pub struct BitCounter {
-    count: u16,
+    current_bits: u16,
+    max_bits: u16,
 }
 
 impl BitCounter {
-    #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
-        Self { count: 0 }
+    pub fn is_valid(&self) -> bool {
+        self.current_bits <= self.max_bits
     }
 }
 
 impl BitWrite for BitCounter {
     fn write_bit(&mut self, _: bool) {
-        self.count += 1;
+        self.current_bits += 1;
     }
-
     fn write_byte(&mut self, _: u8) {
-        self.count += 8;
-    }
-
-    fn bit_count(&self) -> u16 {
-        self.count
+        self.current_bits += 8;
     }
 }
 
 // BitWriter
-
 pub struct BitWriter {
     scratch: u8,
     scratch_index: u8,
-    buffer: [u8; MAX_BUFFER_SIZE],
+    buffer: [u8; MTU_SIZE_BYTES],
     buffer_index: usize,
+    current_bits: u16,
+    max_bits: u16,
 }
 
 impl BitWriter {
@@ -50,14 +44,14 @@ impl BitWriter {
         Self {
             scratch: 0,
             scratch_index: 0,
-            buffer: [0; MAX_BUFFER_SIZE],
+            buffer: [0; MTU_SIZE_BYTES],
             buffer_index: 0,
+            current_bits: 0,
+            max_bits: MTU_SIZE_BITS,
         }
     }
-}
 
-impl BitWriter {
-    pub fn flush(&mut self) -> (usize, [u8; MAX_BUFFER_SIZE]) {
+    pub fn flush(&mut self) -> (usize, [u8; MTU_SIZE_BYTES]) {
         if self.scratch_index > 0 {
             self.buffer[self.buffer_index] =
                 (self.scratch << (8 - self.scratch_index)).reverse_bits();
@@ -69,16 +63,36 @@ impl BitWriter {
         self.buffer_index = 0;
         self.scratch_index = 0;
         self.scratch = 0;
+        self.current_bits = 0;
+        self.max_bits = MTU_SIZE_BITS;
 
-        let mut output_buffer = [0; MAX_BUFFER_SIZE];
-        output_buffer.clone_from_slice(&self.buffer[0..MAX_BUFFER_SIZE]);
+        let mut output_buffer = [0; MTU_SIZE_BYTES];
+        output_buffer.clone_from_slice(&self.buffer[0..MTU_SIZE_BYTES]);
 
         (output_length, output_buffer)
+    }
+
+    pub fn counter(&self) -> BitCounter {
+        return BitCounter {
+            current_bits: self.current_bits,
+            max_bits: self.max_bits,
+        };
+    }
+
+    pub fn reserve_bits(&mut self, bits: u16) {
+        self.max_bits -= bits;
+    }
+
+    pub fn release_bits(&mut self, bits: u16) {
+        self.max_bits += bits;
     }
 }
 
 impl BitWrite for BitWriter {
     fn write_bit(&mut self, bit: bool) {
+        if self.current_bits >= self.max_bits {
+            panic!("Write overflow!");
+        }
         self.scratch <<= 1;
 
         if bit {
@@ -86,6 +100,7 @@ impl BitWrite for BitWriter {
         }
 
         self.scratch_index += 1;
+        self.current_bits += 1;
 
         if self.scratch_index >= 8 {
             self.buffer[self.buffer_index] = self.scratch.reverse_bits();
@@ -102,10 +117,6 @@ impl BitWrite for BitWriter {
             self.write_bit(temp & 1 != 0);
             temp >>= 1;
         }
-    }
-
-    fn bit_count(&self) -> u16 {
-        ((self.buffer_index * 8) + (self.scratch_index as usize)) as u16
     }
 }
 

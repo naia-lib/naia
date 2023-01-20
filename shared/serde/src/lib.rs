@@ -1,6 +1,6 @@
 pub use naia_serde_derive::*;
 
-mod consts;
+mod constants;
 mod error;
 mod impls;
 mod integer;
