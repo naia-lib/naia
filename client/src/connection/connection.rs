@@ -1,7 +1,7 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
-    serde::{BitReader, BitWriter, OwnedBitReader},
+    serde::{BitReader, BitWriter, OwnedBitReader, Serde},
     BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, HostType, Instant, PacketType,
     PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldMutType,
 };
@@ -140,14 +140,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             None => false,
         };
 
-        if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
+        if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages
+        {
             let next_packet_index = self.base.next_packet_index();
 
             let mut bit_writer = BitWriter::new();
 
+            // Reserve bits we know will be required to finish the message:
+            // 1. Tick buffer finish bit
+            // 2. Messages finish bit
+            bit_writer.reserve_bits(2);
+
             // write header
-            self.base
-                .write_outgoing_header(PacketType::Data, &mut bit_writer);
+            self.base.write_outgoing_header(PacketType::Data, &mut bit_writer);
 
             let channel_writer = ProtocolIo::new(&self.entity_manager);
 
@@ -156,21 +161,30 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                 let client_tick = tick_manager.write_client_tick(&mut bit_writer);
 
                 // write tick buffered messages
-
                 self.tick_buffer.as_mut().unwrap().write_messages(
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,
                     &client_tick,
                 );
+
+                // finish tick buffered messages
+                false.ser(&mut bit_writer);
+                bit_writer.release_bits(1);
             }
 
             // write messages
-            self.base.message_manager.write_messages(
-                &channel_writer,
-                &mut bit_writer,
-                next_packet_index,
-            );
+            {
+                self.base.message_manager.write_messages(
+                    &channel_writer,
+                    &mut bit_writer,
+                    next_packet_index,
+                );
+
+                // finish messages
+                false.ser(&mut bit_writer);
+                bit_writer.release_bits(1);
+            }
 
             // send packet
             io.send_writer(&mut bit_writer);

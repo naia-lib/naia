@@ -27,7 +27,7 @@ impl<P: Send + Sync> ReliableSender<P> {
         }
     }
 
-    fn write_outgoing_message(
+    fn write_message(
         &self,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut dyn BitWrite,
@@ -152,7 +152,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
             // check that we can write the next message
             let (message_id, message) = self.outgoing_messages.front().unwrap();
             let mut counter = bit_writer.counter();
-            self.write_outgoing_message(
+            self.write_message(
                 channel_writer,
                 &mut counter,
                 &last_written_id,
@@ -169,7 +169,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
             true.ser(bit_writer);
 
             // write data
-            self.write_outgoing_message(
+            self.write_message(
                 channel_writer,
                 bit_writer,
                 &last_written_id,

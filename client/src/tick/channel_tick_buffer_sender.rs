@@ -3,15 +3,15 @@ use std::{collections::VecDeque, time::Duration};
 use log::info;
 
 use naia_shared::{
-    message_list_header, sequence_greater_than, sequence_less_than,
-    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    sequence_greater_than, sequence_less_than,
+    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
     wrapping_diff, ChannelWriter, Instant, Protocolize, ShortMessageId, Tick, TickBufferSettings,
-    MESSAGE_HISTORY_SIZE, MTU_SIZE_BITS,
+    MESSAGE_HISTORY_SIZE,
 };
 
 pub struct ChannelTickBufferSender<P: Protocolize> {
     sending_messages: OutgoingMessages<P>,
-    next_send_messages: VecDeque<(Tick, Vec<(ShortMessageId, P)>)>,
+    outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageId, P)>)>,
     resend_interval: Duration,
     resend_interval_millis: u32,
     last_sent: Instant,
@@ -25,7 +25,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
 
         Self {
             sending_messages: OutgoingMessages::new(),
-            next_send_messages: VecDeque::new(),
+            outgoing_messages: VecDeque::new(),
             resend_interval,
             resend_interval_millis: resend_interval.as_millis() as u32,
             last_sent: Instant::now(),
@@ -51,7 +51,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
                     break;
                 }
                 let messages = message_map.collect_messages();
-                self.next_send_messages.push_back((*message_tick, messages));
+                self.outgoing_messages.push_back((*message_tick, messages));
             }
 
             // if self.next_send_messages.len() > 0 {
@@ -67,8 +67,8 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         self.last_sent.subtract_millis(self.resend_interval_millis);
     }
 
-    pub fn has_outgoing_messages(&self) -> bool {
-        !self.next_send_messages.is_empty()
+    pub fn has_messages(&self) -> bool {
+        !self.outgoing_messages.is_empty()
     }
 
     // Tick Buffer Message Writing
@@ -79,82 +79,51 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         bit_writer: &mut BitWriter,
         host_tick: &Tick,
     ) -> Option<Vec<(Tick, ShortMessageId)>> {
-        let mut message_count: u16 = 0;
 
-        // Header
-        {
-            // Measure
-            let current_packet_size = bit_writer.bit_count();
-            if current_packet_size > MTU_SIZE_BITS {
-                message_list_header::write(bit_writer, 0);
-                return None;
+        let mut last_written_tick = *host_tick;
+        let mut output = Vec::new();
+
+        loop {
+            if self.outgoing_messages.is_empty() {
+                break;
             }
 
-            let mut counter = BitCounter::new();
+            // check that we can write the next message
+            let (message_tick, messages) = self.outgoing_messages.front().unwrap();
+            let mut counter = bit_writer.counter();
+            self.write_message(
+                channel_writer,
+                &mut counter,
+                &last_written_tick,
+                message_tick,
+                messages,
+            );
 
-            //TODO: message_count is inaccurate here and may be different than final, does
-            // this matter?
-            message_list_header::write(&mut counter, 123);
-
-            // Check for overflow
-            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                message_list_header::write(bit_writer, 0);
-                return None;
+            // if we can, start writing
+            if !counter.is_valid() {
+                break;
             }
 
-            // Find how many messages will fit into the packet
-            let mut last_written_tick = *host_tick;
-            let mut index = 0;
-            loop {
-                if index >= self.next_send_messages.len() {
-                    break;
-                }
+            // write MessageContinue bit
+            true.ser(bit_writer);
 
-                let (message_tick, messages) = self.next_send_messages.get(index).unwrap();
-                self.write_message(
-                    channel_writer,
-                    &mut counter,
-                    &last_written_tick,
-                    message_tick,
-                    messages,
-                );
-                last_written_tick = *message_tick;
-                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
-                    message_count += 1;
-                } else {
-                    break;
-                }
-
-                index += 1;
+            // write data
+            let message_ids = self.write_message(
+                channel_writer,
+                bit_writer,
+                &last_written_tick,
+                &message_tick,
+                &messages,
+            );
+            last_written_tick = *message_tick;
+            for message_id in message_ids {
+                output.push((*message_tick, message_id));
             }
+
+            // pop message we've written
+            self.outgoing_messages.pop_front();
         }
-
-        // Write header
-        message_list_header::write(bit_writer, message_count);
-
-        // Messages
-        {
-            let mut last_written_tick = *host_tick;
-            let mut output = Vec::new();
-            for _ in 0..message_count {
-                // Pop message
-                let (message_tick, messages) = self.next_send_messages.pop_front().unwrap();
-
-                // Write message
-                let message_ids = self.write_message(
-                    channel_writer,
-                    bit_writer,
-                    &last_written_tick,
-                    &message_tick,
-                    &messages,
-                );
-                last_written_tick = message_tick;
-                for message_id in message_ids {
-                    output.push((message_tick, message_id));
-                }
-            }
-            Some(output)
-        }
+        Some(output)
     }
 
     /// Writes a Command into the Writer's internal buffer, which will

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use naia_shared::{
-    serde::{BitWriter, Serde, UnsignedVariableInteger},
+    serde::{BitWriter, Serde, BitWrite},
     ChannelConfig, ChannelIndex, ChannelMode, ChannelWriter, PacketIndex, PacketNotifiable,
     Protocolize, ShortMessageId, Tick,
 };
@@ -53,7 +53,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
 
     pub fn has_outgoing_messages(&self) -> bool {
         for channel in self.channel_senders.values() {
-            if channel.has_outgoing_messages() {
+            if channel.has_messages() {
                 return true;
             }
         }
@@ -67,30 +67,39 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
         packet_index: PacketIndex,
         host_tick: &Tick,
     ) {
-        let mut channels_to_write = Vec::new();
-        for (channel_index, channel) in &self.channel_senders {
-            if channel.has_outgoing_messages() {
-                channels_to_write.push(channel_index.clone());
-            }
-        }
+        for (channel_index, channel) in &mut self.channel_senders {
 
-        // write channel count
-        UnsignedVariableInteger::<3>::new(channels_to_write.len() as u64).ser(bit_writer);
+            if !channel.has_messages() { continue; }
 
-        for channel_index in channels_to_write {
-            let channel = self.channel_senders.get_mut(&channel_index).unwrap();
+            // check that we can at least write a ChannelIndex and a MessageContinue bit
+            let mut counter = bit_writer.counter();
+            channel_index.ser(&mut counter);
+            counter.write_bit(false);
 
-            // write channel index
+            // if we can, start writing
+            if !counter.is_valid() { break; }
+
+            // write ChannelContinue bit
+            true.ser(bit_writer);
+
+            // reserve MessageContinue bit
+            bit_writer.reserve_bits(1);
+
+            // write ChannelIndex
             channel_index.ser(bit_writer);
 
-            if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer, host_tick)
-            {
+            // write Messages
+            if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer, host_tick) {
                 self.packet_to_channel_map
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
                 channel_list.push((channel_index.clone(), message_ids));
             }
+
+            // write MessageContinue finish bit, release
+            false.ser(bit_writer);
+            bit_writer.release_bits(1);
         }
     }
 }
