@@ -16,16 +16,21 @@ impl<P> ReliableReceiver<P> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<Vec<(MessageId, P)>, SerdeErr> {
-        let message_count = message_list_header::read(reader)?;
 
         let mut last_read_id: Option<MessageId> = None;
         let mut output = Vec::new();
 
-        for _x in 0..message_count {
+        loop {
+            let channel_continue = bool::de(reader)?.get();
+            if !channel_continue {
+                break;
+            }
+
             let id_w_msg = Self::read_incoming_message(channel_reader, reader, &last_read_id)?;
             last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
+
         Ok(output)
     }
 

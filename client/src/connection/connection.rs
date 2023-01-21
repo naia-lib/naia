@@ -1,4 +1,5 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
+use log::warn;
 
 use naia_shared::{
     serde::{BitReader, BitWriter, OwnedBitReader, Serde},
@@ -72,22 +73,38 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
             let channel_reader = ProtocolIo::new(&self.entity_manager);
 
-            // Read Messages
-            let messages_result = self
-                .base
-                .message_manager
-                .read_messages(&channel_reader, &mut reader);
-            if messages_result.is_err() {
-                // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
-                continue;
+            // read messages
+            {
+                let messages_result = self
+                    .base
+                    .message_manager
+                    .read_messages(&channel_reader, &mut reader);
+                if messages_result.is_err() {
+                    // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                    warn!("Error reading incoming messages from packet!");
+                    continue;
+                }
+            }
+
+            // read entity updates
+            {
+                let updates_result =
+                    self.entity_manager
+                        .read_updates(world, server_tick, &mut reader, incoming_events);
+                if updates_result.is_err() {
+                    // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                    warn!("Error reading incoming entity updates from packet!");
+                    continue;
+                }
             }
 
             // Read Entity Actions
             let actions_result =
                 self.entity_manager
-                    .read_all(world, server_tick, &mut reader, incoming_events);
+                    .read_actions(world, &mut reader, incoming_events);
             if actions_result.is_err() {
                 // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                warn!("Error reading incoming entity actions from packet!");
                 continue;
             }
         }

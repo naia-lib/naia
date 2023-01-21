@@ -66,18 +66,27 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         Ok(current_id)
     }
 
-    fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
+    pub fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
+
         let mut last_read_id: Option<MessageId> = None;
-        let action_count = message_list_header::read(reader)?;
-        for _ in 0..action_count {
+
+        loop {
+            // read action continue bit
+            let action_continue = bool::de(reader)?.get();
+            if !action_continue {
+                break;
+            }
+
             self.read_action(reader, &mut last_read_id)?;
         }
+
         self.process_incoming_actions(world, event_stream);
+
         Ok(())
     }
 
@@ -282,17 +291,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    fn read_updates<W: WorldMutType<P, E>, C: ChannelIndex>(
+    pub fn read_updates<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
-        let update_count = message_list_header::read(reader)?;
-        for _ in 0..update_count {
+        loop {
+            // read update continue bit
+            let update_continue = bool::de(reader)?.get();
+            if !update_continue {
+                break;
+            }
+
             self.read_update(world, server_tick, reader, event_stream)?;
         }
+
         Ok(())
     }
 
@@ -303,16 +318,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
-        let net_entity = NetEntity::de(reader)?;
+        let net_entity_id = NetEntity::de(reader)?;
 
-        let components_number = UnsignedVariableInteger::<3>::de(reader)?.get();
+        loop {
+            // read update continue bit
+            let component_continue = bool::de(reader)?.get();
+            if !component_continue {
+                break;
+            }
 
-        for _ in 0..components_number {
-            // read incoming update
             let component_update = P::read_create_update(reader)?;
             let component_kind = component_update.kind;
 
-            if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
+            if let Some(world_entity) = self.local_to_world_entity.get(&net_entity_id) {
                 world.component_apply_update(
                     self,
                     world_entity,
