@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr, UnsignedVariableInteger};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{
@@ -195,7 +195,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     ) -> Result<(), SerdeErr> {
 
         loop {
-            let message_continue = bool::de(reader)?.get();
+            let message_continue = bool::de(reader)?;
             if !message_continue {
                 break;
             }

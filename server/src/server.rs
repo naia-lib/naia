@@ -6,6 +6,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use log::warn;
+
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
@@ -13,11 +15,9 @@ use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     serde::{BitWriter, Serde},
     ChannelIndex, EntityHandle, EntityHandleConverter, Tick,
-};
-pub use naia_shared::{
-    wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, NetEntity,
-    PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
-    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
+    BigMap, Instant,
+    PacketType, PropertyMutator, Protocolize,
+    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType,
     WorldRefType,
 };
 
@@ -972,6 +972,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                 if data_result.is_err() {
                                     // Received a malformed packet
                                     // TODO: increase suspicion against packet sender
+                                    warn!("Error reading incoming packet!");
                                     continue;
                                 }
                             }

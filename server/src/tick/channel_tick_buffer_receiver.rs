@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    message_list_header, sequence_greater_than,
+    sequence_greater_than,
     serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
     ChannelReader, Protocolize, ShortMessageId, Tick,
 };
@@ -28,11 +28,18 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
+
         let mut last_read_tick = *remote_tick;
-        let message_count = message_list_header::read(reader)?;
-        for _ in 0..message_count {
+
+        loop {
+            let message_continue = bool::de(reader)?;
+            if !message_continue {
+                break;
+            }
+
             self.read_message(host_tick, &mut last_read_tick, channel_reader, reader)?;
         }
+
         Ok(())
     }
 

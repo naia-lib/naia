@@ -98,14 +98,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                 }
             }
 
-            // Read Entity Actions
-            let actions_result =
-                self.entity_manager
-                    .read_actions(world, &mut reader, incoming_events);
-            if actions_result.is_err() {
-                // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
-                warn!("Error reading incoming entity actions from packet!");
-                continue;
+            // read entity actions
+            {
+                let actions_result =
+                    self.entity_manager
+                        .read_actions(world, &mut reader, incoming_events);
+                if actions_result.is_err() {
+                    // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                    warn!("Error reading incoming entity actions from packet!");
+                    continue;
+                }
             }
         }
     }

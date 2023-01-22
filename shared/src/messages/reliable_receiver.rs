@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
 use crate::{
-    messages::{message_channel::ChannelReader, message_list_header},
+    messages::message_channel::ChannelReader,
     types::MessageId,
 };
 
@@ -21,7 +21,7 @@ impl<P> ReliableReceiver<P> {
         let mut output = Vec::new();
 
         loop {
-            let channel_continue = bool::de(reader)?.get();
+            let channel_continue = bool::de(reader)?;
             if !channel_continue {
                 break;
             }

@@ -4,7 +4,6 @@ use std::{
 };
 
 use naia_shared::{
-    message_list_header,
     serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
     BigMap, ChannelIndex, EntityAction, EntityActionReceiver, EntityActionType, EntityHandle,
     EntityHandleConverter, MessageId, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
@@ -36,20 +35,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Default for EntityManager<P, E> {
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
+
     // Action Reader
-
-    pub fn read_all<W: WorldMutType<P, E>, C: ChannelIndex>(
-        &mut self,
-        world: &mut W,
-        server_tick: Tick,
-        reader: &mut BitReader,
-        event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
-    ) -> Result<(), SerdeErr> {
-        self.read_updates(world, server_tick, reader, event_stream)?;
-        self.read_actions(world, reader, event_stream)?;
-        Ok(())
-    }
-
     fn read_message_id(
         reader: &mut BitReader,
         last_id_opt: &mut Option<MessageId>,
@@ -77,7 +64,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
 
         loop {
             // read action continue bit
-            let action_continue = bool::de(reader)?.get();
+            let action_continue = bool::de(reader)?;
             if !action_continue {
                 break;
             }
@@ -300,12 +287,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     ) -> Result<(), SerdeErr> {
         loop {
             // read update continue bit
-            let update_continue = bool::de(reader)?.get();
+            let update_continue = bool::de(reader)?;
             if !update_continue {
                 break;
             }
 
-            self.read_update(world, server_tick, reader, event_stream)?;
+            let net_entity_id = NetEntity::de(reader)?;
+
+            self.read_update(world, server_tick, reader, &net_entity_id, event_stream)?;
         }
 
         Ok(())
@@ -316,13 +305,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
+        net_entity_id: &NetEntity,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
-        let net_entity_id = NetEntity::de(reader)?;
 
         loop {
             // read update continue bit
-            let component_continue = bool::de(reader)?.get();
+            let component_continue = bool::de(reader)?;
             if !component_continue {
                 break;
             }

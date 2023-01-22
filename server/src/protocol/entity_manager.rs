@@ -8,8 +8,7 @@ use std::{
 };
 
 use naia_shared::{
-    message_list_header,
-    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
     wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter,
     Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
     PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType,
@@ -524,6 +523,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         bit_writer: &mut BitWriter,
         entity: &E,
     ) {
+        let mut written_component_kinds = Vec::new();
         let component_kinds = self.next_send_updates.get(entity).unwrap();
         for component_kind in component_kinds {
 
@@ -562,6 +562,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 .expect("Component does not exist in World")
                 .write_update(&diff_mask, bit_writer, &converter);
 
+            written_component_kinds.push(*component_kind);
+
             //info!("writing UpdateComponent");
 
             // place diff mask in a special transmission record - like map
@@ -578,6 +580,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
             self.world_channel
                 .diff_handler
                 .clear_diff_mask(entity, component_kind);
+        }
+
+        let update_kinds = self.next_send_updates.get_mut(entity).unwrap();
+        for component_kind in &written_component_kinds {
+            update_kinds.remove(component_kind);
+        }
+        if update_kinds.is_empty() {
+            self.next_send_updates.remove(entity);
         }
     }
 }

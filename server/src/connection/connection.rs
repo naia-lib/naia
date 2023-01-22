@@ -73,18 +73,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
         reader: &mut BitReader,
         world_record: &WorldRecord<E, P::Kind>,
     ) -> Result<(), SerdeErr> {
-        // Read Tick Buffered Messages
-        if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
-            let converter = EntityConverter::new(world_record, &self.entity_manager);
-            let channel_reader = ProtocolIo::new(&converter);
-            self.tick_buffer
-                .read_messages(&server_tick, &client_tick, &channel_reader, reader)?;
+
+        let converter = EntityConverter::new(world_record, &self.entity_manager);
+        let channel_reader = ProtocolIo::new(&converter);
+
+        // read tick-buffered messages
+        {
+            if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
+                self.tick_buffer
+                    .read_messages(&server_tick, &client_tick, &channel_reader, reader)?;
+            }
         }
 
-        // Read Messages
+        // read messages
         {
-            let converter = EntityConverter::new(world_record, &self.entity_manager);
-            let channel_reader = ProtocolIo::new(&converter);
             self.base
                 .message_manager
                 .read_messages(&channel_reader, reader)?;

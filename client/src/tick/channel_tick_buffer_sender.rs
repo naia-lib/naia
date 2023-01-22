@@ -88,8 +88,9 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
                 break;
             }
 
-            // check that we can write the next message
             let (message_tick, messages) = self.outgoing_messages.front().unwrap();
+
+            // check that we can write the next message
             let mut counter = bit_writer.counter();
             self.write_message(
                 channel_writer,
