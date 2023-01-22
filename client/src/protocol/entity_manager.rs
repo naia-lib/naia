@@ -35,7 +35,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Default for EntityManager<P, E> {
 }
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
-
     // Action Reader
     fn read_message_id(
         reader: &mut BitReader,
@@ -59,7 +58,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
-
         let mut last_read_id: Option<MessageId> = None;
 
         loop {
@@ -308,7 +306,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         net_entity_id: &NetEntity,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
-
         loop {
             // read update continue bit
             let component_continue = bool::de(reader)?;

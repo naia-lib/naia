@@ -14,11 +14,9 @@ use bevy_ecs::prelude::Resource;
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     serde::{BitWriter, Serde},
-    ChannelIndex, EntityHandle, EntityHandleConverter, Tick,
-    BigMap, Instant,
-    PacketType, PropertyMutator, Protocolize,
-    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType,
-    WorldRefType,
+    BigMap, ChannelIndex, EntityHandle, EntityHandleConverter, Instant, PacketType,
+    PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Tick,
+    Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{

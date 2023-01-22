@@ -2,10 +2,7 @@ use std::marker::PhantomData;
 
 use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
-use crate::{
-    messages::message_channel::ChannelReader,
-    types::MessageId,
-};
+use crate::{messages::message_channel::ChannelReader, types::MessageId};
 
 pub struct ReliableReceiver<P> {
     phantom_p: PhantomData<P>,
@@ -16,7 +13,6 @@ impl<P> ReliableReceiver<P> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<Vec<(MessageId, P)>, SerdeErr> {
-
         let mut last_read_id: Option<MessageId> = None;
         let mut output = Vec::new();
 

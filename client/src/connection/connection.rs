@@ -1,5 +1,5 @@
-use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 use log::warn;
+use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
     serde::{BitReader, BitWriter, OwnedBitReader, Serde},
@@ -88,9 +88,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
             // read entity updates
             {
-                let updates_result =
-                    self.entity_manager
-                        .read_updates(world, server_tick, &mut reader, incoming_events);
+                let updates_result = self.entity_manager.read_updates(
+                    world,
+                    server_tick,
+                    &mut reader,
+                    incoming_events,
+                );
                 if updates_result.is_err() {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity updates from packet!");
@@ -159,8 +162,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             None => false,
         };
 
-        if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages
-        {
+        if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
             let next_packet_index = self.base.next_packet_index();
 
             let mut bit_writer = BitWriter::new();
@@ -171,7 +173,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             bit_writer.reserve_bits(2);
 
             // write header
-            self.base.write_outgoing_header(PacketType::Data, &mut bit_writer);
+            self.base
+                .write_outgoing_header(PacketType::Data, &mut bit_writer);
 
             let channel_writer = ProtocolIo::new(&self.entity_manager);
 

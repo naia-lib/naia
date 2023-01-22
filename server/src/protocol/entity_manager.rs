@@ -239,7 +239,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         let mut last_written_id: Option<MessageId> = None;
 
         loop {
-
             if self.next_send_actions.is_empty() {
                 break;
             }
@@ -481,20 +480,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         let all_update_entities: Vec<E> = self.next_send_updates.keys().copied().collect();
 
         for entity in all_update_entities {
-
             // check that we can at least write a NetEntityId and a ComponentContinue bit
             let mut counter = writer.counter();
 
-            let net_entity_id =
-            self.world_channel
-                .entity_to_net_entity(&entity)
-                .unwrap();
+            let net_entity_id = self.world_channel.entity_to_net_entity(&entity).unwrap();
             net_entity_id.ser(&mut counter);
 
             counter.write_bit(false);
 
             // if we can, start writing
-            if !counter.is_valid() { break; }
+            if !counter.is_valid() {
+                break;
+            }
 
             // write UpdateContinue bit
             true.ser(writer);
@@ -526,7 +523,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         let mut written_component_kinds = Vec::new();
         let component_kinds = self.next_send_updates.get(entity).unwrap();
         for component_kind in component_kinds {
-
             // get diff mask
             let diff_mask = self
                 .world_channel

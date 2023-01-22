@@ -35,7 +35,6 @@ impl<P: Send + Sync> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-
         loop {
             let channel_continue = bool::de(reader)?;
             if !channel_continue {

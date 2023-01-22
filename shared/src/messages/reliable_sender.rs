@@ -139,12 +139,10 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>> {
-
         let mut last_written_id: Option<MessageId> = None;
         let mut message_ids = Vec::new();
 
         loop {
-
             if self.outgoing_messages.is_empty() {
                 break;
             }

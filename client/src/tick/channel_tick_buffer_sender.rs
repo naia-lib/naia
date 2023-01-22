@@ -79,7 +79,6 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         bit_writer: &mut BitWriter,
         host_tick: &Tick,
     ) -> Option<Vec<(Tick, ShortMessageId)>> {
-
         let mut last_written_tick = *host_tick;
         let mut output = Vec::new();
 

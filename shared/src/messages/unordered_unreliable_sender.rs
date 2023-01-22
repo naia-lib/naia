@@ -46,9 +46,7 @@ impl<P: Send + Sync> ChannelSender<P> for UnorderedUnreliableSender<P> {
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
     ) -> Option<Vec<MessageId>> {
-
         loop {
-
             if self.outgoing_messages.is_empty() {
                 break;
             }
@@ -56,14 +54,12 @@ impl<P: Send + Sync> ChannelSender<P> for UnorderedUnreliableSender<P> {
             // Check that we can write the next message
             let message = self.outgoing_messages.front().unwrap();
             let mut counter = bit_writer.counter();
-            self.write_outgoing_message(
-                channel_writer,
-                &mut counter,
-                &message,
-            );
+            self.write_outgoing_message(channel_writer, &mut counter, &message);
 
             // if we can, start writing
-            if !counter.is_valid() { break; }
+            if !counter.is_valid() {
+                break;
+            }
 
             // write MessageContinue bit
             true.ser(bit_writer);

@@ -149,10 +149,10 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
     ) {
-
         for (channel_index, channel) in &mut self.channel_senders {
-
-            if !channel.has_messages() { continue; }
+            if !channel.has_messages() {
+                continue;
+            }
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
             let mut counter = bit_writer.counter();
@@ -160,7 +160,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             counter.write_bit(false);
 
             // if we can, start writing
-            if !counter.is_valid() { break; }
+            if !counter.is_valid() {
+                break;
+            }
 
             // write ChannelContinue bit
             true.ser(bit_writer);
@@ -193,7 +195,6 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-
         loop {
             let message_continue = bool::de(reader)?;
             if !message_continue {

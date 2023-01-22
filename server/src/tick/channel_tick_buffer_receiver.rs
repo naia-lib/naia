@@ -28,7 +28,6 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-
         let mut last_read_tick = *remote_tick;
 
         loop {

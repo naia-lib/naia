@@ -33,7 +33,6 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferReceiver<P, C> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-
         loop {
             let channel_continue = bool::de(reader)?;
             if !channel_continue {
