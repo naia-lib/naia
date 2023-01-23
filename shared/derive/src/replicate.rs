@@ -74,6 +74,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             fn kind(&self) -> #protocol_kind_name {
                 return Protocolize::kind_of::<Self>();
             }
+            fn name(&self) -> String {
+                return "#replica_name".to_string();
+            }
             #dyn_ref_method
             #dyn_mut_method
             #to_protocol_method

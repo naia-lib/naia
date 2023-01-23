@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, time::Duration};
 
-use log::info;
+use log::{info, warn};
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than,
@@ -78,6 +78,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         host_tick: &Tick,
+        has_written: &mut bool,
     ) -> Option<Vec<(Tick, ShortMessageId)>> {
         let mut last_written_tick = *host_tick;
         let mut output = Vec::new();
@@ -99,10 +100,17 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
                 messages,
             );
 
-            // if we can, start writing
-            if !counter.is_valid() {
+            if counter.overflowed() {
+                // if nothing useful has been written in this packet yet,
+                // send warning about size of message being too big
+                if !*has_written {
+                    self.warn_overflow(messages, counter.bits_needed(), bit_writer.bits_free());
+                }
+
                 break;
             }
+
+            *has_written = true;
 
             // write MessageContinue bit
             true.ser(bit_writer);
@@ -168,6 +176,22 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
 
     pub fn notify_message_delivered(&mut self, tick: &Tick, message_id: &ShortMessageId) {
         self.sending_messages.remove_message(tick, message_id);
+    }
+
+    fn warn_overflow(&self, messages: &Vec<(ShortMessageId, P)>, bits_needed: u16, bits_free: u16) {
+        let mut message_names = "".to_string();
+        let mut added = false;
+        for (_id, message) in messages {
+            if added {
+                message_names.push(',');
+            } else {
+                added = true;
+            }
+            message_names.push_str(&message.name());
+        }
+        warn!(
+            "Packet Write Error: Blocking overflow detected! Messages of type `{message_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
+        )
     }
 }
 

@@ -6,13 +6,9 @@ use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
+use log::warn;
 
-use naia_shared::{
-    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter,
-    Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
-    PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType,
-};
+use naia_shared::{serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger}, wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, ProtocolKindType};
 
 use crate::sequence_list::SequenceList;
 
@@ -234,6 +230,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         packet_index: &PacketIndex,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        has_written: &mut bool,
     ) {
         let mut last_counted_id: Option<MessageId> = None;
         let mut last_written_id: Option<MessageId> = None;
@@ -254,10 +251,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 false,
             );
 
-            // if we can, start writing
-            if !counter.is_valid() {
+            if counter.overflowed() {
+                // if nothing useful has been written in this packet yet,
+                // send warning about size of component being too big
+                if !*has_written {
+                    self.warn_overflow_action(world_record, counter.bits_needed(), writer.bits_free());
+                }
                 break;
             }
+
+            *has_written = true;
 
             // write ActionContinue bit
             true.ser(writer);
@@ -469,6 +472,47 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         sent_actions_list.push((*action_id, action_record));
     }
 
+    fn warn_overflow_action(&self, world_record: &WorldRecord<E, <P as Protocolize>::Kind>, bits_needed: u16, bits_free: u16) {
+        let (action_id, action) = self.next_send_actions.front().unwrap();
+
+        match action {
+            EntityActionEvent::SpawnEntity(entity) => {
+
+                let component_kinds = match world_record.component_kinds(entity) {
+                    Some(kind_list) => kind_list,
+                    None => Vec::new(),
+                };
+
+                let mut component_names = "".to_owned();
+                let mut added = false;
+
+                for component_kind in &component_kinds {
+                    if added {
+                        component_names.push(',');
+                    } else {
+                        added = true;
+                    }
+                    let name = component_kind.name();
+                    component_names.push_str(&name);
+                }
+                warn!(
+                    "Packet Write Error: Blocking overflow detected! Entity Spawn message with Components `{component_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
+                )
+            }
+            EntityActionEvent::InsertComponent(entity, component) => {
+                let component_name = component.name();
+                warn!(
+                    "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
+                )
+            }
+            _ => {
+                warn!(
+                    "Packet Write Error: Blocking overflow detected! Action requires {bits_needed} bits, but packet only has {bits_free} bits available! This message should never display..."
+                )
+            }
+        }
+    }
+
     pub fn write_updates<W: WorldRefType<P, E>>(
         &mut self,
         now: &Instant,
@@ -476,6 +520,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         packet_index: &PacketIndex,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        has_written: &mut bool,
     ) {
         let all_update_entities: Vec<E> = self.next_send_updates.keys().copied().collect();
 
@@ -488,8 +533,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
             counter.write_bit(false);
 
-            // if we can, start writing
-            if !counter.is_valid() {
+            if counter.overflowed() {
                 break;
             }
 
@@ -503,7 +547,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
             net_entity_id.ser(writer);
 
             // write Components
-            self.write_update(now, world, world_record, packet_index, writer, &entity);
+            self.write_update(
+                now,
+                world,
+                world_record,
+                packet_index,
+                writer,
+                &entity,
+                has_written,
+            );
 
             // write ComponentContinue finish bit, release
             false.ser(writer);
@@ -517,8 +569,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
         packet_index: &PacketIndex,
-        bit_writer: &mut BitWriter,
+        writer: &mut BitWriter,
         entity: &E,
+        has_written: &mut bool,
     ) {
         let mut written_component_kinds = Vec::new();
         let component_kinds = self.next_send_updates.get(entity).unwrap();
@@ -534,29 +587,40 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
             let converter = EntityConverter::new(world_record, self);
 
             // check that we can write the next component update
-            let mut counter = bit_writer.counter();
+            let mut counter = writer.counter();
             component_kind.ser(&mut counter);
             world
                 .component_of_kind(entity, component_kind)
                 .expect("Component does not exist in World")
                 .write_update(&diff_mask, &mut counter, &converter);
 
-            // if we can, start writing
-            if !counter.is_valid() {
+            if counter.overflowed() {
+                // if nothing useful has been written in this packet yet,
+                // send warning about size of component being too big
+                if !*has_written {
+                    self.warn_overflow_update(
+                        component_kind,
+                        counter.bits_needed(),
+                        writer.bits_free(),
+                    );
+                }
+
                 break;
             }
 
+            *has_written = true;
+
             // write ComponentContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // write component kind
-            component_kind.ser(bit_writer);
+            component_kind.ser(writer);
 
             // write data
             world
                 .component_of_kind(entity, component_kind)
                 .expect("Component does not exist in World")
-                .write_update(&diff_mask, bit_writer, &converter);
+                .write_update(&diff_mask, writer, &converter);
 
             written_component_kinds.push(*component_kind);
 
@@ -585,6 +649,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         if update_kinds.is_empty() {
             self.next_send_updates.remove(entity);
         }
+    }
+
+    fn warn_overflow_update(
+        &self,
+        component_kind: &<P as Protocolize>::Kind,
+        bits_needed: u16,
+        bits_free: u16,
+    ) {
+        let component_name = component_kind.name();
+        warn!(
+            "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"
+        )
     }
 }
 

@@ -66,6 +66,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
         host_tick: &Tick,
+        has_written: &mut bool,
     ) {
         for (channel_index, channel) in &mut self.channel_senders {
             if !channel.has_messages() {
@@ -77,8 +78,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
             channel_index.ser(&mut counter);
             counter.write_bit(false);
 
-            // if we can, start writing
-            if !counter.is_valid() {
+            if counter.overflowed() {
                 break;
             }
 
@@ -92,7 +92,8 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
             channel_index.ser(bit_writer);
 
             // write Messages
-            if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer, host_tick)
+            if let Some(message_ids) =
+                channel.write_messages(channel_writer, bit_writer, host_tick, has_written)
             {
                 self.packet_to_channel_map
                     .entry(packet_index)

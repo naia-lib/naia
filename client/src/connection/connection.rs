@@ -178,6 +178,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
             let channel_writer = ProtocolIo::new(&self.entity_manager);
 
+            let mut has_written = false;
+
             if let Some(tick_manager) = tick_manager_opt {
                 // write tick
                 let client_tick = tick_manager.write_client_tick(&mut bit_writer);
@@ -188,6 +190,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                     &mut bit_writer,
                     next_packet_index,
                     &client_tick,
+                    &mut has_written,
                 );
 
                 // finish tick buffered messages
@@ -201,6 +204,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,
+                    &mut has_written,
                 );
 
                 // finish messages

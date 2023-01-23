@@ -169,6 +169,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
             //     info!("writing some messages");
             // }
 
+            let mut has_written = false;
+
             // write messages
             {
                 let converter = EntityConverter::new(world_record, &self.entity_manager);
@@ -177,6 +179,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,
+                    &mut has_written,
                 );
 
                 // finish messages
@@ -192,6 +195,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                     &next_packet_index,
                     world,
                     world_record,
+                    &mut has_written,
                 );
 
                 // finish updates
@@ -207,6 +211,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                     &next_packet_index,
                     world,
                     world_record,
+                    &mut has_written,
                 );
 
                 // finish actions

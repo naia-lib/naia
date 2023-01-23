@@ -1,4 +1,5 @@
 use std::{collections::VecDeque, mem, time::Duration};
+use log::warn;
 
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
@@ -46,6 +47,12 @@ impl<P: Send + Sync> ReliableSender<P> {
         }
 
         channel_writer.write(bit_writer, message);
+    }
+
+    fn warn_overflow(&self, bits_needed: u16, bits_free: u16) {
+        warn!(
+            "Packet Write Error: Blocking overflow detected! Message requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
+        )
     }
 
     pub fn cleanup_sent_messages(&mut self) {
@@ -138,6 +145,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
         &mut self,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
+        has_written: &mut bool,
     ) -> Option<Vec<MessageId>> {
         let mut last_written_id: Option<MessageId> = None;
         let mut message_ids = Vec::new();
@@ -154,14 +162,21 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
                 channel_writer,
                 &mut counter,
                 &last_written_id,
-                &message_id,
-                &message,
+                message_id,
+                message,
             );
 
-            // if we can, start writing
-            if !counter.is_valid() {
+            if counter.overflowed() {
+                // if nothing useful has been written in this packet yet,
+                // send warning about size of message being too big
+                if !*has_written {
+                    self.warn_overflow(counter.bits_needed(), bit_writer.bits_free());
+                }
+
                 break;
             }
+
+            *has_written = true;
 
             // write MessageContinue bit
             true.ser(bit_writer);
@@ -171,8 +186,8 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
                 channel_writer,
                 bit_writer,
                 &last_written_id,
-                &message_id,
-                &message,
+                message_id,
+                message,
             );
 
             message_ids.push(*message_id);

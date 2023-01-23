@@ -9,13 +9,18 @@ pub trait BitWrite {
 
 // BitCounter
 pub struct BitCounter {
+    start_bits: u16,
     current_bits: u16,
     max_bits: u16,
 }
 
 impl BitCounter {
-    pub fn is_valid(&self) -> bool {
-        self.current_bits <= self.max_bits
+    pub fn overflowed(&self) -> bool {
+        self.current_bits > self.max_bits
+    }
+
+    pub fn bits_needed(&self) -> u16 {
+        self.current_bits - self.start_bits
     }
 }
 
@@ -74,6 +79,7 @@ impl BitWriter {
 
     pub fn counter(&self) -> BitCounter {
         return BitCounter {
+            start_bits: self.current_bits,
             current_bits: self.current_bits,
             max_bits: self.max_bits,
         };
@@ -85,6 +91,10 @@ impl BitWriter {
 
     pub fn release_bits(&mut self, bits: u16) {
         self.max_bits += bits;
+    }
+
+    pub fn bits_free(&self) -> u16 {
+        self.max_bits - self.current_bits
     }
 }
 

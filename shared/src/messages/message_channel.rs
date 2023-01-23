@@ -11,6 +11,7 @@ pub trait ChannelSender<P>: Send + Sync {
         &mut self,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
+        has_written: &mut bool,
     ) -> Option<Vec<MessageId>>;
     fn notify_message_delivered(&mut self, message_id: &MessageId);
 }
