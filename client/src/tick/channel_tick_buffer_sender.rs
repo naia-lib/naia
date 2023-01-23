@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, time::Duration};
 
-use log::{info, warn};
+use log::info;
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than,
@@ -189,7 +189,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
             }
             message_names.push_str(&message.name());
         }
-        warn!(
+        panic!(
             "Packet Write Error: Blocking overflow detected! Messages of type `{message_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
         )
     }

@@ -6,9 +6,13 @@ use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
-use log::warn;
 
-use naia_shared::{serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger}, wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, ProtocolKindType};
+use naia_shared::{
+    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter,
+    Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
+    PacketNotifiable, ProtocolKindType, Protocolize, ReplicateSafe, WorldRefType,
+};
 
 use crate::sequence_list::SequenceList;
 
@@ -255,7 +259,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
                 if !*has_written {
-                    self.warn_overflow_action(world_record, counter.bits_needed(), writer.bits_free());
+                    self.warn_overflow_action(
+                        world_record,
+                        counter.bits_needed(),
+                        writer.bits_free(),
+                    );
                 }
                 break;
             }
@@ -472,12 +480,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         sent_actions_list.push((*action_id, action_record));
     }
 
-    fn warn_overflow_action(&self, world_record: &WorldRecord<E, <P as Protocolize>::Kind>, bits_needed: u16, bits_free: u16) {
-        let (action_id, action) = self.next_send_actions.front().unwrap();
+    fn warn_overflow_action(
+        &self,
+        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        bits_needed: u16,
+        bits_free: u16,
+    ) {
+        let (_action_id, action) = self.next_send_actions.front().unwrap();
 
         match action {
             EntityActionEvent::SpawnEntity(entity) => {
-
                 let component_kinds = match world_record.component_kinds(entity) {
                     Some(kind_list) => kind_list,
                     None => Vec::new(),
@@ -495,18 +507,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                     let name = component_kind.name();
                     component_names.push_str(&name);
                 }
-                warn!(
+                panic!(
                     "Packet Write Error: Blocking overflow detected! Entity Spawn message with Components `{component_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
                 )
             }
-            EntityActionEvent::InsertComponent(entity, component) => {
+            EntityActionEvent::InsertComponent(_entity, component) => {
                 let component_name = component.name();
-                warn!(
+                panic!(
                     "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
                 )
             }
             _ => {
-                warn!(
+                panic!(
                     "Packet Write Error: Blocking overflow detected! Action requires {bits_needed} bits, but packet only has {bits_free} bits available! This message should never display..."
                 )
             }
@@ -658,7 +670,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         bits_free: u16,
     ) {
         let component_name = component_kind.name();
-        warn!(
+        panic!(
             "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"
         )
     }

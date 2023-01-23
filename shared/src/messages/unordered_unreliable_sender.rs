@@ -1,4 +1,3 @@
-use log::warn;
 use std::collections::VecDeque;
 
 use naia_serde::{BitWrite, BitWriter, Serde};
@@ -30,7 +29,7 @@ impl<P: Protocolize> UnorderedUnreliableSender<P> {
 
     fn warn_overflow(&self, message: &P, bits_needed: u16, bits_free: u16) {
         let message_name = message.name();
-        warn!(
+        panic!(
             "Packet Write Error: Blocking overflow detected! Message of type `{message_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Message, or send this message over a Reliable channel so it can be Fragmented)"
         )
     }

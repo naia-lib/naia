@@ -1,6 +1,6 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Ident};
+use syn::{parse_macro_input, Data, DeriveInput, Ident, LitStr};
 
 pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -107,8 +107,9 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
 
         // Variants name() match branch
         {
+            let variant_name_str = LitStr::new(&variant_name.to_string(), variant_name.span());
             let new_output_right = quote! {
-                #enum_name::#variant_name => "#variant_name".to_string(),
+                #enum_name::#variant_name => #variant_name_str.to_string(),
             };
             let new_output_result = quote! {
                 #variants_name

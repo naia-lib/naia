@@ -1,7 +1,7 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Lit, Meta, Path,
+    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Lit, LitStr, Meta, Path,
     PathArguments, Result, Type,
 };
 
@@ -49,6 +49,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let write_update_method = write_update_method(&enum_name, &properties);
     let has_entity_properties = has_entity_properties_method(&properties);
     let entities = entities_method(&properties);
+    let replica_name_str = LitStr::new(&replica_name.to_string(), replica_name.span());
 
     let gen = quote! {
         use std::{rc::Rc, cell::RefCell, io::Cursor};
@@ -75,7 +76,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 return Protocolize::kind_of::<Self>();
             }
             fn name(&self) -> String {
-                return "#replica_name".to_string();
+                return #replica_name_str.to_string();
             }
             #dyn_ref_method
             #dyn_mut_method

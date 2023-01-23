@@ -1,5 +1,4 @@
 use std::{collections::VecDeque, mem, time::Duration};
-use log::warn;
 
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
@@ -50,7 +49,7 @@ impl<P: Send + Sync> ReliableSender<P> {
     }
 
     fn warn_overflow(&self, bits_needed: u16, bits_free: u16) {
-        warn!(
+        panic!(
             "Packet Write Error: Blocking overflow detected! Message requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
         )
     }
