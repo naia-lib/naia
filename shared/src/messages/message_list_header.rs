@@ -1,5 +1,6 @@
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, UnsignedVariableInteger};
 
+/// Write the number of messages in the packet header
 pub fn write<S: BitWrite, T: Into<i128>>(writer: &mut S, message_count: T) {
     let mut message_count_i128: i128 = message_count.into();
     let has_messages: bool = message_count_i128 > 0;
@@ -16,6 +17,7 @@ pub fn write<S: BitWrite, T: Into<i128>>(writer: &mut S, message_count: T) {
     }
 }
 
+/// Read the number of messages from the packet header
 pub fn read(reader: &mut BitReader) -> Result<u16, SerdeErr> {
     let has_messages = bool::de(reader)?;
 
