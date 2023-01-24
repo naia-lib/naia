@@ -125,7 +125,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
     }
 
     /// Returns an iterator of the [`UserKey`] for Users that belong in the [`Room`]
-    pub fn user_keys(&self) -> impl Iterator<Item=&UserKey> {
+    pub fn user_keys(&self) -> impl Iterator<Item = &UserKey> {
         self.server.room_user_keys(&self.key)
     }
 
@@ -182,7 +182,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
     }
 
     /// Returns an iterator of the [`UserKey`] for Users that belong in the [`Room`]
-    pub fn user_keys(&self) -> impl Iterator<Item=&UserKey> {
+    pub fn user_keys(&self) -> impl Iterator<Item = &UserKey> {
         self.server.room_user_keys(&self.key)
     }
 

@@ -5,8 +5,6 @@ use std::{
     panic,
     sync::{Arc, RwLock},
 };
-use std::collections::hash_set::Iter;
-use std::collections::HashSet;
 
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
@@ -731,7 +729,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     }
 
     /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
-    pub(crate) fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item=&UserKey> {
+    pub(crate) fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
         let iter = if let Some(room) = self.rooms.get(room_key) {
             Some(room.user_keys())
         } else {
