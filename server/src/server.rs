@@ -726,6 +726,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         }
     }
 
+    /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
+    pub(crate) fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
+        let iter = if let Some(room) = self.rooms.get(room_key) {
+            Some(room.user_keys())
+        } else {
+            None
+        };
+        iter.into_iter().flatten()
+    }
+
     /// Removes a User from a Room
     pub(crate) fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         if let Some(room) = self.rooms.get_mut(room_key) {

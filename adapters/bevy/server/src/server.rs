@@ -72,6 +72,27 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
         self.server.send_message(user_key, channel, message)
     }
 
+    /// Sends a message to all connected users using a given channel
+    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+        self.server
+            .user_keys()
+            .iter()
+            .for_each(|user_key| self.send_message(user_key, channel.clone(), message))
+    }
+
+    /// Sends a message to all connected users in a given Room using a given channel
+    pub fn broadcast_message_to_room<R: ReplicateSafe<P>>(
+        &mut self,
+        channel: C,
+        message: &R,
+        room_key: &RoomKey,
+    ) {
+        let user_keys: Vec<UserKey> = self.room(room_key).user_keys().cloned().collect();
+        user_keys
+            .iter()
+            .for_each(|user_key| self.send_message(user_key, channel.clone(), message));
+    }
+
     //// Updates ////
 
     pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
