@@ -124,6 +124,11 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
         self.server.room_users_count(&self.key)
     }
 
+    /// Returns an iterator of the [`UserKey`] for Users that belong in the [`Room`]
+    pub fn user_keys(&self) -> impl Iterator<Item=&UserKey> {
+        self.server.room_user_keys(&self.key)
+    }
+
     // Entities
 
     pub fn has_entity(&self, entity: &E) -> bool {
@@ -174,6 +179,11 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
 
     pub fn users_count(&self) -> usize {
         self.server.room_users_count(&self.key)
+    }
+
+    /// Returns an iterator of the [`UserKey`] for Users that belong in the [`Room`]
+    pub fn user_keys(&self) -> impl Iterator<Item=&UserKey> {
+        self.server.room_user_keys(&self.key)
     }
 
     // Entities
