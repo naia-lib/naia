@@ -4,12 +4,12 @@ use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
 use crate::{messages::message_channel::ChannelReader, types::MessageId};
 
-pub struct ReliableReceiver<P> {
+pub struct IndexedMessageReader<P> {
     phantom_p: PhantomData<P>,
 }
 
-impl<P> ReliableReceiver<P> {
-    pub fn read_incoming_messages(
+impl<P> IndexedMessageReader<P> {
+    pub fn read_messages(
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<Vec<(MessageId, P)>, SerdeErr> {
@@ -22,7 +22,7 @@ impl<P> ReliableReceiver<P> {
                 break;
             }
 
-            let id_w_msg = Self::read_incoming_message(channel_reader, reader, &last_read_id)?;
+            let id_w_msg = Self::read_message(channel_reader, reader, &last_read_id)?;
             last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
@@ -30,7 +30,7 @@ impl<P> ReliableReceiver<P> {
         Ok(output)
     }
 
-    pub fn read_incoming_message(
+    fn read_message(
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
         last_read_id: &Option<MessageId>,

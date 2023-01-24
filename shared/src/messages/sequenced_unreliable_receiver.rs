@@ -1,30 +1,37 @@
-use std::{collections::VecDeque, mem};
+use std::mem;
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{message_list_header, sequence_greater_than, types::MessageId};
+use crate::{sequence_greater_than, types::MessageId};
 
 use super::{
     message_channel::{ChannelReader, ChannelReceiver},
-    reliable_receiver::ReliableReceiver,
+    indexed_message_reader::IndexedMessageReader,
 };
 
 pub struct SequencedUnreliableReceiver<P> {
-    most_recent_received_message_id: Option<MessageId>,
-    incoming_messages: VecDeque<P>,
+    newest_received_message_id: Option<MessageId>,
+    incoming_messages: Vec<P>,
 }
 
 impl<P> SequencedUnreliableReceiver<P> {
     pub fn new() -> Self {
         Self {
-            most_recent_received_message_id: None,
-            incoming_messages: VecDeque::new(),
+            newest_received_message_id: None,
+            incoming_messages: Vec::new(),
         }
     }
 
-
-    fn recv_message(&mut self, message: P) {
-        self.incoming_messages.push_back(message);
+    pub fn buffer_message(&mut self, message_id: MessageId, message: P) {
+        if let Some(most_recent_id) = self.newest_received_message_id {
+            if sequence_greater_than(message_id, most_recent_id) {
+                self.incoming_messages.push(message);
+                self.newest_received_message_id = Some(message_id);
+            }
+        } else {
+            self.incoming_messages.push(message);
+            self.newest_received_message_id = Some(message_id);
+        }
     }
 }
 
@@ -36,24 +43,9 @@ impl<P: Send + Sync> ChannelReceiver<P> for SequencedUnreliableReceiver<P> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let message_count = message_list_header::read(reader)?;
-        let mut last_read_id: Option<MessageId> = None;
-
-        for _x in 0..message_count {
-            let (message_id, message) = ReliableReceiver::read_incoming_message(
-                channel_reader, reader, &last_read_id)?;
-            last_read_id = Some(id_w_msg.0);
-
-            // only process the message if it is the most recent one, or if it's the first message received
-            if let Some(most_recent_id) = self.most_recent_received_message_id {
-                if sequence_greater_than(message_id, most_recent_id) {
-                    self.recv_message(message);
-                    self.most_recent_received_message_id = Some(message_id);
-                }
-            } else {
-                self.recv_message(message);
-                self.most_recent_received_message_id = Some(message_id);
-            }
+        let id_w_msgs = IndexedMessageReader::read_messages(channel_reader, reader)?;
+        for (id, message) in id_w_msgs {
+            self.buffer_message(id, message);
         }
         Ok(())
     }

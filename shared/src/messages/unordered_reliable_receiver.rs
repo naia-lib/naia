@@ -6,13 +6,13 @@ use crate::{sequence_less_than, types::MessageId};
 
 use super::{
     message_channel::{ChannelReader, ChannelReceiver},
-    reliable_receiver::ReliableReceiver,
+    indexed_message_reader::IndexedMessageReader,
 };
 
 pub struct UnorderedReliableReceiver<P> {
     oldest_received_message_id: MessageId,
     record: VecDeque<(MessageId, bool)>,
-    received_messages: Vec<(MessageId, P)>,
+    incoming_messages: Vec<(MessageId, P)>,
 }
 
 impl<P> Default for UnorderedReliableReceiver<P> {
@@ -20,7 +20,7 @@ impl<P> Default for UnorderedReliableReceiver<P> {
         Self {
             oldest_received_message_id: 0,
             record: VecDeque::default(),
-            received_messages: Vec::default(),
+            incoming_messages: Vec::default(),
         }
     }
 }
@@ -49,7 +49,7 @@ impl<P> UnorderedReliableReceiver<P> {
                     if *old_message_id == message_id {
                         if !(*old_message) {
                             *old_message = true;
-                            self.received_messages.push((*old_message_id, message));
+                            self.incoming_messages.push((*old_message_id, message));
                             return;
                         } else {
                             // already received this message
@@ -62,7 +62,7 @@ impl<P> UnorderedReliableReceiver<P> {
 
                 if next_message_id == message_id {
                     self.record.push_back((next_message_id, true));
-                    self.received_messages.push((message_id, message));
+                    self.incoming_messages.push((message_id, message));
                     return;
                 } else {
                     self.record.push_back((next_message_id, false));
@@ -92,7 +92,7 @@ impl<P> UnorderedReliableReceiver<P> {
         }
 
         // return buffer
-        mem::take(&mut self.received_messages)
+        mem::take(&mut self.incoming_messages)
     }
 }
 
@@ -102,7 +102,7 @@ impl<P: Send + Sync> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, reader)?;
+        let id_w_msgs = IndexedMessageReader::read_messages(channel_reader, reader)?;
         for (id, message) in id_w_msgs {
             self.buffer_message(id, message);
         }

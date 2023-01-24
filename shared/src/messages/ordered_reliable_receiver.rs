@@ -6,21 +6,21 @@ use crate::{types::MessageId, wrapping_number::sequence_less_than};
 
 use super::{
     message_channel::{ChannelReader, ChannelReceiver},
-    reliable_receiver::ReliableReceiver,
+    indexed_message_reader::IndexedMessageReader,
 };
 
 // OrderedReliableReceiver
 
 pub struct OrderedReliableReceiver<P> {
-    oldest_waiting_message_id: MessageId,
-    waiting_incoming_messages: VecDeque<(MessageId, Option<P>)>,
+    oldest_received_message_id: MessageId,
+    incoming_messages: VecDeque<(MessageId, Option<P>)>,
 }
 
 impl<P> Default for OrderedReliableReceiver<P> {
     fn default() -> Self {
         Self {
-            oldest_waiting_message_id: 0,
-            waiting_incoming_messages: VecDeque::default(),
+            oldest_received_message_id: 0,
+            incoming_messages: VecDeque::default(),
         }
     }
 }
@@ -34,7 +34,7 @@ impl<P> OrderedReliableReceiver<P> {
         // then add new empty slots at the end until getting to the incoming message id
         // then, once you're there, put the new message in
 
-        if sequence_less_than(message_id, self.oldest_waiting_message_id) {
+        if sequence_less_than(message_id, self.oldest_received_message_id) {
             // already moved sliding window past this message id
             return;
         }
@@ -43,15 +43,15 @@ impl<P> OrderedReliableReceiver<P> {
         let mut found = false;
 
         loop {
-            if index < self.waiting_incoming_messages.len() {
-                if let Some((old_message_id, _)) = self.waiting_incoming_messages.get(index) {
+            if index < self.incoming_messages.len() {
+                if let Some((old_message_id, _)) = self.incoming_messages.get(index) {
                     if *old_message_id == message_id {
                         found = true;
                     }
                 }
 
                 if found {
-                    let (_, old_message) = self.waiting_incoming_messages.get_mut(index).unwrap();
+                    let (_, old_message) = self.incoming_messages.get_mut(index).unwrap();
                     if old_message.is_none() {
                         *old_message = Some(message);
                     } else {
@@ -60,14 +60,14 @@ impl<P> OrderedReliableReceiver<P> {
                     break;
                 }
             } else {
-                let next_message_id = self.oldest_waiting_message_id.wrapping_add(index as u16);
+                let next_message_id = self.oldest_received_message_id.wrapping_add(index as u16);
 
                 if next_message_id == message_id {
-                    self.waiting_incoming_messages
+                    self.incoming_messages
                         .push_back((next_message_id, Some(message)));
                     break;
                 } else {
-                    self.waiting_incoming_messages
+                    self.incoming_messages
                         .push_back((next_message_id, None));
                 }
             }
@@ -80,14 +80,14 @@ impl<P> OrderedReliableReceiver<P> {
         let mut output = Vec::new();
         loop {
             let mut has_message = false;
-            if let Some((_, Some(_))) = self.waiting_incoming_messages.front() {
+            if let Some((_, Some(_))) = self.incoming_messages.front() {
                 has_message = true;
             }
             if has_message {
-                let (_, message_opt) = self.waiting_incoming_messages.pop_front().unwrap();
+                let (_, message_opt) = self.incoming_messages.pop_front().unwrap();
                 let message = message_opt.unwrap();
                 output.push(message);
-                self.oldest_waiting_message_id = self.oldest_waiting_message_id.wrapping_add(1);
+                self.oldest_received_message_id = self.oldest_received_message_id.wrapping_add(1);
             } else {
                 break;
             }
@@ -102,7 +102,7 @@ impl<P: Send + Sync> ChannelReceiver<P> for OrderedReliableReceiver<P> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let id_w_msgs = ReliableReceiver::read_incoming_messages(channel_reader, reader)?;
+        let id_w_msgs = IndexedMessageReader::read_messages(channel_reader, reader)?;
         for (id, message) in id_w_msgs {
             self.buffer_message(id, message);
         }

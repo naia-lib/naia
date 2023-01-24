@@ -59,7 +59,6 @@ pub use messages::{
         ReliableSettings, TickBufferSettings,
     },
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
-    message_list_header,
     message_manager::MessageManager,
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
