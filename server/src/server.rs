@@ -585,6 +585,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     //// Entity Scopes
 
+    /// Remove all entities from a User's scope
+    pub(crate) fn user_scope_remove_user(&mut self, user_key: &UserKey) {
+        self.entity_scope_map.remove_user(user_key);
+    }
+
     pub(crate) fn user_scope_set_entity(
         &mut self,
         user_key: &UserKey,
