@@ -5,8 +5,8 @@ use naia_serde::{BitReader, SerdeErr};
 use crate::{types::MessageId, wrapping_number::sequence_less_than};
 
 use super::{
-    message_channel::{ChannelReader, ChannelReceiver},
     indexed_message_reader::IndexedMessageReader,
+    message_channel::{ChannelReader, ChannelReceiver},
 };
 
 // OrderedReliableReceiver
@@ -67,8 +67,7 @@ impl<P> OrderedReliableReceiver<P> {
                         .push_back((next_message_id, Some(message)));
                     break;
                 } else {
-                    self.incoming_messages
-                        .push_back((next_message_id, None));
+                    self.incoming_messages.push_back((next_message_id, None));
                 }
             }
 

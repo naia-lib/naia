@@ -5,8 +5,8 @@ use naia_serde::{BitReader, SerdeErr};
 use crate::{sequence_less_than, types::MessageId};
 
 use super::{
-    message_channel::{ChannelReader, ChannelReceiver},
     indexed_message_reader::IndexedMessageReader,
+    message_channel::{ChannelReader, ChannelReceiver},
 };
 
 pub struct UnorderedReliableReceiver<P> {

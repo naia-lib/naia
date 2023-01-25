@@ -771,7 +771,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 self.send_message(user_key, channel.clone(), message)
             }
         }
-
     }
 
     //////// entities

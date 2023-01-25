@@ -1,9 +1,9 @@
 pub mod channel_config;
+pub mod indexed_message_reader;
+pub mod indexed_message_writer;
 pub mod message_channel;
 pub mod message_manager;
 pub mod ordered_reliable_receiver;
-pub mod indexed_message_reader;
-pub mod indexed_message_writer;
 pub mod reliable_sender;
 pub mod sequenced_unreliable_receiver;
 pub mod sequenced_unreliable_sender;

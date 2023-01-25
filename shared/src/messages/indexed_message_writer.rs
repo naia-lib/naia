@@ -13,7 +13,6 @@ pub struct IndexedMessageWriter<P: Send + Sync> {
 }
 
 impl<P: Send + Sync> IndexedMessageWriter<P> {
-
     pub fn write_messages(
         outgoing_messages: &mut VecDeque<(MessageId, P)>,
         channel_writer: &dyn ChannelWriter<P>,
