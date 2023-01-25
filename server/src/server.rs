@@ -277,6 +277,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         }
     }
 
+    /// Sends a message to all connected users using a given channel
+    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+        self.user_keys()
+            .iter()
+            .for_each(|user_key| self.send_message(user_key, channel.clone(), message))
+    }
+
     // Updates
 
     /// Used to evaluate whether, given a User & Entity that are in the
@@ -749,6 +756,22 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             return room.users_count();
         }
         0
+    }
+
+    /// Sends a message to all connected users in a given Room using a given channel
+    pub(crate) fn room_broadcast_message<R: ReplicateSafe<P>>(
+        &mut self,
+        channel: C,
+        message: &R,
+        room_key: &RoomKey,
+    ) {
+        if let Some(room) = self.rooms.get(room_key) {
+            let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
+            for user_key in &user_keys {
+                self.send_message(user_key, channel.clone(), message)
+            }
+        }
+
     }
 
     //////// entities

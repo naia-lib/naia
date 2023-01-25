@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{BigMapKey, ChannelIndex};
+use naia_shared::{BigMapKey, ChannelIndex, ReplicateSafe};
 
 use super::user::UserKey;
 
@@ -206,5 +206,11 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
 
     pub fn entities_count(&self) -> usize {
         self.server.room_entities_count(&self.key)
+    }
+
+    // Messages
+
+    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+        self.server.room_broadcast_message(channel, message, &self.key);
     }
 }
