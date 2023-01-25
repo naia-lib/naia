@@ -19,6 +19,7 @@ use super::{
     unordered_reliable_receiver::UnorderedReliableReceiver,
     unordered_unreliable_receiver::UnorderedUnreliableReceiver,
     unordered_unreliable_sender::UnorderedUnreliableSender,
+    sequenced_reliable_receiver::SequencedReliableReceiver,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -63,13 +64,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                         Box::new(SequencedUnreliableSender::new()),
                     );
                 }
-                ChannelMode::UnorderedReliable(settings) => {
-                    channel_senders.insert(
-                        channel_index.clone(),
-                        Box::new(ReliableSender::new(settings.rtt_resend_factor)),
-                    );
-                }
-                ChannelMode::OrderedReliable(settings) => {
+                ChannelMode::UnorderedReliable(settings) |
+                ChannelMode::SequencedReliable(settings) |
+                ChannelMode::OrderedReliable(settings)  => {
                     channel_senders.insert(
                         channel_index.clone(),
                         Box::new(ReliableSender::new(settings.rtt_resend_factor)),
@@ -112,6 +109,12 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                     channel_receivers.insert(
                         channel_index.clone(),
                         Box::new(UnorderedReliableReceiver::default()),
+                    );
+                }
+                ChannelMode::SequencedReliable(_) => {
+                    channel_receivers.insert(
+                        channel_index.clone(),
+                        Box::new(SequencedReliableReceiver::default()),
                     );
                 }
                 ChannelMode::OrderedReliable(_) => {

@@ -66,6 +66,7 @@ impl<C: ChannelIndex> Channel<C> {
             ChannelMode::UnorderedUnreliable => false,
             ChannelMode::SequencedUnreliable => false,
             ChannelMode::UnorderedReliable(_) => true,
+            ChannelMode::SequencedReliable(_) => true,
             ChannelMode::OrderedReliable(_) => true,
             ChannelMode::TickBuffered(_) => false,
         }
@@ -124,6 +125,7 @@ pub enum ChannelMode {
     UnorderedUnreliable,
     SequencedUnreliable,
     UnorderedReliable(ReliableSettings),
+    SequencedReliable(ReliableSettings),
     OrderedReliable(ReliableSettings),
     TickBuffered(TickBufferSettings),
 }
@@ -154,6 +156,7 @@ mod define_default_channels {
         UnorderedUnreliable,
         SequencedUnreliable,
         UnorderedReliable,
+        SequencedReliable,
         OrderedReliable,
         TickBuffered,
     }
@@ -183,6 +186,11 @@ const DEFAULT_CHANNEL_CONFIG: &[Channel<DefaultChannels>] = &[
         index: DefaultChannels::UnorderedReliable,
         direction: ChannelDirection::Bidirectional,
         mode: ChannelMode::UnorderedReliable(ReliableSettings::default()),
+    },
+    Channel {
+        index: DefaultChannels::SequencedReliable,
+        direction: ChannelDirection::Bidirectional,
+        mode: ChannelMode::SequencedReliable(ReliableSettings::default()),
     },
     Channel {
         index: DefaultChannels::OrderedReliable,
