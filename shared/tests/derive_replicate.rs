@@ -3,6 +3,7 @@ mod some_protocol {
     use super::some_named_replica::NamedStringHolder;
     use super::some_tuple_replica::TupleStringHolder;
     use super::some_unit_replica::UnitHolder;
+    use super::some_nonreplicated_replica::MixedReplicationHolder;
     use naia_shared::Protocolize;
 
     #[derive(Protocolize)]
@@ -11,6 +12,7 @@ mod some_protocol {
         TupleStringHolder(TupleStringHolder),
         EntityPropertyHolder(EntityPropertyHolder),
         UnitHolder(UnitHolder),
+        MixedReplicationHolder(MixedReplicationHolder),
     }
 }
 
@@ -73,17 +75,35 @@ mod some_entity_replica {
     }
 }
 
+mod some_nonreplicated_replica {
+    use naia_shared::{Property, Replicate};
+
+    #[derive(Replicate)]
+    #[protocol_path = "super::some_protocol::SomeProtocol"]
+    pub struct MixedReplicationHolder {
+        pub string_1: Property<String>,
+        pub string_2: String,
+    }
+
+    impl MixedReplicationHolder {
+        pub fn new(string_1: &str, string_2: &str) -> Self {
+            return MixedReplicationHolder::new_complete(string_1.to_string(), string_2.to_string());
+        }
+    }
+}
+
 use naia_shared::{
     serde::{BitReader, BitWriter},
     BigMapKey, EntityHandle, EntityHandleConverter, FakeEntityConverter, NetEntity,
     NetEntityHandleConverter, Protocolize, ReplicateSafe,
 };
 
-use some_entity_replica::EntityPropertyHolder;
-use some_named_replica::NamedStringHolder;
 use some_protocol::SomeProtocol;
-use some_tuple_replica::TupleStringHolder;
 use some_unit_replica::UnitHolder;
+use some_named_replica::NamedStringHolder;
+use some_nonreplicated_replica::MixedReplicationHolder;
+use some_tuple_replica::TupleStringHolder;
+use some_entity_replica::EntityPropertyHolder;
 
 #[test]
 fn read_write_unit_replica() {
@@ -207,4 +227,32 @@ fn read_write_entity_replica() {
     assert_eq!(typed_in_1.entity_1.handle().unwrap().to_u64(), 1);
     assert_eq!(typed_out_1.entity_1.get(&TestEntityConverter).unwrap(), 1);
     assert_eq!(typed_out_1.entity_1.handle().unwrap().to_u64(), 1);
+}
+
+#[test]
+fn read_write_nonreplicated_replica() {
+    // Write
+    let mut writer = BitWriter::new();
+
+    let in_1 =
+        SomeProtocol::MixedReplicationHolder(MixedReplicationHolder::new("hello world", "goodbye world"));
+
+    in_1.write(&mut writer, &FakeEntityConverter);
+
+    let (buffer_length, buffer) = writer.flush();
+
+    // Read
+
+    let mut reader = BitReader::new(&buffer[..buffer_length]);
+
+    let out_1 = SomeProtocol::read(&mut reader, &FakeEntityConverter)
+        .expect("should deserialize correctly");
+
+    let typed_in_1 = in_1.cast_ref::<MixedReplicationHolder>().unwrap();
+    let typed_out_1 = out_1.cast_ref::<MixedReplicationHolder>().unwrap();
+    assert!(typed_in_1.string_1.equals(&typed_out_1.string_1));
+    assert_eq!(*typed_in_1.string_1, "hello world".to_string());
+    assert_eq!(*typed_in_1.string_2, "goodbye world".to_string());
+    assert_eq!(*typed_out_1.string_1, "hello world".to_string());
+    assert_eq!(*typed_out_1.string_2, "".to_string());
 }
