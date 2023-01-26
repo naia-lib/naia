@@ -51,7 +51,8 @@ impl<P> SequencedReliableReceiver<P> {
                     if *old_message_id == message_id {
                         if !(*old_message) {
                             *old_message = true;
-                            if !sequence_less_than(*old_message_id, self.newest_received_message_id) {
+                            if !sequence_less_than(*old_message_id, self.newest_received_message_id)
+                            {
                                 self.newest_received_message_id = *old_message_id;
                                 self.incoming_messages.push((*old_message_id, message));
                             }

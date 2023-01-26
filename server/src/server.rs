@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{hash_set::Iter, HashMap, VecDeque},
     hash::Hash,
     net::SocketAddr,
     panic,
@@ -216,7 +216,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             self.io.send_writer(&user.address, &mut writer);
             //
         }
-        self.delete_user(user_key);
+        self.user_delete(user_key);
     }
 
     // Messages
@@ -675,17 +675,42 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         None
     }
 
+    /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
+    pub(crate) fn user_room_keys(&self, user_key: &UserKey) -> Option<Iter<RoomKey>> {
+        if let Some(user) = self.users.get(user_key) {
+            return Some(user.room_keys());
+        }
+        return None;
+    }
+
+    /// Get an count of how many Rooms the given User is inside
+    pub(crate) fn user_rooms_count(&self, user_key: &UserKey) -> Option<usize> {
+        if let Some(user) = self.users.get(user_key) {
+            return Some(user.room_count());
+        }
+        return None;
+    }
+
+    pub(crate) fn user_disconnect(&mut self, user_key: &UserKey) {
+        if let Some(user) = self.user_delete(user_key) {
+            self.incoming_events
+                .push_back(Ok(Event::Disconnection(*user_key, user)));
+        }
+    }
+
     /// All necessary cleanup, when they're actually gone...
-    pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
+    pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> Option<User> {
         if let Some(user) = self.users.remove(user_key) {
             if self.user_connections.remove(&user.address).is_some() {
                 self.entity_scope_map.remove_user(user_key);
                 self.handshake_manager.delete_user(&user.address);
 
-                // TODO: cache this?
                 // Clean up all user data
-                for (_, room) in self.rooms.iter_mut() {
-                    room.unsubscribe_user(user_key);
+                for room_key in user.room_keys() {
+                    self.rooms
+                        .get_mut(room_key)
+                        .unwrap()
+                        .unsubscribe_user(user_key);
                 }
 
                 if self.io.bandwidth_monitor_enabled() {
@@ -710,7 +735,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             // TODO: what else kind of cleanup do we need to do here? Scopes?
 
             // actually remove the room from the collection
-            self.rooms.remove(room_key);
+            let room = self.rooms.remove(room_key).unwrap();
+            for user_key in room.user_keys() {
+                self.users.get_mut(user_key).unwrap().uncache_room(room_key);
+            }
 
             true
         } else {
@@ -733,9 +761,30 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Entities will only ever be in-scope for Users which are in a
     /// Room with them
     pub(crate) fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        if let Some(room) = self.rooms.get_mut(room_key) {
-            room.subscribe_user(user_key);
+        if let Some(user) = self.users.get_mut(user_key) {
+            if let Some(room) = self.rooms.get_mut(room_key) {
+                room.subscribe_user(user_key);
+                user.cache_room(room_key);
+            }
         }
+    }
+
+    /// Removes a User from a Room
+    pub(crate) fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        if let Some(user) = self.users.get_mut(user_key) {
+            if let Some(room) = self.rooms.get_mut(room_key) {
+                room.unsubscribe_user(user_key);
+                user.uncache_room(room_key);
+            }
+        }
+    }
+
+    /// Get a count of Users in a given Room
+    pub(crate) fn room_users_count(&self, room_key: &RoomKey) -> usize {
+        if let Some(room) = self.rooms.get(room_key) {
+            return room.users_count();
+        }
+        0
     }
 
     /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
@@ -746,21 +795,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             None
         };
         iter.into_iter().flatten()
-    }
-
-    /// Removes a User from a Room
-    pub(crate) fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        if let Some(room) = self.rooms.get_mut(room_key) {
-            room.unsubscribe_user(user_key);
-        }
-    }
-
-    /// Get a count of Users in a given Room
-    pub(crate) fn room_users_count(&self, room_key: &RoomKey) -> usize {
-        if let Some(room) = self.rooms.get(room_key) {
-            return room.users_count();
-        }
-        0
     }
 
     /// Sends a message to all connected users in a given Room using a given channel
@@ -845,7 +879,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             }
 
             for user_key in user_disconnects {
-                self.disconnect_user(&user_key);
+                self.user_disconnect(&user_key);
             }
         }
 
@@ -1017,7 +1051,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                     .verify_disconnect_request(user_connection, &mut reader)
                                 {
                                     let user_key = user_connection.user_key;
-                                    self.disconnect_user(&user_key);
+                                    self.user_disconnect(&user_key);
                                 }
                             }
                             PacketType::Heartbeat => {
@@ -1106,13 +1140,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                         .push_back(Err(NaiaServerError::Wrapped(Box::new(error))));
                 }
             }
-        }
-    }
-
-    pub(crate) fn disconnect_user(&mut self, user_key: &UserKey) {
-        if let Some(user) = self.delete_user(user_key) {
-            self.incoming_events
-                .push_back(Ok(Event::Disconnection(*user_key, user)));
         }
     }
 

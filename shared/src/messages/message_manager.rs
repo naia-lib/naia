@@ -14,12 +14,12 @@ use super::{
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
+    sequenced_reliable_receiver::SequencedReliableReceiver,
     sequenced_unreliable_receiver::SequencedUnreliableReceiver,
     sequenced_unreliable_sender::SequencedUnreliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
     unordered_unreliable_receiver::UnorderedUnreliableReceiver,
     unordered_unreliable_sender::UnorderedUnreliableSender,
-    sequenced_reliable_receiver::SequencedReliableReceiver,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -64,9 +64,9 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                         Box::new(SequencedUnreliableSender::new()),
                     );
                 }
-                ChannelMode::UnorderedReliable(settings) |
-                ChannelMode::SequencedReliable(settings) |
-                ChannelMode::OrderedReliable(settings)  => {
+                ChannelMode::UnorderedReliable(settings)
+                | ChannelMode::SequencedReliable(settings)
+                | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         channel_index.clone(),
                         Box::new(ReliableSender::new(settings.rtt_resend_factor)),
