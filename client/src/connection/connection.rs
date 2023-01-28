@@ -213,7 +213,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             }
 
             // send packet
-            io.send_writer(&mut bit_writer);
+            match io.send_writer(&mut bit_writer) {
+                Ok(()) => {}
+                Err(_) => {
+                    // TODO: pass this on and handle above
+                    warn!("Client Error: Cannot send data packet to Server");
+                }
+            }
 
             return true;
         }

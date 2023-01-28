@@ -1,4 +1,5 @@
 use std::time::Duration;
+use log::warn;
 
 use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
@@ -72,11 +73,23 @@ impl<P: Protocolize> HandshakeManager<P> {
                 }
                 HandshakeState::AwaitingChallengeResponse => {
                     let mut writer = self.write_challenge_request();
-                    io.send_writer(&mut writer);
+                    match io.send_writer(&mut writer) {
+                        Ok(()) => {}
+                        Err(_) => {
+                            // TODO: pass this on and handle above
+                            warn!("Client Error: Cannot send challenge request packet to Server");
+                        }
+                    }
                 }
                 HandshakeState::AwaitingConnectResponse => {
                     let mut writer = self.write_connect_request();
-                    io.send_writer(&mut writer);
+                    match io.send_writer(&mut writer) {
+                        Ok(()) => {}
+                        Err(_) => {
+                            // TODO: pass this on and handle above
+                            warn!("Client Error: Cannot send connect request packet to Server");
+                        }
+                    }
                 }
             }
         }

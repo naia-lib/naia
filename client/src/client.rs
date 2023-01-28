@@ -1,5 +1,7 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
+use log::warn;
+
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
@@ -112,7 +114,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
         for _ in 0..10 {
             let mut writer = self.handshake_manager.write_disconnect();
-            self.io.send_writer(&mut writer);
+            match self.io.send_writer(&mut writer) {
+                Ok(()) => {}
+                Err(_) => {
+                    // TODO: pass this on and handle above
+                    warn!("Client Error: Cannot send disconnect packet to Server");
+                }
+            }
         }
 
         self.disconnect_internal();
@@ -299,7 +307,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 }
 
                 // send packet
-                self.io.send_writer(&mut writer);
+                match self.io.send_writer(&mut writer) {
+                    Ok(()) => {}
+                    Err(_) => {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send heartbeat packet to Server");
+                    }
+                }
                 server_connection.base.mark_sent();
             }
 
@@ -321,7 +335,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 server_connection.ping_manager.write_ping(&mut writer);
 
                 // send packet
-                self.io.send_writer(&mut writer);
+                match self.io.send_writer(&mut writer) {
+                    Ok(()) => {}
+                    Err(_) => {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send ping packet to Server");
+                    }
+                }
                 server_connection.base.mark_sent();
             }
 
@@ -393,7 +413,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                 ping_index.ser(&mut writer);
 
                                 // send packet
-                                self.io.send_writer(&mut writer);
+                                match self.io.send_writer(&mut writer) {
+                                    Ok(()) => {}
+                                    Err(_) => {
+                                        // TODO: pass this on and handle above
+                                        warn!("Client Error: Cannot send pong packet to Server");
+                                    }
+                                }
                                 server_connection.base.mark_sent();
                             }
                             PacketType::Pong => {

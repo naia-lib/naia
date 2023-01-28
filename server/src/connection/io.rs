@@ -65,7 +65,7 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_writer(&mut self, address: &SocketAddr, writer: &mut BitWriter) {
+    pub fn send_writer(&mut self, address: &SocketAddr, writer: &mut BitWriter) -> Result<(), NaiaServerSocketError> {
         // get payload
         let (length, buffer) = writer.flush();
         let mut payload = &buffer[0..length];
@@ -83,7 +83,8 @@ impl Io {
         self.packet_sender
             .as_ref()
             .expect("Cannot call Server.send_packet() until you call Server.listen()!")
-            .send(address, payload);
+            .send(address, payload)
+            .map_err(|_| NaiaServerSocketError::SendError(*address))
     }
 
     pub fn recv_reader(

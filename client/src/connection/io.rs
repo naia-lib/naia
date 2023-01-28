@@ -61,7 +61,7 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_writer(&mut self, writer: &mut BitWriter) {
+    pub fn send_writer(&mut self, writer: &mut BitWriter) -> Result<(), NaiaClientSocketError> {
         // get payload
         let (length, buffer) = writer.flush();
         let mut payload = &buffer[0..length];
@@ -79,7 +79,8 @@ impl Io {
         self.packet_sender
             .as_mut()
             .expect("Cannot call Client.send_packet() until you call Client.connect()!")
-            .send(payload);
+            .send(payload)
+            .map_err(|_| NaiaClientSocketError::SendError)
     }
 
     pub fn recv_reader(&mut self) -> Result<Option<BitReader>, NaiaClientSocketError> {

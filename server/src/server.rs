@@ -196,7 +196,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             );
             // send connectaccept response
             let mut writer = self.handshake_manager.write_connect_response();
-            self.io.send_writer(&user.address, &mut writer);
+            match self.io.send_writer(&user.address, &mut writer) {
+                Ok(()) => {}
+                Err(_) => {
+                    // TODO: pass this on and handle above
+                    warn!("Server Error: Cannot send connect response packet to {}", &user.address);
+                }
+            }
             //
             self.user_connections.insert(user.address, new_connection);
             if self.io.bandwidth_monitor_enabled() {
@@ -213,7 +219,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         if let Some(user) = self.users.get(user_key) {
             // send connect reject response
             let mut writer = self.handshake_manager.write_reject_response();
-            self.io.send_writer(&user.address, &mut writer);
+            match self.io.send_writer(&user.address, &mut writer) {
+                Ok(()) => {}
+                Err(_) => {
+                    // TODO: pass this on and handle above
+                    warn!("Server Error: Cannot send auth rejection packet to {}", &user.address);
+                }
+            }
             //
         }
         self.user_delete(user_key);
@@ -905,7 +917,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     }
 
                     // send packet
-                    self.io.send_writer(user_address, &mut writer);
+                    match self.io.send_writer(user_address, &mut writer) {
+                        Ok(()) => {}
+                        Err(_) => {
+                            // TODO: pass this on and handle above
+                            warn!("Server Error: Cannot send heartbeat packet to {}", user_address);
+                        }
+                    }
                     connection.base.mark_sent();
                 }
             }
@@ -934,7 +952,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     connection.ping_manager.write_ping(&mut writer);
 
                     // send packet
-                    self.io.send_writer(user_address, &mut writer);
+                    match self.io.send_writer(user_address, &mut writer) {
+                        Ok(()) => {}
+                        Err(_) => {
+                            // TODO: pass this on and handle above
+                            warn!("Server Error: Cannot send ping packet to {}", user_address);
+                        }
+                    }
                     connection.base.mark_sent();
                 }
             }
@@ -961,7 +985,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                             if let Ok(mut writer) =
                                 self.handshake_manager.recv_challenge_request(&mut reader)
                             {
-                                self.io.send_writer(&address, &mut writer);
+                                match self.io.send_writer(&address, &mut writer) {
+                                    Ok(()) => {}
+                                    Err(_) => {
+                                        // TODO: pass this on and handle above
+                                        warn!("Server Error: Cannot send challenge response packet to {}", &address);
+                                    }
+                                };
                             }
                             continue;
                         }
@@ -975,7 +1005,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                         // send connectaccept response
                                         let mut writer =
                                             self.handshake_manager.write_connect_response();
-                                        self.io.send_writer(&address, &mut writer);
+                                        match self.io.send_writer(&address, &mut writer) {
+                                            Ok(()) => {}
+                                            Err(_) => {
+                                                // TODO: pass this on and handle above
+                                                warn!("Server Error: Cannot send connect success response packet to {}", &address);
+                                            }
+                                        };
                                         //
                                     } else {
                                         let user = User::new(address);
@@ -1106,7 +1142,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                 ping_index.ser(&mut writer);
 
                                 // send packet
-                                self.io.send_writer(&address, &mut writer);
+                                match self.io.send_writer(&address, &mut writer) {
+                                    Ok(()) => {}
+                                    Err(_) => {
+                                        // TODO: pass this on and handle above
+                                        warn!("Server Error: Cannot send pong packet to {}", &address);
+                                    }
+                                };
                                 user_connection.base.mark_sent();
                             }
                             PacketType::Pong => {

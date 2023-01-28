@@ -3,6 +3,7 @@ use std::{
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
+use log::warn;
 
 use naia_shared::{
     sequence_greater_than,
@@ -222,7 +223,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
             //info!("--------------\n");
 
             // send packet
-            io.send_writer(&self.base.address, &mut bit_writer);
+            match io.send_writer(&self.base.address, &mut bit_writer) {
+                Ok(()) => {}
+                Err(_) => {
+                    // TODO: pass this on and handle above
+                    warn!("Server Error: Cannot send data packet to {}", &self.base.address);
+                }
+            }
 
             return true;
         }
