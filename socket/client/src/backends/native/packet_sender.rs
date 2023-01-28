@@ -1,5 +1,7 @@
-use tokio::sync::mpsc::Sender;
+use tokio::sync::mpsc::{error::SendError, UnboundedSender};
 use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
+
+use naia_socket_shared::ChannelClosedError;
 
 use crate::server_addr::ServerAddr;
 
@@ -7,13 +9,13 @@ use crate::server_addr::ServerAddr;
 #[derive(Clone)]
 pub struct PacketSender {
     server_addr: AddrCell,
-    sender_channel: Sender<Box<[u8]>>,
+    sender_channel: UnboundedSender<Box<[u8]>>,
 }
 
 impl PacketSender {
     /// Create a new PacketSender, if supplied with the Server's address & a
     /// reference back to the parent Socket
-    pub fn new(server_addr: AddrCell, sender_channel: Sender<Box<[u8]>>) -> Self {
+    pub fn new(server_addr: AddrCell, sender_channel: UnboundedSender<Box<[u8]>>) -> Self {
         PacketSender {
             server_addr,
             sender_channel,
@@ -21,9 +23,10 @@ impl PacketSender {
     }
 
     /// Send a Packet to the Server
-    pub fn send(&self, payload: &[u8]) {
-        let _result = self.sender_channel.blocking_send(payload.into());
-        // TODO: handle result
+    pub fn send(&self, payload: &[u8]) -> Result<(), ChannelClosedError<()>> {
+        self.sender_channel
+            .send(payload.into())
+            .map_err(|_err: SendError<_>| ChannelClosedError(()))
     }
 
     /// Get the Server's Socket address

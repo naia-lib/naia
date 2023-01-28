@@ -1,5 +1,3 @@
-extern crate log;
-
 use std::net::SocketAddr;
 
 use naia_socket_shared::SocketConfig;
@@ -12,7 +10,7 @@ use crate::{
 
 use super::{
     addr_cell::AddrCell, data_channel::DataChannel, data_port::DataPort,
-    packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
+    packet_sender::PacketSender, PacketReceiverImpl,
 };
 
 /// A client-side socket which communicates with an underlying unordered &
@@ -114,6 +112,3 @@ impl Socket {
             .clone();
     }
 }
-
-unsafe impl Send for Socket {}
-unsafe impl Sync for Socket {}

@@ -28,6 +28,17 @@ pub use socket_config::SocketConfig;
 pub use time_queue::TimeQueue;
 pub use url_parse::{parse_server_url, url_to_socket_addr};
 
+#[derive(Debug, Eq, PartialEq)]
+pub struct ChannelClosedError<T>(pub T);
+
+impl<T: std::fmt::Debug> std::error::Error for ChannelClosedError<T> {}
+
+impl<T> std::fmt::Display for ChannelClosedError<T> {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(fmt, "channel closed")
+    }
+}
+
 cfg_if! {
     if #[cfg(all(target_arch = "wasm32", feature = "wbindgen", feature = "mquad"))]
     {

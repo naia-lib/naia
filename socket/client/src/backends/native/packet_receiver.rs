@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{
     error::NaiaClientSocketError, packet_receiver::PacketReceiverTrait, server_addr::ServerAddr,
@@ -11,14 +11,14 @@ use crate::{
 #[derive(Clone)]
 pub struct PacketReceiverImpl {
     server_addr: AddrCell,
-    receiver_channel: Arc<Mutex<Receiver<Box<[u8]>>>>,
+    receiver_channel: Arc<Mutex<UnboundedReceiver<Box<[u8]>>>>,
     receive_buffer: Vec<u8>,
 }
 
 impl PacketReceiverImpl {
     /// Create a new PacketReceiver, if supplied with the Server's address & a
     /// reference back to the parent Socket
-    pub fn new(server_addr: AddrCell, receiver_channel: Receiver<Box<[u8]>>) -> Self {
+    pub fn new(server_addr: AddrCell, receiver_channel: UnboundedReceiver<Box<[u8]>>) -> Self {
         PacketReceiverImpl {
             server_addr,
             receiver_channel: Arc::new(Mutex::new(receiver_channel)),

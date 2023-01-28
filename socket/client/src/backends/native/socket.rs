@@ -1,5 +1,3 @@
-extern crate log;
-
 use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use webrtc_unreliable_client::Socket as RTCSocket;
@@ -42,12 +40,12 @@ impl Socket {
         );
         let conditioner_config = self.config.link_condition.clone();
 
-        let (addr_cell, to_server_sender, to_client_receiver) =
-            get_runtime().block_on(RTCSocket::connect(&server_session_string));
+        let (socket, io) = RTCSocket::new();
+        get_runtime().spawn(async move { socket.connect(&server_session_string).await });
 
         // Setup Packet Sender & Receiver
-        let packet_sender = PacketSender::new(addr_cell.clone(), to_server_sender);
-        let packet_receiver_impl = PacketReceiverImpl::new(addr_cell, to_client_receiver);
+        let packet_sender = PacketSender::new(io.addr_cell.clone(), io.to_server_sender);
+        let packet_receiver_impl = PacketReceiverImpl::new(io.addr_cell, io.to_client_receiver);
 
         let receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);
@@ -64,7 +62,8 @@ impl Socket {
         });
     }
 
-    /// Returns whether or not the Socket is currently connected to the server
+    /// Returns whether or not the connect method was called (doesn't necessarily indicate that the
+    /// connection is fully established).
     pub fn is_connected(&self) -> bool {
         self.io.is_some()
     }
@@ -79,8 +78,7 @@ impl Socket {
             .clone();
     }
 
-    /// Gets a PacketReceiver which can be used to receive packets from the
-    /// Socket
+    /// Gets a PacketReceiver which can be used to receive packets from the Socket
     pub fn packet_receiver(&self) -> PacketReceiver {
         return self
             .io
