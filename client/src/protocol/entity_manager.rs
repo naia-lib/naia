@@ -5,9 +5,9 @@ use std::{
 
 use naia_shared::{
     serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
-    BigMap, ChannelIndex, EntityAction, EntityActionReceiver, EntityActionType, EntityHandle,
-    EntityHandleConverter, MessageId, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
-    WorldMutType,
+    BigMap, ChannelIndex, EntityAction, EntityActionReceiver, EntityActionType,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageId, NetEntity,
+    NetEntityHandleConverter, Protocolize, Tick, WorldMutType,
 };
 
 use crate::{error::NaiaClientError, event::Event};
@@ -344,11 +344,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for EntityMan
             .expect("entity does not exist for given handle!")
     }
 
-    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
-        self.entity_records
-            .get(entity)
-            .expect("entity does not exist!")
-            .entity_handle
+    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
+        if let Some(record) = self.entity_records.get(entity) {
+            Ok(record.entity_handle)
+        } else {
+            Err(EntityDoesNotExistError)
+        }
     }
 }
 
@@ -362,11 +363,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityMan
         entity_record.net_entity
     }
 
-    fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle {
-        let entity = self
-            .local_to_world_entity
-            .get(net_entity)
-            .expect("no entity exists associated with given net entity");
-        self.entity_to_handle(entity)
+    fn net_entity_to_handle(
+        &self,
+        net_entity: &NetEntity,
+    ) -> Result<EntityHandle, EntityDoesNotExistError> {
+        if let Some(entity) = self.local_to_world_entity.get(net_entity) {
+            self.entity_to_handle(entity)
+        } else {
+            Err(EntityDoesNotExistError)
+        }
     }
 }

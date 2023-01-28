@@ -7,7 +7,10 @@ use bevy_ecs::{
 };
 
 use naia_client::{
-    shared::{ChannelIndex, EntityHandle, EntityHandleConverter, Protocolize, ReplicateSafe},
+    shared::{
+        ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Protocolize,
+        ReplicateSafe,
+    },
     Client as NaiaClient, EntityRef, NaiaClientError,
 };
 
@@ -111,7 +114,7 @@ impl<'a, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity> for Clie
         self.client.handle_to_entity(entity_handle)
     }
 
-    fn entity_to_handle(&self, entity: &Entity) -> EntityHandle {
+    fn entity_to_handle(&self, entity: &Entity) -> Result<EntityHandle, EntityDoesNotExistError> {
         self.client.entity_to_handle(entity)
     }
 }

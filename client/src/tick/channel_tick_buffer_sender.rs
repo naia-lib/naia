@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, time::Duration};
 
-use log::info;
+use log::{info, warn};
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than,
@@ -255,7 +255,10 @@ impl<P: Protocolize> OutgoingMessages<P> {
             }
 
             if sequence_less_than(message_tick, *front_tick) {
-                panic!("this method should always receive increasing or equal ticks!")
+                warn!("This method should always receive increasing or equal Ticks! \
+                Received Tick: {message_tick} after receiving {front_tick}. \
+                Possibly try ensuring that Client.send_message() is only called on this channel once per Tick?");
+                return;
             }
         } else {
             // nothing is in here

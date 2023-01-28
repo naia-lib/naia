@@ -9,9 +9,9 @@ use naia_client_socket::Socket;
 
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
-    ChannelIndex, ConnectionConfig, EntityHandle, EntityHandleConverter, PacketType, PingConfig,
-    PingIndex, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig,
-    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    ChannelIndex, ConnectionConfig, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
+    PacketType, PingConfig, PingIndex, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
+    SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -534,7 +534,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter
         connection.entity_manager.handle_to_entity(entity_handle)
     }
 
-    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
+    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
         let connection = self
             .server_connection
             .as_ref()
