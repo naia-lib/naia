@@ -16,3 +16,5 @@ impl fmt::Display for NaiaClientError {
 }
 
 impl Error for NaiaClientError {}
+unsafe impl Send for NaiaClientError {}
+unsafe impl Sync for NaiaClientError {}
