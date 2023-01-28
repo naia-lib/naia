@@ -6,13 +6,9 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_client::{
-    shared::{ChannelIndex, Protocolize, ReplicateSafe},
-    Client as NaiaClient, EntityRef,
-};
+use naia_client::{shared::{ChannelIndex, Protocolize, ReplicateSafe, EntityHandle, EntityHandleConverter}, Client as NaiaClient, EntityRef, NaiaClientError};
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
-use naia_client::shared::{EntityHandle, EntityHandleConverter};
 
 use super::state::State;
 
@@ -63,7 +59,7 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
         self.client.is_connecting()
     }
 
-    pub fn server_address(&self) -> SocketAddr {
+    pub fn server_address(&self) -> Result<SocketAddr, NaiaClientError> {
         self.client.server_address()
     }
 

@@ -27,18 +27,17 @@ use crate::resources::{Global, OwnedEntity};
 const SQUARE_SIZE: f32 = 32.0;
 
 pub fn connect_event(client: Client<Protocol, Channels>) {
-    info!("Client connected to: {}", client.server_address());
+    if let Ok(server_address) = client.server_address() {
+        info!("Client connected to: {}", server_address);
+    }
 }
 
-pub fn reject_event(client: Client<Protocol, Channels>) {
-    info!(
-        "Client rejected from connecting to: {}",
-        client.server_address()
-    );
+pub fn reject_event() {
+    info!("Client rejected from connecting to Server");
 }
 
-pub fn disconnect_event(client: Client<Protocol, Channels>) {
-    info!("Client disconnected from: {}", client.server_address());
+pub fn disconnect_event() {
+    info!("Client disconnected from Server");
 }
 
 pub fn spawn_entity_event(mut event_reader: EventReader<SpawnEntityEvent>) {

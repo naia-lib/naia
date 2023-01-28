@@ -237,8 +237,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     // Connection
 
     /// Get the address currently associated with the Server
-    pub fn server_address(&self) -> SocketAddr {
-        self.io.server_addr_unwrapped()
+    pub fn server_address(&self) -> Result<SocketAddr, NaiaClientError> {
+        self.io.server_addr()
     }
 
     /// Gets the average Round Trip Time measured to the Server
@@ -519,7 +519,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     fn server_address_unwrapped(&self) -> SocketAddr {
         // NOTE: may panic if the connection is not yet established!
-        self.io.server_addr_unwrapped()
+        self.io.server_addr().expect("connection not established!")
     }
 }
 

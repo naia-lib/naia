@@ -8,6 +8,8 @@ pub use naia_shared::{
     WorldMutType, WorldRefType,
 };
 
+use crate::NaiaClientError;
+
 pub struct Io {
     packet_sender: Option<PacketSender>,
     packet_receiver: Option<PacketReceiver>,
@@ -107,17 +109,17 @@ impl Io {
         }
     }
 
-    pub fn server_addr_unwrapped(&self) -> SocketAddr {
-        if let ServerAddr::Found(server_addr) = self
-            .packet_sender
-            .as_ref()
-            .expect("Cannot call Client.server_addr_unwrapped() until you call Client.connect()!")
-            .server_addr()
-        {
-            server_addr
+    pub fn server_addr(&self) -> Result<SocketAddr, NaiaClientError> {
+        if let Some(packet_sender) = self.packet_sender.as_ref() {
+            if let ServerAddr::Found(server_addr) = packet_sender.server_addr() {
+                Ok(server_addr)
+            } else {
+                Err(NaiaClientError::from_message("Connection has not yet been established! Make sure you call Client.connect() before calling this."))
+            }
         } else {
-            panic!("Connection has not yet been established! Call server_addr() instead when unsure about the connection status.")
+            Err(NaiaClientError::from_message("Connection has not yet been established! Make sure you call Client.connect() before calling this."))
         }
+
     }
 
     pub fn outgoing_bandwidth(&mut self) -> f32 {
