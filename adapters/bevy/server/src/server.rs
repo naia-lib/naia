@@ -12,8 +12,9 @@ use naia_server::{
     ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
-use crate::shared::EntityHandle;
 use naia_bevy_shared::{WorldProxy, WorldRef};
+
+use crate::shared::EntityHandle;
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 

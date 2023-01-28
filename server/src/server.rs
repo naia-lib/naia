@@ -628,24 +628,29 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         let component_kind = component_ref.kind();
 
         if world.has_component_of_kind(entity, &component_kind) {
-            panic!(
-                "attempted to add component to entity which already has one of that type! \
-                   an entity is not allowed to have more than 1 type of component at a time."
-            )
-        }
+            // Entity already has this Component type yet, update Component
 
-        self.component_init(entity, &mut component_ref);
+            if let Some(mut component) = world.component_mut::<R>(entity) {
+                component.mirror(&component_ref.protocol_copy());
+            } else {
+                panic!("Should never happen because we checked for this above")
+            }
+        } else {
+            // Entity does not have this Component type yet, initialize Component
 
-        // actually insert component into world
-        world.insert_component(entity, component_ref);
+            self.component_init(entity, &mut component_ref);
 
-        // add component to connections already tracking entity
-        for (_, user_connection) in self.user_connections.iter_mut() {
-            // insert component into user's connection
-            if user_connection.entity_manager.scope_has_entity(entity) {
-                user_connection
-                    .entity_manager
-                    .insert_component(entity, &component_kind);
+            // actually insert component into world
+            world.insert_component(entity, component_ref);
+
+            // add component to connections already tracking entity
+            for (_, user_connection) in self.user_connections.iter_mut() {
+                // insert component into user's connection
+                if user_connection.entity_manager.scope_has_entity(entity) {
+                    user_connection
+                        .entity_manager
+                        .insert_component(entity, &component_kind);
+                }
             }
         }
     }
