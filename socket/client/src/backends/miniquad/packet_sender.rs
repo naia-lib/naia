@@ -16,7 +16,7 @@ impl PacketSender {
                 Ok(())
             } else {
                 Err(naia_socket_shared::ChannelClosedError(()))
-            }
+            };
         }
     }
 

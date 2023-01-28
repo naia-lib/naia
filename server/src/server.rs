@@ -12,7 +12,12 @@ use log::warn;
 use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{serde::{BitWriter, Serde}, BigMap, ChannelIndex, EntityHandle, EntityHandleConverter, Instant, PacketType, PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, EntityDoesNotExistError};
+use naia_shared::{
+    serde::{BitWriter, Serde},
+    BigMap, ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant,
+    PacketType, PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig,
+    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -195,7 +200,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 Ok(()) => {}
                 Err(_) => {
                     // TODO: pass this on and handle above
-                    warn!("Server Error: Cannot send connect response packet to {}", &user.address);
+                    warn!(
+                        "Server Error: Cannot send connect response packet to {}",
+                        &user.address
+                    );
                 }
             }
             //
@@ -203,7 +211,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             if self.io.bandwidth_monitor_enabled() {
                 self.io.register_client(&user.address);
             }
-            self.incoming_events.push_back(Ok(Event::Connection(*user_key)));
+            self.incoming_events
+                .push_back(Ok(Event::Connection(*user_key)));
         }
     }
 
@@ -217,7 +226,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 Ok(()) => {}
                 Err(_) => {
                     // TODO: pass this on and handle above
-                    warn!("Server Error: Cannot send auth rejection packet to {}", &user.address);
+                    warn!(
+                        "Server Error: Cannot send auth rejection packet to {}",
+                        &user.address
+                    );
                 }
             }
             //
@@ -920,7 +932,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                         Ok(()) => {}
                         Err(_) => {
                             // TODO: pass this on and handle above
-                            warn!("Server Error: Cannot send heartbeat packet to {}", user_address);
+                            warn!(
+                                "Server Error: Cannot send heartbeat packet to {}",
+                                user_address
+                            );
                         }
                     }
                     connection.base.mark_sent();
@@ -1145,7 +1160,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                     Ok(()) => {}
                                     Err(_) => {
                                         // TODO: pass this on and handle above
-                                        warn!("Server Error: Cannot send pong packet to {}", &address);
+                                        warn!(
+                                            "Server Error: Cannot send pong packet to {}",
+                                            &address
+                                        );
                                     }
                                 };
                                 user_connection.base.mark_sent();

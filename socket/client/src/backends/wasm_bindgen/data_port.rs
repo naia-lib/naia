@@ -1,4 +1,7 @@
-use std::{collections::VecDeque, sync::{Arc, Mutex}};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{MessageEvent, MessagePort};

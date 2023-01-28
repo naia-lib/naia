@@ -1,9 +1,9 @@
+use log::warn;
 use std::{
     hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
-use log::warn;
 
 use naia_shared::{
     sequence_greater_than,
@@ -227,7 +227,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                 Ok(()) => {}
                 Err(_) => {
                     // TODO: pass this on and handle above
-                    warn!("Server Error: Cannot send data packet to {}", &self.base.address);
+                    warn!(
+                        "Server Error: Cannot send data packet to {}",
+                        &self.base.address
+                    );
                 }
             }
 

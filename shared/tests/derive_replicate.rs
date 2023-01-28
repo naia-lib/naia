@@ -1,9 +1,9 @@
 mod some_protocol {
     use super::some_entity_replica::EntityPropertyHolder;
     use super::some_named_replica::NamedStringHolder;
+    use super::some_nonreplicated_replica::MixedReplicationHolder;
     use super::some_tuple_replica::TupleStringHolder;
     use super::some_unit_replica::UnitHolder;
-    use super::some_nonreplicated_replica::MixedReplicationHolder;
     use naia_shared::Protocolize;
 
     #[derive(Protocolize)]
@@ -87,7 +87,10 @@ mod some_nonreplicated_replica {
 
     impl MixedReplicationHolder {
         pub fn new(string_1: &str, string_2: &str) -> Self {
-            return MixedReplicationHolder::new_complete(string_1.to_string(), string_2.to_string());
+            return MixedReplicationHolder::new_complete(
+                string_1.to_string(),
+                string_2.to_string(),
+            );
         }
     }
 }
@@ -98,12 +101,12 @@ use naia_shared::{
     NetEntityHandleConverter, Protocolize, ReplicateSafe,
 };
 
-use some_protocol::SomeProtocol;
-use some_unit_replica::UnitHolder;
+use some_entity_replica::EntityPropertyHolder;
 use some_named_replica::NamedStringHolder;
 use some_nonreplicated_replica::MixedReplicationHolder;
+use some_protocol::SomeProtocol;
 use some_tuple_replica::TupleStringHolder;
-use some_entity_replica::EntityPropertyHolder;
+use some_unit_replica::UnitHolder;
 
 #[test]
 fn read_write_unit_replica() {
@@ -234,8 +237,10 @@ fn read_write_nonreplicated_replica() {
     // Write
     let mut writer = BitWriter::new();
 
-    let in_1 =
-        SomeProtocol::MixedReplicationHolder(MixedReplicationHolder::new("hello world", "goodbye world"));
+    let in_1 = SomeProtocol::MixedReplicationHolder(MixedReplicationHolder::new(
+        "hello world",
+        "goodbye world",
+    ));
 
     in_1.write(&mut writer, &FakeEntityConverter);
 

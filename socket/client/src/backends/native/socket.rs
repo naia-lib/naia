@@ -56,10 +56,7 @@ impl Socket {
             }
         };
 
-        self.io = Some(Io::new(
-            packet_sender,
-            PacketReceiver::new(receiver),
-        ));
+        self.io = Some(Io::new(packet_sender, PacketReceiver::new(receiver)));
     }
 
     /// Returns whether or not the connect method was called (doesn't necessarily indicate that the

@@ -1,5 +1,5 @@
-use std::time::Duration;
 use log::warn;
+use std::time::Duration;
 
 use naia_shared::{
     serde::{BitReader, BitWriter, Serde},

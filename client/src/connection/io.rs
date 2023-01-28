@@ -119,7 +119,6 @@ impl Io {
         } else {
             Err(NaiaClientError::from_message("Connection has not yet been established! Make sure you call Client.connect() before calling this."))
         }
-
     }
 
     pub fn outgoing_bandwidth(&mut self) -> f32 {

@@ -6,7 +6,10 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_client::{shared::{ChannelIndex, Protocolize, ReplicateSafe, EntityHandle, EntityHandleConverter}, Client as NaiaClient, EntityRef, NaiaClientError};
+use naia_client::{
+    shared::{ChannelIndex, EntityHandle, EntityHandleConverter, Protocolize, ReplicateSafe},
+    Client as NaiaClient, EntityRef, NaiaClientError,
+};
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
 

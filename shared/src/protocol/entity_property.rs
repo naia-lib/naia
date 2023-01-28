@@ -1,4 +1,4 @@
-use std::{hash::Hash, error::Error};
+use std::{error::Error, hash::Hash};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
@@ -118,7 +118,10 @@ pub trait EntityHandleConverter<E: Copy + Eq + Hash> {
 
 pub trait NetEntityHandleConverter {
     fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity;
-    fn net_entity_to_handle(&self, net_entity: &NetEntity) -> Result<EntityHandle, EntityDoesNotExistError>;
+    fn net_entity_to_handle(
+        &self,
+        net_entity: &NetEntity,
+    ) -> Result<EntityHandle, EntityDoesNotExistError>;
 }
 
 pub trait NetEntityConverter<E: Copy + Eq + Hash> {
@@ -161,7 +164,10 @@ impl<'a, 'b, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityConverter<'
         self.net_entity_converter.entity_to_net_entity(&entity)
     }
 
-    fn net_entity_to_handle(&self, net_entity: &NetEntity) -> Result<EntityHandle, EntityDoesNotExistError> {
+    fn net_entity_to_handle(
+        &self,
+        net_entity: &NetEntity,
+    ) -> Result<EntityHandle, EntityDoesNotExistError> {
         let entity = self.net_entity_converter.net_entity_to_entity(net_entity);
         self.handle_converter.entity_to_handle(&entity)
     }

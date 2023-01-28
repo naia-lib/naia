@@ -65,7 +65,11 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_writer(&mut self, address: &SocketAddr, writer: &mut BitWriter) -> Result<(), NaiaServerSocketError> {
+    pub fn send_writer(
+        &mut self,
+        address: &SocketAddr,
+        writer: &mut BitWriter,
+    ) -> Result<(), NaiaServerSocketError> {
         // get payload
         let (length, buffer) = writer.flush();
         let mut payload = &buffer[0..length];

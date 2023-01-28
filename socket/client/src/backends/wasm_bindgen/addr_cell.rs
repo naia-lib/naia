@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, sync::{Arc, Mutex}};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 use crate::{server_addr::ServerAddr, wasm_utils::candidate_to_addr};
 
@@ -33,9 +36,6 @@ impl AddrCell {
     }
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
-        self.cell
-            .lock()
-            .expect("cannot borrow AddrCell.cell!")
-            .0 = ServerAddr::Found(addr.clone());
+        self.cell.lock().expect("cannot borrow AddrCell.cell!").0 = ServerAddr::Found(addr.clone());
     }
 }
