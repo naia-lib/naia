@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::{collections::VecDeque, sync::{Arc, Mutex}};
 
 use crate::{
     error::NaiaClientSocketError, packet_receiver::PacketReceiverTrait, server_addr::ServerAddr,
@@ -7,9 +7,8 @@ use crate::{
 use super::{addr_cell::AddrCell, data_port::DataPort};
 
 /// Handles receiving messages from the Server through a given Client Socket
-#[derive(Clone)]
 pub struct PacketReceiverImpl {
-    message_queue: Rc<RefCell<VecDeque<Box<[u8]>>>>,
+    message_queue: Arc<Mutex<VecDeque<Box<[u8]>>>>,
     server_addr: AddrCell,
     last_payload: Option<Box<[u8]>>,
 }
@@ -30,8 +29,8 @@ impl PacketReceiverTrait for PacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         match self
             .message_queue
-            .try_borrow_mut()
-            .expect("can't borrow 'message_queue' buffer!")
+            .lock()
+            .expect("This should never happen, message_queue should always be available in a single-threaded context")
             .pop_front()
         {
             Some(payload) => {

@@ -5,7 +5,6 @@ use crate::{
 use super::shared::{ERROR_QUEUE, MESSAGE_QUEUE, SERVER_ADDR};
 
 /// Handles receiving messages from the Server through a given Client Socket
-#[derive(Clone)]
 pub struct PacketReceiverImpl {
     last_payload: Option<Box<[u8]>>,
 }

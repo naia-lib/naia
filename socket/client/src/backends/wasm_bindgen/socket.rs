@@ -85,10 +85,7 @@ impl Socket {
             }
         };
 
-        self.io = Some(Io {
-            packet_sender,
-            packet_receiver: PacketReceiver::new(packet_receiver),
-        });
+        self.io = Some(Io::new(packet_sender, PacketReceiver::new(packet_receiver)));
     }
 
     /// Gets a PacketSender which can be used to send packets through the Socket
@@ -103,12 +100,13 @@ impl Socket {
 
     /// Gets a PacketReceiver which can be used to receive packets from the
     /// Socket
-    pub fn packet_receiver(&self) -> PacketReceiver {
+    pub fn packet_receiver(&mut self) -> PacketReceiver {
         return self
             .io
-            .as_ref()
+            .as_mut()
             .expect("Socket is not connected yet! Call Socket.connect() before this.")
             .packet_receiver
-            .clone();
+            .take()
+            .expect("Can only call Socket.packet_receiver() once.");
     }
 }

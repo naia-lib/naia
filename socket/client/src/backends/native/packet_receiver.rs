@@ -8,7 +8,6 @@ use crate::{
 };
 
 /// Handles receiving messages from the Server through a given Client Socket
-#[derive(Clone)]
 pub struct PacketReceiverImpl {
     server_addr: AddrCell,
     receiver_channel: Arc<Mutex<UnboundedReceiver<Box<[u8]>>>>,

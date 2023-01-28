@@ -56,10 +56,10 @@ impl Socket {
             }
         };
 
-        self.io = Some(Io {
+        self.io = Some(Io::new(
             packet_sender,
-            packet_receiver: PacketReceiver::new(receiver),
-        });
+            PacketReceiver::new(receiver),
+        ));
     }
 
     /// Returns whether or not the connect method was called (doesn't necessarily indicate that the
@@ -79,12 +79,13 @@ impl Socket {
     }
 
     /// Gets a PacketReceiver which can be used to receive packets from the Socket
-    pub fn packet_receiver(&self) -> PacketReceiver {
+    pub fn packet_receiver(&mut self) -> PacketReceiver {
         return self
             .io
-            .as_ref()
+            .as_mut()
             .expect("Socket is not connected yet! Call Socket.connect() before this.")
             .packet_receiver
-            .clone();
+            .take()
+            .expect("Can only call Socket.packet_receiver() once.");
     }
 }

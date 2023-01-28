@@ -55,10 +55,7 @@ impl Socket {
             }
         };
 
-        self.io = Some(Io {
-            packet_sender: sender,
-            packet_receiver: PacketReceiver::new(receiver),
-        });
+        self.io = Some(Io::new(sender, PacketReceiver::new(receiver)));
     }
 
     /// Returns whether or not the Socket is currently connected to the server
@@ -78,12 +75,13 @@ impl Socket {
 
     /// Gets a PacketReceiver which can be used to receive packets from the
     /// Socket
-    pub fn packet_receiver(&self) -> PacketReceiver {
+    pub fn packet_receiver(&mut self) -> PacketReceiver {
         return self
             .io
-            .as_ref()
+            .as_mut()
             .expect("Socket is not connected yet! Call Socket.connect() before this.")
             .packet_receiver
-            .clone();
+            .take()
+            .expect("Can only call Socket.packet_receiver() once.");
     }
 }

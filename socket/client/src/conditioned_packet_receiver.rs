@@ -5,7 +5,6 @@ use super::{
 };
 
 /// Used to receive packets from the Client Socket
-#[derive(Clone)]
 pub struct ConditionedPacketReceiver {
     inner_receiver: Box<dyn PacketReceiverTrait>,
     link_conditioner_config: LinkConditionerConfig,
