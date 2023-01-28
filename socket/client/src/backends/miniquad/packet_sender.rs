@@ -12,7 +12,11 @@ impl PacketSender {
             let ptr = payload.as_ptr();
             let len = payload.len();
             let js_obj = naia_create_u8_array(ptr as _, len as _);
-            naia_send(js_obj);
+            return if naia_send(js_obj) {
+                Ok(())
+            } else {
+                Err(naia_socket_shared::ChannelClosedError(()))
+            }
         }
     }
 

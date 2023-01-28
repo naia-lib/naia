@@ -7,7 +7,7 @@ const naia_socket = {
 
     plugin: function (importObject) {
         importObject.env.naia_connect = function (address, rtc_path) { naia_socket.connect(address, rtc_path); };
-        importObject.env.naia_send = function (message) { naia_socket.send(message); };
+        importObject.env.naia_send = function (message) { return naia_socket.send(message); };
         importObject.env.naia_create_string = function (buf, max_len) { return naia_socket.js_create_string(buf, max_len); };
         importObject.env.naia_unwrap_to_str = function (js_object, buf, max_len) { naia_socket.js_unwrap_to_str(js_object, buf, max_len); };
         importObject.env.naia_string_length = function (js_object) { return naia_socket.js_string_length(js_object); };
@@ -98,7 +98,7 @@ const naia_socket = {
 
     send: function (message) {
         let message_string = naia_socket.get_js_object(message);
-        this.send_u8_array(message_string);
+        return this.send_u8_array(message_string);
     },
 
     js_create_string: function (buf, max_len) {
@@ -125,12 +125,13 @@ const naia_socket = {
         if (this.channel) {
             try {
                 this.channel.send(str);
+                return true;
             }
             catch(err) {
-                this.error("error when sending u8 array over datachannel", err.message);
+                return false;
             }
         } else {
-            this.error("error: sending u8 array over uninitialized datachannel");
+            return false;
         }
     },
 
@@ -200,4 +201,4 @@ const naia_socket = {
     }
 };
 
-miniquad_add_plugin({ register_plugin: naia_socket.plugin, version: "0.10.0", name: "naia_socket" });
+miniquad_add_plugin({ register_plugin: naia_socket.plugin, version: "0.14.0", name: "naia_socket" });
