@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use naia_shared::{BigMap, EntityHandle, EntityHandleConverter, ProtocolKindType};
+use naia_shared::{BigMap, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, ProtocolKindType};
 
 use crate::{protocol::global_entity_record::GlobalEntityRecord, room::RoomKey};
 
@@ -106,11 +106,13 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> EntityHandleConverter<E> for Worl
             .expect("should always be an entity for a given handle");
     }
 
-    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
-        return self
+    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
+        if let Some(record) = self
             .entity_records
-            .get(entity)
-            .expect("entity does not exist!")
-            .entity_handle;
+            .get(entity) {
+            Ok(record.entity_handle)
+        } else {
+            Err(EntityDoesNotExistError)
+        }
     }
 }

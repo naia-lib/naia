@@ -73,7 +73,7 @@ pub use protocol::{
     entity_handle::EntityHandle,
     entity_property::{
         EntityConverter, EntityHandleConverter, EntityProperty, FakeEntityConverter,
-        NetEntityConverter, NetEntityHandleConverter,
+        NetEntityConverter, NetEntityHandleConverter, EntityDoesNotExistError
     },
     net_entity::NetEntity,
     property::Property,

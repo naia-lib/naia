@@ -94,6 +94,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
     }
 
     pub fn remove_entity(&mut self, entity: &E) {
+        // Should we de-queue all our waiting messages that depend on this Entity?
         self.in_scope_entities.remove(entity);
     }
 

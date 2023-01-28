@@ -12,12 +12,7 @@ use log::warn;
 use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{
-    serde::{BitWriter, Serde},
-    BigMap, ChannelIndex, EntityHandle, EntityHandleConverter, Instant, PacketType,
-    PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Tick,
-    Timer, WorldMutType, WorldRefType,
-};
+use naia_shared::{serde::{BitWriter, Serde}, BigMap, ChannelIndex, EntityHandle, EntityHandleConverter, Instant, PacketType, PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, EntityDoesNotExistError};
 
 use crate::{
     connection::{
@@ -208,8 +203,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             if self.io.bandwidth_monitor_enabled() {
                 self.io.register_client(&user.address);
             }
-            self.incoming_events
-                .push_back(Ok(Event::Connection(*user_key)));
+            self.incoming_events.push_back(Ok(Event::Connection(*user_key)));
         }
     }
 
@@ -1293,7 +1287,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityH
         self.world_record.handle_to_entity(entity_handle)
     }
 
-    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
+    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
         self.world_record.entity_to_handle(entity)
     }
 }
