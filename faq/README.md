@@ -40,13 +40,16 @@ No. Naia is currently only compatible with `naia-socket`, but there are plans to
 
 ### What game networking concept does naia provide?
 
-Naia provides a message-passing abstraction with different types of channels (unreliable, reliable, sequenced).
-Naia provides efficient serialization with bitpacking and deltacompression.
-Naia provides ECS replication. (TODO: elaborate)
-Naia provides state-synchronization. (TODO: elaborate)
+Naia provides Client/Server networking that compiles to Wasm AND Native.
+
+Naia provides a message-passing abstraction with different types of channels (unreliable, reliable, unordered, ordered, sequenced).
+
+Naia provides efficient serialization with bit-packing and delta-compression.
+
+Naia provides ECS World replication from Server -> Client, and the ability to do interest-management on the Server in order to fine-tune what exactly gets replicated for each user.
 
 Naia does NOT provide:
-- client-prediction. This is usually fairly game specific and should be implemented by the user.
+- client-prediction. This is usually fairly game specific and should be implemented by the user. The `bevy` and `macroquad` demos provided demonstrate one method
 - lag compensation
 - snapshot interpolation
 
