@@ -1,5 +1,3 @@
-extern crate log;
-
 use std::net::SocketAddr;
 
 use naia_socket_shared::SocketConfig;
@@ -12,7 +10,7 @@ use crate::{
 
 use super::{
     addr_cell::AddrCell, data_channel::DataChannel, data_port::DataPort,
-    packet_receiver::PacketReceiverImpl, packet_sender::PacketSender,
+    packet_sender::PacketSender, PacketReceiverImpl,
 };
 
 /// A client-side socket which communicates with an underlying unordered &
@@ -87,10 +85,7 @@ impl Socket {
             }
         };
 
-        self.io = Some(Io {
-            packet_sender,
-            packet_receiver: PacketReceiver::new(packet_receiver),
-        });
+        self.io = Some(Io::new(packet_sender, PacketReceiver::new(packet_receiver)));
     }
 
     /// Gets a PacketSender which can be used to send packets through the Socket
@@ -105,15 +100,13 @@ impl Socket {
 
     /// Gets a PacketReceiver which can be used to receive packets from the
     /// Socket
-    pub fn packet_receiver(&self) -> PacketReceiver {
+    pub fn packet_receiver(&mut self) -> PacketReceiver {
         return self
             .io
-            .as_ref()
+            .as_mut()
             .expect("Socket is not connected yet! Call Socket.connect() before this.")
             .packet_receiver
-            .clone();
+            .take()
+            .expect("Can only call Socket.packet_receiver() once.");
     }
 }
-
-unsafe impl Send for Socket {}
-unsafe impl Sync for Socket {}

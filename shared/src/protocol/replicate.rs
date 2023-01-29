@@ -17,6 +17,8 @@ pub trait Replicate<P: Protocolize>: ReplicateSafe<P> + Clone {}
 
 /// The part of Replicate which is object-safe
 pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
+    /// Gets the String representation of the Type of the Message/Component, used for debugging
+    fn name(&self) -> String;
     /// Gets the TypeId of the Message/Component, used to map to a
     /// registered Protocolize
     fn kind(&self) -> P::Kind;

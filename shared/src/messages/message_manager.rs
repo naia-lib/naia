@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_serde::{BitReader, BitWriter, Serde, SerdeErr, UnsignedVariableInteger};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{
@@ -14,6 +14,9 @@ use super::{
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
+    sequenced_reliable_receiver::SequencedReliableReceiver,
+    sequenced_unreliable_receiver::SequencedUnreliableReceiver,
+    sequenced_unreliable_sender::SequencedUnreliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
     unordered_unreliable_receiver::UnorderedUnreliableReceiver,
     unordered_unreliable_sender::UnorderedUnreliableSender,
@@ -55,13 +58,15 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                         Box::new(UnorderedUnreliableSender::new()),
                     );
                 }
-                ChannelMode::UnorderedReliable(settings) => {
+                ChannelMode::SequencedUnreliable => {
                     channel_senders.insert(
                         channel_index.clone(),
-                        Box::new(ReliableSender::new(settings.rtt_resend_factor)),
+                        Box::new(SequencedUnreliableSender::new()),
                     );
                 }
-                ChannelMode::OrderedReliable(settings) => {
+                ChannelMode::UnorderedReliable(settings)
+                | ChannelMode::SequencedReliable(settings)
+                | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         channel_index.clone(),
                         Box::new(ReliableSender::new(settings.rtt_resend_factor)),
@@ -94,10 +99,22 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                         Box::new(UnorderedUnreliableReceiver::new()),
                     );
                 }
+                ChannelMode::SequencedUnreliable => {
+                    channel_receivers.insert(
+                        channel_index.clone(),
+                        Box::new(SequencedUnreliableReceiver::new()),
+                    );
+                }
                 ChannelMode::UnorderedReliable(_) => {
                     channel_receivers.insert(
                         channel_index.clone(),
                         Box::new(UnorderedReliableReceiver::default()),
+                    );
+                }
+                ChannelMode::SequencedReliable(_) => {
+                    channel_receivers.insert(
+                        channel_index.clone(),
+                        Box::new(SequencedReliableReceiver::default()),
                     );
                 }
                 ChannelMode::OrderedReliable(_) => {
@@ -148,30 +165,45 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
+        has_written: &mut bool,
     ) {
-        let mut channels_to_write = Vec::new();
-        for (channel_index, channel) in &self.channel_senders {
-            if channel.has_messages() {
-                channels_to_write.push(channel_index.clone());
+        for (channel_index, channel) in &mut self.channel_senders {
+            if !channel.has_messages() {
+                continue;
             }
-        }
 
-        // write channel count
-        UnsignedVariableInteger::<3>::new(channels_to_write.len() as u64).ser(bit_writer);
+            // check that we can at least write a ChannelIndex and a MessageContinue bit
+            let mut counter = bit_writer.counter();
+            channel_index.ser(&mut counter);
+            counter.write_bit(false);
 
-        for channel_index in channels_to_write {
-            let channel = self.channel_senders.get_mut(&channel_index).unwrap();
+            if counter.overflowed() {
+                break;
+            }
 
-            // write channel index
+            // write ChannelContinue bit
+            true.ser(bit_writer);
+
+            // reserve MessageContinue bit
+            bit_writer.reserve_bits(1);
+
+            // write ChannelIndex
             channel_index.ser(bit_writer);
 
-            if let Some(message_ids) = channel.write_messages(channel_writer, bit_writer) {
+            // write Messages
+            if let Some(message_ids) =
+                channel.write_messages(channel_writer, bit_writer, has_written)
+            {
                 self.packet_to_message_map
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
                 channel_list.push((channel_index.clone(), message_ids));
             }
+
+            // write MessageContinue finish bit, release
+            false.ser(bit_writer);
+            bit_writer.release_bits(1);
         }
     }
 
@@ -182,17 +214,18 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        // read channel count
-        let channel_count = UnsignedVariableInteger::<3>::de(reader)?.get();
+        loop {
+            let message_continue = bool::de(reader)?;
+            if !message_continue {
+                break;
+            }
 
-        for _ in 0..channel_count {
             // read channel index
             let channel_index = C::de(reader)?;
 
             // continue read inside channel
-            if let Some(channel) = self.channel_receivers.get_mut(&channel_index) {
-                channel.read_messages(channel_reader, reader)?;
-            }
+            let channel = self.channel_receivers.get_mut(&channel_index).unwrap();
+            channel.read_messages(channel_reader, reader)?;
         }
 
         Ok(())

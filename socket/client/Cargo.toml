@@ -5,8 +5,8 @@ authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 description = "Abstraction to expose common API over a UDP socket on Linux, and a unreliable WebRTC datachannel on the browser"
 documentation = "https://docs.rs/naia-client-socket"
-homepage = "https://github.com/naia-rs/naia"
-repository = "https://github.com/naia-rs/naia"
+homepage = "https://github.com/naia-lib/naia"
+repository = "https://github.com/naia-lib/naia"
 keywords = ["wasm", "webrtc", "udp", "networking", "gamedev"]
 categories = ["network-programming", "game-development", "wasm", "web-programming"]
 license = "MIT OR Apache-2.0"
@@ -34,7 +34,7 @@ tinyjson = { version = "2.3", optional = true }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-webrtc-unreliable-client = { version = "0.1.3" }
+webrtc-unreliable-client = { version = "0.2.0" }
 tokio = { version = "1.15", features = ["full"] }
 once_cell = { version = "1.4.1" }
 

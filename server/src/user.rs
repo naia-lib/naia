@@ -1,4 +1,8 @@
-use std::{hash::Hash, net::SocketAddr};
+use std::{
+    collections::{hash_set::Iter, HashSet},
+    hash::Hash,
+    net::SocketAddr,
+};
 
 use naia_shared::{BigMapKey, ChannelIndex, Protocolize};
 
@@ -23,11 +27,31 @@ impl BigMapKey for UserKey {
 #[derive(Clone)]
 pub struct User {
     pub address: SocketAddr,
+    rooms_cache: HashSet<RoomKey>,
 }
 
 impl User {
     pub fn new(address: SocketAddr) -> User {
-        User { address }
+        User {
+            address,
+            rooms_cache: HashSet::new(),
+        }
+    }
+
+    pub(crate) fn cache_room(&mut self, room_key: &RoomKey) {
+        self.rooms_cache.insert(*room_key);
+    }
+
+    pub(crate) fn uncache_room(&mut self, room_key: &RoomKey) {
+        self.rooms_cache.remove(room_key);
+    }
+
+    pub(crate) fn room_keys(&self) -> Iter<RoomKey> {
+        self.rooms_cache.iter()
+    }
+
+    pub(crate) fn room_count(&self) -> usize {
+        self.rooms_cache.len()
     }
 }
 
@@ -49,6 +73,15 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Use
 
     pub fn address(&self) -> SocketAddr {
         self.server.user_address(&self.key).unwrap()
+    }
+
+    pub fn room_count(&self) -> usize {
+        self.server.user_rooms_count(&self.key).unwrap()
+    }
+
+    /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
+    pub fn room_keys(&self) -> impl Iterator<Item = &RoomKey> {
+        self.server.user_room_keys(&self.key).unwrap()
     }
 }
 
@@ -72,7 +105,7 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Use
     }
 
     pub fn disconnect(&mut self) {
-        self.server.disconnect_user(&self.key);
+        self.server.user_disconnect(&self.key);
     }
 
     // Rooms
@@ -87,5 +120,14 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Use
         self.server.room_remove_user(room_key, &self.key);
 
         self
+    }
+
+    pub fn room_count(&self) -> usize {
+        self.server.user_rooms_count(&self.key).unwrap()
+    }
+
+    /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
+    pub fn room_keys(&self) -> impl Iterator<Item = &RoomKey> {
+        self.server.user_room_keys(&self.key).unwrap()
     }
 }

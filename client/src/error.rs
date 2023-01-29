@@ -6,6 +6,12 @@ pub enum NaiaClientError {
     Wrapped(Box<dyn Error + Send>),
 }
 
+impl NaiaClientError {
+    pub fn from_message(message: &str) -> Self {
+        Self::Message(message.to_string())
+    }
+}
+
 impl fmt::Display for NaiaClientError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {

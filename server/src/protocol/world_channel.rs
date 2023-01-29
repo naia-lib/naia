@@ -6,17 +6,14 @@ use std::{
 };
 
 use naia_shared::{
-    ChannelIndex, ChannelSender, EntityAction, EntityActionReceiver, KeyGenerator, NetEntity,
-    ProtocolKindType, Protocolize, ReliableSender,
+    ChannelIndex, ChannelSender, EntityAction, EntityActionReceiver, Instant, KeyGenerator,
+    NetEntity, ProtocolKindType, Protocolize, ReliableSender,
 };
 
-use crate::{
-    protocol::{
-        entity_action_event::EntityActionEvent, entity_manager::ActionId,
-        entity_message_waitlist::EntityMessageWaitlist, global_diff_handler::GlobalDiffHandler,
-        user_diff_handler::UserDiffHandler,
-    },
-    server::Instant,
+use crate::protocol::{
+    entity_action_event::EntityActionEvent, entity_manager::ActionId,
+    entity_message_waitlist::EntityMessageWaitlist, global_diff_handler::GlobalDiffHandler,
+    user_diff_handler::UserDiffHandler,
 };
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;

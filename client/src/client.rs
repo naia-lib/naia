@@ -1,5 +1,7 @@
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
+use log::warn;
+
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
@@ -7,9 +9,9 @@ use naia_client_socket::Socket;
 
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
-    ChannelIndex, ConnectionConfig, EntityHandle, EntityHandleConverter, PacketType, PingConfig,
-    PingIndex, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig, SocketConfig,
-    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    ChannelIndex, ConnectionConfig, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
+    PacketType, PingConfig, PingIndex, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
+    SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -112,7 +114,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
         for _ in 0..10 {
             let mut writer = self.handshake_manager.write_disconnect();
-            self.io.send_writer(&mut writer);
+            match self.io.send_writer(&mut writer) {
+                Ok(()) => {}
+                Err(_) => {
+                    // TODO: pass this on and handle above
+                    warn!("Client Error: Cannot send disconnect packet to Server");
+                }
+            }
         }
 
         self.disconnect_internal();
@@ -229,8 +237,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     // Connection
 
     /// Get the address currently associated with the Server
-    pub fn server_address(&self) -> SocketAddr {
-        self.io.server_addr_unwrapped()
+    pub fn server_address(&self) -> Result<SocketAddr, NaiaClientError> {
+        self.io.server_addr()
     }
 
     /// Gets the average Round Trip Time measured to the Server
@@ -299,7 +307,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 }
 
                 // send packet
-                self.io.send_writer(&mut writer);
+                match self.io.send_writer(&mut writer) {
+                    Ok(()) => {}
+                    Err(_) => {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send heartbeat packet to Server");
+                    }
+                }
                 server_connection.base.mark_sent();
             }
 
@@ -321,7 +335,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 server_connection.ping_manager.write_ping(&mut writer);
 
                 // send packet
-                self.io.send_writer(&mut writer);
+                match self.io.send_writer(&mut writer) {
+                    Ok(()) => {}
+                    Err(_) => {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send ping packet to Server");
+                    }
+                }
                 server_connection.base.mark_sent();
             }
 
@@ -393,7 +413,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                 ping_index.ser(&mut writer);
 
                                 // send packet
-                                self.io.send_writer(&mut writer);
+                                match self.io.send_writer(&mut writer) {
+                                    Ok(()) => {}
+                                    Err(_) => {
+                                        // TODO: pass this on and handle above
+                                        warn!("Client Error: Cannot send pong packet to Server");
+                                    }
+                                }
                                 server_connection.base.mark_sent();
                             }
                             PacketType::Pong => {
@@ -493,7 +519,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     fn server_address_unwrapped(&self) -> SocketAddr {
         // NOTE: may panic if the connection is not yet established!
-        self.io.server_addr_unwrapped()
+        self.io.server_addr().expect("connection not established!")
     }
 }
 
@@ -508,7 +534,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter
         connection.entity_manager.handle_to_entity(entity_handle)
     }
 
-    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
+    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
         let connection = self
             .server_connection
             .as_ref()

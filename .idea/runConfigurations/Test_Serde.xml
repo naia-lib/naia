@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Bevy Demo Client [Linux] [RUN]" type="CargoCommandRunConfiguration" factoryName="Cargo Command" singleton="false">
-    <option name="command" value="run" />
-    <option name="workingDirectory" value="file://$PROJECT_DIR$/demos/bevy/client" />
+  <configuration default="false" name="Test Serde" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="test" />
+    <option name="workingDirectory" value="file://$PROJECT_DIR$/shared/serde" />
     <option name="channel" value="DEFAULT" />
     <option name="requiredFeatures" value="true" />
     <option name="allFeatures" value="false" />

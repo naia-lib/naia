@@ -1,6 +1,7 @@
-extern crate log;
-
-use std::{cell::RefCell, collections::VecDeque, rc::Rc};
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
 
 use wasm_bindgen::{closure::Closure, JsCast};
 use web_sys::{MessageEvent, MessagePort};
@@ -9,12 +10,12 @@ use web_sys::{MessageEvent, MessagePort};
 #[derive(Clone)]
 pub struct DataPort {
     message_port: MessagePort,
-    message_queue: Rc<RefCell<VecDeque<Box<[u8]>>>>,
+    message_queue: Arc<Mutex<VecDeque<Box<[u8]>>>>,
 }
 
 impl DataPort {
     pub fn new(message_port: MessagePort) -> Self {
-        let message_queue = Rc::new(RefCell::new(VecDeque::new()));
+        let message_queue = Arc::new(Mutex::new(VecDeque::new()));
 
         let message_queue_2 = message_queue.clone();
         let port_onmsg_func: Box<dyn FnMut(MessageEvent)> = Box::new(move |evt: MessageEvent| {
@@ -23,7 +24,7 @@ impl DataPort {
                 let mut body = vec![0; uarray.length() as usize];
                 uarray.copy_to(&mut body[..]);
                 message_queue_2
-                    .try_borrow_mut()
+                    .lock()
                     .expect("can't borrow 'message_queue_2' to retrieve message!")
                     .push_back(body.into_boxed_slice());
             }
@@ -43,7 +44,7 @@ impl DataPort {
         self.message_port.clone()
     }
 
-    pub fn message_queue(&self) -> Rc<RefCell<VecDeque<Box<[u8]>>>> {
+    pub fn message_queue(&self) -> Arc<Mutex<VecDeque<Box<[u8]>>>> {
         self.message_queue.clone()
     }
 }

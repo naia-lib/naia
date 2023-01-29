@@ -59,7 +59,6 @@ pub use messages::{
         ReliableSettings, TickBufferSettings,
     },
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
-    message_list_header,
     message_manager::MessageManager,
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
@@ -73,8 +72,8 @@ pub use protocol::{
     entity_action_type::EntityActionType,
     entity_handle::EntityHandle,
     entity_property::{
-        EntityConverter, EntityHandleConverter, EntityProperty, FakeEntityConverter,
-        NetEntityConverter, NetEntityHandleConverter,
+        EntityConverter, EntityDoesNotExistError, EntityHandleConverter, EntityProperty,
+        FakeEntityConverter, NetEntityConverter, NetEntityHandleConverter,
     },
     net_entity::NetEntity,
     property::Property,
@@ -90,7 +89,7 @@ pub use protocol::{
 };
 
 pub use bigmap::{BigMap, BigMapKey};
-pub use constants::{MESSAGE_HISTORY_SIZE, MTU_SIZE_BITS, MTU_SIZE_BYTES};
+pub use constants::MESSAGE_HISTORY_SIZE;
 pub use key_generator::KeyGenerator;
 pub use shared_config::SharedConfig;
 pub use types::{HostType, MessageId, PacketIndex, ShortMessageId, Tick};

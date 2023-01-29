@@ -14,6 +14,8 @@ use super::{
 pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
     type Kind: ProtocolKindType;
 
+    /// Get name of variant
+    fn name(&self) -> String;
     /// Get kind of Replicate type
     fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind;
     /// Get kind from a type_id
@@ -55,6 +57,7 @@ pub trait Protocolize: Clone + Sized + Sync + Send + 'static {
 
 pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync + Serde {
     fn to_type_id(&self) -> TypeId;
+    fn name(&self) -> String;
 }
 
 pub trait ProtocolInserter<P: Protocolize, N> {

@@ -12,8 +12,9 @@ use naia_server::{
     ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
-use crate::shared::EntityHandle;
 use naia_bevy_shared::{WorldProxy, WorldRef};
+
+use crate::shared::{EntityDoesNotExistError, EntityHandle};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 
@@ -70,6 +71,11 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
         message: &R,
     ) {
         self.server.send_message(user_key, channel, message)
+    }
+
+    /// Sends a message to all connected users using a given channel
+    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+        self.server.broadcast_message(channel, message);
     }
 
     //// Updates ////
@@ -192,7 +198,7 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Enti
         self.server.handle_to_entity(entity_handle)
     }
 
-    fn entity_to_handle(&self, entity: &Entity) -> EntityHandle {
+    fn entity_to_handle(&self, entity: &Entity) -> Result<EntityHandle, EntityDoesNotExistError> {
         self.server.entity_to_handle(entity)
     }
 }

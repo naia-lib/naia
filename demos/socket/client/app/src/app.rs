@@ -85,7 +85,12 @@ impl App {
                         };
                         info!("Client send -> {}: {}", server_addr, message_to_server);
 
-                        self.packet_sender.send(message_to_server.as_bytes());
+                        match self.packet_sender.send(message_to_server.as_bytes()) {
+                            Ok(()) => {}
+                            Err(error) => {
+                                info!("Client Send Error: {}", error);
+                            }
+                        }
                     }
                 }
             }

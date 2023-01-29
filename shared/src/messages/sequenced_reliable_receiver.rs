@@ -9,15 +9,17 @@ use super::{
     message_channel::{ChannelReader, ChannelReceiver},
 };
 
-pub struct UnorderedReliableReceiver<P> {
+pub struct SequencedReliableReceiver<P> {
+    newest_received_message_id: MessageId,
     oldest_received_message_id: MessageId,
     record: VecDeque<(MessageId, bool)>,
     incoming_messages: Vec<(MessageId, P)>,
 }
 
-impl<P> Default for UnorderedReliableReceiver<P> {
+impl<P> Default for SequencedReliableReceiver<P> {
     fn default() -> Self {
         Self {
+            newest_received_message_id: 0,
             oldest_received_message_id: 0,
             record: VecDeque::default(),
             incoming_messages: Vec::default(),
@@ -25,7 +27,7 @@ impl<P> Default for UnorderedReliableReceiver<P> {
     }
 }
 
-impl<P> UnorderedReliableReceiver<P> {
+impl<P> SequencedReliableReceiver<P> {
     // Private methods
 
     pub fn buffer_message(&mut self, message_id: MessageId, message: P) {
@@ -49,7 +51,11 @@ impl<P> UnorderedReliableReceiver<P> {
                     if *old_message_id == message_id {
                         if !(*old_message) {
                             *old_message = true;
-                            self.incoming_messages.push((*old_message_id, message));
+                            if !sequence_less_than(*old_message_id, self.newest_received_message_id)
+                            {
+                                self.newest_received_message_id = *old_message_id;
+                                self.incoming_messages.push((*old_message_id, message));
+                            }
                             return;
                         } else {
                             // already received this message
@@ -62,7 +68,10 @@ impl<P> UnorderedReliableReceiver<P> {
 
                 if next_message_id == message_id {
                     self.record.push_back((next_message_id, true));
-                    self.incoming_messages.push((message_id, message));
+                    if !sequence_less_than(message_id, self.newest_received_message_id) {
+                        self.newest_received_message_id = message_id;
+                        self.incoming_messages.push((message_id, message));
+                    }
                     return;
                 } else {
                     self.record.push_back((next_message_id, false));
@@ -96,7 +105,7 @@ impl<P> UnorderedReliableReceiver<P> {
     }
 }
 
-impl<P: Send + Sync> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
+impl<P: Send + Sync> ChannelReceiver<P> for SequencedReliableReceiver<P> {
     fn read_messages(
         &mut self,
         channel_reader: &dyn ChannelReader<P>,

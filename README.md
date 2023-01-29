@@ -1,6 +1,6 @@
 [![Latest Version](https://img.shields.io/crates/v/naia-server.svg)](https://crates.io/crates/naia-server)
 [![API Documentation](https://docs.rs/naia-server/badge.svg)](https://docs.rs/naia-server)
-![](https://tokei.rs/b1/github/naia-rs/naia)
+![](https://tokei.rs/b1/github/naia-lib/naia)
 [![Discord chat](https://img.shields.io/discord/764975354913619988.svg?label=discord%20chat)](https://discord.gg/fD6QCtX)
 [![MIT/Apache][s3]][l3]
 
@@ -21,6 +21,8 @@ Thank very much to Kyren for support & [webrtc-unreliable](https://github.com/ky
 Any help is very welcome, please get in touch! I am open to any criticism / feedback in order to better this project.
 
 Currently guaranteed to work on Web & Linux, although Windows & MacOS have been reported working as well. Please file issues if you find inconsistencies and I'll do what I can.
+
+For more detailed information, please look at the [FAQ](https://github.com/naia-lib/naia/faq/).
 
 ## Demos
 
@@ -59,8 +61,3 @@ To run the WebRTC client demo on Web: (that will be able to communicate with a W
 To run a miniquad client you will require the following be installed
 
     sudo apt-get install libxi-dev libgl1-mesa-dev
-
-### A big thanks to our generous Sponsor for making this work sustainable:
-<a href="https://meetkai.com">
-    <img src="assets/sponsors/meetkai_metaverse_banner_purple_900x250.png" width="600" height="166" />
-</a>

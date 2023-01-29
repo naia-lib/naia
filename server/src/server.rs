@@ -1,10 +1,12 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{hash_set::Iter, HashMap, VecDeque},
     hash::Hash,
     net::SocketAddr,
     panic,
     sync::{Arc, RwLock},
 };
+
+use log::warn;
 
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
@@ -12,13 +14,9 @@ use bevy_ecs::prelude::Resource;
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     serde::{BitWriter, Serde},
-    ChannelIndex, EntityHandle, EntityHandleConverter, Tick,
-};
-pub use naia_shared::{
-    wrapping_diff, BaseConnection, BigMap, ConnectionConfig, Instant, KeyGenerator, NetEntity,
-    PacketType, PingConfig, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
-    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+    BigMap, ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant,
+    PacketType, PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig,
+    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -198,7 +196,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             );
             // send connectaccept response
             let mut writer = self.handshake_manager.write_connect_response();
-            self.io.send_writer(&user.address, &mut writer);
+            match self.io.send_writer(&user.address, &mut writer) {
+                Ok(()) => {}
+                Err(_) => {
+                    // TODO: pass this on and handle above
+                    warn!(
+                        "Server Error: Cannot send connect response packet to {}",
+                        &user.address
+                    );
+                }
+            }
             //
             self.user_connections.insert(user.address, new_connection);
             if self.io.bandwidth_monitor_enabled() {
@@ -215,10 +222,19 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         if let Some(user) = self.users.get(user_key) {
             // send connect reject response
             let mut writer = self.handshake_manager.write_reject_response();
-            self.io.send_writer(&user.address, &mut writer);
+            match self.io.send_writer(&user.address, &mut writer) {
+                Ok(()) => {}
+                Err(_) => {
+                    // TODO: pass this on and handle above
+                    warn!(
+                        "Server Error: Cannot send auth rejection packet to {}",
+                        &user.address
+                    );
+                }
+            }
             //
         }
-        self.delete_user(user_key);
+        self.user_delete(user_key);
     }
 
     // Messages
@@ -277,6 +293,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 }
             }
         }
+    }
+
+    /// Sends a message to all connected users using a given channel
+    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+        self.user_keys()
+            .iter()
+            .for_each(|user_key| self.send_message(user_key, channel.clone(), message))
     }
 
     // Updates
@@ -580,6 +603,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     //// Entity Scopes
 
+    /// Remove all entities from a User's scope
+    pub(crate) fn user_scope_remove_user(&mut self, user_key: &UserKey) {
+        self.entity_scope_map.remove_user(user_key);
+    }
+
     pub(crate) fn user_scope_set_entity(
         &mut self,
         user_key: &UserKey,
@@ -606,24 +634,29 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         let component_kind = component_ref.kind();
 
         if world.has_component_of_kind(entity, &component_kind) {
-            panic!(
-                "attempted to add component to entity which already has one of that type! \
-                   an entity is not allowed to have more than 1 type of component at a time."
-            )
-        }
+            // Entity already has this Component type yet, update Component
 
-        self.component_init(entity, &mut component_ref);
+            if let Some(mut component) = world.component_mut::<R>(entity) {
+                component.mirror(&component_ref.protocol_copy());
+            } else {
+                panic!("Should never happen because we checked for this above")
+            }
+        } else {
+            // Entity does not have this Component type yet, initialize Component
 
-        // actually insert component into world
-        world.insert_component(entity, component_ref);
+            self.component_init(entity, &mut component_ref);
 
-        // add component to connections already tracking entity
-        for (_, user_connection) in self.user_connections.iter_mut() {
-            // insert component into user's connection
-            if user_connection.entity_manager.scope_has_entity(entity) {
-                user_connection
-                    .entity_manager
-                    .insert_component(entity, &component_kind);
+            // actually insert component into world
+            world.insert_component(entity, component_ref);
+
+            // add component to connections already tracking entity
+            for (_, user_connection) in self.user_connections.iter_mut() {
+                // insert component into user's connection
+                if user_connection.entity_manager.scope_has_entity(entity) {
+                    user_connection
+                        .entity_manager
+                        .insert_component(entity, &component_kind);
+                }
             }
         }
     }
@@ -665,17 +698,42 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         None
     }
 
+    /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
+    pub(crate) fn user_room_keys(&self, user_key: &UserKey) -> Option<Iter<RoomKey>> {
+        if let Some(user) = self.users.get(user_key) {
+            return Some(user.room_keys());
+        }
+        return None;
+    }
+
+    /// Get an count of how many Rooms the given User is inside
+    pub(crate) fn user_rooms_count(&self, user_key: &UserKey) -> Option<usize> {
+        if let Some(user) = self.users.get(user_key) {
+            return Some(user.room_count());
+        }
+        return None;
+    }
+
+    pub(crate) fn user_disconnect(&mut self, user_key: &UserKey) {
+        if let Some(user) = self.user_delete(user_key) {
+            self.incoming_events
+                .push_back(Ok(Event::Disconnection(*user_key, user)));
+        }
+    }
+
     /// All necessary cleanup, when they're actually gone...
-    pub(crate) fn delete_user(&mut self, user_key: &UserKey) -> Option<User> {
+    pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> Option<User> {
         if let Some(user) = self.users.remove(user_key) {
             if self.user_connections.remove(&user.address).is_some() {
                 self.entity_scope_map.remove_user(user_key);
                 self.handshake_manager.delete_user(&user.address);
 
-                // TODO: cache this?
                 // Clean up all user data
-                for (_, room) in self.rooms.iter_mut() {
-                    room.unsubscribe_user(user_key);
+                for room_key in user.room_keys() {
+                    self.rooms
+                        .get_mut(room_key)
+                        .unwrap()
+                        .unsubscribe_user(user_key);
                 }
 
                 if self.io.bandwidth_monitor_enabled() {
@@ -700,7 +758,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             // TODO: what else kind of cleanup do we need to do here? Scopes?
 
             // actually remove the room from the collection
-            self.rooms.remove(room_key);
+            let room = self.rooms.remove(room_key).unwrap();
+            for user_key in room.user_keys() {
+                self.users.get_mut(user_key).unwrap().uncache_room(room_key);
+            }
 
             true
         } else {
@@ -723,15 +784,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Entities will only ever be in-scope for Users which are in a
     /// Room with them
     pub(crate) fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        if let Some(room) = self.rooms.get_mut(room_key) {
-            room.subscribe_user(user_key);
+        if let Some(user) = self.users.get_mut(user_key) {
+            if let Some(room) = self.rooms.get_mut(room_key) {
+                room.subscribe_user(user_key);
+                user.cache_room(room_key);
+            }
         }
     }
 
     /// Removes a User from a Room
     pub(crate) fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        if let Some(room) = self.rooms.get_mut(room_key) {
-            room.unsubscribe_user(user_key);
+        if let Some(user) = self.users.get_mut(user_key) {
+            if let Some(room) = self.rooms.get_mut(room_key) {
+                room.unsubscribe_user(user_key);
+                user.uncache_room(room_key);
+            }
         }
     }
 
@@ -741,6 +808,31 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             return room.users_count();
         }
         0
+    }
+
+    /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
+    pub(crate) fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
+        let iter = if let Some(room) = self.rooms.get(room_key) {
+            Some(room.user_keys())
+        } else {
+            None
+        };
+        iter.into_iter().flatten()
+    }
+
+    /// Sends a message to all connected users in a given Room using a given channel
+    pub(crate) fn room_broadcast_message<R: ReplicateSafe<P>>(
+        &mut self,
+        channel: C,
+        message: &R,
+        room_key: &RoomKey,
+    ) {
+        if let Some(room) = self.rooms.get(room_key) {
+            let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
+            for user_key in &user_keys {
+                self.send_message(user_key, channel.clone(), message)
+            }
+        }
     }
 
     //////// entities
@@ -810,7 +902,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             }
 
             for user_key in user_disconnects {
-                self.disconnect_user(&user_key);
+                self.user_disconnect(&user_key);
             }
         }
 
@@ -836,7 +928,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     }
 
                     // send packet
-                    self.io.send_writer(user_address, &mut writer);
+                    match self.io.send_writer(user_address, &mut writer) {
+                        Ok(()) => {}
+                        Err(_) => {
+                            // TODO: pass this on and handle above
+                            warn!(
+                                "Server Error: Cannot send heartbeat packet to {}",
+                                user_address
+                            );
+                        }
+                    }
                     connection.base.mark_sent();
                 }
             }
@@ -865,7 +966,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     connection.ping_manager.write_ping(&mut writer);
 
                     // send packet
-                    self.io.send_writer(user_address, &mut writer);
+                    match self.io.send_writer(user_address, &mut writer) {
+                        Ok(()) => {}
+                        Err(_) => {
+                            // TODO: pass this on and handle above
+                            warn!("Server Error: Cannot send ping packet to {}", user_address);
+                        }
+                    }
                     connection.base.mark_sent();
                 }
             }
@@ -892,7 +999,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                             if let Ok(mut writer) =
                                 self.handshake_manager.recv_challenge_request(&mut reader)
                             {
-                                self.io.send_writer(&address, &mut writer);
+                                match self.io.send_writer(&address, &mut writer) {
+                                    Ok(()) => {}
+                                    Err(_) => {
+                                        // TODO: pass this on and handle above
+                                        warn!("Server Error: Cannot send challenge response packet to {}", &address);
+                                    }
+                                };
                             }
                             continue;
                         }
@@ -906,7 +1019,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                         // send connectaccept response
                                         let mut writer =
                                             self.handshake_manager.write_connect_response();
-                                        self.io.send_writer(&address, &mut writer);
+                                        match self.io.send_writer(&address, &mut writer) {
+                                            Ok(()) => {}
+                                            Err(_) => {
+                                                // TODO: pass this on and handle above
+                                                warn!("Server Error: Cannot send connect success response packet to {}", &address);
+                                            }
+                                        };
                                         //
                                     } else {
                                         let user = User::new(address);
@@ -972,6 +1091,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                 if data_result.is_err() {
                                     // Received a malformed packet
                                     // TODO: increase suspicion against packet sender
+                                    warn!("Error reading incoming packet!");
                                     continue;
                                 }
                             }
@@ -981,7 +1101,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                     .verify_disconnect_request(user_connection, &mut reader)
                                 {
                                     let user_key = user_connection.user_key;
-                                    self.disconnect_user(&user_key);
+                                    self.user_disconnect(&user_key);
                                 }
                             }
                             PacketType::Heartbeat => {
@@ -1036,7 +1156,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                 ping_index.ser(&mut writer);
 
                                 // send packet
-                                self.io.send_writer(&address, &mut writer);
+                                match self.io.send_writer(&address, &mut writer) {
+                                    Ok(()) => {}
+                                    Err(_) => {
+                                        // TODO: pass this on and handle above
+                                        warn!(
+                                            "Server Error: Cannot send pong packet to {}",
+                                            &address
+                                        );
+                                    }
+                                };
                                 user_connection.base.mark_sent();
                             }
                             PacketType::Pong => {
@@ -1070,13 +1199,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                         .push_back(Err(NaiaServerError::Wrapped(Box::new(error))));
                 }
             }
-        }
-    }
-
-    pub(crate) fn disconnect_user(&mut self, user_key: &UserKey) {
-        if let Some(user) = self.delete_user(user_key) {
-            self.incoming_events
-                .push_back(Ok(Event::Disconnection(*user_key, user)));
         }
     }
 
@@ -1183,7 +1305,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityH
         self.world_record.handle_to_entity(entity_handle)
     }
 
-    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
+    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
         self.world_record.entity_to_handle(entity)
     }
 }

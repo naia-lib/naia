@@ -1,3 +1,4 @@
+use log::warn;
 use std::{
     hash::Hash,
     net::SocketAddr,
@@ -6,7 +7,7 @@ use std::{
 
 use naia_shared::{
     sequence_greater_than,
-    serde::{BitReader, BitWriter, SerdeErr},
+    serde::{BitReader, BitWriter, Serde, SerdeErr},
     BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, HostType,
     Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldRefType,
 };
@@ -73,18 +74,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
         reader: &mut BitReader,
         world_record: &WorldRecord<E, P::Kind>,
     ) -> Result<(), SerdeErr> {
-        // Read Tick Buffered Messages
-        if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
-            let converter = EntityConverter::new(world_record, &self.entity_manager);
-            let channel_reader = ProtocolIo::new(&converter);
-            self.tick_buffer
-                .read_messages(&server_tick, &client_tick, &channel_reader, reader)?;
+        let converter = EntityConverter::new(world_record, &self.entity_manager);
+        let channel_reader = ProtocolIo::new(&converter);
+
+        // read tick-buffered messages
+        {
+            if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
+                self.tick_buffer.read_messages(
+                    &server_tick,
+                    &client_tick,
+                    &channel_reader,
+                    reader,
+                )?;
+            }
         }
 
-        // Read Messages
+        // read messages
         {
-            let converter = EntityConverter::new(world_record, &self.entity_manager);
-            let channel_reader = ProtocolIo::new(&converter);
             self.base
                 .message_manager
                 .read_messages(&channel_reader, reader)?;
@@ -144,6 +150,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
 
             let mut bit_writer = BitWriter::new();
 
+            // Reserve bits we know will be required to finish the message:
+            // 1. Messages finish bit
+            // 2. Updates finish bit
+            // 3. Actions finish bit
+            bit_writer.reserve_bits(3);
+
             // write header
             self.base
                 .write_outgoing_header(PacketType::Data, &mut bit_writer);
@@ -158,6 +170,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
             //     info!("writing some messages");
             // }
 
+            let mut has_written = false;
+
             // write messages
             {
                 let converter = EntityConverter::new(world_record, &self.entity_manager);
@@ -166,22 +180,59 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,
+                    &mut has_written,
                 );
+
+                // finish messages
+                false.ser(&mut bit_writer);
+                bit_writer.release_bits(1);
+            }
+
+            // write entity updates
+            {
+                self.entity_manager.write_updates(
+                    now,
+                    &mut bit_writer,
+                    &next_packet_index,
+                    world,
+                    world_record,
+                    &mut has_written,
+                );
+
+                // finish updates
+                false.ser(&mut bit_writer);
+                bit_writer.release_bits(1);
             }
 
             // write entity actions
-            self.entity_manager.write_all(
-                now,
-                &mut bit_writer,
-                &next_packet_index,
-                world,
-                world_record,
-            );
+            {
+                self.entity_manager.write_actions(
+                    now,
+                    &mut bit_writer,
+                    &next_packet_index,
+                    world,
+                    world_record,
+                    &mut has_written,
+                );
+
+                // finish actions
+                false.ser(&mut bit_writer);
+                bit_writer.release_bits(1);
+            }
 
             //info!("--------------\n");
 
             // send packet
-            io.send_writer(&self.base.address, &mut bit_writer);
+            match io.send_writer(&self.base.address, &mut bit_writer) {
+                Ok(()) => {}
+                Err(_) => {
+                    // TODO: pass this on and handle above
+                    warn!(
+                        "Server Error: Cannot send data packet to {}",
+                        &self.base.address
+                    );
+                }
+            }
 
             return true;
         }

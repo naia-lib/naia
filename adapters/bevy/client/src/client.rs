@@ -7,12 +7,14 @@ use bevy_ecs::{
 };
 
 use naia_client::{
-    shared::{ChannelIndex, Protocolize, ReplicateSafe},
-    Client as NaiaClient, EntityRef,
+    shared::{
+        ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Protocolize,
+        ReplicateSafe,
+    },
+    Client as NaiaClient, EntityRef, NaiaClientError,
 };
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
-use naia_client::shared::{EntityHandle, EntityHandleConverter};
 
 use super::state::State;
 
@@ -63,7 +65,7 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
         self.client.is_connecting()
     }
 
-    pub fn server_address(&self) -> SocketAddr {
+    pub fn server_address(&self) -> Result<SocketAddr, NaiaClientError> {
         self.client.server_address()
     }
 
@@ -112,7 +114,7 @@ impl<'a, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity> for Clie
         self.client.handle_to_entity(entity_handle)
     }
 
-    fn entity_to_handle(&self, entity: &Entity) -> EntityHandle {
+    fn entity_to_handle(&self, entity: &Entity) -> Result<EntityHandle, EntityDoesNotExistError> {
         self.client.entity_to_handle(entity)
     }
 }

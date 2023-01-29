@@ -1,4 +1,4 @@
-use std::hash::Hash;
+use std::{error::Error, hash::Hash};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
@@ -44,10 +44,13 @@ impl EntityProperty {
         converter: &dyn NetEntityHandleConverter,
     ) -> Result<Self, SerdeErr> {
         if let Some(net_entity) = Option::<NetEntity>::de(reader)? {
-            let handle = converter.net_entity_to_handle(&net_entity);
-            let mut new_prop = Self::new(mutator_index);
-            *new_prop.handle_prop = Some(handle);
-            Ok(new_prop)
+            if let Ok(handle) = converter.net_entity_to_handle(&net_entity) {
+                let mut new_prop = Self::new(mutator_index);
+                *new_prop.handle_prop = Some(handle);
+                Ok(new_prop)
+            } else {
+                panic!("Could not find Entity to associate with incoming EntityProperty value!");
+            }
         } else {
             let mut new_prop = Self::new(mutator_index);
             *new_prop.handle_prop = None;
@@ -66,8 +69,11 @@ impl EntityProperty {
         converter: &dyn NetEntityHandleConverter,
     ) -> Result<(), SerdeErr> {
         if let Some(net_entity) = Option::<NetEntity>::de(reader)? {
-            let handle = converter.net_entity_to_handle(&net_entity);
-            *self.handle_prop = Some(handle);
+            if let Ok(handle) = converter.net_entity_to_handle(&net_entity) {
+                *self.handle_prop = Some(handle);
+            } else {
+                panic!("Could not find Entity to associate with incoming EntityProperty value!");
+            }
         } else {
             *self.handle_prop = None;
         }
@@ -97,19 +103,25 @@ impl EntityProperty {
     }
 
     pub fn set<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entity: &E) {
-        let new_handle = handler.entity_to_handle(entity);
-        *self.handle_prop = Some(new_handle);
+        if let Ok(new_handle) = handler.entity_to_handle(entity) {
+            *self.handle_prop = Some(new_handle);
+        } else {
+            panic!("Could not find Entity, in order to set the EntityProperty value!")
+        }
     }
 }
 
 pub trait EntityHandleConverter<E: Copy + Eq + Hash> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E;
-    fn entity_to_handle(&self, entity: &E) -> EntityHandle;
+    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError>;
 }
 
 pub trait NetEntityHandleConverter {
     fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity;
-    fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle;
+    fn net_entity_to_handle(
+        &self,
+        net_entity: &NetEntity,
+    ) -> Result<EntityHandle, EntityDoesNotExistError>;
 }
 
 pub trait NetEntityConverter<E: Copy + Eq + Hash> {
@@ -124,8 +136,8 @@ impl NetEntityHandleConverter for FakeEntityConverter {
         NetEntity::from(0)
     }
 
-    fn net_entity_to_handle(&self, _: &NetEntity) -> EntityHandle {
-        EntityHandle::from_u64(0)
+    fn net_entity_to_handle(&self, _: &NetEntity) -> Result<EntityHandle, EntityDoesNotExistError> {
+        Ok(EntityHandle::from_u64(0))
     }
 }
 
@@ -152,8 +164,20 @@ impl<'a, 'b, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityConverter<'
         self.net_entity_converter.entity_to_net_entity(&entity)
     }
 
-    fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle {
+    fn net_entity_to_handle(
+        &self,
+        net_entity: &NetEntity,
+    ) -> Result<EntityHandle, EntityDoesNotExistError> {
         let entity = self.net_entity_converter.net_entity_to_entity(net_entity);
         self.handle_converter.entity_to_handle(&entity)
+    }
+}
+
+#[derive(Debug)]
+pub struct EntityDoesNotExistError;
+impl Error for EntityDoesNotExistError {}
+impl std::fmt::Display for EntityDoesNotExistError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
+        write!(f, "Error while attempting to look-up an Entity value for conversion: Entity was not found!")
     }
 }

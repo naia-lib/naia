@@ -1,6 +1,6 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Ident};
+use syn::{parse_macro_input, Data, DeriveInput, Ident, LitStr};
 
 pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -9,6 +9,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 
     let variants = variants(&input.data);
 
+    let name_method = name_method(&protocol_name, &variants);
     let kind_enum_name = format_ident!("{}Kind", protocol_name);
     let kind_enum_def = kind_enum(&kind_enum_name, &variants);
     let kind_of_method = kind_of_method();
@@ -37,6 +38,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 
         impl Protocolize for #protocol_name {
             type Kind = #kind_enum_name;
+            #name_method
             #kind_of_method
             #type_to_kind_method
             #read_method
@@ -74,6 +76,7 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
 
     let mut variant_definitions = quote! {};
     let mut variants_to_type_id = quote! {};
+    let mut variants_name = quote! {};
 
     for variant in variants {
         let variant_name = Ident::new(&variant.to_string(), Span::call_site());
@@ -101,6 +104,19 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
             };
             variants_to_type_id = new_output_result;
         }
+
+        // Variants name() match branch
+        {
+            let variant_name_str = LitStr::new(&variant_name.to_string(), variant_name.span());
+            let new_output_right = quote! {
+                #enum_name::#variant_name => #variant_name_str.to_string(),
+            };
+            let new_output_result = quote! {
+                #variants_name
+                #new_output_right
+            };
+            variants_name = new_output_result;
+        }
     }
 
     quote! {
@@ -114,6 +130,11 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
             fn to_type_id(&self) -> TypeId {
                 match self {
                     #variants_to_type_id
+                }
+            }
+            fn name(&self) -> String {
+                match self {
+                    #variants_name
                 }
             }
         }
@@ -403,6 +424,31 @@ fn extract_and_insert_method(type_name: &Ident, variants: &Vec<Ident>) -> TokenS
         fn extract_and_insert<E, I: ProtocolInserter<#type_name, E>>(&self,
                                       key: &E,
                                       inserter: &mut I) {
+            match self {
+                #variant_definitions
+            }
+        }
+    }
+}
+
+fn name_method(protocol_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
+    let mut variant_definitions = quote! {};
+
+    for variant_name in variants {
+        let new_output_right = quote! {
+            #protocol_name::#variant_name(replica) => {
+                return replica.name();
+            }
+        };
+        let new_output_result = quote! {
+            #variant_definitions
+            #new_output_right
+        };
+        variant_definitions = new_output_result;
+    }
+
+    quote! {
+        fn name(&self) -> String {
             match self {
                 #variant_definitions
             }

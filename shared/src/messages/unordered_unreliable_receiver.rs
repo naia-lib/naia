@@ -1,11 +1,8 @@
 use std::{collections::VecDeque, mem};
 
-use naia_serde::{BitReader, SerdeErr};
+use naia_serde::{BitReader, Serde, SerdeErr};
 
-use super::{
-    message_channel::{ChannelReader, ChannelReceiver},
-    message_list_header::read,
-};
+use super::message_channel::{ChannelReader, ChannelReceiver};
 
 pub struct UnorderedUnreliableReceiver<P> {
     incoming_messages: VecDeque<P>,
@@ -38,11 +35,16 @@ impl<P: Send + Sync> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let message_count = read(reader)?;
-        for _x in 0..message_count {
+        loop {
+            let channel_continue = bool::de(reader)?;
+            if !channel_continue {
+                break;
+            }
+
             let message = self.read_message(channel_reader, reader)?;
             self.recv_message(message);
         }
+
         Ok(())
     }
 

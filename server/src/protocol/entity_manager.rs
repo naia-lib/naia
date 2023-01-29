@@ -8,11 +8,10 @@ use std::{
 };
 
 use naia_shared::{
-    message_list_header,
-    serde::{BitCounter, BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
     wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter,
     Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
-    PacketNotifiable, Protocolize, ReplicateSafe, WorldRefType, MTU_SIZE_BITS,
+    PacketNotifiable, ProtocolKindType, Protocolize, ReplicateSafe, WorldRefType,
 };
 
 use crate::sequence_list::SequenceList;
@@ -127,18 +126,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         !self.next_send_actions.is_empty() || !self.next_send_updates.is_empty()
     }
 
-    pub fn write_all<W: WorldRefType<P, E>>(
-        &mut self,
-        now: &Instant,
-        writer: &mut BitWriter,
-        packet_index: &PacketIndex,
-        world: &W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
-    ) {
-        self.write_updates(now, writer, packet_index, world, world_record);
-        self.write_actions(now, writer, packet_index, world, world_record);
-    }
-
     // Collecting
 
     fn collect_dropped_action_packets(&mut self) {
@@ -240,86 +227,73 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         *last_id_opt = Some(*current_id);
     }
 
-    fn write_actions<W: WorldRefType<P, E>>(
+    pub fn write_actions<W: WorldRefType<P, E>>(
         &mut self,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        has_written: &mut bool,
     ) {
-        let mut message_count = 0;
+        let mut last_counted_id: Option<MessageId> = None;
+        let mut last_written_id: Option<MessageId> = None;
 
-        // Header
-        {
-            // Measure
-            let current_packet_size = writer.bit_count();
-            if current_packet_size > MTU_SIZE_BITS {
-                message_list_header::write(writer, 0);
-                return;
+        loop {
+            if self.next_send_actions.is_empty() {
+                break;
             }
 
-            let mut counter = BitCounter::new();
-            message_list_header::write(&mut counter, 123);
+            // check that we can write the next message
+            let mut counter = writer.counter();
+            self.write_action(
+                world,
+                world_record,
+                packet_index,
+                &mut counter,
+                &mut last_counted_id,
+                false,
+            );
 
-            // Check for overflow
-            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                message_list_header::write(writer, 0);
-                return;
-            }
-
-            // Find how many messages will fit into the packet
-            let next_send_actions_len = self.next_send_actions.len();
-            let mut last_written_id: Option<ActionId> = None;
-
-            for action_index in 0..next_send_actions_len {
-                self.write_action(
-                    world,
-                    world_record,
-                    packet_index,
-                    &mut counter,
-                    action_index,
-                    &mut last_written_id,
-                    false,
-                );
-                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
-                    message_count += 1;
-                } else {
-                    break;
+            if counter.overflowed() {
+                // if nothing useful has been written in this packet yet,
+                // send warning about size of component being too big
+                if !*has_written {
+                    self.warn_overflow_action(
+                        world_record,
+                        counter.bits_needed(),
+                        writer.bits_free(),
+                    );
                 }
-            }
-        }
-
-        // Write header
-        message_list_header::write(writer, message_count as u64);
-
-        if !self
-            .sent_action_packets
-            .contains_scan_from_back(packet_index)
-        {
-            self.sent_action_packets
-                .insert_scan_from_back(*packet_index, (now.clone(), Vec::new()));
-        }
-
-        // Actions
-        {
-            let mut last_written_id: Option<ActionId> = None;
-
-            // Write messages
-            for action_index in 0..message_count {
-                self.write_action(
-                    world,
-                    world_record,
-                    packet_index,
-                    writer,
-                    action_index,
-                    &mut last_written_id,
-                    true,
-                );
+                break;
             }
 
-            // Pop messages
-            self.next_send_actions.drain(..message_count);
+            *has_written = true;
+
+            // write ActionContinue bit
+            true.ser(writer);
+
+            // optimization
+            if !self
+                .sent_action_packets
+                .contains_scan_from_back(packet_index)
+            {
+                self.sent_action_packets
+                    .insert_scan_from_back(*packet_index, (now.clone(), Vec::new()));
+            }
+
+            // write data
+            self.write_action(
+                world,
+                world_record,
+                packet_index,
+                writer,
+                &mut last_written_id,
+                true,
+            );
+
+            // pop action we've written
+            self.next_send_actions.pop_front();
         }
     }
 
@@ -330,11 +304,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
         packet_index: &PacketIndex,
         bit_writer: &mut dyn BitWrite,
-        action_index: usize,
         last_written_id: &mut Option<ActionId>,
         is_writing: bool,
     ) {
-        let (action_id, action) = self.next_send_actions.get(action_index).unwrap();
+        let (action_id, action) = self.next_send_actions.front().unwrap();
 
         // write message id
         Self::write_action_id(bit_writer, last_written_id, action_id);
@@ -507,111 +480,114 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         sent_actions_list.push((*action_id, action_record));
     }
 
-    fn write_updates<W: WorldRefType<P, E>>(
+    fn warn_overflow_action(
+        &self,
+        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        bits_needed: u16,
+        bits_free: u16,
+    ) {
+        let (_action_id, action) = self.next_send_actions.front().unwrap();
+
+        match action {
+            EntityActionEvent::SpawnEntity(entity) => {
+                let component_kinds = match world_record.component_kinds(entity) {
+                    Some(kind_list) => kind_list,
+                    None => Vec::new(),
+                };
+
+                let mut component_names = "".to_owned();
+                let mut added = false;
+
+                for component_kind in &component_kinds {
+                    if added {
+                        component_names.push(',');
+                    } else {
+                        added = true;
+                    }
+                    let name = component_kind.name();
+                    component_names.push_str(&name);
+                }
+                panic!(
+                    "Packet Write Error: Blocking overflow detected! Entity Spawn message with Components `{component_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
+                )
+            }
+            EntityActionEvent::InsertComponent(_entity, component) => {
+                let component_name = component.name();
+                panic!(
+                    "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
+                )
+            }
+            _ => {
+                panic!(
+                    "Packet Write Error: Blocking overflow detected! Action requires {bits_needed} bits, but packet only has {bits_free} bits available! This message should never display..."
+                )
+            }
+        }
+    }
+
+    pub fn write_updates<W: WorldRefType<P, E>>(
         &mut self,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        has_written: &mut bool,
     ) {
-        let mut update_entities: Vec<E> = Vec::new();
+        let all_update_entities: Vec<E> = self.next_send_updates.keys().copied().collect();
 
-        // Header
-        {
-            // Measure
-            let current_packet_size = writer.bit_count();
-            if current_packet_size > MTU_SIZE_BITS {
-                message_list_header::write(writer, 0);
-                return;
+        for entity in all_update_entities {
+            // check that we can at least write a NetEntityId and a ComponentContinue bit
+            let mut counter = writer.counter();
+
+            let net_entity_id = self.world_channel.entity_to_net_entity(&entity).unwrap();
+            net_entity_id.ser(&mut counter);
+
+            counter.write_bit(false);
+
+            if counter.overflowed() {
+                break;
             }
 
-            let mut counter = BitCounter::new();
-            message_list_header::write(&mut counter, 123);
+            // write UpdateContinue bit
+            true.ser(writer);
 
-            // Check for overflow
-            if current_packet_size + counter.bit_count() > MTU_SIZE_BITS {
-                message_list_header::write(writer, 0);
-                return;
-            }
+            // reserve ComponentContinue bit
+            writer.reserve_bits(1);
 
-            // Find how many messages will fit into the packet
-            let all_update_entities: Vec<E> = self.next_send_updates.keys().copied().collect();
+            // write NetEntityId
+            net_entity_id.ser(writer);
 
-            for update_entity in all_update_entities {
-                self.write_update(
-                    world,
-                    world_record,
-                    packet_index,
-                    &mut counter,
-                    &update_entity,
-                    false,
-                );
-                if current_packet_size + counter.bit_count() <= MTU_SIZE_BITS {
-                    update_entities.push(update_entity);
-                } else {
-                    break;
-                }
-            }
-        }
+            // write Components
+            self.write_update(
+                now,
+                world,
+                world_record,
+                packet_index,
+                writer,
+                &entity,
+                has_written,
+            );
 
-        // Write header
-        message_list_header::write(writer, update_entities.len() as u16);
-
-        if !self.sent_updates.contains_key(packet_index) {
-            self.sent_updates
-                .insert(*packet_index, (now.clone(), HashMap::new()));
-        }
-
-        // Actions
-        {
-            for entity in update_entities {
-                // Pop message
-
-                // Write message
-                self.write_update(world, world_record, packet_index, writer, &entity, true);
-            }
+            // write ComponentContinue finish bit, release
+            false.ser(writer);
+            writer.release_bits(1);
         }
     }
 
     fn write_update<W: WorldRefType<P, E>>(
         &mut self,
+        now: &Instant,
         world: &W,
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
         packet_index: &PacketIndex,
-        bit_writer: &mut dyn BitWrite,
+        writer: &mut BitWriter,
         entity: &E,
-        is_writing: bool,
+        has_written: &mut bool,
     ) {
-        let mut update_holder: Option<HashSet<P::Kind>> = None;
-        if is_writing {
-            update_holder = Some(
-                self.next_send_updates
-                    .remove(entity)
-                    .expect("should be an update available to pop"),
-            );
-        }
-        let component_set = {
-            if is_writing {
-                update_holder.as_ref().unwrap()
-            } else {
-                self.next_send_updates.get(entity).as_ref().unwrap()
-            }
-        };
-
-        // write net entity
-        self.world_channel
-            .entity_to_net_entity(entity)
-            .unwrap()
-            .ser(bit_writer);
-
-        // write number of components
-        UnsignedVariableInteger::<3>::new(component_set.len() as u64).ser(bit_writer);
-
-        for component_kind in component_set {
-            // write component kind
-            component_kind.ser(bit_writer);
-
+        let mut written_component_kinds = Vec::new();
+        let component_kinds = self.next_send_updates.get(entity).unwrap();
+        for component_kind in component_kinds {
             // get diff mask
             let diff_mask = self
                 .world_channel
@@ -620,31 +596,83 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 .expect("DiffHandler does not have registered Component!")
                 .clone();
 
-            // write payload
-            {
-                let converter = EntityConverter::new(world_record, self);
-                world
-                    .component_of_kind(entity, component_kind)
-                    .expect("Component does not exist in World")
-                    .write_update(&diff_mask, bit_writer, &converter);
+            let converter = EntityConverter::new(world_record, self);
+
+            // check that we can write the next component update
+            let mut counter = writer.counter();
+            component_kind.ser(&mut counter);
+            world
+                .component_of_kind(entity, component_kind)
+                .expect("Component does not exist in World")
+                .write_update(&diff_mask, &mut counter, &converter);
+
+            if counter.overflowed() {
+                // if nothing useful has been written in this packet yet,
+                // send warning about size of component being too big
+                if !*has_written {
+                    self.warn_overflow_update(
+                        component_kind,
+                        counter.bits_needed(),
+                        writer.bits_free(),
+                    );
+                }
+
+                break;
             }
 
-            ////////
-            if is_writing {
-                //info!("writing UpdateComponent");
+            *has_written = true;
 
-                // place diff mask in a special transmission record - like map
-                self.last_update_packet_index = *packet_index;
+            // write ComponentContinue bit
+            true.ser(writer);
 
-                let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();
-                sent_updates_map.insert((*entity, *component_kind), diff_mask);
+            // write component kind
+            component_kind.ser(writer);
 
-                // having copied the diff mask for this update, clear the component
-                self.world_channel
-                    .diff_handler
-                    .clear_diff_mask(entity, component_kind);
+            // write data
+            world
+                .component_of_kind(entity, component_kind)
+                .expect("Component does not exist in World")
+                .write_update(&diff_mask, writer, &converter);
+
+            written_component_kinds.push(*component_kind);
+
+            //info!("writing UpdateComponent");
+
+            // place diff mask in a special transmission record - like map
+            self.last_update_packet_index = *packet_index;
+
+            if !self.sent_updates.contains_key(packet_index) {
+                self.sent_updates
+                    .insert(*packet_index, (now.clone(), HashMap::new()));
             }
+            let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();
+            sent_updates_map.insert((*entity, *component_kind), diff_mask);
+
+            // having copied the diff mask for this update, clear the component
+            self.world_channel
+                .diff_handler
+                .clear_diff_mask(entity, component_kind);
         }
+
+        let update_kinds = self.next_send_updates.get_mut(entity).unwrap();
+        for component_kind in &written_component_kinds {
+            update_kinds.remove(component_kind);
+        }
+        if update_kinds.is_empty() {
+            self.next_send_updates.remove(entity);
+        }
+    }
+
+    fn warn_overflow_update(
+        &self,
+        component_kind: &<P as Protocolize>::Kind,
+        bits_needed: u16,
+        bits_free: u16,
+    ) {
+        let component_name = component_kind.name();
+        panic!(
+            "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"
+        )
     }
 }
 

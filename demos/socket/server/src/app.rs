@@ -44,8 +44,15 @@ impl App {
                 if message_from_client.eq(PING_MSG) {
                     let message_to_client: String = PONG_MSG.to_string();
                     info!("Server send -> {}: {}", address, message_to_client);
-                    self.packet_sender
-                        .send(&address, message_to_client.as_bytes());
+                    match self
+                        .packet_sender
+                        .send(&address, message_to_client.as_bytes())
+                    {
+                        Ok(()) => {}
+                        Err(error) => {
+                            info!("Server Send Error {}", error);
+                        }
+                    }
                 }
             }
             Ok(None) => {

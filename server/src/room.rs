@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{BigMapKey, ChannelIndex};
+use naia_shared::{BigMapKey, ChannelIndex, ReplicateSafe};
 
 use super::user::UserKey;
 
@@ -124,6 +124,11 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
         self.server.room_users_count(&self.key)
     }
 
+    /// Returns an iterator of the [`UserKey`] for Users that belong in the [`Room`]
+    pub fn user_keys(&self) -> impl Iterator<Item = &UserKey> {
+        self.server.room_user_keys(&self.key)
+    }
+
     // Entities
 
     pub fn has_entity(&self, entity: &E) -> bool {
@@ -176,6 +181,11 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
         self.server.room_users_count(&self.key)
     }
 
+    /// Returns an iterator of the [`UserKey`] for Users that belong in the [`Room`]
+    pub fn user_keys(&self) -> impl Iterator<Item = &UserKey> {
+        self.server.room_user_keys(&self.key)
+    }
+
     // Entities
 
     pub fn has_entity(&self, entity: &E) -> bool {
@@ -196,5 +206,12 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
 
     pub fn entities_count(&self) -> usize {
         self.server.room_entities_count(&self.key)
+    }
+
+    // Messages
+
+    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+        self.server
+            .room_broadcast_message(channel, message, &self.key);
     }
 }

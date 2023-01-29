@@ -4,11 +4,10 @@ use std::{
 };
 
 use naia_shared::{
-    message_list_header,
     serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
-    BigMap, ChannelIndex, EntityAction, EntityActionReceiver, EntityActionType, EntityHandle,
-    EntityHandleConverter, MessageId, NetEntity, NetEntityHandleConverter, Protocolize, Tick,
-    WorldMutType,
+    BigMap, ChannelIndex, EntityAction, EntityActionReceiver, EntityActionType,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageId, NetEntity,
+    NetEntityHandleConverter, Protocolize, Tick, WorldMutType,
 };
 
 use crate::{error::NaiaClientError, event::Event};
@@ -37,19 +36,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash> Default for EntityManager<P, E> {
 
 impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     // Action Reader
-
-    pub fn read_all<W: WorldMutType<P, E>, C: ChannelIndex>(
-        &mut self,
-        world: &mut W,
-        server_tick: Tick,
-        reader: &mut BitReader,
-        event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
-    ) -> Result<(), SerdeErr> {
-        self.read_updates(world, server_tick, reader, event_stream)?;
-        self.read_actions(world, reader, event_stream)?;
-        Ok(())
-    }
-
     fn read_message_id(
         reader: &mut BitReader,
         last_id_opt: &mut Option<MessageId>,
@@ -66,18 +52,26 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         Ok(current_id)
     }
 
-    fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
+    pub fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageId> = None;
-        let action_count = message_list_header::read(reader)?;
-        for _ in 0..action_count {
+
+        loop {
+            // read action continue bit
+            let action_continue = bool::de(reader)?;
+            if !action_continue {
+                break;
+            }
+
             self.read_action(reader, &mut last_read_id)?;
         }
+
         self.process_incoming_actions(world, event_stream);
+
         Ok(())
     }
 
@@ -282,17 +276,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
-    fn read_updates<W: WorldMutType<P, E>, C: ChannelIndex>(
+    pub fn read_updates<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
-        let update_count = message_list_header::read(reader)?;
-        for _ in 0..update_count {
-            self.read_update(world, server_tick, reader, event_stream)?;
+        loop {
+            // read update continue bit
+            let update_continue = bool::de(reader)?;
+            if !update_continue {
+                break;
+            }
+
+            let net_entity_id = NetEntity::de(reader)?;
+
+            self.read_update(world, server_tick, reader, &net_entity_id, event_stream)?;
         }
+
         Ok(())
     }
 
@@ -301,18 +303,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
+        net_entity_id: &NetEntity,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
-        let net_entity = NetEntity::de(reader)?;
+        loop {
+            // read update continue bit
+            let component_continue = bool::de(reader)?;
+            if !component_continue {
+                break;
+            }
 
-        let components_number = UnsignedVariableInteger::<3>::de(reader)?.get();
-
-        for _ in 0..components_number {
-            // read incoming update
             let component_update = P::read_create_update(reader)?;
             let component_kind = component_update.kind;
 
-            if let Some(world_entity) = self.local_to_world_entity.get(&net_entity) {
+            if let Some(world_entity) = self.local_to_world_entity.get(&net_entity_id) {
                 world.component_apply_update(
                     self,
                     world_entity,
@@ -340,11 +344,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityHandleConverter<E> for EntityMan
             .expect("entity does not exist for given handle!")
     }
 
-    fn entity_to_handle(&self, entity: &E) -> EntityHandle {
-        self.entity_records
-            .get(entity)
-            .expect("entity does not exist!")
-            .entity_handle
+    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
+        if let Some(record) = self.entity_records.get(entity) {
+            Ok(record.entity_handle)
+        } else {
+            Err(EntityDoesNotExistError)
+        }
     }
 }
 
@@ -358,11 +363,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityMan
         entity_record.net_entity
     }
 
-    fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle {
-        let entity = self
-            .local_to_world_entity
-            .get(net_entity)
-            .expect("no entity exists associated with given net entity");
-        self.entity_to_handle(entity)
+    fn net_entity_to_handle(
+        &self,
+        net_entity: &NetEntity,
+    ) -> Result<EntityHandle, EntityDoesNotExistError> {
+        if let Some(entity) = self.local_to_world_entity.get(net_entity) {
+            self.entity_to_handle(entity)
+        } else {
+            Err(EntityDoesNotExistError)
+        }
     }
 }
