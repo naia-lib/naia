@@ -19,5 +19,5 @@ wbindgen = [ "naia-shared/wbindgen" ]
 mquad = [ "naia-shared/mquad" ]
 
 [dependencies]
-naia-shared = { version = "0.14", path = "../../../shared" }
+naia-shared = { version = "0.15", path = "../../../shared" }
 hecs = { version = "0.9" }
