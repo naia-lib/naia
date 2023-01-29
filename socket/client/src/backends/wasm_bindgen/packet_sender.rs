@@ -35,3 +35,6 @@ impl PacketSender {
         self.server_addr.get()
     }
 }
+
+unsafe impl Send for PacketSender {}
+unsafe impl Sync for PacketSender {}
