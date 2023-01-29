@@ -97,8 +97,8 @@ mod some_nonreplicated_replica {
 
 use naia_shared::{
     serde::{BitReader, BitWriter},
-    BigMapKey, EntityHandle, EntityHandleConverter, FakeEntityConverter, NetEntity,
-    NetEntityHandleConverter, Protocolize, ReplicateSafe,
+    BigMapKey, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, FakeEntityConverter,
+    NetEntity, NetEntityHandleConverter, Protocolize, ReplicateSafe,
 };
 
 use some_entity_replica::EntityPropertyHolder;
@@ -196,17 +196,20 @@ fn read_write_entity_replica() {
         fn handle_to_entity(&self, entity_handle: &EntityHandle) -> u64 {
             entity_handle.to_u64()
         }
-        fn entity_to_handle(&self, entity: &u64) -> EntityHandle {
-            EntityHandle::from_u64(*entity)
+        fn entity_to_handle(&self, entity: &u64) -> Result<EntityHandle, EntityDoesNotExistError> {
+            Ok(EntityHandle::from_u64(*entity))
         }
     }
     impl NetEntityHandleConverter for TestEntityConverter {
         fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
             NetEntity::from(entity_handle.to_u64() as u16)
         }
-        fn net_entity_to_handle(&self, net_entity: &NetEntity) -> EntityHandle {
+        fn net_entity_to_handle(
+            &self,
+            net_entity: &NetEntity,
+        ) -> Result<EntityHandle, EntityDoesNotExistError> {
             let net_entity_u16: u16 = (*net_entity).into();
-            EntityHandle::from_u64(net_entity_u16 as u64)
+            Ok(EntityHandle::from_u64(net_entity_u16 as u64))
         }
     }
     // Write
