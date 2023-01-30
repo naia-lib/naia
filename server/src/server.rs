@@ -68,7 +68,6 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelI
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
     // Events
-    /// Contains all the messages received fom
     incoming_events: VecDeque<Result<Event<P, C>, NaiaServerError>>,
     // Ticks
     tick_manager: Option<TickManager>,

@@ -14,16 +14,16 @@ use naia_server::{
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
 
-use crate::shared::{EntityDoesNotExistError, EntityHandle};
+use crate::shared::{EntityDoesNotExistError, EntityHandle, WorldRefType};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 
 // Server
 
 pub struct Server<'world, 'state, P: Protocolize, C: ChannelIndex> {
-    pub state: &'state mut State<P, C>,
-    pub world: &'world World,
-    pub server: Mut<'world, NaiaServer<P, Entity, C>>,
+    state: &'state mut State<P, C>,
+    world: &'world World,
+    server: Mut<'world, NaiaServer<P, Entity, C>>,
     phantom_p: PhantomData<P>,
 }
 
