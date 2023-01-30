@@ -22,7 +22,7 @@ pub trait ChannelSender<P>: Send + Sync {
 }
 
 pub trait ChannelReceiver<P>: Send + Sync {
-    /// Read messages from the channel_reader into an internal buffer
+    /// Read messages from raw bits, parse them and store then into an internal buffer
     fn read_messages(
         &mut self,
         channel_reader: &dyn ChannelReader<P>,

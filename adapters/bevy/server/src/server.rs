@@ -21,9 +21,9 @@ use super::{commands::Command, entity_mut::EntityMut, state::State};
 // Server
 
 pub struct Server<'world, 'state, P: Protocolize, C: ChannelIndex> {
-    state: &'state mut State<P, C>,
-    world: &'world World,
-    server: Mut<'world, NaiaServer<P, Entity, C>>,
+    pub state: &'state mut State<P, C>,
+    pub world: &'world World,
+    pub server: Mut<'world, NaiaServer<P, Entity, C>>,
     phantom_p: PhantomData<P>,
 }
 
@@ -94,6 +94,11 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
         let entity = self.world.entities().reserve_entity();
         self.server.spawn_entity_at(&entity);
         EntityMut::new(entity, self)
+    }
+
+    /// Returns true if the server's [`WorldProxy`] has the entity
+    pub fn has_entity(&self, entity: &Entity) -> bool {
+        self.world.proxy().has_entity(entity)
     }
 
     pub fn entity(&self, entity: &Entity) -> EntityRef<P, Entity, WorldRef> {

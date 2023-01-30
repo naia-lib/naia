@@ -6,11 +6,17 @@ use crate::client::{BitReader, BitWriter};
 
 /// Manages the current tick for the host
 pub struct TickManager {
+    /// How much time in milliseconds does a tick last
     tick_interval_millis: f32,
+    /// How much time in seconds does a tick last
     tick_interval_seconds: f32,
+    /// Used to modify the tick interval. A value >1.0 means that the tick interval will be bigger
     tick_speed_factor: f32,
+    /// Smoothed measure how fast the tick offset is varying
     tick_offset_speed_avg: f32,
+    /// Smoothed measure of how much ahead the client tick is compared to the server tick
     tick_offset_avg: f32,
+    /// current client tick
     internal_tick: Tick,
     client_sending_tick_adjust: f32,
     server_receivable_tick_adjust: f32,
@@ -19,6 +25,7 @@ pub struct TickManager {
     interpolation: f32,
     accumulator: f32,
     minimum_latency: f32,
+    /// Last tick offset recorded
     last_tick_offset: i16,
     ticks_recorded: u8,
 }
@@ -61,6 +68,11 @@ impl TickManager {
         client_tick
     }
 
+    /// Read server tick from any packet that includes it and updates
+    ///
+    /// # Panics
+    ///
+    /// If the incoming packet from the server doesn't contain the server tick
     pub fn read_server_tick(&mut self, reader: &mut BitReader, rtt: f32, jitter: f32) -> Tick {
         let server_tick = Tick::de(reader).expect("unable to read server tick from packet");
 

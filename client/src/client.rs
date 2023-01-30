@@ -130,7 +130,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
-    /// Retrieves incoming update data, and maintains the connection.
+    /// Retrieves incoming update data from the server, and maintains the connection.
     pub fn receive<W: WorldMutType<P, E>>(
         &mut self,
         mut world: W,

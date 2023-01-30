@@ -36,8 +36,15 @@ pub enum EntityChannel<K: ProtocolKindType> {
 
 // WorldChannel
 
+/// Channel to perform ECS replication between server and client
+/// Only handles entity actions (Spawn/despawn entity and insert/remove components)
+/// Will use a reliable sender.
+/// Will wait for acks from the client to know the state of the client's ECS world ("remote")
 pub struct WorldChannel<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+    /// ECS World that exists currently on the server
     host_world: CheckedMap<E, CheckedSet<P::Kind>>,
+    /// ECS World that exists on the client. Uses packet acks to receive confirmation of the
+    /// EntityActions (Entity spawned, component inserted) that were actually received on the client
     remote_world: CheckedMap<E, CheckedSet<P::Kind>>,
     entity_channels: CheckedMap<E, EntityChannel<P::Kind>>,
     outgoing_actions: ReliableSender<EntityActionEvent<E, P::Kind>>,

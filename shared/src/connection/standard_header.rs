@@ -7,11 +7,11 @@ use crate::{connection::packet_type::PacketType, serde, types::PacketIndex};
 #[derive_serde]
 pub struct StandardHeader {
     pub packet_type: PacketType,
-    // Packet index identifying this packet
+    /// Packet index identifying this packet
     pub sender_packet_index: PacketIndex,
-    // This is the last acknowledged sequence number.
+    /// This is the last acknowledged sequence number.
     pub sender_ack_index: PacketIndex,
-    // This is an bitfield of all last 32 acknowledged packages
+    /// This is an bitfield of all last 32 acknowledged packages
     pub sender_ack_bitfield: u32,
 }
 
