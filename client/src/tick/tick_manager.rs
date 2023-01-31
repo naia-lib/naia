@@ -81,6 +81,8 @@ impl TickManager {
         server_tick
     }
 
+    /// This should run every frame. Check if enough time has passed so that we move to the next tick
+    /// Also keeps track of internal state such as the interpolation percentage
     pub fn recv_client_tick(&mut self) -> bool {
         let mut ticked = false;
         let tick_interval_seconds = self.tick_interval_seconds * self.tick_speed_factor;
@@ -104,7 +106,8 @@ impl TickManager {
         ticked
     }
 
-    /// Return the current interpolation of the frame
+    /// Return the current interpolation of the frame between the two surrounding ticks
+    /// 0.20 means that we are 20% of the way to the next tick
     pub fn interpolation(&self) -> f32 {
         self.interpolation
     }

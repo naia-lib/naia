@@ -276,6 +276,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         }
     }
 
+    /// Read component updates from raw bits
     pub fn read_updates<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
@@ -298,6 +299,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         Ok(())
     }
 
+    /// Read component updates from raw bits for a given entity
     fn read_update<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
