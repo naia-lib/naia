@@ -24,10 +24,15 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> Default for EntityActionReceiver<
 }
 
 impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
+    /// Buffer a read [`EntityAction`] so that it can be processed later
     pub fn buffer_action(&mut self, action_id: ActionId, action: EntityAction<E, K>) {
         self.receiver.buffer_message(action_id, action)
     }
 
+    /// Read all buffered [`EntityAction`] inside the `receiver` and process them.
+    ///
+    /// Outputs the list of [`EntityAction`] that can be executed now, buffer the rest
+    /// into each entity's [`EntityChannel`]
     pub fn receive_actions(&mut self) -> Vec<EntityAction<E, K>> {
         let mut outgoing_actions = Vec::new();
         let incoming_actions = self.receiver.receive_messages();
@@ -67,6 +72,15 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         }
     }
 
+    /// Process the provided [`EntityAction`]:
+    ///
+    /// * Checks that [`EntityAction`] can be executed now
+    /// * If so, add it to `outgoing_actions`
+    /// * Else, add it to internal "waiting" buffers so we can check when the [`EntityAction`]
+    ///   can be executed
+    ///
+    /// ([`EntityAction`]s might not be executable now, for example is an InsertComponent
+    ///  is processed before the corresponding entity has been spawned)
     pub fn receive_action(
         &mut self,
         incoming_action_id: ActionId,
@@ -98,6 +112,9 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         }
     }
 
+    /// Process the entity action.
+    /// When the entity is actually spawned on the client, send back an ack event
+    /// to the server.
     pub fn receive_spawn_entity_action(
         &mut self,
         id: ActionId,
@@ -118,7 +135,7 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
             // pop ALL waiting spawns, despawns, inserts, and removes OLDER than spawn_id
             self.receive_canonical(id);
 
-            // process any waiting spawns
+            // process any waiting despawns
             if let Some((despawn_id, _)) = self.waiting_despawns.inner.pop_front() {
                 self.receive_despawn_entity_action(despawn_id, outgoing_actions);
             } else {
@@ -140,6 +157,9 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
         }
     }
 
+    /// Process the entity despawn action
+    /// When the entity has actually been despawned on the client, add an ack to the
+    /// `outgoing_actions`
     pub fn receive_despawn_entity_action(
         &mut self,
         id: ActionId,

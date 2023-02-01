@@ -52,6 +52,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         Ok(current_id)
     }
 
+    /// Read and process incoming actions.
+    ///
+    /// * Emits client events corresponding to any [`EntityAction`] received
+    /// Store
     pub fn read_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
@@ -75,6 +79,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         Ok(())
     }
 
+    /// Read the bits corresponding to the EntityAction and adds the [`EntityAction`]
+    /// to an internal buffer.
+    ///
+    /// We can use a UnorderedReliableReceiver buffer because the messages have already been
+    /// ordered by the client's jitter buffer
     fn read_action(
         &mut self,
         reader: &mut BitReader,
@@ -147,13 +156,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         Ok(())
     }
 
+    /// For each [`EntityAction`] that can be executed now,
+    /// execute it and emit a corresponding event.
     fn process_incoming_actions<W: WorldMutType<P, E>, C: ChannelIndex>(
         &mut self,
         world: &mut W,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) {
+        // receive the list of EntityActions that can be executed now
         let incoming_actions = self.receiver.receive_actions();
 
+        // execute the action and emit an event
         for action in incoming_actions {
             match action {
                 EntityAction::SpawnEntity(net_entity, components) => {

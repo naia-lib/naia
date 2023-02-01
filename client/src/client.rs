@@ -169,7 +169,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                 );
             }
 
-            // receive messages
+            // receive (process) messages
             let messages = server_connection.base.message_manager.receive_messages();
             for (channel, message) in messages {
                 self.incoming_events
