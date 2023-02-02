@@ -107,8 +107,8 @@ impl<P: Protocolize> IncomingMessages<P> {
     // TODO:
     //  * add unit test?
     //  * should there be a maximum buffer size?
-    //  * fasten client simulation if too many ticks are received too late (i.e. received client ticks are too old)
-    //  * slow client simulation if ticks are received too in advance (buffer is too big)
+    //  * fasten client simulation if too many ticks are received too late (i.e. received client ticks are too old) ?
+    //  * slow client simulation if ticks are received too in advance (buffer is too big) ?
     /// Insert a message from the client into the tick-buffer
     /// Will only insert messages that are from future ticks compared to the current server tick
     pub fn insert(

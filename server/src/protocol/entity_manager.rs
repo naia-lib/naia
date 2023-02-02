@@ -579,8 +579,6 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
     /// For a given entity, write component value updates into a packet
     /// Only component values that changed in the internal (naia's) host world will be written
-    ///
-    /// TODO: why do we have `is_writing`?
     fn write_update<W: WorldRefType<P, E>>(
         &mut self,
         now: &Instant,
