@@ -103,119 +103,114 @@ impl App {
         if self.client.is_disconnected() {
             return;
         }
-        for event in self.client.receive(self.world.proxy_mut()) {
-            match event {
-                Ok(Event::Connection(server_address)) => {
-                    info!("Client connected to: {}", server_address);
-                }
-                Ok(Event::Disconnection(server_address)) => {
-                    info!("Client disconnected from: {}", server_address);
 
-                    self.world = World::default();
-                    self.owned_entity = None;
-                    self.squares = HashSet::new();
-                    self.queued_command = None;
-                    self.command_history = CommandHistory::default();
-                }
-                Ok(Event::Tick) => {
-                    if let Some(owned_entity) = &self.owned_entity {
-                        if let Some(command) = self.queued_command.take() {
-                            if let Some(client_tick) = self.client.client_tick() {
-                                if self.command_history.can_insert(&client_tick) {
-                                    // Record command
-                                    self.command_history.insert(client_tick, command.clone());
+        let events = self.client.receive(self.world.proxy_mut());
 
-                                    // Send command
-                                    self.client.send_message(Channels::PlayerCommand, &command);
+        for ConnectionEvent(server_address) in events.read() {
+            info!("Client connected to: {}", server_address);
+        }
+        for DisconnectionEvent(server_address) in events.read() {
+            info!("Client disconnected from: {}", server_address);
 
-                                    // Apply command
-                                    if let Some(mut square_ref) = self
-                                        .world
-                                        .proxy_mut()
-                                        .component_mut::<Square>(&owned_entity.predicted)
-                                    {
-                                        shared_behavior::process_command(&command, &mut square_ref);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                Ok(Event::SpawnEntity(entity)) => {
-                    self.squares.insert(entity);
-                    info!("spawned entity");
-                }
-                Ok(Event::DespawnEntity(entity)) => {
-                    self.squares.remove(&entity);
-                    info!("despawned entity");
-                    // TODO: Sync up Predicted & Confirmed entities
-                }
-                Ok(Event::InsertComponent(_entity, _component)) => {
-                    info!("inserted component");
-                    // TODO: Sync up Predicted & Confirmed entities
-                }
-                Ok(Event::RemoveComponent(_entity, _component)) => {
-                    info!("removed component");
-                    // TODO: Sync up Predicted & Confirmed entities
-                }
-                Ok(Event::Message(
-                    Channels::EntityAssignment,
-                    Protocol::EntityAssignment(message),
-                )) => {
-                    let assign = *message.assign;
+            self.world = World::default();
+            self.owned_entity = None;
+            self.squares = HashSet::new();
+            self.queued_command = None;
+            self.command_history = CommandHistory::default();
+        }
+        for TickEvent in events.read() {
+            if let Some(owned_entity) = &self.owned_entity {
+                if let Some(command) = self.queued_command.take() {
+                    if let Some(client_tick) = self.client.client_tick() {
+                        if self.command_history.can_insert(&client_tick) {
+                            // Record command
+                            self.command_history.insert(client_tick, command.clone());
 
-                    let entity = message.entity.get(&self.client).unwrap();
-                    if assign {
-                        info!("gave ownership of entity");
-                        let prediction_entity = self.world.proxy_mut().duplicate_entity(&entity);
-                        self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
-                    } else {
-                        let mut disowned: bool = false;
-                        if let Some(owned_entity) = &self.owned_entity {
-                            if owned_entity.confirmed == entity {
-                                self.world
-                                    .proxy_mut()
-                                    .despawn_entity(&owned_entity.predicted);
-                                disowned = true;
-                            }
-                        }
-                        if disowned {
-                            info!("removed ownership of entity");
-                            self.owned_entity = None;
-                        }
-                    }
-                }
-                Ok(Event::UpdateComponent(server_tick, updated_entity, _)) => {
-                    if let Some(owned_entity) = &self.owned_entity {
-                        let server_entity = owned_entity.confirmed;
+                            // Send command
+                            self.client.send_message(Channels::PlayerCommand, &command);
 
-                        // If entity is owned
-                        if updated_entity == server_entity {
-                            let client_entity = owned_entity.predicted;
-
-                            // Set state of all components on Predicted & Confirmed entities to the authoritative Server state
-                            self.world
+                            // Apply command
+                            if let Some(mut square_ref) = self
+                                .world
                                 .proxy_mut()
-                                .mirror_entities(&client_entity, &server_entity);
-
-                            let replay_commands = self.command_history.replays(&server_tick);
-                            for (_, command) in replay_commands {
-                                if let Some(mut square_ref) = self
-                                    .world
-                                    .proxy_mut()
-                                    .component_mut::<Square>(&client_entity)
-                                {
-                                    shared_behavior::process_command(&command, &mut square_ref);
-                                }
+                                .component_mut::<Square>(&owned_entity.predicted)
+                            {
+                                shared_behavior::process_command(&command, &mut square_ref);
                             }
                         }
                     }
                 }
-                Err(err) => {
-                    info!("Client Error: {}", err);
-                }
-                _ => {}
             }
+        }
+        for SpawnEntityEvent(entity) in events.read() {
+            self.squares.insert(entity);
+            info!("spawned entity");
+        }
+        for DespawnEntityEvent(entity) in events.read() {
+            self.squares.remove(&entity);
+            info!("despawned entity");
+            // TODO: Sync up Predicted & Confirmed entities
+        }
+        for InsertComponentEvent(_entity, _component_kind) in events.read() {
+            info!("inserted component");
+            // TODO: Sync up Predicted & Confirmed entities
+        }
+        for RemoveComponentEvent(_entity, _component) in events.read() {
+            info!("removed component");
+            // TODO: Sync up Predicted & Confirmed entities
+        }
+        for MessageEvent::<EntityAssignment, EntityAssignment>(message) in events.read() {
+            let assign = *message.assign;
+
+            let entity = message.entity.get(&self.client).unwrap();
+            if assign {
+                info!("gave ownership of entity");
+                let prediction_entity = self.world.proxy_mut().duplicate_entity(&entity);
+                self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+            } else {
+                let mut disowned: bool = false;
+                if let Some(owned_entity) = &self.owned_entity {
+                    if owned_entity.confirmed == entity {
+                        self.world
+                            .proxy_mut()
+                            .despawn_entity(&owned_entity.predicted);
+                        disowned = true;
+                    }
+                }
+                if disowned {
+                    info!("removed ownership of entity");
+                    self.owned_entity = None;
+                }
+            }
+        }
+        for UpdateComponentEvent(server_tick, updated_entity, _updated_component_type) in events.read() {
+            if let Some(owned_entity) = &self.owned_entity {
+                let server_entity = owned_entity.confirmed;
+
+                // If entity is owned
+                if updated_entity == server_entity {
+                    let client_entity = owned_entity.predicted;
+
+                    // Set state of all components on Predicted & Confirmed entities to the authoritative Server state
+                    self.world
+                        .proxy_mut()
+                        .mirror_entities(&client_entity, &server_entity);
+
+                    let replay_commands = self.command_history.replays(&server_tick);
+                    for (_, command) in replay_commands {
+                        if let Some(mut square_ref) = self
+                            .world
+                            .proxy_mut()
+                            .component_mut::<Square>(&client_entity)
+                        {
+                            shared_behavior::process_command(&command, &mut square_ref);
+                        }
+                    }
+                }
+            }
+        }
+        for ErrorEvent(error) in events.read() {
+            info!("Client Error: {}", err);
         }
     }
 
