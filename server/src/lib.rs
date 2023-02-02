@@ -19,7 +19,7 @@ pub use naia_shared as shared;
 mod cache_map;
 mod connection;
 mod error;
-mod event;
+mod events;
 mod protocol;
 mod room;
 mod sequence_list;
@@ -30,7 +30,7 @@ mod user;
 mod user_scope;
 
 pub use error::NaiaServerError;
-pub use event::Event;
+pub use events::{Events, AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent, ErrorEvent, TickEvent};
 pub use protocol::entity_ref::EntityRef;
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;

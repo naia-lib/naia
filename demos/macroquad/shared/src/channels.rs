@@ -8,6 +8,10 @@ pub enum Channels {
     EntityAssignment,
 }
 
+// TODO: link these in with the enum and config
+pub struct PlayerCommandChannel;
+pub struct EntityAssignmentChannel;
+
 pub const CHANNEL_CONFIG: &[Channel<Channels>] = &[
     Channel {
         index: Channels::PlayerCommand,

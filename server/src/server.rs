@@ -36,7 +36,7 @@ use crate::{
 
 use super::{
     error::NaiaServerError,
-    event::Event,
+    events::Events,
     room::{Room, RoomKey, RoomMut, RoomRef},
     server_config::ServerConfig,
     user::{User, UserKey, UserMut, UserRef},
@@ -68,7 +68,7 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelI
     // Components
     diff_handler: Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
     // Events
-    incoming_events: VecDeque<Result<Event<P, C>, NaiaServerError>>,
+    incoming_events: Events,
     // Ticks
     tick_manager: Option<TickManager>,
 }
@@ -105,7 +105,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             // Components
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::default())),
             // Events
-            incoming_events: VecDeque::new(),
+            incoming_events: Events::new(),
             // Ticks
             tick_manager,
         }
@@ -126,7 +126,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, C>, NaiaServerError>> {
+    pub fn receive(&mut self) -> Events {
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
         self.maintain_socket();
@@ -149,11 +149,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             // receive messages from anyone
             let messages = connection.base.message_manager.receive_messages();
             for (channel, message) in messages {
-                self.incoming_events.push_back(Ok(Event::Message(
-                    connection.user_key,
-                    channel,
-                    message,
-                )));
+                self.incoming_events.push_message(&connection.user_key, channel, message);
             }
         }
 
@@ -167,15 +163,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     .tick_buffer
                     .receive_messages(&self.tick_manager.as_ref().unwrap().server_tick());
                 for (channel, message) in messages {
-                    self.incoming_events.push_back(Ok(Event::Message(
-                        connection.user_key,
-                        channel,
-                        message,
-                    )));
+                    self.incoming_events.push_message(&connection.user_key, channel, message);
                 }
             }
 
-            self.incoming_events.push_back(Ok(Event::Tick));
+            self.incoming_events.push_tick();
         }
 
         // return all received messages and reset the buffer
@@ -212,8 +204,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             if self.io.bandwidth_monitor_enabled() {
                 self.io.register_client(&user.address);
             }
-            self.incoming_events
-                .push_back(Ok(Event::Connection(*user_key)));
+            self.incoming_events.push_connection(user_key);
         }
     }
 
@@ -717,8 +708,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     pub(crate) fn user_disconnect(&mut self, user_key: &UserKey) {
         if let Some(user) = self.user_delete(user_key) {
-            self.incoming_events
-                .push_back(Ok(Event::Disconnection(*user_key, user)));
+            self.incoming_events.push_disconnection(user_key, user);
         }
     }
 
@@ -1034,9 +1024,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                         let user_key = self.users.insert(user);
 
                                         if let Some(auth_message) = auth_message_opt {
-                                            self.incoming_events.push_back(Ok(
-                                                Event::Authorization(user_key, auth_message),
-                                            ));
+                                            self.incoming_events.push_auth(&user_key, auth_message);
                                         } else {
                                             self.accept_connection(&user_key);
                                         }
@@ -1199,8 +1187,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     break;
                 }
                 Err(error) => {
-                    self.incoming_events
-                        .push_back(Err(NaiaServerError::Wrapped(Box::new(error))));
+                    self.incoming_events.push_error(NaiaServerError::Wrapped(Box::new(error)));
                 }
             }
         }

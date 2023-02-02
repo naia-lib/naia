@@ -17,7 +17,7 @@ mod client_config;
 mod command_history;
 mod connection;
 mod error;
-mod event;
+mod events;
 mod protocol;
 mod tick;
 
@@ -25,7 +25,7 @@ pub use client::Client;
 pub use client_config::ClientConfig;
 pub use command_history::CommandHistory;
 pub use error::NaiaClientError;
-pub use event::Event;
+pub use events::Event;
 pub use protocol::entity_ref::EntityRef;
 
 pub mod internal {

@@ -1,15 +1,15 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
-use naia_server::{
-    shared::Random, Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
-};
+use naia_server::{shared::Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
+                  AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent, TickEvent, ErrorEvent};
 
 use naia_demo_world::{Entity, World as DemoWorld};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
-    protocol::{Color, EntityAssignment, KeyCommand, Marker, Protocol, Square},
-    shared_config, Channels,
+    protocol::{Color, EntityAssignment, KeyCommand, Marker, Protocol, Square, Auth},
+    shared_config,
+    channels::{PlayerCommandChannel, Channels},
 };
 
 type World = DemoWorld<Protocol>;
@@ -56,7 +56,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        let events = self.server.receive();
+        let mut events = self.server.receive();
         if events.is_empty() {
             // If we don't sleep here, app will loop at 100% CPU until a new message comes in
             sleep(Duration::from_millis(5));
@@ -136,7 +136,7 @@ impl App {
                 self.square_last_command.remove(&entity);
             }
         }
-        for MessageEvent::<PlayerCommand, KeyCommand>(user_key, key_command) in events.read() {
+        for MessageEvent::<PlayerCommandChannel, KeyCommand>(user_key, channel, key_command) in events.read() {
             if let Some(entity) = &key_command.entity.get(&self.server) {
                 self.square_last_command.insert(*entity, key_command);
             }

@@ -10,7 +10,7 @@ use naia_shared::{
     NetEntityHandleConverter, Protocolize, Tick, WorldMutType,
 };
 
-use crate::{error::NaiaClientError, event::Event};
+use crate::{error::NaiaClientError, events::Event};
 
 use super::entity_record::EntityRecord;
 

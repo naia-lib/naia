@@ -24,7 +24,7 @@ use crate::{
     tick::tick_manager::TickManager,
 };
 
-use super::{client_config::ClientConfig, error::NaiaClientError, event::Event};
+use super::{client_config::ClientConfig, error::NaiaClientError, events::Event};
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server

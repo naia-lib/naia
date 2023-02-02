@@ -4,8 +4,7 @@ extern crate naia_shared;
 pub mod behavior;
 pub mod protocol;
 
-mod channels;
-pub use channels::Channels;
+pub mod channels;
 
 mod shared;
 pub use shared::shared_config;

@@ -9,7 +9,7 @@ use naia_shared::{
 
 use crate::{
     error::NaiaClientError,
-    event::Event,
+    events::Event,
     protocol::entity_manager::EntityManager,
     tick::{
         tick_buffer_sender::TickBufferSender, tick_manager::TickManager, tick_queue::TickQueue,
