@@ -23,6 +23,8 @@ pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
     pub entity_manager: EntityManager<P, E>,
     pub ping_manager: PingManager,
     pub tick_buffer: Option<TickBufferSender<P, C>>,
+    /// Small buffer when receiving updates (entity actions, entity updates) from the server
+    /// to make sure we receive them in order
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
@@ -62,6 +64,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             .add_item(incoming_tick, reader.to_owned());
     }
 
+    /// Read the packets (raw bits) from the jitter buffer that correspond to the
+    /// `receiving_tick`
+    ///
+    /// * Receive (process) entity actions/entity updates and emit events for them
+    /// * Read messages and store them into an internal buffer
+    ///
+    /// Note that currently, messages are also being stored in the jitter buffer and processed
+    /// on the receiving tick, even though it's not needed is the channel is not tick buffered.
     pub fn process_buffered_packets<W: WorldMutType<P, E>>(
         &mut self,
         world: &mut W,
@@ -117,6 +127,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
     // Outgoing data
 
+    /// Collect and send any outgoing packets from client to server
+    ///
+    /// Outgoing packets are either:
+    /// * messages
+    /// * acks from reliable channels
+    /// * acks from the `EntityActionReceiver` for all [`EntityAction`]s
     pub fn send_outgoing_packets(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
         self.collect_outgoing_messages(tick_manager_opt);
 

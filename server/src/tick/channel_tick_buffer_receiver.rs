@@ -6,6 +6,8 @@ use naia_shared::{
     ChannelReader, Protocolize, ShortMessageId, Tick,
 };
 
+/// Receive updates from the client and store them in a buffer along with the corresponding
+/// client tick.
 pub struct ChannelTickBufferReceiver<P: Protocolize> {
     incoming_messages: IncomingMessages<P>,
 }
@@ -17,10 +19,13 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
         }
     }
 
+    /// Read the stored buffer-data corresponding to the given [`Tick`]
     pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<P> {
         self.incoming_messages.collect(host_tick)
     }
 
+    /// Given incoming packet data, read transmitted Messages and store
+    /// them in a buffer to be returned to the application
     pub fn read_messages(
         &mut self,
         host_tick: &Tick,
@@ -87,6 +92,8 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
 struct IncomingMessages<P: Protocolize> {
     // front is small, back is big
     // front is present, back is future
+    /// Buffer containing messages from the client, along with the corresponding tick
+    /// We do not store anything for empty ticks
     buffer: VecDeque<(Tick, HashMap<ShortMessageId, P>)>,
 }
 
@@ -97,6 +104,13 @@ impl<P: Protocolize> IncomingMessages<P> {
         }
     }
 
+    // TODO:
+    //  * add unit test?
+    //  * should there be a maximum buffer size?
+    //  * fasten client simulation if too many ticks are received too late (i.e. received client ticks are too old)
+    //  * slow client simulation if ticks are received too in advance (buffer is too big)
+    /// Insert a message from the client into the tick-buffer
+    /// Will only insert messages that are from future ticks compared to the current server tick
     pub fn insert(
         &mut self,
         host_tick: &Tick,
@@ -118,11 +132,14 @@ impl<P: Protocolize> IncomingMessages<P> {
             }
 
             let mut insert = false;
+
+            // loop from back to front (future to present)
             loop {
                 index -= 1;
 
                 if let Some((existing_tick, existing_messages)) = self.buffer.get_mut(index) {
                     if *existing_tick == *message_tick {
+                        // should almost never collide
                         if let std::collections::hash_map::Entry::Vacant(e) =
                             existing_messages.entry(message_id)
                         {
@@ -133,10 +150,11 @@ impl<P: Protocolize> IncomingMessages<P> {
                             // inserted command into existing tick
                             return true;
                         } else {
+                            // TODO: log hash collisions?
                             return false;
                         }
                     } else if sequence_greater_than(*message_tick, *existing_tick) {
-                        // incoming client tick is larger than found tick ...
+                        // incoming client tick is larger (more in the future) than found tick
                         insert = true;
                     }
                 }
@@ -167,6 +185,7 @@ impl<P: Protocolize> IncomingMessages<P> {
         }
     }
 
+    /// Delete from the buffer all data that is older than the provided [`Tick`]
     fn prune_outdated_commands(&mut self, host_tick: &Tick) {
         loop {
             let mut pop = false;
@@ -183,6 +202,8 @@ impl<P: Protocolize> IncomingMessages<P> {
         }
     }
 
+
+    /// Retrieve from the buffer data corresponding to the provided [`Tick`]
     pub fn collect(&mut self, host_tick: &Tick) -> Vec<P> {
         self.prune_outdated_commands(host_tick);
 

@@ -157,7 +157,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             }
         }
 
-        // receive tick buffered messages on tick
+        // receive (retrieve from buffer) tick buffered messages for the current server tick
         if did_tick {
             // Receive Tick Buffered Messages
             for user_address in &user_addresses {
@@ -178,6 +178,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             self.incoming_events.push_back(Ok(Event::Tick));
         }
 
+        // return all received messages and reset the buffer
         std::mem::take(&mut self.incoming_events)
     }
 
@@ -886,6 +887,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     // Private methods
 
+    /// Maintain connection with a client and read all incoming packet data
     fn maintain_socket(&mut self) {
         // disconnects
         if self.timeout_timer.ringing() {
@@ -1184,6 +1186,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                     ////
                                 }
 
+                                // TODO: send a message to client with a recommendation on how
+                                //  to speedup/slowdown simulation?
                                 user_connection.ping_manager.process_pong(&mut reader);
                             }
                             _ => {}

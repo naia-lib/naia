@@ -14,7 +14,7 @@ use naia_server::{
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
 
-use crate::shared::{EntityDoesNotExistError, EntityHandle};
+use crate::shared::{EntityDoesNotExistError, EntityHandle, WorldRefType};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 
@@ -94,6 +94,11 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
         let entity = self.world.entities().reserve_entity();
         self.server.spawn_entity_at(&entity);
         EntityMut::new(entity, self)
+    }
+
+    /// Returns true if the server's [`WorldProxy`] has the entity
+    pub fn has_entity(&self, entity: &Entity) -> bool {
+        self.world.proxy().has_entity(entity)
     }
 
     pub fn entity(&self, entity: &Entity) -> EntityRef<P, Entity, WorldRef> {

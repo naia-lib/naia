@@ -231,8 +231,10 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         Ok(())
     }
 
+    /// Retrieve all messages from the channel buffers
     pub fn receive_messages(&mut self) -> Vec<(C, P)> {
         let mut output = Vec::new();
+        // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_index, channel) in &mut self.channel_receivers {
             let mut messages = channel.receive_messages();
             for message in messages.drain(..) {

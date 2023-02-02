@@ -8,6 +8,8 @@ use crate::{backends::Timer, wrapping_number::sequence_greater_than};
 
 use super::ping_config::PingConfig;
 
+/// Is responsible for sending regular ping messages between client/servers
+/// and to estimate rtt/jitter
 pub struct PingManager {
     ping_timer: Timer,
     sent_pings: SentPings,
@@ -60,6 +62,7 @@ impl PingManager {
         }
     }
 
+    /// Recompute rtt/jitter estimations
     fn process_new_rtt(&mut self, rtt_millis: f32) {
         let new_jitter = ((rtt_millis - self.rtt) / 2.0).abs();
         self.jitter = (self.rtt_smoothing_factor_inv * self.jitter)

@@ -62,12 +62,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
     }
 
+    /// Update the last received tick tracker from the given client
     pub fn recv_client_tick(&mut self, client_tick: Tick) {
         if sequence_greater_than(client_tick, self.last_received_tick) {
             self.last_received_tick = client_tick;
         }
     }
 
+    /// Read packet data received from a client
     pub fn process_incoming_data(
         &mut self,
         server_and_client_tick_opt: Option<(Tick, Tick)>,
@@ -135,6 +137,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
             .collect_outgoing_messages(now, rtt_millis);
     }
 
+    /// Send any message, component actions and component updates to the client
+    /// Will split the data into multiple packets.
     fn send_outgoing_packet<W: WorldRefType<P, E>>(
         &mut self,
         now: &Instant,
