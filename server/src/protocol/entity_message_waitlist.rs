@@ -1,22 +1,21 @@
-use naia_shared::{ChannelIndex, KeyGenerator, MessageManager, Protocolize};
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
 };
 
+use naia_shared::{ChannelId, KeyGenerator, Message, MessageManager};
+
 type MessageHandle = u16;
 
-pub struct EntityMessageWaitlist<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+pub struct EntityMessageWaitlist<E: Copy + Eq + Hash> {
     message_handle_store: KeyGenerator<MessageHandle>,
-    messages: HashMap<MessageHandle, (Vec<E>, C, P)>,
+    messages: HashMap<MessageHandle, (Vec<E>, ChannelId, Box<dyn Message>)>,
     waiting_entities: HashMap<E, HashSet<MessageHandle>>,
     in_scope_entities: HashSet<E>,
-    ready_messages: Vec<(C, P)>,
+    ready_messages: Vec<(ChannelId, Box<dyn Message>)>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Default
-    for EntityMessageWaitlist<P, E, C>
-{
+impl<E: Copy + Eq + Hash> Default for EntityMessageWaitlist<E> {
     fn default() -> Self {
         Self {
             messages: HashMap::default(),
@@ -28,8 +27,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Default
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist<P, E, C> {
-    pub fn queue_message(&mut self, entities: Vec<E>, channel: C, message: P) {
+impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
+    pub fn queue_message(&mut self, entities: Vec<E>, channel: ChannelId, message: Box<dyn Message>) {
         let new_handle = self.message_handle_store.generate();
 
         for entity in &entities {
@@ -100,7 +99,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
 
     pub fn collect_ready_messages(&mut self, message_manager: &mut MessageManager) {
         for (channel, message) in self.ready_messages.drain(..) {
-            message_manager.send_message(channel, message);
+            message_manager.send_message(&channel, message);
         }
     }
 }

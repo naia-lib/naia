@@ -5,14 +5,12 @@ use naia_shared::{ReplicaMutTrait, ReplicaRefTrait, ReplicateSafe};
 // ComponentRef
 pub struct ComponentRef<'a, R: ReplicateSafe> {
     inner: &'a R,
-    phantom: PhantomData<P>,
 }
 
 impl<'a, R: ReplicateSafe> ComponentRef<'a, R> {
     pub fn new(inner: &'a R) -> Self {
         Self {
             inner,
-            phantom: PhantomData,
         }
     }
 }

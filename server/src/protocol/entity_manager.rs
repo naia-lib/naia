@@ -6,13 +6,12 @@ use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
-use bevy_ecs::component::ComponentId;
 
 use naia_shared::{
     serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter,
+    wrapping_diff, DiffMask, EntityAction, EntityActionType, EntityConverter,
     Instant, MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
-    PacketNotifiable, ProtocolKindType, Protocolize, ReplicateSafe, WorldRefType,
+    PacketNotifiable, ReplicateSafe, WorldRefType, ComponentId
 };
 
 use crate::sequence_list::SequenceList;
@@ -40,7 +39,7 @@ pub struct EntityManager<E: Copy + Eq + Hash + Send + Sync> {
     next_send_updates: HashMap<E, HashSet<ComponentId>>,
     #[allow(clippy::type_complexity)]
     /// Map of component updates and [`DiffMask`] that were written into each packet
-    sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, P::Kind), DiffMask>)>,
+    sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, ComponentId), DiffMask>)>,
     /// Last [`PacketIndex`] where a component update was written by the server
     last_update_packet_index: PacketIndex,
 }
@@ -74,11 +73,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         self.world_channel.host_despawn_entity(entity);
     }
 
-    pub fn insert_component(&mut self, entity: &E, component: &P::Kind) {
+    pub fn insert_component(&mut self, entity: &E, component: &ComponentId) {
         self.world_channel.host_insert_component(entity, component);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component: &P::Kind) {
+    pub fn remove_component(&mut self, entity: &E, component: &ComponentId) {
         self.world_channel.host_remove_component(entity, component);
     }
 
@@ -230,13 +229,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         *last_id_opt = Some(*current_id);
     }
 
-    pub fn write_actions<W: WorldRefType<P, E>>(
+    pub fn write_actions<W: WorldRefType<E>>(
         &mut self,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
         world: &W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        world_record: &WorldRecord<E>,
         has_written: &mut bool,
     ) {
         let mut last_counted_id: Option<MessageIndex> = None;
@@ -301,10 +300,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn write_action<W: WorldRefType<P, E>>(
+    fn write_action<W: WorldRefType<E>>(
         &mut self,
         world: &W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        world_record: &WorldRecord<E>,
         packet_index: &PacketIndex,
         bit_writer: &mut dyn BitWrite,
         last_written_id: &mut Option<ActionId>,
@@ -474,10 +473,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     #[allow(clippy::type_complexity)]
     fn record_action_written(
-        sent_actions: &mut SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
+        sent_actions: &mut SequenceList<(Instant, Vec<(ActionId, EntityAction<E>)>)>,
         packet_index: &PacketIndex,
         action_id: &ActionId,
-        action_record: EntityAction<E, P::Kind>,
+        action_record: EntityAction<E>,
     ) {
         let (_, sent_actions_list) = sent_actions.get_mut_scan_from_back(packet_index).unwrap();
         sent_actions_list.push((*action_id, action_record));
@@ -485,7 +484,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     fn warn_overflow_action(
         &self,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        world_record: &WorldRecord<E>,
         bits_needed: u16,
         bits_free: u16,
     ) {
@@ -534,7 +533,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
         world: &W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        world_record: &WorldRecord<E>,
         has_written: &mut bool,
     ) {
         let all_update_entities: Vec<E> = self.next_send_updates.keys().copied().collect();
@@ -580,11 +579,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     /// For a given entity, write component value updates into a packet
     /// Only component values that changed in the internal (naia's) host world will be written
-    fn write_update<W: WorldRefType<P, E>>(
+    fn write_update<W: WorldRefType<E>>(
         &mut self,
         now: &Instant,
         world: &W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        world_record: &WorldRecord<E>,
         packet_index: &PacketIndex,
         writer: &mut BitWriter,
         entity: &E,
@@ -670,7 +669,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     fn warn_overflow_update(
         &self,
-        component_kind: &<P as Protocolize>::Kind,
+        component_kind: &ComponentId,
         bits_needed: u16,
         bits_free: u16,
     ) {

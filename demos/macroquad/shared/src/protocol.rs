@@ -16,10 +16,18 @@ pub use key_command::KeyCommand;
 pub use marker::Marker;
 pub use square::{Color, Square};
 
+pub struct PlayerCommandChannel;
+//TODO: implement derive!
+impl Channel for PlayerCommandChannel {}
+pub struct EntityAssignmentChannel;
+//TODO: implement derive!
+impl Channel for EntityAssignmentChannel {}
+
 // Protocol Build
 pub fn protocol() -> Protocol {
 
-    Protocol::build()
+    Protocol::builder()
+        // Config
         .tick_interval(Duration::from_millis(20))
         .link_condition(LinkConditionerConfig::average_condition())
         // Channels
@@ -39,5 +47,5 @@ pub fn protocol() -> Protocol {
         .add_component::<Square>()
         .add_component::<Marker>()
         // Build
-        .new()
+        .build()
 }

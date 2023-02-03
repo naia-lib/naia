@@ -1,19 +1,19 @@
 use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
-    BigMap, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, ProtocolKindType,
+    BigMap, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
 };
 
 use crate::{protocol::global_entity_record::GlobalEntityRecord, room::RoomKey};
 
-pub struct WorldRecord<E: Copy + Eq + Hash, K: ProtocolKindType> {
+pub struct WorldRecord<E: Copy + Eq + Hash> {
     /// Information about entities in the internal ECS World
-    entity_records: HashMap<E, GlobalEntityRecord<K>>,
+    entity_records: HashMap<E, GlobalEntityRecord>,
     /// Map from the internal [`EntityHandle`] to the external (e.g. Bevy's) entity id
     handle_entity_map: BigMap<EntityHandle, E>,
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> Default for WorldRecord<E, K> {
+impl<E: Copy + Eq + Hash> Default for WorldRecord<E> {
     fn default() -> Self {
         Self {
             entity_records: HashMap::default(),
@@ -22,7 +22,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> Default for WorldRecord<E, K> {
     }
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
+impl<E: Copy + Eq + Hash> WorldRecord<E> {
     // Sync w/ World & Server
 
     pub fn spawn_entity(&mut self, entity: &E) {

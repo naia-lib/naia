@@ -5,10 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    ChannelIndex, ChannelSender, EntityAction, EntityActionReceiver, Instant, KeyGenerator,
-    NetEntity, ProtocolKindType, Protocolize, ReliableSender,
-};
+use naia_shared::{ChannelSender, ComponentId, EntityAction, EntityActionReceiver, Instant, KeyGenerator, NetEntity, ReliableSender};
 
 use crate::protocol::{
     entity_action_event::EntityActionEvent, entity_manager::ActionId,
@@ -28,9 +25,9 @@ pub enum ComponentChannel {
 
 // EntityChannel
 
-pub enum EntityChannel<K: ProtocolKindType> {
+pub enum EntityChannel {
     Spawning,
-    Spawned(CheckedMap<K, ComponentChannel>),
+    Spawned(CheckedMap<ComponentId, ComponentChannel>),
     Despawning,
 }
 
@@ -40,28 +37,28 @@ pub enum EntityChannel<K: ProtocolKindType> {
 /// Only handles entity actions (Spawn/despawn entity and insert/remove components)
 /// Will use a reliable sender.
 /// Will wait for acks from the client to know the state of the client's ECS world ("remote")
-pub struct WorldChannel<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
     /// ECS World that exists currently on the server
-    host_world: CheckedMap<E, CheckedSet<P::Kind>>,
+    host_world: CheckedMap<E, CheckedSet<ComponentId>>,
     /// ECS World that exists on the client. Uses packet acks to receive confirmation of the
     /// EntityActions (Entity spawned, component inserted) that were actually received on the client
-    remote_world: CheckedMap<E, CheckedSet<P::Kind>>,
-    entity_channels: CheckedMap<E, EntityChannel<P::Kind>>,
-    outgoing_actions: ReliableSender<EntityActionEvent<E, P::Kind>>,
-    delivered_actions: EntityActionReceiver<E, P::Kind>,
+    remote_world: CheckedMap<E, CheckedSet<ComponentId>>,
+    entity_channels: CheckedMap<E, EntityChannel>,
+    outgoing_actions: ReliableSender<EntityActionEvent<E>>,
+    delivered_actions: EntityActionReceiver<E>,
 
     address: SocketAddr,
-    pub diff_handler: UserDiffHandler<E, P::Kind>,
+    pub diff_handler: UserDiffHandler<E>,
     net_entity_generator: KeyGenerator<NetEntity>,
     entity_to_net_entity_map: HashMap<E, NetEntity>,
     net_entity_to_entity_map: HashMap<NetEntity, E>,
-    pub delayed_entity_messages: EntityMessageWaitlist<P, E, C>,
+    pub delayed_entity_messages: EntityMessageWaitlist<E>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldChannel<P, E, C> {
+impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
     pub fn new(
         address: SocketAddr,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
+        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
     ) -> Self {
         Self {
             host_world: CheckedMap::new(),
@@ -147,7 +144,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         }
     }
 
-    pub fn host_insert_component(&mut self, entity: &E, component: &P::Kind) {
+    pub fn host_insert_component(&mut self, entity: &E, component: &ComponentId) {
         if !self.host_world.contains_key(entity) {
             panic!("cannot insert component into non-existent entity");
         }
@@ -172,7 +169,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         }
     }
 
-    pub fn host_remove_component(&mut self, entity: &E, component: &P::Kind) {
+    pub fn host_remove_component(&mut self, entity: &E, component: &ComponentId) {
         if !self.host_world.contains_key(entity) {
             panic!("cannot remove component from non-existent entity");
         }
@@ -202,7 +199,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
 
     // Remote Actions
 
-    pub fn remote_spawn_entity(&mut self, entity: E, inserted_components: HashSet<P::Kind>) {
+    pub fn remote_spawn_entity(&mut self, entity: E, inserted_components: HashSet<ComponentId>) {
         if self.remote_world.contains_key(&entity) {
             panic!("should not be able to replace entity in remote world");
         }
@@ -216,7 +213,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
                 let mut component_channels = CheckedMap::new();
                 let host_components = self.host_world.get(&entity).unwrap();
 
-                let insert_status_components: HashSet<&P::Kind> =
+                let insert_status_components: HashSet<&ComponentId> =
                     host_components.inner.union(&inserted_components).collect();
 
                 for component in insert_status_components {
@@ -224,7 +221,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
                     component_channels.insert(*component, ComponentChannel::Inserting);
                 }
 
-                let send_insert_action_components: HashSet<&P::Kind> = host_components
+                let send_insert_action_components: HashSet<&ComponentId> = host_components
                     .inner
                     .difference(&inserted_components)
                     .collect();
@@ -280,7 +277,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         self.remote_world.remove(&entity);
     }
 
-    pub fn remote_insert_component(&mut self, entity: E, component: P::Kind) {
+    pub fn remote_insert_component(&mut self, entity: E, component: ComponentId) {
         if !self.remote_world.contains_key(&entity) {
             panic!("cannot insert component into non-existent entity");
         }
@@ -319,7 +316,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         }
     }
 
-    pub fn remote_remove_component(&mut self, entity: E, component: P::Kind) {
+    pub fn remote_remove_component(&mut self, entity: E, component: ComponentId) {
         if !self.remote_world.contains_key(&entity) {
             panic!("cannot remove component from non-existent entity");
         }
@@ -380,18 +377,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         self.net_entity_generator.recycle_key(&net_entity);
     }
 
-    fn on_component_channel_opened(&mut self, entity: &E, component: &P::Kind) {
+    fn on_component_channel_opened(&mut self, entity: &E, component: &ComponentId) {
         self.diff_handler
             .register_component(&self.address, entity, component);
     }
 
-    fn on_component_channel_closing(&mut self, entity: &E, component: &P::Kind) {
+    fn on_component_channel_closing(&mut self, entity: &E, component: &ComponentId) {
         self.diff_handler.deregister_component(entity, component);
     }
 
     // Action Delivery
 
-    pub fn action_delivered(&mut self, action_id: ActionId, action: EntityAction<E, P::Kind>) {
+    pub fn action_delivered(&mut self, action_id: ActionId, action: EntityAction<E>) {
         if self.outgoing_actions.deliver_message(&action_id).is_some() {
             self.delivered_actions.buffer_action(action_id, action);
             self.process_delivered_actions();
@@ -403,7 +400,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         for action in delivered_actions {
             match action {
                 EntityAction::SpawnEntity(entity, components) => {
-                    let component_set: HashSet<P::Kind> = components.iter().copied().collect();
+                    let component_set: HashSet<ComponentId> = components.iter().copied().collect();
                     self.remote_spawn_entity(entity, component_set);
                 }
                 EntityAction::DespawnEntity(entity) => {
@@ -428,12 +425,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> WorldCh
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-    ) -> VecDeque<(ActionId, EntityActionEvent<E, P::Kind>)> {
+    ) -> VecDeque<(ActionId, EntityActionEvent<E>)> {
         self.outgoing_actions.collect_messages(now, rtt_millis);
         self.outgoing_actions.take_next_messages()
     }
 
-    pub fn collect_next_updates(&self) -> HashMap<E, HashSet<P::Kind>> {
+    pub fn collect_next_updates(&self) -> HashMap<E, HashSet<ComponentId>> {
         let mut output = HashMap::new();
 
         for (entity, entity_channel) in self.entity_channels.iter() {

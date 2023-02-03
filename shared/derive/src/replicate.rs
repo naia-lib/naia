@@ -43,12 +43,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let properties = properties(&input);
     let struct_type = get_struct_type(&input);
 
-    // Paths
-    let (protocol_path, protocol_name) = protocol_path(&input);
-
     // Names
     let replica_name = input.ident;
-    let protocol_kind_name = format_ident!("{}Kind", protocol_name);
     let enum_name = format_ident!("{}Property", replica_name);
 
     // Definitions
@@ -58,14 +54,13 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let new_complete_method =
         new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
     let read_method = read_method(
-        &protocol_name,
         &replica_name,
         &enum_name,
         &properties,
         &struct_type,
     );
     let read_create_update_method =
-        read_create_update_method(&replica_name, &protocol_kind_name, &properties);
+        read_create_update_method(&replica_name, &properties);
 
     // ReplicateSafe Derive Methods
     let diff_mask_size = {
@@ -76,15 +71,13 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             ((len - 1) / 8) + 1
         }
     } as u8;
-    let dyn_ref_method = dyn_ref_method(&protocol_name);
-    let dyn_mut_method = dyn_mut_method(&protocol_name);
-    let to_protocol_method = into_protocol_method(&protocol_name, &replica_name);
-    let protocol_copy_method = protocol_copy_method(&protocol_name, &replica_name);
+    let dyn_ref_method = dyn_ref_method();
+    let dyn_mut_method = dyn_mut_method();
     let clone_method = clone_method(&replica_name, &properties, &struct_type);
-    let mirror_method = mirror_method(&protocol_name, &replica_name, &properties, &struct_type);
+    let mirror_method = mirror_method(&replica_name, &properties, &struct_type);
     let set_mutator_method = set_mutator_method(&properties, &struct_type);
     let read_apply_update_method =
-        read_apply_update_method(&protocol_kind_name, &properties, &struct_type);
+        read_apply_update_method(&properties, &struct_type);
     let write_method = write_method(&properties, &struct_type);
     let write_update_method = write_update_method(&enum_name, &properties, &struct_type);
     let has_entity_properties = has_entity_properties_method(&properties);
@@ -95,10 +88,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         use std::{rc::Rc, cell::RefCell, io::Cursor};
         use naia_shared::{
             DiffMask, PropertyMutate, ReplicateSafe, PropertyMutator, ComponentUpdate,
-            Protocolize, ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter,
+            ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentId, Named,
             serde::{BitReader, BitWrite, BitWriter, OwnedBitReader, Serde, SerdeErr},
         };
-        use #protocol_path::{#protocol_name, #protocol_kind_name};
         mod internal {
             pub use naia_shared::{EntityProperty, EntityHandle};
         }
@@ -110,18 +102,18 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #read_method
             #read_create_update_method
         }
-        impl ReplicateSafe<#protocol_name> for #replica_name {
-            fn diff_mask_size(&self) -> u8 { #diff_mask_size }
-            fn kind(&self) -> #protocol_kind_name {
-                return Protocolize::kind_of::<Self>();
-            }
+        impl Named for #replica_name {
             fn name(&self) -> String {
                 return #replica_name_str.to_string();
             }
+        }
+        impl ReplicateSafe for #replica_name {
+            fn diff_mask_size(&self) -> u8 { #diff_mask_size }
+            fn kind(&self) -> ComponentId {
+                todo!()
+            }
             #dyn_ref_method
             #dyn_mut_method
-            #to_protocol_method
-            #protocol_copy_method
             #mirror_method
             #set_mutator_method
             #write_method
@@ -130,7 +122,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             #has_entity_properties
             #entities
         }
-        impl Replicate<#protocol_name> for #replica_name {}
+        impl Replicate for #replica_name {}
         impl Clone for #replica_name {
             #clone_method
         }
@@ -384,17 +376,17 @@ fn into_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStr
     }
 }
 
-pub fn dyn_ref_method(protocol_name: &Ident) -> TokenStream {
+pub fn dyn_ref_method() -> TokenStream {
     quote! {
-        fn dyn_ref(&self) -> ReplicaDynRef<'_, #protocol_name> {
+        fn dyn_ref(&self) -> ReplicaDynRef<'_> {
             return ReplicaDynRef::new(self);
         }
     }
 }
 
-pub fn dyn_mut_method(protocol_name: &Ident) -> TokenStream {
+pub fn dyn_mut_method() -> TokenStream {
     quote! {
-        fn dyn_mut(&mut self) -> ReplicaDynMut<'_, #protocol_name> {
+        fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
             return ReplicaDynMut::new(self);
         }
     }
@@ -454,7 +446,6 @@ fn clone_method(
 }
 
 fn mirror_method(
-    protocol_name: &Ident,
     replica_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
@@ -474,10 +465,8 @@ fn mirror_method(
     }
 
     quote! {
-        fn mirror(&mut self, other: &#protocol_name) {
-            if let #protocol_name::#replica_name(replica) = other {
-                #output
-            }
+        fn mirror(&mut self, other: &dyn ReplicateSafe) {
+            todo!()
         }
     }
 }
@@ -646,7 +635,6 @@ pub fn new_complete_method(
 }
 
 pub fn read_method(
-    protocol_name: &Ident,
     replica_name: &Ident,
     enum_name: &Ident,
     properties: &[Property],
@@ -721,17 +709,16 @@ pub fn read_method(
     };
 
     quote! {
-        pub fn read(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<#protocol_name, SerdeErr> {
+        pub fn read(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<#replica_name, SerdeErr> {
             #prop_reads
 
-            return Ok(#protocol_name::#replica_name(#replica_build));
+            return Ok(#replica_build);
         }
     }
 }
 
 pub fn read_create_update_method(
     replica_name: &Ident,
-    kind_name: &Ident,
     properties: &[Property],
 ) -> TokenStream {
     let mut prop_read_writes = quote! {};
@@ -773,7 +760,7 @@ pub fn read_create_update_method(
     }
 
     quote! {
-        pub fn read_create_update(reader: &mut BitReader) -> Result<ComponentUpdate::<#kind_name>, SerdeErr> {
+        pub fn read_create_update(reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
 
             let mut update_writer = BitWriter::new();
 
@@ -782,13 +769,14 @@ pub fn read_create_update_method(
             let (length, buffer) = update_writer.flush();
             let owned_reader = OwnedBitReader::new(&buffer[..length]);
 
-            return Ok(ComponentUpdate::new(#kind_name::#replica_name, owned_reader));
+            let component_id: ComponentId = todo!();
+
+            return Ok(ComponentUpdate::new(component_id, owned_reader));
         }
     }
 }
 
 fn read_apply_update_method(
-    kind_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
 ) -> TokenStream {
@@ -824,7 +812,7 @@ fn read_apply_update_method(
     }
 
     quote! {
-        fn read_apply_update(&mut self, converter: &dyn NetEntityHandleConverter, mut update: ComponentUpdate<#kind_name>) -> Result<(), SerdeErr> {
+        fn read_apply_update(&mut self, converter: &dyn NetEntityHandleConverter, mut update: ComponentUpdate) -> Result<(), SerdeErr> {
             let reader = &mut update.reader();
             #output
             Ok(())

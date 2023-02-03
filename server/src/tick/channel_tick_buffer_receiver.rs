@@ -1,19 +1,16 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
-    ChannelReader, Protocolize, ShortMessageId, Tick,
-};
+use naia_shared::{sequence_greater_than, serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger}, ChannelReader, ShortMessageIndex, Tick, Message};
+
 use crate::Events;
 
 /// Receive updates from the client and store them in a buffer along with the corresponding
 /// client tick.
-pub struct ChannelTickBufferReceiver<P: Protocolize> {
-    incoming_messages: IncomingMessages<P>,
+pub struct ChannelTickBufferReceiver {
+    incoming_messages: IncomingMessages,
 }
 
-impl<P: Protocolize> ChannelTickBufferReceiver<P> {
+impl ChannelTickBufferReceiver {
     pub fn new() -> Self {
         Self {
             incoming_messages: IncomingMessages::new(),
@@ -92,15 +89,15 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
 
 // Incoming messages
 
-struct IncomingMessages<P: Protocolize> {
+struct IncomingMessages {
     // front is small, back is big
     // front is present, back is future
     /// Buffer containing messages from the client, along with the corresponding tick
     /// We do not store anything for empty ticks
-    buffer: VecDeque<(Tick, HashMap<ShortMessageId, P>)>,
+    buffer: VecDeque<(Tick, HashMap<ShortMessageId, Box<dyn Message>>)>,
 }
 
-impl<P: Protocolize> IncomingMessages<P> {
+impl IncomingMessages {
     pub fn new() -> Self {
         IncomingMessages {
             buffer: VecDeque::new(),

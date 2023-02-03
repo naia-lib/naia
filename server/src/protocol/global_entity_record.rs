@@ -1,16 +1,16 @@
 use std::collections::HashSet;
 
-use naia_shared::{EntityHandle, ProtocolKindType};
+use naia_shared::{ComponentId, EntityHandle};
 
 use crate::room::RoomKey;
 
-pub struct GlobalEntityRecord<K: ProtocolKindType> {
+pub struct GlobalEntityRecord {
     pub room_key: Option<RoomKey>,
     pub entity_handle: EntityHandle,
-    pub component_kinds: HashSet<K>,
+    pub component_kinds: HashSet<ComponentId>,
 }
 
-impl<K: ProtocolKindType> GlobalEntityRecord<K> {
+impl GlobalEntityRecord {
     pub fn new(entity_handle: EntityHandle) -> Self {
         Self {
             room_key: None,

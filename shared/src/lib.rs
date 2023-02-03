@@ -55,7 +55,7 @@ pub use connection::{
     standard_header::StandardHeader,
 };
 pub use messages::{
-    message::Message,
+    message::{Message, Messages},
     channel_config::{
         Channel, ChannelConfig, ChannelDirection, ChannelMode,
         ReliableSettings, TickBufferSettings,
@@ -66,6 +66,8 @@ pub use messages::{
     reliable_sender::ReliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
     message_receivable::MessageReceivable,
+    named::Named,
+    protocol_io::ProtocolIo,
 };
 pub use entity::{
     entity_action::EntityAction,
@@ -88,13 +90,13 @@ pub use component::{
         ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
         ReplicaRefWrapper,
     },
-    replicate::{Replicate, ReplicateSafe},
+    replicate::{Replicate, ReplicateSafe, Components},
 };
 
 pub use bigmap::{BigMap, BigMapKey};
 pub use constants::MESSAGE_HISTORY_SIZE;
 pub use key_generator::KeyGenerator;
 pub use protocol::Protocol;
-pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
+pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick, ComponentId, ChannelId, MessageId};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

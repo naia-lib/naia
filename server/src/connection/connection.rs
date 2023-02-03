@@ -8,8 +8,8 @@ use std::{
 use naia_shared::{
     sequence_greater_than,
     serde::{BitReader, BitWriter, Serde, SerdeErr},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, HostType,
-    Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldRefType,
+    BaseConnection, ChannelConfig, ConnectionConfig, EntityConverter, HostType,
+    Instant, PacketType, PingManager, StandardHeader, Tick, WorldRefType,
 };
 
 use crate::{
@@ -74,7 +74,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
         &mut self,
         server_and_client_tick_opt: Option<(Tick, Tick)>,
         reader: &mut BitReader,
-        world_record: &WorldRecord<E, P::Kind>,
+        world_record: &WorldRecord<E>,
     ) -> Result<(), SerdeErr> {
         let converter = EntityConverter::new(world_record, &self.entity_manager);
         let channel_reader = ProtocolIo::new(&converter);

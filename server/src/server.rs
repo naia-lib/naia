@@ -12,7 +12,7 @@ use log::warn;
 use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{serde::{BitWriter, Serde}, BigMap, ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, PacketType, PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, Protocol, Channel};
+use naia_shared::{serde::{BitWriter, Serde}, BigMap, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, PacketType, PropertyMutator, Replicate, ReplicateSafe, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, Protocol, Channel, Components};
 
 use crate::{
     connection::{
@@ -654,13 +654,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Removes a Component from an Entity
-    pub(crate) fn remove_component<R: Replicate<P>, W: WorldMutType<P, E>>(
+    pub(crate) fn remove_component<R: Replicate, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,
     ) -> Option<R> {
         // get component key from type
-        let component_kind = P::kind_of::<R>();
+        let component_kind = Components::kind_of::<R>();
 
         // clean up component on all connections
 

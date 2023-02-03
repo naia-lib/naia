@@ -4,9 +4,9 @@ use ring::{hmac, rand};
 
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde, SerdeErr},
-    wrapping_diff, BaseConnection, ChannelIndex, ConnectionConfig, FakeEntityConverter, Instant,
-    KeyGenerator, PacketType, PropertyMutate, PropertyMutator, ProtocolKindType, Protocolize,
-    Replicate, ReplicateSafe, SharedConfig, StandardHeader, Timer, WorldMutType, WorldRefType,
+    wrapping_diff, BaseConnection, ConnectionConfig, FakeEntityConverter, Instant,
+    KeyGenerator, PacketType, PropertyMutate, PropertyMutator,
+    Replicate, ReplicateSafe, StandardHeader, Timer, WorldMutType, WorldRefType, Message,
 };
 
 use crate::cache_map::CacheMap;
@@ -15,20 +15,19 @@ use super::connection::Connection;
 
 pub type Timestamp = u64;
 
-pub enum HandshakeResult<P: Protocolize> {
+pub enum HandshakeResult {
     Invalid,
-    Success(Option<P>),
+    Success(Option<Box<dyn Message>>),
 }
 
-pub struct HandshakeManager<P: Protocolize> {
+pub struct HandshakeManager {
     connection_hash_key: hmac::Key,
     require_auth: bool,
     address_to_timestamp_map: HashMap<SocketAddr, Timestamp>,
     timestamp_digest_map: CacheMap<Timestamp, Vec<u8>>,
-    phantom: PhantomData<P>,
 }
 
-impl<P: Protocolize> HandshakeManager<P> {
+impl HandshakeManager {
     pub fn new(require_auth: bool) -> Self {
         let connection_hash_key =
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
@@ -38,7 +37,6 @@ impl<P: Protocolize> HandshakeManager<P> {
             require_auth,
             address_to_timestamp_map: HashMap::new(),
             timestamp_digest_map: CacheMap::with_capacity(64),
-            phantom: PhantomData,
         }
     }
 
@@ -77,7 +75,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         &mut self,
         address: &SocketAddr,
         reader: &mut BitReader,
-    ) -> HandshakeResult<P> {
+    ) -> HandshakeResult {
         // Verify that timestamp hash has been written by this
         // server instance
         if let Some(timestamp) = self.timestamp_validate(reader) {
@@ -90,7 +88,7 @@ impl<P: Protocolize> HandshakeManager<P> {
                 self.address_to_timestamp_map.insert(*address, timestamp);
 
                 if has_auth {
-                    if let Ok(auth_message) = P::read(reader, &FakeEntityConverter) {
+                    if let Ok(auth_message) = ReplicateSafe::read(reader, &FakeEntityConverter) {
                         HandshakeResult::Success(Some(auth_message))
                     } else {
                         HandshakeResult::Invalid

@@ -4,7 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use naia_shared::{BigMapKey, ChannelIndex, Protocolize};
+use naia_shared::BigMapKey;
 
 use crate::{RoomKey, Server};
 

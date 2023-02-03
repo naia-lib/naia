@@ -2,18 +2,18 @@ use std::collections::HashMap;
 
 use naia_shared::{
     serde::{BitReader, Serde, SerdeErr},
-    ChannelConfig, ChannelIndex, ChannelMode, ChannelReader, Protocolize, Tick,
+    ChannelConfig, ChannelMode, ChannelReader, Tick,
 };
 use crate::Events;
 
 use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
 
-pub struct TickBufferReceiver<P: Protocolize, C: ChannelIndex> {
-    channel_receivers: HashMap<C, ChannelTickBufferReceiver<P>>,
+pub struct TickBufferReceiver {
+    channel_receivers: HashMap<ChannelId, ChannelTickBufferReceiver>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> TickBufferReceiver<P, C> {
-    pub fn new(channel_config: &ChannelConfig<C>) -> Self {
+impl TickBufferReceiver {
+    pub fn new(channel_config: &ChannelConfig) -> Self {
         // initialize receivers
         let mut channel_receivers = HashMap::new();
         for (channel_index, channel) in channel_config.channels() {

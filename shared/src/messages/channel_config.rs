@@ -4,7 +4,6 @@ use crate::{serde::Serde, types::ChannelId};
 
 // ChannelType
 pub trait Channel {
-    fn new() -> Self;
 }
 
 // ChannelConfig

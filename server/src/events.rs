@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::vec::IntoIter;
 
-use naia_shared::{Channel, ChannelIndex, ChannelType, Protocolize};
+use naia_shared::Channel;
 
 use crate::NaiaServerError;
 use super::user::{User, UserKey};

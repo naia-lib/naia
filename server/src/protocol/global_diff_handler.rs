@@ -1,7 +1,6 @@
 use std::{collections::HashMap, hash::Hash, net::SocketAddr};
-use bevy_ecs::component::ComponentId;
 
-use naia_shared::ProtocolKindType;
+use naia_shared::ComponentId;
 
 use super::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
