@@ -40,8 +40,7 @@ impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
     }
 
     pub fn deregister_component(&mut self, entity: &E, component_id: &ComponentId) {
-        self.mut_receiver_builders
-            .remove(&(*entity, *component_id));
+        self.mut_receiver_builders.remove(&(*entity, *component_id));
     }
 
     pub fn receiver(

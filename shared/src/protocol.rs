@@ -1,7 +1,3 @@
-pub struct Protocol {
+pub struct Protocol {}
 
-}
-
-impl Protocol {
-
-}
+impl Protocol {}

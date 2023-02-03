@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    serde::SerdeErr, BigMap, ComponentUpdate, NetEntityHandleConverter,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
-    Replicate, ReplicateSafe, WorldMutType, WorldRefType, ComponentId, Components,
+    serde::SerdeErr, BigMap, ComponentId, ComponentUpdate, Components, NetEntityHandleConverter,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    ReplicateSafe, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -170,10 +170,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         output
     }
 
-    fn component_mut<R: ReplicateSafe>(
-        &mut self,
-        entity: &Entity,
-    ) -> Option<ReplicaMutWrapper<R>> {
+    fn component_mut<R: ReplicateSafe>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             if let Some(boxed_component) = component_map.get_mut(&Components::kind_of::<R>()) {
                 if let Some(raw_ref) = Components::cast_mut::<R>(boxed_component) {
@@ -236,7 +233,6 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn insert_component<R: ReplicateSafe>(&mut self, entity: &Entity, component: R) {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-
             let component_kind = Components::kind_of::<R>();
             if component_map.contains_key(&component_kind) {
                 panic!("Entity already has a Component of that type!");
@@ -254,7 +250,11 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         None
     }
 
-    fn remove_component_of_kind(&mut self, entity: &Entity, component_kind: &ComponentId) -> Option<Box<dyn ReplicateSafe>> {
+    fn remove_component_of_kind(
+        &mut self,
+        entity: &Entity,
+        component_kind: &ComponentId,
+    ) -> Option<Box<dyn ReplicateSafe>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             return component_map.remove(component_kind);
         }
@@ -293,11 +293,7 @@ fn has_component<R: ReplicateSafe>(world: &World, entity: &Entity) -> bool {
     false
 }
 
-fn has_component_of_type(
-    world: &World,
-    entity: &Entity,
-    component_type: &ComponentId,
-) -> bool {
+fn has_component_of_type(world: &World, entity: &Entity, component_type: &ComponentId) -> bool {
     if let Some(component_map) = world.entities.get(entity) {
         return component_map.contains_key(component_type);
     }

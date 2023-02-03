@@ -183,7 +183,9 @@ impl App {
                 }
             }
         }
-        for UpdateComponentEvent(server_tick, updated_entity, _updated_component_type) in events.read() {
+        for UpdateComponentEvent(server_tick, updated_entity, _updated_component_type) in
+            events.read()
+        {
             if let Some(owned_entity) = &self.owned_entity {
                 let server_entity = owned_entity.confirmed;
 

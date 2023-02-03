@@ -28,7 +28,12 @@ impl<E: Copy + Eq + Hash> Default for EntityMessageWaitlist<E> {
 }
 
 impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
-    pub fn queue_message(&mut self, entities: Vec<E>, channel: ChannelId, message: Box<dyn Message>) {
+    pub fn queue_message(
+        &mut self,
+        entities: Vec<E>,
+        channel: ChannelId,
+        message: Box<dyn Message>,
+    ) {
         let new_handle = self.message_handle_store.generate();
 
         for entity in &entities {

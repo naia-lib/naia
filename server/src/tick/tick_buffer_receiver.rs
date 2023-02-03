@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
+use crate::Events;
 use naia_shared::{
     serde::{BitReader, Serde, SerdeErr},
     ChannelConfig, ChannelMode, ChannelReader, Tick,
 };
-use crate::Events;
 
 use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
 

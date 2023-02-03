@@ -1,3 +1,1 @@
-pub trait MessageReceivable {
-
-}
+pub trait MessageReceivable {}

@@ -4,10 +4,7 @@ use naia_serde::{BitWriter, Serde};
 
 use crate::{
     backends::Timer,
-    messages::{
-        channel_config::ChannelConfig,
-        message_manager::MessageManager,
-    },
+    messages::{channel_config::ChannelConfig, message_manager::MessageManager},
     types::{HostType, PacketIndex},
 };
 

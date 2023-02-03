@@ -1,6 +1,10 @@
 use std::collections::{HashMap, VecDeque};
 
-use naia_shared::{sequence_greater_than, serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger}, ChannelReader, ShortMessageIndex, Tick, Message};
+use naia_shared::{
+    sequence_greater_than,
+    serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
+    ChannelReader, Message, ShortMessageIndex, Tick,
+};
 
 use crate::Events;
 
@@ -201,7 +205,6 @@ impl IncomingMessages {
             }
         }
     }
-
 
     /// Retrieve from the buffer data corresponding to the provided [`Tick`]
     pub fn collect(&mut self, host_tick: &Tick) -> Vec<P> {

@@ -9,9 +9,9 @@ use std::{
 
 use naia_shared::{
     serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, DiffMask, EntityAction, EntityActionType, EntityConverter,
-    Instant, MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
-    PacketNotifiable, ReplicateSafe, WorldRefType, ComponentId
+    wrapping_diff, ComponentId, DiffMask, EntityAction, EntityActionType, EntityConverter, Instant,
+    MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable,
+    ReplicateSafe, WorldRefType,
 };
 
 use crate::sequence_list::SequenceList;
@@ -46,10 +46,7 @@ pub struct EntityManager<E: Copy + Eq + Hash + Send + Sync> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
     /// Create a new EntityManager, given the client's address
-    pub fn new(
-        address: SocketAddr,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
-    ) -> Self {
+    pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>) -> Self {
         EntityManager {
             // World
             world_channel: WorldChannel::new(address, diff_handler),
@@ -91,12 +88,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     // Messages
 
-    pub fn queue_entity_message(
-        &mut self,
-        entities: Vec<E>,
-        channel: C,
-        message: &R,
-    ) {
+    pub fn queue_entity_message(&mut self, entities: Vec<E>, channel: C, message: &R) {
         self.world_channel.delayed_entity_messages.queue_message(
             entities,
             channel,
@@ -667,12 +659,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         }
     }
 
-    fn warn_overflow_update(
-        &self,
-        component_kind: &ComponentId,
-        bits_needed: u16,
-        bits_free: u16,
-    ) {
+    fn warn_overflow_update(&self, component_kind: &ComponentId, bits_needed: u16, bits_free: u16) {
         let component_name = component_kind.name();
         panic!(
             "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"

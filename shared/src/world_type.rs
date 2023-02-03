@@ -1,14 +1,14 @@
 use naia_serde::SerdeErr;
 
+use crate::types::ComponentId;
 use crate::{
-    entity::entity_property::NetEntityHandleConverter,
     component::{
         component_update::ComponentUpdate,
         replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
-        replicate::{ReplicateSafe,Replicate},
+        replicate::{Replicate, ReplicateSafe},
     },
+    entity::entity_property::NetEntityHandleConverter,
 };
-use crate::types::ComponentId;
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
@@ -26,10 +26,7 @@ pub trait WorldRefType<E> {
     /// check whether entity contains component, dynamically
     fn has_component_of_kind(&self, entity: &E, component_id: &ComponentId) -> bool;
     /// gets an entity's component
-    fn component<'a, R: ReplicateSafe>(
-        &'a self,
-        entity: &E,
-    ) -> Option<ReplicaRefWrapper<'a, R>>;
+    fn component<'a, R: ReplicateSafe>(&'a self, entity: &E) -> Option<ReplicaRefWrapper<'a, R>>;
     /// gets an entity's component, dynamically
     fn component_of_kind<'a>(
         &'a self,
@@ -84,5 +81,9 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// remove a component
     fn remove_component<R: Replicate>(&mut self, entity: &E) -> Option<R>;
     /// remove a component by kind
-    fn remove_component_of_kind(&mut self, entity: &E, component_id: &ComponentId) -> Option<Box<dyn ReplicateSafe>>;
+    fn remove_component_of_kind(
+        &mut self,
+        entity: &E,
+        component_id: &ComponentId,
+    ) -> Option<Box<dyn ReplicateSafe>>;
 }

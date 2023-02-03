@@ -26,10 +26,10 @@ pub use naia_serde as serde;
 pub use serde::derive_serde;
 
 mod backends;
-mod connection;
-mod messages;
-mod entity;
 mod component;
+mod connection;
+mod entity;
+mod messages;
 
 mod bigmap;
 mod constants;
@@ -40,6 +40,18 @@ mod world_type;
 mod wrapping_number;
 
 pub use backends::{Timer, Timestamp};
+pub use component::{
+    component_update::ComponentUpdate,
+    diff_mask::DiffMask,
+    property::Property,
+    property_mutate::{PropertyMutate, PropertyMutator},
+    replica_ref::{
+        ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,
+        ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
+        ReplicaRefWrapper,
+    },
+    replicate::{Components, Replicate, ReplicateSafe},
+};
 pub use connection::{
     ack_manager::AckManager,
     bandwidth_monitor::BandwidthMonitor,
@@ -54,21 +66,6 @@ pub use connection::{
     ping_manager::{PingIndex, PingManager},
     standard_header::StandardHeader,
 };
-pub use messages::{
-    message::{Message, Messages},
-    channel_config::{
-        Channel, ChannelConfig, ChannelDirection, ChannelMode,
-        ReliableSettings, TickBufferSettings,
-    },
-    message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
-    message_manager::MessageManager,
-    ordered_reliable_receiver::OrderedReliableReceiver,
-    reliable_sender::ReliableSender,
-    unordered_reliable_receiver::UnorderedReliableReceiver,
-    message_receivable::MessageReceivable,
-    named::Named,
-    protocol_io::ProtocolIo,
-};
 pub use entity::{
     entity_action::EntityAction,
     entity_action_receiver::EntityActionReceiver,
@@ -80,23 +77,27 @@ pub use entity::{
     },
     net_entity::NetEntity,
 };
-pub use component::{
-    component_update::ComponentUpdate,
-    diff_mask::DiffMask,
-    property::Property,
-    property_mutate::{PropertyMutate, PropertyMutator},
-    replica_ref::{
-        ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,
-        ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
-        ReplicaRefWrapper,
+pub use messages::{
+    channel_config::{
+        Channel, ChannelConfig, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings,
     },
-    replicate::{Replicate, ReplicateSafe, Components},
+    message::{Message, Messages},
+    message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
+    message_manager::MessageManager,
+    message_receivable::MessageReceivable,
+    named::Named,
+    ordered_reliable_receiver::OrderedReliableReceiver,
+    protocol_io::ProtocolIo,
+    reliable_sender::ReliableSender,
+    unordered_reliable_receiver::UnorderedReliableReceiver,
 };
 
 pub use bigmap::{BigMap, BigMapKey};
 pub use constants::MESSAGE_HISTORY_SIZE;
 pub use key_generator::KeyGenerator;
 pub use protocol::Protocol;
-pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick, ComponentId, ChannelId, MessageId};
+pub use types::{
+    ChannelId, ComponentId, HostType, MessageId, MessageIndex, PacketIndex, ShortMessageIndex, Tick,
+};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

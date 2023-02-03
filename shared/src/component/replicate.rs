@@ -1,26 +1,21 @@
 use naia_serde::{BitWrite, SerdeErr};
 
-use crate::{entity::{
-    entity_handle::EntityHandle,
-    entity_property::NetEntityHandleConverter,
-},
-component::{
-    component_update::ComponentUpdate,
-    diff_mask::DiffMask,
-    property_mutate::PropertyMutator,
-    replica_ref::{ReplicaDynMut, ReplicaDynRef},
-}};
 use crate::messages::named::Named;
 use crate::types::ComponentId;
+use crate::{
+    component::{
+        component_update::ComponentUpdate,
+        diff_mask::DiffMask,
+        property_mutate::PropertyMutator,
+        replica_ref::{ReplicaDynMut, ReplicaDynRef},
+    },
+    entity::{entity_handle::EntityHandle, entity_property::NetEntityHandleConverter},
+};
 
 /// A map to hold all component types
-pub struct Components {
+pub struct Components {}
 
-}
-
-impl Components {
-
-}
+impl Components {}
 
 impl Components {
     pub fn kind_of<R: ReplicateSafe>() -> ComponentId {
@@ -32,7 +27,9 @@ impl Components {
     pub fn cast_ref<R: ReplicateSafe>(boxed_component: &Box<dyn ReplicateSafe>) -> Option<&R> {
         todo!()
     }
-    pub fn cast_mut<R: ReplicateSafe>(boxed_component: &mut Box<dyn ReplicateSafe>) -> Option<&mut R> {
+    pub fn cast_mut<R: ReplicateSafe>(
+        boxed_component: &mut Box<dyn ReplicateSafe>,
+    ) -> Option<&mut R> {
         todo!()
     }
 }
@@ -40,9 +37,7 @@ impl Components {
 /// A struct that implements Replicate is a Message/Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
-pub trait Replicate: ReplicateSafe + Clone {
-
-}
+pub trait Replicate: ReplicateSafe + Clone {}
 
 /// The part of Replicate which is object-safe
 pub trait ReplicateSafe: ReplicateInner + Named {

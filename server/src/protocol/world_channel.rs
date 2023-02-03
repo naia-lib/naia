@@ -5,7 +5,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{ChannelSender, ComponentId, EntityAction, EntityActionReceiver, Instant, KeyGenerator, NetEntity, ReliableSender};
+use naia_shared::{
+    ChannelSender, ComponentId, EntityAction, EntityActionReceiver, Instant, KeyGenerator,
+    NetEntity, ReliableSender,
+};
 
 use crate::protocol::{
     entity_action_event::EntityActionEvent, entity_manager::ActionId,
@@ -56,10 +59,7 @@ pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
-    pub fn new(
-        address: SocketAddr,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
-    ) -> Self {
+    pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>) -> Self {
         Self {
             host_world: CheckedMap::new(),
             remote_world: CheckedMap::new(),

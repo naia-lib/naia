@@ -9,9 +9,7 @@ pub struct ComponentRef<'a, R: ReplicateSafe> {
 
 impl<'a, R: ReplicateSafe> ComponentRef<'a, R> {
     pub fn new(inner: &'a R) -> Self {
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 }
 
@@ -28,9 +26,7 @@ pub struct ComponentMut<'a, R: ReplicateSafe> {
 
 impl<'a, R: ReplicateSafe> ComponentMut<'a, R> {
     pub fn new(inner: &'a mut R) -> Self {
-        Self {
-            inner,
-        }
+        Self { inner }
     }
 }
 

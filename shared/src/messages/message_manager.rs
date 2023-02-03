@@ -3,7 +3,11 @@ use std::collections::HashMap;
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{connection::packet_notifiable::PacketNotifiable, Message, MessageReceivable, ReplicateSafe, types::{HostType, MessageIndex, PacketIndex, ChannelId}};
+use crate::{
+    connection::packet_notifiable::PacketNotifiable,
+    types::{ChannelId, HostType, MessageIndex, PacketIndex},
+    Message, MessageReceivable, ReplicateSafe,
+};
 
 use super::{
     channel_config::{ChannelConfig, ChannelMode},
@@ -32,7 +36,8 @@ impl MessageManager {
         // initialize all reliable channels
 
         // initialize senders
-        let mut channel_senders = HashMap::<ChannelId, Box<dyn ChannelSender<Box<dyn Message>>>>::new();
+        let mut channel_senders =
+            HashMap::<ChannelId, Box<dyn ChannelSender<Box<dyn Message>>>>::new();
         for (channel_id, channel) in channel_config.channels() {
             match &host_type {
                 HostType::Server => {
@@ -49,23 +54,19 @@ impl MessageManager {
 
             match &channel.mode {
                 ChannelMode::UnorderedUnreliable => {
-                    channel_senders.insert(
-                        *channel_id,
-                        Box::new(UnorderedUnreliableSender::new()),
-                    );
+                    channel_senders.insert(*channel_id, Box::new(UnorderedUnreliableSender::new()));
                 }
                 ChannelMode::SequencedUnreliable => {
-                    channel_senders.insert(
-                        *channel_id,
-                        Box::new(SequencedUnreliableSender::new()),
-                    );
+                    channel_senders.insert(*channel_id, Box::new(SequencedUnreliableSender::new()));
                 }
                 ChannelMode::UnorderedReliable(settings)
                 | ChannelMode::SequencedReliable(settings)
                 | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         *channel_id,
-                        Box::new(ReliableSender::<Box<dyn Message>>::new(settings.rtt_resend_factor)),
+                        Box::new(ReliableSender::<Box<dyn Message>>::new(
+                            settings.rtt_resend_factor,
+                        )),
                     );
                 }
                 _ => {}
@@ -73,7 +74,8 @@ impl MessageManager {
         }
 
         // initialize receivers
-        let mut channel_receivers = HashMap::<ChannelId, Box<dyn ChannelReceiver<Box<dyn Message>>>>::new();
+        let mut channel_receivers =
+            HashMap::<ChannelId, Box<dyn ChannelReceiver<Box<dyn Message>>>>::new();
         for (channel_index, channel) in channel_config.channels() {
             match &host_type {
                 HostType::Server => {
@@ -229,7 +231,6 @@ impl MessageManager {
 
     /// Retrieve all messages from the channel buffers
     pub fn receive_messages(&mut self, incoming_messages: &mut dyn MessageReceivable) {
-
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_index, channel) in &mut self.channel_receivers {
             let mut messages = channel.receive_messages();

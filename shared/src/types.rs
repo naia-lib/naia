@@ -1,5 +1,5 @@
-use std::ops::{Deref, DerefMut};
 use crate::{derive_serde, serde};
+use std::ops::{Deref, DerefMut};
 
 pub type PacketIndex = u16;
 pub type Tick = u16;
@@ -14,13 +14,11 @@ pub enum HostType {
 #[derive(Eq, Hash, Copy)]
 #[derive_serde]
 pub struct ComponentId {
-    inner: u16
+    inner: u16,
 }
 impl ComponentId {
     pub fn new(value: u16) -> Self {
-        Self {
-            inner: value
-        }
+        Self { inner: value }
     }
 }
 impl Deref for ComponentId {
@@ -40,13 +38,11 @@ impl DerefMut for ComponentId {
 #[derive(Eq, Hash, Copy)]
 #[derive_serde]
 pub struct MessageId {
-    inner: u16
+    inner: u16,
 }
 impl MessageId {
     pub fn new(value: u16) -> Self {
-        Self {
-            inner: value
-        }
+        Self { inner: value }
     }
 }
 impl Deref for MessageId {
@@ -66,13 +62,11 @@ impl DerefMut for MessageId {
 #[derive(Eq, Hash, Copy)]
 #[derive_serde]
 pub struct ChannelId {
-    inner: u16
+    inner: u16,
 }
 impl ChannelId {
     pub fn new(value: u16) -> Self {
-        Self {
-            inner: value
-        }
+        Self { inner: value }
     }
 }
 impl Deref for ChannelId {

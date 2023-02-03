@@ -8,8 +8,8 @@ use std::{
 use naia_shared::{
     sequence_greater_than,
     serde::{BitReader, BitWriter, Serde, SerdeErr},
-    BaseConnection, ChannelConfig, ConnectionConfig, EntityConverter, HostType,
-    Instant, PacketType, PingManager, StandardHeader, Tick, WorldRefType,
+    BaseConnection, ChannelConfig, ConnectionConfig, EntityConverter, HostType, Instant,
+    PacketType, PingManager, StandardHeader, Tick, WorldRefType,
 };
 
 use crate::{

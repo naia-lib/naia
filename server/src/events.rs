@@ -5,8 +5,8 @@ use std::vec::IntoIter;
 
 use naia_shared::Channel;
 
-use crate::NaiaServerError;
 use super::user::{User, UserKey};
+use crate::NaiaServerError;
 
 pub struct Events {
     connections: Vec<(UserKey)>,
@@ -96,14 +96,11 @@ impl Events {
     }
 }
 
-
-
 // Event Trait
 pub trait Event {
     type Iter;
 
     fn iter(events: &mut Events) -> Self::Iter;
-
 }
 
 // ConnectEvent
@@ -161,7 +158,9 @@ impl<M: 'static> Event for AuthorizationEvent<M> {
             let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
             for (user_key, boxed_auth) in boxed_list {
-                let message: M = *boxed_auth.downcast::<M>().expect("shouldn't be possible here?");
+                let message: M = *boxed_auth
+                    .downcast::<M>()
+                    .expect("shouldn't be possible here?");
                 output_list.push((user_key, message));
             }
 
@@ -185,7 +184,9 @@ impl<C: ChannelType + 'static, M: 'static> Event for MessageEvent<C, M> {
                 let mut output_list: Vec<(UserKey, C, M)> = Vec::new();
 
                 for (user_key, boxed_auth) in boxed_list {
-                    let message: M = *boxed_auth.downcast::<M>().expect("shouldn't be possible here?");
+                    let message: M = *boxed_auth
+                        .downcast::<M>()
+                        .expect("shouldn't be possible here?");
                     output_list.push((user_key, C::new(), message));
                 }
 
@@ -195,5 +196,3 @@ impl<C: ChannelType + 'static, M: 'static> Event for MessageEvent<C, M> {
         return IntoIterator::into_iter(Vec::new());
     }
 }
-
-

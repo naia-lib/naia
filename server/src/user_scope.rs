@@ -7,8 +7,7 @@ pub struct UserScopeMut<'s, E: Copy + Eq + Hash + Send + Sync> {
     key: UserKey,
 }
 
-impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeMut<'s, E>
-{
+impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeMut<'s, E> {
     pub fn new(server: &'s mut Server<E>, key: &UserKey) -> Self {
         UserScopeMut { server, key: *key }
     }

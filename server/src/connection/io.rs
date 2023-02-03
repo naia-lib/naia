@@ -5,9 +5,8 @@ use naia_server_socket::{NaiaServerSocketError, PacketReceiver, PacketSender};
 pub use naia_shared::{
     serde::{BitWriter, OwnedBitReader},
     wrapping_diff, BaseConnection, CompressionConfig, ConnectionConfig, Decoder, Encoder, Instant,
-    KeyGenerator, PacketType, PropertyMutate, PropertyMutator,
-    Replicate, ReplicateSafe, StandardHeader, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+    KeyGenerator, PacketType, PropertyMutate, PropertyMutator, Replicate, ReplicateSafe,
+    StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use super::bandwidth_monitor::BandwidthMonitor;

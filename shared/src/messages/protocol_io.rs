@@ -1,4 +1,7 @@
-use crate::{Message, Messages, messages::message_channel::{ChannelReader, ChannelWriter}, NetEntityHandleConverter};
+use crate::{
+    messages::message_channel::{ChannelReader, ChannelWriter},
+    Message, Messages, NetEntityHandleConverter,
+};
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
 pub struct ProtocolIo<'c> {

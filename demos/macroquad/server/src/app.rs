@@ -1,17 +1,19 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
-use naia_server::{shared::Random, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
-                  AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent, TickEvent, ErrorEvent};
+use naia_server::{
+    shared::Random, AuthorizationEvent, ConnectionEvent, DisconnectionEvent, ErrorEvent,
+    MessageEvent, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent, UserKey,
+};
 
 use naia_demo_world::{Entity, World as DemoWorld};
 
+use naia_macroquad_demo_shared::protocol::PlayerCommandChannel;
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
-    protocol::{Color, EntityAssignment, KeyCommand, Marker, Protocol, Square, Auth},
+    channels::{Channels, PlayerCommandChannel},
+    protocol::{Auth, Color, EntityAssignment, KeyCommand, Marker, Protocol, Square},
     shared_config,
-    channels::{PlayerCommandChannel, Channels},
 };
-use naia_macroquad_demo_shared::protocol::PlayerCommandChannel;
 
 type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity, Channels>;
@@ -121,11 +123,8 @@ impl App {
             // TODO: eventually would like to do this like:
             // self.server.entity_property(assigment_message).set(&entity_id);
 
-            self.server.send_message(
-                &user_key,
-                Channels::EntityAssignment,
-                &assignment_message,
-            );
+            self.server
+                .send_message(&user_key, Channels::EntityAssignment, &assignment_message);
         }
         for (user_key, user) in events.read::<DisconnectionEvent>() {
             info!("Naia Server disconnected from: {}", user.address);
@@ -137,7 +136,9 @@ impl App {
                 self.square_last_command.remove(&entity);
             }
         }
-        for (user_key, key_command) in events.read::<MessageEvent<PlayerCommandChannel, KeyCommand>>() {
+        for (user_key, key_command) in
+            events.read::<MessageEvent<PlayerCommandChannel, KeyCommand>>()
+        {
             if let Some(entity) = &key_command.entity.get(&self.server) {
                 self.square_last_command.insert(*entity, key_command);
             }

@@ -3,8 +3,7 @@ use std::{collections::HashMap, hash::Hash};
 use crate::{serde::Serde, types::ChannelId};
 
 // ChannelType
-pub trait Channel {
-}
+pub trait Channel {}
 
 // ChannelConfig
 //#[derive(Clone)]
@@ -48,10 +47,7 @@ impl ChannelSettings {
             panic!("TickBuffered Messages are only allowed to be sent from Client to Server");
         }
 
-        Self {
-            mode,
-            direction,
-        }
+        Self { mode, direction }
     }
 
     pub fn reliable(&self) -> bool {

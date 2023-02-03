@@ -24,7 +24,12 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
     }
 
     // Component Registration
-    pub fn register_component(&mut self, addr: &SocketAddr, entity: &E, component_kind: &ComponentId) {
+    pub fn register_component(
+        &mut self,
+        addr: &SocketAddr,
+        entity: &E,
+        component_kind: &ComponentId,
+    ) {
         if let Ok(global_handler) = self.global_diff_handler.as_ref().read() {
             let receiver = global_handler
                 .receiver(addr, entity, component_kind)
@@ -42,7 +47,11 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
     }
 
     // Diff masks
-    pub fn diff_mask(&self, entity: &E, component_kind: &ComponentId) -> Option<RwLockReadGuard<DiffMask>> {
+    pub fn diff_mask(
+        &self,
+        entity: &E,
+        component_kind: &ComponentId,
+    ) -> Option<RwLockReadGuard<DiffMask>> {
         if let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) {
             return receiver.mask();
         }
@@ -60,7 +69,12 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
         None
     }
 
-    pub fn or_diff_mask(&mut self, entity: &E, component_kind: &ComponentId, other_mask: &DiffMask) {
+    pub fn or_diff_mask(
+        &mut self,
+        entity: &E,
+        component_kind: &ComponentId,
+        other_mask: &DiffMask,
+    ) {
         let current_diff_mask = self.receivers.get_mut(&(*entity, *component_kind)).unwrap();
         current_diff_mask.or_mask(other_mask);
     }

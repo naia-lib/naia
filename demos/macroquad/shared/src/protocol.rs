@@ -1,8 +1,9 @@
 use std::time::Duration;
 
-use naia_shared::{LinkConditionerConfig, SocketConfig, Channel,
-                  ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings,
-                  Protocol};
+use naia_shared::{
+    Channel, ChannelDirection, ChannelMode, LinkConditionerConfig, Protocol, ReliableSettings,
+    SocketConfig, TickBufferSettings,
+};
 
 mod auth;
 mod entity_assignment;
@@ -25,7 +26,6 @@ impl Channel for EntityAssignmentChannel {}
 
 // Protocol Build
 pub fn protocol() -> Protocol {
-
     Protocol::builder()
         // Config
         .tick_interval(Duration::from_millis(20))
@@ -33,7 +33,7 @@ pub fn protocol() -> Protocol {
         // Channels
         .add_channel::<PlayerCommandChannel>(
             ChannelDirection::ClientToServer,
-            ChannelMode::TickBuffered(TickBufferSettings::default())
+            ChannelMode::TickBuffered(TickBufferSettings::default()),
         )
         .add_channel::<EntityAssignmentChannel>(
             ChannelDirection::ServerToClient,

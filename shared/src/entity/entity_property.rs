@@ -4,13 +4,8 @@ use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::{
     bigmap::BigMapKey,
-    entity::{
-        entity_handle::EntityHandle, net_entity::NetEntity,
-    },
-    component:: {
-        property::Property,
-        property_mutate::PropertyMutator,
-    }
+    component::{property::Property, property_mutate::PropertyMutator},
+    entity::{entity_handle::EntityHandle, net_entity::NetEntity},
 };
 
 #[derive(Clone)]

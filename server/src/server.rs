@@ -12,7 +12,12 @@ use log::warn;
 use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{serde::{BitWriter, Serde}, BigMap, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, PacketType, PropertyMutator, Replicate, ReplicateSafe, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, Protocol, Channel, Components};
+use naia_shared::{
+    serde::{BitWriter, Serde},
+    BigMap, Channel, Components, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
+    Instant, PacketType, PropertyMutator, Protocol, Replicate, ReplicateSafe, StandardHeader, Tick,
+    Timer, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -142,7 +147,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let connection = self.user_connections.get_mut(user_address).unwrap();
 
             // receive messages from anyone
-            connection.base.message_manager.receive_messages(&mut self.incoming_events);
+            connection
+                .base
+                .message_manager
+                .receive_messages(&mut self.incoming_events);
         }
 
         // receive (retrieve from buffer) tick buffered messages for the current server tick
@@ -151,9 +159,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             for user_address in &user_addresses {
                 let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                connection
-                    .tick_buffer
-                    .receive_messages(&self.tick_manager.as_ref().unwrap().server_tick(), &mut self.incoming_events);
+                connection.tick_buffer.receive_messages(
+                    &self.tick_manager.as_ref().unwrap().server_tick(),
+                    &mut self.incoming_events,
+                );
             }
 
             self.incoming_events.push_tick();
@@ -239,12 +248,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         channel: &dyn Channel,
         message: Box<dyn Message>,
     ) {
-        if !self
-            .protocol
-            .channel
-            .channel(&channel)
-            .can_send_to_client()
-        {
+        if !self.protocol.channel.channel(&channel).can_send_to_client() {
             panic!("Cannot send message to Client on this Channel");
         }
 
@@ -1187,7 +1191,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     break;
                 }
                 Err(error) => {
-                    self.incoming_events.push_error(NaiaServerError::Wrapped(Box::new(error)));
+                    self.incoming_events
+                        .push_error(NaiaServerError::Wrapped(Box::new(error)));
                 }
             }
         }

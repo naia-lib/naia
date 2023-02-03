@@ -30,7 +30,10 @@ mod user;
 mod user_scope;
 
 pub use error::NaiaServerError;
-pub use events::{Events, AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent, ErrorEvent, TickEvent};
+pub use events::{
+    AuthorizationEvent, ConnectionEvent, DisconnectionEvent, ErrorEvent, Events, MessageEvent,
+    TickEvent,
+};
 pub use protocol::entity_ref::EntityRef;
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;

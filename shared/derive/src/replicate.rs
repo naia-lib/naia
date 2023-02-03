@@ -53,14 +53,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     // Replica Methods
     let new_complete_method =
         new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
-    let read_method = read_method(
-        &replica_name,
-        &enum_name,
-        &properties,
-        &struct_type,
-    );
-    let read_create_update_method =
-        read_create_update_method(&replica_name, &properties);
+    let read_method = read_method(&replica_name, &enum_name, &properties, &struct_type);
+    let read_create_update_method = read_create_update_method(&replica_name, &properties);
 
     // ReplicateSafe Derive Methods
     let diff_mask_size = {
@@ -76,8 +70,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let clone_method = clone_method(&replica_name, &properties, &struct_type);
     let mirror_method = mirror_method(&replica_name, &properties, &struct_type);
     let set_mutator_method = set_mutator_method(&properties, &struct_type);
-    let read_apply_update_method =
-        read_apply_update_method(&properties, &struct_type);
+    let read_apply_update_method = read_apply_update_method(&properties, &struct_type);
     let write_method = write_method(&properties, &struct_type);
     let write_update_method = write_update_method(&enum_name, &properties, &struct_type);
     let has_entity_properties = has_entity_properties_method(&properties);
@@ -717,10 +710,7 @@ pub fn read_method(
     }
 }
 
-pub fn read_create_update_method(
-    replica_name: &Ident,
-    properties: &[Property],
-) -> TokenStream {
+pub fn read_create_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {
@@ -776,10 +766,7 @@ pub fn read_create_update_method(
     }
 }
 
-fn read_apply_update_method(
-    properties: &[Property],
-    struct_type: &StructType,
-) -> TokenStream {
+fn read_apply_update_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
     for (index, property) in properties.iter().enumerate() {

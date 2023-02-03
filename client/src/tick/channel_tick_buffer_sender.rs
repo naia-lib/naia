@@ -5,8 +5,8 @@ use log::{info, warn};
 use naia_shared::{
     sequence_greater_than, sequence_less_than,
     serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelWriter, Instant, Protocolize, ShortMessageIndex, Tick, TickBufferSettings,
-    MESSAGE_HISTORY_SIZE,
+    wrapping_diff, ChannelWriter, Instant, Protocolize, ShortMessageIndex, Tick,
+    TickBufferSettings, MESSAGE_HISTORY_SIZE,
 };
 
 pub struct ChannelTickBufferSender<P: Protocolize> {
@@ -178,7 +178,12 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         self.sending_messages.remove_message(tick, message_id);
     }
 
-    fn warn_overflow(&self, messages: &Vec<(ShortMessageIndex, P)>, bits_needed: u16, bits_free: u16) {
+    fn warn_overflow(
+        &self,
+        messages: &Vec<(ShortMessageIndex, P)>,
+        bits_needed: u16,
+        bits_free: u16,
+    ) {
         let mut message_names = "".to_string();
         let mut added = false;
         for (_id, message) in messages {

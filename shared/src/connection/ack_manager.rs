@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    messages::message_manager::MessageManager,
-    types::PacketIndex,
+    messages::message_manager::MessageManager, types::PacketIndex,
     wrapping_number::sequence_greater_than,
 };
 
