@@ -149,7 +149,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             // receive messages from anyone
             let messages = connection.base.message_manager.receive_messages();
             for (channel, message) in messages {
-                self.incoming_events.push_message(&connection.user_key, channel, message);
+                self.incoming_events.push_message::<C, P>(&connection.user_key, message);
             }
         }
 
@@ -159,12 +159,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             for user_address in &user_addresses {
                 let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                let messages = connection
+                connection
                     .tick_buffer
-                    .receive_messages(&self.tick_manager.as_ref().unwrap().server_tick());
-                for (channel, message) in messages {
-                    self.incoming_events.push_message(&connection.user_key, channel, message);
-                }
+                    .receive_messages(&self.tick_manager.as_ref().unwrap().server_tick(), &mut self.incoming_events);
             }
 
             self.incoming_events.push_tick();

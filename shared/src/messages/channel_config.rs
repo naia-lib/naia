@@ -2,6 +2,11 @@ use std::{collections::HashMap, hash::Hash};
 
 use crate::serde::Serde;
 
+// ChannelType
+pub trait ChannelType {
+    fn new() -> Self;
+}
+
 // ChannelConfig
 #[derive(Clone)]
 pub struct ChannelConfig<C: ChannelIndex> {

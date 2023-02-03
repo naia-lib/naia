@@ -62,7 +62,7 @@ impl App {
             sleep(Duration::from_millis(5));
             return;
         }
-        for AuthorizationEvent::<Auth>(user_key, auth) in events.read() {
+        for (user_key, auth) in events.read::<AuthorizationEvent<Auth>>() {
             if *auth.username == "charlie" && *auth.password == "12345" {
                 // Accept incoming connection
                 self.server.accept_connection(&user_key);
@@ -71,7 +71,7 @@ impl App {
                 self.server.reject_connection(&user_key);
             }
         }
-        for ConnectionEvent(user_key) in events.read() {
+        for (user_key) in events.read::<ConnectionEvent>() {
             // New User has joined the Server
             let user_address = self
                 .server
@@ -126,7 +126,7 @@ impl App {
                 &assignment_message,
             );
         }
-        for DisconnectionEvent(user_key, user) in events.read() {
+        for (user_key, user) in events.read::<DisconnectionEvent>() {
             info!("Naia Server disconnected from: {}", user.address);
             if let Some(entity) = self.user_squares.remove(&user_key) {
                 self.server
@@ -136,12 +136,12 @@ impl App {
                 self.square_last_command.remove(&entity);
             }
         }
-        for MessageEvent::<PlayerCommandChannel, KeyCommand>(user_key, channel, key_command) in events.read() {
+        for (user_key, channel, key_command) in events.read::<MessageEvent<PlayerCommandChannel, KeyCommand>>() {
             if let Some(entity) = &key_command.entity.get(&self.server) {
                 self.square_last_command.insert(*entity, key_command);
             }
         }
-        for TickEvent in events.read() {
+        for _ in events.read::<TickEvent>() {
             // All game logic should happen here, on a tick event
 
             // Check whether Entities are in/out of all possible Scopes
@@ -171,7 +171,7 @@ impl App {
             // method, the Server will never communicate with it's connected Clients
             self.server.send_all_updates(self.world.proxy());
         }
-        for ErrorEvent(error) in events.read() {
+        for (error) in events.read::<ErrorEvent>() {
             info!("Naia Server error: {}", error);
         }
     }

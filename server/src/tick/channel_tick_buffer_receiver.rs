@@ -5,6 +5,7 @@ use naia_shared::{
     serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
     ChannelReader, Protocolize, ShortMessageId, Tick,
 };
+use crate::Events;
 
 /// Receive updates from the client and store them in a buffer along with the corresponding
 /// client tick.
@@ -20,8 +21,10 @@ impl<P: Protocolize> ChannelTickBufferReceiver<P> {
     }
 
     /// Read the stored buffer-data corresponding to the given [`Tick`]
-    pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<P> {
-        self.incoming_messages.collect(host_tick)
+    pub fn receive_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
+        let incoming_messages = self.incoming_messages.collect(host_tick);
+        // TODO: Really important Connor! Put these messages into `incoming_events`
+        // Otherwise no messages will be received!
     }
 
     /// Given incoming packet data, read transmitted Messages and store

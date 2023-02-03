@@ -1,6 +1,4 @@
-use naia_shared::{
-    derive_channels, Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings,
-};
+use naia_shared::{derive_channels, Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings, ChannelType};
 
 #[derive_channels]
 pub enum Channels {
@@ -10,6 +8,11 @@ pub enum Channels {
 
 // TODO: link these in with the enum and config
 pub struct PlayerCommandChannel;
+impl ChannelType for PlayerCommandChannel {
+    fn new() -> Self {
+        Self
+    }
+}
 pub struct EntityAssignmentChannel;
 
 pub const CHANNEL_CONFIG: &[Channel<Channels>] = &[

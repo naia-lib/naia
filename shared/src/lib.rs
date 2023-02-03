@@ -55,7 +55,7 @@ pub use connection::{
 };
 pub use messages::{
     channel_config::{
-        Channel, ChannelConfig, ChannelDirection, ChannelIndex, ChannelMode, DefaultChannels,
+        Channel, ChannelType, ChannelConfig, ChannelDirection, ChannelIndex, ChannelMode, DefaultChannels,
         ReliableSettings, TickBufferSettings,
     },
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},

@@ -4,6 +4,7 @@ use naia_shared::{
     serde::{BitReader, Serde, SerdeErr},
     ChannelConfig, ChannelIndex, ChannelMode, ChannelReader, Protocolize, Tick,
 };
+use crate::Events;
 
 use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
 
@@ -52,14 +53,9 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferReceiver<P, C> {
     }
 
     /// Retrieved stored data from the tick buffer for the given [`Tick`]
-    pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<(C, P)> {
-        let mut output = Vec::new();
-        for (channel_index, channel) in &mut self.channel_receivers {
-            let mut messages = channel.receive_messages(host_tick);
-            for message in messages.drain(..) {
-                output.push((channel_index.clone(), message));
-            }
+    pub fn receive_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
+        for (_channel_index, channel) in &mut self.channel_receivers {
+            channel.receive_messages(host_tick, incoming_events);
         }
-        output
     }
 }
