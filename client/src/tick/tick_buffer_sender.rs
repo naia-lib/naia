@@ -3,7 +3,7 @@ use std::{collections::HashMap, time::Duration};
 use naia_shared::{
     serde::{BitWrite, BitWriter, Serde},
     ChannelConfig, ChannelIndex, ChannelMode, ChannelWriter, PacketIndex, PacketNotifiable,
-    Protocolize, ShortMessageId, Tick,
+    Protocolize, ShortMessageIndex, Tick,
 };
 
 use super::channel_tick_buffer_sender::ChannelTickBufferSender;
@@ -11,7 +11,7 @@ use super::channel_tick_buffer_sender::ChannelTickBufferSender;
 pub struct TickBufferSender<P: Protocolize, C: ChannelIndex> {
     channel_senders: HashMap<C, ChannelTickBufferSender<P>>,
     #[allow(clippy::type_complexity)]
-    packet_to_channel_map: HashMap<PacketIndex, Vec<(C, Vec<(Tick, ShortMessageId)>)>>,
+    packet_to_channel_map: HashMap<PacketIndex, Vec<(C, Vec<(Tick, ShortMessageIndex)>)>>,
 }
 
 impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {

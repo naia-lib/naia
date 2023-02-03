@@ -1,4 +1,8 @@
-use naia_shared::Protocolize;
+use std::time::Duration;
+
+use naia_shared::{LinkConditionerConfig, SocketConfig, Channel,
+                  ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings,
+                  Protocol};
 
 mod auth;
 mod entity_assignment;
@@ -12,11 +16,28 @@ pub use key_command::KeyCommand;
 pub use marker::Marker;
 pub use square::{Color, Square};
 
-#[derive(Protocolize)]
-pub enum Protocol {
-    Auth(Auth),
-    EntityAssignment(EntityAssignment),
-    KeyCommand(KeyCommand),
-    Square(Square),
-    Marker(Marker),
+// Protocol Build
+pub fn protocol() -> Protocol {
+
+    Protocol::build()
+        .tick_interval(Duration::from_millis(20))
+        .link_condition(LinkConditionerConfig::average_condition())
+        // Channels
+        .add_channel::<PlayerCommandChannel>(
+            ChannelDirection::ClientToServer,
+            ChannelMode::TickBuffered(TickBufferSettings::default())
+        )
+        .add_channel::<EntityAssignmentChannel>(
+            ChannelDirection::ServerToClient,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        // Messages
+        .add_message::<Auth>()
+        .add_message::<EntityAssignment>()
+        .add_message::<KeyCommand>()
+        // Components
+        .add_component::<Square>()
+        .add_component::<Marker>()
+        // Build
+        .new()
 }

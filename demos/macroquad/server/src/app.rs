@@ -11,6 +11,7 @@ use naia_macroquad_demo_shared::{
     shared_config,
     channels::{PlayerCommandChannel, Channels},
 };
+use naia_macroquad_demo_shared::protocol::PlayerCommandChannel;
 
 type World = DemoWorld<Protocol>;
 type Server = NaiaServer<Protocol, Entity, Channels>;
@@ -136,7 +137,7 @@ impl App {
                 self.square_last_command.remove(&entity);
             }
         }
-        for (user_key, channel, key_command) in events.read::<MessageEvent<PlayerCommandChannel, KeyCommand>>() {
+        for (user_key, key_command) in events.read::<MessageEvent<PlayerCommandChannel, KeyCommand>>() {
             if let Some(entity) = &key_command.entity.get(&self.server) {
                 self.square_last_command.insert(*entity, key_command);
             }

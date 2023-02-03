@@ -1,14 +1,15 @@
 use std::{collections::HashMap, hash::Hash, net::SocketAddr};
+use bevy_ecs::component::ComponentId;
 
 use naia_shared::ProtocolKindType;
 
 use super::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
-pub struct GlobalDiffHandler<E: Copy + Eq + Hash, K: ProtocolKindType> {
-    mut_receiver_builders: HashMap<(E, K), MutReceiverBuilder>,
+pub struct GlobalDiffHandler<E: Copy + Eq + Hash> {
+    mut_receiver_builders: HashMap<(E, ComponentId), MutReceiverBuilder>,
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> Default for GlobalDiffHandler<E, K> {
+impl<E: Copy + Eq + Hash> Default for GlobalDiffHandler<E> {
     fn default() -> Self {
         Self {
             mut_receiver_builders: HashMap::default(),
@@ -16,17 +17,17 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> Default for GlobalDiffHandler<E, 
     }
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> GlobalDiffHandler<E, K> {
+impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
     // For Server
     pub fn register_component(
         &mut self,
         entity: &E,
-        component_kind: &K,
+        component_id: &ComponentId,
         diff_mask_length: u8,
     ) -> MutSender {
         if self
             .mut_receiver_builders
-            .contains_key(&(*entity, *component_kind))
+            .contains_key(&(*entity, *component_id))
         {
             panic!("Component cannot register with Server more than once!");
         }
@@ -34,23 +35,23 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> GlobalDiffHandler<E, K> {
         let (sender, builder) = MutChannel::new_channel(diff_mask_length);
 
         self.mut_receiver_builders
-            .insert((*entity, *component_kind), builder);
+            .insert((*entity, *component_id), builder);
 
         sender
     }
 
-    pub fn deregister_component(&mut self, entity: &E, component_kind: &K) {
+    pub fn deregister_component(&mut self, entity: &E, component_id: &ComponentId) {
         self.mut_receiver_builders
-            .remove(&(*entity, *component_kind));
+            .remove(&(*entity, *component_id));
     }
 
     pub fn receiver(
         &self,
         addr: &SocketAddr,
         entity: &E,
-        component_kind: &K,
+        component_id: &ComponentId,
     ) -> Option<MutReceiver> {
-        if let Some(builder) = self.mut_receiver_builders.get(&(*entity, *component_kind)) {
+        if let Some(builder) = self.mut_receiver_builders.get(&(*entity, *component_id)) {
             return builder.build(addr);
         }
         None

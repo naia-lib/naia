@@ -9,7 +9,6 @@ pub enum Color {
 }
 
 #[derive(Replicate)]
-#[protocol_path = "crate::protocol::Protocol"]
 pub struct Square {
     pub x: Property<u16>,
     pub y: Property<u16>,

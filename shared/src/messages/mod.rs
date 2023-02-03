@@ -11,3 +11,6 @@ pub mod sequenced_unreliable_sender;
 pub mod unordered_reliable_receiver;
 pub mod unordered_unreliable_receiver;
 pub mod unordered_unreliable_sender;
+pub mod message_receivable;
+pub mod message;
+pub mod named;

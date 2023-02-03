@@ -5,13 +5,13 @@ use log::{info, warn};
 use naia_shared::{
     sequence_greater_than, sequence_less_than,
     serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelWriter, Instant, Protocolize, ShortMessageId, Tick, TickBufferSettings,
+    wrapping_diff, ChannelWriter, Instant, Protocolize, ShortMessageIndex, Tick, TickBufferSettings,
     MESSAGE_HISTORY_SIZE,
 };
 
 pub struct ChannelTickBufferSender<P: Protocolize> {
     sending_messages: OutgoingMessages<P>,
-    outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageId, P)>)>,
+    outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageIndex, P)>)>,
     resend_interval: Duration,
     resend_interval_millis: u32,
     last_sent: Instant,
@@ -79,7 +79,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         bit_writer: &mut BitWriter,
         host_tick: &Tick,
         has_written: &mut bool,
-    ) -> Option<Vec<(Tick, ShortMessageId)>> {
+    ) -> Option<Vec<(Tick, ShortMessageIndex)>> {
         let mut last_written_tick = *host_tick;
         let mut output = Vec::new();
 
@@ -142,8 +142,8 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         bit_writer: &mut dyn BitWrite,
         last_written_tick: &Tick,
         message_tick: &Tick,
-        messages: &Vec<(ShortMessageId, P)>,
-    ) -> Vec<ShortMessageId> {
+        messages: &Vec<(ShortMessageIndex, P)>,
+    ) -> Vec<ShortMessageIndex> {
         let mut message_ids = Vec::new();
 
         // write message tick diff
@@ -157,7 +157,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         let message_count = UnsignedVariableInteger::<3>::new(messages.len() as u64);
         message_count.ser(bit_writer);
 
-        let mut last_id_written: ShortMessageId = 0;
+        let mut last_id_written: ShortMessageIndex = 0;
         for (message_id, message) in messages {
             // write message id diff
             let id_diff = UnsignedVariableInteger::<2>::new(*message_id - last_id_written);
@@ -174,11 +174,11 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         message_ids
     }
 
-    pub fn notify_message_delivered(&mut self, tick: &Tick, message_id: &ShortMessageId) {
+    pub fn notify_message_delivered(&mut self, tick: &Tick, message_id: &ShortMessageIndex) {
         self.sending_messages.remove_message(tick, message_id);
     }
 
-    fn warn_overflow(&self, messages: &Vec<(ShortMessageId, P)>, bits_needed: u16, bits_free: u16) {
+    fn warn_overflow(&self, messages: &Vec<(ShortMessageIndex, P)>, bits_needed: u16, bits_free: u16) {
         let mut message_names = "".to_string();
         let mut added = false;
         for (_id, message) in messages {
@@ -209,7 +209,7 @@ impl<P: Protocolize> MessageMap<P> {
         self.list.push(Some(message));
     }
 
-    pub fn collect_messages(&self) -> Vec<(ShortMessageId, P)> {
+    pub fn collect_messages(&self) -> Vec<(ShortMessageIndex, P)> {
         let mut output = Vec::new();
         for (index, message_opt) in self.list.iter().enumerate() {
             if let Some(message) = message_opt {
@@ -219,7 +219,7 @@ impl<P: Protocolize> MessageMap<P> {
         output
     }
 
-    pub fn remove(&mut self, message_id: &ShortMessageId) {
+    pub fn remove(&mut self, message_id: &ShortMessageIndex) {
         if let Some(container) = self.list.get_mut(*message_id as usize) {
             *container = None;
         }
@@ -293,7 +293,7 @@ impl<P: Protocolize> OutgoingMessages<P> {
         self.buffer.iter()
     }
 
-    pub fn remove_message(&mut self, tick: &Tick, message_id: &ShortMessageId) {
+    pub fn remove_message(&mut self, tick: &Tick, message_id: &ShortMessageIndex) {
         let mut index = self.buffer.len();
 
         if index == 0 {

@@ -5,16 +5,17 @@ use std::{
 };
 
 use crate::{
-    sequence_less_than, EntityAction, MessageId as ActionId, ProtocolKindType,
+    sequence_less_than, EntityAction, MessageIndex as ActionId,
     UnorderedReliableReceiver,
 };
+use crate::types::ComponentId;
 
-pub struct EntityActionReceiver<E: Copy + Hash + Eq, K: ProtocolKindType> {
-    receiver: UnorderedReliableReceiver<EntityAction<E, K>>,
-    entity_channels: HashMap<E, EntityChannel<E, K>>,
+pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
+    receiver: UnorderedReliableReceiver<EntityAction<E>>,
+    entity_channels: HashMap<E, EntityChannel<E>>,
 }
 
-impl<E: Copy + Hash + Eq, K: ProtocolKindType> Default for EntityActionReceiver<E, K> {
+impl<E: Copy + Hash + Eq> Default for EntityActionReceiver<E> {
     fn default() -> Self {
         Self {
             receiver: UnorderedReliableReceiver::default(),
@@ -23,9 +24,9 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> Default for EntityActionReceiver<
     }
 }
 
-impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
+impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
     /// Buffer a read [`EntityAction`] so that it can be processed later
-    pub fn buffer_action(&mut self, action_id: ActionId, action: EntityAction<E, K>) {
+    pub fn buffer_action(&mut self, action_id: ActionId, action: EntityAction<E>) {
         self.receiver.buffer_message(action_id, action)
     }
 
@@ -33,7 +34,7 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
     ///
     /// Outputs the list of [`EntityAction`] that can be executed now, buffer the rest
     /// into each entity's [`EntityChannel`]
-    pub fn receive_actions(&mut self) -> Vec<EntityAction<E, K>> {
+    pub fn receive_actions(&mut self) -> Vec<EntityAction<E>> {
         let mut outgoing_actions = Vec::new();
         let incoming_actions = self.receiver.receive_messages();
         for (action_id, action) in incoming_actions {
@@ -51,16 +52,16 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityActionReceiver<E, K> {
 
 // Entity Channel
 
-pub struct EntityChannel<E: Copy + Hash + Eq, K: ProtocolKindType> {
+pub struct EntityChannel<E: Copy + Hash + Eq> {
     entity: E,
     last_canonical_id: Option<ActionId>,
     spawned: bool,
-    components: HashMap<K, ComponentChannel<E, K>>,
-    waiting_spawns: OrderedIds<Vec<K>>,
+    components: HashMap<ComponentId, ComponentChannel<E>>,
+    waiting_spawns: OrderedIds<Vec<ComponentId>>,
     waiting_despawns: OrderedIds<()>,
 }
 
-impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
+impl<E: Copy + Hash + Eq> EntityChannel<E> {
     pub fn new(entity: E) -> Self {
         Self {
             entity,
@@ -84,8 +85,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
     pub fn receive_action(
         &mut self,
         incoming_action_id: ActionId,
-        incoming_action: EntityAction<E, K>,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+        incoming_action: EntityAction<E>,
+        outgoing_actions: &mut Vec<EntityAction<E>>,
     ) {
         match incoming_action {
             EntityAction::SpawnEntity(_, components) => {
@@ -118,8 +119,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
     pub fn receive_spawn_entity_action(
         &mut self,
         id: ActionId,
-        components: Vec<K>,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+        components: Vec<ComponentId>,
+        outgoing_actions: &mut Vec<EntityAction<E>>,
     ) {
         // do not process any spawn OLDER than last received spawn id / despawn id
         if let Some(last_id) = self.last_canonical_id {
@@ -163,7 +164,7 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
     pub fn receive_despawn_entity_action(
         &mut self,
         id: ActionId,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+        outgoing_actions: &mut Vec<EntityAction<E>>,
     ) {
         // do not process any despawn OLDER than last received spawn id / despawn id
         if let Some(last_id) = self.last_canonical_id {
@@ -197,8 +198,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
     pub fn receive_insert_component_action(
         &mut self,
         id: ActionId,
-        component: K,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+        component: ComponentId,
+        outgoing_actions: &mut Vec<EntityAction<E>>,
     ) {
         // do not process any insert OLDER than last received spawn id / despawn id
         if let Some(last_id) = self.last_canonical_id {
@@ -241,8 +242,8 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
     pub fn receive_remove_component_action(
         &mut self,
         id: ActionId,
-        component: K,
-        outgoing_actions: &mut Vec<EntityAction<E, K>>,
+        component: ComponentId,
+        outgoing_actions: &mut Vec<EntityAction<E>>,
     ) {
         // do not process any remove OLDER than last received spawn id / despawn id
         if let Some(last_id) = self.last_canonical_id {
@@ -297,17 +298,16 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> EntityChannel<E, K> {
 // Component Channel
 // most of this should be public, no methods here
 
-pub struct ComponentChannel<E: Copy + Hash + Eq, K: ProtocolKindType> {
+pub struct ComponentChannel<E: Copy + Hash + Eq> {
     pub inserted: bool,
     pub last_canonical_id: Option<ActionId>,
     pub waiting_inserts: OrderedIds<()>,
     pub waiting_removes: OrderedIds<()>,
 
     phantom_e: PhantomData<E>,
-    phantom_k: PhantomData<K>,
 }
 
-impl<E: Copy + Hash + Eq, K: ProtocolKindType> ComponentChannel<E, K> {
+impl<E: Copy + Hash + Eq> ComponentChannel<E> {
     pub fn new(canonical_id: Option<ActionId>) -> Self {
         Self {
             inserted: false,
@@ -316,7 +316,6 @@ impl<E: Copy + Hash + Eq, K: ProtocolKindType> ComponentChannel<E, K> {
             last_canonical_id: canonical_id,
 
             phantom_e: PhantomData,
-            phantom_k: PhantomData,
         }
     }
 

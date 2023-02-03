@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
-use crate::protocol::property_mutate::PropertyMutator;
+use crate::component::property_mutate::PropertyMutator;
 
 /// A Property of an Component/Message, that contains data
 /// which must be tracked for updates

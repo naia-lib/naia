@@ -3,15 +3,15 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::{types::MessageId, Protocolize};
+use crate::{messages::named::Named, types::MessageIndex};
 
 use super::message_channel::{ChannelSender, ChannelWriter};
 
-pub struct UnorderedUnreliableSender<P: Protocolize> {
+pub struct UnorderedUnreliableSender<P> {
     outgoing_messages: VecDeque<P>,
 }
 
-impl<P: Protocolize> UnorderedUnreliableSender<P> {
+impl<P: Named> UnorderedUnreliableSender<P> {
     pub fn new() -> Self {
         Self {
             outgoing_messages: VecDeque::new(),
@@ -35,7 +35,7 @@ impl<P: Protocolize> UnorderedUnreliableSender<P> {
     }
 }
 
-impl<P: Protocolize + Send + Sync> ChannelSender<P> for UnorderedUnreliableSender<P> {
+impl<P: Send + Sync + Named> ChannelSender<P> for UnorderedUnreliableSender<P> {
     fn send_message(&mut self, message: P) {
         self.outgoing_messages.push_back(message);
     }
@@ -53,7 +53,7 @@ impl<P: Protocolize + Send + Sync> ChannelSender<P> for UnorderedUnreliableSende
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
-    ) -> Option<Vec<MessageId>> {
+    ) -> Option<Vec<MessageIndex>> {
         loop {
             if self.outgoing_messages.is_empty() {
                 break;
@@ -88,7 +88,7 @@ impl<P: Protocolize + Send + Sync> ChannelSender<P> for UnorderedUnreliableSende
         None
     }
 
-    fn notify_message_delivered(&mut self, _: &MessageId) {
+    fn notify_message_delivered(&mut self, _: &MessageIndex) {
         // not necessary for an unreliable channel
     }
 }

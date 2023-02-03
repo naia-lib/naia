@@ -1,7 +1,6 @@
 use naia_shared::{Property, Replicate};
 
 #[derive(Replicate)]
-#[protocol_path = "crate::protocol::Protocol"]
 pub struct Auth {
     pub username: Property<String>,
     pub password: Property<String>,

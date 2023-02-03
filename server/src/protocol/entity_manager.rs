@@ -6,11 +6,12 @@ use std::{
     sync::{Arc, RwLock},
     time::Duration,
 };
+use bevy_ecs::component::ComponentId;
 
 use naia_shared::{
     serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
     wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter,
-    Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
+    Instant, MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
     PacketNotifiable, ProtocolKindType, Protocolize, ReplicateSafe, WorldRefType,
 };
 
@@ -24,19 +25,19 @@ use super::{
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 const ACTION_RECORD_TTL: Duration = Duration::from_secs(60);
 
-pub type ActionId = MessageId;
+pub type ActionId = MessageIndex;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+pub struct EntityManager<E: Copy + Eq + Hash + Send + Sync> {
     // World
-    world_channel: WorldChannel<P, E, C>,
-    next_send_actions: VecDeque<(ActionId, EntityActionEvent<E, P::Kind>)>,
+    world_channel: WorldChannel<E>,
+    next_send_actions: VecDeque<(ActionId, EntityActionEvent<E>)>,
     #[allow(clippy::type_complexity)]
-    sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
+    sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E>)>)>,
 
     // Updates
-    next_send_updates: HashMap<E, HashSet<P::Kind>>,
+    next_send_updates: HashMap<E, HashSet<ComponentId>>,
     #[allow(clippy::type_complexity)]
     /// Map of component updates and [`DiffMask`] that were written into each packet
     sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, P::Kind), DiffMask>)>,
@@ -44,11 +45,11 @@ pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: C
     last_update_packet_index: PacketIndex,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityManager<P, E, C> {
-    /// Create a new NewEntityManager, given the client's address
+impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
+    /// Create a new EntityManager, given the client's address
     pub fn new(
         address: SocketAddr,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
+        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
     ) -> Self {
         EntityManager {
             // World
@@ -91,7 +92,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
     // Messages
 
-    pub fn queue_entity_message<R: ReplicateSafe<P>>(
+    pub fn queue_entity_message(
         &mut self,
         entities: Vec<E>,
         channel: C,
@@ -238,8 +239,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
         has_written: &mut bool,
     ) {
-        let mut last_counted_id: Option<MessageId> = None;
-        let mut last_written_id: Option<MessageId> = None;
+        let mut last_counted_id: Option<MessageIndex> = None;
+        let mut last_written_id: Option<MessageIndex> = None;
 
         loop {
             if self.next_send_actions.is_empty() {

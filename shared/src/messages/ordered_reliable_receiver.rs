@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{types::MessageId, wrapping_number::sequence_less_than};
+use crate::{types::MessageIndex, wrapping_number::sequence_less_than};
 
 use super::{
     indexed_message_reader::IndexedMessageReader,
@@ -12,8 +12,8 @@ use super::{
 // OrderedReliableReceiver
 
 pub struct OrderedReliableReceiver<P> {
-    oldest_received_message_id: MessageId,
-    incoming_messages: VecDeque<(MessageId, Option<P>)>,
+    oldest_received_message_id: MessageIndex,
+    incoming_messages: VecDeque<(MessageIndex, Option<P>)>,
 }
 
 impl<P> Default for OrderedReliableReceiver<P> {
@@ -26,7 +26,7 @@ impl<P> Default for OrderedReliableReceiver<P> {
 }
 
 impl<P> OrderedReliableReceiver<P> {
-    pub fn buffer_message(&mut self, message_id: MessageId, message: P) {
+    pub fn buffer_message(&mut self, message_index: MessageIndex, message: P) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_id has been instantiated
         // already if it has, put the message into the slot
@@ -34,7 +34,7 @@ impl<P> OrderedReliableReceiver<P> {
         // then add new empty slots at the end until getting to the incoming message id
         // then, once you're there, put the new message in
 
-        if sequence_less_than(message_id, self.oldest_received_message_id) {
+        if sequence_less_than(message_index, self.oldest_received_message_id) {
             // already moved sliding window past this message id
             return;
         }
@@ -45,7 +45,7 @@ impl<P> OrderedReliableReceiver<P> {
         loop {
             if index < self.incoming_messages.len() {
                 if let Some((old_message_id, _)) = self.incoming_messages.get(index) {
-                    if *old_message_id == message_id {
+                    if *old_message_id == message_index {
                         found = true;
                     }
                 }
@@ -62,7 +62,7 @@ impl<P> OrderedReliableReceiver<P> {
             } else {
                 let next_message_id = self.oldest_received_message_id.wrapping_add(index as u16);
 
-                if next_message_id == message_id {
+                if next_message_id == message_index {
                     self.incoming_messages
                         .push_back((next_message_id, Some(message)));
                     break;

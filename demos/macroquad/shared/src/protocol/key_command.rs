@@ -1,7 +1,6 @@
 use naia_shared::{EntityProperty, Property, Replicate};
 
 #[derive(Replicate)]
-#[protocol_path = "crate::protocol::Protocol"]
 pub struct KeyCommand {
     pub entity: EntityProperty,
     pub w: Property<bool>,

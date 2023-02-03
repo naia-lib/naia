@@ -1,66 +1,55 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::serde::Serde;
+use crate::{serde::Serde, types::ChannelId};
 
 // ChannelType
-pub trait ChannelType {
+pub trait Channel {
     fn new() -> Self;
 }
 
 // ChannelConfig
-#[derive(Clone)]
-pub struct ChannelConfig<C: ChannelIndex> {
-    channels: HashMap<C, Channel<C>>,
+//#[derive(Clone)]
+pub struct ChannelConfig {
+    channels: HashMap<ChannelId, ChannelSettings>,
 }
 
-impl<C: ChannelIndex> ChannelConfig<C> {
-    pub fn new(input: &[Channel<C>]) -> Self {
-        let mut new_me = Self {
+impl ChannelConfig {
+    pub fn new() -> Self {
+        Self {
             channels: HashMap::new(),
-        };
-
-        for channel in input {
-            new_me.add_channel(channel.clone());
         }
-
-        new_me
     }
 
-    fn add_channel(&mut self, channel: Channel<C>) {
-        self.channels.insert(channel.index.clone(), channel);
-    }
-
-    pub fn channel(&self, channel_index: &C) -> &Channel<C> {
-        return self
-            .channels
-            .get(channel_index)
-            .expect("Channel has not been registered in the config!");
-    }
-
-    pub fn channels(&self) -> &HashMap<C, Channel<C>> {
+    pub fn channels(&self) -> &HashMap<ChannelId, ChannelSettings> {
         &self.channels
     }
+
+    pub fn channel(&self, channel_id: &ChannelId) -> &ChannelSettings {
+        return self
+            .channels
+            .get(channel_id)
+            .expect("Channel has not been registered in the protocol!");
+    }
+
+    fn add_channel(&mut self, channel_id: &ChannelId, channel_settings: ChannelSettings) {
+        self.channels.insert(*channel_id, channel_settings);
+    }
 }
 
-// ChannelIndex
-pub trait ChannelIndex: Serde + Eq + Hash + Sized + Sync + Send + 'static {}
-
-// Channel
+// ChannelSettings
 #[derive(Clone)]
-pub struct Channel<C: ChannelIndex> {
-    pub index: C,
+pub struct ChannelSettings {
     pub mode: ChannelMode,
     pub direction: ChannelDirection,
 }
 
-impl<C: ChannelIndex> Channel<C> {
-    pub fn new(index: C, mode: ChannelMode, direction: ChannelDirection) -> Self {
+impl ChannelSettings {
+    pub fn new(mode: ChannelMode, direction: ChannelDirection) -> Self {
         if mode.tick_buffered() && direction != ChannelDirection::ClientToServer {
             panic!("TickBuffered Messages are only allowed to be sent from Client to Server");
         }
 
         Self {
-            index,
             mode,
             direction,
         }
@@ -149,62 +138,64 @@ pub enum ChannelDirection {
     Bidirectional,
 }
 
-// Default Channels
-
-mod define_default_channels {
-    use super::ChannelIndex;
-    use crate::{derive_serde, serde};
-
-    #[derive(Eq, Hash)]
-    #[derive_serde]
-    pub enum DefaultChannels {
-        UnorderedUnreliable,
-        SequencedUnreliable,
-        UnorderedReliable,
-        SequencedReliable,
-        OrderedReliable,
-        TickBuffered,
-    }
-
-    impl ChannelIndex for DefaultChannels {}
-}
-pub use define_default_channels::DefaultChannels;
-
-impl ChannelConfig<DefaultChannels> {
-    pub fn default() -> &'static [Channel<DefaultChannels>] {
-        DEFAULT_CHANNEL_CONFIG
-    }
-}
-
-const DEFAULT_CHANNEL_CONFIG: &[Channel<DefaultChannels>] = &[
-    Channel {
-        index: DefaultChannels::UnorderedUnreliable,
-        direction: ChannelDirection::Bidirectional,
-        mode: ChannelMode::UnorderedUnreliable,
-    },
-    Channel {
-        index: DefaultChannels::SequencedUnreliable,
-        direction: ChannelDirection::Bidirectional,
-        mode: ChannelMode::SequencedUnreliable,
-    },
-    Channel {
-        index: DefaultChannels::UnorderedReliable,
-        direction: ChannelDirection::Bidirectional,
-        mode: ChannelMode::UnorderedReliable(ReliableSettings::default()),
-    },
-    Channel {
-        index: DefaultChannels::SequencedReliable,
-        direction: ChannelDirection::Bidirectional,
-        mode: ChannelMode::SequencedReliable(ReliableSettings::default()),
-    },
-    Channel {
-        index: DefaultChannels::OrderedReliable,
-        direction: ChannelDirection::Bidirectional,
-        mode: ChannelMode::OrderedReliable(ReliableSettings::default()),
-    },
-    Channel {
-        index: DefaultChannels::TickBuffered,
-        direction: ChannelDirection::ClientToServer,
-        mode: ChannelMode::TickBuffered(TickBufferSettings::default()),
-    },
-];
+// TODO: Connor, reimplement!
+// // Default Channels
+//
+// mod define_default_channels {
+//     use super::ChannelIndex;
+//     use crate::{derive_serde, serde};
+//
+//     #[derive(Eq, Hash)]
+//     #[derive_serde]
+//     pub enum DefaultChannels {
+//         UnorderedUnreliable,
+//         SequencedUnreliable,
+//         UnorderedReliable,
+//         SequencedReliable,
+//         OrderedReliable,
+//         TickBuffered,
+//     }
+//
+//     impl ChannelIndex for DefaultChannels {}
+// }
+// pub use define_default_channels::DefaultChannels;
+// use crate::types::ChannelId;
+//
+// impl ChannelConfig<DefaultChannels> {
+//     pub fn default() -> &'static [Channel<DefaultChannels>] {
+//         DEFAULT_CHANNEL_CONFIG
+//     }
+// }
+//
+// const DEFAULT_CHANNEL_CONFIG: &[Channel<DefaultChannels>] = &[
+//     Channel {
+//         index: DefaultChannels::UnorderedUnreliable,
+//         direction: ChannelDirection::Bidirectional,
+//         mode: ChannelMode::UnorderedUnreliable,
+//     },
+//     Channel {
+//         index: DefaultChannels::SequencedUnreliable,
+//         direction: ChannelDirection::Bidirectional,
+//         mode: ChannelMode::SequencedUnreliable,
+//     },
+//     Channel {
+//         index: DefaultChannels::UnorderedReliable,
+//         direction: ChannelDirection::Bidirectional,
+//         mode: ChannelMode::UnorderedReliable(ReliableSettings::default()),
+//     },
+//     Channel {
+//         index: DefaultChannels::SequencedReliable,
+//         direction: ChannelDirection::Bidirectional,
+//         mode: ChannelMode::SequencedReliable(ReliableSettings::default()),
+//     },
+//     Channel {
+//         index: DefaultChannels::OrderedReliable,
+//         direction: ChannelDirection::Bidirectional,
+//         mode: ChannelMode::OrderedReliable(ReliableSettings::default()),
+//     },
+//     Channel {
+//         index: DefaultChannels::TickBuffered,
+//         direction: ChannelDirection::ClientToServer,
+//         mode: ChannelMode::TickBuffered(TickBufferSettings::default()),
+//     },
+// ];

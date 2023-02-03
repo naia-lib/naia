@@ -28,12 +28,13 @@ pub use serde::derive_serde;
 mod backends;
 mod connection;
 mod messages;
-mod protocol;
+mod entity;
+mod component;
 
 mod bigmap;
 mod constants;
 mod key_generator;
-mod shared_config;
+mod protocol;
 mod types;
 mod world_type;
 mod wrapping_number;
@@ -54,8 +55,9 @@ pub use connection::{
     standard_header::StandardHeader,
 };
 pub use messages::{
+    message::Message,
     channel_config::{
-        Channel, ChannelType, ChannelConfig, ChannelDirection, ChannelIndex, ChannelMode, DefaultChannels,
+        Channel, ChannelConfig, ChannelDirection, ChannelMode,
         ReliableSettings, TickBufferSettings,
     },
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
@@ -63,10 +65,9 @@ pub use messages::{
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
+    message_receivable::MessageReceivable,
 };
-pub use protocol::{
-    component_update::ComponentUpdate,
-    diff_mask::DiffMask,
+pub use entity::{
     entity_action::EntityAction,
     entity_action_receiver::EntityActionReceiver,
     entity_action_type::EntityActionType,
@@ -76,10 +77,12 @@ pub use protocol::{
         FakeEntityConverter, NetEntityConverter, NetEntityHandleConverter,
     },
     net_entity::NetEntity,
+};
+pub use component::{
+    component_update::ComponentUpdate,
+    diff_mask::DiffMask,
     property::Property,
     property_mutate::{PropertyMutate, PropertyMutator},
-    protocol_io::ProtocolIo,
-    protocolize::{ProtocolInserter, ProtocolKindType, Protocolize},
     replica_ref::{
         ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,
         ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
@@ -91,7 +94,7 @@ pub use protocol::{
 pub use bigmap::{BigMap, BigMapKey};
 pub use constants::MESSAGE_HISTORY_SIZE;
 pub use key_generator::KeyGenerator;
-pub use shared_config::SharedConfig;
-pub use types::{HostType, MessageId, PacketIndex, ShortMessageId, Tick};
+pub use protocol::Protocol;
+pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

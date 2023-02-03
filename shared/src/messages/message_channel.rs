@@ -1,7 +1,7 @@
 use naia_serde::{BitReader, BitWrite, BitWriter, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::types::MessageId;
+use crate::types::MessageIndex;
 
 pub trait ChannelSender<P>: Send + Sync {
     /// Queues a Message to be transmitted to the remote host into an internal buffer
@@ -16,9 +16,9 @@ pub trait ChannelSender<P>: Send + Sync {
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
-    ) -> Option<Vec<MessageId>>;
+    ) -> Option<Vec<MessageIndex>>;
     /// Called when it receives acknowledgement that a Message has been received
-    fn notify_message_delivered(&mut self, message_id: &MessageId);
+    fn notify_message_delivered(&mut self, message_id: &MessageIndex);
 }
 
 pub trait ChannelReceiver<P>: Send + Sync {

@@ -98,7 +98,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityMessageWaitlist
         self.in_scope_entities.remove(entity);
     }
 
-    pub fn collect_ready_messages(&mut self, message_manager: &mut MessageManager<P, C>) {
+    pub fn collect_ready_messages(&mut self, message_manager: &mut MessageManager) {
         for (channel, message) in self.ready_messages.drain(..) {
             message_manager.send_message(channel, message);
         }

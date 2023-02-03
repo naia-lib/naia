@@ -6,7 +6,7 @@ use std::{
 use naia_shared::{
     serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
     BigMap, ChannelIndex, EntityAction, EntityActionReceiver, EntityActionType,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageId, NetEntity,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex, NetEntity,
     NetEntityHandleConverter, Protocolize, Tick, WorldMutType,
 };
 
@@ -38,15 +38,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     // Action Reader
     fn read_message_id(
         reader: &mut BitReader,
-        last_id_opt: &mut Option<MessageId>,
-    ) -> Result<MessageId, SerdeErr> {
+        last_id_opt: &mut Option<MessageIndex>,
+    ) -> Result<MessageIndex, SerdeErr> {
         let current_id = if let Some(last_id) = last_id_opt {
             // read diff
-            let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageId;
+            let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
             last_id.wrapping_add(id_diff)
         } else {
             // read message id
-            MessageId::de(reader)?
+            MessageIndex::de(reader)?
         };
         *last_id_opt = Some(current_id);
         Ok(current_id)
@@ -62,7 +62,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
         reader: &mut BitReader,
         event_stream: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
     ) -> Result<(), SerdeErr> {
-        let mut last_read_id: Option<MessageId> = None;
+        let mut last_read_id: Option<MessageIndex> = None;
 
         loop {
             // read action continue bit
@@ -87,7 +87,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash> EntityManager<P, E> {
     fn read_action(
         &mut self,
         reader: &mut BitReader,
-        last_read_id: &mut Option<MessageId>,
+        last_read_id: &mut Option<MessageIndex>,
     ) -> Result<(), SerdeErr> {
         let action_id = Self::read_message_id(reader, last_read_id)?;
 

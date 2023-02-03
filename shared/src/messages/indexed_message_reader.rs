@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
-use crate::{messages::message_channel::ChannelReader, types::MessageId};
+use crate::{messages::message_channel::ChannelReader, types::MessageIndex};
 
 pub struct IndexedMessageReader<P> {
     phantom_p: PhantomData<P>,
@@ -12,8 +12,8 @@ impl<P> IndexedMessageReader<P> {
     pub fn read_messages(
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
-    ) -> Result<Vec<(MessageId, P)>, SerdeErr> {
-        let mut last_read_id: Option<MessageId> = None;
+    ) -> Result<Vec<(MessageIndex, P)>, SerdeErr> {
+        let mut last_read_id: Option<MessageIndex> = None;
         let mut output = Vec::new();
 
         loop {
@@ -33,14 +33,14 @@ impl<P> IndexedMessageReader<P> {
     fn read_message(
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
-        last_read_id: &Option<MessageId>,
-    ) -> Result<(MessageId, P), SerdeErr> {
-        let message_id: MessageId = if let Some(last_id) = last_read_id {
-            let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageId;
+        last_read_id: &Option<MessageIndex>,
+    ) -> Result<(MessageIndex, P), SerdeErr> {
+        let message_id: MessageIndex = if let Some(last_id) = last_read_id {
+            let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
             last_id.wrapping_add(id_diff)
         } else {
             // read message id
-            MessageId::de(reader)?
+            MessageIndex::de(reader)?
         };
 
         // read payload

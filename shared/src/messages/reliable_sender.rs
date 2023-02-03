@@ -4,16 +4,16 @@ use naia_serde::BitWriter;
 
 use naia_socket_shared::Instant;
 
-use crate::{messages::indexed_message_writer::IndexedMessageWriter, types::MessageId};
+use crate::{messages::indexed_message_writer::IndexedMessageWriter, types::MessageIndex};
 
 use super::message_channel::{ChannelSender, ChannelWriter};
 
 // Sender
 pub struct ReliableSender<P: Send + Sync> {
     rtt_resend_factor: f32,
-    sending_messages: VecDeque<Option<(MessageId, Option<Instant>, P)>>,
-    next_send_message_id: MessageId,
-    outgoing_messages: VecDeque<(MessageId, P)>,
+    sending_messages: VecDeque<Option<(MessageIndex, Option<Instant>, P)>>,
+    next_send_message_id: MessageIndex,
+    outgoing_messages: VecDeque<(MessageIndex, P)>,
 }
 
 impl<P: Send + Sync> ReliableSender<P> {
@@ -43,14 +43,14 @@ impl<P: Send + Sync> ReliableSender<P> {
         }
     }
 
-    pub fn take_next_messages(&mut self) -> VecDeque<(MessageId, P)> {
+    pub fn take_next_messages(&mut self) -> VecDeque<(MessageIndex, P)> {
         mem::take(&mut self.outgoing_messages)
     }
 
     // Called when a message has been delivered
     // If this message has never been delivered before, will clear from the outgoing
     // buffer and return the message previously there
-    pub fn deliver_message(&mut self, message_id: &MessageId) -> Option<P> {
+    pub fn deliver_message(&mut self, message_id: &MessageIndex) -> Option<P> {
         let mut index = 0;
         let mut found = false;
 
@@ -81,7 +81,7 @@ impl<P: Send + Sync> ReliableSender<P> {
     }
 }
 
-impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
+impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
     fn send_message(&mut self, message: P) {
         self.sending_messages
             .push_back(Some((self.next_send_message_id, None, message)));
@@ -117,7 +117,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
-    ) -> Option<Vec<MessageId>> {
+    ) -> Option<Vec<MessageIndex>> {
         IndexedMessageWriter::write_messages(
             &mut self.outgoing_messages,
             channel_writer,
@@ -126,7 +126,7 @@ impl<P: Clone + Send + Sync> ChannelSender<P> for ReliableSender<P> {
         )
     }
 
-    fn notify_message_delivered(&mut self, message_id: &MessageId) {
-        self.deliver_message(message_id);
+    fn notify_message_delivered(&mut self, message_index: &MessageIndex) {
+        self.deliver_message(message_index);
     }
 }

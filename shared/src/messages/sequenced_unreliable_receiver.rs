@@ -2,7 +2,7 @@ use std::mem;
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{sequence_greater_than, types::MessageId};
+use crate::{sequence_greater_than, types::MessageIndex};
 
 use super::{
     indexed_message_reader::IndexedMessageReader,
@@ -10,7 +10,7 @@ use super::{
 };
 
 pub struct SequencedUnreliableReceiver<P> {
-    newest_received_message_id: Option<MessageId>,
+    newest_received_message_id: Option<MessageIndex>,
     incoming_messages: Vec<P>,
 }
 
@@ -22,7 +22,7 @@ impl<P> SequencedUnreliableReceiver<P> {
         }
     }
 
-    pub fn buffer_message(&mut self, message_id: MessageId, message: P) {
+    pub fn buffer_message(&mut self, message_id: MessageIndex, message: P) {
         if let Some(most_recent_id) = self.newest_received_message_id {
             if sequence_greater_than(message_id, most_recent_id) {
                 self.incoming_messages.push(message);

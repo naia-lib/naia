@@ -12,12 +12,7 @@ use log::warn;
 use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{
-    serde::{BitWriter, Serde},
-    BigMap, ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant,
-    PacketType, PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig,
-    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
-};
+use naia_shared::{serde::{BitWriter, Serde}, BigMap, ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, PacketType, PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, Protocol, Channel};
 
 use crate::{
     connection::{
@@ -47,10 +42,10 @@ use super::{
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
 #[cfg_attr(feature = "bevy_support", derive(Resource))]
-pub struct Server<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     server_config: ServerConfig,
-    shared_config: SharedConfig<C>,
+    protocol: Protocol,
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
@@ -59,36 +54,36 @@ pub struct Server<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelI
     handshake_manager: HandshakeManager<P>,
     // Users
     users: BigMap<UserKey, User>,
-    user_connections: HashMap<SocketAddr, Connection<P, E, C>>,
+    user_connections: HashMap<SocketAddr, Connection<E>>,
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
-    world_record: WorldRecord<E, P::Kind>,
+    world_record: WorldRecord<E>,
     entity_scope_map: EntityScopeMap<E>,
     // Components
-    diff_handler: Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
+    diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
     // Events
     incoming_events: Events,
     // Ticks
     tick_manager: Option<TickManager>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<P, E, C> {
+impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Create a new Server
-    pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<C>) -> Self {
-        let socket = Socket::new(&shared_config.socket);
+    pub fn new(server_config: &ServerConfig, protocol: Protocol) -> Self {
+        let socket = Socket::new(&protocol.socket);
 
-        let tick_manager = { shared_config.tick_interval.map(TickManager::new) };
+        let tick_manager = { protocol.tick_interval.map(TickManager::new) };
 
         Server {
             // Config
             server_config: server_config.clone(),
-            shared_config: shared_config.clone(),
+            protocol,
             // Connection
             socket,
             io: Io::new(
                 &server_config.connection.bandwidth_measure_duration,
-                &shared_config.compression,
+                &protocol.compression,
             ),
             heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
             timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
@@ -147,10 +142,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             let connection = self.user_connections.get_mut(user_address).unwrap();
 
             // receive messages from anyone
-            let messages = connection.base.message_manager.receive_messages();
-            for (channel, message) in messages {
-                self.incoming_events.push_message::<C, P>(&connection.user_key, message);
-            }
+            connection.base.message_manager.receive_messages(&mut self.incoming_events);
         }
 
         // receive (retrieve from buffer) tick buffered messages for the current server tick
@@ -179,7 +171,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         if let Some(user) = self.users.get(user_key) {
             let new_connection = Connection::new(
                 &self.server_config.connection,
-                &self.shared_config.channel,
+                &self.protocol.channel,
                 user.address,
                 user_key,
                 &self.diff_handler,
@@ -230,14 +222,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn send_message<R: ReplicateSafe<P>>(
+    pub fn send_message<M: Message>(
         &mut self,
         user_key: &UserKey,
-        channel: C,
-        message: &R,
+        channel: &dyn Channel,
+        message: M,
+    ) {
+        self.send_message_inner(user_key, channel, Box::new(message));
+    }
+
+    /// Queues up an Message to be sent to the Client associated with a given
+    /// UserKey
+    fn send_message_inner(
+        &mut self,
+        user_key: &UserKey,
+        channel: &dyn Channel,
+        message: Box<dyn Message>,
     ) {
         if !self
-            .shared_config
+            .protocol
             .channel
             .channel(&channel)
             .can_send_to_client()
@@ -266,7 +269,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                         connection
                             .base
                             .message_manager
-                            .send_message(channel, message.protocol_copy());
+                            .send_message(channel, message);
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
@@ -278,7 +281,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                     connection
                         .base
                         .message_manager
-                        .send_message(channel, message.protocol_copy());
+                        .send_message(channel, message);
                 }
             }
         }

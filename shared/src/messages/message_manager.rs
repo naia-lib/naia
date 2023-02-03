@@ -3,14 +3,10 @@ use std::collections::HashMap;
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{
-    connection::packet_notifiable::PacketNotifiable,
-    protocol::protocolize::Protocolize,
-    types::{HostType, MessageId, PacketIndex},
-};
+use crate::{connection::packet_notifiable::PacketNotifiable, Message, MessageReceivable, ReplicateSafe, types::{HostType, MessageIndex, PacketIndex, ChannelId}};
 
 use super::{
-    channel_config::{ChannelConfig, ChannelIndex, ChannelMode},
+    channel_config::{ChannelConfig, ChannelMode},
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
@@ -24,20 +20,20 @@ use super::{
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
-pub struct MessageManager<P: Protocolize, C: ChannelIndex> {
-    channel_senders: HashMap<C, Box<dyn ChannelSender<P>>>,
-    channel_receivers: HashMap<C, Box<dyn ChannelReceiver<P>>>,
-    packet_to_message_map: HashMap<PacketIndex, Vec<(C, Vec<MessageId>)>>,
+pub struct MessageManager {
+    channel_senders: HashMap<ChannelId, Box<dyn ChannelSender<Box<dyn Message>>>>,
+    channel_receivers: HashMap<ChannelId, Box<dyn ChannelReceiver<Box<dyn Message>>>>,
+    packet_to_message_map: HashMap<PacketIndex, Vec<(ChannelId, Vec<MessageIndex>)>>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
+impl MessageManager {
     /// Creates a new MessageManager
-    pub fn new(host_type: HostType, channel_config: &ChannelConfig<C>) -> Self {
+    pub fn new(host_type: HostType, channel_config: &ChannelConfig) -> Self {
         // initialize all reliable channels
 
         // initialize senders
-        let mut channel_senders = HashMap::<C, Box<dyn ChannelSender<P>>>::new();
-        for (channel_index, channel) in channel_config.channels() {
+        let mut channel_senders = HashMap::<ChannelId, Box<dyn ChannelSender<Box<dyn Message>>>>::new();
+        for (channel_id, channel) in channel_config.channels() {
             match &host_type {
                 HostType::Server => {
                     if !channel.can_send_to_client() {
@@ -54,13 +50,13 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
             match &channel.mode {
                 ChannelMode::UnorderedUnreliable => {
                     channel_senders.insert(
-                        channel_index.clone(),
+                        *channel_id,
                         Box::new(UnorderedUnreliableSender::new()),
                     );
                 }
                 ChannelMode::SequencedUnreliable => {
                     channel_senders.insert(
-                        channel_index.clone(),
+                        *channel_id,
                         Box::new(SequencedUnreliableSender::new()),
                     );
                 }
@@ -68,8 +64,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                 | ChannelMode::SequencedReliable(settings)
                 | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
-                        channel_index.clone(),
-                        Box::new(ReliableSender::new(settings.rtt_resend_factor)),
+                        *channel_id,
+                        Box::new(ReliableSender::<Box<dyn Message>>::new(settings.rtt_resend_factor)),
                     );
                 }
                 _ => {}
@@ -77,7 +73,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
         }
 
         // initialize receivers
-        let mut channel_receivers = HashMap::<C, Box<dyn ChannelReceiver<P>>>::new();
+        let mut channel_receivers = HashMap::<ChannelId, Box<dyn ChannelReceiver<Box<dyn Message>>>>::new();
         for (channel_index, channel) in channel_config.channels() {
             match &host_type {
                 HostType::Server => {
@@ -137,8 +133,8 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     // Outgoing Messages
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn send_message(&mut self, channel_index: C, message: P) {
-        if let Some(channel) = self.channel_senders.get_mut(&channel_index) {
+    pub fn send_message(&mut self, channel_id: &ChannelId, message: Box<dyn Message>) {
+        if let Some(channel) = self.channel_senders.get_mut(channel_id) {
             channel.send_message(message);
         }
     }
@@ -162,7 +158,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     pub fn write_messages(
         &mut self,
-        channel_writer: &dyn ChannelWriter<P>,
+        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
         has_written: &mut bool,
@@ -211,7 +207,7 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
 
     pub fn read_messages(
         &mut self,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &dyn ChannelReader<Box<dyn Message>>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -220,11 +216,11 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
                 break;
             }
 
-            // read channel index
-            let channel_index = C::de(reader)?;
+            // read channel id
+            let channel_id = ChannelId::de(reader)?;
 
             // continue read inside channel
-            let channel = self.channel_receivers.get_mut(&channel_index).unwrap();
+            let channel = self.channel_receivers.get_mut(&channel_id).unwrap();
             channel.read_messages(channel_reader, reader)?;
         }
 
@@ -232,20 +228,21 @@ impl<P: Protocolize, C: ChannelIndex> MessageManager<P, C> {
     }
 
     /// Retrieve all messages from the channel buffers
-    pub fn receive_messages(&mut self) -> Vec<(C, P)> {
-        let mut output = Vec::new();
+    pub fn receive_messages(&mut self, incoming_messages: &mut dyn MessageReceivable) {
+
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_index, channel) in &mut self.channel_receivers {
             let mut messages = channel.receive_messages();
             for message in messages.drain(..) {
-                output.push((channel_index.clone(), message));
+                //output.push((channel_index.clone(), message));
+                // TODO: Really important Connor! Put these messages into `incoming_messages`
+                // Otherwise no messages will be received!
             }
         }
-        output
     }
 }
 
-impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for MessageManager<P, C> {
+impl PacketNotifiable for MessageManager {
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {

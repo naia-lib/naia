@@ -1,42 +1,36 @@
 use naia_serde::{BitWrite, SerdeErr};
 
-use super::{
-    component_update::ComponentUpdate,
-    diff_mask::DiffMask,
+use crate::{entity::{
     entity_handle::EntityHandle,
     entity_property::NetEntityHandleConverter,
+},
+component::{
+    component_update::ComponentUpdate,
+    diff_mask::DiffMask,
     property_mutate::PropertyMutator,
-    protocolize::Protocolize,
     replica_ref::{ReplicaDynMut, ReplicaDynRef},
-};
+}};
+use crate::messages::named::Named;
+use crate::types::ComponentId;
 
 /// A struct that implements Replicate is a Message/Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
-pub trait Replicate<P: Protocolize>: ReplicateSafe<P> + Clone {}
+pub trait Replicate: ReplicateSafe + Clone {}
 
 /// The part of Replicate which is object-safe
-pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
-    /// Gets the String representation of the Type of the Message/Component, used for debugging
-    fn name(&self) -> String;
-    /// Gets the TypeId of the Message/Component, used to map to a
-    /// registered Protocolize
-    fn kind(&self) -> P::Kind;
-    /// Gets the number of bytes of the Message/Component's DiffMask
+pub trait ReplicateSafe: ReplicateInner + Named {
+    /// Gets the ComponentId of this type
+    fn kind(&self) -> ComponentId;
+    /// Gets the number of bytes of the Component's DiffMask
     fn diff_mask_size(&self) -> u8;
-    /// Get an immutable reference to the inner Component/Message as a
-    /// Replicate trait object
-    fn dyn_ref(&self) -> ReplicaDynRef<'_, P>;
-    /// Get an mutable reference to the inner Component/Message as a
-    /// Replicate trait object
-    fn dyn_mut(&mut self) -> ReplicaDynMut<'_, P>;
-    /// Returns self as a Protocol
-    fn into_protocol(self) -> P;
-    /// Returns a copy of self as a Protocol
-    fn protocol_copy(&self) -> P;
+    /// Get an immutable reference to the inner Component as a Replicate trait object
+    fn dyn_ref(&self) -> ReplicaDynRef<'_>;
+    /// Get an mutable reference to the inner Component as a Replicate trait object
+    fn dyn_mut(&mut self) -> ReplicaDynMut<'_>;
     /// Sets the current Replica to the state of another Replica of the
     /// same type
-    fn mirror(&mut self, other: &P);
+    fn mirror(&mut self, other: &dyn ReplicateSafe);
     /// Set the Message/Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client
@@ -57,7 +51,7 @@ pub trait ReplicateSafe<P: Protocolize>: ReplicateInner {
     fn read_apply_update(
         &mut self,
         converter: &dyn NetEntityHandleConverter,
-        update: ComponentUpdate<P::Kind>,
+        update: ComponentUpdate,
     ) -> Result<(), SerdeErr>;
     /// Returns whether has any EntityProperties
     fn has_entity_properties(&self) -> bool;

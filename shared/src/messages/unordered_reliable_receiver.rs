@@ -2,7 +2,7 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{sequence_less_than, types::MessageId};
+use crate::{sequence_less_than, types::MessageIndex};
 
 use super::{
     indexed_message_reader::IndexedMessageReader,
@@ -10,9 +10,9 @@ use super::{
 };
 
 pub struct UnorderedReliableReceiver<P> {
-    oldest_received_message_id: MessageId,
-    record: VecDeque<(MessageId, bool)>,
-    incoming_messages: Vec<(MessageId, P)>,
+    oldest_received_message_id: MessageIndex,
+    record: VecDeque<(MessageIndex, bool)>,
+    incoming_messages: Vec<(MessageIndex, P)>,
 }
 
 impl<P> Default for UnorderedReliableReceiver<P> {
@@ -28,7 +28,7 @@ impl<P> Default for UnorderedReliableReceiver<P> {
 impl<P> UnorderedReliableReceiver<P> {
     // Private methods
 
-    pub fn buffer_message(&mut self, message_id: MessageId, message: P) {
+    pub fn buffer_message(&mut self, message_id: MessageIndex, message: P) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_id has been instantiated
         // already if it has, put the message into the slot
@@ -76,7 +76,7 @@ impl<P> UnorderedReliableReceiver<P> {
         }
     }
 
-    pub fn receive_messages(&mut self) -> Vec<(MessageId, P)> {
+    pub fn receive_messages(&mut self) -> Vec<(MessageIndex, P)> {
         // clear all received messages from record
         loop {
             let mut has_message = false;

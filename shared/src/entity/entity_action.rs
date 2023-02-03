@@ -1,14 +1,14 @@
-use super::protocolize::ProtocolKindType;
+use crate::types::ComponentId;
 
-pub enum EntityAction<E: Copy, K: ProtocolKindType> {
-    SpawnEntity(E, Vec<K>),
+pub enum EntityAction<E: Copy> {
+    SpawnEntity(E, Vec<ComponentId>),
     DespawnEntity(E),
-    InsertComponent(E, K),
-    RemoveComponent(E, K),
+    InsertComponent(E, ComponentId),
+    RemoveComponent(E, ComponentId),
     Noop,
 }
 
-impl<E: Copy, K: ProtocolKindType> EntityAction<E, K> {
+impl<E: Copy> EntityAction<E> {
     pub fn entity(&self) -> Option<E> {
         match self {
             EntityAction::SpawnEntity(entity, _) => Some(*entity),

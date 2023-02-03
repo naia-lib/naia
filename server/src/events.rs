@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::vec::IntoIter;
 
-use naia_shared::{ChannelIndex, ChannelType, Protocolize};
+use naia_shared::{Channel, ChannelIndex, ChannelType, Protocolize};
 
 use crate::NaiaServerError;
 use super::user::{User, UserKey};
@@ -69,7 +69,7 @@ impl Events {
         self.empty = false;
     }
 
-    pub(crate) fn push_message<C: Any, M: Any>(&mut self, user_key: &UserKey, message: M) {
+    pub(crate) fn push_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: M) {
         let channel_type: TypeId = TypeId::of::<C>();
         if !self.messages.contains_key(&channel_type) {
             self.messages.insert(channel_type, HashMap::new());

@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
-use crate::{types::MessageId, wrapping_diff};
+use crate::{types::MessageIndex, wrapping_diff};
 
 use super::message_channel::ChannelWriter;
 
@@ -14,12 +14,12 @@ pub struct IndexedMessageWriter<P: Send + Sync> {
 
 impl<P: Send + Sync> IndexedMessageWriter<P> {
     pub fn write_messages(
-        outgoing_messages: &mut VecDeque<(MessageId, P)>,
+        outgoing_messages: &mut VecDeque<(MessageIndex, P)>,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
-    ) -> Option<Vec<MessageId>> {
-        let mut last_written_id: Option<MessageId> = None;
+    ) -> Option<Vec<MessageIndex>> {
+        let mut last_written_id: Option<MessageIndex> = None;
         let mut message_ids = Vec::new();
 
         loop {
@@ -74,8 +74,8 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
     fn write_message(
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut dyn BitWrite,
-        last_written_id: &Option<MessageId>,
-        message_id: &MessageId,
+        last_written_id: &Option<MessageIndex>,
+        message_id: &MessageIndex,
         message: &P,
     ) {
         if let Some(last_id) = last_written_id {
