@@ -95,7 +95,7 @@ pub use messages::{
 pub use bigmap::{BigMap, BigMapKey};
 pub use constants::MESSAGE_HISTORY_SIZE;
 pub use key_generator::KeyGenerator;
-pub use protocol::Protocol;
+pub use protocol::{Plugin, Protocol, ProtocolBuilder};
 pub use types::{
     ChannelId, ComponentId, HostType, MessageId, MessageIndex, PacketIndex, ShortMessageIndex, Tick,
 };

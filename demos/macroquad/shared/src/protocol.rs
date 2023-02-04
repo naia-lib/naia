@@ -1,15 +1,8 @@
 use std::time::Duration;
 
-use naia_shared::{
-    Channel, ChannelDirection, ChannelMode, LinkConditionerConfig, Protocol, ReliableSettings,
-    SocketConfig, TickBufferSettings,
-};
+use naia_shared::{LinkConditionerConfig, Protocol};
 
-use crate::{
-    channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Marker, Square},
-    messages::{Auth, EntityAssignment, KeyCommand},
-};
+use crate::{channels::ChannelsPlugin, components::ComponentsPlugin, messages::MessagesPlugin};
 
 // Protocol Build
 pub fn protocol() -> Protocol {
@@ -18,21 +11,11 @@ pub fn protocol() -> Protocol {
         .tick_interval(Duration::from_millis(20))
         .link_condition(LinkConditionerConfig::average_condition())
         // Channels
-        .add_channel::<PlayerCommandChannel>(
-            ChannelDirection::ClientToServer,
-            ChannelMode::TickBuffered(TickBufferSettings::default()),
-        )
-        .add_channel::<EntityAssignmentChannel>(
-            ChannelDirection::ServerToClient,
-            ChannelMode::UnorderedReliable(ReliableSettings::default()),
-        )
+        .add_plugin(ChannelsPlugin)
         // Messages
-        .add_message::<Auth>()
-        .add_message::<EntityAssignment>()
-        .add_message::<KeyCommand>()
+        .add_plugin(MessagesPlugin)
         // Components
-        .add_component::<Square>()
-        .add_component::<Marker>()
+        .add_plugin(ComponentsPlugin)
         // Build
         .build()
 }

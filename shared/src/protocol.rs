@@ -33,6 +33,11 @@ pub struct ProtocolBuilder {
 }
 
 impl ProtocolBuilder {
+    pub fn add_plugin<P: Plugin>(&mut self, plugin: P) -> &mut Self {
+        plugin.build(self);
+        self
+    }
+
     pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
         self.link_conditioner_config = Some(config);
         self
@@ -82,4 +87,7 @@ impl ProtocolBuilder {
     }
 }
 
-impl ProtocolBuilder {}
+//Plugin
+pub trait Plugin {
+    fn build(&self, protocol: &mut ProtocolBuilder);
+}
