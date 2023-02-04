@@ -172,7 +172,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_mut<R: ReplicateSafe>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            if let Some(boxed_component) = component_map.get_mut(&Components::kind_of::<R>()) {
+            if let Some(boxed_component) = component_map.get_mut(&Components::type_to_id::<R>()) {
                 if let Some(raw_ref) = Components::cast_mut::<R>(boxed_component) {
                     let wrapper = ComponentMut::<R>::new(raw_ref);
                     let wrapped_ref = ReplicaMutWrapper::new(wrapper);
@@ -233,7 +233,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn insert_component<R: ReplicateSafe>(&mut self, entity: &Entity, component: R) {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            let component_kind = Components::kind_of::<R>();
+            let component_kind = Components::type_to_id::<R>();
             if component_map.contains_key(&component_kind) {
                 panic!("Entity already has a Component of that type!");
             }
@@ -243,7 +243,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn remove_component<R: Replicate>(&mut self, entity: &Entity) -> Option<R> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            if let Some(boxed_component) = component_map.remove(&Components::kind_of::<R>()) {
+            if let Some(boxed_component) = component_map.remove(&Components::type_to_id::<R>()) {
                 return Components::cast::<R>(boxed_component);
             }
         }
@@ -287,7 +287,7 @@ fn entities(world: &World) -> Vec<Entity> {
 
 fn has_component<R: ReplicateSafe>(world: &World, entity: &Entity) -> bool {
     if let Some(component_map) = world.entities.get(entity) {
-        return component_map.contains_key(&Components::kind_of::<R>());
+        return component_map.contains_key(&Components::type_to_id::<R>());
     }
 
     false
@@ -306,7 +306,7 @@ fn component<'a, R: ReplicateSafe>(
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, R>> {
     if let Some(component_map) = world.entities.get(entity) {
-        if let Some(boxed_component) = component_map.get(&Components::kind_of::<R>()) {
+        if let Some(boxed_component) = component_map.get(&Components::type_to_id::<R>()) {
             if let Some(raw_ref) = Components::cast_ref::<R>(boxed_component) {
                 let wrapper = ComponentRef::<R>::new(raw_ref);
                 let wrapped_ref = ReplicaRefWrapper::new(wrapper);

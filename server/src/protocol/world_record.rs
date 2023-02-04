@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use naia_shared::{BigMap, EntityDoesNotExistError, EntityHandle, EntityHandleConverter};
+use naia_shared::{BigMap, ComponentId, EntityDoesNotExistError, EntityHandle, EntityHandleConverter};
 
 use crate::{protocol::global_entity_record::GlobalEntityRecord, room::RoomKey};
 
@@ -32,7 +32,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
             .insert(*entity, GlobalEntityRecord::new(entity_handle));
     }
 
-    pub fn despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord<K>> {
+    pub fn despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord> {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
@@ -40,7 +40,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
         self.entity_records.remove(entity)
     }
 
-    pub fn add_component(&mut self, entity: &E, component_type: &K) {
+    pub fn add_component(&mut self, entity: &E, component_type: &ComponentId) {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
@@ -48,7 +48,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
         component_kind_set.insert(*component_type);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component_kind: &K) {
+    pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentId) {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
@@ -64,7 +64,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
         self.entity_records.contains_key(entity)
     }
 
-    pub fn component_kinds(&self, entity: &E) -> Option<Vec<K>> {
+    pub fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentId>> {
         if !self.entity_records.contains_key(entity) {
             return None;
         }
@@ -100,7 +100,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> EntityHandleConverter<E> for WorldRecord<E, K> {
+impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for WorldRecord<E> {
     fn handle_to_entity(&self, handle: &EntityHandle) -> E {
         return *self
             .handle_entity_map

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::vec::IntoIter;
 
-use naia_shared::Channel;
+use naia_shared::{Channel, ChannelId, Channels, Message, MessageId, MessageReceivable, Messages};
 
 use super::user::{User, UserKey};
 use crate::NaiaServerError;
@@ -13,8 +13,8 @@ pub struct Events {
     disconnections: Vec<(UserKey, User)>,
     ticks: Vec<()>,
     errors: Vec<(NaiaServerError)>,
-    auths: HashMap<TypeId, Vec<(UserKey, Box<dyn Any>)>>,
-    messages: HashMap<TypeId, HashMap<TypeId, Vec<(UserKey, Box<dyn Any>)>>>,
+    auths: HashMap<MessageId, Vec<(UserKey, Box<dyn Message>)>>,
+    messages: HashMap<ChannelId, HashMap<MessageId, Vec<(UserKey, Box<dyn Message>)>>>,
     empty: bool,
 }
 
@@ -22,6 +22,10 @@ impl Default for Events {
     fn default() -> Self {
         Events::new()
     }
+}
+
+impl MessageReceivable for Events {
+
 }
 
 impl Events {
@@ -59,31 +63,31 @@ impl Events {
         self.empty = false;
     }
 
-    pub(crate) fn push_auth<M: Any>(&mut self, user_key: &UserKey, auth_message: M) {
-        let type_id: TypeId = TypeId::of::<M>();
-        if !self.auths.contains_key(&type_id) {
-            self.auths.insert(type_id, Vec::new());
+    pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: Box<dyn Message>) {
+        let message_id: MessageId = Messages::message_id_from_box(&auth_message);
+        if !self.auths.contains_key(&message_id) {
+            self.auths.insert(message_id, Vec::new());
         }
-        let list = self.auths.get_mut(&type_id).unwrap();
-        list.push((*user_key, Box::new(auth_message)));
+        let list = self.auths.get_mut(&message_id).unwrap();
+        list.push((*user_key, auth_message));
         self.empty = false;
     }
 
-    pub(crate) fn push_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: M) {
-        let channel_type: TypeId = TypeId::of::<C>();
-        if !self.messages.contains_key(&channel_type) {
-            self.messages.insert(channel_type, HashMap::new());
-        }
-        let channel_map = self.messages.get_mut(&channel_type).unwrap();
-
-        let message_type: TypeId = TypeId::of::<M>();
-        if !channel_map.contains_key(&message_type) {
-            channel_map.insert(message_type, Vec::new());
-        }
-        let list = channel_map.get_mut(&message_type).unwrap();
-        list.push((*user_key, Box::new(message)));
-        self.empty = false;
-    }
+    // pub(crate) fn push_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: M) {
+    //     let channel_type: TypeId = TypeId::of::<C>();
+    //     if !self.messages.contains_key(&channel_type) {
+    //         self.messages.insert(channel_type, HashMap::new());
+    //     }
+    //     let channel_map = self.messages.get_mut(&channel_type).unwrap();
+    //
+    //     let message_type: TypeId = TypeId::of::<M>();
+    //     if !channel_map.contains_key(&message_type) {
+    //         channel_map.insert(message_type, Vec::new());
+    //     }
+    //     let list = channel_map.get_mut(&message_type).unwrap();
+    //     list.push((*user_key, Box::new(message)));
+    //     self.empty = false;
+    // }
 
     pub(crate) fn push_tick(&mut self) {
         self.ticks.push(());
@@ -104,7 +108,7 @@ pub trait Event {
 }
 
 // ConnectEvent
-pub struct ConnectionEvent(pub UserKey);
+pub struct ConnectionEvent;
 impl Event for ConnectionEvent {
     type Iter = IntoIter<(UserKey)>;
 
@@ -115,7 +119,7 @@ impl Event for ConnectionEvent {
 }
 
 // DisconnectEvent
-pub struct DisconnectionEvent(pub UserKey, pub User);
+pub struct DisconnectionEvent;
 impl Event for DisconnectionEvent {
     type Iter = IntoIter<(UserKey, User)>;
 
@@ -137,7 +141,7 @@ impl Event for TickEvent {
 }
 
 // Error Event
-pub struct ErrorEvent(pub NaiaServerError);
+pub struct ErrorEvent;
 impl Event for ErrorEvent {
     type Iter = IntoIter<(NaiaServerError)>;
 
@@ -148,18 +152,19 @@ impl Event for ErrorEvent {
 }
 
 // Auth Event
-pub struct AuthorizationEvent<M>(pub UserKey, pub M);
-impl<M: 'static> Event for AuthorizationEvent<M> {
+pub struct AuthorizationEvent<M: Message> {
+    phantom_m: PhantomData<M>,
+}
+impl<M: Message+ 'static> Event for AuthorizationEvent<M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
-        let type_id: TypeId = TypeId::of::<M>();
-        if let Some(boxed_list) = events.auths.remove(&type_id) {
+        let message_id: MessageId = Messages::type_to_id::<M>();
+        if let Some(boxed_list) = events.auths.remove(&message_id) {
             let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
             for (user_key, boxed_auth) in boxed_list {
-                let message: M = *boxed_auth
-                    .downcast::<M>()
+                let message: M = Messages::downcast::<M>(boxed_auth)
                     .expect("shouldn't be possible here?");
                 output_list.push((user_key, message));
             }
@@ -172,22 +177,24 @@ impl<M: 'static> Event for AuthorizationEvent<M> {
 }
 
 // Message Event
-pub struct MessageEvent<C: ChannelType, M>(pub UserKey, pub C, pub M);
-impl<C: ChannelType + 'static, M: 'static> Event for MessageEvent<C, M> {
-    type Iter = IntoIter<(UserKey, C, M)>;
+pub struct MessageEvent<C: Channel, M: Message> {
+    phantom_c: PhantomData<C>,
+    phantom_m: PhantomData<M>,
+}
+impl<C: Channel + 'static, M: Message + 'static> Event for MessageEvent<C, M> {
+    type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
-        let channel_type: TypeId = TypeId::of::<C>();
-        if let Some(mut channel_map) = events.messages.remove(&channel_type) {
-            let message_type: TypeId = TypeId::of::<M>();
-            if let Some(boxed_list) = channel_map.remove(&message_type) {
-                let mut output_list: Vec<(UserKey, C, M)> = Vec::new();
+        let channel_id: ChannelId = Channels::type_to_id::<C>();
+        if let Some(mut channel_map) = events.messages.remove(&channel_id) {
+            let message_id: MessageId = Messages::type_to_id::<M>();
+            if let Some(boxed_list) = channel_map.remove(&message_id) {
+                let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
-                for (user_key, boxed_auth) in boxed_list {
-                    let message: M = *boxed_auth
-                        .downcast::<M>()
+                for (user_key, boxed_message) in boxed_list {
+                    let message: M = Messages::downcast::<M>(boxed_message)
                         .expect("shouldn't be possible here?");
-                    output_list.push((user_key, C::new(), message));
+                    output_list.push((user_key, message));
                 }
 
                 return IntoIterator::into_iter(output_list);

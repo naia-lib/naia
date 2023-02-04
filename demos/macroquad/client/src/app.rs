@@ -11,7 +11,7 @@ use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
-    protocol::{Auth, Color, KeyCommand, Protocol, Square},
+    messages::{Auth, Color, KeyCommand, Protocol, Square},
     shared_config, Channels,
 };
 

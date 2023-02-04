@@ -1,4 +1,4 @@
-use crate::{derive_serde, serde};
+use crate::{Components, derive_serde, serde};
 use std::ops::{Deref, DerefMut};
 
 pub type PacketIndex = u16;
@@ -16,9 +16,14 @@ pub enum HostType {
 pub struct ComponentId {
     inner: u16,
 }
+
 impl ComponentId {
     pub fn new(value: u16) -> Self {
         Self { inner: value }
+    }
+
+    pub fn name(&self) -> String {
+        Components::id_to_name(self)
     }
 }
 impl Deref for ComponentId {

@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{BigMapKey, ReplicateSafe};
+use naia_shared::{BigMapKey, Channel, ChannelId, Channels, Message, ReplicateSafe};
 
 use super::user::UserKey;
 
@@ -208,8 +208,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
 
     // Messages
 
-    pub fn broadcast_message<R: ReplicateSafe>(&mut self, channel: C, message: &R) {
-        self.server
-            .room_broadcast_message(channel, message, &self.key);
+    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: M) {
+        self.server.room_broadcast_message(&Channels::type_to_id::<C>(), Box::new(message), &self.key);
     }
 }

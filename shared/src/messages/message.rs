@@ -1,15 +1,21 @@
+use std::any::Any;
 use crate::messages::named::Named;
 use crate::{MessageId, NetEntityHandleConverter};
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
-/// A map to hold all component types
+// Messages
 pub struct Messages {}
 
-impl Messages {}
-
 impl Messages {
-    pub fn kind_of<R: Message>() -> MessageId {
+    pub fn type_to_id<M: Message>() -> MessageId {
         todo!()
+    }
+
+    pub fn message_id_from_box(boxed_message: &Box<dyn Message>) -> MessageId { todo!() }
+
+    pub fn downcast<M: Message>(boxed_message: Box<dyn Message>) -> Option<M> {
+        let boxed_any: Box<dyn Any> = boxed_message.into_any();
+        Box::<dyn Any + 'static>::downcast::<M>(boxed_any).ok().map(|boxed_m| *boxed_m)
     }
 
     pub fn read(
@@ -19,17 +25,28 @@ impl Messages {
         todo!()
     }
 
-    pub fn write<M: Message>(
+    pub fn write(
         bit_writer: &mut dyn BitWrite,
         converter: &dyn NetEntityHandleConverter,
-        message: &M,
+        message: &Box<dyn Message>,
     ) {
         todo!()
     }
 }
 
-pub trait Message: Send + Sync + MessageClone + Named {}
+// Message
+pub trait Message: Send + Sync + Named + MessageClone + Any {
+    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+}
 
+// Named
+impl Named for Box<dyn Message> {
+    fn name(&self) -> String {
+        self.as_ref().name()
+    }
+}
+
+// MessageClone
 pub trait MessageClone {
     fn clone_box(&self) -> Box<dyn Message>;
 }
@@ -43,11 +60,5 @@ impl<T: 'static + Clone + Message> MessageClone for T {
 impl Clone for Box<dyn Message> {
     fn clone(&self) -> Box<dyn Message> {
         MessageClone::clone_box(self.as_ref())
-    }
-}
-
-impl Named for Box<dyn Message> {
-    fn name(&self) -> String {
-        Named::name(self.as_ref())
     }
 }

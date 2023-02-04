@@ -8,6 +8,7 @@ pub use naia_shared::{
     Message, PacketType, PropertyMutate, PropertyMutator, Replicate, ReplicateSafe, StandardHeader,
     Timer, WorldMutType, WorldRefType,
 };
+use naia_shared::Messages;
 
 use crate::cache_map::CacheMap;
 
@@ -88,7 +89,7 @@ impl HandshakeManager {
                 self.address_to_timestamp_map.insert(*address, timestamp);
 
                 if has_auth {
-                    if let Ok(auth_message) = ReplicateSafe::read(reader, &FakeEntityConverter) {
+                    if let Ok(auth_message) = Messages::read(reader, &FakeEntityConverter) {
                         HandshakeResult::Success(Some(auth_message))
                     } else {
                         HandshakeResult::Invalid
@@ -111,9 +112,9 @@ impl HandshakeManager {
         writer
     }
 
-    pub fn verify_disconnect_request<E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex>(
+    pub fn verify_disconnect_request<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
-        connection: &Connection<P, E, C>,
+        connection: &Connection<E>,
         reader: &mut BitReader,
     ) -> bool {
         // Verify that timestamp hash has been written by this

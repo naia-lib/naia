@@ -5,18 +5,18 @@ use naia_server::{
     MessageEvent, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent, UserKey,
 };
 
-use naia_demo_world::{Entity, World as DemoWorld};
+use naia_demo_world::{Entity, World};
 
-use naia_macroquad_demo_shared::protocol::PlayerCommandChannel;
+use naia_macroquad_demo_shared::messages::PlayerCommandChannel;
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
     channels::{Channels, PlayerCommandChannel},
-    protocol::{Auth, Color, EntityAssignment, KeyCommand, Marker, Protocol, Square},
+    messages::{Auth, Color, EntityAssignment, KeyCommand, Marker, Protocol, Square},
     shared_config,
 };
+use naia_macroquad_demo_shared::channels::EntityAssignmentChannel;
 
-type World = DemoWorld<Protocol>;
-type Server = NaiaServer<Protocol, Entity, Channels>;
+type Server = NaiaServer<Entity>;
 
 pub struct App {
     server: Server,
@@ -124,7 +124,7 @@ impl App {
             // self.server.entity_property(assigment_message).set(&entity_id);
 
             self.server
-                .send_message(&user_key, Channels::EntityAssignment, &assignment_message);
+                .send_message::<EntityAssignmentChannel, _>(&user_key, &assignment_message);
         }
         for (user_key, user) in events.read::<DisconnectionEvent>() {
             info!("Naia Server disconnected from: {}", user.address);

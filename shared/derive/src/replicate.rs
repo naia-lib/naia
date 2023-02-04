@@ -5,13 +5,9 @@ use syn::{
     Member, Meta, Path, PathArguments, Result, Type,
 };
 
-const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
+use crate::shared::{StructType, get_struct_type};
 
-pub enum StructType {
-    Struct,
-    UnitStruct,
-    TupleStruct,
-}
+const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
 
 pub struct NormalProperty {
     pub variable_name: Ident,
@@ -273,18 +269,6 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
     }
 
     fields
-}
-
-/// Get the type of the struct
-fn get_struct_type(input: &DeriveInput) -> StructType {
-    if let Data::Struct(data_struct) = &input.data {
-        return match &data_struct.fields {
-            Fields::Named(_) => StructType::Struct,
-            Fields::Unnamed(_) => StructType::TupleStruct,
-            Fields::Unit => StructType::UnitStruct,
-        };
-    }
-    panic!("Can only derive Replicate on a struct")
 }
 
 fn protocol_path(input: &DeriveInput) -> (Path, Ident) {

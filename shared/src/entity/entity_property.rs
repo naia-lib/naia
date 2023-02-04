@@ -20,6 +20,12 @@ impl EntityProperty {
         }
     }
 
+    pub fn new_empty() -> Self {
+        Self {
+            handle_prop: Property::<Option<EntityHandle>>::new(None, 0),
+        }
+    }
+
     pub fn mirror(&mut self, other: &EntityProperty) {
         *self.handle_prop = other.handle();
     }

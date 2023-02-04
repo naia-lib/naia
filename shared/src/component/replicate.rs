@@ -15,10 +15,11 @@ use crate::{
 /// A map to hold all component types
 pub struct Components {}
 
-impl Components {}
-
 impl Components {
-    pub fn kind_of<R: ReplicateSafe>() -> ComponentId {
+    pub fn type_to_id<R: ReplicateSafe>() -> ComponentId {
+        todo!()
+    }
+    pub fn id_to_name(id: &ComponentId) -> String {
         todo!()
     }
     pub fn cast<R: Replicate>(boxed_component: Box<dyn ReplicateSafe>) -> Option<R> {

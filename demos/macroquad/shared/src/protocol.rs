@@ -5,24 +5,20 @@ use naia_shared::{
     SocketConfig, TickBufferSettings,
 };
 
-mod auth;
-mod entity_assignment;
-mod key_command;
-mod marker;
-mod square;
-
-pub use auth::Auth;
-pub use entity_assignment::EntityAssignment;
-pub use key_command::KeyCommand;
-pub use marker::Marker;
-pub use square::{Color, Square};
-
-pub struct PlayerCommandChannel;
-//TODO: implement derive!
-impl Channel for PlayerCommandChannel {}
-pub struct EntityAssignmentChannel;
-//TODO: implement derive!
-impl Channel for EntityAssignmentChannel {}
+use crate::{
+    channels::{
+        EntityAssignmentChannel, PlayerCommandChannel
+    },
+    messages::{
+        Auth,
+        EntityAssignment,
+        KeyCommand,
+    },
+    components::{
+        Marker,
+        Square,
+    }
+};
 
 // Protocol Build
 pub fn protocol() -> Protocol {

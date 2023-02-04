@@ -5,12 +5,9 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, BitWriter, Serde, SerdeErr},
-    BaseConnection, ChannelConfig, ConnectionConfig, EntityConverter, HostType, Instant,
-    PacketType, PingManager, StandardHeader, Tick, WorldRefType,
-};
+use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter, Serde, SerdeErr}, BaseConnection,
+                  ChannelConfig, ConnectionConfig, EntityConverter, HostType, Instant, PacketType, PingManager,
+                  StandardHeader, Tick, WorldRefType, ProtocolIo};
 
 use crate::{
     protocol::{
@@ -23,22 +20,21 @@ use crate::{
 
 use super::io::Io;
 
-pub struct Connection<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
-    pub base: BaseConnection<P, C>,
-    pub entity_manager: EntityManager<P, E, C>,
-    pub tick_buffer: TickBufferReceiver<P, C>,
+    pub base: BaseConnection,
+    pub entity_manager: EntityManager<E>,
+    pub tick_buffer: TickBufferReceiver,
     pub last_received_tick: Tick,
     pub ping_manager: PingManager,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connection<P, E, C> {
+impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn new(
         connection_config: &ConnectionConfig,
-        channel_config: &ChannelConfig<C>,
         user_address: SocketAddr,
         user_key: &UserKey,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
+        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
     ) -> Self {
         Connection {
             user_key: *user_key,
@@ -102,12 +98,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
     }
 
     // Outgoing data
-    pub fn send_outgoing_packets<W: WorldRefType<P, E>>(
+    pub fn send_outgoing_packets<W: WorldRefType<E>>(
         &mut self,
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E, P::Kind>,
+        world_record: &WorldRecord<E>,
         tick_manager_opt: &Option<TickManager>,
         rtt_millis: &f32,
     ) {
@@ -139,12 +135,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
 
     /// Send any message, component actions and component updates to the client
     /// Will split the data into multiple packets.
-    fn send_outgoing_packet<W: WorldRefType<P, E>>(
+    fn send_outgoing_packet<W: WorldRefType<E>>(
         &mut self,
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E, P::Kind>,
+        world_record: &WorldRecord<E>,
         tick_manager_opt: &Option<TickManager>,
     ) -> bool {
         if self.base.message_manager.has_outgoing_messages()

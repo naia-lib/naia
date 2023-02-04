@@ -12,12 +12,7 @@ use log::warn;
 use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{
-    serde::{BitWriter, Serde},
-    BigMap, Channel, Components, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
-    Instant, PacketType, PropertyMutator, Protocol, Replicate, ReplicateSafe, StandardHeader, Tick,
-    Timer, WorldMutType, WorldRefType,
-};
+use naia_shared::{serde::{BitWriter, Serde}, BigMap, Channel, Components, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, PacketType, PropertyMutator, Protocol, Replicate, ReplicateSafe, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, ComponentId, Message, ChannelId, Channels};
 
 use crate::{
     connection::{
@@ -56,7 +51,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ping_timer: Timer,
-    handshake_manager: HandshakeManager<P>,
+    handshake_manager: HandshakeManager,
     // Users
     users: BigMap<UserKey, User>,
     user_connections: HashMap<SocketAddr, Connection<E>>,
@@ -180,7 +175,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if let Some(user) = self.users.get(user_key) {
             let new_connection = Connection::new(
                 &self.server_config.connection,
-                &self.protocol.channel,
                 user.address,
                 user_key,
                 &self.diff_handler,
@@ -231,13 +225,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn send_message<M: Message>(
+    pub fn send_message<C: Channel, M: Message>(
         &mut self,
         user_key: &UserKey,
-        channel: &dyn Channel,
         message: M,
     ) {
-        self.send_message_inner(user_key, channel, Box::new(message));
+        self.send_message_inner(user_key, &Channels::type_to_id::<C>(), Box::new(message));
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -245,10 +238,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     fn send_message_inner(
         &mut self,
         user_key: &UserKey,
-        channel: &dyn Channel,
+        channel_id: &ChannelId,
         message: Box<dyn Message>,
     ) {
-        if !self.protocol.channel.channel(&channel).can_send_to_client() {
+        if !self.protocol.channel.channel(channel_id).can_send_to_client() {
             panic!("Cannot send message to Client on this Channel");
         }
 
@@ -273,29 +266,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         connection
                             .base
                             .message_manager
-                            .send_message(channel, message);
+                            .send_message(channel_id, message);
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
                         connection
                             .entity_manager
-                            .queue_entity_message(entities, channel, message);
+                            .queue_entity_message(entities, channel_id, message);
                     }
                 } else {
                     connection
                         .base
                         .message_manager
-                        .send_message(channel, message);
+                        .send_message(channel_id, message);
                 }
             }
         }
     }
 
     /// Sends a message to all connected users using a given channel
-    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+    pub fn broadcast_message<C: Channel, M: Message>(
+        &mut self,
+        message: M,
+    ) {
+        self.broadcast_message_inner(&Channels::type_to_id::<C>(), Box::new(message));
+    }
+
+    fn broadcast_message_inner(&mut self, channel_id: &ChannelId, message: Box<dyn Message>) {
         self.user_keys()
             .iter()
-            .for_each(|user_key| self.send_message(user_key, channel.clone(), message))
+            .for_each(|user_key| self.send_message_inner(user_key, channel_id, message))
     }
 
     // Updates
@@ -328,7 +328,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub fn send_all_updates<W: WorldRefType<P, E>>(&mut self, world: W) {
+    pub fn send_all_updates<W: WorldRefType<E>>(&mut self, world: W) {
         let now = Instant::now();
 
         // update entity scopes
@@ -358,7 +358,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<P, E>>(&mut self, mut world: W) -> EntityMut<P, E, W, C> {
+    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
         let entity = world.spawn_entity();
         self.spawn_entity_init(&entity);
 
@@ -373,7 +373,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<W: WorldRefType<P, E>>(&self, world: W, entity: &E) -> EntityRef<P, E, W> {
+    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(world, entity);
         }
@@ -383,11 +383,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<P, E>>(
+    pub fn entity_mut<W: WorldMutType<E>>(
         &mut self,
         world: W,
         entity: &E,
-    ) -> EntityMut<P, E, W, C> {
+    ) -> EntityMut<E, W> {
         if world.has_entity(entity) {
             return EntityMut::new(self, world, entity);
         }
@@ -395,7 +395,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Gets a Vec of all Entities in the given World
-    pub fn entities<W: WorldRefType<P, E>>(&self, world: W) -> Vec<E> {
+    pub fn entities<W: WorldRefType<E>>(&self, world: W) -> Vec<E> {
         world.entities()
     }
 
@@ -409,7 +409,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> UserRef<P, E, C> {
+    pub fn user(&self, user_key: &UserKey) -> UserRef<E> {
         if self.users.contains_key(user_key) {
             return UserRef::new(self, user_key);
         }
@@ -419,7 +419,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, E, C> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<E> {
         if self.users.contains_key(user_key) {
             return UserMut::new(self, user_key);
         }
@@ -444,7 +444,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
-    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, E, C> {
+    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<E> {
         if self.users.contains_key(user_key) {
             return UserScopeMut::new(self, user_key);
         }
@@ -456,7 +456,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&mut self) -> RoomMut<P, E, C> {
+    pub fn make_room(&mut self) -> RoomMut<E> {
         let new_room = Room::new();
         let room_key = self.rooms.insert(new_room);
         RoomMut::new(self, &room_key)
@@ -470,7 +470,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, E, C> {
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<E> {
         if self.rooms.contains_key(room_key) {
             return RoomRef::new(self, room_key);
         }
@@ -480,7 +480,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, E, C> {
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<E> {
         if self.rooms.contains_key(room_key) {
             return RoomMut::new(self, room_key);
         }
@@ -570,7 +570,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// This will also remove all of the Entity’s Components.
     /// Returns true if the Entity is successfully despawned and false if the
     /// Entity does not exist.
-    pub(crate) fn despawn_entity<W: WorldMutType<P, E>>(&mut self, world: &mut W, entity: &E) {
+    pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
         if !world.has_entity(entity) {
             panic!("attempted to de-spawn nonexistent entity");
         }
@@ -617,7 +617,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     //// Components
 
     /// Adds a Component to an Entity
-    pub(crate) fn insert_component<R: ReplicateSafe<P>, W: WorldMutType<P, E>>(
+    pub(crate) fn insert_component<R: ReplicateSafe, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,
@@ -816,16 +816,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Sends a message to all connected users in a given Room using a given channel
-    pub(crate) fn room_broadcast_message<R: ReplicateSafe<P>>(
+    pub(crate) fn room_broadcast_message(
         &mut self,
-        channel: C,
-        message: &R,
+        channel_id: &ChannelId,
+        message: Box<dyn Message>,
         room_key: &RoomKey,
     ) {
         if let Some(room) = self.rooms.get(room_key) {
             let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
             for user_key in &user_keys {
-                self.send_message(user_key, channel.clone(), message)
+                self.send_message_inner(user_key, channel_id, message.clone())
             }
         }
     }
@@ -1206,7 +1206,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // Entity Scopes
 
-    fn update_entity_scopes<W: WorldRefType<P, E>>(&mut self, world: &W) {
+    fn update_entity_scopes<W: WorldRefType<E>>(&mut self, world: &W) {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(user) = self.users.get(&removed_user) {
@@ -1266,7 +1266,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // Component Helpers
 
-    fn component_init<R: ReplicateSafe<P>>(&mut self, entity: &E, component_ref: &mut R) {
+    fn component_init<R: ReplicateSafe>(&mut self, entity: &E, component_ref: &mut R) {
         let component_kind = component_ref.kind();
         self.world_record.add_component(entity, &component_kind);
 
@@ -1284,7 +1284,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         component_ref.set_mutator(&prop_mutator);
     }
 
-    fn component_cleanup(&mut self, entity: &E, component_kind: &P::Kind) {
+    fn component_cleanup(&mut self, entity: &E, component_kind: &ComponentId) {
         self.world_record.remove_component(entity, component_kind);
         self.diff_handler
             .as_ref()
@@ -1294,8 +1294,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityHandleConverter<E>
-    for Server<P, E, C>
+impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E>
 {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         self.world_record.handle_to_entity(entity_handle)

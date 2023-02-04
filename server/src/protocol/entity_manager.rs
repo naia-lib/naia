@@ -7,12 +7,7 @@ use std::{
     time::Duration,
 };
 
-use naia_shared::{
-    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ComponentId, DiffMask, EntityAction, EntityActionType, EntityConverter, Instant,
-    MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable,
-    ReplicateSafe, WorldRefType,
-};
+use naia_shared::{serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger}, wrapping_diff, ComponentId, DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, ReplicateSafe, WorldRefType, ChannelId, Message};
 
 use crate::sequence_list::SequenceList;
 
@@ -88,11 +83,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     // Messages
 
-    pub fn queue_entity_message(&mut self, entities: Vec<E>, channel: C, message: &R) {
+    pub fn queue_entity_message(&mut self, entities: Vec<E>, channel: ChannelId, message: Box<dyn Message>) {
         self.world_channel.delayed_entity_messages.queue_message(
             entities,
             channel,
-            message.protocol_copy(),
+            message,
         );
     }
 
@@ -102,7 +97,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        message_manager: &mut MessageManager<P, C>,
+        message_manager: &mut MessageManager,
     ) {
         self.world_channel
             .delayed_entity_messages
@@ -519,7 +514,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         }
     }
 
-    pub fn write_updates<W: WorldRefType<P, E>>(
+    pub fn write_updates<W: WorldRefType<E>>(
         &mut self,
         now: &Instant,
         writer: &mut BitWriter,
@@ -668,8 +663,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 }
 
 // PacketNotifiable
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> PacketNotifiable
-    for EntityManager<P, E, C>
+impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for EntityManager<E>
 {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         // Updates
@@ -688,9 +682,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> PacketN
 }
 
 // NetEntityConverter
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> NetEntityConverter<E>
-    for EntityManager<P, E, C>
-{
+impl<E: Copy + Eq + Hash + Send + Sync> NetEntityConverter<E> for EntityManager<E> {
     fn entity_to_net_entity(&self, entity: &E) -> NetEntity {
         return *self
             .world_channel

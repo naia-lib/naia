@@ -2,37 +2,17 @@ use std::{collections::HashMap, hash::Hash};
 
 use crate::{serde::Serde, types::ChannelId};
 
-// ChannelType
+// Channels
+pub struct Channels {}
+
+impl Channels {
+    pub fn type_to_id<M: Channel>() -> ChannelId {
+        todo!()
+    }
+}
+
+// Channel Trait
 pub trait Channel {}
-
-// ChannelConfig
-//#[derive(Clone)]
-pub struct ChannelConfig {
-    channels: HashMap<ChannelId, ChannelSettings>,
-}
-
-impl ChannelConfig {
-    pub fn new() -> Self {
-        Self {
-            channels: HashMap::new(),
-        }
-    }
-
-    pub fn channels(&self) -> &HashMap<ChannelId, ChannelSettings> {
-        &self.channels
-    }
-
-    pub fn channel(&self, channel_id: &ChannelId) -> &ChannelSettings {
-        return self
-            .channels
-            .get(channel_id)
-            .expect("Channel has not been registered in the protocol!");
-    }
-
-    fn add_channel(&mut self, channel_id: &ChannelId, channel_settings: ChannelSettings) {
-        self.channels.insert(*channel_id, channel_settings);
-    }
-}
 
 // ChannelSettings
 #[derive(Clone)]

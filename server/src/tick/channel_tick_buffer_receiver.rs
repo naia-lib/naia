@@ -34,7 +34,7 @@ impl ChannelTickBufferReceiver {
         &mut self,
         host_tick: &Tick,
         remote_tick: &Tick,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &dyn ChannelReader<Box<dyn Message>>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_tick = *remote_tick;
@@ -57,7 +57,7 @@ impl ChannelTickBufferReceiver {
         &mut self,
         host_tick: &Tick,
         last_read_tick: &mut Tick,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &dyn ChannelReader<Box<dyn Message>>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read remote tick
@@ -68,11 +68,11 @@ impl ChannelTickBufferReceiver {
         // read message count
         let message_count = UnsignedVariableInteger::<3>::de(reader)?.get();
 
-        let mut last_read_message_id: ShortMessageId = 0;
+        let mut last_read_message_id: ShortMessageIndex = 0;
         for _ in 0..message_count {
             // read message id diff, add to last read id
-            let id_diff = UnsignedVariableInteger::<2>::de(reader)?.get() as ShortMessageId;
-            let message_id: ShortMessageId = last_read_message_id + id_diff;
+            let id_diff = UnsignedVariableInteger::<2>::de(reader)?.get() as ShortMessageIndex;
+            let message_id: ShortMessageIndex = last_read_message_id + id_diff;
             last_read_message_id = message_id;
 
             // read payload
@@ -98,7 +98,7 @@ struct IncomingMessages {
     // front is present, back is future
     /// Buffer containing messages from the client, along with the corresponding tick
     /// We do not store anything for empty ticks
-    buffer: VecDeque<(Tick, HashMap<ShortMessageId, Box<dyn Message>>)>,
+    buffer: VecDeque<(Tick, HashMap<ShortMessageIndex, Box<dyn Message>>)>,
 }
 
 impl IncomingMessages {
@@ -119,8 +119,8 @@ impl IncomingMessages {
         &mut self,
         host_tick: &Tick,
         message_tick: &Tick,
-        message_id: ShortMessageId,
-        new_message: P,
+        message_id: ShortMessageIndex,
+        new_message: Box<dyn Message>,
     ) -> bool {
         if sequence_greater_than(*message_tick, *host_tick) {
             let mut index = self.buffer.len();
@@ -207,7 +207,7 @@ impl IncomingMessages {
     }
 
     /// Retrieve from the buffer data corresponding to the provided [`Tick`]
-    pub fn collect(&mut self, host_tick: &Tick) -> Vec<P> {
+    pub fn collect(&mut self, host_tick: &Tick) -> Vec<Box<dyn Message>> {
         self.prune_outdated_commands(host_tick);
 
         // now get the newest applicable command

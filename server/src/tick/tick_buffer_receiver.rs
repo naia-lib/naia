@@ -1,10 +1,7 @@
 use std::collections::HashMap;
 
 use crate::Events;
-use naia_shared::{
-    serde::{BitReader, Serde, SerdeErr},
-    ChannelConfig, ChannelMode, ChannelReader, Tick,
-};
+use naia_shared::{serde::{BitReader, Serde, SerdeErr}, ChannelConfig, ChannelMode, ChannelReader, Tick, ChannelId, Message};
 
 use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
 
@@ -32,7 +29,7 @@ impl TickBufferReceiver {
         &mut self,
         host_tick: &Tick,
         remote_tick: &Tick,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &dyn ChannelReader<Box<dyn Message>>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -42,7 +39,7 @@ impl TickBufferReceiver {
             }
 
             // read channel index
-            let channel_index = C::de(reader)?;
+            let channel_index = ChannelId::de(reader)?;
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_index).unwrap();
