@@ -1,6 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
-use naia_shared::{BigMap, ComponentId, EntityDoesNotExistError, EntityHandle, EntityHandleConverter};
+use naia_shared::{
+    BigMap, ComponentId, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
+};
 
 use crate::{protocol::global_entity_record::GlobalEntityRecord, room::RoomKey};
 

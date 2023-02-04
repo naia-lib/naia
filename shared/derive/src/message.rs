@@ -1,11 +1,8 @@
-use proc_macro2::{Punct, Spacing, Span, TokenStream};
-use quote::{format_ident, quote};
-use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Index, Lit, LitStr,
-    Member, Meta, Path, PathArguments, Result, Type,
-};
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
+use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Index, LitStr, Member, Type};
 
-use super::{shared::{get_struct_type, StructType}};
+use super::shared::{get_struct_type, StructType};
 
 pub fn message_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -20,18 +17,22 @@ pub fn message_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     // Methods
     let clone_method = clone_method(&struct_name, &properties, &struct_type);
+    let has_entity_properties_method = has_entity_properties_method(&properties);
+    let entities_method = entities_method(&properties, &struct_type);
 
     let gen = quote! {
 
         mod internal {
             pub use std::any::Any;
-            pub use naia_shared::Named;
+            pub use naia_shared::{Named, EntityHandle};
         }
 
         impl Message for #struct_name {
             fn into_any(self: Box<Self>) -> Box<dyn internal::Any> {
                 self
             }
+            #has_entity_properties_method
+            #entities_method
         }
         impl internal::Named for #struct_name {
             fn name(&self) -> String {
@@ -52,7 +53,6 @@ fn clone_method(
     struct_type: &StructType,
 ) -> TokenStream {
     let mut output = quote! {};
-    let mut entity_property_output = quote! {};
 
     for (index, property) in properties.iter().enumerate() {
         let field_name = get_field_name(property, index, struct_type);
@@ -76,6 +76,52 @@ fn clone_method(
                 #output
             };
             return new_clone;
+        }
+    }
+}
+
+fn has_entity_properties_method(properties: &[Property]) -> TokenStream {
+    for property in properties.iter() {
+        if let Property::Entity(_) = property {
+            return quote! {
+                fn has_entity_properties(&self) -> bool {
+                    return true;
+                }
+            };
+        }
+    }
+
+    quote! {
+        fn has_entity_properties(&self) -> bool {
+            return false;
+        }
+    }
+}
+
+fn entities_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut body = quote! {};
+
+    for (index, property) in properties.iter().enumerate() {
+        if let Property::Entity(_) = property {
+            let field_name = get_field_name(property, index, struct_type);
+            let body_add_right = quote! {
+                if let Some(handle) = self.#field_name.handle() {
+                    output.push(handle);
+                }
+            };
+            let new_body = quote! {
+                #body
+                #body_add_right
+            };
+            body = new_body;
+        }
+    }
+
+    quote! {
+        fn entities(&self) -> Vec<internal::EntityHandle> {
+            let mut output = Vec::new();
+            #body
+            return output;
         }
     }
 }
@@ -118,7 +164,8 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
                                 fields.push(Property::entity(variable_name));
                                 continue;
                             } else {
-                                fields.push(Property::nonreplicated(variable_name, field.ty.clone()))
+                                fields
+                                    .push(Property::nonreplicated(variable_name, field.ty.clone()))
                             }
                         }
                     }
@@ -172,7 +219,6 @@ pub enum Property {
 }
 
 impl Property {
-
     pub fn entity(variable_name: Ident) -> Self {
         Self::Entity(EntityProperty {
             variable_name: variable_name.clone(),
@@ -194,13 +240,6 @@ impl Property {
         match self {
             Self::Entity(property) => &property.variable_name,
             Self::NonReplicated(property) => &property.variable_name,
-        }
-    }
-
-    pub fn uppercase_variable_name(&self) -> &Ident {
-        match self {
-            Self::Entity(property) => &property.uppercase_variable_name,
-            Self::NonReplicated(_) => panic!("Unused for non-replicated properties"),
         }
     }
 }

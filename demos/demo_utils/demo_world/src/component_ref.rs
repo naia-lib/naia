@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use naia_shared::{ReplicaMutTrait, ReplicaRefTrait, ReplicateSafe};
 
 // ComponentRef

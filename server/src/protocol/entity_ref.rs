@@ -1,4 +1,4 @@
-use std::{hash::Hash, marker::PhantomData};
+use std::hash::Hash;
 
 use naia_shared::{
     ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
@@ -48,8 +48,7 @@ pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> 
     entity: E,
 }
 
-impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W>
-{
+impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
     pub(crate) fn new(server: &'s mut Server<E>, world: W, entity: &E) -> Self {
         EntityMut {
             server,
@@ -83,10 +82,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self
     }
 
-    pub fn insert_components<R: ReplicateSafe>(
-        &mut self,
-        mut component_refs: Vec<R>,
-    ) -> &mut Self {
+    pub fn insert_components<R: ReplicateSafe>(&mut self, mut component_refs: Vec<R>) -> &mut Self {
         while let Some(component_ref) = component_refs.pop() {
             self.insert_component(component_ref);
         }
@@ -95,7 +91,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn remove_component<R: Replicate>(&mut self) -> Option<R> {
-        self.server.remove_component::<R, W>(&mut self.world, &self.entity)
+        self.server
+            .remove_component::<R, W>(&mut self.world, &self.entity)
     }
 
     // Rooms

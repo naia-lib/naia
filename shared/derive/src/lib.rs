@@ -3,14 +3,14 @@
 
 #![deny(trivial_casts, trivial_numeric_casts, unstable_features)]
 
-mod replicate;
 mod channel;
 mod message;
+mod replicate;
 mod shared;
 
-use replicate::replicate_impl;
 use channel::channel_impl;
 use message::message_impl;
+use replicate::replicate_impl;
 
 /// Derives the Replicate trait for a given struct
 #[proc_macro_derive(Replicate)]

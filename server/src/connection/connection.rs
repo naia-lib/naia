@@ -5,9 +5,12 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{sequence_greater_than, serde::{BitReader, BitWriter, Serde, SerdeErr}, BaseConnection,
-                  ChannelConfig, ConnectionConfig, EntityConverter, HostType, Instant, PacketType, PingManager,
-                  StandardHeader, Tick, WorldRefType, ProtocolIo};
+use naia_shared::{
+    sequence_greater_than,
+    serde::{BitReader, BitWriter, Serde, SerdeErr},
+    BaseConnection, ConnectionConfig, EntityConverter, HostType, Instant, PacketType, PingManager,
+    ProtocolIo, StandardHeader, Tick, WorldRefType,
+};
 
 use crate::{
     protocol::{
@@ -38,14 +41,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     ) -> Self {
         Connection {
             user_key: *user_key,
-            base: BaseConnection::new(
-                user_address,
-                HostType::Server,
-                connection_config,
-                channel_config,
-            ),
+            base: BaseConnection::new(user_address, HostType::Server, connection_config),
             entity_manager: EntityManager::new(user_address, diff_handler),
-            tick_buffer: TickBufferReceiver::new(channel_config),
+            tick_buffer: TickBufferReceiver::new(),
             ping_manager: PingManager::new(&connection_config.ping),
             last_received_tick: 0,
         }

@@ -4,7 +4,7 @@ use naia_serde::{BitWriter, Serde};
 
 use crate::{
     backends::Timer,
-    messages::{channel_config::ChannelConfig, message_manager::MessageManager},
+    messages::message_manager::MessageManager,
     types::{HostType, PacketIndex},
 };
 
@@ -29,14 +29,13 @@ impl BaseConnection {
         address: SocketAddr,
         host_type: HostType,
         connection_config: &ConnectionConfig,
-        channel_config: &ChannelConfig,
     ) -> Self {
         BaseConnection {
             address,
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
-            message_manager: MessageManager::new(host_type, channel_config),
+            message_manager: MessageManager::new(host_type),
         }
     }
 

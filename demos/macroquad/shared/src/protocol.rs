@@ -6,18 +6,9 @@ use naia_shared::{
 };
 
 use crate::{
-    channels::{
-        EntityAssignmentChannel, PlayerCommandChannel
-    },
-    messages::{
-        Auth,
-        EntityAssignment,
-        KeyCommand,
-    },
-    components::{
-        Marker,
-        Square,
-    }
+    channels::{EntityAssignmentChannel, PlayerCommandChannel},
+    components::{Marker, Square},
+    messages::{Auth, EntityAssignment, KeyCommand},
 };
 
 // Protocol Build

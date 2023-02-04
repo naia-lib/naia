@@ -2,8 +2,9 @@ use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
-use crate::{Channel, ChannelDirection, ChannelMode, CompressionConfig, Message, Replicate, ReplicateSafe};
+use crate::{Channel, ChannelDirection, ChannelMode, CompressionConfig, Message, Replicate};
 
+#[derive(Clone)]
 pub struct Protocol {
     /// Used to configure the underlying socket
     pub socket: SocketConfig,
@@ -32,7 +33,6 @@ pub struct ProtocolBuilder {
 }
 
 impl ProtocolBuilder {
-
     pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
         self.link_conditioner_config = Some(config);
         self
@@ -53,7 +53,11 @@ impl ProtocolBuilder {
         self
     }
 
-    pub fn add_channel<C: Channel>(&mut self, direction: ChannelDirection, mode: ChannelMode) -> &mut Self {
+    pub fn add_channel<C: Channel>(
+        &mut self,
+        direction: ChannelDirection,
+        mode: ChannelMode,
+    ) -> &mut Self {
         todo!()
     }
 
@@ -66,7 +70,10 @@ impl ProtocolBuilder {
     }
 
     pub fn build(&mut self) -> Protocol {
-        let socket = SocketConfig::new(self.link_conditioner_config.take(), self.rtc_endpoint_path.take());
+        let socket = SocketConfig::new(
+            self.link_conditioner_config.take(),
+            self.rtc_endpoint_path.take(),
+        );
         Protocol {
             socket,
             tick_interval: self.tick_interval.take(),
@@ -75,6 +82,4 @@ impl ProtocolBuilder {
     }
 }
 
-impl ProtocolBuilder {
-
-}
+impl ProtocolBuilder {}

@@ -1,4 +1,3 @@
-use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::vec::IntoIter;
@@ -9,10 +8,10 @@ use super::user::{User, UserKey};
 use crate::NaiaServerError;
 
 pub struct Events {
-    connections: Vec<(UserKey)>,
+    connections: Vec<UserKey>,
     disconnections: Vec<(UserKey, User)>,
     ticks: Vec<()>,
-    errors: Vec<(NaiaServerError)>,
+    errors: Vec<NaiaServerError>,
     auths: HashMap<MessageId, Vec<(UserKey, Box<dyn Message>)>>,
     messages: HashMap<ChannelId, HashMap<MessageId, Vec<(UserKey, Box<dyn Message>)>>>,
     empty: bool,
@@ -24,9 +23,7 @@ impl Default for Events {
     }
 }
 
-impl MessageReceivable for Events {
-
-}
+impl MessageReceivable for Events {}
 
 impl Events {
     pub(crate) fn new() -> Events {
@@ -54,7 +51,7 @@ impl Events {
     // Crate-public
 
     pub(crate) fn push_connection(&mut self, user_key: &UserKey) {
-        self.connections.push((*user_key));
+        self.connections.push(*user_key);
         self.empty = false;
     }
 
@@ -95,7 +92,7 @@ impl Events {
     }
 
     pub(crate) fn push_error(&mut self, error: NaiaServerError) {
-        self.errors.push((error));
+        self.errors.push(error);
         self.empty = false;
     }
 }
@@ -110,7 +107,7 @@ pub trait Event {
 // ConnectEvent
 pub struct ConnectionEvent;
 impl Event for ConnectionEvent {
-    type Iter = IntoIter<(UserKey)>;
+    type Iter = IntoIter<UserKey>;
 
     fn iter(events: &mut Events) -> Self::Iter {
         let list = std::mem::take(&mut events.connections);
@@ -143,7 +140,7 @@ impl Event for TickEvent {
 // Error Event
 pub struct ErrorEvent;
 impl Event for ErrorEvent {
-    type Iter = IntoIter<(NaiaServerError)>;
+    type Iter = IntoIter<NaiaServerError>;
 
     fn iter(events: &mut Events) -> Self::Iter {
         let list = std::mem::take(&mut events.errors);
@@ -155,7 +152,7 @@ impl Event for ErrorEvent {
 pub struct AuthorizationEvent<M: Message> {
     phantom_m: PhantomData<M>,
 }
-impl<M: Message+ 'static> Event for AuthorizationEvent<M> {
+impl<M: Message + 'static> Event for AuthorizationEvent<M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
@@ -164,8 +161,8 @@ impl<M: Message+ 'static> Event for AuthorizationEvent<M> {
             let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
             for (user_key, boxed_auth) in boxed_list {
-                let message: M = Messages::downcast::<M>(boxed_auth)
-                    .expect("shouldn't be possible here?");
+                let message: M =
+                    Messages::downcast::<M>(boxed_auth).expect("shouldn't be possible here?");
                 output_list.push((user_key, message));
             }
 

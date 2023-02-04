@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::Events;
-use naia_shared::{serde::{BitReader, Serde, SerdeErr}, ChannelConfig, ChannelMode, ChannelReader, Tick, ChannelId, Message};
+use naia_shared::{
+    serde::{BitReader, Serde, SerdeErr},
+    ChannelId, ChannelMode, ChannelReader, Channels, Message, Tick,
+};
 
 use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
 
@@ -10,12 +13,12 @@ pub struct TickBufferReceiver {
 }
 
 impl TickBufferReceiver {
-    pub fn new(channel_config: &ChannelConfig) -> Self {
+    pub fn new() -> Self {
         // initialize receivers
         let mut channel_receivers = HashMap::new();
-        for (channel_index, channel) in channel_config.channels() {
-            if let ChannelMode::TickBuffered(_) = channel.mode {
-                channel_receivers.insert(channel_index.clone(), ChannelTickBufferReceiver::new());
+        for (channel_id, channel_settings) in Channels::channels() {
+            if let ChannelMode::TickBuffered(_) = channel_settings.mode {
+                channel_receivers.insert(*channel_id, ChannelTickBufferReceiver::new());
             }
         }
 

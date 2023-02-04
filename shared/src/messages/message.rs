@@ -1,7 +1,7 @@
-use std::any::Any;
 use crate::messages::named::Named;
-use crate::{MessageId, NetEntityHandleConverter};
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
+use crate::{EntityHandle, MessageId, NetEntityHandleConverter};
+use naia_serde::{BitReader, BitWrite, SerdeErr};
+use std::any::Any;
 
 // Messages
 pub struct Messages {}
@@ -11,11 +11,15 @@ impl Messages {
         todo!()
     }
 
-    pub fn message_id_from_box(boxed_message: &Box<dyn Message>) -> MessageId { todo!() }
+    pub fn message_id_from_box(boxed_message: &Box<dyn Message>) -> MessageId {
+        todo!()
+    }
 
     pub fn downcast<M: Message>(boxed_message: Box<dyn Message>) -> Option<M> {
         let boxed_any: Box<dyn Any> = boxed_message.into_any();
-        Box::<dyn Any + 'static>::downcast::<M>(boxed_any).ok().map(|boxed_m| *boxed_m)
+        Box::<dyn Any + 'static>::downcast::<M>(boxed_any)
+            .ok()
+            .map(|boxed_m| *boxed_m)
     }
 
     pub fn read(
@@ -37,6 +41,9 @@ impl Messages {
 // Message
 pub trait Message: Send + Sync + Named + MessageClone + Any {
     fn into_any(self: Box<Self>) -> Box<dyn Any>;
+    fn has_entity_properties(&self) -> bool;
+    /// Returns a list of Entities contained within the Replica's properties
+    fn entities(&self) -> Vec<EntityHandle>;
 }
 
 // Named

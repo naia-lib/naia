@@ -7,14 +7,13 @@ use naia_server::{
 
 use naia_demo_world::{Entity, World};
 
-use naia_macroquad_demo_shared::messages::PlayerCommandChannel;
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
-    channels::{Channels, PlayerCommandChannel},
-    messages::{Auth, Color, EntityAssignment, KeyCommand, Marker, Protocol, Square},
-    shared_config,
+    channels::{EntityAssignmentChannel, PlayerCommandChannel},
+    components::{Color, Marker, Square},
+    messages::{Auth, EntityAssignment, KeyCommand},
+    protocol,
 };
-use naia_macroquad_demo_shared::channels::EntityAssignmentChannel;
 
 type Server = NaiaServer<Entity>;
 
@@ -42,7 +41,7 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server = Server::new(&ServerConfig::default(), &shared_config());
+        let mut server = Server::new(ServerConfig::default(), protocol());
         server.listen(&server_addresses);
 
         // Create a new, singular room, which will contain Users and Entities that they
@@ -66,7 +65,7 @@ impl App {
             return;
         }
         for (user_key, auth) in events.read::<AuthorizationEvent<Auth>>() {
-            if *auth.username == "charlie" && *auth.password == "12345" {
+            if auth.username == "charlie" && auth.password == "12345" {
                 // Accept incoming connection
                 self.server.accept_connection(&user_key);
             } else {
@@ -74,7 +73,7 @@ impl App {
                 self.server.reject_connection(&user_key);
             }
         }
-        for (user_key) in events.read::<ConnectionEvent>() {
+        for user_key in events.read::<ConnectionEvent>() {
             // New User has joined the Server
             let user_address = self
                 .server
@@ -173,7 +172,7 @@ impl App {
             // method, the Server will never communicate with it's connected Clients
             self.server.send_all_updates(self.world.proxy());
         }
-        for (error) in events.read::<ErrorEvent>() {
+        for error in events.read::<ErrorEvent>() {
             info!("Naia Server error: {}", error);
         }
     }

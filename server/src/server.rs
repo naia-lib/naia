@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_set::Iter, HashMap, VecDeque},
+    collections::{hash_set::Iter, HashMap},
     hash::Hash,
     net::SocketAddr,
     panic,
@@ -12,7 +12,12 @@ use log::warn;
 use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
-use naia_shared::{serde::{BitWriter, Serde}, BigMap, Channel, Components, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, PacketType, PropertyMutator, Protocol, Replicate, ReplicateSafe, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, ComponentId, Message, ChannelId, Channels};
+use naia_shared::{
+    serde::{BitWriter, Serde},
+    BigMap, Channel, ChannelId, Channels, ComponentId, Components, EntityDoesNotExistError,
+    EntityHandle, EntityHandleConverter, Instant, Message, PacketType, PropertyMutator, Protocol,
+    Replicate, ReplicateSafe, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -45,7 +50,6 @@ use super::{
 pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     server_config: ServerConfig,
-    protocol: Protocol,
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
@@ -70,7 +74,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Create a new Server
-    pub fn new(server_config: &ServerConfig, protocol: Protocol) -> Self {
+    pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
         let socket = Socket::new(&protocol.socket);
 
         let tick_manager = { protocol.tick_interval.map(TickManager::new) };
@@ -78,7 +82,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         Server {
             // Config
             server_config: server_config.clone(),
-            protocol,
             // Connection
             socket,
             io: Io::new(
@@ -225,12 +228,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn send_message<C: Channel, M: Message>(
-        &mut self,
-        user_key: &UserKey,
-        message: M,
-    ) {
-        self.send_message_inner(user_key, &Channels::type_to_id::<C>(), Box::new(message));
+    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
+        let cloned_message = M::clone_box(message);
+        self.send_message_inner(user_key, &Channels::type_to_id::<C>(), cloned_message);
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -241,7 +241,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         channel_id: &ChannelId,
         message: Box<dyn Message>,
     ) {
-        if !self.protocol.channel.channel(channel_id).can_send_to_client() {
+        if !Channels::channel(channel_id).can_send_to_client() {
             panic!("Cannot send message to Client on this Channel");
         }
 
@@ -285,17 +285,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Sends a message to all connected users using a given channel
-    pub fn broadcast_message<C: Channel, M: Message>(
-        &mut self,
-        message: M,
-    ) {
+    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: M) {
         self.broadcast_message_inner(&Channels::type_to_id::<C>(), Box::new(message));
     }
 
     fn broadcast_message_inner(&mut self, channel_id: &ChannelId, message: Box<dyn Message>) {
         self.user_keys()
             .iter()
-            .for_each(|user_key| self.send_message_inner(user_key, channel_id, message))
+            .for_each(|user_key| self.send_message_inner(user_key, channel_id, message.clone()))
     }
 
     // Updates
@@ -383,11 +380,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<E>>(
-        &mut self,
-        world: W,
-        entity: &E,
-    ) -> EntityMut<E, W> {
+    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
         if world.has_entity(entity) {
             return EntityMut::new(self, world, entity);
         }
@@ -633,7 +626,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Entity already has this Component type yet, update Component
 
             if let Some(mut component) = world.component_mut::<R>(entity) {
-                component.mirror(&component_ref.protocol_copy());
+                component.mirror(&component_ref);
             } else {
                 panic!("Should never happen because we checked for this above")
             }
@@ -664,7 +657,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
     ) -> Option<R> {
         // get component key from type
-        let component_kind = Components::kind_of::<R>();
+        let component_id = Components::type_to_id::<R>();
 
         // clean up component on all connections
 
@@ -674,11 +667,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // remove component from user connection
             user_connection
                 .entity_manager
-                .remove_component(entity, &component_kind);
+                .remove_component(entity, &component_id);
         }
 
         // cleanup all other loose ends
-        self.component_cleanup(entity, &component_kind);
+        self.component_cleanup(entity, &component_id);
 
         // remove from world
         world.remove_component::<R>(entity)
@@ -1211,6 +1204,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(user) = self.users.get(&removed_user) {
                     if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
+                        // TODO: evaluate whether the Entity really needs to be despawned!
+                        // What if the Entity shares another Room with this User? It shouldn't be despawned!
+
                         //remove entity from user connection
                         user_connection
                             .entity_manager
@@ -1294,8 +1290,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E>
-{
+impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         self.world_record.handle_to_entity(entity_handle)
     }

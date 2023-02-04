@@ -1,4 +1,4 @@
-use crate::{Components, derive_serde, serde};
+use crate::{derive_serde, serde, Components};
 use std::ops::{Deref, DerefMut};
 
 pub type PacketIndex = u16;
@@ -10,7 +10,7 @@ pub enum HostType {
     Client,
 }
 
-// ComponentId
+/// ComponentId - should be one unique value for each type of Component
 #[derive(Eq, Hash, Copy)]
 #[derive_serde]
 pub struct ComponentId {

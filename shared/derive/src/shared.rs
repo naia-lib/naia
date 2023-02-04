@@ -1,4 +1,4 @@
-use syn::{DeriveInput, Fields, Data};
+use syn::{Data, DeriveInput, Fields};
 
 pub enum StructType {
     Struct,

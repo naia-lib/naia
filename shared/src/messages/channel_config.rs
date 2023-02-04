@@ -1,12 +1,20 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
-use crate::{serde::Serde, types::ChannelId};
+use crate::types::ChannelId;
 
 // Channels
-pub struct Channels {}
+pub struct Channels;
 
 impl Channels {
     pub fn type_to_id<M: Channel>() -> ChannelId {
+        todo!()
+    }
+
+    pub fn channels() -> &'static HashMap<ChannelId, ChannelSettings> {
+        todo!()
+    }
+
+    pub fn channel(id: &ChannelId) -> &ChannelSettings {
         todo!()
     }
 }

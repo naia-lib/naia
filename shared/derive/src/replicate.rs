@@ -1,11 +1,11 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Index, Lit, LitStr,
-    Member, Meta, Path, PathArguments, Result, Type,
+    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Index, LitStr, Member,
+    PathArguments, Type,
 };
 
-use crate::shared::{StructType, get_struct_type};
+use crate::shared::{get_struct_type, StructType};
 
 const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
 
@@ -271,39 +271,6 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
     fields
 }
 
-fn protocol_path(input: &DeriveInput) -> (Path, Ident) {
-    let mut path_result: Option<Result<Path>> = None;
-
-    let attrs = &input.attrs;
-    for option in attrs {
-        let option = option.parse_meta().unwrap();
-        if let Meta::NameValue(meta_name_value) = option {
-            let path = meta_name_value.path;
-            let lit = meta_name_value.lit;
-            if let Some(ident) = path.get_ident() {
-                if ident == "protocol_path" {
-                    if let Lit::Str(lit_str) = lit {
-                        path_result = Some(lit_str.parse());
-                    }
-                }
-            }
-        }
-    }
-
-    if let Some(Ok(path)) = path_result {
-        let mut new_path = path;
-        if let Some(last_seg) = new_path.segments.pop() {
-            let name = last_seg.into_value().ident;
-            if let Some(second_seg) = new_path.segments.pop() {
-                new_path.segments.push_value(second_seg.into_value());
-                return (new_path, name);
-            }
-        }
-    }
-
-    panic!("When deriving 'Replicate' you MUST specify the path of the accompanying protocol. IE: '#[protocol_path = \"crate::MyProtocol\"]'");
-}
-
 fn property_enum(enum_name: &Ident, properties: &[Property]) -> TokenStream {
     if properties.is_empty() {
         return quote! {
@@ -333,22 +300,6 @@ fn property_enum(enum_name: &Ident, properties: &[Property]) -> TokenStream {
         #hashtag[repr(u8)]
         enum #enum_name {
             #variant_list
-        }
-    }
-}
-
-fn protocol_copy_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
-    quote! {
-        fn protocol_copy(&self) -> #protocol_name {
-            return #protocol_name::#replica_name(self.clone());
-        }
-    }
-}
-
-fn into_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
-    quote! {
-        fn into_protocol(self) -> #protocol_name {
-            return #protocol_name::#replica_name(self);
         }
     }
 }
@@ -423,7 +374,7 @@ fn clone_method(
 }
 
 fn mirror_method(
-    replica_name: &Ident,
+    _replica_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
 ) -> TokenStream {
@@ -694,7 +645,7 @@ pub fn read_method(
     }
 }
 
-pub fn read_create_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
+pub fn read_create_update_method(_replica_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {

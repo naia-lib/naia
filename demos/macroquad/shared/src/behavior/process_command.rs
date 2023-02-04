@@ -1,4 +1,4 @@
-use crate::{messages::KeyCommand, components::Square};
+use crate::{components::Square, messages::KeyCommand};
 
 const SQUARE_SPEED: u16 = 3;
 

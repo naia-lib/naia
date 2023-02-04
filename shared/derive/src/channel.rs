@@ -1,11 +1,7 @@
-use proc_macro2::{Punct, Spacing, Span, TokenStream};
-use quote::{format_ident, quote};
-use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Index, Lit, LitStr,
-    Member, Meta, Path, PathArguments, Result, Type,
-};
+use quote::quote;
+use syn::{parse_macro_input, DeriveInput};
 
-use super::{shared::{get_struct_type, StructType}};
+use super::shared::{get_struct_type, StructType};
 
 pub fn channel_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

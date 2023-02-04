@@ -7,7 +7,12 @@ use std::{
     time::Duration,
 };
 
-use naia_shared::{serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger}, wrapping_diff, ComponentId, DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, ReplicateSafe, WorldRefType, ChannelId, Message};
+use naia_shared::{
+    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
+    wrapping_diff, ChannelId, ComponentId, DiffMask, EntityAction, EntityActionType,
+    EntityConverter, Instant, Message, MessageIndex, MessageManager, NetEntity, NetEntityConverter,
+    PacketIndex, PacketNotifiable, WorldRefType,
+};
 
 use crate::sequence_list::SequenceList;
 
@@ -65,12 +70,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         self.world_channel.host_despawn_entity(entity);
     }
 
-    pub fn insert_component(&mut self, entity: &E, component: &ComponentId) {
-        self.world_channel.host_insert_component(entity, component);
+    pub fn insert_component(&mut self, entity: &E, component_id: &ComponentId) {
+        self.world_channel
+            .host_insert_component(entity, component_id);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component: &ComponentId) {
-        self.world_channel.host_remove_component(entity, component);
+    pub fn remove_component(&mut self, entity: &E, component_id: &ComponentId) {
+        self.world_channel
+            .host_remove_component(entity, component_id);
     }
 
     pub fn scope_has_entity(&self, entity: &E) -> bool {
@@ -83,12 +90,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     // Messages
 
-    pub fn queue_entity_message(&mut self, entities: Vec<E>, channel: ChannelId, message: Box<dyn Message>) {
-        self.world_channel.delayed_entity_messages.queue_message(
-            entities,
-            channel,
-            message,
-        );
+    pub fn queue_entity_message(
+        &mut self,
+        entities: Vec<E>,
+        channel: &ChannelId,
+        message: Box<dyn Message>,
+    ) {
+        self.world_channel
+            .delayed_entity_messages
+            .queue_message(entities, channel, message);
     }
 
     // Writer
@@ -663,8 +673,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 }
 
 // PacketNotifiable
-impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for EntityManager<E>
-{
+impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for EntityManager<E> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         // Updates
         self.sent_updates.remove(&packet_index);

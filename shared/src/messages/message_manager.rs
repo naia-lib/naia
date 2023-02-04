@@ -6,11 +6,11 @@ use naia_socket_shared::Instant;
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
     types::{ChannelId, HostType, MessageIndex, PacketIndex},
-    Message, MessageReceivable, ReplicateSafe,
+    Channels, Message, MessageReceivable,
 };
 
 use super::{
-    channel_config::{ChannelConfig, ChannelMode},
+    channel_config::ChannelMode,
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
@@ -32,27 +32,27 @@ pub struct MessageManager {
 
 impl MessageManager {
     /// Creates a new MessageManager
-    pub fn new(host_type: HostType, channel_config: &ChannelConfig) -> Self {
+    pub fn new(host_type: HostType) -> Self {
         // initialize all reliable channels
 
         // initialize senders
         let mut channel_senders =
             HashMap::<ChannelId, Box<dyn ChannelSender<Box<dyn Message>>>>::new();
-        for (channel_id, channel) in channel_config.channels() {
+        for (channel_id, channel_settings) in Channels::channels() {
             match &host_type {
                 HostType::Server => {
-                    if !channel.can_send_to_client() {
+                    if !channel_settings.can_send_to_client() {
                         continue;
                     }
                 }
                 HostType::Client => {
-                    if !channel.can_send_to_server() {
+                    if !channel_settings.can_send_to_server() {
                         continue;
                     }
                 }
             }
 
-            match &channel.mode {
+            match &channel_settings.mode {
                 ChannelMode::UnorderedUnreliable => {
                     channel_senders.insert(*channel_id, Box::new(UnorderedUnreliableSender::new()));
                 }
@@ -76,48 +76,48 @@ impl MessageManager {
         // initialize receivers
         let mut channel_receivers =
             HashMap::<ChannelId, Box<dyn ChannelReceiver<Box<dyn Message>>>>::new();
-        for (channel_index, channel) in channel_config.channels() {
+        for (channel_id, channel_settings) in Channels::channels() {
             match &host_type {
                 HostType::Server => {
-                    if !channel.can_send_to_server() {
+                    if !channel_settings.can_send_to_server() {
                         continue;
                     }
                 }
                 HostType::Client => {
-                    if !channel.can_send_to_client() {
+                    if !channel_settings.can_send_to_client() {
                         continue;
                     }
                 }
             }
 
-            match &channel.mode {
+            match &channel_settings.mode {
                 ChannelMode::UnorderedUnreliable => {
                     channel_receivers.insert(
-                        channel_index.clone(),
+                        channel_id.clone(),
                         Box::new(UnorderedUnreliableReceiver::new()),
                     );
                 }
                 ChannelMode::SequencedUnreliable => {
                     channel_receivers.insert(
-                        channel_index.clone(),
+                        channel_id.clone(),
                         Box::new(SequencedUnreliableReceiver::new()),
                     );
                 }
                 ChannelMode::UnorderedReliable(_) => {
                     channel_receivers.insert(
-                        channel_index.clone(),
+                        channel_id.clone(),
                         Box::new(UnorderedReliableReceiver::default()),
                     );
                 }
                 ChannelMode::SequencedReliable(_) => {
                     channel_receivers.insert(
-                        channel_index.clone(),
+                        channel_id.clone(),
                         Box::new(SequencedReliableReceiver::default()),
                     );
                 }
                 ChannelMode::OrderedReliable(_) => {
                     channel_receivers.insert(
-                        channel_index.clone(),
+                        channel_id.clone(),
                         Box::new(OrderedReliableReceiver::default()),
                     );
                 }
@@ -235,6 +235,7 @@ impl MessageManager {
         for (channel_index, channel) in &mut self.channel_receivers {
             let mut messages = channel.receive_messages();
             for message in messages.drain(..) {
+                todo!();
                 //output.push((channel_index.clone(), message));
                 // TODO: Really important Connor! Put these messages into `incoming_messages`
                 // Otherwise no messages will be received!

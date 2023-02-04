@@ -31,7 +31,7 @@ impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
     pub fn queue_message(
         &mut self,
         entities: Vec<E>,
-        channel: ChannelId,
+        channel: &ChannelId,
         message: Box<dyn Message>,
     ) {
         let new_handle = self.message_handle_store.generate();
@@ -46,7 +46,7 @@ impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
         }
 
         self.messages
-            .insert(new_handle, (entities, channel, message));
+            .insert(new_handle, (entities, *channel, message));
     }
 
     pub fn add_entity(&mut self, entity: &E) {

@@ -1,14 +1,14 @@
-use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr};
+use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
 use ring::{hmac, rand};
 
+use naia_shared::Messages;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde, SerdeErr},
     wrapping_diff, BaseConnection, ConnectionConfig, FakeEntityConverter, Instant, KeyGenerator,
     Message, PacketType, PropertyMutate, PropertyMutator, Replicate, ReplicateSafe, StandardHeader,
     Timer, WorldMutType, WorldRefType,
 };
-use naia_shared::Messages;
 
 use crate::cache_map::CacheMap;
 
