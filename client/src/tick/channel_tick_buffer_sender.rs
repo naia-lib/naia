@@ -5,8 +5,8 @@ use log::{info, warn};
 use naia_shared::{
     sequence_greater_than, sequence_less_than,
     serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelWriter, Instant, Protocolize, ShortMessageIndex, Tick,
-    TickBufferSettings, MESSAGE_HISTORY_SIZE,
+    wrapping_diff, ChannelWriter, Instant, ShortMessageIndex, Tick, TickBufferSettings,
+    MESSAGE_HISTORY_SIZE,
 };
 
 pub struct ChannelTickBufferSender<P: Protocolize> {

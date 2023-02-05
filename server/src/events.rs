@@ -1,6 +1,4 @@
-use std::collections::HashMap;
-use std::marker::PhantomData;
-use std::vec::IntoIter;
+use std::{collections::HashMap, marker::PhantomData, vec::IntoIter};
 
 use naia_shared::{Channel, ChannelId, Channels, Message, MessageId, MessageReceivable, Messages};
 
@@ -70,21 +68,25 @@ impl Events {
         self.empty = false;
     }
 
-    // pub(crate) fn push_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: M) {
-    //     let channel_type: TypeId = TypeId::of::<C>();
-    //     if !self.messages.contains_key(&channel_type) {
-    //         self.messages.insert(channel_type, HashMap::new());
-    //     }
-    //     let channel_map = self.messages.get_mut(&channel_type).unwrap();
-    //
-    //     let message_type: TypeId = TypeId::of::<M>();
-    //     if !channel_map.contains_key(&message_type) {
-    //         channel_map.insert(message_type, Vec::new());
-    //     }
-    //     let list = channel_map.get_mut(&message_type).unwrap();
-    //     list.push((*user_key, Box::new(message)));
-    //     self.empty = false;
-    // }
+    pub(crate) fn push_message(
+        &mut self,
+        user_key: &UserKey,
+        channel_id: &ChannelId,
+        message: Box<dyn Message>,
+    ) {
+        if !self.messages.contains_key(&channel_id) {
+            self.messages.insert(*channel_id, HashMap::new());
+        }
+        let channel_map = self.messages.get_mut(&channel_id).unwrap();
+
+        let message_id: MessageId = Messages::message_id_from_box(&auth_message);
+        if !channel_map.contains_key(&message_id) {
+            channel_map.insert(message_id, Vec::new());
+        }
+        let list = channel_map.get_mut(&message_id).unwrap();
+        list.push((*user_key, message));
+        self.empty = false;
+    }
 
     pub(crate) fn push_tick(&mut self) {
         self.ticks.push(());

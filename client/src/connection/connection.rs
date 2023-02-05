@@ -3,10 +3,11 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
     serde::{BitReader, BitWriter, OwnedBitReader, Serde},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, HostType, Instant, PacketType,
-    PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldMutType,
+    BaseConnection, ConnectionConfig, HostType, Instant, PacketType, PingManager, ProtocolIo,
+    StandardHeader, Tick, WorldMutType,
 };
 
+use crate::events::Events;
 use crate::{
     error::NaiaClientError,
     events::Event,
@@ -18,29 +19,28 @@ use crate::{
 
 use super::io::Io;
 
-pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
-    pub base: BaseConnection<P, C>,
-    pub entity_manager: EntityManager<P, E>,
+pub struct Connection<E: Copy + Eq + Hash> {
+    pub base: BaseConnection,
+    pub entity_manager: EntityManager<E>,
     pub ping_manager: PingManager,
-    pub tick_buffer: Option<TickBufferSender<P, C>>,
+    pub tick_buffer: Option<TickBufferSender>,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
+impl<E: Copy + Eq + Hash> Connection<E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
-        channel_config: &ChannelConfig<C>,
         tick_duration: &Option<Duration>,
     ) -> Self {
         let tick_buffer = tick_duration
             .as_ref()
-            .map(|duration| TickBufferSender::new(channel_config, duration));
+            .map(|duration| TickBufferSender::new(duration));
 
         Connection {
-            base: BaseConnection::new(address, HostType::Client, connection_config, channel_config),
+            base: BaseConnection::new(address, HostType::Client, connection_config),
             entity_manager: EntityManager::default(),
             ping_manager: PingManager::new(&connection_config.ping),
             tick_buffer,
@@ -72,11 +72,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     ///
     /// Note that currently, messages are also being stored in the jitter buffer and processed
     /// on the receiving tick, even though it's not needed is the channel is not tick buffered.
-    pub fn process_buffered_packets<W: WorldMutType<P, E>>(
+    pub fn process_buffered_packets<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         receiving_tick: Tick,
-        incoming_events: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
+        incoming_events: &mut Events<E>,
     ) {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();

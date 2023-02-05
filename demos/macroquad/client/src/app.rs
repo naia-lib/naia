@@ -7,16 +7,17 @@ use macroquad::prelude::{
 
 use naia_client::{Client as NaiaClient, ClientConfig, CommandHistory, Event};
 
-use naia_demo_world::{Entity, World as DemoWorld, WorldMutType, WorldRefType};
+use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
-    messages::{Auth, Color, KeyCommand, Protocol, Square},
-    shared_config, Channels,
+    channels::{EntityAssignmentChannel, PlayerCommandChannel},
+    components::{Color, Marker, Square},
+    messages::{Auth, EntityAssignment, KeyCommand},
+    protocol,
 };
 
-type World = DemoWorld<Protocol>;
-type Client = NaiaClient<Protocol, Entity, Channels>;
+type Client = NaiaClient<Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;
 
@@ -47,7 +48,7 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
-        let mut client = Client::new(&ClientConfig::default(), &shared_config());
+        let mut client = Client::new(ClientConfig::default(), protocol());
         client.auth(Auth::new("charlie", "12345"));
         client.connect("http://127.0.0.1:14191");
 
@@ -104,12 +105,12 @@ impl App {
             return;
         }
 
-        let events = self.client.receive(self.world.proxy_mut());
+        let mut events = self.client.receive(self.world.proxy_mut());
 
-        for ConnectionEvent(server_address) in events.read() {
+        for server_address in events.read::<ConnectionEvent>() {
             info!("Client connected to: {}", server_address);
         }
-        for DisconnectionEvent(server_address) in events.read() {
+        for server_address in events.read::<DisconnectionEvent>() {
             info!("Client disconnected from: {}", server_address);
 
             self.world = World::default();
@@ -118,7 +119,7 @@ impl App {
             self.queued_command = None;
             self.command_history = CommandHistory::default();
         }
-        for TickEvent in events.read() {
+        for _ in events.read::<TickEvent>() {
             if let Some(owned_entity) = &self.owned_entity {
                 if let Some(command) = self.queued_command.take() {
                     if let Some(client_tick) = self.client.client_tick() {
@@ -142,27 +143,27 @@ impl App {
                 }
             }
         }
-        for SpawnEntityEvent(entity) in events.read() {
+        for entity in events.read::<SpawnEntityEvent>() {
             self.squares.insert(entity);
             info!("spawned entity");
         }
-        for DespawnEntityEvent(entity) in events.read() {
+        for entity in events.read::<DespawnEntityEvent>() {
             self.squares.remove(&entity);
             info!("despawned entity");
             // TODO: Sync up Predicted & Confirmed entities
         }
-        for InsertComponentEvent(_entity, _component_kind) in events.read() {
+        for (_entity, _component_id) in events.read::<InsertComponentEvent>() {
             info!("inserted component");
             // TODO: Sync up Predicted & Confirmed entities
         }
-        for RemoveComponentEvent(_entity, _component) in events.read() {
+        for (_entity, _component) in events.read::<RemoveComponentEvent>() {
             info!("removed component");
             // TODO: Sync up Predicted & Confirmed entities
         }
-        for MessageEvent::<EntityAssignment, EntityAssignment>(message) in events.read() {
-            let assign = *message.assign;
+        for entity_assignment in events.read::<MessageEvent<EntityAssignment, EntityAssignment>>() {
+            let assign = *entity_assignment.assign;
 
-            let entity = message.entity.get(&self.client).unwrap();
+            let entity = entity_assignment.entity.get(&self.client).unwrap();
             if assign {
                 info!("gave ownership of entity");
                 let prediction_entity = self.world.proxy_mut().duplicate_entity(&entity);
@@ -183,8 +184,8 @@ impl App {
                 }
             }
         }
-        for UpdateComponentEvent(server_tick, updated_entity, _updated_component_type) in
-            events.read()
+        for (server_tick, updated_entity, _updated_component_type) in
+            events.read::<UpdateComponentEvent>()
         {
             if let Some(owned_entity) = &self.owned_entity {
                 let server_entity = owned_entity.confirmed;
@@ -211,8 +212,8 @@ impl App {
                 }
             }
         }
-        for ErrorEvent(error) in events.read() {
-            info!("Client Error: {}", err);
+        for error in events.read::<ErrorEvent>() {
+            info!("Client Error: {}", error);
         }
     }
 

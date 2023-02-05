@@ -1,20 +1,18 @@
 use std::{hash::Hash, marker::PhantomData};
 
-use naia_shared::{Protocolize, ReplicaRefWrapper, ReplicateSafe, WorldRefType};
+use naia_shared::{ReplicaRefWrapper, ReplicateSafe, WorldRefType};
 
 // EntityRef
-pub struct EntityRef<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> {
+pub struct EntityRef<E: Copy + Eq + Hash, W: WorldRefType<E>> {
     world: W,
     entity: E,
-    phantom_p: PhantomData<P>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E, W> {
+impl<E: Copy + Eq + Hash, W: WorldRefType<E>> EntityRef<E, W> {
     pub fn new(world: W, entity: &E) -> Self {
         EntityRef {
             world,
             entity: *entity,
-            phantom_p: PhantomData,
         }
     }
 
@@ -22,11 +20,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash, W: WorldRefType<P, E>> EntityRef<P, E,
         self.entity
     }
 
-    pub fn has_component<R: ReplicateSafe<P>>(&self) -> bool {
+    pub fn has_component<R: ReplicateSafe>(&self) -> bool {
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: ReplicateSafe<P>>(&self) -> Option<ReplicaRefWrapper<P, R>> {
+    pub fn component<R: ReplicateSafe>(&self) -> Option<ReplicaRefWrapper<R>> {
         self.world.component::<R>(&self.entity)
     }
 }

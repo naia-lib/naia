@@ -3,11 +3,11 @@ use std::time::Duration;
 
 use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
-    FakeEntityConverter,
+    FakeEntityConverter, Message,
 };
 pub use naia_shared::{
-    ConnectionConfig, PacketType, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
-    StandardHeader, Timer, Timestamp as stamp_time, WorldMutType, WorldRefType,
+    ConnectionConfig, PacketType, ReplicateSafe, StandardHeader, Timer, Timestamp as stamp_time,
+    WorldMutType, WorldRefType,
 };
 
 use super::io::Io;
@@ -26,15 +26,15 @@ pub enum HandshakeResult {
     Rejected,
 }
 
-pub struct HandshakeManager<P: Protocolize> {
+pub struct HandshakeManager {
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Vec<u8>>,
     pub connection_state: HandshakeState,
-    auth_message: Option<P>,
+    auth_message: Option<Box<dyn Message>>,
 }
 
-impl<P: Protocolize> HandshakeManager<P> {
+impl HandshakeManager {
     pub fn new(send_interval: Duration) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
@@ -50,7 +50,7 @@ impl<P: Protocolize> HandshakeManager<P> {
         }
     }
 
-    pub fn set_auth_message(&mut self, auth: P) {
+    pub fn set_auth_message(&mut self, auth: Box<dyn Message>) {
         self.auth_message = Some(auth);
     }
 

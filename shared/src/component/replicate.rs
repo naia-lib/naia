@@ -22,6 +22,9 @@ impl Components {
     pub fn id_to_name(id: &ComponentId) -> String {
         todo!()
     }
+    pub fn box_to_id(boxed_component: &Box<dyn ReplicateSafe>) -> ComponentId {
+        todo!()
+    }
     pub fn cast<R: Replicate>(boxed_component: Box<dyn ReplicateSafe>) -> Option<R> {
         todo!()
     }
