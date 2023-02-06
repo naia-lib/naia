@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    sequence_less_than, EntityAction, MessageId as ActionId, ProtocolKindType,
+    sequence_less_than, EntityAction, ExternalEntity, MessageId as ActionId, ProtocolKindType,
     UnorderedReliableReceiver,
 };
 

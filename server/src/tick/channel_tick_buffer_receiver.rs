@@ -202,7 +202,6 @@ impl<P: Protocolize> IncomingMessages<P> {
         }
     }
 
-
     /// Retrieve from the buffer data corresponding to the provided [`Tick`]
     pub fn collect(&mut self, host_tick: &Tick) -> Vec<P> {
         self.prune_outdated_commands(host_tick);

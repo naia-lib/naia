@@ -1,4 +1,6 @@
-use crate::parse::Enum;
+use proc_macro2::{Ident, TokenStream};
+use quote::{format_ident, quote};
+use syn::{DataEnum, Fields};
 
 fn bits_needed_for(max_value: usize) -> u8 {
     let mut bits = 1;
@@ -12,154 +14,160 @@ fn bits_needed_for(max_value: usize) -> u8 {
 }
 
 #[allow(clippy::format_push_string)]
-pub fn derive_serde_enum(enum_: &Enum) -> String {
+pub fn derive_serde_enum(enum_: &DataEnum, enum_name: &Ident) -> TokenStream {
     let variant_number = enum_.variants.len();
     let bits_needed = bits_needed_for(variant_number);
 
-    let mut ser_variants = String::new();
+    let ser_method = get_ser_method(enum_, bits_needed);
+    let de_method = get_de_method(enum_, bits_needed);
 
-    for (index, variant) in enum_.variants.iter().enumerate() {
-        let variant_name = &variant.name;
-
-        // Unit Variant
-        if variant.fields.is_empty() {
-            l!(ser_variants, "Self::{} => {{", variant_name);
-
-            // INDEX
-            l!(
-                ser_variants,
-                "let index = UnsignedInteger::<{}>::new({});",
-                bits_needed,
-                index
-            );
-            l!(ser_variants, "index.ser(writer);");
-
-            l!(ser_variants, "},");
-        }
-        // Struct Variant
-        else if !variant.tuple {
-            l!(ser_variants, "Self::{} {{", variant.name);
-            for field in &variant.fields {
-                l!(
-                    ser_variants,
-                    "{}, ",
-                    field
-                        .field_name
-                        .as_ref()
-                        .expect("expected the field to have a name")
-                );
-            }
-            l!(ser_variants, "} => {");
-
-            // INDEX
-            l!(
-                ser_variants,
-                "let index = UnsignedInteger::<{}>::new({});",
-                bits_needed,
-                index
-            );
-            l!(ser_variants, "index.ser(writer);");
-
-            for field in &variant.fields {
-                l!(
-                    ser_variants,
-                    "{}.ser(writer);",
-                    field
-                        .field_name
-                        .as_ref()
-                        .expect("expected the field to have a name")
-                );
-            }
-            l!(ser_variants, "}");
-        }
-        // Tuple Variant
-        else if variant.tuple {
-            l!(ser_variants, "Self::{} (", variant.name);
-            for (n, _) in variant.fields.iter().enumerate() {
-                l!(ser_variants, "f{}, ", n);
-            }
-            l!(ser_variants, ") => {");
-
-            // INDEX
-            l!(
-                ser_variants,
-                "let index = UnsignedInteger::<{}>::new({});",
-                bits_needed,
-                index
-            );
-            l!(ser_variants, "index.ser(writer);");
-
-            for (n, _) in variant.fields.iter().enumerate() {
-                l!(ser_variants, "f{}.ser(writer);", n);
-            }
-            l!(ser_variants, "}");
+    quote! {
+        impl Serde for #enum_name {
+            #ser_method
+            #de_method
         }
     }
+}
 
-    let mut de_variants = String::new();
-
+fn get_ser_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
+    let mut ser = quote! {};
     for (index, variant) in enum_.variants.iter().enumerate() {
-        let variant_index = format!("{}u16", index);
-
-        // Unit Variant
-        if variant.fields.is_empty() {
-            l!(de_variants, "{} => Self::{},", variant_index, variant.name);
-        }
-        // Struct Variant
-        else if !variant.tuple {
-            l!(
-                de_variants,
-                "{} => Self::{} {{",
-                variant_index,
-                variant.name
-            );
-            for field in &variant.fields {
-                l!(
-                    de_variants,
-                    "{}: Serde::de(reader)?,",
-                    field
-                        .field_name
+        let variant_index = index as u16;
+        let variant_name = &variant.ident;
+        let base = match &variant.fields {
+            Fields::Unit => {
+                quote! {
+                    Self::#variant_name => {
+                        let index = naia_serde::UnsignedInteger::<#bits_needed>::new(#variant_index);
+                        index.ser(writer);
+                    }
+                }
+            }
+            Fields::Named(fields) => {
+                let names: Vec<&Ident> = fields
+                    .named
+                    .iter()
+                    .map(|field| {
+                        field
+                            .ident
+                            .as_ref()
+                            .expect("expected field to have a name.")
+                    })
+                    .collect();
+                let left = quote! { Self::#variant_name{ #(#names),* } };
+                let mut right = quote! {
+                    let index = naia_serde::UnsignedInteger::<#bits_needed>::new(#variant_index);
+                    index.ser(writer);
+                };
+                for field in fields.named.iter() {
+                    let field_name = field
+                        .ident
                         .as_ref()
-                        .expect("expected field to have a name")
-                );
+                        .expect("expected field to have a name.");
+                    right = quote! {
+                        #right
+                        #field_name.ser(writer);
+                    }
+                }
+                quote! {
+                    #left => { #right }
+                }
             }
-            l!(de_variants, "},");
-        }
-        // Tuple Variant
-        else if variant.tuple {
-            l!(de_variants, "{} => Self::{} (", variant_index, variant.name);
-            for _ in &variant.fields {
-                l!(de_variants, "Serde::de(reader)?,");
+            Fields::Unnamed(fields) => {
+                let names: Vec<Ident> = fields
+                    .unnamed
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| format_ident!("f{}", i))
+                    .collect();
+                let left = quote! { Self::#variant_name( #(#names),* ) };
+
+                let mut right = quote! {
+                    let index = naia_serde::UnsignedInteger::<#bits_needed>::new(#variant_index);
+                    index.ser(writer);
+                };
+                for field_name in names {
+                    right = quote! {
+                        #right
+                        #field_name.ser(writer);
+                    }
+                }
+                quote! {
+                    #left => { #right }
+                }
             }
-            l!(de_variants, "),");
+        };
+        ser = quote! {
+            #ser
+            #base
         }
     }
+    quote! {
+         fn ser(&self, writer: &mut dyn naia_serde::BitWrite) {
+            match self {
+                #ser
+            }
+         }
+    }
+}
 
-    let name = enum_.name.clone();
+fn get_de_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
+    let mut de = quote! {};
 
-    format!(
-        "
-        mod impl_serde_{name} {{
-            use super::serde::*;
-            use super::{name};
-            impl Serde for {name} {{
-                fn ser(&self, writer: &mut dyn BitWrite) {{
-                    match self {{
-                      {ser_variants}
-                    }}
-                }}
-                fn de(reader: &mut BitReader) -> std::result::Result<Self, SerdeErr> {{
-                    let index: UnsignedInteger<{bits_needed}> = Serde::de(reader)?;
-                    let index_u16: u16 = index.get() as u16;
-                    Ok(match index_u16 {{
-                        {de_variants}
-                        _ => return std::result::Result::Err(SerdeErr{{}})
-                    }})
-                }}
-            }}
-        }}
-        "
-    )
-    .parse()
-    .expect("unable to parse valid tokens from string")
+    for (index, variant) in enum_.variants.iter().enumerate() {
+        let variant_index = index as u16;
+        let variant_name = &variant.ident;
+        match &variant.fields {
+            Fields::Unit => {
+                de = quote! {
+                    #de
+                    #variant_index => Self::#variant_name,
+                }
+            }
+            Fields::Named(fields) => {
+                let mut base = quote! {};
+                for field in fields.named.iter() {
+                    let field_name = field
+                        .ident
+                        .as_ref()
+                        .expect("expected field to have a name.");
+                    base = quote! {
+                        #base
+                        #field_name: Serde::de(reader)?,
+                    }
+                }
+                de = quote! {
+                    #de
+                    #variant_index => Self::#variant_name{
+                        #base
+                    },
+                }
+            }
+            Fields::Unnamed(fields) => {
+                let mut base = quote! {};
+                for _ in fields.unnamed.iter() {
+                    base = quote! {
+                        #base
+                        Serde::de(reader)?,
+                    }
+                }
+                de = quote! {
+                    #de
+                    #variant_index => Self::#variant_name(
+                        #base
+                    ),
+                }
+            }
+        }
+    }
+    quote! {
+        fn de(reader: &mut naia_serde::BitReader) -> std::result::Result<Self, naia_serde::SerdeErr> {
+            let index: naia_serde::UnsignedInteger<#bits_needed> = Serde::de(reader)?;
+            let index_u16: u16 = index.get() as u16;
+            Ok(match index_u16 {
+                #de
+                _ => return std::result::Result::Err(naia_serde::SerdeErr{})
+            })
+        }
+    }
 }

@@ -148,10 +148,9 @@ pub enum ChannelDirection {
 
 mod define_default_channels {
     use super::ChannelIndex;
-    use crate::{derive_serde, serde};
+    use crate::serde::Serde;
 
-    #[derive(Eq, Hash)]
-    #[derive_serde]
+    #[derive(Eq, Hash, PartialEq, Clone, Serde)]
     pub enum DefaultChannels {
         UnorderedUnreliable,
         SequencedUnreliable,

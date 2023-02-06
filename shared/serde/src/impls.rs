@@ -3,6 +3,7 @@ mod boxed;
 mod hash;
 mod option;
 mod scalars;
+mod serde;
 mod string;
 mod tuple;
 mod vector;

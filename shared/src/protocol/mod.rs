@@ -11,4 +11,5 @@ pub mod property_mutate;
 pub mod protocol_io;
 pub mod protocolize;
 pub mod replica_ref;
+pub mod replicable_property;
 pub mod replicate;

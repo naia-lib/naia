@@ -8,7 +8,7 @@ mod channel_index;
 mod protocolize;
 mod replicate;
 
-use channel_index::channels_impl;
+use channel_index::channel_index_impl;
 use protocolize::protocolize_impl;
 use replicate::replicate_impl;
 
@@ -24,10 +24,7 @@ pub fn replicate_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStre
     replicate_impl(input)
 }
 
-#[proc_macro_attribute]
-pub fn derive_channels(
-    first_input: proc_macro::TokenStream,
-    second_input: proc_macro::TokenStream,
-) -> proc_macro::TokenStream {
-    channels_impl(first_input, second_input)
+#[proc_macro_derive(ChannelIndex)]
+pub fn channel_index_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    channel_index_impl(input)
 }

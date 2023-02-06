@@ -21,9 +21,9 @@ cfg_if! {
 
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
+pub use crate::serde::Serde;
 pub use naia_derive::*;
 pub use naia_serde as serde;
-pub use serde::derive_serde;
 
 mod backends;
 mod connection;

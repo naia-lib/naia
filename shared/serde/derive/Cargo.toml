@@ -21,6 +21,8 @@ proc-macro = true
 [features]
 
 [dependencies]
-naia-parse = { version = "0.13", path = "../../parse" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }
+proc-macro2 = "1.0"
+syn = { version = "1.0.86", features = ["clone-impls"] }
+quote = "1.0"

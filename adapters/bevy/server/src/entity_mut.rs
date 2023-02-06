@@ -1,5 +1,6 @@
 use bevy_ecs::entity::Entity;
 
+use crate::commands::UnsyncEntity;
 use naia_server::{
     shared::{ChannelIndex, Protocolize, Replicate, ReplicateSafe},
     RoomKey,

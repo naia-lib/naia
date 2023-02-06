@@ -1,9 +1,7 @@
 mod some_enum {
-    use naia_serde as serde;
-    use serde::derive_serde;
+    use naia_serde::Serde;
 
-    #[derive(Debug)]
-    #[derive_serde]
+    #[derive(Debug, PartialEq, Clone, Serde)]
     pub enum SomeEnum {
         Variant1,
         Variant2(bool),
@@ -18,10 +16,9 @@ mod some_enum {
 }
 
 mod some_enum_2 {
-    use naia_shared::{derive_serde, serde};
+    use naia_serde::Serde;
 
-    #[derive(Debug)]
-    #[derive_serde]
+    #[derive(Debug, PartialEq, Clone, Serde)]
     pub enum SomeEnum2 {
         Variant1,
         Variant2,
