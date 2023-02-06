@@ -7,7 +7,6 @@ use bevy_ecs::prelude::Resource;
 
 use naia_client_socket::Socket;
 
-use naia_shared::ExternalEntity;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde},
     ChannelIndex, ConnectionConfig, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
@@ -523,7 +522,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             if let Some(duration) = self.shared_config.tick_interval {
                 Some(TickManager::new(
                     duration,
-                    self.client_config.minimum_latency,
+                    self.client_config
+                        .tick_manager_config
+                        .expect("tick manager config should be provided"),
                 ))
             } else {
                 None

@@ -1,4 +1,3 @@
-use naia_shared::ExternalEntity;
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,

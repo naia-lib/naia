@@ -3,8 +3,8 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
     serde::{BitReader, BitWriter, OwnedBitReader, Serde},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, ExternalEntity, HostType,
-    Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldMutType,
+    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, HostType, Instant, PacketType,
+    PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldMutType,
 };
 
 use crate::{

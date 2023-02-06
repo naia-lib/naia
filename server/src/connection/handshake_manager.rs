@@ -2,7 +2,6 @@ use std::{collections::HashMap, hash::Hash, marker::PhantomData, net::SocketAddr
 
 use ring::{hmac, rand};
 
-use naia_shared::ExternalEntity;
 pub use naia_shared::{
     serde::{BitReader, BitWriter, Serde, SerdeErr},
     wrapping_diff, BaseConnection, ChannelIndex, ConnectionConfig, FakeEntityConverter, Instant,

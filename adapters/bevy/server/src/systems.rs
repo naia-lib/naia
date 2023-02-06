@@ -1,7 +1,3 @@
-use super::{
-    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
-    resource::ServerResource,
-};
 use bevy_ecs::{
     entity::Entity,
     event::Events,
