@@ -2,25 +2,26 @@ use std::{collections::HashMap, time::Duration};
 
 use naia_shared::{
     serde::{BitWrite, BitWriter, Serde},
-    ChannelMode, ChannelWriter, PacketIndex, PacketNotifiable, ShortMessageIndex, Tick,
+    ChannelId, ChannelMode, ChannelWriter, Channels, Message, PacketIndex, PacketNotifiable,
+    ShortMessageIndex, Tick,
 };
 
 use super::channel_tick_buffer_sender::ChannelTickBufferSender;
 
-pub struct TickBufferSender<P: Protocolize, C: ChannelIndex> {
-    channel_senders: HashMap<C, ChannelTickBufferSender<P>>,
+pub struct TickBufferSender {
+    channel_senders: HashMap<ChannelId, ChannelTickBufferSender>,
     #[allow(clippy::type_complexity)]
-    packet_to_channel_map: HashMap<PacketIndex, Vec<(C, Vec<(Tick, ShortMessageIndex)>)>>,
+    packet_to_channel_map: HashMap<PacketIndex, Vec<(ChannelId, Vec<(Tick, ShortMessageIndex)>)>>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
-    pub fn new(channel_config: &ChannelConfig<C>, tick_duration: &Duration) -> Self {
+impl TickBufferSender {
+    pub fn new(tick_duration: &Duration) -> Self {
         // initialize senders
         let mut channel_senders = HashMap::new();
-        for (channel_index, channel) in channel_config.channels() {
+        for (channel_index, channel) in Channels::channels() {
             if let ChannelMode::TickBuffered(settings) = &channel.mode {
                 channel_senders.insert(
-                    channel_index.clone(),
+                    *channel_index,
                     ChannelTickBufferSender::new(tick_duration, settings),
                 );
             }
@@ -34,8 +35,13 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
 
     // Outgoing Messages
 
-    pub fn send_message(&mut self, host_tick: &Tick, channel_index: C, message: P) {
-        if let Some(channel) = self.channel_senders.get_mut(&channel_index) {
+    pub fn send_message(
+        &mut self,
+        host_tick: &Tick,
+        channel_id: &ChannelId,
+        message: Box<dyn Message>,
+    ) {
+        if let Some(channel) = self.channel_senders.get_mut(channel_id) {
             channel.send_message(host_tick, message);
         }
     }
@@ -61,7 +67,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
 
     pub fn write_messages(
         &mut self,
-        channel_writer: &dyn ChannelWriter<P>,
+        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
         host_tick: &Tick,
@@ -98,7 +104,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
-                channel_list.push((channel_index.clone(), message_ids));
+                channel_list.push((*channel_index, message_ids));
             }
 
             // write MessageContinue finish bit, release
@@ -108,7 +114,7 @@ impl<P: Protocolize, C: ChannelIndex> TickBufferSender<P, C> {
     }
 }
 
-impl<P: Protocolize, C: ChannelIndex> PacketNotifiable for TickBufferSender<P, C> {
+impl PacketNotifiable for TickBufferSender {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_channel_map.get(&packet_index) {
             for (channel_index, message_ids) in channel_list {

@@ -5,7 +5,11 @@ use macroquad::prelude::{
     YELLOW,
 };
 
-use naia_client::{Client as NaiaClient, ClientConfig, CommandHistory, Event};
+use naia_client::{
+    Client as NaiaClient, ClientConfig, CommandHistory, ConnectionEvent, DespawnEntityEvent,
+    DisconnectionEvent, ErrorEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent,
+    SpawnEntityEvent, TickEvent, UpdateComponentEvent,
+};
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 
@@ -78,16 +82,16 @@ impl App {
             if w || s || a || d {
                 if let Some(command) = &mut self.queued_command {
                     if w {
-                        *command.w = true;
+                        command.w = true;
                     }
                     if s {
-                        *command.s = true;
+                        command.s = true;
                     }
                     if a {
-                        *command.a = true;
+                        command.a = true;
                     }
                     if d {
-                        *command.d = true;
+                        command.d = true;
                     }
                 } else {
                     let mut key_command = KeyCommand::new(w, s, a, d);
@@ -128,7 +132,8 @@ impl App {
                             self.command_history.insert(client_tick, command.clone());
 
                             // Send command
-                            self.client.send_message(Channels::PlayerCommand, &command);
+                            self.client
+                                .send_message::<PlayerCommandChannel, _>(&command);
 
                             // Apply command
                             if let Some(mut square_ref) = self
@@ -156,12 +161,14 @@ impl App {
             info!("inserted component");
             // TODO: Sync up Predicted & Confirmed entities
         }
-        for (_entity, _component) in events.read::<RemoveComponentEvent>() {
+        for (_entity, _component) in events.read::<RemoveComponentEvent<Square>>() {
             info!("removed component");
             // TODO: Sync up Predicted & Confirmed entities
         }
-        for entity_assignment in events.read::<MessageEvent<EntityAssignment, EntityAssignment>>() {
-            let assign = *entity_assignment.assign;
+        for entity_assignment in
+            events.read::<MessageEvent<EntityAssignmentChannel, EntityAssignment>>()
+        {
+            let assign = entity_assignment.assign;
 
             let entity = entity_assignment.entity.get(&self.client).unwrap();
             if assign {

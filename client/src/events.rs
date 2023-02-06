@@ -54,8 +54,8 @@ impl<E: Copy> Events<E> {
         self.empty
     }
 
-    pub fn read<V: Event>(&mut self) -> V::Iter {
-        return V::iter::<E>(self);
+    pub fn read<V: Event<E>>(&mut self) -> V::Iter {
+        return V::iter(self);
     }
 
     pub(crate) fn push_connection(&mut self, socket_addr: &SocketAddr) {
@@ -126,6 +126,10 @@ impl<E: Copy> Events<E> {
     pub(crate) fn push_update(&mut self, tick: Tick, entity: E, component_id: ComponentId) {
         self.updates.push((tick, entity, component_id));
         self.empty = false;
+    }
+
+    pub(crate) fn clear(&mut self) {
+        todo!()
     }
 }
 

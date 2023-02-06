@@ -142,7 +142,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
             EntityActionType::RemoveComponent => {
                 // read all data
                 let net_entity = NetEntity::de(reader)?;
-                let component_kind = Components::Kind::de(reader)?;
+                let component_kind = ComponentId::de(reader)?;
 
                 self.receiver.buffer_action(
                     action_id,
@@ -184,7 +184,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                     let entity_handle = self.handle_entity_map.insert(world_entity);
                     let mut entity_record = EntityRecord::new(net_entity, entity_handle);
 
-                    incoming_events.push_back(Ok(Event::SpawnEntity(world_entity)));
+                    incoming_events.push_spawn(world_entity);
 
                     // read component list
                     for component_kind in components {
@@ -195,10 +195,10 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
 
                         entity_record.component_kinds.insert(component_kind);
 
-                        component.extract_and_insert(&world_entity, world);
+                        //component.extract_and_insert(&world_entity, world);
+                        todo!();
 
-                        incoming_events
-                            .push_back(Ok(Event::InsertComponent(world_entity, component_kind)));
+                        incoming_events.push_insert(world_entity, component_kind);
                     }
                     //
 
@@ -219,14 +219,13 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                             if let Some(component) =
                                 world.remove_component_of_kind(&world_entity, &component_kind)
                             {
-                                incoming_events
-                                    .push_back(Ok(Event::RemoveComponent(world_entity, component)));
+                                incoming_events.push_remove(world_entity, component);
                             }
                         }
 
                         world.despawn_entity(&world_entity);
 
-                        incoming_events.push_back(Ok(Event::DespawnEntity(world_entity)));
+                        incoming_events.push_despawn(world_entity);
                     } else {
                         panic!("received message attempting to delete nonexistent entity");
                     }
@@ -252,10 +251,10 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
 
                         entity_record.component_kinds.insert(component_kind);
 
-                        component.extract_and_insert(world_entity, world);
+                        //component.extract_and_insert(world_entity, world);
+                        todo!();
 
-                        incoming_events
-                            .push_back(Ok(Event::InsertComponent(*world_entity, component_kind)));
+                        incoming_events.push_insert(*world_entity, component_kind);
                     }
                 }
                 EntityAction::RemoveComponent(net_entity, component_kind) => {
@@ -277,8 +276,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                             .expect("Component already removed?");
 
                         // Generate event
-                        incoming_events
-                            .push_back(Ok(Event::RemoveComponent(*world_entity, component)));
+                        incoming_events.push_remove(*world_entity, component);
                     } else {
                         panic!("attempting to delete nonexistent component of entity");
                     }
@@ -340,11 +338,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                     component_update,
                 )?;
 
-                incoming_events.push_back(Ok(Event::UpdateComponent(
-                    server_tick,
-                    *world_entity,
-                    component_kind,
-                )));
+                incoming_events.push_update(server_tick, *world_entity, component_kind);
             }
         }
 

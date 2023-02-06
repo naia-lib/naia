@@ -1,4 +1,4 @@
-use naia_serde::{BitWrite, SerdeErr};
+use naia_serde::{BitReader, BitWrite, SerdeErr};
 
 use crate::messages::named::Named;
 use crate::types::ComponentId;
@@ -13,7 +13,7 @@ use crate::{
 };
 
 /// A map to hold all component types
-pub struct Components {}
+pub struct Components;
 
 impl Components {
     pub fn type_to_id<R: ReplicateSafe>() -> ComponentId {
@@ -34,6 +34,23 @@ impl Components {
     pub fn cast_mut<R: ReplicateSafe>(
         boxed_component: &mut Box<dyn ReplicateSafe>,
     ) -> Option<&mut R> {
+        todo!()
+    }
+    pub fn read(
+        bit_reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
+    ) -> Result<Box<dyn ReplicateSafe>, SerdeErr> {
+        todo!()
+    }
+
+    pub fn write(
+        bit_writer: &mut dyn BitWrite,
+        converter: &dyn NetEntityHandleConverter,
+        message: &Box<dyn ReplicateSafe>,
+    ) {
+        todo!()
+    }
+    pub fn read_create_update(bit_reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
         todo!()
     }
 }

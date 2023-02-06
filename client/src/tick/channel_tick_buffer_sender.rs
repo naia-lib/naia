@@ -5,19 +5,19 @@ use log::{info, warn};
 use naia_shared::{
     sequence_greater_than, sequence_less_than,
     serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelWriter, Instant, ShortMessageIndex, Tick, TickBufferSettings,
+    wrapping_diff, ChannelWriter, Instant, Message, ShortMessageIndex, Tick, TickBufferSettings,
     MESSAGE_HISTORY_SIZE,
 };
 
-pub struct ChannelTickBufferSender<P: Protocolize> {
-    sending_messages: OutgoingMessages<P>,
-    outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageIndex, P)>)>,
+pub struct ChannelTickBufferSender {
+    sending_messages: OutgoingMessages,
+    outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageIndex, Box<dyn Message>)>)>,
     resend_interval: Duration,
     resend_interval_millis: u32,
     last_sent: Instant,
 }
 
-impl<P: Protocolize> ChannelTickBufferSender<P> {
+impl ChannelTickBufferSender {
     pub fn new(tick_duration: &Duration, settings: &TickBufferSettings) -> Self {
         let resend_interval = Duration::from_millis(
             ((settings.tick_resend_factor as u128) * tick_duration.as_millis()) as u64,
@@ -60,7 +60,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
         }
     }
 
-    pub fn send_message(&mut self, host_tick: &Tick, message: P) {
+    pub fn send_message(&mut self, host_tick: &Tick, message: Box<dyn Message>) {
         self.sending_messages.push(*host_tick, message);
 
         self.last_sent = Instant::now();
@@ -75,7 +75,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
 
     pub fn write_messages(
         &mut self,
-        channel_writer: &dyn ChannelWriter<P>,
+        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
         bit_writer: &mut BitWriter,
         host_tick: &Tick,
         has_written: &mut bool,
@@ -138,11 +138,11 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
     /// eventually be put into the outgoing packet
     fn write_message(
         &self,
-        channel_writer: &dyn ChannelWriter<P>,
+        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
         bit_writer: &mut dyn BitWrite,
         last_written_tick: &Tick,
         message_tick: &Tick,
-        messages: &Vec<(ShortMessageIndex, P)>,
+        messages: &Vec<(ShortMessageIndex, Box<dyn Message>)>,
     ) -> Vec<ShortMessageIndex> {
         let mut message_ids = Vec::new();
 
@@ -180,7 +180,7 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
 
     fn warn_overflow(
         &self,
-        messages: &Vec<(ShortMessageIndex, P)>,
+        messages: &Vec<(ShortMessageIndex, Box<dyn Message>)>,
         bits_needed: u16,
         bits_free: u16,
     ) {
@@ -201,20 +201,20 @@ impl<P: Protocolize> ChannelTickBufferSender<P> {
 }
 
 // MessageMap
-struct MessageMap<P: Protocolize> {
-    list: Vec<Option<P>>,
+struct MessageMap {
+    list: Vec<Option<Box<dyn Message>>>,
 }
 
-impl<P: Protocolize> MessageMap<P> {
+impl MessageMap {
     pub fn new() -> Self {
         MessageMap { list: Vec::new() }
     }
 
-    pub fn insert(&mut self, message: P) {
+    pub fn insert(&mut self, message: Box<dyn Message>) {
         self.list.push(Some(message));
     }
 
-    pub fn collect_messages(&self) -> Vec<(ShortMessageIndex, P)> {
+    pub fn collect_messages(&self) -> Vec<(ShortMessageIndex, Box<dyn Message>)> {
         let mut output = Vec::new();
         for (index, message_opt) in self.list.iter().enumerate() {
             if let Some(message) = message_opt {
@@ -237,13 +237,13 @@ impl<P: Protocolize> MessageMap<P> {
 
 // OutgoingMessages
 
-struct OutgoingMessages<P: Protocolize> {
+struct OutgoingMessages {
     // front big, back small
     // front recent, back past
-    buffer: VecDeque<(Tick, MessageMap<P>)>,
+    buffer: VecDeque<(Tick, MessageMap)>,
 }
 
-impl<P: Protocolize> OutgoingMessages<P> {
+impl OutgoingMessages {
     pub fn new() -> Self {
         OutgoingMessages {
             buffer: VecDeque::new(),
@@ -251,7 +251,7 @@ impl<P: Protocolize> OutgoingMessages<P> {
     }
 
     // should only push increasing ticks of messages
-    pub fn push(&mut self, message_tick: Tick, message_protocol: P) {
+    pub fn push(&mut self, message_tick: Tick, message_protocol: Box<dyn Message>) {
         if let Some((front_tick, msg_map)) = self.buffer.front_mut() {
             if message_tick == *front_tick {
                 // been here before, cool
@@ -294,7 +294,7 @@ impl<P: Protocolize> OutgoingMessages<P> {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &(Tick, MessageMap<P>)> {
+    pub fn iter(&self) -> impl Iterator<Item = &(Tick, MessageMap)> {
         self.buffer.iter()
     }
 

@@ -25,7 +25,11 @@ pub use client::Client;
 pub use client_config::ClientConfig;
 pub use command_history::CommandHistory;
 pub use error::NaiaClientError;
-pub use events::Event;
+pub use events::{
+    ConnectionEvent, DespawnEntityEvent, DisconnectionEvent, ErrorEvent, Events,
+    InsertComponentEvent, MessageEvent, RejectionEvent, RemoveComponentEvent, SpawnEntityEvent,
+    TickEvent, UpdateComponentEvent,
+};
 pub use protocol::entity_ref::EntityRef;
 
 pub mod internal {

@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
 
 use log::warn;
@@ -32,12 +33,13 @@ use super::{client_config::ClientConfig, error::NaiaClientError, events::Events}
 pub struct Client<E: Copy + Eq + Hash> {
     // Config
     client_config: ClientConfig,
+    protocol: Protocol,
     // Connection
     io: Io,
     server_connection: Option<Connection<E>>,
     handshake_manager: HandshakeManager,
     // Events
-    incoming_events: Events,
+    incoming_events: Events<E>,
     // Ticks
     tick_manager: Option<TickManager>,
 }
@@ -51,13 +53,16 @@ impl<E: Copy + Eq + Hash> Client<E> {
             .tick_interval
             .map(|duration| TickManager::new(duration, client_config.minimum_latency));
 
+        let compression_config = protocol.compression.clone();
+
         Client {
             // Config
             client_config: client_config.clone(),
+            protocol,
             // Connection
             io: Io::new(
                 &client_config.connection.bandwidth_measure_duration,
-                &protocol.compression,
+                &compression_config,
             ),
             server_connection: None,
             handshake_manager,
@@ -69,9 +74,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
     }
 
     /// Set the auth object to use when setting up a connection with the Server
-    pub fn auth<R: ReplicateSafe>(&mut self, auth: R) {
-        self.handshake_manager
-            .set_auth_message(auth.into_protocol());
+    pub fn auth<M: Message>(&mut self, auth: M) {
+        self.handshake_manager.set_auth_message(Box::new(auth));
     }
 
     /// Connect to the given server address
@@ -79,7 +83,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
-        let mut socket = Socket::new(&self.shared_config.socket);
+        let mut socket = Socket::new(&self.protocol.socket);
         socket.connect(server_session_url);
         self.io
             .load(socket.packet_sender(), socket.packet_receiver());
@@ -125,7 +129,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
     /// Retrieves incoming update data from the server, and maintains the connection.
-    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Events {
+    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Events<E> {
         // Need to run this to maintain connection with server, and receive packets
         // until none left
         self.maintain_socket();
@@ -448,15 +452,14 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                     self.server_connection = Some(Connection::new(
                                         server_addr,
                                         &self.client_config.connection,
-                                        &self.shared_config.channel,
-                                        &self.shared_config.tick_interval,
+                                        &self.protocol.tick_interval,
                                     ));
-                                    self.incoming_events.push_connection(server_addr);
+                                    self.incoming_events.push_connection(&server_addr);
                                 }
                                 Some(HandshakeResult::Rejected) => {
                                     let server_addr = self.server_address_unwrapped();
                                     self.incoming_events.clear();
-                                    self.incoming_events.push_rejection(server_addr);
+                                    self.incoming_events.push_rejection(&server_addr);
                                     self.disconnect_cleanup();
                                     return;
                                 }
@@ -482,14 +485,14 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
         // exit early, we're disconnected, who cares?
         self.incoming_events.clear();
-        self.incoming_events.push_disconnection(server_addr);
+        self.incoming_events.push_disconnection(&server_addr);
     }
 
     fn disconnect_cleanup(&mut self) {
         // this is very similar to the newtype method .. can we coalesce and reduce
         // duplication?
         let tick_manager = {
-            if let Some(duration) = self.shared_config.tick_interval {
+            if let Some(duration) = self.protocol.tick_interval {
                 Some(TickManager::new(
                     duration,
                     self.client_config.minimum_latency,
@@ -501,7 +504,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
         self.io = Io::new(
             &self.client_config.connection.bandwidth_measure_duration,
-            &self.shared_config.compression,
+            &self.protocol.compression,
         );
         self.server_connection = None;
         self.handshake_manager = HandshakeManager::new(self.client_config.send_handshake_interval);
