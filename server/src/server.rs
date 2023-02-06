@@ -228,7 +228,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
+    pub fn send_message<C: Channel + 'static, M: Message>(
+        &mut self,
+        user_key: &UserKey,
+        message: &M,
+    ) {
         let cloned_message = M::clone_box(message);
         self.send_message_inner(user_key, &Channels::type_to_id::<C>(), cloned_message);
     }
@@ -285,7 +289,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Sends a message to all connected users using a given channel
-    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: M) {
+    pub fn broadcast_message<C: Channel + 'static, M: Message>(&mut self, message: M) {
         self.broadcast_message_inner(&Channels::type_to_id::<C>(), Box::new(message));
     }
 

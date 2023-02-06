@@ -2,7 +2,14 @@ use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
-use crate::{Channel, ChannelDirection, ChannelMode, CompressionConfig, Message, Replicate};
+use crate::{
+    component::replicate::{Components, Replicate},
+    connection::compression_config::CompressionConfig,
+    messages::{
+        channel_config::{Channel, ChannelDirection, ChannelMode, ChannelSettings, Channels},
+        message::{Message, Messages},
+    },
+};
 
 #[derive(Clone)]
 pub struct Protocol {
@@ -58,20 +65,23 @@ impl ProtocolBuilder {
         self
     }
 
-    pub fn add_channel<C: Channel>(
+    pub fn add_channel<C: Channel + 'static>(
         &mut self,
         direction: ChannelDirection,
         mode: ChannelMode,
     ) -> &mut Self {
-        todo!()
+        Channels::add_channel::<C>(ChannelSettings::new(mode, direction));
+        self
     }
 
-    pub fn add_message<M: Message>(&mut self) -> &mut Self {
-        todo!()
+    pub fn add_message<M: Message + 'static>(&mut self) -> &mut Self {
+        Messages::add_message::<M>();
+        self
     }
 
-    pub fn add_component<C: Replicate>(&mut self) -> &mut Self {
-        todo!()
+    pub fn add_component<C: Replicate + 'static>(&mut self) -> &mut Self {
+        Components::add_component::<C>();
+        self
     }
 
     pub fn build(&mut self) -> Protocol {

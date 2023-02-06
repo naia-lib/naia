@@ -1,7 +1,9 @@
+use std::{any::TypeId, collections::HashMap, sync::Mutex};
+
+use lazy_static::lazy_static;
+
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::messages::named::Named;
-use crate::types::ComponentId;
 use crate::{
     component::{
         component_update::ComponentUpdate,
@@ -10,6 +12,8 @@ use crate::{
         replica_ref::{ReplicaDynMut, ReplicaDynRef},
     },
     entity::{entity_handle::EntityHandle, entity_property::NetEntityHandleConverter},
+    messages::named::Named,
+    types::ComponentId,
 };
 
 /// A map to hold all component types
@@ -46,16 +50,43 @@ impl Components {
     pub fn write(
         bit_writer: &mut dyn BitWrite,
         converter: &dyn NetEntityHandleConverter,
-        message: &Box<dyn ReplicateSafe>,
+        component: &Box<dyn ReplicateSafe>,
     ) {
         todo!()
     }
     pub fn read_create_update(bit_reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
         todo!()
     }
+
+    pub fn add_component<C: Replicate + 'static>() {
+        let mut components_data = COMPONENTS_DATA.lock().unwrap();
+        let type_id = TypeId::of::<C>();
+        let component_id = ComponentId::new(components_data.current_id);
+        components_data.type_to_id_map.insert(type_id, component_id);
+        components_data.current_id += 1;
+        //TODO: check for current_id overflow?
+    }
 }
 
-/// A struct that implements Replicate is a Message/Component, or otherwise,
+lazy_static! {
+    static ref COMPONENTS_DATA: Mutex<ComponentsData> = Mutex::new(ComponentsData::new());
+}
+
+struct ComponentsData {
+    pub current_id: u16,
+    pub type_to_id_map: HashMap<TypeId, ComponentId>,
+}
+
+impl ComponentsData {
+    pub fn new() -> Self {
+        Self {
+            current_id: 0,
+            type_to_id_map: HashMap::new(),
+        }
+    }
+}
+
+/// A struct that implements Replicate is a Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
 pub trait Replicate: ReplicateSafe + Clone {}
@@ -73,15 +104,15 @@ pub trait ReplicateSafe: ReplicateInner + Named {
     /// Sets the current Replica to the state of another Replica of the
     /// same type
     fn mirror(&mut self, other: &dyn ReplicateSafe);
-    /// Set the Message/Component's PropertyMutator, which keeps track
+    /// Set the Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client
     fn set_mutator(&mut self, mutator: &PropertyMutator);
     /// Writes data into an outgoing byte stream, sufficient to completely
-    /// recreate the Message/Component on the client
+    /// recreate the Component on the client
     fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
-    /// mutated Properties of the Message/Component on the client
+    /// mutated Properties of the Component on the client
     fn write_update(
         &self,
         diff_mask: &DiffMask,

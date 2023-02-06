@@ -79,7 +79,7 @@ impl Events {
         }
         let channel_map = self.messages.get_mut(&channel_id).unwrap();
 
-        let message_id: MessageId = Messages::message_id_from_box(&auth_message);
+        let message_id: MessageId = Messages::message_id_from_box(&message);
         if !channel_map.contains_key(&message_id) {
             channel_map.insert(message_id, Vec::new());
         }

@@ -208,7 +208,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
 
     // Messages
 
-    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: M) {
+    pub fn broadcast_message<C: Channel + 'static, M: Message>(&mut self, message: M) {
         self.server.room_broadcast_message(
             &Channels::type_to_id::<C>(),
             Box::new(message),

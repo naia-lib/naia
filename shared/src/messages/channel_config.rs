@@ -1,4 +1,10 @@
-use std::collections::HashMap;
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+    sync::Mutex,
+};
+
+use lazy_static::lazy_static;
 
 use crate::types::ChannelId;
 
@@ -6,8 +12,22 @@ use crate::types::ChannelId;
 pub struct Channels;
 
 impl Channels {
-    pub fn type_to_id<M: Channel>() -> ChannelId {
-        todo!()
+    pub fn add_channel<C: Channel + 'static>(settings: ChannelSettings) {
+        let mut channels_data = CHANNELS_DATA.lock().unwrap();
+        let type_id = TypeId::of::<C>();
+        let channel_id = ChannelId::new(channels_data.current_id);
+        channels_data.type_to_id_map.insert(type_id, channel_id);
+        channels_data.id_to_data_map.insert(channel_id, settings);
+        channels_data.current_id += 1;
+        //TODO: check for current_id overflow?
+    }
+
+    pub fn type_to_id<C: Channel + 'static>() -> ChannelId {
+        let type_id = TypeId::of::<C>();
+        let mut channels_data = CHANNELS_DATA.lock().unwrap();
+        return *channels_data.type_to_id_map.get(&type_id).expect(
+            "Must properly initialize Channel with Protocol via `add_channel()` function!",
+        );
     }
 
     pub fn channels() -> &'static HashMap<ChannelId, ChannelSettings> {
@@ -16,6 +36,26 @@ impl Channels {
 
     pub fn channel(id: &ChannelId) -> &ChannelSettings {
         todo!()
+    }
+}
+
+lazy_static! {
+    static ref CHANNELS_DATA: Mutex<ChannelsData> = Mutex::new(ChannelsData::new());
+}
+
+struct ChannelsData {
+    pub current_id: u16,
+    pub type_to_id_map: HashMap<TypeId, ChannelId>,
+    pub id_to_data_map: HashMap<ChannelId, ChannelSettings>,
+}
+
+impl ChannelsData {
+    pub fn new() -> Self {
+        Self {
+            current_id: 0,
+            type_to_id_map: HashMap::new(),
+            id_to_data_map: HashMap::new(),
+        }
     }
 }
 
