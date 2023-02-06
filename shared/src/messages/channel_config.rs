@@ -148,7 +148,7 @@ pub enum ChannelDirection {
 
 mod define_default_channels {
     use super::ChannelIndex;
-    use crate::serde::Serde;
+    use naia_serde::Serde;
 
     #[derive(Eq, Hash, PartialEq, Clone, Serde)]
     pub enum DefaultChannels {

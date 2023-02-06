@@ -15,8 +15,7 @@ pub fn channel_index_impl(input: proc_macro::TokenStream) -> proc_macro::TokenSt
     let gen = quote! {
         mod #mod_channel_name {
             use naia_shared::{Serde, ChannelIndex};
-            #[derive(Clone, Hash, PartialEq, Eq)]
-            #[derive_serde]
+            #[derive(Clone, Hash, PartialEq, Eq, Serde)]
             #input
 
             impl ChannelIndex for #enum_name {}
