@@ -229,7 +229,8 @@ impl<E: Copy> Event<E> for SpawnEntityEvent {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        todo!()
+        let list = std::mem::take(&mut events.spawns);
+        return IntoIterator::into_iter(list);
     }
 }
 
@@ -239,7 +240,8 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        todo!()
+        let list = std::mem::take(&mut events.despawns);
+        return IntoIterator::into_iter(list);
     }
 }
 
@@ -249,7 +251,8 @@ impl<E: Copy> Event<E> for InsertComponentEvent {
     type Iter = IntoIter<(E, ComponentId)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        todo!()
+        let list = std::mem::take(&mut events.inserts);
+        return IntoIterator::into_iter(list);
     }
 }
 
@@ -261,7 +264,20 @@ impl<E: Copy, C: ReplicateSafe> Event<E> for RemoveComponentEvent<C> {
     type Iter = IntoIter<(E, C)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        todo!()
+        let component_id: ComponentId = Components::type_to_id::<C>();
+        if let Some(boxed_list) = events.removes.remove(&component_id) {
+            let mut output_list: Vec<(E, C)> = Vec::new();
+
+            for (entity, boxed_component) in boxed_list {
+                let component: C =
+                    Components::cast::<C>(boxed_component).expect("shouldn't be possible here?");
+                output_list.push((entity, component));
+            }
+
+            return IntoIterator::into_iter(output_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
     }
 }
 
@@ -271,6 +287,7 @@ impl<E: Copy> Event<E> for UpdateComponentEvent {
     type Iter = IntoIter<(Tick, E, ComponentId)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        todo!()
+        let list = std::mem::take(&mut events.updates);
+        return IntoIterator::into_iter(list);
     }
 }

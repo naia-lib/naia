@@ -187,7 +187,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
+    pub fn send_message<C: Channel + 'static, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
         self.send_message_inner(&Channels::type_to_id::<C>(), cloned_message);
     }

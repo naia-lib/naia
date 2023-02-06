@@ -20,8 +20,21 @@ use crate::{
 pub struct Components;
 
 impl Components {
-    pub fn type_to_id<R: ReplicateSafe>() -> ComponentId {
-        todo!()
+    pub fn add_component<C: Replicate + 'static>() {
+        let mut components_data = COMPONENTS_DATA.lock().unwrap();
+        let type_id = TypeId::of::<C>();
+        let component_id = ComponentId::new(components_data.current_id);
+        components_data.type_to_id_map.insert(type_id, component_id);
+        components_data.current_id += 1;
+        //TODO: check for current_id overflow?
+    }
+
+    pub fn type_to_id<C: ReplicateSafe>() -> ComponentId {
+        let type_id = TypeId::of::<C>();
+        let mut components_data = COMPONENTS_DATA.lock().unwrap();
+        return *components_data.type_to_id_map.get(&type_id).expect(
+            "Must properly initialize Component with Protocol via `add_component()` function!",
+        );
     }
     pub fn id_to_name(id: &ComponentId) -> String {
         todo!()
@@ -29,7 +42,7 @@ impl Components {
     pub fn box_to_id(boxed_component: &Box<dyn ReplicateSafe>) -> ComponentId {
         todo!()
     }
-    pub fn cast<R: Replicate>(boxed_component: Box<dyn ReplicateSafe>) -> Option<R> {
+    pub fn cast<R: ReplicateSafe>(boxed_component: Box<dyn ReplicateSafe>) -> Option<R> {
         todo!()
     }
     pub fn cast_ref<R: ReplicateSafe>(boxed_component: &Box<dyn ReplicateSafe>) -> Option<&R> {
@@ -56,15 +69,6 @@ impl Components {
     }
     pub fn read_create_update(bit_reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
         todo!()
-    }
-
-    pub fn add_component<C: Replicate + 'static>() {
-        let mut components_data = COMPONENTS_DATA.lock().unwrap();
-        let type_id = TypeId::of::<C>();
-        let component_id = ComponentId::new(components_data.current_id);
-        components_data.type_to_id_map.insert(type_id, component_id);
-        components_data.current_id += 1;
-        //TODO: check for current_id overflow?
     }
 }
 
