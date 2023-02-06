@@ -37,4 +37,3 @@ impl PacketSender {
 }
 
 unsafe impl Send for PacketSender {}
-unsafe impl Sync for PacketSender {}

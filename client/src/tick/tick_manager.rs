@@ -21,7 +21,6 @@ pub struct TickManager {
     client_sending_tick_adjust: f32,
     server_receivable_tick_adjust: f32,
     client_receiving_tick_adjust: f32,
-    #[cfg_attr(feature = "reflect", reflect(ignore))]
     last_tick_instant: Instant,
     interpolation: f32,
     accumulator: f32,
