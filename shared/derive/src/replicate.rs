@@ -62,7 +62,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
     let create_builder_method = create_builder_method(&builder_name);
     let read_method = read_method(&replica_name, &enum_name, &properties, &struct_type);
-    let read_create_update_method = read_create_update_method(&replica_name, &properties);
+    let read_create_update_method = read_create_update_method(&properties);
 
     let dyn_ref_method = dyn_ref_method();
     let dyn_mut_method = dyn_mut_method();
@@ -89,7 +89,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
             #property_enum_definition
 
-            struct #builder_name;
+            struct #builder_name {
+                component_id: ComponentId,
+            }
             impl ReplicateBuilder for #builder_name {
                 #read_method
                 #read_create_update_method
@@ -391,7 +393,7 @@ fn clone_method(
 }
 
 fn mirror_method(
-    _replica_name: &Ident,
+    replica_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
 ) -> TokenStream {
@@ -411,7 +413,11 @@ fn mirror_method(
 
     quote! {
         fn mirror(&mut self, other: &dyn Replicate) {
-            todo!()
+            if let Some(replica) = other.to_any().downcast_ref::<#replica_name>() {
+                #output
+            } else {
+                panic!("cannot mirror: other Component is of another type!");
+            }
         }
     }
 }
@@ -581,8 +587,8 @@ pub fn new_complete_method(
 
 pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
     quote! {
-        fn create_builder() -> Box<dyn ReplicateBuilder> where Self:Sized {
-            Box::new(#builder_name)
+        fn create_builder(component_id: ComponentId) -> Box<dyn ReplicateBuilder> where Self:Sized {
+            Box::new(#builder_name { component_id })
         }
     }
 }
@@ -670,7 +676,7 @@ pub fn read_method(
     }
 }
 
-pub fn read_create_update_method(_replica_name: &Ident, properties: &[Property]) -> TokenStream {
+pub fn read_create_update_method(properties: &[Property]) -> TokenStream {
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {
@@ -719,9 +725,7 @@ pub fn read_create_update_method(_replica_name: &Ident, properties: &[Property])
             let (length, buffer) = update_writer.flush();
             let owned_reader = OwnedBitReader::new(&buffer[..length]);
 
-            let component_id: ComponentId = todo!();
-
-            return Ok(ComponentUpdate::new(component_id, owned_reader));
+            return Ok(ComponentUpdate::new(self.component_id, owned_reader));
         }
     }
 }

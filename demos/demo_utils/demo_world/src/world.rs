@@ -210,26 +210,24 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         immutable_entity: &Entity,
         component_kind: &ComponentId,
     ) {
-        todo!()
-        // let immutable_component_opt: Option<P> = {
-        //     if let Some(immutable_component_map) = self.world.entities.get(immutable_entity) {
-        //         if let Some(immutable_component) = immutable_component_map.get(component_kind) {
-        //             let immutable_copy = immutable_component.dyn_ref().protocol_copy();
-        //             Some(immutable_copy)
-        //         } else {
-        //             None
-        //         }
-        //     } else {
-        //         None
-        //     }
-        // };
-        // if let Some(immutable_component) = immutable_component_opt {
-        //     if let Some(mutable_component_map) = self.world.entities.get_mut(mutable_entity) {
-        //         if let Some(mutable_component) = mutable_component_map.get_mut(component_kind) {
-        //             mutable_component.dyn_mut().mirror(&immutable_component);
-        //         }
-        //     }
-        // }
+        let immutable_component_opt: Option<Box<dyn Replicate>> = {
+            if let Some(immutable_component_map) = self.world.entities.get(immutable_entity) {
+                if let Some(immutable_component) = immutable_component_map.get(component_kind) {
+                    Some(immutable_component.copy_to_box())
+                } else {
+                    None
+                }
+            } else {
+                None
+            }
+        };
+        if let Some(immutable_component) = immutable_component_opt {
+            if let Some(mutable_component_map) = self.world.entities.get_mut(mutable_entity) {
+                if let Some(mutable_component) = mutable_component_map.get_mut(component_kind) {
+                    mutable_component.mirror(immutable_component.as_ref());
+                }
+            }
+        }
     }
 
     fn insert_component<R: Replicate>(&mut self, entity: &Entity, component: R) {

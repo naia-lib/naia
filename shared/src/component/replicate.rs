@@ -26,8 +26,10 @@ pub struct Components;
 impl Components {
     pub fn add_component<C: Replicate>() {
         let type_id = TypeId::of::<C>();
-        let builder = C::create_builder();
-        Self::get_data().add_component(&type_id, builder);
+        let mut component_data = Self::get_data();
+        let component_id = component_data.add_component_id(&type_id);
+        let builder = C::create_builder(component_id);
+        component_data.add_component(&component_id, builder);
     }
 
     pub fn type_to_id<C: Replicate>() -> ComponentId {
@@ -46,7 +48,10 @@ impl Components {
     }
 
     pub fn read_create_update(reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
-        todo!()
+        let component_id: ComponentId = ComponentId::de(reader)?;
+        return Self::get_data()
+            .get_builder(&component_id)
+            .read_create_update(reader);
     }
 
     pub fn cast_ref<R: Replicate>(boxed_component: &Box<dyn Replicate>) -> Option<&R> {
@@ -100,12 +105,16 @@ impl ComponentsData {
         }
     }
 
-    fn add_component(&mut self, type_id: &TypeId, builder: Box<dyn ReplicateBuilder>) {
+    fn add_component_id(&mut self, type_id: &TypeId) -> ComponentId {
         let component_id = ComponentId::new(self.current_id);
         self.type_to_id_map.insert(*type_id, component_id);
-        self.id_to_data_map.insert(component_id, builder);
         self.current_id += 1;
         //TODO: check for current_id overflow?
+        component_id
+    }
+
+    fn add_component(&mut self, component_id: &ComponentId, builder: Box<dyn ReplicateBuilder>) {
+        self.id_to_data_map.insert(*component_id, builder);
     }
 
     fn get_id(&self, type_id: &TypeId) -> ComponentId {
@@ -138,7 +147,7 @@ pub trait ReplicateBuilder: Send {
 pub trait Replicate: ReplicateInner + Named + Any {
     fn to_any(&self) -> &dyn Any;
     fn to_any_mut(&mut self) -> &mut dyn Any;
-    fn create_builder() -> Box<dyn ReplicateBuilder>
+    fn create_builder(component_id: ComponentId) -> Box<dyn ReplicateBuilder>
     where
         Self: Sized;
     fn copy_to_box(&self) -> Box<dyn Replicate>;
