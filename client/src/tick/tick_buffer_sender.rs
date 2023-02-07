@@ -20,7 +20,7 @@ impl TickBufferSender {
         for (channel_index, channel) in Channels::channels() {
             if let ChannelMode::TickBuffered(settings) = &channel.mode {
                 channel_senders.insert(
-                    *channel_index,
+                    channel_index,
                     ChannelTickBufferSender::new(tick_duration, settings),
                 );
             }

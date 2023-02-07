@@ -18,6 +18,7 @@ use crate::{
     },
     tick::{tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager},
     user::UserKey,
+    Events,
 };
 
 use super::io::Io;
@@ -26,7 +27,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
     pub base: BaseConnection,
     pub entity_manager: EntityManager<E>,
-    pub tick_buffer: TickBufferReceiver,
+    tick_buffer: TickBufferReceiver,
     pub last_received_tick: Tick,
     pub ping_manager: PingManager,
 }
@@ -92,6 +93,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
 
         Ok(())
+    }
+
+    pub fn receive_messages(&mut self, incoming_events: &mut Events) {
+        let messages = self.base.message_manager.receive_messages();
+        for (channel_id, message) in messages {
+            incoming_events.push_message(&self.user_key, &channel_id, message);
+        }
+    }
+
+    pub fn receive_tick_buffer_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
+        let channels = self.tick_buffer.receive_messages(host_tick);
+        for (channel_id, messages) in channels {
+            for message in messages {
+                incoming_events.push_message(&self.user_key, &channel_id, message);
+            }
+        }
     }
 
     // Outgoing data

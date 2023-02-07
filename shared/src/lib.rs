@@ -80,7 +80,7 @@ pub use messages::{
     channel_config::{
         Channel, ChannelDirection, ChannelMode, Channels, ReliableSettings, TickBufferSettings,
     },
-    message::{Message, Messages},
+    message::{Message, MessageBuilder, Messages},
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     message_manager::MessageManager,
     message_receivable::MessageReceivable,

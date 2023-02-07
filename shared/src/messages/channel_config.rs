@@ -1,7 +1,8 @@
+use std::collections::hash_map::IntoIter;
 use std::{
     any::{Any, TypeId},
     collections::HashMap,
-    sync::Mutex,
+    sync::{Mutex, MutexGuard},
 };
 
 use lazy_static::lazy_static;
@@ -12,30 +13,33 @@ use crate::types::ChannelId;
 pub struct Channels;
 
 impl Channels {
-    pub fn add_channel<C: Channel + 'static>(settings: ChannelSettings) {
-        let mut channels_data = CHANNELS_DATA.lock().unwrap();
+    pub fn add_channel<C: Channel>(settings: ChannelSettings) {
         let type_id = TypeId::of::<C>();
-        let channel_id = ChannelId::new(channels_data.current_id);
-        channels_data.type_to_id_map.insert(type_id, channel_id);
-        channels_data.id_to_data_map.insert(channel_id, settings);
-        channels_data.current_id += 1;
-        //TODO: check for current_id overflow?
+        Self::get_data().add_channel(&type_id, settings);
     }
 
-    pub fn type_to_id<C: Channel + 'static>() -> ChannelId {
+    pub fn type_to_id<C: Channel>() -> ChannelId {
         let type_id = TypeId::of::<C>();
-        let mut channels_data = CHANNELS_DATA.lock().unwrap();
-        return *channels_data.type_to_id_map.get(&type_id).expect(
-            "Must properly initialize Channel with Protocol via `add_channel()` function!",
-        );
+        return Self::get_data().get_id(&type_id);
     }
 
-    pub fn channels() -> &'static HashMap<ChannelId, ChannelSettings> {
-        todo!()
+    pub fn channels() -> Vec<(ChannelId, ChannelSettings)> {
+        return Self::get_data().channels();
     }
 
-    pub fn channel(id: &ChannelId) -> &ChannelSettings {
-        todo!()
+    pub fn channel(id: &ChannelId) -> ChannelSettings {
+        return Self::get_data().channel(id);
+    }
+
+    fn get_data() -> MutexGuard<'static, ChannelsData> {
+        match CHANNELS_DATA.lock() {
+            Ok(channels_data) => {
+                return channels_data;
+            }
+            Err(poison) => {
+                panic!("Channels::get_data() Error: {}", poison);
+            }
+        }
     }
 }
 
@@ -44,23 +48,52 @@ lazy_static! {
 }
 
 struct ChannelsData {
-    pub current_id: u16,
-    pub type_to_id_map: HashMap<TypeId, ChannelId>,
-    pub id_to_data_map: HashMap<ChannelId, ChannelSettings>,
+    current_id: u16,
+    type_to_id_map: HashMap<TypeId, ChannelId>,
+    id_to_data_map: HashMap<ChannelId, ChannelSettings>,
 }
 
 impl ChannelsData {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             current_id: 0,
             type_to_id_map: HashMap::new(),
             id_to_data_map: HashMap::new(),
         }
     }
+
+    fn add_channel(&mut self, type_id: &TypeId, settings: ChannelSettings) {
+        let channel_id = ChannelId::new(self.current_id);
+        self.type_to_id_map.insert(*type_id, channel_id);
+        self.id_to_data_map.insert(channel_id, settings);
+        self.current_id += 1;
+        //TODO: check for current_id overflow?
+    }
+
+    fn get_id(&self, type_id: &TypeId) -> ChannelId {
+        return *self.type_to_id_map.get(type_id).expect(
+            "Must properly initialize Channel with Protocol via `add_channel()` function!",
+        );
+    }
+
+    fn channels(&self) -> Vec<(ChannelId, ChannelSettings)> {
+        // TODO: is there a better way to do this without copying + cloning?
+        // How to return a reference here (behind a Mutex ..)
+        let mut output = Vec::new();
+        for (id, settings) in &self.id_to_data_map {
+            output.push((*id, settings.clone()));
+        }
+        output
+    }
+
+    fn channel(&self, id: &ChannelId) -> ChannelSettings {
+        let settings = self.id_to_data_map.get(id).unwrap();
+        settings.clone()
+    }
 }
 
 // Channel Trait
-pub trait Channel {}
+pub trait Channel: 'static {}
 
 // ChannelSettings
 #[derive(Clone)]

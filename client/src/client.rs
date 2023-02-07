@@ -165,10 +165,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
             }
 
             // receive (process) messages
-            server_connection
-                .base
-                .message_manager
-                .receive_messages(&mut self.incoming_events);
+            server_connection.receive_messages(&mut self.incoming_events);
 
             // send outgoing packets
             server_connection.send_outgoing_packets(&mut self.io, &self.tick_manager);

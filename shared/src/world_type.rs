@@ -78,6 +78,8 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     );
     /// insert a component
     fn insert_component<R: Replicate>(&mut self, entity: &E, component_ref: R);
+    /// insert a boxed component
+    fn insert_boxed_component(&mut self, entity: &E, boxed_component: Box<dyn Replicate>);
     /// remove a component
     fn remove_component<R: Replicate>(&mut self, entity: &E) -> Option<R>;
     /// remove a component by kind

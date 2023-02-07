@@ -156,7 +156,7 @@ impl HandshakeManager {
             // write that we have auth
             true.ser(&mut writer);
             // write payload
-            Messages::write(&mut writer, &FakeEntityConverter, auth_message);
+            auth_message.write(&mut writer, &FakeEntityConverter);
         } else {
             // write that we do not have auth
             false.ser(&mut writer);

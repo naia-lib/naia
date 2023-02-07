@@ -145,10 +145,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let connection = self.user_connections.get_mut(user_address).unwrap();
 
             // receive messages from anyone
-            connection
-                .base
-                .message_manager
-                .receive_messages(&mut self.incoming_events);
+            connection.receive_messages(&mut self.incoming_events);
         }
 
         // receive (retrieve from buffer) tick buffered messages for the current server tick
@@ -157,7 +154,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             for user_address in &user_addresses {
                 let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                connection.tick_buffer.receive_messages(
+                connection.receive_tick_buffer_messages(
                     &self.tick_manager.as_ref().unwrap().server_tick(),
                     &mut self.incoming_events,
                 );

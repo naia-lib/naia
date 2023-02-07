@@ -59,7 +59,7 @@ impl Events {
     }
 
     pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: Box<dyn Message>) {
-        let message_id: MessageId = Messages::message_id_from_box(&auth_message);
+        let message_id: MessageId = auth_message.kind();
         if !self.auths.contains_key(&message_id) {
             self.auths.insert(message_id, Vec::new());
         }
@@ -79,7 +79,7 @@ impl Events {
         }
         let channel_map = self.messages.get_mut(&channel_id).unwrap();
 
-        let message_id: MessageId = Messages::message_id_from_box(&message);
+        let message_id: MessageId = message.kind();
         if !channel_map.contains_key(&message_id) {
             channel_map.insert(message_id, Vec::new());
         }

@@ -17,7 +17,7 @@ impl TickBufferReceiver {
         let mut channel_receivers = HashMap::new();
         for (channel_id, channel_settings) in Channels::channels() {
             if let ChannelMode::TickBuffered(_) = channel_settings.mode {
-                channel_receivers.insert(*channel_id, ChannelTickBufferReceiver::new());
+                channel_receivers.insert(channel_id, ChannelTickBufferReceiver::new());
             }
         }
 
@@ -52,9 +52,15 @@ impl TickBufferReceiver {
     }
 
     /// Retrieved stored data from the tick buffer for the given [`Tick`]
-    pub fn receive_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
-        for (_channel_index, channel) in &mut self.channel_receivers {
-            channel.receive_messages(host_tick, incoming_events);
+    pub fn receive_messages(
+        &mut self,
+        host_tick: &Tick,
+    ) -> Vec<(ChannelId, Vec<Box<dyn Message>>)> {
+        let mut output = Vec::new();
+        for (channel_id, channel) in &mut self.channel_receivers {
+            let messages = channel.receive_messages(host_tick);
+            output.push((*channel_id, messages));
         }
+        output
     }
 }

@@ -142,16 +142,17 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn duplicate_components(&mut self, new_entity: &Entity, old_entity: &Entity) {
-        todo!()
-        // for component_kind in self.component_kinds(old_entity) {
-        //     let mut component_copy_opt: Option<P> = None;
-        //     if let Some(component) = self.component_of_kind(old_entity, &component_kind) {
-        //         component_copy_opt = Some(component.protocol_copy());
-        //     }
-        //     if let Some(component_copy) = component_copy_opt {
-        //         Protocolize::extract_and_insert(&component_copy, new_entity, self);
-        //     }
-        // }
+        for component_kind in self.component_kinds(old_entity) {
+            let mut boxed_option: Option<Box<dyn Replicate>> = None;
+            if let Some(component) = self.component_of_kind(old_entity, &component_kind) {
+                boxed_option = Some(component.copy_to_box());
+            }
+            if let Some(boxed_component) = boxed_option {
+                self.insert_boxed_component(new_entity, boxed_component);
+            } else {
+                panic!("this shouldn't happen");
+            }
+        }
     }
 
     fn despawn_entity(&mut self, entity: &Entity) {
@@ -241,6 +242,16 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         }
     }
 
+    fn insert_boxed_component(&mut self, entity: &Entity, boxed_component: Box<dyn Replicate>) {
+        if let Some(component_map) = self.world.entities.get_mut(entity) {
+            let component_kind = boxed_component.kind();
+            if component_map.contains_key(&component_kind) {
+                panic!("Entity already has a Component of that type!");
+            }
+            component_map.insert(component_kind, boxed_component);
+        }
+    }
+
     fn remove_component<R: Replicate>(&mut self, entity: &Entity) -> Option<R> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             if let Some(boxed_component) = component_map.remove(&Components::type_to_id::<R>()) {
@@ -262,12 +273,6 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         None
     }
 }
-
-// impl<'w> ProtocolInserter<Entity> for WorldMut<'w> {
-//     fn insert<I: Replicate>(&mut self, entity: &Entity, impl_ref: I) {
-//         self.insert_component::<I>(entity, impl_ref);
-//     }
-// }
 
 // private methods //
 

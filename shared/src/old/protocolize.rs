@@ -60,6 +60,6 @@ pub trait ProtocolKindType: Eq + Hash + Copy + Send + Sync + Serde {
     fn name(&self) -> String;
 }
 
-pub trait ProtocolInserter<P: Protocolize, N> {
-    fn insert<R: ReplicateSafe<P>>(&mut self, entity: &N, component: R);
+pub trait ProtocolInserter<E> {
+    fn insert<R: Replicate>(&mut self, entity: &E, component: R);
 }

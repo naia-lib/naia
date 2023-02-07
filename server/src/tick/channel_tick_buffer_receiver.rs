@@ -21,11 +21,8 @@ impl ChannelTickBufferReceiver {
     }
 
     /// Read the stored buffer-data corresponding to the given [`Tick`]
-    pub fn receive_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
-        let incoming_messages = self.incoming_messages.collect(host_tick);
-        todo!();
-        // TODO: Really important Connor! Put these messages into `incoming_events`
-        // Otherwise no messages will be received!
+    pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<Box<dyn Message>> {
+        self.incoming_messages.collect(host_tick)
     }
 
     /// Given incoming packet data, read transmitted Messages and store

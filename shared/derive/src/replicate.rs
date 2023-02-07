@@ -44,18 +44,10 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let enum_name = format_ident!("{}Property", replica_name);
     let module_name = format_ident!("define_{}", replica_name);
     let builder_name = format_ident!("{}Builder", replica_name);
+    let replica_name_str = LitStr::new(&replica_name.to_string(), replica_name.span());
 
     // Definitions
     let property_enum_definition = property_enum(&enum_name, &properties);
-
-    // Replica Methods
-    let new_complete_method =
-        new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
-    let create_builder_method = create_builder_method(&builder_name);
-    let read_method = read_method(&replica_name, &enum_name, &properties, &struct_type);
-    let read_create_update_method = read_create_update_method(&replica_name, &properties);
-
-    // Replicate Derive Methods
     let diff_mask_size = {
         let len = properties.len();
         if len == 0 {
@@ -64,6 +56,14 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             ((len - 1) / 8) + 1
         }
     } as u8;
+
+    // Methods
+    let new_complete_method =
+        new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
+    let create_builder_method = create_builder_method(&builder_name);
+    let read_method = read_method(&replica_name, &enum_name, &properties, &struct_type);
+    let read_create_update_method = read_create_update_method(&replica_name, &properties);
+
     let dyn_ref_method = dyn_ref_method();
     let dyn_mut_method = dyn_mut_method();
     let clone_method = clone_method(&replica_name, &properties, &struct_type);
@@ -74,11 +74,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let write_update_method = write_update_method(&enum_name, &properties, &struct_type);
     let has_entity_properties = has_entity_properties_method(&properties);
     let entities = entities_method(&properties, &struct_type);
-    let replica_name_str = LitStr::new(&replica_name.to_string(), replica_name.span());
 
     let gen = quote! {
         mod #module_name {
-            use super::*;
 
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any};
             use naia_shared::{
@@ -87,16 +85,18 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,
                 EntityProperty, EntityHandle, Replicate, Property, Components, ReplicateBuilder
             };
+            use super::*;
 
             #property_enum_definition
 
-            impl #replica_name {
-                #new_complete_method
-            }
             struct #builder_name;
             impl ReplicateBuilder for #builder_name {
                 #read_method
                 #read_create_update_method
+            }
+
+            impl #replica_name {
+                #new_complete_method
             }
             impl Named for #replica_name {
                 fn name(&self) -> String {
@@ -107,11 +107,17 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 fn to_any(&self) -> &dyn Any {
                     self
                 }
-                #create_builder_method
-                fn diff_mask_size(&self) -> u8 { #diff_mask_size }
+                fn to_any_mut(&mut self) -> &mut dyn Any {
+                    self
+                }
                 fn kind(&self) -> ComponentId {
                     Components::type_to_id::<#replica_name>()
                 }
+                fn diff_mask_size(&self) -> u8 { #diff_mask_size }
+                fn copy_to_box(&self) -> Box<dyn Replicate> {
+                    Box::new(self.clone())
+                }
+                #create_builder_method
                 #dyn_ref_method
                 #dyn_mut_method
                 #mirror_method

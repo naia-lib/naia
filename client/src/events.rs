@@ -1,6 +1,4 @@
-use std::marker::PhantomData;
-use std::vec::IntoIter;
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, marker::PhantomData, net::SocketAddr, vec::IntoIter};
 
 use naia_shared::{
     Channel, ChannelId, Channels, ComponentId, Components, Message, MessageId, MessageReceivable,
@@ -79,7 +77,7 @@ impl<E: Copy> Events<E> {
         }
         let channel_map = self.messages.get_mut(&channel_id).unwrap();
 
-        let message_id: MessageId = Messages::message_id_from_box(&message);
+        let message_id: MessageId = message.kind();
         if !channel_map.contains_key(&message_id) {
             channel_map.insert(message_id, Vec::new());
         }
@@ -129,7 +127,18 @@ impl<E: Copy> Events<E> {
     }
 
     pub(crate) fn clear(&mut self) {
-        todo!()
+        self.connections.clear();
+        self.rejections.clear();
+        self.disconnections.clear();
+        self.ticks.clear();
+        self.errors.clear();
+        self.messages.clear();
+        self.spawns.clear();
+        self.despawns.clear();
+        self.inserts.clear();
+        self.removes.clear();
+        self.updates.clear();
+        self.empty = true;
     }
 }
 

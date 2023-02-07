@@ -54,16 +54,16 @@ impl MessageManager {
 
             match &channel_settings.mode {
                 ChannelMode::UnorderedUnreliable => {
-                    channel_senders.insert(*channel_id, Box::new(UnorderedUnreliableSender::new()));
+                    channel_senders.insert(channel_id, Box::new(UnorderedUnreliableSender::new()));
                 }
                 ChannelMode::SequencedUnreliable => {
-                    channel_senders.insert(*channel_id, Box::new(SequencedUnreliableSender::new()));
+                    channel_senders.insert(channel_id, Box::new(SequencedUnreliableSender::new()));
                 }
                 ChannelMode::UnorderedReliable(settings)
                 | ChannelMode::SequencedReliable(settings)
                 | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
-                        *channel_id,
+                        channel_id,
                         Box::new(ReliableSender::<Box<dyn Message>>::new(
                             settings.rtt_resend_factor,
                         )),
@@ -230,17 +230,16 @@ impl MessageManager {
     }
 
     /// Retrieve all messages from the channel buffers
-    pub fn receive_messages(&mut self, incoming_messages: &mut dyn MessageReceivable) {
+    pub fn receive_messages(&mut self) -> Vec<(ChannelId, Box<dyn Message>)> {
+        let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_index, channel) in &mut self.channel_receivers {
             let mut messages = channel.receive_messages();
-            for message in messages.drain(..) {
-                todo!();
-                //output.push((channel_index.clone(), message));
-                // TODO: Really important Connor! Put these messages into `incoming_messages`
-                // Otherwise no messages will be received!
+            for message in messages {
+                output.push((channel_index.clone(), message));
             }
         }
+        output
     }
 }
 

@@ -16,7 +16,7 @@ impl<'c> ProtocolIo<'c> {
 
 impl<'c> ChannelWriter<Box<dyn Message>> for ProtocolIo<'c> {
     fn write(&self, writer: &mut dyn BitWrite, data: &Box<dyn Message>) {
-        Messages::write(writer, self.converter, data);
+        data.write(writer, self.converter);
     }
 }
 
