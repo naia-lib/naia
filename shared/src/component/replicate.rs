@@ -54,12 +54,23 @@ impl Components {
             .read_create_update(reader);
     }
 
+    pub fn cast<R: Replicate>(boxed_component: Box<dyn Replicate>) -> Option<R> {
+        let boxed_any: Box<dyn Any> = boxed_component.to_boxed_any();
+        Box::<dyn Any + 'static>::downcast::<R>(boxed_any)
+            .ok()
+            .map(|boxed_c| *boxed_c)
+    }
+
     pub fn cast_ref<R: Replicate>(boxed_component: &Box<dyn Replicate>) -> Option<&R> {
         boxed_component.to_any().downcast_ref::<R>()
     }
 
     pub fn cast_mut<R: Replicate>(boxed_component: &mut Box<dyn Replicate>) -> Option<&mut R> {
         boxed_component.to_any_mut().downcast_mut::<R>()
+    }
+
+    pub fn id_to_name(id: &ComponentId) -> String {
+        return Self::get_data().get_builder(id).name();
     }
 
     fn get_data() -> MutexGuard<'static, ComponentsData> {
@@ -71,18 +82,6 @@ impl Components {
                 panic!("Components::get_data() Error: {}", poison);
             }
         }
-    }
-
-    pub fn id_to_name(id: &ComponentId) -> String {
-        todo!()
-    }
-
-    pub fn box_to_id(boxed_component: &Box<dyn Replicate>) -> ComponentId {
-        todo!()
-    }
-
-    pub fn cast<R: Replicate>(boxed_component: Box<dyn Replicate>) -> Option<R> {
-        todo!()
     }
 }
 
@@ -130,7 +129,7 @@ impl ComponentsData {
     }
 }
 
-pub trait ReplicateBuilder: Send {
+pub trait ReplicateBuilder: Send + Named {
     /// Create new Component from incoming bit stream
     fn read(
         &self,
@@ -147,6 +146,7 @@ pub trait ReplicateBuilder: Send {
 pub trait Replicate: ReplicateInner + Named + Any {
     fn to_any(&self) -> &dyn Any;
     fn to_any_mut(&mut self) -> &mut dyn Any;
+    fn to_boxed_any(self: Box<Self>) -> Box<dyn Any>;
     fn create_builder(component_id: ComponentId) -> Box<dyn ReplicateBuilder>
     where
         Self: Sized;

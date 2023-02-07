@@ -35,8 +35,8 @@ impl Messages {
             .read(reader, converter);
     }
 
-    pub fn downcast<M: Message>(boxed_message: Box<dyn Message>) -> Option<M> {
-        let boxed_any: Box<dyn Any> = boxed_message.into_any();
+    pub fn cast<M: Message>(boxed_message: Box<dyn Message>) -> Option<M> {
+        let boxed_any: Box<dyn Any> = boxed_message.to_boxed_any();
         Box::<dyn Any + 'static>::downcast::<M>(boxed_any)
             .ok()
             .map(|boxed_m| *boxed_m)
@@ -106,7 +106,7 @@ pub trait MessageBuilder: Send {
 
 // Message
 pub trait Message: Send + Sync + Named + MessageClone + Any {
-    fn into_any(self: Box<Self>) -> Box<dyn Any>;
+    fn to_boxed_any(self: Box<Self>) -> Box<dyn Any>;
     fn create_builder() -> Box<dyn MessageBuilder>
     where
         Self: Sized;

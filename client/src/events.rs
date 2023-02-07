@@ -112,7 +112,7 @@ impl<E: Copy> Events<E> {
     }
 
     pub(crate) fn push_remove(&mut self, entity: E, component: Box<dyn Replicate>) {
-        let component_id: ComponentId = Components::box_to_id(&component);
+        let component_id: ComponentId = component.kind();
         if !self.removes.contains_key(&component_id) {
             self.removes.insert(component_id, Vec::new());
         }
@@ -220,8 +220,8 @@ impl<E: Copy, C: Channel + 'static, M: Message + 'static> Event<E> for MessageEv
                 let mut output_list: Vec<M> = Vec::new();
 
                 for boxed_message in boxed_list {
-                    let message: M = Messages::downcast::<M>(boxed_message)
-                        .expect("shouldn't be possible here?");
+                    let message: M =
+                        Messages::cast::<M>(boxed_message).expect("shouldn't be possible here?");
                     output_list.push(message);
                 }
 

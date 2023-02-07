@@ -96,6 +96,11 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 #read_method
                 #read_create_update_method
             }
+            impl Named for #builder_name {
+                fn name(&self) -> String {
+                    return #replica_name_str.to_string();
+                }
+            }
 
             impl #replica_name {
                 #new_complete_method
@@ -110,6 +115,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                     self
                 }
                 fn to_any_mut(&mut self) -> &mut dyn Any {
+                    self
+                }
+                fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
                     self
                 }
                 fn kind(&self) -> ComponentId {

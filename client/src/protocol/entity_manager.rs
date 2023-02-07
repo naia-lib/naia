@@ -250,8 +250,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
 
                         entity_record.component_kinds.insert(component_kind);
 
-                        //component.extract_and_insert(world_entity, world);
-                        todo!();
+                        world.insert_boxed_component(&world_entity, component);
 
                         incoming_events.push_insert(*world_entity, component_kind);
                     }

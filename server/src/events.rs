@@ -164,7 +164,7 @@ impl<M: Message + 'static> Event for AuthorizationEvent<M> {
 
             for (user_key, boxed_auth) in boxed_list {
                 let message: M =
-                    Messages::downcast::<M>(boxed_auth).expect("shouldn't be possible here?");
+                    Messages::cast::<M>(boxed_auth).expect("shouldn't be possible here?");
                 output_list.push((user_key, message));
             }
 
@@ -191,8 +191,8 @@ impl<C: Channel + 'static, M: Message + 'static> Event for MessageEvent<C, M> {
                 let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
                 for (user_key, boxed_message) in boxed_list {
-                    let message: M = Messages::downcast::<M>(boxed_message)
-                        .expect("shouldn't be possible here?");
+                    let message: M =
+                        Messages::cast::<M>(boxed_message).expect("shouldn't be possible here?");
                     output_list.push((user_key, message));
                 }
 

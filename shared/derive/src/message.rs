@@ -41,7 +41,7 @@ pub fn message_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             }
 
             impl Message for #struct_name {
-                fn into_any(self: Box<Self>) -> Box<dyn Any> {
+                fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
                     self
                 }
                 fn kind(&self) -> MessageId {
