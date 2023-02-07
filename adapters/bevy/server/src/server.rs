@@ -64,12 +64,7 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
     }
 
     //// Messages ////
-    pub fn send_message<R: Replicate<P>>(
-        &mut self,
-        user_key: &UserKey,
-        channel: C,
-        message: &R,
-    ) {
+    pub fn send_message<R: Replicate<P>>(&mut self, user_key: &UserKey, channel: C, message: &R) {
         self.server.send_message(user_key, channel, message)
     }
 

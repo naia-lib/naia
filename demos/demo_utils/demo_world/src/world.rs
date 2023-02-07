@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use naia_shared::{
     BigMap, ComponentId, ComponentUpdate, Components, NetEntityHandleConverter,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
-    Replicate, SerdeErr, WorldMutType, WorldRefType,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    SerdeErr, WorldMutType, WorldRefType,
 };
 
 use super::{

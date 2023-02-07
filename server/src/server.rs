@@ -15,8 +15,8 @@ use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     BigMap, BitWriter, Channel, ChannelId, Channels, ComponentId, Components,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, Message, PacketType,
-    PropertyMutator, Protocol, Replicate, Serde, StandardHeader, Tick, Timer,
-    WorldMutType, WorldRefType,
+    PropertyMutator, Protocol, Replicate, Serde, StandardHeader, Tick, Timer, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{

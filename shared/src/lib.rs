@@ -49,7 +49,7 @@ pub use component::{
         ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
         ReplicaRefWrapper,
     },
-    replicate::{Components, Replicate},
+    replicate::{Components, Replicate, ReplicateBuilder},
 };
 pub use connection::{
     ack_manager::AckManager,

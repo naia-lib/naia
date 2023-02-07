@@ -72,7 +72,11 @@ mod some_nonreplicated_replica {
     }
 }
 
-use naia_shared::{BitReader, BitWriter, BigMapKey, Components, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, FakeEntityConverter, NetEntity, NetEntityHandleConverter, Replicate, Protocol, ProtocolBuilder};
+use naia_shared::{
+    BigMapKey, BitReader, BitWriter, Components, EntityDoesNotExistError, EntityHandle,
+    EntityHandleConverter, FakeEntityConverter, NetEntity, NetEntityHandleConverter, Protocol,
+    ProtocolBuilder, Replicate,
+};
 
 use some_entity_replica::EntityPropertyHolder;
 use some_named_replica::NamedStringHolder;
@@ -82,6 +86,8 @@ use some_unit_replica::UnitHolder;
 
 #[test]
 fn read_write_unit_replica() {
+    // Protocol
+    Protocol::builder().add_component::<UnitHolder>();
     // Write
     let mut writer = BitWriter::new();
 
@@ -104,6 +110,8 @@ fn read_write_unit_replica() {
 
 #[test]
 fn read_write_named_replica() {
+    // Protocol
+    Protocol::builder().add_component::<NamedStringHolder>();
     // Write
     let mut writer = BitWriter::new();
 
@@ -131,6 +139,8 @@ fn read_write_named_replica() {
 
 #[test]
 fn read_write_tuple_replica() {
+    // Protocol
+    Protocol::builder().add_component::<TupleStringHolder>();
     // Write
     let mut writer = BitWriter::new();
 
@@ -181,8 +191,7 @@ fn read_write_entity_replica() {
         }
     }
     // Protocol
-    Protocol::builder()
-        .add_component::<EntityPropertyHolder>();
+    Protocol::builder().add_component::<EntityPropertyHolder>();
     // Write
     let mut writer = BitWriter::new();
     let mut in_1 = EntityPropertyHolder::new();
@@ -207,6 +216,8 @@ fn read_write_entity_replica() {
 
 #[test]
 fn read_write_nonreplicated_replica() {
+    // Protocol
+    Protocol::builder().add_component::<MixedReplicationHolder>();
     // Write
     let mut writer = BitWriter::new();
 

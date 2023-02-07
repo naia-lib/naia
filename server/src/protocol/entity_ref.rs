@@ -1,8 +1,6 @@
 use std::hash::Hash;
 
-use naia_shared::{
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, WorldMutType, WorldRefType,
-};
+use naia_shared::{ReplicaMutWrapper, ReplicaRefWrapper, Replicate, WorldMutType, WorldRefType};
 
 use crate::{room::RoomKey, server::Server};
 

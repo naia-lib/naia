@@ -42,6 +42,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     // Names
     let replica_name = input.ident.clone();
     let enum_name = format_ident!("{}Property", replica_name);
+    let module_name = format_ident!("define_{}", replica_name);
+    let builder_name = format_ident!("{}Builder", replica_name);
 
     // Definitions
     let property_enum_definition = property_enum(&enum_name, &properties);
@@ -49,6 +51,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     // Replica Methods
     let new_complete_method =
         new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
+    let create_builder_method = create_builder_method(&builder_name);
     let read_method = read_method(&replica_name, &enum_name, &properties, &struct_type);
     let read_create_update_method = read_create_update_method(&replica_name, &properties);
 
@@ -72,24 +75,26 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let has_entity_properties = has_entity_properties_method(&properties);
     let entities = entities_method(&properties, &struct_type);
     let replica_name_str = LitStr::new(&replica_name.to_string(), replica_name.span());
-    let module_name = format_ident!("define_{}", replica_name);
 
     let gen = quote! {
         mod #module_name {
             use super::*;
 
-            use std::{rc::Rc, cell::RefCell, io::Cursor};
+            use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any};
             use naia_shared::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentId, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,
-                EntityProperty, EntityHandle, Replicate, Property, Components
+                EntityProperty, EntityHandle, Replicate, Property, Components, ReplicateBuilder
             };
 
             #property_enum_definition
 
             impl #replica_name {
                 #new_complete_method
+            }
+            struct #builder_name;
+            impl ReplicateBuilder for #builder_name {
                 #read_method
                 #read_create_update_method
             }
@@ -99,6 +104,10 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 }
             }
             impl Replicate for #replica_name {
+                fn to_any(&self) -> &dyn Any {
+                    self
+                }
+                #create_builder_method
                 fn diff_mask_size(&self) -> u8 { #diff_mask_size }
                 fn kind(&self) -> ComponentId {
                     Components::type_to_id::<#replica_name>()
@@ -564,6 +573,14 @@ pub fn new_complete_method(
     }
 }
 
+pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
+    quote! {
+        fn create_builder() -> Box<dyn ReplicateBuilder> where Self:Sized {
+            Box::new(#builder_name)
+        }
+    }
+}
+
 pub fn read_method(
     replica_name: &Ident,
     enum_name: &Ident,
@@ -639,10 +656,10 @@ pub fn read_method(
     };
 
     quote! {
-        pub fn read(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<#replica_name, SerdeErr> {
+        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<Box<dyn Replicate>, SerdeErr> {
             #prop_reads
 
-            return Ok(#replica_build);
+            return Ok(Box::new(#replica_build));
         }
     }
 }
@@ -687,7 +704,7 @@ pub fn read_create_update_method(_replica_name: &Ident, properties: &[Property])
     }
 
     quote! {
-        pub fn read_create_update(reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
+        fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
 
             let mut update_writer = BitWriter::new();
 

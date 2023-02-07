@@ -2,8 +2,8 @@ use hecs::{Entity, World};
 
 use naia_shared::{
     serde::SerdeErr, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, Replicate,
-    WorldMutType, WorldRefType,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, Replicate, WorldMutType,
+    WorldRefType,
 };
 
 use super::{

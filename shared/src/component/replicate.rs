@@ -1,8 +1,10 @@
+use std::any::Any;
+use std::sync::MutexGuard;
 use std::{any::TypeId, collections::HashMap, sync::Mutex};
 
 use lazy_static::lazy_static;
 
-use naia_serde::{BitReader, BitWrite, SerdeErr};
+use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
 use crate::{
     component::{
@@ -20,12 +22,14 @@ use crate::{
 pub struct Components;
 
 impl Components {
-
     pub fn add_component<C: Replicate>() {
         let mut components_data = COMPONENTS_DATA.lock().unwrap();
         let type_id = TypeId::of::<C>();
         let component_id = ComponentId::new(components_data.current_id);
         components_data.type_to_id_map.insert(type_id, component_id);
+        components_data
+            .id_to_data_map
+            .insert(component_id, C::create_builder());
         components_data.current_id += 1;
         //TODO: check for current_id overflow?
     }
@@ -34,9 +38,9 @@ impl Components {
         let type_id = TypeId::of::<C>();
         match COMPONENTS_DATA.lock() {
             Ok(components_data) => {
-                return *components_data.type_to_id_map.get(&type_id).expect(
-                    "Must properly initialize Component with Protocol via `add_component()` function!",
-                );
+                return *components_data.type_to_id_map
+                    .get(&type_id)
+                    .expect("Must properly initialize Component with Protocol via `add_component()` function!");
             }
             Err(poison) => {
                 panic!("type_to_id Error: {}", poison);
@@ -57,24 +61,36 @@ impl Components {
     }
 
     pub fn cast_ref<R: Replicate>(boxed_component: &Box<dyn Replicate>) -> Option<&R> {
-        todo!()
+        boxed_component.to_any().downcast_ref::<R>()
     }
 
-    pub fn cast_mut<R: Replicate>(
-        boxed_component: &mut Box<dyn Replicate>,
-    ) -> Option<&mut R> {
+    pub fn cast_mut<R: Replicate>(boxed_component: &mut Box<dyn Replicate>) -> Option<&mut R> {
         todo!()
     }
 
     pub fn read(
-        bit_reader: &mut BitReader,
+        reader: &mut BitReader,
         converter: &dyn NetEntityHandleConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr> {
-        todo!()
+        let component_id: ComponentId = ComponentId::de(reader)?;
+        return Self::get_data()
+            .get_builder(&component_id)
+            .read(reader, converter);
     }
 
     pub fn read_create_update(bit_reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
         todo!()
+    }
+
+    fn get_data() -> MutexGuard<'static, ComponentsData> {
+        match COMPONENTS_DATA.lock() {
+            Ok(components_data) => {
+                return components_data;
+            }
+            Err(poison) => {
+                panic!("Components::get_data() Error: {}", poison);
+            }
+        }
     }
 }
 
@@ -85,21 +101,44 @@ lazy_static! {
 struct ComponentsData {
     pub current_id: u16,
     pub type_to_id_map: HashMap<TypeId, ComponentId>,
+    pub id_to_data_map: HashMap<ComponentId, Box<dyn ReplicateBuilder>>,
 }
 
 impl ComponentsData {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             current_id: 0,
             type_to_id_map: HashMap::new(),
+            id_to_data_map: HashMap::new(),
         }
     }
+
+    fn get_builder(&self, id: &ComponentId) -> &Box<dyn ReplicateBuilder> {
+        return self.id_to_data_map.get(&id).expect(
+            "Must properly initialize Component with Protocol via `add_component()` function!",
+        );
+    }
+}
+
+pub trait ReplicateBuilder: Send {
+    /// Create new Component from incoming bit stream
+    fn read(
+        &self,
+        reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
+    ) -> Result<Box<dyn Replicate>, SerdeErr>;
+    /// Create new Component Update from incoming bit stream
+    fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr>;
 }
 
 /// A struct that implements Replicate is a Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
-pub trait Replicate: ReplicateInner + Named {
+pub trait Replicate: ReplicateInner + Named + Any {
+    fn to_any(&self) -> &dyn Any;
+    fn create_builder() -> Box<dyn ReplicateBuilder>
+    where
+        Self: Sized;
     /// Gets the ComponentId of this type
     fn kind(&self) -> ComponentId;
     /// Gets the number of bytes of the Component's DiffMask

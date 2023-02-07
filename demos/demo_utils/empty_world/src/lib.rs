@@ -166,11 +166,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn insert_component<R: Replicate<P>>(
-            &mut self,
-            _entity: &EmptyEntity,
-            _component_ref: R,
-        ) {
+        fn insert_component<R: Replicate<P>>(&mut self, _entity: &EmptyEntity, _component_ref: R) {
             unimplemented!()
         }
 

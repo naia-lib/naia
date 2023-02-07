@@ -5,8 +5,8 @@ use ring::{hmac, rand};
 use naia_shared::Messages;
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BitReader, BitWriter, ConnectionConfig, FakeEntityConverter,
-    Instant, KeyGenerator, Message, PacketType, PropertyMutate, PropertyMutator,
-    Replicate, Serde, SerdeErr, StandardHeader, Timer, WorldMutType, WorldRefType,
+    Instant, KeyGenerator, Message, PacketType, PropertyMutate, PropertyMutator, Replicate, Serde,
+    SerdeErr, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::cache_map::CacheMap;

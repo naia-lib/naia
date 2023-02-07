@@ -6,8 +6,8 @@ use std::{
 use naia_shared::{
     BigMap, BitReader, ComponentId, Components, EntityAction, EntityActionReceiver,
     EntityActionType, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex,
-    NetEntity, NetEntityHandleConverter, Replicate, Serde, SerdeErr, Tick,
-    UnsignedVariableInteger, WorldMutType,
+    NetEntity, NetEntityHandleConverter, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger,
+    WorldMutType,
 };
 
 use crate::events::Events;
