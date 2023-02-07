@@ -8,10 +8,10 @@ use std::{
 };
 
 use naia_shared::{
-    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelId, ComponentId, DiffMask, EntityAction, EntityActionType,
-    EntityConverter, Instant, Message, MessageIndex, MessageManager, NetEntity, NetEntityConverter,
-    PacketIndex, PacketNotifiable, WorldRefType,
+    wrapping_diff, BitWrite, BitWriter, ChannelId, ComponentId, DiffMask, EntityAction,
+    EntityActionType, EntityConverter, Instant, Message, MessageIndex, MessageManager, NetEntity,
+    NetEntityConverter, PacketIndex, PacketNotifiable, Serde, UnsignedVariableInteger,
+    WorldRefType,
 };
 
 use crate::sequence_list::SequenceList;

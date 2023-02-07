@@ -3,9 +3,8 @@ use std::{collections::VecDeque, time::Duration};
 use log::{info, warn};
 
 use naia_shared::{
-    sequence_greater_than, sequence_less_than,
-    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelWriter, Instant, Message, ShortMessageIndex, Tick, TickBufferSettings,
+    sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter, ChannelWriter,
+    Instant, Message, Serde, ShortMessageIndex, Tick, TickBufferSettings, UnsignedVariableInteger,
     MESSAGE_HISTORY_SIZE,
 };
 

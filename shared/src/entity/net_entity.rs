@@ -1,7 +1,6 @@
 // Local Entity
 
-use crate::serde;
-use naia_serde::{BitReader, BitWrite, SerdeErr, UnsignedVariableInteger};
+use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, UnsignedVariableInteger};
 
 // An Entity in the Client's scope, that is being
 // synced to the Client
@@ -20,7 +19,7 @@ impl From<u16> for NetEntity {
     }
 }
 
-impl serde::Serde for NetEntity {
+impl Serde for NetEntity {
     fn ser(&self, writer: &mut dyn BitWrite) {
         UnsignedVariableInteger::<7>::new(self.0).ser(writer);
     }

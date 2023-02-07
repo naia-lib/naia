@@ -1,6 +1,6 @@
-use naia_shared::{derive_serde, serde, Property, Replicate};
+use naia_shared::{Property, Replicate, Serde};
 
-#[derive_serde]
+#[derive(Clone, PartialEq, Serde)]
 pub enum Color {
     Red,
     Blue,

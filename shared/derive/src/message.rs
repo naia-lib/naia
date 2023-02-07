@@ -57,7 +57,7 @@ fn clone_method(
     for (index, property) in properties.iter().enumerate() {
         let field_name = get_field_name(property, index, struct_type);
         match property {
-            Property::NonReplicated(_) | Property::Entity(_) => {
+            Property::NormalField(_) | Property::EntityProperty(_) => {
                 let new_output_right = quote! {
                     #field_name: self.#field_name.clone(),
                 };
@@ -82,7 +82,7 @@ fn clone_method(
 
 fn has_entity_properties_method(properties: &[Property]) -> TokenStream {
     for property in properties.iter() {
-        if let Property::Entity(_) = property {
+        if let Property::EntityProperty(_) = property {
             return quote! {
                 fn has_entity_properties(&self) -> bool {
                     return true;
@@ -102,7 +102,7 @@ fn entities_method(properties: &[Property], struct_type: &StructType) -> TokenSt
     let mut body = quote! {};
 
     for (index, property) in properties.iter().enumerate() {
-        if let Property::Entity(_) = property {
+        if let Property::EntityProperty(_) = property {
             let field_name = get_field_name(property, index, struct_type);
             let body_add_right = quote! {
                 if let Some(handle) = self.#field_name.handle() {
@@ -207,20 +207,20 @@ pub struct EntityProperty {
     pub uppercase_variable_name: Ident,
 }
 
-pub struct NonReplicatedProperty {
+pub struct NormalField {
     pub variable_name: Ident,
     pub field_type: Type,
 }
 
 #[allow(clippy::large_enum_variant)]
 pub enum Property {
-    Entity(EntityProperty),
-    NonReplicated(NonReplicatedProperty),
+    EntityProperty(EntityProperty),
+    NormalField(NormalField),
 }
 
 impl Property {
     pub fn entity(variable_name: Ident) -> Self {
-        Self::Entity(EntityProperty {
+        Self::EntityProperty(EntityProperty {
             variable_name: variable_name.clone(),
             uppercase_variable_name: Ident::new(
                 variable_name.to_string().to_uppercase().as_str(),
@@ -230,7 +230,7 @@ impl Property {
     }
 
     pub fn nonreplicated(variable_name: Ident, field_type: Type) -> Self {
-        Self::NonReplicated(NonReplicatedProperty {
+        Self::NormalField(NormalField {
             variable_name: variable_name.clone(),
             field_type,
         })
@@ -238,8 +238,8 @@ impl Property {
 
     pub fn variable_name(&self) -> &Ident {
         match self {
-            Self::Entity(property) => &property.variable_name,
-            Self::NonReplicated(property) => &property.variable_name,
+            Self::EntityProperty(property) => &property.variable_name,
+            Self::NormalField(property) => &property.variable_name,
         }
     }
 }

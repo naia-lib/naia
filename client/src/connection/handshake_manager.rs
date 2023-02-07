@@ -1,10 +1,7 @@
 use log::warn;
 use std::time::Duration;
 
-use naia_shared::{
-    serde::{BitReader, BitWriter, Serde},
-    FakeEntityConverter, Message, Messages,
-};
+use naia_shared::{BitReader, BitWriter, FakeEntityConverter, Message, Messages, Serde};
 pub use naia_shared::{
     ConnectionConfig, PacketType, ReplicateSafe, StandardHeader, Timer, Timestamp as stamp_time,
     WorldMutType, WorldRefType,

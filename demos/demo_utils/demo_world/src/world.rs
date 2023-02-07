@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    serde::SerdeErr, BigMap, ComponentId, ComponentUpdate, Components, NetEntityHandleConverter,
+    BigMap, ComponentId, ComponentUpdate, Components, NetEntityHandleConverter,
     ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
-    ReplicateSafe, WorldMutType, WorldRefType,
+    ReplicateSafe, SerdeErr, WorldMutType, WorldRefType,
 };
 
 use super::{

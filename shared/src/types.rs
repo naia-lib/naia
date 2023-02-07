@@ -1,5 +1,8 @@
-use crate::{derive_serde, serde, Components};
 use std::ops::{Deref, DerefMut};
+
+use naia_serde::SerdeInternal;
+
+use crate::Components;
 
 pub type PacketIndex = u16;
 pub type Tick = u16;
@@ -11,8 +14,7 @@ pub enum HostType {
 }
 
 /// ComponentId - should be one unique value for each type of Component
-#[derive(Eq, Hash, Copy)]
-#[derive_serde]
+#[derive(Eq, Hash, Copy, SerdeInternal, Clone, PartialEq)]
 pub struct ComponentId {
     inner: u16,
 }
@@ -40,8 +42,7 @@ impl DerefMut for ComponentId {
 }
 
 // MessageId
-#[derive(Eq, Hash, Copy)]
-#[derive_serde]
+#[derive(Eq, Hash, Copy, SerdeInternal, Clone, PartialEq)]
 pub struct MessageId {
     inner: u16,
 }
@@ -64,8 +65,7 @@ impl DerefMut for MessageId {
 }
 
 // ChannelId
-#[derive(Eq, Hash, Copy)]
-#[derive_serde]
+#[derive(Eq, Hash, Copy, SerdeInternal, Clone, PartialEq)]
 pub struct ChannelId {
     inner: u16,
 }

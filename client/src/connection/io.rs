@@ -2,9 +2,8 @@ use std::{net::SocketAddr, time::Duration};
 
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, ServerAddr};
 pub use naia_shared::{
-    serde::{BitReader, BitWriter},
-    BandwidthMonitor, CompressionConfig, ConnectionConfig, Decoder, Encoder, PacketType,
-    ReplicateSafe, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    BandwidthMonitor, BitReader, BitWriter, CompressionConfig, ConnectionConfig, Decoder, Encoder,
+    PacketType, ReplicateSafe, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use crate::NaiaClientError;

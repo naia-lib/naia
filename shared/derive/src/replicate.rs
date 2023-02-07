@@ -40,7 +40,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let struct_type = get_struct_type(&input);
 
     // Names
-    let replica_name = input.ident;
+    let replica_name = input.ident.clone();
     let enum_name = format_ident!("{}Property", replica_name);
 
     // Definitions
@@ -72,48 +72,51 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let has_entity_properties = has_entity_properties_method(&properties);
     let entities = entities_method(&properties, &struct_type);
     let replica_name_str = LitStr::new(&replica_name.to_string(), replica_name.span());
+    let module_name = format_ident!("define_{}", replica_name);
 
     let gen = quote! {
-        use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{
-            DiffMask, PropertyMutate, ReplicateSafe, PropertyMutator, ComponentUpdate,
-            ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentId, Named,
-            serde::{BitReader, BitWrite, BitWriter, OwnedBitReader, Serde, SerdeErr},
-        };
-        mod internal {
-            pub use naia_shared::{EntityProperty, EntityHandle};
-        }
+        mod #module_name {
+            use super::*;
 
-        #property_enum_definition
+            use std::{rc::Rc, cell::RefCell, io::Cursor};
+            use naia_shared::{
+                DiffMask, PropertyMutate, ReplicateSafe, PropertyMutator, ComponentUpdate,
+                ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentId, Named,
+                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,
+                EntityProperty, EntityHandle, Replicate, Property
+            };
 
-        impl #replica_name {
-            #new_complete_method
-            #read_method
-            #read_create_update_method
-        }
-        impl Named for #replica_name {
-            fn name(&self) -> String {
-                return #replica_name_str.to_string();
+            #property_enum_definition
+
+            impl #replica_name {
+                #new_complete_method
+                #read_method
+                #read_create_update_method
             }
-        }
-        impl ReplicateSafe for #replica_name {
-            fn diff_mask_size(&self) -> u8 { #diff_mask_size }
-            fn kind(&self) -> ComponentId {
-                todo!()
+            impl Named for #replica_name {
+                fn name(&self) -> String {
+                    return #replica_name_str.to_string();
+                }
             }
-            #dyn_ref_method
-            #dyn_mut_method
-            #mirror_method
-            #set_mutator_method
-            #write_method
-            #write_update_method
-            #read_apply_update_method
-            #has_entity_properties
-            #entities
-        }
-        impl Replicate for #replica_name {}
-        impl Clone for #replica_name {
-            #clone_method
+            impl ReplicateSafe for #replica_name {
+                fn diff_mask_size(&self) -> u8 { #diff_mask_size }
+                fn kind(&self) -> ComponentId {
+                    todo!()
+                }
+                #dyn_ref_method
+                #dyn_mut_method
+                #mirror_method
+                #set_mutator_method
+                #write_method
+                #write_update_method
+                #read_apply_update_method
+                #has_entity_properties
+                #entities
+            }
+            impl Replicate for #replica_name {}
+            impl Clone for #replica_name {
+                #clone_method
+            }
         }
     };
 
@@ -867,7 +870,7 @@ fn entities_method(properties: &[Property], struct_type: &StructType) -> TokenSt
     }
 
     quote! {
-        fn entities(&self) -> Vec<internal::EntityHandle> {
+        fn entities(&self) -> Vec<EntityHandle> {
             let mut output = Vec::new();
             #body
             return output;

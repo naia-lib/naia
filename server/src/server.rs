@@ -13,10 +13,10 @@ use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
-    serde::{BitWriter, Serde},
-    BigMap, Channel, ChannelId, Channels, ComponentId, Components, EntityDoesNotExistError,
-    EntityHandle, EntityHandleConverter, Instant, Message, PacketType, PropertyMutator, Protocol,
-    Replicate, ReplicateSafe, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    BigMap, BitWriter, Channel, ChannelId, Channels, ComponentId, Components,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, Message, PacketType,
+    PropertyMutator, Protocol, Replicate, ReplicateSafe, Serde, StandardHeader, Tick, Timer,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{

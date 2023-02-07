@@ -9,10 +9,10 @@ use bevy_ecs::prelude::Resource;
 use naia_client_socket::Socket;
 
 pub use naia_shared::{
-    serde::{BitReader, BitWriter, Serde},
-    Channel, ChannelId, Channels, ConnectionConfig, EntityDoesNotExistError, EntityHandle,
-    EntityHandleConverter, Message, PacketType, PingConfig, PingIndex, Protocol, ReplicateSafe,
-    SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    BitReader, BitWriter, Channel, ChannelId, Channels, ConnectionConfig, EntityDoesNotExistError,
+    EntityHandle, EntityHandleConverter, Message, PacketType, PingConfig, PingIndex, Protocol,
+    ReplicateSafe, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{

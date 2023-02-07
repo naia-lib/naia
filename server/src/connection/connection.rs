@@ -6,10 +6,9 @@ use std::{
 };
 
 use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, BitWriter, Serde, SerdeErr},
-    BaseConnection, ConnectionConfig, EntityConverter, HostType, Instant, PacketType, PingManager,
-    ProtocolIo, StandardHeader, Tick, WorldRefType,
+    sequence_greater_than, BaseConnection, BitReader, BitWriter, ConnectionConfig, EntityConverter,
+    HostType, Instant, PacketType, PingManager, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick,
+    WorldRefType,
 };
 
 use crate::{

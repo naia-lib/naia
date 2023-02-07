@@ -4,10 +4,10 @@ use std::{
 };
 
 use naia_shared::{
-    serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
-    BigMap, ComponentId, Components, EntityAction, EntityActionReceiver, EntityActionType,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex, NetEntity,
-    NetEntityHandleConverter, ReplicateSafe, Tick, WorldMutType,
+    BigMap, BitReader, ComponentId, Components, EntityAction, EntityActionReceiver,
+    EntityActionType, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex,
+    NetEntity, NetEntityHandleConverter, ReplicateSafe, Serde, SerdeErr, Tick,
+    UnsignedVariableInteger, WorldMutType,
 };
 
 use crate::events::Events;

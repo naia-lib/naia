@@ -22,8 +22,7 @@ cfg_if! {
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
 pub use naia_derive::*;
-pub use naia_serde as serde;
-pub use serde::derive_serde;
+pub use naia_serde::Serde;
 
 mod backends;
 mod component;
@@ -90,6 +89,10 @@ pub use messages::{
     protocol_io::ProtocolIo,
     reliable_sender::ReliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
+};
+pub use naia_serde::{
+    BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, UnsignedInteger,
+    UnsignedVariableInteger,
 };
 
 pub use bigmap::{BigMap, BigMapKey};

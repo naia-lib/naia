@@ -1,9 +1,8 @@
 use std::{collections::HashMap, time::Duration};
 
 use naia_shared::{
-    serde::{BitWrite, BitWriter, Serde},
-    ChannelId, ChannelMode, ChannelWriter, Channels, Message, PacketIndex, PacketNotifiable,
-    ShortMessageIndex, Tick,
+    BitWrite, BitWriter, ChannelId, ChannelMode, ChannelWriter, Channels, Message, PacketIndex,
+    PacketNotifiable, Serde, ShortMessageIndex, Tick,
 };
 
 use super::channel_tick_buffer_sender::ChannelTickBufferSender;

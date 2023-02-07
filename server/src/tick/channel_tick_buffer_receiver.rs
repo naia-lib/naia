@@ -1,9 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger},
-    ChannelReader, Message, ShortMessageIndex, Tick,
+    sequence_greater_than, BitReader, ChannelReader, Message, Serde, SerdeErr, ShortMessageIndex,
+    Tick, UnsignedVariableInteger,
 };
 
 use crate::Events;

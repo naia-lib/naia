@@ -2,9 +2,8 @@ use log::warn;
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
-    serde::{BitReader, BitWriter, OwnedBitReader, Serde},
-    BaseConnection, ConnectionConfig, HostType, Instant, PacketType, PingManager, ProtocolIo,
-    StandardHeader, Tick, WorldMutType,
+    BaseConnection, BitReader, BitWriter, ConnectionConfig, HostType, Instant, OwnedBitReader,
+    PacketType, PingManager, ProtocolIo, Serde, StandardHeader, Tick, WorldMutType,
 };
 
 use crate::events::Events;

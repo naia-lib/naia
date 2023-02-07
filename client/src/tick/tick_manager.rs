@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{serde::Serde, wrapping_diff, Instant, Tick};
+use naia_shared::{wrapping_diff, Instant, Serde, Tick};
 
 use crate::client::{BitReader, BitWriter};
 

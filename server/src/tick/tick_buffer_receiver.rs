@@ -2,8 +2,7 @@ use std::collections::HashMap;
 
 use crate::Events;
 use naia_shared::{
-    serde::{BitReader, Serde, SerdeErr},
-    ChannelId, ChannelMode, ChannelReader, Channels, Message, Tick,
+    BitReader, ChannelId, ChannelMode, ChannelReader, Channels, Message, Serde, SerdeErr, Tick,
 };
 
 use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
