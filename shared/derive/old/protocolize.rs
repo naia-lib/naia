@@ -28,7 +28,7 @@ pub fn protocolize_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStre
 
     let gen = quote! {
         use std::{any::{Any, TypeId}, ops::{Deref, DerefMut}, sync::RwLock, collections::HashMap};
-        use naia_shared::{ProtocolInserter, ProtocolKindType, ReplicateSafe, ComponentUpdate,
+        use naia_shared::{ProtocolInserter, ProtocolKindType, ComponentUpdate,
             DiffMask, ReplicaDynRef, ReplicaDynMut, Replicate, derive_serde,
             NetEntityHandleConverter,
             serde, serde::{Serde, SerdeErr},
@@ -143,7 +143,7 @@ pub fn kind_enum(enum_name: &Ident, variants: &Vec<Ident>) -> TokenStream {
 
 fn kind_of_method() -> TokenStream {
     quote! {
-        fn kind_of<R: ReplicateSafe<Self>>() -> Self::Kind {
+        fn kind_of<R: Replicate<Self>>() -> Self::Kind {
             return Self::type_to_kind(TypeId::of::<R>()).expect("type not initialized correctly");
         }
     }

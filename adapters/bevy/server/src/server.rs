@@ -7,7 +7,7 @@ use bevy_ecs::{
 };
 
 use naia_server::{
-    shared::{ChannelIndex, EntityHandleConverter, Protocolize, ReplicateSafe},
+    shared::{ChannelIndex, EntityHandleConverter, Protocolize, Replicate},
     EntityRef, Event, NaiaServerError, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
     ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
 };
@@ -64,7 +64,7 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
     }
 
     //// Messages ////
-    pub fn send_message<R: ReplicateSafe<P>>(
+    pub fn send_message<R: Replicate<P>>(
         &mut self,
         user_key: &UserKey,
         channel: C,
@@ -74,7 +74,7 @@ impl<'world, 'state, P: Protocolize, C: ChannelIndex> Server<'world, 'state, P, 
     }
 
     /// Sends a message to all connected users using a given channel
-    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+    pub fn broadcast_message<R: Replicate<P>>(&mut self, channel: C, message: &R) {
         self.server.broadcast_message(channel, message);
     }
 

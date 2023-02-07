@@ -2,7 +2,7 @@ use std::{any::Any, marker::PhantomData};
 
 use hecs::{Entity, World};
 
-use naia_shared::{Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
+use naia_shared::{Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::component_ref::{ComponentDynMut, ComponentDynRef};
 
@@ -28,12 +28,12 @@ pub trait ComponentAccess<P: Protocolize> {
 }
 
 // ComponentAccessor
-pub struct ComponentAccessor<P: Protocolize, R: ReplicateSafe<P>> {
+pub struct ComponentAccessor<P: Protocolize, R: Replicate<P>> {
     phantom_p: PhantomData<P>,
     phantom_r: PhantomData<R>,
 }
 
-impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
+impl<P: Protocolize, R: Replicate<P>> ComponentAccessor<P, R> {
     pub fn create() -> Box<dyn Any> {
         let inner_box: Box<dyn ComponentAccess<P>> = Box::new(ComponentAccessor {
             phantom_p: PhantomData::<P>,
@@ -43,7 +43,7 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
     }
 }
 
-impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
+impl<P: Protocolize, R: Replicate<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
     fn component<'w>(
         &self,
         world: &'w World,

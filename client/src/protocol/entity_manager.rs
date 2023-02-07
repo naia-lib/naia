@@ -6,7 +6,7 @@ use std::{
 use naia_shared::{
     BigMap, BitReader, ComponentId, Components, EntityAction, EntityActionReceiver,
     EntityActionType, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex,
-    NetEntity, NetEntityHandleConverter, ReplicateSafe, Serde, SerdeErr, Tick,
+    NetEntity, NetEntityHandleConverter, Replicate, Serde, SerdeErr, Tick,
     UnsignedVariableInteger, WorldMutType,
 };
 
@@ -20,7 +20,7 @@ pub struct EntityManager<E: Copy + Eq + Hash> {
     local_to_world_entity: HashMap<NetEntity, E>,
     pub handle_entity_map: BigMap<EntityHandle, E>,
     receiver: EntityActionReceiver<NetEntity>,
-    received_components: HashMap<(NetEntity, ComponentId), Box<dyn ReplicateSafe>>,
+    received_components: HashMap<(NetEntity, ComponentId), Box<dyn Replicate>>,
 }
 
 impl<E: Copy + Eq + Hash> Default for EntityManager<E> {

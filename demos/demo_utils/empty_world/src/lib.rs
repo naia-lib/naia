@@ -5,7 +5,7 @@ mod inner {
 
     use naia_shared::{
         serde::SerdeErr, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
-        ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+        ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, Replicate,
         WorldMutType, WorldRefType,
     };
 
@@ -50,7 +50,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn has_component<R: ReplicateSafe<P>>(&self, _entity: &EmptyEntity) -> bool {
+        fn has_component<R: Replicate<P>>(&self, _entity: &EmptyEntity) -> bool {
             unimplemented!()
         }
 
@@ -58,7 +58,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn component<'a, R: ReplicateSafe<P>>(
+        fn component<'a, R: Replicate<P>>(
             &'a self,
             _entity: &EmptyEntity,
         ) -> Option<ReplicaRefWrapper<'a, P, R>> {
@@ -83,7 +83,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn has_component<R: ReplicateSafe<P>>(&self, _entity: &EmptyEntity) -> bool {
+        fn has_component<R: Replicate<P>>(&self, _entity: &EmptyEntity) -> bool {
             unimplemented!()
         }
 
@@ -91,7 +91,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn component<'a, R: ReplicateSafe<P>>(
+        fn component<'a, R: Replicate<P>>(
             &'a self,
             _entity: &EmptyEntity,
         ) -> Option<ReplicaRefWrapper<'a, P, R>> {
@@ -132,7 +132,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn component_mut<'a, R: ReplicateSafe<P>>(
+        fn component_mut<'a, R: Replicate<P>>(
             &'a mut self,
             _entity: &EmptyEntity,
         ) -> Option<ReplicaMutWrapper<'a, P, R>> {
@@ -166,7 +166,7 @@ mod inner {
             unimplemented!()
         }
 
-        fn insert_component<R: ReplicateSafe<P>>(
+        fn insert_component<R: Replicate<P>>(
             &mut self,
             _entity: &EmptyEntity,
             _component_ref: R,
@@ -188,7 +188,7 @@ mod inner {
     }
 
     impl<P: Protocolize> ProtocolInserter<P, EmptyEntity> for EmptyWorldMut<P> {
-        fn insert<I: ReplicateSafe<P>>(&mut self, _: &EmptyEntity, _: I) {
+        fn insert<I: Replicate<P>>(&mut self, _: &EmptyEntity, _: I) {
             unimplemented!()
         }
     }

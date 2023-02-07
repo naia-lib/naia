@@ -79,7 +79,7 @@ impl ProtocolBuilder {
         self
     }
 
-    pub fn add_component<C: Replicate + 'static>(&mut self) -> &mut Self {
+    pub fn add_component<C: Replicate>(&mut self) -> &mut Self {
         Components::add_component::<C>();
         self
     }

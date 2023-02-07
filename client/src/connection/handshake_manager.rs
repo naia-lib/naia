@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use naia_shared::{BitReader, BitWriter, FakeEntityConverter, Message, Messages, Serde};
 pub use naia_shared::{
-    ConnectionConfig, PacketType, ReplicateSafe, StandardHeader, Timer, Timestamp as stamp_time,
+    ConnectionConfig, PacketType, Replicate, StandardHeader, Timer, Timestamp as stamp_time,
     WorldMutType, WorldRefType,
 };
 

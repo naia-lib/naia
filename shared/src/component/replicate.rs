@@ -20,7 +20,8 @@ use crate::{
 pub struct Components;
 
 impl Components {
-    pub fn add_component<C: Replicate + 'static>() {
+
+    pub fn add_component<C: Replicate>() {
         let mut components_data = COMPONENTS_DATA.lock().unwrap();
         let type_id = TypeId::of::<C>();
         let component_id = ComponentId::new(components_data.current_id);
@@ -29,44 +30,49 @@ impl Components {
         //TODO: check for current_id overflow?
     }
 
-    pub fn type_to_id<C: ReplicateSafe>() -> ComponentId {
+    pub fn type_to_id<C: Replicate>() -> ComponentId {
         let type_id = TypeId::of::<C>();
-        let mut components_data = COMPONENTS_DATA.lock().unwrap();
-        return *components_data.type_to_id_map.get(&type_id).expect(
-            "Must properly initialize Component with Protocol via `add_component()` function!",
-        );
+        match COMPONENTS_DATA.lock() {
+            Ok(components_data) => {
+                return *components_data.type_to_id_map.get(&type_id).expect(
+                    "Must properly initialize Component with Protocol via `add_component()` function!",
+                );
+            }
+            Err(poison) => {
+                panic!("type_to_id Error: {}", poison);
+            }
+        }
     }
+
     pub fn id_to_name(id: &ComponentId) -> String {
         todo!()
     }
-    pub fn box_to_id(boxed_component: &Box<dyn ReplicateSafe>) -> ComponentId {
-        todo!()
-    }
-    pub fn cast<R: ReplicateSafe>(boxed_component: Box<dyn ReplicateSafe>) -> Option<R> {
-        todo!()
-    }
-    pub fn cast_ref<R: ReplicateSafe>(boxed_component: &Box<dyn ReplicateSafe>) -> Option<&R> {
-        todo!()
-    }
-    pub fn cast_mut<R: ReplicateSafe>(
-        boxed_component: &mut Box<dyn ReplicateSafe>,
-    ) -> Option<&mut R> {
-        todo!()
-    }
-    pub fn read(
-        bit_reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
-    ) -> Result<Box<dyn ReplicateSafe>, SerdeErr> {
+
+    pub fn box_to_id(boxed_component: &Box<dyn Replicate>) -> ComponentId {
         todo!()
     }
 
-    pub fn write(
-        bit_writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityHandleConverter,
-        component: &Box<dyn ReplicateSafe>,
-    ) {
+    pub fn cast<R: Replicate>(boxed_component: Box<dyn Replicate>) -> Option<R> {
         todo!()
     }
+
+    pub fn cast_ref<R: Replicate>(boxed_component: &Box<dyn Replicate>) -> Option<&R> {
+        todo!()
+    }
+
+    pub fn cast_mut<R: Replicate>(
+        boxed_component: &mut Box<dyn Replicate>,
+    ) -> Option<&mut R> {
+        todo!()
+    }
+
+    pub fn read(
+        bit_reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
+    ) -> Result<Box<dyn Replicate>, SerdeErr> {
+        todo!()
+    }
+
     pub fn read_create_update(bit_reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
         todo!()
     }
@@ -93,10 +99,7 @@ impl ComponentsData {
 /// A struct that implements Replicate is a Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
-pub trait Replicate: ReplicateSafe + Clone {}
-
-/// The part of Replicate which is object-safe
-pub trait ReplicateSafe: ReplicateInner + Named {
+pub trait Replicate: ReplicateInner + Named {
     /// Gets the ComponentId of this type
     fn kind(&self) -> ComponentId;
     /// Gets the number of bytes of the Component's DiffMask
@@ -107,7 +110,7 @@ pub trait ReplicateSafe: ReplicateInner + Named {
     fn dyn_mut(&mut self) -> ReplicaDynMut<'_>;
     /// Sets the current Replica to the state of another Replica of the
     /// same type
-    fn mirror(&mut self, other: &dyn ReplicateSafe);
+    fn mirror(&mut self, other: &dyn Replicate);
     /// Set the Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client

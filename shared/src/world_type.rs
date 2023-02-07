@@ -5,7 +5,7 @@ use crate::{
     component::{
         component_update::ComponentUpdate,
         replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
-        replicate::{Replicate, ReplicateSafe},
+        replicate::Replicate,
     },
     entity::entity_property::NetEntityHandleConverter,
 };
@@ -22,11 +22,11 @@ pub trait WorldRefType<E> {
 
     // Components
     /// check whether entity contains component
-    fn has_component<R: ReplicateSafe>(&self, entity: &E) -> bool;
+    fn has_component<R: Replicate>(&self, entity: &E) -> bool;
     /// check whether entity contains component, dynamically
     fn has_component_of_kind(&self, entity: &E, component_id: &ComponentId) -> bool;
     /// gets an entity's component
-    fn component<'a, R: ReplicateSafe>(&'a self, entity: &E) -> Option<ReplicaRefWrapper<'a, R>>;
+    fn component<'a, R: Replicate>(&'a self, entity: &E) -> Option<ReplicaRefWrapper<'a, R>>;
     /// gets an entity's component, dynamically
     fn component_of_kind<'a>(
         &'a self,
@@ -53,7 +53,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// gets all of an Entity's Components as a list of Ids
     fn component_kinds(&mut self, entity: &E) -> Vec<ComponentId>;
     /// gets an entity's component
-    fn component_mut<'a, R: ReplicateSafe>(
+    fn component_mut<'a, R: Replicate>(
         &'a mut self,
         entity: &E,
     ) -> Option<ReplicaMutWrapper<'a, R>>;
@@ -77,7 +77,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         component_kind: &ComponentId,
     );
     /// insert a component
-    fn insert_component<R: ReplicateSafe>(&mut self, entity: &E, component_ref: R);
+    fn insert_component<R: Replicate>(&mut self, entity: &E, component_ref: R);
     /// remove a component
     fn remove_component<R: Replicate>(&mut self, entity: &E) -> Option<R>;
     /// remove a component by kind
@@ -85,5 +85,5 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         &mut self,
         entity: &E,
         component_id: &ComponentId,
-    ) -> Option<Box<dyn ReplicateSafe>>;
+    ) -> Option<Box<dyn Replicate>>;
 }

@@ -6,7 +6,7 @@ use crate::{protocol::component_update::ComponentUpdate, DiffMask, NetEntityHand
 
 use super::{
     replica_ref::{ReplicaDynMut, ReplicaDynRef},
-    replicate::{Replicate, ReplicateSafe},
+    replicate::Replicate,
 };
 
 /// An Enum with a variant for every Component/Message that can be sent

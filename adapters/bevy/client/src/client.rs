@@ -9,7 +9,7 @@ use bevy_ecs::{
 use naia_client::{
     shared::{
         ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Protocolize,
-        ReplicateSafe,
+        Replicate,
     },
     Client as NaiaClient, EntityRef, NaiaClientError,
 };
@@ -45,7 +45,7 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
 
     //// Connections ////
 
-    pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
+    pub fn auth<R: Replicate<P>>(&mut self, auth: R) {
         self.client.auth(auth);
     }
 
@@ -84,7 +84,7 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
     }
 
     //// Messages ////
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+    pub fn send_message<R: Replicate<P>>(&mut self, channel: C, message: &R) {
         self.client.send_message(channel, message)
     }
 

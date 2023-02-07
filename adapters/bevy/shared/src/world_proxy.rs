@@ -5,7 +5,7 @@ use bevy_ecs::{
 
 use naia_shared::{
     serde::SerdeErr, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, ProtocolKindType,
-    Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicateSafe,
+    Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
     WorldMutType, WorldRefType,
 };
 
@@ -59,7 +59,7 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
         entities::<P>(self.world)
     }
 
-    fn has_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> bool {
+    fn has_component<R: Replicate<P>>(&self, entity: &Entity) -> bool {
         has_component::<P, R>(self.world, entity)
     }
 
@@ -67,7 +67,7 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w> {
         has_component_of_kind::<P>(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
+    fn component<R: Replicate<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
         component(self.world, entity)
     }
 
@@ -101,7 +101,7 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
         entities::<P>(self.world)
     }
 
-    fn has_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> bool {
+    fn has_component<R: Replicate<P>>(&self, entity: &Entity) -> bool {
         has_component::<P, R>(self.world, entity)
     }
 
@@ -109,7 +109,7 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w> {
         has_component_of_kind::<P>(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
+    fn component<R: Replicate<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
         component(self.world, entity)
     }
 
@@ -179,7 +179,7 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
         kinds
     }
 
-    fn component_mut<R: ReplicateSafe<P>>(
+    fn component_mut<R: Replicate<P>>(
         &mut self,
         entity: &Entity,
     ) -> Option<ReplicaMutWrapper<P, R>> {
@@ -234,7 +234,7 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
             });
     }
 
-    fn insert_component<I: ReplicateSafe<P>>(&mut self, entity: &Entity, component_ref: I) {
+    fn insert_component<I: Replicate<P>>(&mut self, entity: &Entity, component_ref: I) {
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
         let mut world_data = world_data_unchecked_mut(self.world);
@@ -247,7 +247,7 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
         self.world.entity_mut(*entity).insert(component_ref);
     }
 
-    fn remove_component<R: ReplicateSafe<P>>(&mut self, entity: &Entity) -> Option<R> {
+    fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) -> Option<R> {
         return self.world.entity_mut(*entity).remove::<R>();
     }
 
@@ -264,7 +264,7 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w> {
 }
 
 impl<'w, P: Protocolize> ProtocolInserter<P, Entity> for WorldMut<'w> {
-    fn insert<I: ReplicateSafe<P>>(&mut self, entity: &Entity, impl_ref: I) {
+    fn insert<I: Replicate<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
     }
 }
@@ -280,7 +280,7 @@ fn entities<P: Protocolize>(world: &World) -> Vec<Entity> {
     world_data.entities()
 }
 
-fn has_component<P: Protocolize, R: ReplicateSafe<P>>(world: &World, entity: &Entity) -> bool {
+fn has_component<P: Protocolize, R: Replicate<P>>(world: &World, entity: &Entity) -> bool {
     return world.get::<R>(*entity).is_some();
 }
 
@@ -294,7 +294,7 @@ fn has_component_of_kind<P: Protocolize>(
         .contains_type_id(component_kind.to_type_id());
 }
 
-fn component<'a, P: Protocolize, R: ReplicateSafe<P>>(
+fn component<'a, P: Protocolize, R: Replicate<P>>(
     world: &'a World,
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, P, R>> {

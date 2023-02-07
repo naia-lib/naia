@@ -25,7 +25,7 @@ pub fn derive_serde_tuple_struct(
 
     let module_name = format_ident!("define_{}", struct_name);
 
-    let import_types = quote! {BitWrite, Serde};
+    let import_types = quote! {BitWrite, Serde, BitReader, SerdeErr};
     let imports = match is_internal {
         true => {
             quote! {

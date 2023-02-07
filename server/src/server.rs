@@ -15,7 +15,7 @@ use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     BigMap, BitWriter, Channel, ChannelId, Channels, ComponentId, Components,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, Message, PacketType,
-    PropertyMutator, Protocol, Replicate, ReplicateSafe, Serde, StandardHeader, Tick, Timer,
+    PropertyMutator, Protocol, Replicate, Serde, StandardHeader, Tick, Timer,
     WorldMutType, WorldRefType,
 };
 
@@ -614,7 +614,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     //// Components
 
     /// Adds a Component to an Entity
-    pub(crate) fn insert_component<R: ReplicateSafe, W: WorldMutType<E>>(
+    pub(crate) fn insert_component<R: Replicate, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,
@@ -1266,7 +1266,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // Component Helpers
 
-    fn component_init<R: ReplicateSafe>(&mut self, entity: &E, component_ref: &mut R) {
+    fn component_init<R: Replicate>(&mut self, entity: &E, component_ref: &mut R) {
         let component_kind = component_ref.kind();
         self.world_record.add_component(entity, &component_kind);
 

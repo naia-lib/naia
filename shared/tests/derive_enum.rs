@@ -28,7 +28,7 @@ mod some_enum_2 {
     }
 }
 
-use naia_shared::serde::{BitReader, BitWriter, Serde};
+use naia_shared::{BitReader, BitWriter, Serde};
 use some_enum::SomeEnum;
 use some_enum_2::SomeEnum2;
 

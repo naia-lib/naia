@@ -4,13 +4,13 @@ use hecs::{Component as HecsComponent, Ref as HecsRef, RefMut as HecsMut};
 
 use naia_shared::{
     Protocolize, ReplicaDynMutTrait, ReplicaDynRefTrait, ReplicaMutTrait, ReplicaRefTrait,
-    ReplicateSafe,
+    Replicate,
 };
 
 // ComponentRef
 pub struct ComponentRef<'a, T: HecsComponent>(pub HecsRef<'a, T>);
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for ComponentRef<'a, R> {
+impl<'a, P: Protocolize, R: Replicate<P>> ReplicaRefTrait<P, R> for ComponentRef<'a, R> {
     fn to_ref(&self) -> &R {
         &self.0
     }
@@ -19,13 +19,13 @@ impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for Componen
 // ComponentMut
 pub struct ComponentMut<'a, T: HecsComponent>(pub HecsMut<'a, T>);
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for ComponentMut<'a, R> {
+impl<'a, P: Protocolize, R: Replicate<P>> ReplicaRefTrait<P, R> for ComponentMut<'a, R> {
     fn to_ref(&self) -> &R {
         &self.0
     }
 }
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaMutTrait<P, R> for ComponentMut<'a, R> {
+impl<'a, P: Protocolize, R: Replicate<P>> ReplicaMutTrait<P, R> for ComponentMut<'a, R> {
     fn to_mut(&mut self) -> &mut R {
         &mut self.0
     }
@@ -34,8 +34,8 @@ impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaMutTrait<P, R> for Componen
 // ComponentDynRef
 pub struct ComponentDynRef<'a, T: HecsComponent>(pub HecsRef<'a, T>);
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaDynRefTrait<P> for ComponentDynRef<'a, R> {
-    fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P> {
+impl<'a, P: Protocolize, R: Replicate<P>> ReplicaDynRefTrait<P> for ComponentDynRef<'a, R> {
+    fn to_dyn_ref(&self) -> &dyn Replicate<P> {
         self.0.deref()
     }
 }
@@ -43,14 +43,14 @@ impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaDynRefTrait<P> for Componen
 // ComponentDynMut
 pub struct ComponentDynMut<'a, T: HecsComponent>(pub HecsMut<'a, T>);
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaDynRefTrait<P> for ComponentDynMut<'a, R> {
-    fn to_dyn_ref(&self) -> &dyn ReplicateSafe<P> {
+impl<'a, P: Protocolize, R: Replicate<P>> ReplicaDynRefTrait<P> for ComponentDynMut<'a, R> {
+    fn to_dyn_ref(&self) -> &dyn Replicate<P> {
         self.0.deref()
     }
 }
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaDynMutTrait<P> for ComponentDynMut<'a, R> {
-    fn to_dyn_mut(&mut self) -> &mut dyn ReplicateSafe<P> {
+impl<'a, P: Protocolize, R: Replicate<P>> ReplicaDynMutTrait<P> for ComponentDynMut<'a, R> {
+    fn to_dyn_mut(&mut self) -> &mut dyn Replicate<P> {
         self.0.deref_mut()
     }
 }

@@ -72,11 +72,7 @@ mod some_nonreplicated_replica {
     }
 }
 
-use naia_shared::{
-    serde::{BitReader, BitWriter},
-    BigMapKey, Components, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
-    FakeEntityConverter, NetEntity, NetEntityHandleConverter, ReplicateSafe,
-};
+use naia_shared::{BitReader, BitWriter, BigMapKey, Components, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, FakeEntityConverter, NetEntity, NetEntityHandleConverter, Replicate, Protocol, ProtocolBuilder};
 
 use some_entity_replica::EntityPropertyHolder;
 use some_named_replica::NamedStringHolder;
@@ -184,6 +180,9 @@ fn read_write_entity_replica() {
             Ok(EntityHandle::from_u64(net_entity_u16 as u64))
         }
     }
+    // Protocol
+    Protocol::builder()
+        .add_component::<EntityPropertyHolder>();
     // Write
     let mut writer = BitWriter::new();
     let mut in_1 = EntityPropertyHolder::new();

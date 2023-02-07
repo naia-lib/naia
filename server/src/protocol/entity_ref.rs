@@ -1,7 +1,7 @@
 use std::hash::Hash;
 
 use naia_shared::{
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, WorldMutType, WorldRefType,
 };
 
 use crate::{room::RoomKey, server::Server};
@@ -31,12 +31,12 @@ impl<E: Copy + Eq + Hash, W: WorldRefType<E>> EntityRef<E, W> {
     // Components
 
     /// Returns whether or not the Entity has an associated Component
-    pub fn has_component<R: ReplicateSafe>(&self) -> bool {
+    pub fn has_component<R: Replicate>(&self) -> bool {
         self.world.has_component::<R>(&self.entity)
     }
 
     /// Gets a Ref to a Component associated with the Entity
-    pub fn component<R: ReplicateSafe>(&self) -> Option<ReplicaRefWrapper<R>> {
+    pub fn component<R: Replicate>(&self) -> Option<ReplicaRefWrapper<R>> {
         self.world.component::<R>(&self.entity)
     }
 }
@@ -67,22 +67,22 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
 
     // Components
 
-    pub fn has_component<R: ReplicateSafe>(&self) -> bool {
+    pub fn has_component<R: Replicate>(&self) -> bool {
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: ReplicateSafe>(&mut self) -> Option<ReplicaMutWrapper<R>> {
+    pub fn component<R: Replicate>(&mut self) -> Option<ReplicaMutWrapper<R>> {
         self.world.component_mut::<R>(&self.entity)
     }
 
-    pub fn insert_component<R: ReplicateSafe>(&mut self, component_ref: R) -> &mut Self {
+    pub fn insert_component<R: Replicate>(&mut self, component_ref: R) -> &mut Self {
         self.server
             .insert_component(&mut self.world, &self.entity, component_ref);
 
         self
     }
 
-    pub fn insert_components<R: ReplicateSafe>(&mut self, mut component_refs: Vec<R>) -> &mut Self {
+    pub fn insert_components<R: Replicate>(&mut self, mut component_refs: Vec<R>) -> &mut Self {
         while let Some(component_ref) = component_refs.pop() {
             self.insert_component(component_ref);
         }

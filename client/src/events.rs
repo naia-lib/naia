@@ -4,7 +4,7 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use naia_shared::{
     Channel, ChannelId, Channels, ComponentId, Components, Message, MessageId, MessageReceivable,
-    Messages, ReplicateSafe, Tick,
+    Messages, Replicate, Tick,
 };
 
 use crate::NaiaClientError;
@@ -19,7 +19,7 @@ pub struct Events<E: Copy> {
     spawns: Vec<E>,
     despawns: Vec<E>,
     inserts: Vec<(E, ComponentId)>,
-    removes: HashMap<ComponentId, Vec<(E, Box<dyn ReplicateSafe>)>>,
+    removes: HashMap<ComponentId, Vec<(E, Box<dyn Replicate>)>>,
     updates: Vec<(Tick, E, ComponentId)>,
     empty: bool,
 }
@@ -113,7 +113,7 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_remove(&mut self, entity: E, component: Box<dyn ReplicateSafe>) {
+    pub(crate) fn push_remove(&mut self, entity: E, component: Box<dyn Replicate>) {
         let component_id: ComponentId = Components::box_to_id(&component);
         if !self.removes.contains_key(&component_id) {
             self.removes.insert(component_id, Vec::new());
@@ -257,10 +257,10 @@ impl<E: Copy> Event<E> for InsertComponentEvent {
 }
 
 // Remove Event
-pub struct RemoveComponentEvent<C: ReplicateSafe> {
+pub struct RemoveComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
-impl<E: Copy, C: ReplicateSafe> Event<E> for RemoveComponentEvent<C> {
+impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
     type Iter = IntoIter<(E, C)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {

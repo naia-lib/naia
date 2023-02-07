@@ -2,7 +2,7 @@ use hecs::{Entity, World};
 
 use naia_shared::{
     serde::SerdeErr, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicateSafe,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, Replicate,
     WorldMutType, WorldRefType,
 };
 
@@ -60,7 +60,7 @@ impl<'w, 'd, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, 'd, P> {
         entities(self.world)
     }
 
-    fn has_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> bool {
+    fn has_component<R: Replicate<P>>(&self, entity: &Entity) -> bool {
         has_component::<P, R>(self.world, entity)
     }
 
@@ -68,7 +68,7 @@ impl<'w, 'd, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, 'd, P> {
         has_component_of_kind::<P>(self.world, self.world_data, entity, component_kind)
     }
 
-    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
+    fn component<R: Replicate<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
         component::<P, R>(self.world, entity)
     }
 
@@ -106,7 +106,7 @@ impl<'w, 'd, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, 'd, P> {
         entities(self.world)
     }
 
-    fn has_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> bool {
+    fn has_component<R: Replicate<P>>(&self, entity: &Entity) -> bool {
         has_component::<P, R>(self.world, entity)
     }
 
@@ -114,7 +114,7 @@ impl<'w, 'd, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, 'd, P> {
         has_component_of_kind::<P>(self.world, self.world_data, entity, component_kind)
     }
 
-    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
+    fn component<R: Replicate<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
         component::<P, R>(self.world, entity)
     }
 
@@ -172,7 +172,7 @@ impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
         kinds
     }
 
-    fn component_mut<R: ReplicateSafe<P>>(
+    fn component_mut<R: Replicate<P>>(
         &mut self,
         entity: &Entity,
     ) -> Option<ReplicaMutWrapper<P, R>> {
@@ -221,7 +221,7 @@ impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
         }
     }
 
-    fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &Entity, component_ref: R) {
+    fn insert_component<R: Replicate<P>>(&mut self, entity: &Entity, component_ref: R) {
         // cache type id for later
         // todo: can we initialize this map on startup via Protocol derive?
         let component_kind = component_ref.kind();
@@ -247,7 +247,7 @@ impl<'w, 'd, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, 'd, P> {
 }
 
 impl<'w, 'd, P: Protocolize> ProtocolInserter<P, Entity> for WorldMut<'w, 'd, P> {
-    fn insert<I: ReplicateSafe<P>>(&mut self, entity: &Entity, impl_ref: I) {
+    fn insert<I: Replicate<P>>(&mut self, entity: &Entity, impl_ref: I) {
         self.insert_component::<I>(entity, impl_ref);
     }
 }
@@ -267,7 +267,7 @@ fn entities(world: &World) -> Vec<Entity> {
     output
 }
 
-fn has_component<P: Protocolize, R: ReplicateSafe<P>>(world: &World, entity: &Entity) -> bool {
+fn has_component<P: Protocolize, R: Replicate<P>>(world: &World, entity: &Entity) -> bool {
     let result = world.get::<&R>(*entity);
     result.is_ok()
 }
@@ -281,7 +281,7 @@ fn has_component_of_kind<P: Protocolize>(
     return component_of_kind::<P>(world, world_data, entity, component_kind).is_some();
 }
 
-fn component<'a, P: Protocolize, R: ReplicateSafe<P>>(
+fn component<'a, P: Protocolize, R: Replicate<P>>(
     world: &'a World,
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, P, R>> {

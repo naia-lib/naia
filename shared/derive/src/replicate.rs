@@ -52,7 +52,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let read_method = read_method(&replica_name, &enum_name, &properties, &struct_type);
     let read_create_update_method = read_create_update_method(&replica_name, &properties);
 
-    // ReplicateSafe Derive Methods
+    // Replicate Derive Methods
     let diff_mask_size = {
         let len = properties.len();
         if len == 0 {
@@ -80,10 +80,10 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
             use std::{rc::Rc, cell::RefCell, io::Cursor};
             use naia_shared::{
-                DiffMask, PropertyMutate, ReplicateSafe, PropertyMutator, ComponentUpdate,
+                DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentId, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,
-                EntityProperty, EntityHandle, Replicate, Property
+                EntityProperty, EntityHandle, Replicate, Property, Components
             };
 
             #property_enum_definition
@@ -98,10 +98,10 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                     return #replica_name_str.to_string();
                 }
             }
-            impl ReplicateSafe for #replica_name {
+            impl Replicate for #replica_name {
                 fn diff_mask_size(&self) -> u8 { #diff_mask_size }
                 fn kind(&self) -> ComponentId {
-                    todo!()
+                    Components::type_to_id::<#replica_name>()
                 }
                 #dyn_ref_method
                 #dyn_mut_method
@@ -113,7 +113,6 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 #has_entity_properties
                 #entities
             }
-            impl Replicate for #replica_name {}
             impl Clone for #replica_name {
                 #clone_method
             }
@@ -396,7 +395,7 @@ fn mirror_method(
     }
 
     quote! {
-        fn mirror(&mut self, other: &dyn ReplicateSafe) {
+        fn mirror(&mut self, other: &dyn Replicate) {
             todo!()
         }
     }

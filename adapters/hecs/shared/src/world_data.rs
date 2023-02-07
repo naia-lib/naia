@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_shared::{Protocolize, ReplicateSafe};
+use naia_shared::{Protocolize, Replicate};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
@@ -38,7 +38,7 @@ impl<P: Protocolize> WorldData<P> {
         self.kind_to_accessor_map.contains_key(component_kind)
     }
 
-    pub(crate) fn put_kind<R: ReplicateSafe<P>>(&mut self, component_kind: &P::Kind) {
+    pub(crate) fn put_kind<R: Replicate<P>>(&mut self, component_kind: &P::Kind) {
         self.kind_to_accessor_map
             .insert(*component_kind, ComponentAccessor::<P, R>::create());
     }

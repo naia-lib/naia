@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use naia_shared::{
     BigMap, ComponentId, ComponentUpdate, Components, NetEntityHandleConverter,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
-    ReplicateSafe, SerdeErr, WorldMutType, WorldRefType,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+    Replicate, SerdeErr, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -18,7 +18,7 @@ use super::{
 /// It's recommended to use this only when you do not have another ECS library's
 /// own World available.
 pub struct World {
-    pub entities: BigMap<Entity, HashMap<ComponentId, Box<dyn ReplicateSafe>>>,
+    pub entities: BigMap<Entity, HashMap<ComponentId, Box<dyn Replicate>>>,
 }
 
 impl Default for World {
@@ -76,7 +76,7 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
         entities(self.world)
     }
 
-    fn has_component<R: ReplicateSafe>(&self, entity: &Entity) -> bool {
+    fn has_component<R: Replicate>(&self, entity: &Entity) -> bool {
         has_component::<R>(self.world, entity)
     }
 
@@ -84,7 +84,7 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
         has_component_of_type(self.world, entity, component_type)
     }
 
-    fn component<R: ReplicateSafe>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
         component(self.world, entity)
     }
 
@@ -106,7 +106,7 @@ impl<'w> WorldRefType<Entity> for WorldMut<'w> {
         entities(self.world)
     }
 
-    fn has_component<R: ReplicateSafe>(&self, entity: &Entity) -> bool {
+    fn has_component<R: Replicate>(&self, entity: &Entity) -> bool {
         has_component::<R>(self.world, entity)
     }
 
@@ -114,7 +114,7 @@ impl<'w> WorldRefType<Entity> for WorldMut<'w> {
         has_component_of_type(self.world, entity, component_type)
     }
 
-    fn component<R: ReplicateSafe>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
         component(self.world, entity)
     }
 
@@ -170,7 +170,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         output
     }
 
-    fn component_mut<R: ReplicateSafe>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
+    fn component_mut<R: Replicate>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             if let Some(boxed_component) = component_map.get_mut(&Components::type_to_id::<R>()) {
                 if let Some(raw_ref) = Components::cast_mut::<R>(boxed_component) {
@@ -231,7 +231,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         // }
     }
 
-    fn insert_component<R: ReplicateSafe>(&mut self, entity: &Entity, component: R) {
+    fn insert_component<R: Replicate>(&mut self, entity: &Entity, component: R) {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             let component_kind = Components::type_to_id::<R>();
             if component_map.contains_key(&component_kind) {
@@ -254,7 +254,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         &mut self,
         entity: &Entity,
         component_kind: &ComponentId,
-    ) -> Option<Box<dyn ReplicateSafe>> {
+    ) -> Option<Box<dyn Replicate>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             return component_map.remove(component_kind);
         }
@@ -264,7 +264,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 }
 
 // impl<'w> ProtocolInserter<Entity> for WorldMut<'w> {
-//     fn insert<I: ReplicateSafe>(&mut self, entity: &Entity, impl_ref: I) {
+//     fn insert<I: Replicate>(&mut self, entity: &Entity, impl_ref: I) {
 //         self.insert_component::<I>(entity, impl_ref);
 //     }
 // }
@@ -285,7 +285,7 @@ fn entities(world: &World) -> Vec<Entity> {
     output
 }
 
-fn has_component<R: ReplicateSafe>(world: &World, entity: &Entity) -> bool {
+fn has_component<R: Replicate>(world: &World, entity: &Entity) -> bool {
     if let Some(component_map) = world.entities.get(entity) {
         return component_map.contains_key(&Components::type_to_id::<R>());
     }
@@ -301,7 +301,7 @@ fn has_component_of_type(world: &World, entity: &Entity, component_type: &Compon
     false
 }
 
-fn component<'a, R: ReplicateSafe>(
+fn component<'a, R: Replicate>(
     world: &'a World,
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, R>> {

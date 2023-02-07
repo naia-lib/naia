@@ -11,7 +11,7 @@ use naia_client_socket::Socket;
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelId, Channels, ConnectionConfig, EntityDoesNotExistError,
     EntityHandle, EntityHandleConverter, Message, PacketType, PingConfig, PingIndex, Protocol,
-    ReplicateSafe, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
+    Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
     WorldRefType,
 };
 
