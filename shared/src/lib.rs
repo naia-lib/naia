@@ -30,7 +30,6 @@ mod component;
 mod connection;
 mod entity;
 mod messages;
-mod transport;
 
 mod bigmap;
 mod constants;
