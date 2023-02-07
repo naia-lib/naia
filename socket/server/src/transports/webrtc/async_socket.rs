@@ -7,8 +7,8 @@ use webrtc_unreliable::{
 };
 
 use naia_socket_shared::{parse_server_url, url_to_socket_addr, SocketConfig};
-
-use crate::{error::NaiaServerSocketError, server_addrs::ServerAddrs};
+use crate::NaiaServerSocketError;
+use crate::transports::webrtc::server_addrs::ServerAddrs;
 
 use super::session::start_session_server;
 

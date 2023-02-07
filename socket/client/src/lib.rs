@@ -15,19 +15,29 @@ cfg_if! {
     } else {}
 }
 
-mod backends;
+mod transports;
 mod conditioned_packet_receiver;
 mod error;
 mod io;
 mod packet_receiver;
+mod packet_sender;
 mod server_addr;
 
 pub use naia_socket_shared as shared;
 
-pub use backends::*;
 pub use error::NaiaClientSocketError;
 pub use packet_receiver::PacketReceiver;
+pub use packet_sender::PacketSender;
 pub use server_addr::ServerAddr;
+
+cfg_if! {
+    if #[cfg(feature = "webrtc")] {
+        pub use transports::webrtc::*;
+    } else {
+        compile_error!("a transport among ['webrtc'] must be enabled.");
+    }
+}
+
 
 cfg_if! {
     if #[cfg(all(target_arch = "wasm32", feature = "wbindgen", feature = "mquad"))]

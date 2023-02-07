@@ -17,14 +17,14 @@ extern crate cfg_if;
 pub mod link_condition_logic;
 
 mod backends;
+mod transports;
+
 mod link_conditioner_config;
-mod socket_config;
 mod time_queue;
 mod url_parse;
 
 pub use backends::{Instant, Random};
 pub use link_conditioner_config::LinkConditionerConfig;
-pub use socket_config::SocketConfig;
 pub use time_queue::TimeQueue;
 pub use url_parse::{parse_server_url, url_to_socket_addr};
 
@@ -36,6 +36,14 @@ impl<T: std::fmt::Debug> std::error::Error for ChannelClosedError<T> {}
 impl<T> std::fmt::Display for ChannelClosedError<T> {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(fmt, "channel closed")
+    }
+}
+
+cfg_if! {
+    if #[cfg(feature = "webrtc")] {
+        pub use transports::webrtc::*;
+    } else {
+        compile_error!("a transport among ['webrtc'] must be enabled.");
     }
 }
 

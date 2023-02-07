@@ -12,6 +12,7 @@ use log::warn;
 use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
+use naia_server_socket::shared::Socket;
 use naia_shared::{
     serde::{BitWriter, Serde},
     BigMap, Channel, ChannelId, Channels, ComponentId, Components, EntityDoesNotExistError,

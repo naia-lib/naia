@@ -21,6 +21,7 @@ wbindgen = [ "naia-socket-shared/wbindgen", "js-sys" ]
 mquad = [ "naia-socket-shared/mquad" ]
 bevy_support = [ "bevy_ecs" ]
 zstd_support = [ "zstd" ]
+webrtc = ["naia-socket-shared/webrtc"]
 
 [dependencies]
 naia-socket-shared = { version = "0.15", path = "../socket/shared" }

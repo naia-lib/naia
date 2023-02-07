@@ -1,12 +1,12 @@
 use std::time::Duration;
 
-use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
+use naia_socket_shared::SocketConfig;
 
 use crate::{Channel, ChannelDirection, ChannelMode, CompressionConfig, Message, Replicate};
 
 #[derive(Clone)]
 pub struct Protocol {
-    /// Used to configure the underlying socket
+    // Used to configure the underlying socket
     pub socket: SocketConfig,
     /// The duration between each tick
     pub tick_interval: Option<Duration>,
@@ -17,8 +17,7 @@ pub struct Protocol {
 impl Protocol {
     pub fn builder() -> ProtocolBuilder {
         ProtocolBuilder {
-            link_conditioner_config: None,
-            rtc_endpoint_path: None,
+            socket_config: None,
             tick_interval: None,
             compression: None,
         }
@@ -26,8 +25,7 @@ impl Protocol {
 }
 
 pub struct ProtocolBuilder {
-    link_conditioner_config: Option<LinkConditionerConfig>,
-    rtc_endpoint_path: Option<String>,
+    socket_config: Option<SocketConfig>,
     tick_interval: Option<Duration>,
     compression: Option<CompressionConfig>,
 }
@@ -38,16 +36,6 @@ impl ProtocolBuilder {
         self
     }
 
-    pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
-        self.link_conditioner_config = Some(config);
-        self
-    }
-
-    pub fn rtc_endpoint(&mut self, path: String) -> &mut Self {
-        self.rtc_endpoint_path = Some(path);
-        self
-    }
-
     pub fn tick_interval(&mut self, duration: Duration) -> &mut Self {
         self.tick_interval = Some(duration);
         self
@@ -55,6 +43,11 @@ impl ProtocolBuilder {
 
     pub fn compression(&mut self, config: CompressionConfig) -> &mut Self {
         self.compression = Some(config);
+        self
+    }
+
+    pub fn socket_config(&mut self, config: SocketConfig) -> &mut Self {
+        self.socket_config = Some(config);
         self
     }
 
@@ -75,12 +68,8 @@ impl ProtocolBuilder {
     }
 
     pub fn build(&mut self) -> Protocol {
-        let socket = SocketConfig::new(
-            self.link_conditioner_config.take(),
-            self.rtc_endpoint_path.take(),
-        );
         Protocol {
-            socket,
+            socket: self.socket_config.take().unwrap(),
             tick_interval: self.tick_interval.take(),
             compression: self.compression.take(),
         }

@@ -15,8 +15,13 @@ edition = "2021"
 [badges]
 maintenance = { status = "actively-developed" }
 
+[features]
+default = ["webrtc"]
+webrtc = ["naia-socket-shared/webrtc"]
+
 [dependencies]
 naia-socket-shared = { version = "0.15", path = "../shared" }
+cfg-if = { version = "1.0" }
 log = { version = "0.4" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-core = { version = "0.3" }

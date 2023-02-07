@@ -18,7 +18,7 @@ use webrtc_unreliable::SessionEndpoint;
 
 use naia_socket_shared::SocketConfig;
 
-use crate::{executor, server_addrs::ServerAddrs};
+use super::{executor, server_addrs::ServerAddrs};
 
 static RTC_URL_PATH: OnceCell<String> = OnceCell::new();
 

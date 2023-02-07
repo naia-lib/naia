@@ -16,8 +16,10 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [features]
+default = ["webrtc"]
 wbindgen = [ "naia-socket-shared/wbindgen", "wasm-bindgen", "js-sys", "web_sys", "tinyjson" ]
 mquad = [ "naia-socket-shared/mquad", "miniquad" ]
+webrtc = ["naia-socket-shared/webrtc"]
 
 [dependencies]
 naia-socket-shared = { version = "0.15", path = "../shared" }

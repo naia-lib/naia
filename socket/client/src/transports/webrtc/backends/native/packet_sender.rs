@@ -2,6 +2,8 @@ use tokio::sync::mpsc::{error::SendError, UnboundedSender};
 use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
 use naia_socket_shared::ChannelClosedError;
+use crate::NaiaClientSocketError;
+use crate::packet_sender::PacketSenderTrait;
 
 use crate::server_addr::ServerAddr;
 
@@ -23,14 +25,22 @@ impl PacketSender {
     }
 
     /// Send a Packet to the Server
-    pub fn send(&self, payload: &[u8]) -> Result<(), ChannelClosedError<()>> {
+    fn send(&self, payload: &[u8]) -> Result<(), ChannelClosedError<()>> {
         self.sender_channel
             .send(payload.into())
             .map_err(|_err: SendError<_>| ChannelClosedError(()))
     }
+}
+
+impl PacketSenderTrait for PacketSender {
+    /// Send a Packet to the Server
+    fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
+        self.send(payload)
+            .map_err(|err| NaiaClientSocketError::Message(err.to_string()))
+    }
 
     /// Get the Server's Socket address
-    pub fn server_addr(&self) -> ServerAddr {
+    fn server_addr(&self) -> ServerAddr {
         match self.server_addr.get() {
             RTCServerAddr::Finding => ServerAddr::Finding,
             RTCServerAddr::Found(addr) => ServerAddr::Found(addr),

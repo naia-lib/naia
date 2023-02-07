@@ -2,12 +2,12 @@ use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use webrtc_unreliable_client::Socket as RTCSocket;
 
-use crate::backends::native::runtime::get_runtime;
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
     io::Io,
     packet_receiver::{PacketReceiver, PacketReceiverTrait},
 };
+use crate::backends::native::runtime::get_runtime;
 
 use super::{packet_receiver::PacketReceiverImpl, packet_sender::PacketSender};
 
@@ -56,7 +56,9 @@ impl Socket {
             }
         };
 
-        self.io = Some(Io::new(packet_sender, PacketReceiver::new(receiver)));
+        self.io = Some(Io::new(
+            crate::PacketSender::new(Box::new(packet_sender)),
+            PacketReceiver::new(receiver)));
     }
 
     /// Returns whether or not the connect method was called (doesn't necessarily indicate that the
@@ -66,7 +68,7 @@ impl Socket {
     }
 
     /// Gets a PacketSender which can be used to send packets through the Socket
-    pub fn packet_sender(&self) -> PacketSender {
+    pub fn packet_sender(&self) -> crate::PacketSender {
         return self
             .io
             .as_ref()

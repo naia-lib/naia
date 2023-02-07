@@ -1,6 +1,4 @@
-use std::default::Default;
-
-use super::link_conditioner_config::LinkConditionerConfig;
+use crate::LinkConditionerConfig;
 
 const DEFAULT_RTC_PATH: &str = "rtc_session";
 
@@ -12,6 +10,7 @@ pub struct SocketConfig {
     /// The endpoint URL path to use for initiating new WebRTC sessions
     pub rtc_endpoint_path: String,
 }
+
 
 impl SocketConfig {
     /// Creates a new SocketConfig
@@ -31,6 +30,16 @@ impl SocketConfig {
             link_condition,
             rtc_endpoint_path: endpoint_path,
         }
+    }
+
+    pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
+        self.link_condition = Some(config);
+        self
+    }
+
+    pub fn rtc_endpoint(&mut self, path: String) -> &mut Self {
+        self.rtc_endpoint_path = path;
+        self
     }
 }
 

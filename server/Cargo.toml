@@ -19,6 +19,7 @@ maintenance = { status = "actively-developed" }
 [features]
 bevy_support = ["naia-shared/bevy_support","bevy_ecs"]
 zstd_support = ["naia-shared/zstd_support"]
+webrtc = ["naia-server-socket/webrtc"]
 
 [dependencies]
 naia-server-socket = { version = "0.15", path = "../socket/server" }

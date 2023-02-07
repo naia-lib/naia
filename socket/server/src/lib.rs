@@ -11,24 +11,29 @@
     unused_qualifications
 )]
 
+#[macro_use]
+extern crate cfg_if;
+
 extern crate log;
 
-mod async_socket;
-mod conditioned_packet_receiver;
 mod error;
 mod io;
+mod transports;
 mod packet_receiver;
 mod packet_sender;
-mod server_addrs;
-mod session;
-mod socket;
-
-/// Executor for Server
-pub mod executor;
+mod conditioned_packet_receiver;
 
 pub use error::NaiaServerSocketError;
 pub use naia_socket_shared as shared;
 pub use packet_receiver::PacketReceiver;
 pub use packet_sender::PacketSender;
-pub use server_addrs::ServerAddrs;
-pub use socket::Socket;
+
+
+cfg_if! {
+    if #[cfg(feature = "webrtc")] {
+        pub use transports::webrtc::*;
+    } else {
+        compile_error!("a transport among ['webrtc'] must be enabled.");
+    }
+}
+

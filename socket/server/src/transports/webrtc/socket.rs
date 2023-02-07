@@ -2,15 +2,17 @@ use futures_util::SinkExt;
 use smol::channel;
 
 use naia_socket_shared::SocketConfig;
+use crate::conditioned_packet_receiver::ConditionedPacketReceiverImpl;
+use crate::io::Io;
+use crate::{PacketReceiver, PacketSender};
+use crate::packet_receiver::PacketReceiverTrait;
+use crate::transports::webrtc::executor;
+use crate::transports::webrtc::packet_receiver::PacketReceiverImpl;
+use crate::transports::webrtc::packet_sender::PacketSenderImpl;
 
-use crate::{async_socket::Socket as AsyncSocket, executor, io::Io};
+use super::async_socket::Socket as AsyncSocket;
 
-use super::{
-    conditioned_packet_receiver::ConditionedPacketReceiverImpl,
-    packet_receiver::{PacketReceiver, PacketReceiverImpl, PacketReceiverTrait},
-    packet_sender::PacketSender,
-    server_addrs::ServerAddrs,
-};
+use super::server_addrs::ServerAddrs;
 
 /// Socket is able to send and receive messages from remote Clients
 pub struct Socket {
@@ -80,10 +82,10 @@ impl Socket {
             )),
             None => Box::new(PacketReceiverImpl::new(from_client_receiver)),
         };
-        let sender = PacketSender::new(to_client_sender);
+        let sender = PacketSenderImpl::new(to_client_sender);
 
         self.io = Some(Io {
-            packet_sender: sender,
+            packet_sender: PacketSender::new(Box::new(sender)),
             packet_receiver: PacketReceiver::new(receiver),
         });
     }

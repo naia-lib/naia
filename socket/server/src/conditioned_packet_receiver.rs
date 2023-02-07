@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use smol::channel::Receiver;
 
 use naia_socket_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
-
-use super::{error::NaiaServerSocketError, packet_receiver::PacketReceiverTrait};
+use crate::error::NaiaServerSocketError;
+use crate::packet_receiver::PacketReceiverTrait;
 
 /// Used to receive packets from the Server Socket
 #[derive(Clone)]
