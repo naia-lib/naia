@@ -7,12 +7,7 @@ use std::{
     time::Duration,
 };
 
-use naia_shared::{
-    wrapping_diff, BitWrite, BitWriter, ChannelId, ComponentId, DiffMask, EntityAction,
-    EntityActionType, EntityConverter, Instant, Message, MessageIndex, MessageManager, NetEntity,
-    NetEntityConverter, PacketIndex, PacketNotifiable, Serde, UnsignedVariableInteger,
-    WorldRefType,
-};
+use naia_shared::{wrapping_diff, BitWrite, BitWriter, ChannelId, ComponentId, DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, Message, MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType, Components};
 
 use crate::sequence_list::SequenceList;
 
@@ -228,6 +223,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     pub fn write_actions<W: WorldRefType<E>>(
         &mut self,
+        components: &Components,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
@@ -246,6 +242,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
             // check that we can write the next message
             let mut counter = writer.counter();
             self.write_action(
+                components,
                 world,
                 world_record,
                 packet_index,
@@ -259,6 +256,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 // send warning about size of component being too big
                 if !*has_written {
                     self.warn_overflow_action(
+                        components,
                         world_record,
                         counter.bits_needed(),
                         writer.bits_free(),
@@ -283,6 +281,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
             // write data
             self.write_action(
+                components,
                 world,
                 world_record,
                 packet_index,
@@ -299,6 +298,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
     #[allow(clippy::too_many_arguments)]
     fn write_action<W: WorldRefType<E>>(
         &mut self,
+        components: &Components,
         world: &W,
         world_record: &WorldRecord<E>,
         packet_index: &PacketIndex,
@@ -339,7 +339,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                     world
                         .component_of_kind(entity, component_kind)
                         .expect("Component does not exist in World")
-                        .write(bit_writer, &converter);
+                        .write(components, bit_writer, &converter);
                 }
 
                 // if we are writing to this packet, add it to record
@@ -408,7 +408,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                     world
                         .component_of_kind(entity, component)
                         .expect("Component does not exist in World")
-                        .write(bit_writer, &converter);
+                        .write(components, bit_writer, &converter);
 
                     // if we are actually writing this packet
                     if is_writing {
@@ -481,6 +481,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     fn warn_overflow_action(
         &self,
+        components: &Components,
         world_record: &WorldRecord<E>,
         bits_needed: u16,
         bits_free: u16,
@@ -503,15 +504,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                     } else {
                         added = true;
                     }
-                    let name = component_kind.name();
+                    let name = components.id_to_name(component_kind);
                     component_names.push_str(&name);
                 }
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Entity Spawn message with Components `{component_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
                 )
             }
-            EntityActionEvent::InsertComponent(_entity, component) => {
-                let component_name = component.name();
+            EntityActionEvent::InsertComponent(_entity, component_id) => {
+                let component_name = components.id_to_name(component_id);
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
                 )
@@ -526,6 +527,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     pub fn write_updates<W: WorldRefType<E>>(
         &mut self,
+        components: &Components,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
@@ -559,6 +561,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
             // write Components
             self.write_update(
+                components,
                 now,
                 world,
                 world_record,
@@ -578,6 +581,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
     /// Only component values that changed in the internal (naia's) host world will be written
     fn write_update<W: WorldRefType<E>>(
         &mut self,
+        components: &Components,
         now: &Instant,
         world: &W,
         world_record: &WorldRecord<E>,
@@ -611,8 +615,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
                 if !*has_written {
+                    let component_name = components.id_to_name(component_kind);
                     self.warn_overflow_update(
-                        component_kind,
+                        component_name,
                         counter.bits_needed(),
                         writer.bits_free(),
                     );
@@ -664,8 +669,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         }
     }
 
-    fn warn_overflow_update(&self, component_kind: &ComponentId, bits_needed: u16, bits_free: u16) {
-        let component_name = component_kind.name();
+    fn warn_overflow_update(&self, component_name: String, bits_needed: u16, bits_free: u16) {
         panic!(
             "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"
         )

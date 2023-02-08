@@ -6,7 +6,8 @@ use crate::{channels::ChannelsPlugin, components::ComponentsPlugin, messages::Me
 
 // Protocol Build
 pub fn protocol() -> Protocol {
-    Protocol::builder()
+    let mut protocol = Protocol::new();
+    protocol
         // Config
         .tick_interval(Duration::from_millis(20))
         .link_condition(LinkConditionerConfig::average_condition())
@@ -15,7 +16,6 @@ pub fn protocol() -> Protocol {
         // Messages
         .add_plugin(MessagesPlugin)
         // Components
-        .add_plugin(ComponentsPlugin)
-        // Build
-        .build()
+        .add_plugin(ComponentsPlugin);
+    protocol
 }

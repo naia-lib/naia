@@ -1,3 +1,4 @@
+use std::any::TypeId;
 use std::collections::HashSet;
 
 use naia_shared::{ComponentId, EntityHandle};
@@ -7,7 +8,7 @@ use crate::room::RoomKey;
 pub struct GlobalEntityRecord {
     pub room_key: Option<RoomKey>,
     pub entity_handle: EntityHandle,
-    pub component_kinds: HashSet<ComponentId>,
+    pub component_kinds: HashSet<TypeId>,
 }
 
 impl GlobalEntityRecord {

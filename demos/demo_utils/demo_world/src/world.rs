@@ -1,7 +1,8 @@
+use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
 use naia_shared::{
-    BigMap, ComponentId, ComponentUpdate, Components, NetEntityHandleConverter,
+    BigMap, ComponentId, ComponentUpdate, NetEntityHandleConverter,
     ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
     SerdeErr, WorldMutType, WorldRefType,
 };
@@ -18,7 +19,7 @@ use super::{
 /// It's recommended to use this only when you do not have another ECS library's
 /// own World available.
 pub struct World {
-    pub entities: BigMap<Entity, HashMap<ComponentId, Box<dyn Replicate>>>,
+    pub entities: BigMap<Entity, HashMap<TypeId, Box<dyn Replicate>>>,
 }
 
 impl Default for World {
@@ -80,7 +81,7 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
         has_component::<R>(self.world, entity)
     }
 
-    fn has_component_of_kind(&self, entity: &Entity, component_type: &ComponentId) -> bool {
+    fn has_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> bool {
         has_component_of_type(self.world, entity, component_type)
     }
 
@@ -91,7 +92,7 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
     fn component_of_kind<'a>(
         &'a self,
         entity: &Entity,
-        component_type: &ComponentId,
+        component_type: &TypeId,
     ) -> Option<ReplicaDynRefWrapper<'a>> {
         component_of_kind(self.world, entity, component_type)
     }
@@ -110,7 +111,7 @@ impl<'w> WorldRefType<Entity> for WorldMut<'w> {
         has_component::<R>(self.world, entity)
     }
 
-    fn has_component_of_kind(&self, entity: &Entity, component_type: &ComponentId) -> bool {
+    fn has_component_of_kind(&self, entity: &Entity, component_type: &TypeId) -> bool {
         has_component_of_type(self.world, entity, component_type)
     }
 
@@ -121,7 +122,7 @@ impl<'w> WorldRefType<Entity> for WorldMut<'w> {
     fn component_of_kind<'a>(
         &'a self,
         entity: &Entity,
-        component_type: &ComponentId,
+        component_type: &TypeId,
     ) -> Option<ReplicaDynRefWrapper<'a>> {
         component_of_kind(self.world, entity, component_type)
     }
@@ -159,8 +160,8 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         self.world.entities.remove(entity);
     }
 
-    fn component_kinds(&mut self, entity: &Entity) -> Vec<ComponentId> {
-        let mut output: Vec<ComponentId> = Vec::new();
+    fn component_kinds(&mut self, entity: &Entity) -> Vec<TypeId> {
+        let mut output: Vec<TypeId> = Vec::new();
 
         if let Some(component_map) = self.world.entities.get(entity) {
             for component_kind in component_map.keys() {
@@ -173,8 +174,8 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_mut<R: Replicate>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            if let Some(boxed_component) = component_map.get_mut(&Components::type_to_id::<R>()) {
-                if let Some(raw_ref) = Components::cast_mut::<R>(boxed_component) {
+            if let Some(boxed_component) = component_map.get_mut(&TypeId::of::<R>()) {
+                if let Some(raw_ref) = boxed_component.to_any_mut().downcast_mut::<R>() {
                     let wrapper = ComponentMut::<R>::new(raw_ref);
                     let wrapped_ref = ReplicaMutWrapper::new(wrapper);
                     return Some(wrapped_ref);
@@ -189,10 +190,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         &mut self,
         converter: &dyn NetEntityHandleConverter,
         entity: &Entity,
-        component_kind: &ComponentId,
+        component_type_id: &TypeId,
         update: ComponentUpdate,
     ) -> Result<(), SerdeErr> {
-        if let Some(mut component) = component_mut_of_kind(self.world, entity, component_kind) {
+        if let Some(mut component) = component_mut_of_kind(self.world, entity, component_type_id) {
             component.read_apply_update(converter, update)?;
         }
         Ok(())
@@ -208,7 +209,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         &mut self,
         mutable_entity: &Entity,
         immutable_entity: &Entity,
-        component_kind: &ComponentId,
+        component_kind: &TypeId,
     ) {
         let immutable_component_opt: Option<Box<dyn Replicate>> = {
             if let Some(immutable_component_map) = self.world.entities.get(immutable_entity) {
@@ -232,7 +233,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn insert_component<R: Replicate>(&mut self, entity: &Entity, component: R) {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            let component_kind = Components::type_to_id::<R>();
+            let component_kind = TypeId::of::<R>();
             if component_map.contains_key(&component_kind) {
                 panic!("Entity already has a Component of that type!");
             }
@@ -242,18 +243,20 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn insert_boxed_component(&mut self, entity: &Entity, boxed_component: Box<dyn Replicate>) {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            let component_kind = boxed_component.kind();
-            if component_map.contains_key(&component_kind) {
+            let component_type_id = boxed_component.type_of();
+            if component_map.contains_key(&component_type_id) {
                 panic!("Entity already has a Component of that type!");
             }
-            component_map.insert(component_kind, boxed_component);
+            component_map.insert(component_type_id, boxed_component);
         }
     }
 
     fn remove_component<R: Replicate>(&mut self, entity: &Entity) -> Option<R> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            if let Some(boxed_component) = component_map.remove(&Components::type_to_id::<R>()) {
-                return Components::cast::<R>(boxed_component);
+            if let Some(boxed_component) = component_map.remove(&TypeId::of::<R>()) {
+                return Box::<dyn Any + 'static>::downcast::<R>(boxed_component.to_boxed_any())
+                    .ok()
+                    .map(|boxed_c| *boxed_c);
             }
         }
         None
@@ -262,7 +265,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn remove_component_of_kind(
         &mut self,
         entity: &Entity,
-        component_kind: &ComponentId,
+        component_kind: &TypeId,
     ) -> Option<Box<dyn Replicate>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             return component_map.remove(component_kind);
@@ -290,13 +293,13 @@ fn entities(world: &World) -> Vec<Entity> {
 
 fn has_component<R: Replicate>(world: &World, entity: &Entity) -> bool {
     if let Some(component_map) = world.entities.get(entity) {
-        return component_map.contains_key(&Components::type_to_id::<R>());
+        return component_map.contains_key(&TypeId::of::<R>());
     }
 
     false
 }
 
-fn has_component_of_type(world: &World, entity: &Entity, component_type: &ComponentId) -> bool {
+fn has_component_of_type(world: &World, entity: &Entity, component_type: &TypeId) -> bool {
     if let Some(component_map) = world.entities.get(entity) {
         return component_map.contains_key(component_type);
     }
@@ -309,8 +312,8 @@ fn component<'a, R: Replicate>(
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, R>> {
     if let Some(component_map) = world.entities.get(entity) {
-        if let Some(boxed_component) = component_map.get(&Components::type_to_id::<R>()) {
-            if let Some(raw_ref) = Components::cast_ref::<R>(boxed_component) {
+        if let Some(boxed_component) = component_map.get(&TypeId::of::<R>()) {
+            if let Some(raw_ref) = boxed_component.to_any().downcast_ref::<R>() {
                 let wrapper = ComponentRef::<R>::new(raw_ref);
                 let wrapped_ref = ReplicaRefWrapper::new(wrapper);
                 return Some(wrapped_ref);
@@ -324,7 +327,7 @@ fn component<'a, R: Replicate>(
 fn component_of_kind<'a>(
     world: &'a World,
     entity: &Entity,
-    component_type: &ComponentId,
+    component_type: &TypeId,
 ) -> Option<ReplicaDynRefWrapper<'a>> {
     if let Some(component_map) = world.entities.get(entity) {
         if let Some(component) = component_map.get(component_type) {
@@ -338,7 +341,7 @@ fn component_of_kind<'a>(
 fn component_mut_of_kind<'a>(
     world: &'a mut World,
     entity: &Entity,
-    component_type: &ComponentId,
+    component_type: &TypeId,
 ) -> Option<ReplicaDynMutWrapper<'a>> {
     if let Some(component_map) = world.entities.get_mut(entity) {
         if let Some(raw_ref) = component_map.get_mut(component_type) {

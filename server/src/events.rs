@@ -1,4 +1,5 @@
 use std::{collections::HashMap, marker::PhantomData, vec::IntoIter};
+use std::any::{Any, TypeId};
 
 use naia_shared::{Channel, ChannelId, Channels, Message, MessageId, MessageReceivable, Messages};
 
@@ -10,8 +11,8 @@ pub struct Events {
     disconnections: Vec<(UserKey, User)>,
     ticks: Vec<()>,
     errors: Vec<NaiaServerError>,
-    auths: HashMap<MessageId, Vec<(UserKey, Box<dyn Message>)>>,
-    messages: HashMap<ChannelId, HashMap<MessageId, Vec<(UserKey, Box<dyn Message>)>>>,
+    auths: HashMap<TypeId, Vec<(UserKey, Box<dyn Message>)>>,
+    messages: HashMap<TypeId, HashMap<TypeId, Vec<(UserKey, Box<dyn Message>)>>>,
     empty: bool,
 }
 
@@ -59,11 +60,12 @@ impl Events {
     }
 
     pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: Box<dyn Message>) {
-        let message_id: MessageId = auth_message.kind();
-        if !self.auths.contains_key(&message_id) {
-            self.auths.insert(message_id, Vec::new());
+
+        let auth_message_type_id = auth_message.type_of();
+        if !self.auths.contains_key(&auth_message_type_id) {
+            self.auths.insert(auth_message_type_id, Vec::new());
         }
-        let list = self.auths.get_mut(&message_id).unwrap();
+        let list = self.auths.get_mut(&auth_message_type_id).unwrap();
         list.push((*user_key, auth_message));
         self.empty = false;
     }
@@ -71,19 +73,18 @@ impl Events {
     pub(crate) fn push_message(
         &mut self,
         user_key: &UserKey,
-        channel_id: &ChannelId,
+        channel_id: &TypeId,
         message: Box<dyn Message>,
     ) {
         if !self.messages.contains_key(&channel_id) {
             self.messages.insert(*channel_id, HashMap::new());
         }
         let channel_map = self.messages.get_mut(&channel_id).unwrap();
-
-        let message_id: MessageId = message.kind();
-        if !channel_map.contains_key(&message_id) {
-            channel_map.insert(message_id, Vec::new());
+        let message_type_id = message.type_of();
+        if !channel_map.contains_key(&message_type_id) {
+            channel_map.insert(message_type_id, Vec::new());
         }
-        let list = channel_map.get_mut(&message_id).unwrap();
+        let list = channel_map.get_mut(&message_type_id).unwrap();
         list.push((*user_key, message));
         self.empty = false;
     }
@@ -154,17 +155,19 @@ impl Event for ErrorEvent {
 pub struct AuthorizationEvent<M: Message> {
     phantom_m: PhantomData<M>,
 }
-impl<M: Message + 'static> Event for AuthorizationEvent<M> {
+impl<M: Message> Event for AuthorizationEvent<M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
-        let message_id: MessageId = Messages::type_to_id::<M>();
+        let message_id: TypeId = TypeId::of::<M>();
         if let Some(boxed_list) = events.auths.remove(&message_id) {
             let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
             for (user_key, boxed_auth) in boxed_list {
-                let message: M =
-                    Messages::cast::<M>(boxed_auth).expect("shouldn't be possible here?");
+                let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_auth.to_boxed_any())
+                    .ok()
+                    .map(|boxed_m| *boxed_m)
+                    .unwrap();
                 output_list.push((user_key, message));
             }
 
@@ -180,19 +183,20 @@ pub struct MessageEvent<C: Channel, M: Message> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<M>,
 }
-impl<C: Channel + 'static, M: Message + 'static> Event for MessageEvent<C, M> {
+impl<C: Channel, M: Message> Event for MessageEvent<C, M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
-        let channel_id: ChannelId = Channels::type_to_id::<C>();
+        let channel_id: TypeId = TypeId::of::<C>();
         if let Some(mut channel_map) = events.messages.remove(&channel_id) {
-            let message_id: MessageId = Messages::type_to_id::<M>();
+            let message_id: TypeId = TypeId::of::<M>();
             if let Some(boxed_list) = channel_map.remove(&message_id) {
                 let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
                 for (user_key, boxed_message) in boxed_list {
-                    let message: M =
-                        Messages::cast::<M>(boxed_message).expect("shouldn't be possible here?");
+                    let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_message.to_boxed_any())
+                            .ok()
+                            .map(|boxed_m| *boxed_m).unwrap();
                     output_list.push((user_key, message));
                 }
 

@@ -73,6 +73,7 @@ impl HandshakeManager {
     // Step 3 of Handshake
     pub fn recv_connect_request(
         &mut self,
+        messages: &Messages,
         address: &SocketAddr,
         reader: &mut BitReader,
     ) -> HandshakeResult {
@@ -88,7 +89,7 @@ impl HandshakeManager {
                 self.address_to_timestamp_map.insert(*address, timestamp);
 
                 if has_auth {
-                    if let Ok(auth_message) = Messages::read(reader, &FakeEntityConverter) {
+                    if let Ok(auth_message) = messages.read(reader, &FakeEntityConverter) {
                         HandshakeResult::Success(Some(auth_message))
                     } else {
                         HandshakeResult::Invalid

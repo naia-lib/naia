@@ -658,7 +658,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
     ) -> Option<R> {
         // get component key from type
-        let component_id = Components::type_to_id::<R>();
+        let component_id = Components::type_to_kind::<R>();
 
         // clean up component on all connections
 

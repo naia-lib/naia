@@ -15,13 +15,13 @@ impl<'c> ProtocolIo<'c> {
 }
 
 impl<'c> ChannelWriter<Box<dyn Message>> for ProtocolIo<'c> {
-    fn write(&self, writer: &mut dyn BitWrite, data: &Box<dyn Message>) {
-        data.write(writer, self.converter);
+    fn write(&self, messages: &Messages, writer: &mut dyn BitWrite, data: &Box<dyn Message>) {
+        data.write(messages, writer, self.converter);
     }
 }
 
 impl<'c> ChannelReader<Box<dyn Message>> for ProtocolIo<'c> {
-    fn read(&self, reader: &mut BitReader) -> Result<Box<dyn Message>, SerdeErr> {
-        Messages::read(reader, self.converter)
+    fn read(&self, messages: &Messages, reader: &mut BitReader) -> Result<Box<dyn Message>, SerdeErr> {
+        messages.read(reader, self.converter)
     }
 }

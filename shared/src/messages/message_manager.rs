@@ -3,11 +3,7 @@ use std::collections::HashMap;
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{
-    connection::packet_notifiable::PacketNotifiable,
-    types::{ChannelId, HostType, MessageIndex, PacketIndex},
-    Channels, Message, MessageReceivable,
-};
+use crate::{connection::packet_notifiable::PacketNotifiable, types::{ChannelId, HostType, MessageIndex, PacketIndex}, Channels, Message, MessageReceivable, Messages};
 
 use super::{
     channel_config::ChannelMode,
@@ -32,13 +28,13 @@ pub struct MessageManager {
 
 impl MessageManager {
     /// Creates a new MessageManager
-    pub fn new(host_type: HostType) -> Self {
+    pub fn new(host_type: HostType, channels: &Channels) -> Self {
         // initialize all reliable channels
 
         // initialize senders
         let mut channel_senders =
             HashMap::<ChannelId, Box<dyn ChannelSender<Box<dyn Message>>>>::new();
-        for (channel_id, channel_settings) in Channels::channels() {
+        for (channel_id, channel_settings) in channels.channels() {
             match &host_type {
                 HostType::Server => {
                     if !channel_settings.can_send_to_client() {
@@ -76,7 +72,7 @@ impl MessageManager {
         // initialize receivers
         let mut channel_receivers =
             HashMap::<ChannelId, Box<dyn ChannelReceiver<Box<dyn Message>>>>::new();
-        for (channel_id, channel_settings) in Channels::channels() {
+        for (channel_id, channel_settings) in channels.channels() {
             match &host_type {
                 HostType::Server => {
                     if !channel_settings.can_send_to_server() {
@@ -160,6 +156,7 @@ impl MessageManager {
 
     pub fn write_messages(
         &mut self,
+        messages: &Messages,
         channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
@@ -190,7 +187,7 @@ impl MessageManager {
 
             // write Messages
             if let Some(message_ids) =
-                channel.write_messages(channel_writer, bit_writer, has_written)
+                channel.write_messages(messages, channel_writer, bit_writer, has_written)
             {
                 self.packet_to_message_map
                     .entry(packet_index)
@@ -209,6 +206,7 @@ impl MessageManager {
 
     pub fn read_messages(
         &mut self,
+        messages: &Messages,
         channel_reader: &dyn ChannelReader<Box<dyn Message>>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
@@ -223,7 +221,7 @@ impl MessageManager {
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_id).unwrap();
-            channel.read_messages(channel_reader, reader)?;
+            channel.read_messages(messages, channel_reader, reader)?;
         }
 
         Ok(())

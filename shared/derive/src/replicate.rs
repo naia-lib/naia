@@ -78,7 +78,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let gen = quote! {
         mod #module_name {
 
-            use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any};
+            use std::{rc::Rc, cell::RefCell, io::Cursor, any::{Any, TypeId}};
             use naia_shared::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentId, Named,
@@ -120,8 +120,8 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
                     self
                 }
-                fn kind(&self) -> ComponentId {
-                    Components::type_to_id::<#replica_name>()
+                fn type_of(&self) -> TypeId {
+                    TypeId::of::<#replica_name>()
                 }
                 fn diff_mask_size(&self) -> u8 { #diff_mask_size }
                 fn copy_to_box(&self) -> Box<dyn Replicate> {
@@ -808,8 +808,8 @@ fn write_method(properties: &[Property], struct_type: &StructType) -> TokenStrea
     }
 
     quote! {
-        fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-            self.kind().ser(bit_writer);
+        fn write(&self, components: &Components, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+            components.type_id_to_kind(&self.type_of()).ser(bit_writer);
             #property_writes
         }
     }

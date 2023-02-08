@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
-use crate::{types::MessageIndex, wrapping_diff};
+use crate::{Messages, types::MessageIndex, wrapping_diff};
 
 use super::message_channel::ChannelWriter;
 
@@ -14,6 +14,7 @@ pub struct IndexedMessageWriter<P: Send + Sync> {
 
 impl<P: Send + Sync> IndexedMessageWriter<P> {
     pub fn write_messages(
+        messages: &Messages,
         outgoing_messages: &mut VecDeque<(MessageIndex, P)>,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
@@ -31,6 +32,7 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
             let (message_id, message) = outgoing_messages.front().unwrap();
             let mut counter = bit_writer.counter();
             Self::write_message(
+                messages,
                 channel_writer,
                 &mut counter,
                 &last_written_id,
@@ -55,6 +57,7 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
 
             // write data
             Self::write_message(
+                messages,
                 channel_writer,
                 bit_writer,
                 &last_written_id,
@@ -72,6 +75,7 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
     }
 
     fn write_message(
+        messages: &Messages,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut dyn BitWrite,
         last_written_id: &Option<MessageIndex>,
@@ -88,7 +92,7 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
             message_id.ser(bit_writer);
         }
 
-        channel_writer.write(bit_writer, message);
+        channel_writer.write(messages, bit_writer, message);
     }
 
     fn warn_overflow(bits_needed: u16, bits_free: u16) {

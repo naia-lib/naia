@@ -1,14 +1,11 @@
+use std::any::TypeId;
 use naia_serde::SerdeErr;
 
-use crate::types::ComponentId;
-use crate::{
-    component::{
-        component_update::ComponentUpdate,
-        replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
-        replicate::Replicate,
-    },
-    entity::entity_property::NetEntityHandleConverter,
-};
+use crate::{types::ComponentId, component::{
+    component_update::ComponentUpdate,
+    replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
+    replicate::Replicate,
+}, entity::entity_property::NetEntityHandleConverter};
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
@@ -24,14 +21,14 @@ pub trait WorldRefType<E> {
     /// check whether entity contains component
     fn has_component<R: Replicate>(&self, entity: &E) -> bool;
     /// check whether entity contains component, dynamically
-    fn has_component_of_kind(&self, entity: &E, component_id: &ComponentId) -> bool;
+    fn has_component_of_kind(&self, entity: &E, component_id: &TypeId) -> bool;
     /// gets an entity's component
     fn component<'a, R: Replicate>(&'a self, entity: &E) -> Option<ReplicaRefWrapper<'a, R>>;
     /// gets an entity's component, dynamically
     fn component_of_kind<'a>(
         &'a self,
         entity: &E,
-        component_kind: &ComponentId,
+        component_id: &TypeId,
     ) -> Option<ReplicaDynRefWrapper<'a>>;
 }
 
@@ -51,7 +48,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
 
     // Components
     /// gets all of an Entity's Components as a list of Ids
-    fn component_kinds(&mut self, entity: &E) -> Vec<ComponentId>;
+    fn component_kinds(&mut self, entity: &E) -> Vec<TypeId>;
     /// gets an entity's component
     fn component_mut<'a, R: Replicate>(
         &'a mut self,
@@ -62,7 +59,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         &mut self,
         converter: &dyn NetEntityHandleConverter,
         entity: &E,
-        component_kind: &ComponentId,
+        component_id: &TypeId,
         update: ComponentUpdate,
     ) -> Result<(), SerdeErr>;
     /// mirrors the whole state of two different entities
@@ -74,7 +71,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         &mut self,
         mutable_entity: &E,
         immutable_entity: &E,
-        component_kind: &ComponentId,
+        component_id: &TypeId,
     );
     /// insert a component
     fn insert_component<R: Replicate>(&mut self, entity: &E, component_ref: R);
@@ -86,6 +83,6 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     fn remove_component_of_kind(
         &mut self,
         entity: &E,
-        component_id: &ComponentId,
+        component_id: &TypeId,
     ) -> Option<Box<dyn Replicate>>;
 }

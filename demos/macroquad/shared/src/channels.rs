@@ -1,7 +1,4 @@
-use naia_shared::{
-    Channel, ChannelDirection, ChannelMode, Plugin, ProtocolBuilder, ReliableSettings,
-    TickBufferSettings,
-};
+use naia_shared::{Channel, ChannelDirection, ChannelMode, Plugin, Protocol, ReliableSettings, TickBufferSettings};
 
 #[derive(Channel)]
 pub struct PlayerCommandChannel;
@@ -13,7 +10,7 @@ pub struct EntityAssignmentChannel;
 pub struct ChannelsPlugin;
 
 impl Plugin for ChannelsPlugin {
-    fn build(&self, protocol: &mut ProtocolBuilder) {
+    fn build(&self, protocol: &mut Protocol) {
         protocol
             .add_channel::<PlayerCommandChannel>(
                 ChannelDirection::ClientToServer,

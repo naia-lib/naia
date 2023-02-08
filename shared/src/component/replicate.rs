@@ -16,87 +16,20 @@ use crate::{
     },
     entity::{entity_handle::EntityHandle, entity_property::NetEntityHandleConverter},
     messages::named::Named,
-    types::ComponentId,
+    types::{ComponentId, NetId},
     WorldMutType,
 };
+use crate::types::;
 
 /// A map to hold all component types
-pub struct Components;
+pub struct Components {
+    current_net_id: NetId,
+    map: HashMap<ComponentId, (NetId, Box<dyn ReplicateBuilder>)>,
+}
 
 impl Components {
-    pub fn add_component<C: Replicate>() {
-        let type_id = TypeId::of::<C>();
-        let mut component_data = Self::get_data();
-        let component_id = component_data.add_component_id(&type_id);
-        let builder = C::create_builder(component_id);
-        component_data.add_component(&component_id, builder);
-    }
 
-    pub fn type_to_id<C: Replicate>() -> ComponentId {
-        let type_id = TypeId::of::<C>();
-        return Self::get_data().get_id(&type_id);
-    }
-
-    pub fn read(
-        reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
-    ) -> Result<Box<dyn Replicate>, SerdeErr> {
-        let component_id: ComponentId = ComponentId::de(reader)?;
-        return Self::get_data()
-            .get_builder(&component_id)
-            .read(reader, converter);
-    }
-
-    pub fn read_create_update(reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
-        let component_id: ComponentId = ComponentId::de(reader)?;
-        return Self::get_data()
-            .get_builder(&component_id)
-            .read_create_update(reader);
-    }
-
-    pub fn cast<R: Replicate>(boxed_component: Box<dyn Replicate>) -> Option<R> {
-        let boxed_any: Box<dyn Any> = boxed_component.to_boxed_any();
-        Box::<dyn Any + 'static>::downcast::<R>(boxed_any)
-            .ok()
-            .map(|boxed_c| *boxed_c)
-    }
-
-    pub fn cast_ref<R: Replicate>(boxed_component: &Box<dyn Replicate>) -> Option<&R> {
-        boxed_component.to_any().downcast_ref::<R>()
-    }
-
-    pub fn cast_mut<R: Replicate>(boxed_component: &mut Box<dyn Replicate>) -> Option<&mut R> {
-        boxed_component.to_any_mut().downcast_mut::<R>()
-    }
-
-    pub fn id_to_name(id: &ComponentId) -> String {
-        return Self::get_data().get_builder(id).name();
-    }
-
-    fn get_data() -> MutexGuard<'static, ComponentsData> {
-        match COMPONENTS_DATA.lock() {
-            Ok(components_data) => {
-                return components_data;
-            }
-            Err(poison) => {
-                panic!("Components::get_data() Error: {}", poison);
-            }
-        }
-    }
-}
-
-lazy_static! {
-    static ref COMPONENTS_DATA: Mutex<ComponentsData> = Mutex::new(ComponentsData::new());
-}
-
-struct ComponentsData {
-    current_id: u16,
-    type_to_id_map: HashMap<TypeId, ComponentId>,
-    id_to_data_map: HashMap<ComponentId, Box<dyn ReplicateBuilder>>,
-}
-
-impl ComponentsData {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             current_id: 0,
             type_to_id_map: HashMap::new(),
@@ -104,22 +37,47 @@ impl ComponentsData {
         }
     }
 
-    fn add_component_id(&mut self, type_id: &TypeId) -> ComponentId {
+    pub fn add_component<C: Replicate>(&mut self) {
+        let type_id = TypeId::of::<C>();
+
+        // Make ComponentId
         let component_id = ComponentId::new(self.current_id);
-        self.type_to_id_map.insert(*type_id, component_id);
+        self.type_to_id_map.insert(type_id, component_id);
         self.current_id += 1;
         //TODO: check for current_id overflow?
-        component_id
+
+        // Make Builder
+        let builder = C::create_builder(component_id);
+        self.id_to_data_map.insert(component_id, builder);
     }
 
-    fn add_component(&mut self, component_id: &ComponentId, builder: Box<dyn ReplicateBuilder>) {
-        self.id_to_data_map.insert(*component_id, builder);
+    pub fn type_to_kind<C: Replicate>(&self) -> ComponentId {
+        let type_id = TypeId::of::<C>();
+        return self.type_id_to_kind(&type_id);
     }
 
-    fn get_id(&self, type_id: &TypeId) -> ComponentId {
-        return *self.type_to_id_map.get(type_id).expect(
+    pub fn type_id_to_kind(&self, type_id: &TypeId) -> ComponentId {
+        return *self.type_to_id_map.get(&type_id).expect(
             "Must properly initialize Component with Protocol via `add_component()` function!",
         );
+    }
+
+    pub fn read(
+        &self,
+        reader: &mut BitReader,
+        converter: &dyn NetEntityHandleConverter,
+    ) -> Result<Box<dyn Replicate>, SerdeErr> {
+        let component_id: ComponentId = ComponentId::de(reader)?;
+        return self.get_builder(&component_id).read(reader, converter);
+    }
+
+    pub fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
+        let component_id: ComponentId = ComponentId::de(reader)?;
+        return self.get_builder(&component_id).read_create_update(reader);
+    }
+
+    pub fn id_to_name(&self, id: &ComponentId) -> String {
+        return self.get_builder(id).name();
     }
 
     fn get_builder(&self, id: &ComponentId) -> &Box<dyn ReplicateBuilder> {
@@ -151,8 +109,8 @@ pub trait Replicate: ReplicateInner + Named + Any {
     where
         Self: Sized;
     fn copy_to_box(&self) -> Box<dyn Replicate>;
-    /// Gets the ComponentId of this type
-    fn kind(&self) -> ComponentId;
+    /// Gets the TypeId of this type
+    fn type_of(&self) -> TypeId;
     /// Gets the number of bytes of the Component's DiffMask
     fn diff_mask_size(&self) -> u8;
     /// Get an immutable reference to the inner Component as a Replicate trait object
@@ -168,7 +126,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
     fn set_mutator(&mut self, mutator: &PropertyMutator);
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Component on the client
-    fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
+    fn write(&self, components: &Components, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter);
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Component on the client
     fn write_update(

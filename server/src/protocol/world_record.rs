@@ -1,4 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
+use std::any::TypeId;
 
 use naia_shared::{
     BigMap, ComponentId, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
@@ -42,7 +43,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
         self.entity_records.remove(entity)
     }
 
-    pub fn add_component(&mut self, entity: &E, component_type: &ComponentId) {
+    pub fn add_component(&mut self, entity: &E, component_type: &TypeId) {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
@@ -50,7 +51,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
         component_kind_set.insert(*component_type);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentId) {
+    pub fn remove_component(&mut self, entity: &E, component_kind: &TypeId) {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
@@ -66,7 +67,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
         self.entity_records.contains_key(entity)
     }
 
-    pub fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentId>> {
+    pub fn component_kinds(&self, entity: &E) -> Option<Vec<TypeId>> {
         if !self.entity_records.contains_key(entity) {
             return None;
         }

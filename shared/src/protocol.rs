@@ -11,56 +11,64 @@ use crate::{
     },
 };
 
-#[derive(Clone)]
+// Protocol Plugin
+pub trait Plugin {
+    fn build(&self, protocol: &mut Protocol);
+}
+
+// Protocol
 pub struct Protocol {
+    pub channels: Channels,
+    pub messages: Messages,
+    pub components: Components,
     /// Used to configure the underlying socket
     pub socket: SocketConfig,
     /// The duration between each tick
     pub tick_interval: Option<Duration>,
     /// Configuration used to control compression parameters
     pub compression: Option<CompressionConfig>,
+    locked: bool,
 }
 
 impl Protocol {
-    pub fn builder() -> ProtocolBuilder {
-        ProtocolBuilder {
-            link_conditioner_config: None,
-            rtc_endpoint_path: None,
+    pub fn new() -> Protocol {
+        Protocol {
+            channels: Channels::new(),
+            messages: Messages::new(),
+            components: Components::new(),
+            socket: SocketConfig::new(None, None),
             tick_interval: None,
             compression: None,
+            locked: false,
         }
     }
-}
 
-pub struct ProtocolBuilder {
-    link_conditioner_config: Option<LinkConditionerConfig>,
-    rtc_endpoint_path: Option<String>,
-    tick_interval: Option<Duration>,
-    compression: Option<CompressionConfig>,
-}
-
-impl ProtocolBuilder {
     pub fn add_plugin<P: Plugin>(&mut self, plugin: P) -> &mut Self {
+        self.check_lock();
         plugin.build(self);
         self
     }
 
     pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
-        self.link_conditioner_config = Some(config);
+        self.check_lock();
+        self.socket.link_condition = Some(config);
         self
     }
 
     pub fn rtc_endpoint(&mut self, path: String) -> &mut Self {
-        self.rtc_endpoint_path = Some(path);
+        self.check_lock();
+        self.socket.rtc_endpoint_path = path;
         self
     }
 
     pub fn tick_interval(&mut self, duration: Duration) -> &mut Self {
+        self.check_lock();
         self.tick_interval = Some(duration);
         self
     }
 
     pub fn compression(&mut self, config: CompressionConfig) -> &mut Self {
+        self.check_lock();
         self.compression = Some(config);
         self
     }
@@ -70,34 +78,33 @@ impl ProtocolBuilder {
         direction: ChannelDirection,
         mode: ChannelMode,
     ) -> &mut Self {
-        Channels::add_channel::<C>(ChannelSettings::new(mode, direction));
+        self.check_lock();
+        self.channels.add_channel::<C>(ChannelSettings::new(mode, direction));
         self
     }
 
     pub fn add_message<M: Message + 'static>(&mut self) -> &mut Self {
-        Messages::add_message::<M>();
+        self.check_lock();
+        self.messages.add_message::<M>();
         self
     }
 
     pub fn add_component<C: Replicate>(&mut self) -> &mut Self {
-        Components::add_component::<C>();
+        self.check_lock();
+        self.components.add_component::<C>();
         self
     }
 
-    pub fn build(&mut self) -> Protocol {
-        let socket = SocketConfig::new(
-            self.link_conditioner_config.take(),
-            self.rtc_endpoint_path.take(),
-        );
-        Protocol {
-            socket,
-            tick_interval: self.tick_interval.take(),
-            compression: self.compression.take(),
+    pub fn lock(&mut self) {
+        self.check_lock();
+        self.locked = true;
+    }
+
+    fn check_lock(&self) {
+        if self.locked {
+            panic!("Protocol already locked!");
         }
     }
 }
 
-//Plugin
-pub trait Plugin {
-    fn build(&self, protocol: &mut ProtocolBuilder);
-}
+

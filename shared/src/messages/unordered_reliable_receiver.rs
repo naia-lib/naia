@@ -2,7 +2,7 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{sequence_less_than, types::MessageIndex};
+use crate::{Messages, sequence_less_than, types::MessageIndex};
 
 use super::{
     indexed_message_reader::IndexedMessageReader,
@@ -99,10 +99,11 @@ impl<P> UnorderedReliableReceiver<P> {
 impl<P: Send + Sync> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
     fn read_messages(
         &mut self,
+        messages: &Messages,
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let id_w_msgs = IndexedMessageReader::read_messages(channel_reader, reader)?;
+        let id_w_msgs = IndexedMessageReader::read_messages(messages, channel_reader, reader)?;
         for (id, message) in id_w_msgs {
             self.buffer_message(id, message);
         }

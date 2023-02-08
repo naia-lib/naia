@@ -1,4 +1,4 @@
-use naia_shared::{Plugin, ProtocolBuilder};
+use naia_shared::{Plugin, Protocol};
 
 mod auth;
 mod entity_assignment;
@@ -12,7 +12,7 @@ pub use key_command::KeyCommand;
 pub struct MessagesPlugin;
 
 impl Plugin for MessagesPlugin {
-    fn build(&self, protocol: &mut ProtocolBuilder) {
+    fn build(&self, protocol: &mut Protocol) {
         protocol
             .add_message::<Auth>()
             .add_message::<EntityAssignment>()

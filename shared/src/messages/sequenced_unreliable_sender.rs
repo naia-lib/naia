@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::{messages::indexed_message_writer::IndexedMessageWriter, types::MessageIndex};
+use crate::{Messages, messages::indexed_message_writer::IndexedMessageWriter, types::MessageIndex};
 
 use super::message_channel::{ChannelSender, ChannelWriter};
 
@@ -42,11 +42,13 @@ impl<P: Send + Sync> ChannelSender<P> for SequencedUnreliableSender<P> {
     /// Include a wrapped message id for sequencing purposes
     fn write_messages(
         &mut self,
+        messages: &Messages,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
         IndexedMessageWriter::write_messages(
+            messages,
             &mut self.outgoing_messages,
             channel_writer,
             bit_writer,

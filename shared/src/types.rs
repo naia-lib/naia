@@ -1,3 +1,4 @@
+use std::any::TypeId;
 use std::ops::{Deref, DerefMut};
 
 use naia_serde::SerdeInternal;
@@ -12,77 +13,82 @@ pub enum HostType {
     Server,
     Client,
 }
+pub type NetId = u16;
 
 /// ComponentId - should be one unique value for each type of Component
-#[derive(Eq, Hash, Copy, SerdeInternal, Clone, PartialEq)]
+#[derive(Eq, Hash, Copy, Clone, PartialEq)]
 pub struct ComponentId {
-    inner: u16,
+    type_id: TypeId,
 }
 
-impl ComponentId {
-    pub fn new(value: u16) -> Self {
-        Self { inner: value }
-    }
-
-    pub fn name(&self) -> String {
-        Components::id_to_name(self)
+impl From<TypeId> for ComponentId {
+    fn from(type_id: TypeId) -> Self {
+        Self {
+            type_id
+        }
     }
 }
 impl Deref for ComponentId {
-    type Target = u16;
+    type Target = TypeId;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.type_id
     }
 }
 impl DerefMut for ComponentId {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+        &mut self.type_id
     }
 }
 
 // MessageId
-#[derive(Eq, Hash, Copy, SerdeInternal, Clone, PartialEq)]
+#[derive(Eq, Hash, Copy, Clone, PartialEq)]
 pub struct MessageId {
-    inner: u16,
+    type_id: TypeId,
 }
-impl MessageId {
-    pub fn new(value: u16) -> Self {
-        Self { inner: value }
+
+impl From<TypeId> for MessageId {
+    fn from(type_id: TypeId) -> Self {
+        Self {
+            type_id
+        }
     }
 }
 impl Deref for MessageId {
-    type Target = u16;
+    type Target = TypeId;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.type_id
     }
 }
 impl DerefMut for MessageId {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+        &mut self.type_id
     }
 }
 
 // ChannelId
-#[derive(Eq, Hash, Copy, SerdeInternal, Clone, PartialEq)]
+#[derive(Eq, Hash, Copy, Clone, PartialEq)]
 pub struct ChannelId {
-    inner: u16,
+    type_id: TypeId,
 }
-impl ChannelId {
-    pub fn new(value: u16) -> Self {
-        Self { inner: value }
+
+impl From<TypeId> for ChannelId {
+    fn from(type_id: TypeId) -> Self {
+        Self {
+            type_id
+        }
     }
 }
 impl Deref for ChannelId {
-    type Target = u16;
+    type Target = TypeId;
 
     fn deref(&self) -> &Self::Target {
-        &self.inner
+        &self.type_id
     }
 }
 impl DerefMut for ChannelId {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
+        &mut self.type_id
     }
 }

@@ -4,7 +4,7 @@ use naia_serde::BitWriter;
 
 use naia_socket_shared::Instant;
 
-use crate::{messages::indexed_message_writer::IndexedMessageWriter, types::MessageIndex};
+use crate::{Messages, messages::indexed_message_writer::IndexedMessageWriter, types::MessageIndex};
 
 use super::message_channel::{ChannelSender, ChannelWriter};
 
@@ -114,11 +114,13 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
 
     fn write_messages(
         &mut self,
+        messages: &Messages,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
         IndexedMessageWriter::write_messages(
+            messages,
             &mut self.outgoing_messages,
             channel_writer,
             bit_writer,

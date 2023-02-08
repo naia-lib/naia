@@ -1,4 +1,5 @@
 use std::{collections::HashMap, marker::PhantomData, net::SocketAddr, vec::IntoIter};
+use std::any::Any;
 
 use naia_shared::{
     Channel, ChannelId, Channels, ComponentId, Components, Message, MessageId, MessageReceivable,
@@ -220,8 +221,7 @@ impl<E: Copy, C: Channel + 'static, M: Message + 'static> Event<E> for MessageEv
                 let mut output_list: Vec<M> = Vec::new();
 
                 for boxed_message in boxed_list {
-                    let message: M =
-                        Messages::cast::<M>(boxed_message).expect("shouldn't be possible here?");
+                    let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_message.to_boxed_any()).ok().map(|boxed_m| *boxed_m);
                     output_list.push(message);
                 }
 
@@ -273,13 +273,14 @@ impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
     type Iter = IntoIter<(E, C)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        let component_id: ComponentId = Components::type_to_id::<C>();
+        let component_id: ComponentId = Components::type_to_kind::<C>();
         if let Some(boxed_list) = events.removes.remove(&component_id) {
             let mut output_list: Vec<(E, C)> = Vec::new();
 
             for (entity, boxed_component) in boxed_list {
-                let component: C =
-                    Components::cast::<C>(boxed_component).expect("shouldn't be possible here?");
+                let component: C = Box::<dyn Any + 'static>::downcast::<C>(boxed_component.to_boxed_any())
+                    .ok()
+                    .map(|boxed_c| *boxed_c);
                 output_list.push((entity, component));
             }
 

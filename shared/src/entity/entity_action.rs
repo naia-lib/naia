@@ -1,10 +1,10 @@
-use crate::types::ComponentId;
+use std::any::TypeId;
 
 pub enum EntityAction<E: Copy> {
-    SpawnEntity(E, Vec<ComponentId>),
+    SpawnEntity(E, Vec<TypeId>),
     DespawnEntity(E),
-    InsertComponent(E, ComponentId),
-    RemoveComponent(E, ComponentId),
+    InsertComponent(E, TypeId),
+    RemoveComponent(E, TypeId),
     Noop,
 }
 

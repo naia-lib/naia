@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
-use crate::{messages::message_channel::ChannelReader, types::MessageIndex};
+use crate::{Messages, messages::message_channel::ChannelReader, types::MessageIndex};
 
 pub struct IndexedMessageReader<P> {
     phantom_p: PhantomData<P>,
@@ -10,6 +10,7 @@ pub struct IndexedMessageReader<P> {
 
 impl<P> IndexedMessageReader<P> {
     pub fn read_messages(
+        messages: &Messages,
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<Vec<(MessageIndex, P)>, SerdeErr> {
@@ -22,7 +23,7 @@ impl<P> IndexedMessageReader<P> {
                 break;
             }
 
-            let id_w_msg = Self::read_message(channel_reader, reader, &last_read_id)?;
+            let id_w_msg = Self::read_message(messages, channel_reader, reader, &last_read_id)?;
             last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
@@ -31,6 +32,7 @@ impl<P> IndexedMessageReader<P> {
     }
 
     fn read_message(
+        messages: &Messages,
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
         last_read_id: &Option<MessageIndex>,
@@ -44,7 +46,7 @@ impl<P> IndexedMessageReader<P> {
         };
 
         // read payload
-        let new_message = channel_reader.read(reader)?;
+        let new_message = channel_reader.read(messages, reader)?;
 
         Ok((message_id, new_message))
     }

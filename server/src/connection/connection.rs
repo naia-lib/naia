@@ -5,11 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    sequence_greater_than, BaseConnection, BitReader, BitWriter, ConnectionConfig, EntityConverter,
-    HostType, Instant, PacketType, PingManager, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick,
-    WorldRefType,
-};
+use naia_shared::{sequence_greater_than, BaseConnection, BitReader, BitWriter, ConnectionConfig, EntityConverter, HostType, Instant, PacketType, PingManager, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick, WorldRefType, Channels, Messages, Protocol};
 
 use crate::{
     protocol::{
@@ -37,11 +33,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         connection_config: &ConnectionConfig,
         user_address: SocketAddr,
         user_key: &UserKey,
+        channels: &Channels,
         diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
     ) -> Self {
         Connection {
             user_key: *user_key,
-            base: BaseConnection::new(user_address, HostType::Server, connection_config),
+            base: BaseConnection::new(user_address, HostType::Server, connection_config, channels),
             entity_manager: EntityManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(),
             ping_manager: PingManager::new(&connection_config.ping),
@@ -66,6 +63,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     /// Read packet data received from a client
     pub fn process_incoming_data(
         &mut self,
+        messages: &Messages,
         server_and_client_tick_opt: Option<(Tick, Tick)>,
         reader: &mut BitReader,
         world_record: &WorldRecord<E>,
@@ -89,24 +87,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         {
             self.base
                 .message_manager
-                .read_messages(&channel_reader, reader)?;
+                .read_messages(messages, &channel_reader, reader)?;
         }
 
         Ok(())
     }
 
-    pub fn receive_messages(&mut self, incoming_events: &mut Events) {
-        let messages = self.base.message_manager.receive_messages();
-        for (channel_id, message) in messages {
-            incoming_events.push_message(&self.user_key, &channel_id, message);
+    pub fn receive_messages(&mut self, channels: &Channels, incoming_events: &mut Events) {
+        let received_messages = self.base.message_manager.receive_messages();
+        for (channel_kind, message) in received_messages {
+            let channel_type_id = channels.kind_to_type(&channel_kind);
+            incoming_events.push_message(&self.user_key, &channel_type_id, message);
         }
     }
 
-    pub fn receive_tick_buffer_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
-        let channels = self.tick_buffer.receive_messages(host_tick);
-        for (channel_id, messages) in channels {
-            for message in messages {
-                incoming_events.push_message(&self.user_key, &channel_id, message);
+    pub fn receive_tick_buffer_messages(&mut self, channels: &Channels, host_tick: &Tick, incoming_events: &mut Events) {
+        let channel_messages = self.tick_buffer.receive_messages(host_tick);
+        for (channel_kind, received_messages) in channel_messages {
+            for message in received_messages {
+                let channel_type_id = channels.kind_to_type(&channel_kind);
+                incoming_events.push_message(&self.user_key, &channel_type_id, message);
             }
         }
     }
@@ -114,6 +114,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     // Outgoing data
     pub fn send_outgoing_packets<W: WorldRefType<E>>(
         &mut self,
+        protocol: &Protocol,
         now: &Instant,
         io: &mut Io,
         world: &W,
@@ -125,7 +126,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(now, io, world, world_record, tick_manager_opt) {
+            if self.send_outgoing_packet(protocol, now, io, world, world_record, tick_manager_opt) {
                 any_sent = true;
             } else {
                 break;
@@ -151,6 +152,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     /// Will split the data into multiple packets.
     fn send_outgoing_packet<W: WorldRefType<E>>(
         &mut self,
+        protocol: &Protocol,
         now: &Instant,
         io: &mut Io,
         world: &W,
@@ -191,6 +193,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 let converter = EntityConverter::new(world_record, &self.entity_manager);
                 let channel_writer = ProtocolIo::new(&converter);
                 self.base.message_manager.write_messages(
+                    &protocol.messages,
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,
@@ -205,6 +208,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             // write entity updates
             {
                 self.entity_manager.write_updates(
+                    &protocol.components,
                     now,
                     &mut bit_writer,
                     &next_packet_index,
@@ -221,6 +225,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             // write entity actions
             {
                 self.entity_manager.write_actions(
+                    &protocol.components,
                     now,
                     &mut bit_writer,
                     &next_packet_index,
