@@ -1,9 +1,8 @@
 use std::{thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::default_channels::UnorderedReliableChannel, AuthorizationEvent, ConnectionEvent,
-    DisconnectionEvent, ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerAddrs,
-    ServerConfig, TickEvent,
+    shared::default_channels::UnorderedReliableChannel, AuthEvent, ConnectEvent, DisconnectEvent,
+    ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldRefType};
@@ -84,7 +83,7 @@ impl App {
             sleep(Duration::from_millis(5));
             return;
         } else {
-            for (user_key, auth) in events.read::<AuthorizationEvent<Auth>>() {
+            for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
                 if auth.username == "charlie" && auth.password == "12345" {
                     // Accept incoming connection
                     self.server.accept_connection(&user_key);
@@ -93,7 +92,7 @@ impl App {
                     self.server.reject_connection(&user_key);
                 }
             }
-            for user_key in events.read::<ConnectionEvent>() {
+            for user_key in events.read::<ConnectEvent>() {
                 info!(
                     "Naia Server connected to: {}",
                     self.server.user(&user_key).address()
@@ -102,7 +101,7 @@ impl App {
                     .room_mut(&self.main_room_key)
                     .add_user(&user_key);
             }
-            for (_user_key, user) in events.read::<DisconnectionEvent>() {
+            for (_user_key, user) in events.read::<DisconnectEvent>() {
                 info!("Naia Server disconnected from: {:?}", user.address);
             }
             for (user_key, message) in

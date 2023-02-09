@@ -104,8 +104,8 @@ pub trait Event {
 }
 
 // ConnectEvent
-pub struct ConnectionEvent;
-impl Event for ConnectionEvent {
+pub struct ConnectEvent;
+impl Event for ConnectEvent {
     type Iter = IntoIter<UserKey>;
 
     fn iter(events: &mut Events) -> Self::Iter {
@@ -115,8 +115,8 @@ impl Event for ConnectionEvent {
 }
 
 // DisconnectEvent
-pub struct DisconnectionEvent;
-impl Event for DisconnectionEvent {
+pub struct DisconnectEvent;
+impl Event for DisconnectEvent {
     type Iter = IntoIter<(UserKey, User)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
@@ -148,10 +148,10 @@ impl Event for ErrorEvent {
 }
 
 // Auth Event
-pub struct AuthorizationEvent<M: Message> {
+pub struct AuthEvent<M: Message> {
     phantom_m: PhantomData<M>,
 }
-impl<M: Message> Event for AuthorizationEvent<M> {
+impl<M: Message> Event for AuthEvent<M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {

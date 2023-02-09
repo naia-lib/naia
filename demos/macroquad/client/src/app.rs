@@ -6,8 +6,8 @@ use macroquad::prelude::{
 };
 
 use naia_client::{
-    Client as NaiaClient, ClientConfig, CommandHistory, ConnectionEvent, DespawnEntityEvent,
-    DisconnectionEvent, ErrorEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent,
+    Client as NaiaClient, ClientConfig, CommandHistory, ConnectEvent, DespawnEntityEvent,
+    DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent,
     SpawnEntityEvent, TickEvent, UpdateComponentEvent,
 };
 
@@ -111,10 +111,10 @@ impl App {
 
         let mut events = self.client.receive(self.world.proxy_mut());
 
-        for server_address in events.read::<ConnectionEvent>() {
+        for server_address in events.read::<ConnectEvent>() {
             info!("Client connected to: {}", server_address);
         }
-        for server_address in events.read::<DisconnectionEvent>() {
+        for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
 
             self.world = World::default();

@@ -1,8 +1,8 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::Random, AuthorizationEvent, ConnectionEvent, DisconnectionEvent, ErrorEvent,
-    MessageEvent, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent, UserKey,
+    shared::Random, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvent, RoomKey,
+    Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent, UserKey,
 };
 
 use naia_demo_world::{Entity, World};
@@ -64,7 +64,7 @@ impl App {
             sleep(Duration::from_millis(5));
             return;
         }
-        for (user_key, auth) in events.read::<AuthorizationEvent<Auth>>() {
+        for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
             if auth.username == "charlie" && auth.password == "12345" {
                 // Accept incoming connection
                 self.server.accept_connection(&user_key);
@@ -73,7 +73,7 @@ impl App {
                 self.server.reject_connection(&user_key);
             }
         }
-        for user_key in events.read::<ConnectionEvent>() {
+        for user_key in events.read::<ConnectEvent>() {
             // New User has joined the Server
             let user_address = self
                 .server
@@ -125,7 +125,7 @@ impl App {
             self.server
                 .send_message::<EntityAssignmentChannel, _>(&user_key, &assignment_message);
         }
-        for (user_key, user) in events.read::<DisconnectionEvent>() {
+        for (user_key, user) in events.read::<DisconnectEvent>() {
             info!("Naia Server disconnected from: {}", user.address);
             if let Some(entity) = self.user_squares.remove(&user_key) {
                 self.server

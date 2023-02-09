@@ -15,7 +15,7 @@ pub fn protocol() -> Protocol {
     let mut protocol = Protocol::new();
     protocol
         // Config
-        .tick_interval(Duration::from_millis(20))
+        .tick_interval(Duration::from_millis(800))
         .link_condition(LinkConditionerConfig::average_condition())
         // Channels
         .add_default_channels()

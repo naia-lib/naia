@@ -145,8 +145,8 @@ pub trait Event<E: Copy> {
 }
 
 // ConnectEvent
-pub struct ConnectionEvent;
-impl<E: Copy> Event<E> for ConnectionEvent {
+pub struct ConnectEvent;
+impl<E: Copy> Event<E> for ConnectEvent {
     type Iter = IntoIter<SocketAddr>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -156,8 +156,8 @@ impl<E: Copy> Event<E> for ConnectionEvent {
 }
 
 // RejectEvent
-pub struct RejectionEvent;
-impl<E: Copy> Event<E> for RejectionEvent {
+pub struct RejectEvent;
+impl<E: Copy> Event<E> for RejectEvent {
     type Iter = IntoIter<SocketAddr>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -167,8 +167,8 @@ impl<E: Copy> Event<E> for RejectionEvent {
 }
 
 // DisconnectEvent
-pub struct DisconnectionEvent;
-impl<E: Copy> Event<E> for DisconnectionEvent {
+pub struct DisconnectEvent;
+impl<E: Copy> Event<E> for DisconnectEvent {
     type Iter = IntoIter<SocketAddr>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
