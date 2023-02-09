@@ -2,7 +2,7 @@ use hecs::Entity;
 
 use naia_hecs_server::shared::Random;
 
-use naia_hecs_demo_shared::protocol::{Marker, Name, Position};
+use naia_hecs_demo_shared::{Marker, Name, Position};
 
 use crate::app::App;
 

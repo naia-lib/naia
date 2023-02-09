@@ -12,13 +12,11 @@ pub struct ComponentKind {
     type_id: TypeId,
 }
 
-// impl From<TypeId> for ComponentKind {
-//     fn from(type_id: TypeId) -> Self {
-//         Self {
-//             type_id
-//         }
-//     }
-// }
+impl From<TypeId> for ComponentKind {
+    fn from(type_id: TypeId) -> Self {
+        Self { type_id }
+    }
+}
 
 impl ComponentKind {
     pub fn of<C: Replicate>() -> Self {
