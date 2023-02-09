@@ -1,4 +1,6 @@
-use naia_shared::{Channel, ChannelDirection, ChannelMode, Plugin, Protocol, ReliableSettings, TickBufferSettings};
+use naia_shared::{
+    Channel, ChannelDirection, ChannelMode, Plugin, Protocol, ReliableSettings, TickBufferSettings,
+};
 
 #[derive(Channel)]
 pub struct PlayerCommandChannel;

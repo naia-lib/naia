@@ -31,4 +31,3 @@ cfg-if = { version = "1.0" }
 js-sys = { version = "0.3", optional = true }
 bevy_ecs = { version = "0.9", default_features = false, optional = true }
 zstd = { version = "0.12.2", optional = true }
-lazy_static = { version = "1.4" }

@@ -73,7 +73,7 @@ mod some_nonreplicated_replica {
 }
 
 use naia_shared::{
-    BigMapKey, BitReader, BitWriter, Components, EntityDoesNotExistError, EntityHandle,
+    BigMapKey, BitReader, BitWriter, ComponentKinds, EntityDoesNotExistError, EntityHandle,
     EntityHandleConverter, FakeEntityConverter, NetEntity, NetEntityHandleConverter, Protocol,
     ProtocolBuilder, Replicate,
 };
@@ -101,11 +101,11 @@ fn read_write_unit_replica() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let out_1 =
-        Components::read(&mut reader, &FakeEntityConverter).expect("should deserialize correctly");
+    let out_1 = ComponentKinds::read(&mut reader, &FakeEntityConverter)
+        .expect("should deserialize correctly");
 
-    let _typed_in_1 = Components::cast_ref::<UnitHolder>(&out_1).unwrap();
-    let _typed_out_1 = Components::cast_ref::<UnitHolder>(&out_1).unwrap();
+    let _typed_in_1 = ComponentKinds::cast_ref::<UnitHolder>(&out_1).unwrap();
+    let _typed_out_1 = ComponentKinds::cast_ref::<UnitHolder>(&out_1).unwrap();
 }
 
 #[test]
@@ -125,10 +125,10 @@ fn read_write_named_replica() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let out_1 =
-        Components::read(&mut reader, &FakeEntityConverter).expect("should deserialize correctly");
+    let out_1 = ComponentKinds::read(&mut reader, &FakeEntityConverter)
+        .expect("should deserialize correctly");
 
-    let typed_out_1 = Components::cast_ref::<NamedStringHolder>(&out_1).unwrap();
+    let typed_out_1 = ComponentKinds::cast_ref::<NamedStringHolder>(&out_1).unwrap();
     assert!(in_1.string_1.equals(&typed_out_1.string_1));
     assert!(in_1.string_2.equals(&typed_out_1.string_2));
     assert_eq!(*in_1.string_1, "hello world".to_string());
@@ -154,10 +154,10 @@ fn read_write_tuple_replica() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let out_1 =
-        Components::read(&mut reader, &FakeEntityConverter).expect("should deserialize correctly");
+    let out_1 = ComponentKinds::read(&mut reader, &FakeEntityConverter)
+        .expect("should deserialize correctly");
 
-    let typed_out_1 = Components::cast_ref::<TupleStringHolder>(&out_1).unwrap();
+    let typed_out_1 = ComponentKinds::cast_ref::<TupleStringHolder>(&out_1).unwrap();
     assert!(in_1.0.equals(&typed_out_1.0));
     assert!(in_1.1.equals(&typed_out_1.1));
     assert_eq!(*in_1.0, "hello world".to_string());
@@ -200,10 +200,10 @@ fn read_write_entity_replica() {
     let (buffer_length, buffer) = writer.flush();
     // Read
     let mut reader = BitReader::new(&buffer[..buffer_length]);
-    let out_1 =
-        Components::read(&mut reader, &TestEntityConverter).expect("should deserialize correctly");
+    let out_1 = ComponentKinds::read(&mut reader, &TestEntityConverter)
+        .expect("should deserialize correctly");
 
-    let typed_out_1 = Components::cast_ref::<EntityPropertyHolder>(&out_1).unwrap();
+    let typed_out_1 = ComponentKinds::cast_ref::<EntityPropertyHolder>(&out_1).unwrap();
     assert!(in_1.entity_1.equals(&typed_out_1.entity_1));
     let entity_handles = Vec::<EntityHandle>::from([EntityHandle::from_u64(1)]);
     assert_eq!(in_1.entities(), entity_handles);
@@ -231,10 +231,10 @@ fn read_write_nonreplicated_replica() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let out_1 =
-        Components::read(&mut reader, &FakeEntityConverter).expect("should deserialize correctly");
+    let out_1 = ComponentKinds::read(&mut reader, &FakeEntityConverter)
+        .expect("should deserialize correctly");
 
-    let typed_out_1 = Components::cast_ref::<MixedReplicationHolder>(&out_1).unwrap();
+    let typed_out_1 = ComponentKinds::cast_ref::<MixedReplicationHolder>(&out_1).unwrap();
     assert!(in_1.string_1.equals(&typed_out_1.string_1));
     assert_eq!(*in_1.string_1, "hello world".to_string());
     assert_eq!(*in_1.string_2, "goodbye world".to_string());

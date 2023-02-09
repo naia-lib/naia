@@ -65,19 +65,19 @@ impl ChannelTickBufferReceiver {
         // read message count
         let message_count = UnsignedVariableInteger::<3>::de(reader)?.get();
 
-        let mut last_read_message_id: ShortMessageIndex = 0;
+        let mut last_read_message_index: ShortMessageIndex = 0;
         for _ in 0..message_count {
             // read message id diff, add to last read id
             let id_diff = UnsignedVariableInteger::<2>::de(reader)?.get() as ShortMessageIndex;
-            let message_id: ShortMessageIndex = last_read_message_id + id_diff;
-            last_read_message_id = message_id;
+            let message_index: ShortMessageIndex = last_read_message_index + id_diff;
+            last_read_message_index = message_index;
 
             // read payload
             let new_message = channel_reader.read(reader)?;
 
             if !self
                 .incoming_messages
-                .insert(host_tick, &remote_tick, message_id, new_message)
+                .insert(host_tick, &remote_tick, message_index, new_message)
             {
                 //info!("failed command. server: {}, client: {}",
                 // server_tick, client_tick);
@@ -116,7 +116,7 @@ impl IncomingMessages {
         &mut self,
         host_tick: &Tick,
         message_tick: &Tick,
-        message_id: ShortMessageIndex,
+        message_index: ShortMessageIndex,
         new_message: Box<dyn Message>,
     ) -> bool {
         if sequence_greater_than(*message_tick, *host_tick) {
@@ -125,7 +125,7 @@ impl IncomingMessages {
             //in the case of empty vec
             if index == 0 {
                 let mut map = HashMap::new();
-                map.insert(message_id, new_message);
+                map.insert(message_index, new_message);
                 self.buffer.push_back((*message_tick, map));
                 //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (empty q)",
                 // server_tick, client_tick, owned_entity);
@@ -142,7 +142,7 @@ impl IncomingMessages {
                     if *existing_tick == *message_tick {
                         // should almost never collide
                         if let std::collections::hash_map::Entry::Vacant(e) =
-                            existing_messages.entry(message_id)
+                            existing_messages.entry(message_index)
                         {
                             e.insert(new_message);
                             //info!("inserting command at tick: {}", client_tick);
@@ -163,7 +163,7 @@ impl IncomingMessages {
                 if insert {
                     // found correct position to insert node
                     let mut new_messages = HashMap::new();
-                    new_messages.insert(message_id, new_message);
+                    new_messages.insert(message_index, new_message);
                     self.buffer.insert(index + 1, (*message_tick, new_messages));
                     //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (midbck
                     // insrt)", server_tick, client_tick, owned_entity);
@@ -173,7 +173,7 @@ impl IncomingMessages {
                 if index == 0 {
                     //traversed the whole vec, push front
                     let mut new_messages = HashMap::new();
-                    new_messages.insert(message_id, new_message);
+                    new_messages.insert(message_index, new_message);
                     self.buffer.push_front((*message_tick, new_messages));
                     //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (front
                     // insrt)", server_tick, client_tick, owned_entity);

@@ -1,7 +1,9 @@
-use std::{collections::HashMap, marker::PhantomData, vec::IntoIter};
 use std::any::{Any, TypeId};
+use std::{collections::HashMap, marker::PhantomData, vec::IntoIter};
 
-use naia_shared::{Channel, ChannelId, Channels, Message, MessageId, MessageReceivable, Messages};
+use naia_shared::{
+    Channel, ChannelKind, ChannelKinds, Message, MessageKind, MessageKinds, MessageReceivable,
+};
 
 use super::user::{User, UserKey};
 use crate::NaiaServerError;
@@ -60,8 +62,7 @@ impl Events {
     }
 
     pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: Box<dyn Message>) {
-
-        let auth_message_type_id = auth_message.type_of();
+        let auth_message_type_id = auth_message.kind();
         if !self.auths.contains_key(&auth_message_type_id) {
             self.auths.insert(auth_message_type_id, Vec::new());
         }
@@ -73,14 +74,14 @@ impl Events {
     pub(crate) fn push_message(
         &mut self,
         user_key: &UserKey,
-        channel_id: &TypeId,
+        channel_kind: &ChannelKind,
         message: Box<dyn Message>,
     ) {
-        if !self.messages.contains_key(&channel_id) {
-            self.messages.insert(*channel_id, HashMap::new());
+        if !self.messages.contains_key(&channel_kind) {
+            self.messages.insert(*channel_kind, HashMap::new());
         }
-        let channel_map = self.messages.get_mut(&channel_id).unwrap();
-        let message_type_id = message.type_of();
+        let channel_map = self.messages.get_mut(&channel_kind).unwrap();
+        let message_type_id = message.kind();
         if !channel_map.contains_key(&message_type_id) {
             channel_map.insert(message_type_id, Vec::new());
         }
@@ -159,8 +160,8 @@ impl<M: Message> Event for AuthorizationEvent<M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
-        let message_id: TypeId = TypeId::of::<M>();
-        if let Some(boxed_list) = events.auths.remove(&message_id) {
+        let message_kind: MessageKind = TypeId::of::<M>();
+        if let Some(boxed_list) = events.auths.remove(&message_kind) {
             let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
             for (user_key, boxed_auth) in boxed_list {
@@ -187,16 +188,18 @@ impl<C: Channel, M: Message> Event for MessageEvent<C, M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
-        let channel_id: TypeId = TypeId::of::<C>();
-        if let Some(mut channel_map) = events.messages.remove(&channel_id) {
-            let message_id: TypeId = TypeId::of::<M>();
-            if let Some(boxed_list) = channel_map.remove(&message_id) {
+        let channel_kind: TypeId = TypeId::of::<C>();
+        if let Some(mut channel_map) = events.messages.remove(&channel_kind) {
+            let message_kind: MessageKind = TypeId::of::<M>();
+            if let Some(boxed_list) = channel_map.remove(&message_kind) {
                 let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
                 for (user_key, boxed_message) in boxed_list {
-                    let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_message.to_boxed_any())
+                    let message: M =
+                        Box::<dyn Any + 'static>::downcast::<M>(boxed_message.to_boxed_any())
                             .ok()
-                            .map(|boxed_m| *boxed_m).unwrap();
+                            .map(|boxed_m| *boxed_m)
+                            .unwrap();
                     output_list.push((user_key, message));
                 }
 

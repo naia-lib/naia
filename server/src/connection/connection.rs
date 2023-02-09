@@ -5,7 +5,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{sequence_greater_than, BaseConnection, BitReader, BitWriter, ConnectionConfig, EntityConverter, HostType, Instant, PacketType, PingManager, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick, WorldRefType, Channels, Messages, Protocol};
+use naia_shared::{
+    sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
+    EntityConverter, HostType, Instant, MessageKinds, PacketType, PingManager, Protocol,
+    ProtocolIo, Serde, SerdeErr, StandardHeader, Tick, WorldRefType,
+};
 
 use crate::{
     protocol::{
@@ -33,7 +37,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         connection_config: &ConnectionConfig,
         user_address: SocketAddr,
         user_key: &UserKey,
-        channels: &Channels,
+        channel_kinds: &ChannelKinds,
         diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
     ) -> Self {
         Connection {
@@ -63,7 +67,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     /// Read packet data received from a client
     pub fn process_incoming_data(
         &mut self,
-        messages: &Messages,
+        message_kinds: &MessageKinds,
         server_and_client_tick_opt: Option<(Tick, Tick)>,
         reader: &mut BitReader,
         world_record: &WorldRecord<E>,
@@ -93,7 +97,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         Ok(())
     }
 
-    pub fn receive_messages(&mut self, channels: &Channels, incoming_events: &mut Events) {
+    pub fn receive_messages(&mut self, channel_kinds: &ChannelKinds, incoming_events: &mut Events) {
         let received_messages = self.base.message_manager.receive_messages();
         for (channel_kind, message) in received_messages {
             let channel_type_id = channels.kind_to_type(&channel_kind);
@@ -101,7 +105,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
     }
 
-    pub fn receive_tick_buffer_messages(&mut self, channels: &Channels, host_tick: &Tick, incoming_events: &mut Events) {
+    pub fn receive_tick_buffer_messages(
+        &mut self,
+        channel_kinds: &ChannelKinds,
+        host_tick: &Tick,
+        incoming_events: &mut Events,
+    ) {
         let channel_messages = self.tick_buffer.receive_messages(host_tick);
         for (channel_kind, received_messages) in channel_messages {
             for message in received_messages {

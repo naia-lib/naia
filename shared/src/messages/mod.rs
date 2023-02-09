@@ -1,8 +1,10 @@
-pub mod channel_config;
+pub mod channel;
+pub mod channel_kinds;
 pub mod indexed_message_reader;
 pub mod indexed_message_writer;
 pub mod message;
 pub mod message_channel;
+pub mod message_kinds;
 pub mod message_manager;
 pub mod message_receivable;
 pub mod named;

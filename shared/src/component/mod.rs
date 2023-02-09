@@ -1,3 +1,4 @@
+pub mod component_kinds;
 pub mod component_update;
 pub mod diff_mask;
 pub mod property;

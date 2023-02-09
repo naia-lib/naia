@@ -7,7 +7,12 @@ use std::{
     time::Duration,
 };
 
-use naia_shared::{wrapping_diff, BitWrite, BitWriter, ChannelId, ComponentId, DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, Message, MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType, Components};
+use naia_shared::{
+    wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, DiffMask,
+    EntityAction, EntityActionType, EntityConverter, Instant, Message, MessageIndex,
+    MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Serde,
+    UnsignedVariableInteger, WorldRefType,
+};
 
 use crate::sequence_list::SequenceList;
 
@@ -31,10 +36,10 @@ pub struct EntityManager<E: Copy + Eq + Hash + Send + Sync> {
     sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E>)>)>,
 
     // Updates
-    next_send_updates: HashMap<E, HashSet<ComponentId>>,
+    next_send_updates: HashMap<E, HashSet<ComponentKind>>,
     #[allow(clippy::type_complexity)]
     /// Map of component updates and [`DiffMask`] that were written into each packet
-    sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, ComponentId), DiffMask>)>,
+    sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, ComponentKind), DiffMask>)>,
     /// Last [`PacketIndex`] where a component update was written by the server
     last_update_packet_index: PacketIndex,
 }
@@ -65,14 +70,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         self.world_channel.host_despawn_entity(entity);
     }
 
-    pub fn insert_component(&mut self, entity: &E, component_id: &ComponentId) {
+    pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         self.world_channel
-            .host_insert_component(entity, component_id);
+            .host_insert_component(entity, component_kind);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component_id: &ComponentId) {
+    pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         self.world_channel
-            .host_remove_component(entity, component_id);
+            .host_remove_component(entity, component_kind);
     }
 
     pub fn scope_has_entity(&self, entity: &E) -> bool {
@@ -88,7 +93,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
     pub fn queue_entity_message(
         &mut self,
         entities: Vec<E>,
-        channel: &ChannelId,
+        channel: &ChannelKind,
         message: Box<dyn Message>,
     ) {
         self.world_channel
@@ -223,7 +228,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     pub fn write_actions<W: WorldRefType<E>>(
         &mut self,
-        components: &Components,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
@@ -298,7 +303,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
     #[allow(clippy::too_many_arguments)]
     fn write_action<W: WorldRefType<E>>(
         &mut self,
-        components: &Components,
+        component_kinds: &ComponentKinds,
         world: &W,
         world_record: &WorldRecord<E>,
         packet_index: &PacketIndex,
@@ -481,7 +486,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     fn warn_overflow_action(
         &self,
-        components: &Components,
+        component_kinds: &ComponentKinds,
         world_record: &WorldRecord<E>,
         bits_needed: u16,
         bits_free: u16,
@@ -511,8 +516,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                     "Packet Write Error: Blocking overflow detected! Entity Spawn message with Components `{component_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
                 )
             }
-            EntityActionEvent::InsertComponent(_entity, component_id) => {
-                let component_name = components.id_to_name(component_id);
+            EntityActionEvent::InsertComponent(_entity, component_kind) => {
+                let component_name = components.id_to_name(component_kind);
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
                 )
@@ -527,7 +532,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
     pub fn write_updates<W: WorldRefType<E>>(
         &mut self,
-        components: &Components,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
@@ -581,7 +586,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
     /// Only component values that changed in the internal (naia's) host world will be written
     fn write_update<W: WorldRefType<E>>(
         &mut self,
-        components: &Components,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         world: &W,
         world_record: &WorldRecord<E>,

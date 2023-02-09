@@ -3,16 +3,16 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{ChannelId, KeyGenerator, Message, MessageManager};
+use naia_shared::{ChannelKind, KeyGenerator, Message, MessageManager};
 
 type MessageHandle = u16;
 
 pub struct EntityMessageWaitlist<E: Copy + Eq + Hash> {
     message_handle_store: KeyGenerator<MessageHandle>,
-    messages: HashMap<MessageHandle, (Vec<E>, ChannelId, Box<dyn Message>)>,
+    messages: HashMap<MessageHandle, (Vec<E>, ChannelKind, Box<dyn Message>)>,
     waiting_entities: HashMap<E, HashSet<MessageHandle>>,
     in_scope_entities: HashSet<E>,
-    ready_messages: Vec<(ChannelId, Box<dyn Message>)>,
+    ready_messages: Vec<(ChannelKind, Box<dyn Message>)>,
 }
 
 impl<E: Copy + Eq + Hash> Default for EntityMessageWaitlist<E> {
@@ -31,7 +31,7 @@ impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
     pub fn queue_message(
         &mut self,
         entities: Vec<E>,
-        channel: &ChannelId,
+        channel: &ChannelKind,
         message: Box<dyn Message>,
     ) {
         let new_handle = self.message_handle_store.generate();

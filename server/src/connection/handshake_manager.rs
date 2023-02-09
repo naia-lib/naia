@@ -2,7 +2,7 @@ use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
 use ring::{hmac, rand};
 
-use naia_shared::Messages;
+use naia_shared::MessageKinds;
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BitReader, BitWriter, ConnectionConfig, FakeEntityConverter,
     Instant, KeyGenerator, Message, PacketType, PropertyMutate, PropertyMutator, Replicate, Serde,
@@ -73,7 +73,7 @@ impl HandshakeManager {
     // Step 3 of Handshake
     pub fn recv_connect_request(
         &mut self,
-        messages: &Messages,
+        message_kinds: &MessageKinds,
         address: &SocketAddr,
         reader: &mut BitReader,
     ) -> HandshakeResult {

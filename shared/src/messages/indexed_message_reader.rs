@@ -2,7 +2,8 @@ use std::marker::PhantomData;
 
 use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
-use crate::{Messages, messages::message_channel::ChannelReader, types::MessageIndex};
+use crate::messages::message_kinds::MessageKinds;
+use crate::{messages::message_channel::ChannelReader, types::MessageIndex};
 
 pub struct IndexedMessageReader<P> {
     phantom_p: PhantomData<P>,
@@ -10,7 +11,7 @@ pub struct IndexedMessageReader<P> {
 
 impl<P> IndexedMessageReader<P> {
     pub fn read_messages(
-        messages: &Messages,
+        message_kinds: &MessageKinds,
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<Vec<(MessageIndex, P)>, SerdeErr> {
@@ -23,7 +24,8 @@ impl<P> IndexedMessageReader<P> {
                 break;
             }
 
-            let id_w_msg = Self::read_message(messages, channel_reader, reader, &last_read_id)?;
+            let id_w_msg =
+                Self::read_message(message_kinds, channel_reader, reader, &last_read_id)?;
             last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
@@ -32,12 +34,12 @@ impl<P> IndexedMessageReader<P> {
     }
 
     fn read_message(
-        messages: &Messages,
+        message_kinds: &MessageKinds,
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
         last_read_id: &Option<MessageIndex>,
     ) -> Result<(MessageIndex, P), SerdeErr> {
-        let message_id: MessageIndex = if let Some(last_id) = last_read_id {
+        let message_index: MessageIndex = if let Some(last_id) = last_read_id {
             let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
             last_id.wrapping_add(id_diff)
         } else {
@@ -46,8 +48,8 @@ impl<P> IndexedMessageReader<P> {
         };
 
         // read payload
-        let new_message = channel_reader.read(messages, reader)?;
+        let new_message = channel_reader.read(message_kinds, reader)?;
 
-        Ok((message_id, new_message))
+        Ok((message_index, new_message))
     }
 }

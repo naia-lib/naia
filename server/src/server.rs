@@ -13,7 +13,7 @@ use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
-    BigMap, BitWriter, Channel, ChannelId, Channels, ComponentId, Components,
+    BigMap, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, Message, PacketType,
     PropertyMutator, Protocol, Replicate, Serde, StandardHeader, Tick, Timer, WorldMutType,
     WorldRefType,
@@ -74,7 +74,9 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Create a new Server
-    pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
+    pub fn new(server_config: ServerConfig, mut protocol: Protocol) -> Self {
+        protocol.lock();
+
         let socket = Socket::new(&protocol.socket);
 
         let tick_manager = { protocol.tick_interval.map(TickManager::new) };
@@ -231,7 +233,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         message: &M,
     ) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(user_key, &Channels::type_to_id::<C>(), cloned_message);
+        self.send_message_inner(user_key, &ChannelKinds::type_to_id::<C>(), cloned_message);
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -239,10 +241,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     fn send_message_inner(
         &mut self,
         user_key: &UserKey,
-        channel_id: &ChannelId,
+        channel_kind: &ChannelKind,
         message: Box<dyn Message>,
     ) {
-        if !Channels::channel(channel_id).can_send_to_client() {
+        if !ChannelKinds::channel(channel_kind).can_send_to_client() {
             panic!("Cannot send message to Client on this Channel");
         }
 
@@ -267,19 +269,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         connection
                             .base
                             .message_manager
-                            .send_message(channel_id, message);
+                            .send_message(channel_kind, message);
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
-                        connection
-                            .entity_manager
-                            .queue_entity_message(entities, channel_id, message);
+                        connection.entity_manager.queue_entity_message(
+                            entities,
+                            channel_kind,
+                            message,
+                        );
                     }
                 } else {
                     connection
                         .base
                         .message_manager
-                        .send_message(channel_id, message);
+                        .send_message(channel_kind, message);
                 }
             }
         }
@@ -290,10 +294,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.broadcast_message_inner(&Channels::type_to_id::<C>(), Box::new(message));
     }
 
-    fn broadcast_message_inner(&mut self, channel_id: &ChannelId, message: Box<dyn Message>) {
+    fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
         self.user_keys()
             .iter()
-            .for_each(|user_key| self.send_message_inner(user_key, channel_id, message.clone()))
+            .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
     }
 
     // Updates
@@ -658,7 +662,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
     ) -> Option<R> {
         // get component key from type
-        let component_id = Components::type_to_kind::<R>();
+        let component_kind = ComponentKinds::type_to_kind::<R>();
 
         // clean up component on all connections
 
@@ -668,11 +672,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // remove component from user connection
             user_connection
                 .entity_manager
-                .remove_component(entity, &component_id);
+                .remove_component(entity, &component_kind);
         }
 
         // cleanup all other loose ends
-        self.component_cleanup(entity, &component_id);
+        self.component_cleanup(entity, &component_kind);
 
         // remove from world
         world.remove_component::<R>(entity)
@@ -812,14 +816,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Sends a message to all connected users in a given Room using a given channel
     pub(crate) fn room_broadcast_message(
         &mut self,
-        channel_id: &ChannelId,
+        channel_kind: &ChannelKind,
         message: Box<dyn Message>,
         room_key: &RoomKey,
     ) {
         if let Some(room) = self.rooms.get(room_key) {
             let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
             for user_key in &user_keys {
-                self.send_message_inner(user_key, channel_id, message.clone())
+                self.send_message_inner(user_key, channel_kind, message.clone())
             }
         }
     }
@@ -1281,7 +1285,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         component_ref.set_mutator(&prop_mutator);
     }
 
-    fn component_cleanup(&mut self, entity: &E, component_kind: &ComponentId) {
+    fn component_cleanup(&mut self, entity: &E, component_kind: &ComponentKind) {
         self.world_record.remove_component(entity, component_kind);
         self.diff_handler
             .as_ref()

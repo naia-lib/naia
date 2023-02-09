@@ -157,7 +157,7 @@ impl App {
             info!("despawned entity");
             // TODO: Sync up Predicted & Confirmed entities
         }
-        for (_entity, _component_id) in events.read::<InsertComponentEvent>() {
+        for (_entity, _component_kind) in events.read::<InsertComponentEvent>() {
             info!("inserted component");
             // TODO: Sync up Predicted & Confirmed entities
         }

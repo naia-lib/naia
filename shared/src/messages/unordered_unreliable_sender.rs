@@ -3,7 +3,8 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::{Messages, messages::named::Named, types::MessageIndex};
+use crate::messages::message_kinds::MessageKinds;
+use crate::{messages::named::Named, types::MessageIndex};
 
 use super::message_channel::{ChannelSender, ChannelWriter};
 
@@ -20,12 +21,12 @@ impl<P: Named> UnorderedUnreliableSender<P> {
 
     fn write_message<S: BitWrite>(
         &self,
-        messages: &Messages,
+        message_kinds: &MessageKinds,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut S,
         message: &P,
     ) {
-        channel_writer.write(messages, bit_writer, message);
+        channel_writer.write(message_kinds, bit_writer, message);
     }
 
     fn warn_overflow(&self, message: &P, bits_needed: u16, bits_free: u16) {
@@ -51,7 +52,7 @@ impl<P: Send + Sync + Named> ChannelSender<P> for UnorderedUnreliableSender<P> {
 
     fn write_messages(
         &mut self,
-        messages: &Messages,
+        message_kinds: &MessageKinds,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
@@ -64,7 +65,7 @@ impl<P: Send + Sync + Named> ChannelSender<P> for UnorderedUnreliableSender<P> {
             // Check that we can write the next message
             let message = self.outgoing_messages.front().unwrap();
             let mut counter = bit_writer.counter();
-            self.write_message(messages, channel_writer, &mut counter, message);
+            self.write_message(message_kinds, channel_writer, &mut counter, message);
 
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
@@ -82,7 +83,7 @@ impl<P: Send + Sync + Named> ChannelSender<P> for UnorderedUnreliableSender<P> {
             true.ser(bit_writer);
 
             // write data
-            self.write_message(messages, channel_writer, bit_writer, &message);
+            self.write_message(message_kinds, channel_writer, bit_writer, &message);
 
             // pop message we've written
             self.outgoing_messages.pop_front();

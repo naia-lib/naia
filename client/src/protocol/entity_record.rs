@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use naia_shared::{ComponentId, EntityHandle, NetEntity};
+use naia_shared::{ComponentKind, EntityHandle, NetEntity};
 
 pub struct EntityRecord {
     pub net_entity: NetEntity,
-    pub component_kinds: HashSet<ComponentId>,
+    pub component_kinds: HashSet<ComponentKind>,
     pub entity_handle: EntityHandle,
 }
 

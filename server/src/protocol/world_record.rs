@@ -1,8 +1,8 @@
-use std::{collections::HashMap, hash::Hash};
 use std::any::TypeId;
+use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
-    BigMap, ComponentId, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
+    BigMap, ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
 };
 
 use crate::{protocol::global_entity_record::GlobalEntityRecord, room::RoomKey};
@@ -51,7 +51,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
         component_kind_set.insert(*component_type);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component_kind: &TypeId) {
+    pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }

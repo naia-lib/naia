@@ -1,7 +1,7 @@
 use std::any::TypeId;
 use std::collections::HashSet;
 
-use naia_shared::{ComponentId, EntityHandle};
+use naia_shared::{ComponentKind, EntityHandle};
 
 use crate::room::RoomKey;
 

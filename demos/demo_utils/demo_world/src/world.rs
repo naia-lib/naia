@@ -1,10 +1,12 @@
-use std::any::{Any, TypeId};
-use std::collections::HashMap;
+use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
+};
 
 use naia_shared::{
-    BigMap, ComponentId, ComponentUpdate, NetEntityHandleConverter,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
-    SerdeErr, WorldMutType, WorldRefType,
+    BigMap, ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
+    WorldRefType,
 };
 
 use super::{
@@ -19,7 +21,7 @@ use super::{
 /// It's recommended to use this only when you do not have another ECS library's
 /// own World available.
 pub struct World {
-    pub entities: BigMap<Entity, HashMap<TypeId, Box<dyn Replicate>>>,
+    pub entities: BigMap<Entity, HashMap<ComponentKind, Box<dyn Replicate>>>,
 }
 
 impl Default for World {
@@ -209,7 +211,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         &mut self,
         mutable_entity: &Entity,
         immutable_entity: &Entity,
-        component_kind: &TypeId,
+        component_kind: &ComponentKind,
     ) {
         let immutable_component_opt: Option<Box<dyn Replicate>> = {
             if let Some(immutable_component_map) = self.world.entities.get(immutable_entity) {
@@ -265,7 +267,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn remove_component_of_kind(
         &mut self,
         entity: &Entity,
-        component_kind: &TypeId,
+        component_kind: &ComponentKind,
     ) -> Option<Box<dyn Replicate>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             return component_map.remove(component_kind);

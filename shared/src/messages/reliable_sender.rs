@@ -4,7 +4,8 @@ use naia_serde::BitWriter;
 
 use naia_socket_shared::Instant;
 
-use crate::{Messages, messages::indexed_message_writer::IndexedMessageWriter, types::MessageIndex};
+use crate::messages::message_kinds::MessageKinds;
+use crate::{messages::indexed_message_writer::IndexedMessageWriter, types::MessageIndex};
 
 use super::message_channel::{ChannelSender, ChannelWriter};
 
@@ -12,7 +13,7 @@ use super::message_channel::{ChannelSender, ChannelWriter};
 pub struct ReliableSender<P: Send + Sync> {
     rtt_resend_factor: f32,
     sending_messages: VecDeque<Option<(MessageIndex, Option<Instant>, P)>>,
-    next_send_message_id: MessageIndex,
+    next_send_message_index: MessageIndex,
     outgoing_messages: VecDeque<(MessageIndex, P)>,
 }
 
@@ -20,7 +21,7 @@ impl<P: Send + Sync> ReliableSender<P> {
     pub fn new(rtt_resend_factor: f32) -> Self {
         Self {
             rtt_resend_factor,
-            next_send_message_id: 0,
+            next_send_message_index: 0,
             sending_messages: VecDeque::new(),
             outgoing_messages: VecDeque::new(),
         }
@@ -50,7 +51,7 @@ impl<P: Send + Sync> ReliableSender<P> {
     // Called when a message has been delivered
     // If this message has never been delivered before, will clear from the outgoing
     // buffer and return the message previously there
-    pub fn deliver_message(&mut self, message_id: &MessageIndex) -> Option<P> {
+    pub fn deliver_message(&mut self, message_index: &MessageIndex) -> Option<P> {
         let mut index = 0;
         let mut found = false;
 
@@ -59,8 +60,8 @@ impl<P: Send + Sync> ReliableSender<P> {
                 return None;
             }
 
-            if let Some(Some((old_message_id, _, _))) = self.sending_messages.get(index) {
-                if *message_id == *old_message_id {
+            if let Some(Some((old_message_index, _, _))) = self.sending_messages.get(index) {
+                if *message_index == *old_message_index {
                     found = true;
                 }
             }
@@ -84,14 +85,14 @@ impl<P: Send + Sync> ReliableSender<P> {
 impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
     fn send_message(&mut self, message: P) {
         self.sending_messages
-            .push_back(Some((self.next_send_message_id, None, message)));
-        self.next_send_message_id = self.next_send_message_id.wrapping_add(1);
+            .push_back(Some((self.next_send_message_index, None, message)));
+        self.next_send_message_index = self.next_send_message_index.wrapping_add(1);
     }
 
     fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
 
-        for (message_id, last_sent_opt, message) in self.sending_messages.iter_mut().flatten() {
+        for (message_index, last_sent_opt, message) in self.sending_messages.iter_mut().flatten() {
             let mut should_send = false;
             if let Some(last_sent) = last_sent_opt {
                 if last_sent.elapsed() >= resend_duration {
@@ -102,7 +103,7 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
             }
             if should_send {
                 self.outgoing_messages
-                    .push_back((*message_id, message.clone()));
+                    .push_back((*message_index, message.clone()));
                 *last_sent_opt = Some(now.clone());
             }
         }
@@ -114,13 +115,13 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
 
     fn write_messages(
         &mut self,
-        messages: &Messages,
+        message_kinds: &MessageKinds,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
         IndexedMessageWriter::write_messages(
-            messages,
+            message_kinds,
             &mut self.outgoing_messages,
             channel_writer,
             bit_writer,

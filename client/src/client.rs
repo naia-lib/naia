@@ -9,10 +9,10 @@ use bevy_ecs::prelude::Resource;
 use naia_client_socket::Socket;
 
 pub use naia_shared::{
-    BitReader, BitWriter, Channel, ChannelId, Channels, ConnectionConfig, EntityDoesNotExistError,
-    EntityHandle, EntityHandleConverter, Message, PacketType, PingConfig, PingIndex, Protocol,
-    Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+    BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, PacketType, PingConfig,
+    PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -46,7 +46,9 @@ pub struct Client<E: Copy + Eq + Hash> {
 
 impl<E: Copy + Eq + Hash> Client<E> {
     /// Create a new Client
-    pub fn new(client_config: ClientConfig, protocol: Protocol) -> Self {
+    pub fn new(client_config: ClientConfig, mut protocol: Protocol) -> Self {
+        protocol.lock();
+
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
         let tick_manager = protocol
@@ -186,11 +188,11 @@ impl<E: Copy + Eq + Hash> Client<E> {
     /// Queues up an Message to be sent to the Server
     pub fn send_message<C: Channel + 'static, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(&Channels::type_to_id::<C>(), cloned_message);
+        self.send_message_inner(&ChannelKinds::type_to_id::<C>(), cloned_message);
     }
 
-    fn send_message_inner(&mut self, channel_id: &ChannelId, message: Box<dyn Message>) {
-        let channel_settings = Channels::channel(channel_id);
+    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+        let channel_settings = ChannelKinds::channel(channel_kind);
         if !channel_settings.can_send_to_server() {
             panic!("Cannot send message to Server on this Channel");
         }
@@ -204,14 +206,14 @@ impl<E: Copy + Eq + Hash> Client<E> {
                         .tick_buffer
                         .as_mut()
                         .expect("connection does not have a tick buffer")
-                        .send_message(&client_tick, channel_id, message);
+                        .send_message(&client_tick, channel_kind, message);
                 }
             }
         } else if let Some(connection) = &mut self.server_connection {
             connection
                 .base
                 .message_manager
-                .send_message(channel_id, message);
+                .send_message(channel_kind, message);
         }
     }
 

@@ -40,6 +40,7 @@ mod wrapping_number;
 
 pub use backends::{Timer, Timestamp};
 pub use component::{
+    component_kinds::{ComponentKind, ComponentKinds},
     component_update::ComponentUpdate,
     diff_mask::DiffMask,
     property::Property,
@@ -49,7 +50,7 @@ pub use component::{
         ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
         ReplicaRefWrapper,
     },
-    replicate::{Components, Replicate, ReplicateBuilder},
+    replicate::{Replicate, ReplicateBuilder},
 };
 pub use connection::{
     ack_manager::AckManager,
@@ -77,11 +78,10 @@ pub use entity::{
     net_entity::NetEntity,
 };
 pub use messages::{
-    channel_config::{
-        Channel, ChannelDirection, ChannelMode, Channels, ReliableSettings, TickBufferSettings,
-    },
-    message::{Message, MessageBuilder, Messages},
+    channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
+    message::{Message, MessageBuilder},
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
+    message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     message_receivable::MessageReceivable,
     named::Named,
@@ -99,8 +99,6 @@ pub use bigmap::{BigMap, BigMapKey};
 pub use constants::MESSAGE_HISTORY_SIZE;
 pub use key_generator::KeyGenerator;
 pub use protocol::{Plugin, Protocol};
-pub use types::{
-    ChannelId, ComponentId, HostType, MessageId, MessageIndex, PacketIndex, ShortMessageIndex, Tick,
-};
+pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

@@ -31,7 +31,7 @@ pub fn message_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             pub use std::any::{Any, TypeId};
             pub use naia_shared::{
                 Named, EntityHandle, Message, BitWrite, NetEntityHandleConverter,
-                EntityProperty, MessageId, Messages, Serde, MessageBuilder, BitReader, SerdeErr
+                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr
             };
             use super::*;
 
@@ -167,7 +167,7 @@ fn write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 
     quote! {
-        fn write(&self, messages: &Messages, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+        fn write(&self, message_kinds: &MessageKinds, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
             messages.type_id_to_kind(&self.type_of()).ser(bit_writer);
             #field_writes
         }

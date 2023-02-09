@@ -1,14 +1,14 @@
 use naia_serde::{BitReader, OwnedBitReader};
 
-use crate::types::ComponentId;
+use crate::component::component_kinds::ComponentKind;
 
 pub struct ComponentUpdate {
-    pub kind: ComponentId,
+    pub kind: ComponentKind,
     buffer: OwnedBitReader,
 }
 
 impl ComponentUpdate {
-    pub fn new(kind: ComponentId, buffer: OwnedBitReader) -> Self {
+    pub fn new(kind: ComponentKind, buffer: OwnedBitReader) -> Self {
         Self { kind, buffer }
     }
 

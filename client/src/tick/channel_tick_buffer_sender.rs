@@ -115,7 +115,7 @@ impl ChannelTickBufferSender {
             true.ser(bit_writer);
 
             // write data
-            let message_ids = self.write_message(
+            let message_indexs = self.write_message(
                 channel_writer,
                 bit_writer,
                 &last_written_tick,
@@ -123,8 +123,8 @@ impl ChannelTickBufferSender {
                 &messages,
             );
             last_written_tick = *message_tick;
-            for message_id in message_ids {
-                output.push((*message_tick, message_id));
+            for message_index in message_indexs {
+                output.push((*message_tick, message_index));
             }
 
             // pop message we've written
@@ -143,7 +143,7 @@ impl ChannelTickBufferSender {
         message_tick: &Tick,
         messages: &Vec<(ShortMessageIndex, Box<dyn Message>)>,
     ) -> Vec<ShortMessageIndex> {
-        let mut message_ids = Vec::new();
+        let mut message_indexs = Vec::new();
 
         // write message tick diff
         // this is reversed (diff is always negative, but it's encoded as positive)
@@ -157,24 +157,24 @@ impl ChannelTickBufferSender {
         message_count.ser(bit_writer);
 
         let mut last_id_written: ShortMessageIndex = 0;
-        for (message_id, message) in messages {
+        for (message_index, message) in messages {
             // write message id diff
-            let id_diff = UnsignedVariableInteger::<2>::new(*message_id - last_id_written);
+            let id_diff = UnsignedVariableInteger::<2>::new(*message_index - last_id_written);
             id_diff.ser(bit_writer);
 
             // write payload
             channel_writer.write(bit_writer, message);
 
             // record id for output
-            message_ids.push(*message_id);
-            last_id_written = *message_id;
+            message_indexs.push(*message_index);
+            last_id_written = *message_index;
         }
 
-        message_ids
+        message_indexs
     }
 
-    pub fn notify_message_delivered(&mut self, tick: &Tick, message_id: &ShortMessageIndex) {
-        self.sending_messages.remove_message(tick, message_id);
+    pub fn notify_message_delivered(&mut self, tick: &Tick, message_index: &ShortMessageIndex) {
+        self.sending_messages.remove_message(tick, message_index);
     }
 
     fn warn_overflow(
@@ -223,8 +223,8 @@ impl MessageMap {
         output
     }
 
-    pub fn remove(&mut self, message_id: &ShortMessageIndex) {
-        if let Some(container) = self.list.get_mut(*message_id as usize) {
+    pub fn remove(&mut self, message_index: &ShortMessageIndex) {
+        if let Some(container) = self.list.get_mut(*message_index as usize) {
             *container = None;
         }
     }
@@ -297,7 +297,7 @@ impl OutgoingMessages {
         self.buffer.iter()
     }
 
-    pub fn remove_message(&mut self, tick: &Tick, message_id: &ShortMessageIndex) {
+    pub fn remove_message(&mut self, tick: &Tick, message_index: &ShortMessageIndex) {
         let mut index = self.buffer.len();
 
         if index == 0 {
@@ -313,7 +313,7 @@ impl OutgoingMessages {
             if let Some((old_tick, message_map)) = self.buffer.get_mut(index) {
                 if *old_tick == *tick {
                     // found it!
-                    message_map.remove(message_id);
+                    message_map.remove(message_index);
                     //info!("removed delivered message! tick: {}, msg_id: {}", tick, msg_id);
                     if message_map.len() == 0 {
                         remove = true;

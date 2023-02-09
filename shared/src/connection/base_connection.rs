@@ -2,7 +2,11 @@ use std::net::SocketAddr;
 
 use naia_serde::{BitWriter, Serde};
 
-use crate::{backends::Timer, Channels, messages::message_manager::MessageManager, types::{HostType, PacketIndex}};
+use crate::{
+    backends::Timer,
+    messages::{channel_kinds::ChannelKinds, message_manager::MessageManager},
+    types::{HostType, PacketIndex},
+};
 
 use super::{
     ack_manager::AckManager, connection_config::ConnectionConfig,
@@ -25,14 +29,14 @@ impl BaseConnection {
         address: SocketAddr,
         host_type: HostType,
         connection_config: &ConnectionConfig,
-        channels: &Channels,
+        channel_kinds: &ChannelKinds,
     ) -> Self {
         BaseConnection {
             address,
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
-            message_manager: MessageManager::new(host_type, channels),
+            message_manager: MessageManager::new(host_type, channel_kinds),
         }
     }
 

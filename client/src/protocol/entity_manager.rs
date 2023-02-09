@@ -4,7 +4,7 @@ use std::{
 };
 
 use naia_shared::{
-    BigMap, BitReader, ComponentId, Components, EntityAction, EntityActionReceiver,
+    BigMap, BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver,
     EntityActionType, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex,
     NetEntity, NetEntityHandleConverter, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger,
     WorldMutType,
@@ -20,7 +20,7 @@ pub struct EntityManager<E: Copy + Eq + Hash> {
     local_to_world_entity: HashMap<NetEntity, E>,
     pub handle_entity_map: BigMap<EntityHandle, E>,
     receiver: EntityActionReceiver<NetEntity>,
-    received_components: HashMap<(NetEntity, ComponentId), Box<dyn Replicate>>,
+    received_components: HashMap<(NetEntity, ComponentKind), Box<dyn Replicate>>,
 }
 
 impl<E: Copy + Eq + Hash> Default for EntityManager<E> {
@@ -37,20 +37,20 @@ impl<E: Copy + Eq + Hash> Default for EntityManager<E> {
 
 impl<E: Copy + Eq + Hash> EntityManager<E> {
     // Action Reader
-    fn read_message_id(
+    fn read_message_index(
         reader: &mut BitReader,
-        last_id_opt: &mut Option<MessageIndex>,
+        last_index_opt: &mut Option<MessageIndex>,
     ) -> Result<MessageIndex, SerdeErr> {
-        let current_id = if let Some(last_id) = last_id_opt {
+        let current_index = if let Some(last_index) = last_index_opt {
             // read diff
-            let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
-            last_id.wrapping_add(id_diff)
+            let index_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
+            last_index.wrapping_add(index_diff)
         } else {
             // read message id
             MessageIndex::de(reader)?
         };
-        *last_id_opt = Some(current_id);
-        Ok(current_id)
+        *last_index_opt = Some(current_index);
+        Ok(current_index)
     }
 
     /// Read and process incoming actions.
@@ -90,7 +90,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
     ) -> Result<(), SerdeErr> {
-        let action_id = Self::read_message_id(reader, last_read_id)?;
+        let action_id = Self::read_message_index(reader, last_read_id)?;
 
         let action_type = EntityActionType::de(reader)?;
 
@@ -104,7 +104,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                 let components_num = UnsignedVariableInteger::<3>::de(reader)?.get();
                 let mut component_kinds = Vec::new();
                 for _ in 0..components_num {
-                    let new_component = Components::read(reader, self)?;
+                    let new_component = ComponentKinds::read(reader, self)?;
                     let new_component_kind = new_component.dyn_ref().kind();
                     self.received_components
                         .insert((net_entity, new_component_kind), new_component);
@@ -128,7 +128,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
             EntityActionType::InsertComponent => {
                 // read all data
                 let net_entity = NetEntity::de(reader)?;
-                let new_component = Components::read(reader, self)?;
+                let new_component = ComponentKinds::read(reader, self)?;
                 let new_component_kind = new_component.dyn_ref().kind();
 
                 self.receiver.buffer_action(
@@ -142,7 +142,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
             EntityActionType::RemoveComponent => {
                 // read all data
                 let net_entity = NetEntity::de(reader)?;
-                let component_kind = ComponentId::de(reader)?;
+                let component_kind = ComponentKind::de(reader)?;
 
                 self.receiver.buffer_action(
                     action_id,
@@ -325,7 +325,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                 break;
             }
 
-            let component_update = Components::read_create_update(reader)?;
+            let component_update = ComponentKinds::read_create_update(reader)?;
             let component_kind = component_update.kind;
 
             if let Some(world_entity) = self.local_to_world_entity.get(&net_entity_id) {

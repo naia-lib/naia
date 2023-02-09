@@ -3,11 +3,13 @@ use std::time::Duration;
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
 use crate::{
-    component::replicate::{Components, Replicate},
+    component::{component_kinds::ComponentKinds, replicate::Replicate},
     connection::compression_config::CompressionConfig,
     messages::{
-        channel_config::{Channel, ChannelDirection, ChannelMode, ChannelSettings, Channels},
-        message::{Message, Messages},
+        channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
+        channel_kinds::ChannelKinds,
+        message::Message,
+        message_kinds::MessageKinds,
     },
 };
 
@@ -18,9 +20,9 @@ pub trait Plugin {
 
 // Protocol
 pub struct Protocol {
-    pub channels: Channels,
-    pub messages: Messages,
-    pub components: Components,
+    pub channel_kinds: ChannelKinds,
+    pub message_kinds: MessageKinds,
+    pub component_kinds: ComponentKinds,
     /// Used to configure the underlying socket
     pub socket: SocketConfig,
     /// The duration between each tick
@@ -33,9 +35,9 @@ pub struct Protocol {
 impl Protocol {
     pub fn new() -> Protocol {
         Protocol {
-            channels: Channels::new(),
-            messages: Messages::new(),
-            components: Components::new(),
+            channel_kinds: ChannelKinds::new(),
+            message_kinds: MessageKinds::new(),
+            component_kinds: ComponentKinds::new(),
             socket: SocketConfig::new(None, None),
             tick_interval: None,
             compression: None,
@@ -79,19 +81,20 @@ impl Protocol {
         mode: ChannelMode,
     ) -> &mut Self {
         self.check_lock();
-        self.channels.add_channel::<C>(ChannelSettings::new(mode, direction));
+        self.channel_kinds
+            .add_channel::<C>(ChannelSettings::new(mode, direction));
         self
     }
 
     pub fn add_message<M: Message + 'static>(&mut self) -> &mut Self {
         self.check_lock();
-        self.messages.add_message::<M>();
+        self.message_kinds.add_message::<M>();
         self
     }
 
     pub fn add_component<C: Replicate>(&mut self) -> &mut Self {
         self.check_lock();
-        self.components.add_component::<C>();
+        self.component_kinds.add_component::<C>();
         self
     }
 
@@ -106,5 +109,3 @@ impl Protocol {
         }
     }
 }
-
-

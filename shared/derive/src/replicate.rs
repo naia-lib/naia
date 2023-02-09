@@ -81,16 +81,16 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::{Any, TypeId}};
             use naia_shared::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
-                ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentId, Named,
+                ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,
-                EntityProperty, EntityHandle, Replicate, Property, Components, ReplicateBuilder
+                EntityProperty, EntityHandle, Replicate, Property, ComponentKinds, ReplicateBuilder
             };
             use super::*;
 
             #property_enum_definition
 
             struct #builder_name {
-                component_id: ComponentId,
+                component_kind: ComponentKind,
             }
             impl ReplicateBuilder for #builder_name {
                 #read_method
@@ -595,8 +595,8 @@ pub fn new_complete_method(
 
 pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
     quote! {
-        fn create_builder(component_id: ComponentId) -> Box<dyn ReplicateBuilder> where Self:Sized {
-            Box::new(#builder_name { component_id })
+        fn create_builder(component_kind: ComponentKind) -> Box<dyn ReplicateBuilder> where Self:Sized {
+            Box::new(#builder_name { component_kind })
         }
     }
 }
@@ -733,7 +733,7 @@ pub fn read_create_update_method(properties: &[Property]) -> TokenStream {
             let (length, buffer) = update_writer.flush();
             let owned_reader = OwnedBitReader::new(&buffer[..length]);
 
-            return Ok(ComponentUpdate::new(self.component_id, owned_reader));
+            return Ok(ComponentUpdate::new(self.component_kind, owned_reader));
         }
     }
 }
@@ -808,7 +808,7 @@ fn write_method(properties: &[Property], struct_type: &StructType) -> TokenStrea
     }
 
     quote! {
-        fn write(&self, components: &Components, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+        fn write(&self, component_kinds: &ComponentKinds, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
             components.type_id_to_kind(&self.type_of()).ser(bit_writer);
             #property_writes
         }

@@ -2,22 +2,23 @@ use std::collections::HashMap;
 
 use crate::Events;
 use naia_shared::{
-    BitReader, ChannelId, ChannelMode, ChannelReader, Channels, Message, Serde, SerdeErr, Tick,
+    BitReader, ChannelKind, ChannelKinds, ChannelMode, ChannelReader, Message, Serde, SerdeErr,
+    Tick,
 };
 
 use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
 
 pub struct TickBufferReceiver {
-    channel_receivers: HashMap<ChannelId, ChannelTickBufferReceiver>,
+    channel_receivers: HashMap<ChannelKind, ChannelTickBufferReceiver>,
 }
 
 impl TickBufferReceiver {
     pub fn new() -> Self {
         // initialize receivers
         let mut channel_receivers = HashMap::new();
-        for (channel_id, channel_settings) in Channels::channels() {
+        for (channel_kind, channel_settings) in ChannelKinds::channels() {
             if let ChannelMode::TickBuffered(_) = channel_settings.mode {
-                channel_receivers.insert(channel_id, ChannelTickBufferReceiver::new());
+                channel_receivers.insert(channel_kind, ChannelTickBufferReceiver::new());
             }
         }
 
@@ -41,7 +42,7 @@ impl TickBufferReceiver {
             }
 
             // read channel index
-            let channel_index = ChannelId::de(reader)?;
+            let channel_index = ChannelKind::de(reader)?;
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_index).unwrap();
@@ -55,11 +56,11 @@ impl TickBufferReceiver {
     pub fn receive_messages(
         &mut self,
         host_tick: &Tick,
-    ) -> Vec<(ChannelId, Vec<Box<dyn Message>>)> {
+    ) -> Vec<(ChannelKind, Vec<Box<dyn Message>>)> {
         let mut output = Vec::new();
-        for (channel_id, channel) in &mut self.channel_receivers {
+        for (channel_kind, channel) in &mut self.channel_receivers {
             let messages = channel.receive_messages(host_tick);
-            output.push((*channel_id, messages));
+            output.push((*channel_kind, messages));
         }
         output
     }

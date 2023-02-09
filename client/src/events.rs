@@ -1,9 +1,9 @@
-use std::{collections::HashMap, marker::PhantomData, net::SocketAddr, vec::IntoIter};
 use std::any::Any;
+use std::{collections::HashMap, marker::PhantomData, net::SocketAddr, vec::IntoIter};
 
 use naia_shared::{
-    Channel, ChannelId, Channels, ComponentId, Components, Message, MessageId, MessageReceivable,
-    Messages, Replicate, Tick,
+    Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, Message, MessageKind,
+    MessageKinds, MessageReceivable, Replicate, Tick,
 };
 
 use crate::NaiaClientError;
@@ -14,12 +14,12 @@ pub struct Events<E: Copy> {
     disconnections: Vec<SocketAddr>,
     ticks: Vec<()>,
     errors: Vec<NaiaClientError>,
-    messages: HashMap<ChannelId, HashMap<MessageId, Vec<Box<dyn Message>>>>,
+    messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>>,
     spawns: Vec<E>,
     despawns: Vec<E>,
-    inserts: Vec<(E, ComponentId)>,
-    removes: HashMap<ComponentId, Vec<(E, Box<dyn Replicate>)>>,
-    updates: Vec<(Tick, E, ComponentId)>,
+    inserts: Vec<(E, ComponentKind)>,
+    removes: HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>,
+    updates: Vec<(Tick, E, ComponentKind)>,
     empty: bool,
 }
 
@@ -72,17 +72,17 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_message(&mut self, channel_id: &ChannelId, message: Box<dyn Message>) {
-        if !self.messages.contains_key(&channel_id) {
-            self.messages.insert(*channel_id, HashMap::new());
+    pub(crate) fn push_message(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+        if !self.messages.contains_key(&channel_kind) {
+            self.messages.insert(*channel_kind, HashMap::new());
         }
-        let channel_map = self.messages.get_mut(&channel_id).unwrap();
+        let channel_map = self.messages.get_mut(&channel_kind).unwrap();
 
-        let message_id: MessageId = message.kind();
-        if !channel_map.contains_key(&message_id) {
-            channel_map.insert(message_id, Vec::new());
+        let message_kind: MessageKind = message.kind();
+        if !channel_map.contains_key(&message_kind) {
+            channel_map.insert(message_kind, Vec::new());
         }
-        let list = channel_map.get_mut(&message_id).unwrap();
+        let list = channel_map.get_mut(&message_kind).unwrap();
         list.push(message);
         self.empty = false;
     }
@@ -107,23 +107,23 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_insert(&mut self, entity: E, component_id: ComponentId) {
-        self.inserts.push((entity, component_id));
+    pub(crate) fn push_insert(&mut self, entity: E, component_kind: ComponentKind) {
+        self.inserts.push((entity, component_kind));
         self.empty = false;
     }
 
     pub(crate) fn push_remove(&mut self, entity: E, component: Box<dyn Replicate>) {
-        let component_id: ComponentId = component.kind();
-        if !self.removes.contains_key(&component_id) {
-            self.removes.insert(component_id, Vec::new());
+        let component_kind: ComponentKind = component.kind();
+        if !self.removes.contains_key(&component_kind) {
+            self.removes.insert(component_kind, Vec::new());
         }
-        let list = self.removes.get_mut(&component_id).unwrap();
+        let list = self.removes.get_mut(&component_kind).unwrap();
         list.push((entity, component));
         self.empty = false;
     }
 
-    pub(crate) fn push_update(&mut self, tick: Tick, entity: E, component_id: ComponentId) {
-        self.updates.push((tick, entity, component_id));
+    pub(crate) fn push_update(&mut self, tick: Tick, entity: E, component_kind: ComponentKind) {
+        self.updates.push((tick, entity, component_kind));
         self.empty = false;
     }
 
@@ -214,14 +214,17 @@ impl<E: Copy, C: Channel + 'static, M: Message + 'static> Event<E> for MessageEv
     type Iter = IntoIter<M>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        let channel_id: ChannelId = Channels::type_to_id::<C>();
-        if let Some(mut channel_map) = events.messages.remove(&channel_id) {
-            let message_id: MessageId = Messages::type_to_id::<M>();
-            if let Some(boxed_list) = channel_map.remove(&message_id) {
+        let channel_kind: ChannelKind = ChannelKinds::type_to_id::<C>();
+        if let Some(mut channel_map) = events.messages.remove(&channel_kind) {
+            let message_kind: MessageKind = MessageKinds::type_to_id::<M>();
+            if let Some(boxed_list) = channel_map.remove(&message_kind) {
                 let mut output_list: Vec<M> = Vec::new();
 
                 for boxed_message in boxed_list {
-                    let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_message.to_boxed_any()).ok().map(|boxed_m| *boxed_m);
+                    let message: M =
+                        Box::<dyn Any + 'static>::downcast::<M>(boxed_message.to_boxed_any())
+                            .ok()
+                            .map(|boxed_m| *boxed_m);
                     output_list.push(message);
                 }
 
@@ -257,7 +260,7 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
 // Insert Event
 pub struct InsertComponentEvent;
 impl<E: Copy> Event<E> for InsertComponentEvent {
-    type Iter = IntoIter<(E, ComponentId)>;
+    type Iter = IntoIter<(E, ComponentKind)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.inserts);
@@ -273,14 +276,15 @@ impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
     type Iter = IntoIter<(E, C)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        let component_id: ComponentId = Components::type_to_kind::<C>();
-        if let Some(boxed_list) = events.removes.remove(&component_id) {
+        let component_kind: ComponentKind = ComponentKinds::type_to_kind::<C>();
+        if let Some(boxed_list) = events.removes.remove(&component_kind) {
             let mut output_list: Vec<(E, C)> = Vec::new();
 
             for (entity, boxed_component) in boxed_list {
-                let component: C = Box::<dyn Any + 'static>::downcast::<C>(boxed_component.to_boxed_any())
-                    .ok()
-                    .map(|boxed_c| *boxed_c);
+                let component: C =
+                    Box::<dyn Any + 'static>::downcast::<C>(boxed_component.to_boxed_any())
+                        .ok()
+                        .map(|boxed_c| *boxed_c);
                 output_list.push((entity, component));
             }
 
@@ -294,7 +298,7 @@ impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
 // Update Event
 pub struct UpdateComponentEvent;
 impl<E: Copy> Event<E> for UpdateComponentEvent {
-    type Iter = IntoIter<(Tick, E, ComponentId)>;
+    type Iter = IntoIter<(Tick, E, ComponentKind)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.updates);

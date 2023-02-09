@@ -126,8 +126,8 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
     pub fn receive_messages(&mut self, incoming_events: &mut Events<E>) {
         let messages = self.base.message_manager.receive_messages();
-        for (channel_id, message) in messages {
-            incoming_events.push_message(&channel_id, message);
+        for (channel_kind, message) in messages {
+            incoming_events.push_message(&channel_kind, message);
         }
     }
 
