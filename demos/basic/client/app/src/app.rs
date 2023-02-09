@@ -94,6 +94,9 @@ impl App {
                 );
             }
         }
+        for _ in events.read::<DespawnEntityEvent>() {
+            info!("deletion of Character entity");
+        }
         for (_, entity, _) in events.read::<UpdateComponentEvent>() {
             if let Some(character) = self
                 .client
@@ -118,13 +121,9 @@ impl App {
                 (*character.fullname).last,
             );
         }
-        for _ in events.read::<DespawnEntityEvent>() {
-            info!("deletion of Character entity");
-        }
         for _ in events.read::<TickEvent>() {
             //info!("tick event");
         }
-
         for error in events.read::<ErrorEvent>() {
             info!("Client Error: {}", error);
             return;

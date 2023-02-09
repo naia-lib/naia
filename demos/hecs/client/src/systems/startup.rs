@@ -1,21 +1,21 @@
 use std::collections::HashMap;
 
 use naia_hecs_client::{
-    shared::{DefaultChannels, SharedConfig},
+    shared::Protocol,
     ClientConfig, WorldWrapper as World,
 };
 
-use naia_hecs_demo_shared::protocol::Auth;
+use naia_hecs_demo_shared::Auth;
 
 use crate::app::{App, Client};
 
 pub fn app_init(
     client_config: ClientConfig,
-    shared_config: SharedConfig<DefaultChannels>,
+    protocol: Protocol,
     server_addr: &str,
     auth: Auth,
 ) -> App {
-    let mut client = Client::new(&client_config, &shared_config);
+    let mut client = Client::new(client_config, protocol);
     client.auth(auth);
     client.connect(server_addr);
 
