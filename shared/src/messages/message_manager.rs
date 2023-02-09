@@ -8,7 +8,7 @@ use crate::{
     connection::packet_notifiable::PacketNotifiable,
     messages::channel_kinds::{ChannelKind, ChannelKinds},
     types::{HostType, MessageIndex, PacketIndex},
-    Message, MessageReceivable,
+    Message,
 };
 
 use super::{
@@ -242,7 +242,7 @@ impl MessageManager {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
-            let mut messages = channel.receive_messages();
+            let messages = channel.receive_messages();
             for message in messages {
                 output.push((channel_kind.clone(), message));
             }

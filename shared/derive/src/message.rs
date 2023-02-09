@@ -28,7 +28,7 @@ pub fn message_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let gen = quote! {
         mod #module_name {
 
-            pub use std::any::{Any, TypeId};
+            pub use std::any::Any;
             pub use naia_shared::{
                 Named, EntityHandle, Message, BitWrite, NetEntityHandleConverter,
                 EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr
@@ -41,11 +41,11 @@ pub fn message_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
             }
 
             impl Message for #struct_name {
+                fn kind(&self) -> MessageKind {
+                    MessageKind::of::<#struct_name>()
+                }
                 fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
                     self
-                }
-                fn type_of(&self) -> TypeId {
-                    TypeId::of::<#struct_name>()
                 }
                 #create_builder_method
                 #has_entity_properties_method
@@ -168,7 +168,7 @@ fn write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
 
     quote! {
         fn write(&self, message_kinds: &MessageKinds, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-            messages.type_id_to_kind(&self.type_of()).ser(bit_writer);
+            self.kind().ser(message_kinds, bit_writer);
             #field_writes
         }
     }

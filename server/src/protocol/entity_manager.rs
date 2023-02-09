@@ -247,7 +247,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
             // check that we can write the next message
             let mut counter = writer.counter();
             self.write_action(
-                components,
+                component_kinds,
                 world,
                 world_record,
                 packet_index,
@@ -261,7 +261,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 // send warning about size of component being too big
                 if !*has_written {
                     self.warn_overflow_action(
-                        components,
+                        component_kinds,
                         world_record,
                         counter.bits_needed(),
                         writer.bits_free(),
@@ -286,7 +286,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
             // write data
             self.write_action(
-                components,
+                component_kinds,
                 world,
                 world_record,
                 packet_index,
@@ -327,24 +327,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                     .ser(bit_writer);
 
                 // get component list
-                let component_kinds = match world_record.component_kinds(entity) {
+                let component_kind_list = match world_record.component_kinds(entity) {
                     Some(kind_list) => kind_list,
                     None => Vec::new(),
                 };
 
                 // write number of components
                 let components_num =
-                    UnsignedVariableInteger::<3>::new(component_kinds.len() as i128);
+                    UnsignedVariableInteger::<3>::new(component_kind_list.len() as i128);
                 components_num.ser(bit_writer);
 
-                for component_kind in &component_kinds {
+                for component_kind in &component_kind_list {
                     let converter = EntityConverter::new(world_record, self);
 
                     // write component payload
                     world
                         .component_of_kind(entity, component_kind)
                         .expect("Component does not exist in World")
-                        .write(components, bit_writer, &converter);
+                        .write(component_kinds, bit_writer, &converter);
                 }
 
                 // if we are writing to this packet, add it to record
@@ -355,7 +355,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                         &mut self.sent_action_packets,
                         packet_index,
                         action_id,
-                        EntityAction::SpawnEntity(*entity, component_kinds),
+                        EntityAction::SpawnEntity(*entity, component_kind_list),
                     );
                 }
             }
@@ -413,7 +413,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                     world
                         .component_of_kind(entity, component)
                         .expect("Component does not exist in World")
-                        .write(components, bit_writer, &converter);
+                        .write(component_kinds, bit_writer, &converter);
 
                     // if we are actually writing this packet
                     if is_writing {
@@ -429,7 +429,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                     }
                 }
             }
-            EntityActionEvent::RemoveComponent(entity, component) => {
+            EntityActionEvent::RemoveComponent(entity, component_kind) => {
                 if !self.world_channel.entity_channel_is_open(entity) {
                     EntityActionType::Noop.ser(bit_writer);
 
@@ -455,7 +455,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                         .ser(bit_writer);
 
                     // write component kind
-                    component.ser(bit_writer);
+                    component_kind.ser(component_kinds, bit_writer);
 
                     // if we are writing to this packet, add it to record
                     if is_writing {
@@ -465,7 +465,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                             &mut self.sent_action_packets,
                             packet_index,
                             action_id,
-                            EntityAction::RemoveComponent(*entity, *component),
+                            EntityAction::RemoveComponent(*entity, *component_kind),
                         );
                     }
                 }
@@ -495,7 +495,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
         match action {
             EntityActionEvent::SpawnEntity(entity) => {
-                let component_kinds = match world_record.component_kinds(entity) {
+                let component_kind_list = match world_record.component_kinds(entity) {
                     Some(kind_list) => kind_list,
                     None => Vec::new(),
                 };
@@ -503,13 +503,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 let mut component_names = "".to_owned();
                 let mut added = false;
 
-                for component_kind in &component_kinds {
+                for component_kind in &component_kind_list {
                     if added {
                         component_names.push(',');
                     } else {
                         added = true;
                     }
-                    let name = components.id_to_name(component_kind);
+                    let name = component_kinds.kind_to_name(component_kind);
                     component_names.push_str(&name);
                 }
                 panic!(
@@ -517,7 +517,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 )
             }
             EntityActionEvent::InsertComponent(_entity, component_kind) => {
-                let component_name = components.id_to_name(component_kind);
+                let component_name = component_kinds.kind_to_name(component_kind);
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
                 )
@@ -566,7 +566,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
             // write Components
             self.write_update(
-                components,
+                component_kinds,
                 now,
                 world,
                 world_record,
@@ -596,8 +596,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         has_written: &mut bool,
     ) {
         let mut written_component_kinds = Vec::new();
-        let component_kinds = self.next_send_updates.get(entity).unwrap();
-        for component_kind in component_kinds {
+        let component_kind_set = self.next_send_updates.get(entity).unwrap();
+        for component_kind in component_kind_set {
             // get diff mask
             let diff_mask = self
                 .world_channel
@@ -610,7 +610,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
             // check that we can write the next component update
             let mut counter = writer.counter();
-            component_kind.ser(&mut counter);
+            component_kind.ser(component_kinds, &mut counter);
             world
                 .component_of_kind(entity, component_kind)
                 .expect("Component does not exist in World")
@@ -620,7 +620,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
                 if !*has_written {
-                    let component_name = components.id_to_name(component_kind);
+                    let component_name = component_kinds.kind_to_name(component_kind);
                     self.warn_overflow_update(
                         component_name,
                         counter.bits_needed(),
@@ -637,7 +637,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
             true.ser(writer);
 
             // write component kind
-            component_kind.ser(writer);
+            component_kind.ser(component_kinds, writer);
 
             // write data
             world

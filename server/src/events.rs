@@ -1,9 +1,6 @@
-use std::any::{Any, TypeId};
-use std::{collections::HashMap, marker::PhantomData, vec::IntoIter};
+use std::{any::Any, collections::HashMap, marker::PhantomData, vec::IntoIter};
 
-use naia_shared::{
-    Channel, ChannelKind, ChannelKinds, Message, MessageKind, MessageKinds, MessageReceivable,
-};
+use naia_shared::{Channel, ChannelKind, Message, MessageKind, MessageReceivable};
 
 use super::user::{User, UserKey};
 use crate::NaiaServerError;
@@ -13,8 +10,8 @@ pub struct Events {
     disconnections: Vec<(UserKey, User)>,
     ticks: Vec<()>,
     errors: Vec<NaiaServerError>,
-    auths: HashMap<TypeId, Vec<(UserKey, Box<dyn Message>)>>,
-    messages: HashMap<TypeId, HashMap<TypeId, Vec<(UserKey, Box<dyn Message>)>>>,
+    auths: HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>,
+    messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>>,
     empty: bool,
 }
 
@@ -160,7 +157,7 @@ impl<M: Message> Event for AuthorizationEvent<M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
-        let message_kind: MessageKind = TypeId::of::<M>();
+        let message_kind: MessageKind = MessageKind::of::<M>();
         if let Some(boxed_list) = events.auths.remove(&message_kind) {
             let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
@@ -188,9 +185,9 @@ impl<C: Channel, M: Message> Event for MessageEvent<C, M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events) -> Self::Iter {
-        let channel_kind: TypeId = TypeId::of::<C>();
+        let channel_kind: ChannelKind = ChannelKind::of::<C>();
         if let Some(mut channel_map) = events.messages.remove(&channel_kind) {
-            let message_kind: MessageKind = TypeId::of::<M>();
+            let message_kind: MessageKind = MessageKind::of::<M>();
             if let Some(boxed_list) = channel_map.remove(&message_kind) {
                 let mut output_list: Vec<(UserKey, M)> = Vec::new();
 

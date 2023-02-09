@@ -1,11 +1,6 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    hash::Hash,
-    sync::{Mutex, MutexGuard},
-};
+use std::any::Any;
 
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, SerdeErr};
 
 use crate::{
     component::{
@@ -17,7 +12,6 @@ use crate::{
     },
     entity::{entity_handle::EntityHandle, entity_property::NetEntityHandleConverter},
     messages::named::Named,
-    WorldMutType,
 };
 
 pub trait ReplicateBuilder: Send + Named {
@@ -35,15 +29,15 @@ pub trait ReplicateBuilder: Send + Named {
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
 pub trait Replicate: ReplicateInner + Named + Any {
+    /// Gets the ComponentKind of this type
+    fn kind(&self) -> ComponentKind;
     fn to_any(&self) -> &dyn Any;
     fn to_any_mut(&mut self) -> &mut dyn Any;
     fn to_boxed_any(self: Box<Self>) -> Box<dyn Any>;
+    fn copy_to_box(&self) -> Box<dyn Replicate>;
     fn create_builder() -> Box<dyn ReplicateBuilder>
     where
         Self: Sized;
-    fn copy_to_box(&self) -> Box<dyn Replicate>;
-    /// Gets the ComponentKind of this type
-    fn kind(&self) -> ComponentKind;
     /// Gets the number of bytes of the Component's DiffMask
     fn diff_mask_size(&self) -> u8;
     /// Get an immutable reference to the inner Component as a Replicate trait object

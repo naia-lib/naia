@@ -135,7 +135,7 @@ impl App {
                 self.square_last_command.remove(&entity);
             }
         }
-        for (user_key, key_command) in
+        for (_user_key, key_command) in
             events.read::<MessageEvent<PlayerCommandChannel, KeyCommand>>()
         {
             if let Some(entity) = &key_command.entity.get(&self.server) {

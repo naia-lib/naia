@@ -62,7 +62,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
     let create_builder_method = create_builder_method(&builder_name);
     let read_method = read_method(&replica_name, &enum_name, &properties, &struct_type);
-    let read_create_update_method = read_create_update_method(&properties);
+    let read_create_update_method = read_create_update_method(&replica_name, &properties);
 
     let dyn_ref_method = dyn_ref_method();
     let dyn_mut_method = dyn_mut_method();
@@ -78,7 +78,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
     let gen = quote! {
         mod #module_name {
 
-            use std::{rc::Rc, cell::RefCell, io::Cursor, any::{Any, TypeId}};
+            use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any};
             use naia_shared::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentKind, Named,
@@ -89,9 +89,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
             #property_enum_definition
 
-            struct #builder_name {
-                component_kind: ComponentKind,
-            }
+            struct #builder_name;
             impl ReplicateBuilder for #builder_name {
                 #read_method
                 #read_create_update_method
@@ -111,6 +109,9 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 }
             }
             impl Replicate for #replica_name {
+                fn kind(&self) -> ComponentKind {
+                    ComponentKind::of::<#replica_name>()
+                }
                 fn to_any(&self) -> &dyn Any {
                     self
                 }
@@ -120,13 +121,10 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
                 fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
                     self
                 }
-                fn type_of(&self) -> TypeId {
-                    TypeId::of::<#replica_name>()
-                }
-                fn diff_mask_size(&self) -> u8 { #diff_mask_size }
                 fn copy_to_box(&self) -> Box<dyn Replicate> {
                     Box::new(self.clone())
                 }
+                fn diff_mask_size(&self) -> u8 { #diff_mask_size }
                 #create_builder_method
                 #dyn_ref_method
                 #dyn_mut_method
@@ -595,8 +593,8 @@ pub fn new_complete_method(
 
 pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
     quote! {
-        fn create_builder(component_kind: ComponentKind) -> Box<dyn ReplicateBuilder> where Self:Sized {
-            Box::new(#builder_name { component_kind })
+        fn create_builder() -> Box<dyn ReplicateBuilder> where Self:Sized {
+            Box::new(#builder_name)
         }
     }
 }
@@ -684,7 +682,7 @@ pub fn read_method(
     }
 }
 
-pub fn read_create_update_method(properties: &[Property]) -> TokenStream {
+pub fn read_create_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {
@@ -733,7 +731,7 @@ pub fn read_create_update_method(properties: &[Property]) -> TokenStream {
             let (length, buffer) = update_writer.flush();
             let owned_reader = OwnedBitReader::new(&buffer[..length]);
 
-            return Ok(ComponentUpdate::new(self.component_kind, owned_reader));
+            return Ok(ComponentUpdate::new(ComponentKind::of::<#replica_name>(), owned_reader));
         }
     }
 }
@@ -809,7 +807,7 @@ fn write_method(properties: &[Property], struct_type: &StructType) -> TokenStrea
 
     quote! {
         fn write(&self, component_kinds: &ComponentKinds, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-            components.type_id_to_kind(&self.type_of()).ser(bit_writer);
+            self.kind().ser(component_kinds, bit_writer);
             #property_writes
         }
     }

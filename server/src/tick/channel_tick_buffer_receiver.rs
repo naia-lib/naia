@@ -1,11 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    sequence_greater_than, BitReader, ChannelReader, Message, Serde, SerdeErr, ShortMessageIndex,
-    Tick, UnsignedVariableInteger,
+    sequence_greater_than, BitReader, ChannelReader, Message, MessageKinds, Serde, SerdeErr,
+    ShortMessageIndex, Tick, UnsignedVariableInteger,
 };
-
-use crate::Events;
 
 /// Receive updates from the client and store them in a buffer along with the corresponding
 /// client tick.
@@ -29,6 +27,7 @@ impl ChannelTickBufferReceiver {
     /// them in a buffer to be returned to the application
     pub fn read_messages(
         &mut self,
+        message_kinds: &MessageKinds,
         host_tick: &Tick,
         remote_tick: &Tick,
         channel_reader: &dyn ChannelReader<Box<dyn Message>>,
@@ -42,7 +41,13 @@ impl ChannelTickBufferReceiver {
                 break;
             }
 
-            self.read_message(host_tick, &mut last_read_tick, channel_reader, reader)?;
+            self.read_message(
+                message_kinds,
+                host_tick,
+                &mut last_read_tick,
+                channel_reader,
+                reader,
+            )?;
         }
 
         Ok(())
@@ -52,6 +57,7 @@ impl ChannelTickBufferReceiver {
     /// them to be returned to the application
     fn read_message(
         &mut self,
+        message_kinds: &MessageKinds,
         host_tick: &Tick,
         last_read_tick: &mut Tick,
         channel_reader: &dyn ChannelReader<Box<dyn Message>>,
@@ -73,7 +79,7 @@ impl ChannelTickBufferReceiver {
             last_read_message_index = message_index;
 
             // read payload
-            let new_message = channel_reader.read(reader)?;
+            let new_message = channel_reader.read(message_kinds, reader)?;
 
             if !self
                 .incoming_messages

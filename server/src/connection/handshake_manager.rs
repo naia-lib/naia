@@ -89,7 +89,7 @@ impl HandshakeManager {
                 self.address_to_timestamp_map.insert(*address, timestamp);
 
                 if has_auth {
-                    if let Ok(auth_message) = messages.read(reader, &FakeEntityConverter) {
+                    if let Ok(auth_message) = message_kinds.read(reader, &FakeEntityConverter) {
                         HandshakeResult::Success(Some(auth_message))
                     } else {
                         HandshakeResult::Invalid

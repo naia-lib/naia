@@ -1,10 +1,6 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    sync::{Mutex, MutexGuard},
-};
+use std::any::Any;
 
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, SerdeErr};
 
 use crate::{
     messages::{
@@ -26,12 +22,12 @@ pub trait MessageBuilder: Send {
 
 // Message
 pub trait Message: Send + Sync + Named + MessageClone + Any {
+    /// Gets the MessageKind of this type
+    fn kind(&self) -> MessageKind;
     fn to_boxed_any(self: Box<Self>) -> Box<dyn Any>;
     fn create_builder() -> Box<dyn MessageBuilder>
     where
         Self: Sized;
-    /// Gets the MessageKind of this type
-    fn kind(&self) -> MessageKind;
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Component on the client
     fn write(

@@ -1,9 +1,8 @@
 use naia_serde::SerdeErr;
-use std::any::TypeId;
 
-use crate::component::component_kinds::ComponentKind;
 use crate::{
     component::{
+        component_kinds::ComponentKind,
         component_update::ComponentUpdate,
         replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
         replicate::Replicate,
@@ -51,8 +50,8 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     fn despawn_entity(&mut self, entity: &E);
 
     // Components
-    /// gets all of an Entity's Components as a list of Ids
-    fn component_kinds(&mut self, entity: &E) -> Vec<TypeId>;
+    /// gets all of an Entity's Components
+    fn component_kinds(&mut self, entity: &E) -> Vec<ComponentKind>;
     /// gets an entity's component
     fn component_mut<'a, R: Replicate>(
         &'a mut self,

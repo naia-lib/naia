@@ -13,10 +13,9 @@ use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
-    BigMap, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, Message, PacketType,
-    PropertyMutator, Protocol, Replicate, Serde, StandardHeader, Tick, Timer, WorldMutType,
-    WorldRefType,
+    BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityDoesNotExistError, EntityHandle,
+    EntityHandleConverter, Instant, Message, PacketType, PropertyMutator, Protocol, Replicate,
+    Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -50,6 +49,7 @@ use super::{
 pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     server_config: ServerConfig,
+    protocol: Protocol,
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
@@ -81,15 +81,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         let tick_manager = { protocol.tick_interval.map(TickManager::new) };
 
+        let io = Io::new(
+            &server_config.connection.bandwidth_measure_duration,
+            &protocol.compression,
+        );
+
         Server {
             // Config
             server_config: server_config.clone(),
+            protocol,
             // Connection
             socket,
-            io: Io::new(
-                &server_config.connection.bandwidth_measure_duration,
-                &protocol.compression,
-            ),
+            io,
             heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
             timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
             ping_timer: Timer::new(server_config.connection.ping.ping_interval),
@@ -179,6 +182,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &self.server_config.connection,
                 user.address,
                 user_key,
+                &self.protocol.channel_kinds,
                 &self.diff_handler,
             );
             // send connectaccept response
@@ -227,13 +231,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn send_message<C: Channel + 'static, M: Message>(
-        &mut self,
-        user_key: &UserKey,
-        message: &M,
-    ) {
+    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(user_key, &ChannelKinds::type_to_id::<C>(), cloned_message);
+        self.send_message_inner(user_key, &ChannelKind::of::<C>(), cloned_message);
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -244,7 +244,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         channel_kind: &ChannelKind,
         message: Box<dyn Message>,
     ) {
-        if !ChannelKinds::channel(channel_kind).can_send_to_client() {
+        if !self
+            .protocol
+            .channel_kinds
+            .channel(channel_kind)
+            .can_send_to_client()
+        {
             panic!("Cannot send message to Client on this Channel");
         }
 
@@ -290,8 +295,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Sends a message to all connected users using a given channel
-    pub fn broadcast_message<C: Channel + 'static, M: Message>(&mut self, message: M) {
-        self.broadcast_message_inner(&Channels::type_to_id::<C>(), Box::new(message));
+    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: M) {
+        self.broadcast_message_inner(&ChannelKind::of::<C>(), Box::new(message));
     }
 
     fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
@@ -346,6 +351,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let rtt = connection.ping_manager.rtt;
 
             connection.send_outgoing_packets(
+                &self.protocol,
                 &now,
                 &mut self.io,
                 &world,
@@ -662,7 +668,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
     ) -> Option<R> {
         // get component key from type
-        let component_kind = ComponentKinds::type_to_kind::<R>();
+        let component_kind = ComponentKind::of::<R>();
 
         // clean up component on all connections
 
@@ -1004,10 +1010,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             continue;
                         }
                         PacketType::ClientConnectRequest => {
-                            match self
-                                .handshake_manager
-                                .recv_connect_request(&address, &mut reader)
-                            {
+                            match self.handshake_manager.recv_connect_request(
+                                &self.protocol.message_kinds,
+                                &address,
+                                &mut reader,
+                            ) {
                                 HandshakeResult::Success(auth_message_opt) => {
                                     if self.user_connections.contains_key(&address) {
                                         // send connectaccept response
@@ -1076,6 +1083,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                                 // process data
                                 let data_result = user_connection.process_incoming_data(
+                                    &self.protocol.channel_kinds,
+                                    &self.protocol.message_kinds,
                                     server_and_client_tick_opt,
                                     &mut reader,
                                     &self.world_record,

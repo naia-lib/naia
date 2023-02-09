@@ -79,6 +79,7 @@ pub use entity::{
 };
 pub use messages::{
     channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
+    channel_kinds::{ChannelKind, ChannelKinds},
     message::{Message, MessageBuilder},
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     message_kinds::{MessageKind, MessageKinds},

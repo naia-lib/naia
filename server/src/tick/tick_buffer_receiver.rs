@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use crate::Events;
 use naia_shared::{
-    BitReader, ChannelKind, ChannelKinds, ChannelMode, ChannelReader, Message, Serde, SerdeErr,
-    Tick,
+    BitReader, ChannelKind, ChannelKinds, ChannelMode, ChannelReader, Message, MessageKinds, Serde,
+    SerdeErr, Tick,
 };
 
 use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
@@ -13,10 +12,10 @@ pub struct TickBufferReceiver {
 }
 
 impl TickBufferReceiver {
-    pub fn new() -> Self {
+    pub fn new(channel_kinds: &ChannelKinds) -> Self {
         // initialize receivers
         let mut channel_receivers = HashMap::new();
-        for (channel_kind, channel_settings) in ChannelKinds::channels() {
+        for (channel_kind, channel_settings) in channel_kinds.channels() {
             if let ChannelMode::TickBuffered(_) = channel_settings.mode {
                 channel_receivers.insert(channel_kind, ChannelTickBufferReceiver::new());
             }
@@ -30,6 +29,8 @@ impl TickBufferReceiver {
     /// Read incoming packet data and store in a buffer
     pub fn read_messages(
         &mut self,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
         host_tick: &Tick,
         remote_tick: &Tick,
         channel_reader: &dyn ChannelReader<Box<dyn Message>>,
@@ -42,11 +43,17 @@ impl TickBufferReceiver {
             }
 
             // read channel index
-            let channel_index = ChannelKind::de(reader)?;
+            let channel_kind = ChannelKind::de(channel_kinds, reader)?;
 
             // continue read inside channel
-            let channel = self.channel_receivers.get_mut(&channel_index).unwrap();
-            channel.read_messages(host_tick, remote_tick, channel_reader, reader)?;
+            let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
+            channel.read_messages(
+                message_kinds,
+                host_tick,
+                remote_tick,
+                channel_reader,
+                reader,
+            )?;
         }
 
         Ok(())
