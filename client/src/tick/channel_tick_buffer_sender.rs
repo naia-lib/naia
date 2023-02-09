@@ -4,8 +4,8 @@ use log::{info, warn};
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter, ChannelWriter,
-    Instant, Message, Serde, ShortMessageIndex, Tick, TickBufferSettings, UnsignedVariableInteger,
-    MESSAGE_HISTORY_SIZE,
+    Instant, Message, MessageKinds, Serde, ShortMessageIndex, Tick, TickBufferSettings,
+    UnsignedVariableInteger, MESSAGE_HISTORY_SIZE,
 };
 
 pub struct ChannelTickBufferSender {
@@ -74,6 +74,7 @@ impl ChannelTickBufferSender {
 
     pub fn write_messages(
         &mut self,
+        message_kinds: &MessageKinds,
         channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
         bit_writer: &mut BitWriter,
         host_tick: &Tick,
@@ -92,6 +93,7 @@ impl ChannelTickBufferSender {
             // check that we can write the next message
             let mut counter = bit_writer.counter();
             self.write_message(
+                message_kinds,
                 channel_writer,
                 &mut counter,
                 &last_written_tick,
@@ -116,6 +118,7 @@ impl ChannelTickBufferSender {
 
             // write data
             let message_indexs = self.write_message(
+                message_kinds,
                 channel_writer,
                 bit_writer,
                 &last_written_tick,
@@ -137,6 +140,7 @@ impl ChannelTickBufferSender {
     /// eventually be put into the outgoing packet
     fn write_message(
         &self,
+        message_kinds: &MessageKinds,
         channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
         bit_writer: &mut dyn BitWrite,
         last_written_tick: &Tick,
@@ -163,7 +167,7 @@ impl ChannelTickBufferSender {
             id_diff.ser(bit_writer);
 
             // write payload
-            channel_writer.write(bit_writer, message);
+            channel_writer.write(message_kinds, bit_writer, message);
 
             // record id for output
             message_indexs.push(*message_index);

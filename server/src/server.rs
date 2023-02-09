@@ -1083,8 +1083,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                                 // process data
                                 let data_result = user_connection.process_incoming_data(
-                                    &self.protocol.channel_kinds,
-                                    &self.protocol.message_kinds,
+                                    &self.protocol,
                                     server_and_client_tick_opt,
                                     &mut reader,
                                     &self.world_record,

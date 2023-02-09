@@ -56,7 +56,7 @@ impl HandshakeManager {
     }
 
     // Give handshake manager the opportunity to send out messages to the server
-    pub fn send(&mut self, io: &mut Io) {
+    pub fn send(&mut self, message_kinds: &MessageKinds, io: &mut Io) {
         if io.is_loaded() {
             if !self.handshake_timer.ringing() {
                 return;
@@ -79,7 +79,7 @@ impl HandshakeManager {
                     }
                 }
                 HandshakeState::AwaitingConnectResponse => {
-                    let mut writer = self.write_connect_request();
+                    let mut writer = self.write_connect_request(message_kinds);
                     match io.send_writer(&mut writer) {
                         Ok(()) => {}
                         Err(_) => {
@@ -143,7 +143,7 @@ impl HandshakeManager {
     }
 
     // Step 3 of Handshake
-    pub fn write_connect_request(&self) -> BitWriter {
+    pub fn write_connect_request(&self, message_kinds: &MessageKinds) -> BitWriter {
         let mut writer = BitWriter::new();
 
         StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0).ser(&mut writer);
@@ -156,7 +156,7 @@ impl HandshakeManager {
             // write that we have auth
             true.ser(&mut writer);
             // write payload
-            auth_message.write(&mut writer, &FakeEntityConverter);
+            auth_message.write(message_kinds, &mut writer, &FakeEntityConverter);
         } else {
             // write that we do not have auth
             false.ser(&mut writer);

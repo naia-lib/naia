@@ -2,7 +2,7 @@ use std::{collections::HashMap, time::Duration};
 
 use naia_shared::{
     BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ChannelWriter, Message,
-    PacketIndex, PacketNotifiable, Serde, ShortMessageIndex, Tick,
+    PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick,
 };
 
 use super::channel_tick_buffer_sender::ChannelTickBufferSender;
@@ -14,10 +14,10 @@ pub struct TickBufferSender {
 }
 
 impl TickBufferSender {
-    pub fn new(tick_duration: &Duration) -> Self {
+    pub fn new(channel_kinds: &ChannelKinds, tick_duration: &Duration) -> Self {
         // initialize senders
         let mut channel_senders = HashMap::new();
-        for (channel_index, channel) in ChannelKinds::channels() {
+        for (channel_index, channel) in channel_kinds.channels() {
             if let ChannelMode::TickBuffered(settings) = &channel.mode {
                 channel_senders.insert(
                     channel_index,
@@ -66,20 +66,21 @@ impl TickBufferSender {
 
     pub fn write_messages(
         &mut self,
+        protocol: &Protocol,
         channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
         host_tick: &Tick,
         has_written: &mut bool,
     ) {
-        for (channel_index, channel) in &mut self.channel_senders {
+        for (channel_kind, channel) in &mut self.channel_senders {
             if !channel.has_messages() {
                 continue;
             }
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
             let mut counter = bit_writer.counter();
-            channel_index.ser(&mut counter);
+            channel_kind.ser(&protocol.channel_kinds, &mut counter);
             counter.write_bit(false);
 
             if counter.overflowed() {
@@ -93,17 +94,21 @@ impl TickBufferSender {
             bit_writer.reserve_bits(1);
 
             // write ChannelIndex
-            channel_index.ser(bit_writer);
+            channel_kind.ser(&protocol.channel_kinds, bit_writer);
 
             // write Messages
-            if let Some(message_indexs) =
-                channel.write_messages(channel_writer, bit_writer, host_tick, has_written)
-            {
+            if let Some(message_indexes) = channel.write_messages(
+                &protocol.message_kinds,
+                channel_writer,
+                bit_writer,
+                host_tick,
+                has_written,
+            ) {
                 self.packet_to_channel_map
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
-                channel_list.push((*channel_index, message_indexs));
+                channel_list.push((*channel_kind, message_indexes));
             }
 
             // write MessageContinue finish bit, release

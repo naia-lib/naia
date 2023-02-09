@@ -1,15 +1,15 @@
+use std::{hash::Hash, net::SocketAddr, time::Duration};
+
 use log::warn;
-use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ConnectionConfig, HostType, Instant, OwnedBitReader,
-    PacketType, PingManager, ProtocolIo, Serde, StandardHeader, Tick, WorldMutType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant,
+    OwnedBitReader, PacketType, PingManager, Protocol, ProtocolIo, Serde, StandardHeader, Tick,
+    WorldMutType,
 };
 
-use crate::events::Events;
 use crate::{
-    error::NaiaClientError,
-    events::Event,
+    events::Events,
     protocol::entity_manager::EntityManager,
     tick::{
         tick_buffer_sender::TickBufferSender, tick_manager::TickManager, tick_queue::TickQueue,
@@ -33,13 +33,14 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         address: SocketAddr,
         connection_config: &ConnectionConfig,
         tick_duration: &Option<Duration>,
+        channel_kinds: &ChannelKinds,
     ) -> Self {
         let tick_buffer = tick_duration
             .as_ref()
-            .map(|duration| TickBufferSender::new(duration));
+            .map(|duration| TickBufferSender::new(channel_kinds, duration));
 
         Connection {
-            base: BaseConnection::new(address, HostType::Client, connection_config),
+            base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
             entity_manager: EntityManager::default(),
             ping_manager: PingManager::new(&connection_config.ping),
             tick_buffer,
@@ -73,6 +74,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     /// on the receiving tick, even though it's not needed is the channel is not tick buffered.
     pub fn process_buffered_packets<W: WorldMutType<E>>(
         &mut self,
+        protocol: &Protocol,
         world: &mut W,
         receiving_tick: Tick,
         incoming_events: &mut Events<E>,
@@ -84,10 +86,10 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             // read messages
             {
-                let messages_result = self
-                    .base
-                    .message_manager
-                    .read_messages(&channel_reader, &mut reader);
+                let messages_result =
+                    self.base
+                        .message_manager
+                        .read_messages(protocol, &channel_reader, &mut reader);
                 if messages_result.is_err() {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming messages from packet!");
@@ -98,6 +100,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             // read entity updates
             {
                 let updates_result = self.entity_manager.read_updates(
+                    &protocol.component_kinds,
                     world,
                     server_tick,
                     &mut reader,
@@ -112,9 +115,12 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             // read entity actions
             {
-                let actions_result =
-                    self.entity_manager
-                        .read_actions(world, &mut reader, incoming_events);
+                let actions_result = self.entity_manager.read_actions(
+                    &protocol.component_kinds,
+                    world,
+                    &mut reader,
+                    incoming_events,
+                );
                 if actions_result.is_err() {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity actions from packet!");
@@ -139,12 +145,17 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     /// * messages
     /// * acks from reliable channels
     /// * acks from the `EntityActionReceiver` for all [`EntityAction`]s
-    pub fn send_outgoing_packets(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
+    pub fn send_outgoing_packets(
+        &mut self,
+        protocol: &Protocol,
+        io: &mut Io,
+        tick_manager_opt: &Option<TickManager>,
+    ) {
         self.collect_outgoing_messages(tick_manager_opt);
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(io, tick_manager_opt) {
+            if self.send_outgoing_packet(protocol, io, tick_manager_opt) {
                 any_sent = true;
             } else {
                 break;
@@ -176,6 +187,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     // Sends packet and returns whether or not a packet was sent
     fn send_outgoing_packet(
         &mut self,
+        protocol: &Protocol,
         io: &mut Io,
         tick_manager_opt: &Option<TickManager>,
     ) -> bool {
@@ -208,6 +220,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
                 // write tick buffered messages
                 self.tick_buffer.as_mut().unwrap().write_messages(
+                    &protocol,
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,
@@ -223,6 +236,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             // write messages
             {
                 self.base.message_manager.write_messages(
+                    protocol,
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,

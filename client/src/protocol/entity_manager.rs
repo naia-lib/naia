@@ -1,7 +1,4 @@
-use std::{
-    collections::{HashMap, VecDeque},
-    hash::Hash,
-};
+use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
     BigMap, BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver,
@@ -11,7 +8,6 @@ use naia_shared::{
 };
 
 use crate::events::Events;
-use crate::{error::NaiaClientError, events::Event};
 
 use super::entity_record::EntityRecord;
 
@@ -59,6 +55,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
     /// Store
     pub fn read_actions<W: WorldMutType<E>>(
         &mut self,
+        component_kinds: &ComponentKinds,
         world: &mut W,
         reader: &mut BitReader,
         incoming_events: &mut Events<E>,
@@ -72,7 +69,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                 break;
             }
 
-            self.read_action(reader, &mut last_read_id)?;
+            self.read_action(component_kinds, reader, &mut last_read_id)?;
         }
 
         self.process_incoming_actions(world, incoming_events);
@@ -87,6 +84,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
     /// ordered by the client's jitter buffer
     fn read_action(
         &mut self,
+        component_kinds: &ComponentKinds,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
     ) -> Result<(), SerdeErr> {
@@ -102,18 +100,18 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
 
                 // read components
                 let components_num = UnsignedVariableInteger::<3>::de(reader)?.get();
-                let mut component_kinds = Vec::new();
+                let mut component_kind_list = Vec::new();
                 for _ in 0..components_num {
-                    let new_component = ComponentKinds::read(reader, self)?;
-                    let new_component_kind = new_component.dyn_ref().kind();
+                    let new_component = component_kinds.read(reader, self)?;
+                    let new_component_kind = new_component.kind();
                     self.received_components
                         .insert((net_entity, new_component_kind), new_component);
-                    component_kinds.push(new_component_kind);
+                    component_kind_list.push(new_component_kind);
                 }
 
                 self.receiver.buffer_action(
                     action_id,
-                    EntityAction::SpawnEntity(net_entity, component_kinds),
+                    EntityAction::SpawnEntity(net_entity, component_kind_list),
                 );
             }
             // Entity Deletion
@@ -128,8 +126,8 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
             EntityActionType::InsertComponent => {
                 // read all data
                 let net_entity = NetEntity::de(reader)?;
-                let new_component = ComponentKinds::read(reader, self)?;
-                let new_component_kind = new_component.dyn_ref().kind();
+                let new_component = component_kinds.read(reader, self)?;
+                let new_component_kind = new_component.kind();
 
                 self.receiver.buffer_action(
                     action_id,
@@ -142,7 +140,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
             EntityActionType::RemoveComponent => {
                 // read all data
                 let net_entity = NetEntity::de(reader)?;
-                let component_kind = ComponentKind::de(reader)?;
+                let component_kind = ComponentKind::de(component_kinds, reader)?;
 
                 self.receiver.buffer_action(
                     action_id,
@@ -289,6 +287,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
     /// Read component updates from raw bits
     pub fn read_updates<W: WorldMutType<E>>(
         &mut self,
+        component_kinds: &ComponentKinds,
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
@@ -303,7 +302,14 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
 
             let net_entity_id = NetEntity::de(reader)?;
 
-            self.read_update(world, server_tick, reader, &net_entity_id, incoming_events)?;
+            self.read_update(
+                component_kinds,
+                world,
+                server_tick,
+                reader,
+                &net_entity_id,
+                incoming_events,
+            )?;
         }
 
         Ok(())
@@ -312,6 +318,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
     /// Read component updates from raw bits for a given entity
     fn read_update<W: WorldMutType<E>>(
         &mut self,
+        component_kinds: &ComponentKinds,
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
@@ -325,7 +332,7 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                 break;
             }
 
-            let component_update = ComponentKinds::read_create_update(reader)?;
+            let component_update = component_kinds.read_create_update(reader)?;
             let component_kind = component_update.kind;
 
             if let Some(world_entity) = self.local_to_world_entity.get(&net_entity_id) {

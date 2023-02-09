@@ -1,10 +1,6 @@
-use std::any::Any;
 use std::{collections::HashMap, marker::PhantomData, net::SocketAddr, vec::IntoIter};
 
-use naia_shared::{
-    Channel, ChannelKind, ChannelKinds, ComponentKind, ComponentKinds, Message, MessageKind,
-    MessageKinds, MessageReceivable, Replicate, Tick,
-};
+use naia_shared::{Channel, ChannelKind, ComponentKind, Message, MessageKind, Replicate, Tick};
 
 use crate::NaiaClientError;
 
@@ -28,8 +24,6 @@ impl<E: Copy> Default for Events<E> {
         Events::new()
     }
 }
-
-impl<E: Copy> MessageReceivable for Events<E> {}
 
 impl<E: Copy> Events<E> {
     pub(crate) fn new() -> Events<E> {
@@ -210,22 +204,20 @@ pub struct MessageEvent<C: Channel, M: Message> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<M>,
 }
-impl<E: Copy, C: Channel + 'static, M: Message + 'static> Event<E> for MessageEvent<C, M> {
+impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
     type Iter = IntoIter<M>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        let channel_kind: ChannelKind = ChannelKinds::type_to_id::<C>();
+        let channel_kind: ChannelKind = ChannelKind::of::<C>();
         if let Some(mut channel_map) = events.messages.remove(&channel_kind) {
-            let message_kind: MessageKind = MessageKinds::type_to_id::<M>();
+            let message_kind: MessageKind = MessageKind::of::<M>();
             if let Some(boxed_list) = channel_map.remove(&message_kind) {
                 let mut output_list: Vec<M> = Vec::new();
 
                 for boxed_message in boxed_list {
-                    let message: M =
-                        Box::<dyn Any + 'static>::downcast::<M>(boxed_message.to_boxed_any())
-                            .ok()
-                            .map(|boxed_m| *boxed_m);
-                    output_list.push(message);
+                    let boxed_any = boxed_message.to_boxed_any();
+                    let message = boxed_any.downcast::<M>().unwrap();
+                    output_list.push(*message);
                 }
 
                 return IntoIterator::into_iter(output_list);
@@ -276,16 +268,14 @@ impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
     type Iter = IntoIter<(E, C)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        let component_kind: ComponentKind = ComponentKinds::type_to_kind::<C>();
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
         if let Some(boxed_list) = events.removes.remove(&component_kind) {
             let mut output_list: Vec<(E, C)> = Vec::new();
 
             for (entity, boxed_component) in boxed_list {
-                let component: C =
-                    Box::<dyn Any + 'static>::downcast::<C>(boxed_component.to_boxed_any())
-                        .ok()
-                        .map(|boxed_c| *boxed_c);
-                output_list.push((entity, component));
+                let boxed_any = boxed_component.to_boxed_any();
+                let component = boxed_any.downcast::<C>().unwrap();
+                output_list.push((entity, *component));
             }
 
             return IntoIterator::into_iter(output_list);

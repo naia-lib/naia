@@ -7,8 +7,8 @@ use std::{
 
 use naia_shared::{
     sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
-    EntityConverter, HostType, Instant, MessageKinds, PacketType, PingManager, Protocol,
-    ProtocolIo, Serde, SerdeErr, StandardHeader, Tick, WorldRefType,
+    EntityConverter, HostType, Instant, PacketType, PingManager, Protocol, ProtocolIo, Serde,
+    SerdeErr, StandardHeader, Tick, WorldRefType,
 };
 
 use crate::{
@@ -72,8 +72,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     /// Read packet data received from a client
     pub fn process_incoming_data(
         &mut self,
-        channel_kinds: &ChannelKinds,
-        message_kinds: &MessageKinds,
+        protocol: &Protocol,
         server_and_client_tick_opt: Option<(Tick, Tick)>,
         reader: &mut BitReader,
         world_record: &WorldRecord<E>,
@@ -85,8 +84,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         {
             if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
                 self.tick_buffer.read_messages(
-                    channel_kinds,
-                    message_kinds,
+                    protocol,
                     &server_tick,
                     &client_tick,
                     &channel_reader,
@@ -97,12 +95,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read messages
         {
-            self.base.message_manager.read_messages(
-                channel_kinds,
-                message_kinds,
-                &channel_reader,
-                reader,
-            )?;
+            self.base
+                .message_manager
+                .read_messages(protocol, &channel_reader, reader)?;
         }
 
         Ok(())
@@ -206,8 +201,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 let converter = EntityConverter::new(world_record, &self.entity_manager);
                 let channel_writer = ProtocolIo::new(&converter);
                 self.base.message_manager.write_messages(
-                    &protocol.channel_kinds,
-                    &protocol.message_kinds,
+                    &protocol,
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,

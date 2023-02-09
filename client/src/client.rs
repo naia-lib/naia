@@ -1,5 +1,4 @@
-use std::time::Duration;
-use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
@@ -137,8 +136,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.maintain_socket();
 
         // all other operations
-        if let Some(server_connection) = self.server_connection.as_mut() {
-            if server_connection.base.should_drop() {
+        if let Some(connection) = self.server_connection.as_mut() {
+            if connection.base.should_drop() {
                 self.disconnect_internal();
                 return std::mem::take(&mut self.incoming_events);
             }
@@ -152,14 +151,16 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
                     // apply updates on tick boundary
                     let receiving_tick = tick_manager.client_receiving_tick();
-                    server_connection.process_buffered_packets(
+                    connection.process_buffered_packets(
+                        &self.protocol,
                         &mut world,
                         receiving_tick,
                         &mut self.incoming_events,
                     );
                 }
             } else {
-                server_connection.process_buffered_packets(
+                connection.process_buffered_packets(
+                    &self.protocol,
                     &mut world,
                     0,
                     &mut self.incoming_events,
@@ -167,17 +168,18 @@ impl<E: Copy + Eq + Hash> Client<E> {
             }
 
             // receive (process) messages
-            server_connection.receive_messages(&mut self.incoming_events);
+            connection.receive_messages(&mut self.incoming_events);
 
             // send outgoing packets
-            server_connection.send_outgoing_packets(&mut self.io, &self.tick_manager);
+            connection.send_outgoing_packets(&self.protocol, &mut self.io, &self.tick_manager);
 
             // tick event
             if did_tick {
                 self.incoming_events.push_tick();
             }
         } else {
-            self.handshake_manager.send(&mut self.io);
+            self.handshake_manager
+                .send(&self.protocol.message_kinds, &mut self.io);
         }
 
         std::mem::take(&mut self.incoming_events)
@@ -186,13 +188,13 @@ impl<E: Copy + Eq + Hash> Client<E> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message<C: Channel + 'static, M: Message>(&mut self, message: &M) {
+    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(&ChannelKinds::type_to_id::<C>(), cloned_message);
+        self.send_message_inner(&ChannelKind::of::<C>(), cloned_message);
     }
 
     fn send_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
-        let channel_settings = ChannelKinds::channel(channel_kind);
+        let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
         if !channel_settings.can_send_to_server() {
             panic!("Cannot send message to Server on this Channel");
         }
@@ -452,6 +454,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                         server_addr,
                                         &self.client_config.connection,
                                         &self.protocol.tick_interval,
+                                        &self.protocol.channel_kinds,
                                     ));
                                     self.incoming_events.push_connection(&server_addr);
                                 }

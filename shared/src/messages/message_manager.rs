@@ -3,12 +3,11 @@ use std::collections::HashMap;
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::messages::message_kinds::MessageKinds;
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
     messages::channel_kinds::{ChannelKind, ChannelKinds},
     types::{HostType, MessageIndex, PacketIndex},
-    Message,
+    Message, Protocol,
 };
 
 use super::{
@@ -164,8 +163,7 @@ impl MessageManager {
 
     pub fn write_messages(
         &mut self,
-        channel_kinds: &ChannelKinds,
-        message_kinds: &MessageKinds,
+        protocol: &Protocol,
         channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
@@ -178,7 +176,7 @@ impl MessageManager {
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
             let mut counter = bit_writer.counter();
-            channel_index.ser(channel_kinds, &mut counter);
+            channel_index.ser(&protocol.channel_kinds, &mut counter);
             counter.write_bit(false);
 
             if counter.overflowed() {
@@ -192,12 +190,15 @@ impl MessageManager {
             bit_writer.reserve_bits(1);
 
             // write ChannelIndex
-            channel_index.ser(channel_kinds, bit_writer);
+            channel_index.ser(&protocol.channel_kinds, bit_writer);
 
             // write Messages
-            if let Some(message_indexs) =
-                channel.write_messages(message_kinds, channel_writer, bit_writer, has_written)
-            {
+            if let Some(message_indexs) = channel.write_messages(
+                &protocol.message_kinds,
+                channel_writer,
+                bit_writer,
+                has_written,
+            ) {
                 self.packet_to_message_map
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
@@ -215,8 +216,7 @@ impl MessageManager {
 
     pub fn read_messages(
         &mut self,
-        channel_kinds: &ChannelKinds,
-        message_kinds: &MessageKinds,
+        protocol: &Protocol,
         channel_reader: &dyn ChannelReader<Box<dyn Message>>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
@@ -227,11 +227,11 @@ impl MessageManager {
             }
 
             // read channel id
-            let channel_kind = ChannelKind::de(channel_kinds, reader)?;
+            let channel_kind = ChannelKind::de(&protocol.channel_kinds, reader)?;
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(message_kinds, channel_reader, reader)?;
+            channel.read_messages(&protocol.message_kinds, channel_reader, reader)?;
         }
 
         Ok(())

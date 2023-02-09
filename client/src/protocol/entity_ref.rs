@@ -1,4 +1,4 @@
-use std::{hash::Hash, marker::PhantomData};
+use std::hash::Hash;
 
 use naia_shared::{ReplicaRefWrapper, Replicate, WorldRefType};
 
