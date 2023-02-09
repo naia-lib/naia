@@ -84,7 +84,6 @@ pub use messages::{
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
-    message_receivable::MessageReceivable,
     named::Named,
     ordered_reliable_receiver::OrderedReliableReceiver,
     protocol_io::ProtocolIo,

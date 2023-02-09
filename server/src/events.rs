@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, vec::IntoIter};
 
-use naia_shared::{Channel, ChannelKind, Message, MessageKind, MessageReceivable};
+use naia_shared::{Channel, ChannelKind, Message, MessageKind};
 
 use super::user::{User, UserKey};
 use crate::NaiaServerError;
@@ -20,8 +20,6 @@ impl Default for Events {
         Events::new()
     }
 }
-
-impl MessageReceivable for Events {}
 
 impl Events {
     pub(crate) fn new() -> Events {

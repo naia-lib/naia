@@ -41,10 +41,14 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 
     // Names
     let replica_name = input.ident.clone();
-    let enum_name = format_ident!("{}Property", replica_name);
-    let module_name = format_ident!("define_{}", replica_name);
-    let builder_name = format_ident!("{}Builder", replica_name);
     let replica_name_str = LitStr::new(&replica_name.to_string(), replica_name.span());
+    let lowercase_replica_name = Ident::new(
+        replica_name.to_string().to_lowercase().as_str(),
+        Span::call_site(),
+    );
+    let module_name = format_ident!("define_{}", lowercase_replica_name);
+    let enum_name = format_ident!("{}Property", replica_name);
+    let builder_name = format_ident!("{}Builder", replica_name);
 
     // Definitions
     let property_enum_definition = property_enum(&enum_name, &properties);

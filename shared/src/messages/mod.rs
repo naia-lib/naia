@@ -6,7 +6,6 @@ pub mod message;
 pub mod message_channel;
 pub mod message_kinds;
 pub mod message_manager;
-pub mod message_receivable;
 pub mod named;
 pub mod ordered_reliable_receiver;
 pub mod protocol_io;

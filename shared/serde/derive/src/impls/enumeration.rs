@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{DataEnum, Fields};
 
@@ -21,7 +21,11 @@ pub fn derive_serde_enum(enum_: &DataEnum, enum_name: &Ident, is_internal: bool)
     let ser_method = get_ser_method(enum_, bits_needed);
     let de_method = get_de_method(enum_, bits_needed);
 
-    let module_name = format_ident!("define_{}", enum_name);
+    let lowercase_enum_name = Ident::new(
+        enum_name.to_string().to_lowercase().as_str(),
+        Span::call_site(),
+    );
+    let module_name = format_ident!("define_{}", lowercase_enum_name);
 
     let import_types = quote! { Serde, BitWrite, UnsignedInteger, BitReader, SerdeErr };
     let imports = match is_internal {

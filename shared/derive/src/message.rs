@@ -14,7 +14,11 @@ pub fn message_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     // Names
     let struct_name = input.ident;
     let struct_name_str = LitStr::new(&struct_name.to_string(), struct_name.span());
-    let module_name = format_ident!("define_{}", struct_name);
+    let lowercase_struct_name = Ident::new(
+        struct_name.to_string().to_lowercase().as_str(),
+        Span::call_site(),
+    );
+    let module_name = format_ident!("define_{}", lowercase_struct_name);
     let builder_name = format_ident!("{}Builder", struct_name);
 
     // Methods

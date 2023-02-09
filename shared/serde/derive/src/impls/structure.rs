@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::DataStruct;
 
@@ -23,7 +23,11 @@ pub fn derive_serde_struct(
         };
     }
 
-    let module_name = format_ident!("define_{}", struct_name);
+    let lowercase_struct_name = Ident::new(
+        struct_name.to_string().to_lowercase().as_str(),
+        Span::call_site(),
+    );
+    let module_name = format_ident!("define_{}", lowercase_struct_name);
 
     let import_types = quote! { Serde, BitWrite, BitReader, SerdeErr };
     let imports = match is_internal {
