@@ -1,13 +1,12 @@
-use naia_shared::{Property, Replicate};
+use naia_shared::Message;
 
-#[derive(Replicate)]
-#[protocol_path = "crate::protocol::Protocol"]
+#[derive(Message)]
 pub struct StringMessage {
-    pub contents: Property<String>,
+    pub contents: String,
 }
 
 impl StringMessage {
     pub fn new(contents: String) -> Self {
-        StringMessage::new_complete(contents)
+        Self { contents }
     }
 }

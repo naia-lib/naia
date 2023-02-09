@@ -1,5 +1,6 @@
 pub mod channel;
 pub mod channel_kinds;
+pub mod default_channels;
 pub mod indexed_message_reader;
 pub mod indexed_message_writer;
 pub mod message;

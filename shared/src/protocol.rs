@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
+use crate::messages::default_channels::DefaultChannelsPlugin;
 use crate::{
     component::{component_kinds::ComponentKinds, replicate::Replicate},
     connection::compression_config::CompressionConfig,
@@ -72,6 +73,13 @@ impl Protocol {
     pub fn compression(&mut self, config: CompressionConfig) -> &mut Self {
         self.check_lock();
         self.compression = Some(config);
+        self
+    }
+
+    pub fn add_default_channels(&mut self) -> &mut Self {
+        self.check_lock();
+        let plugin = DefaultChannelsPlugin;
+        plugin.build(self);
         self
     }
 

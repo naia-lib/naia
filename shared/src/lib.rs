@@ -77,6 +77,7 @@ pub use entity::{
     },
     net_entity::NetEntity,
 };
+pub use messages::default_channels;
 pub use messages::{
     channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
     channel_kinds::{ChannelKind, ChannelKinds},
