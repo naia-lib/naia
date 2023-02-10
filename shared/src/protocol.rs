@@ -83,7 +83,7 @@ impl Protocol {
         self
     }
 
-    pub fn add_channel<C: Channel + 'static>(
+    pub fn add_channel<C: Channel>(
         &mut self,
         direction: ChannelDirection,
         mode: ChannelMode,
@@ -94,7 +94,7 @@ impl Protocol {
         self
     }
 
-    pub fn add_message<M: Message + 'static>(&mut self) -> &mut Self {
+    pub fn add_message<M: Message>(&mut self) -> &mut Self {
         self.check_lock();
         self.message_kinds.add_message::<M>();
         self

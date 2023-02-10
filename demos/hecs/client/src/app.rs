@@ -4,13 +4,9 @@ use log::info;
 
 use hecs::Entity;
 
-use naia_hecs_client::{
-    Client as NaiaClient, ClientConfig, WorldWrapper as World,
-};
+use naia_hecs_client::{Client as NaiaClient, ClientConfig, WorldWrapper as World};
 
-use naia_hecs_demo_shared::{
-    protocol, Auth,
-};
+use naia_hecs_demo_shared::{protocol, Auth};
 
 use super::systems::{events::process_events, startup::app_init};
 

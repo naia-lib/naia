@@ -34,10 +34,6 @@ impl WorldData {
         None
     }
 
-    pub(crate) fn has_kind(&self, component_kind: &ComponentKind) -> bool {
-        self.kind_to_accessor_map.contains_key(component_kind)
-    }
-
     pub(crate) fn put_kind<R: Replicate>(&mut self, component_kind: &ComponentKind) {
         self.kind_to_accessor_map
             .insert(*component_kind, ComponentAccessor::<R>::create());

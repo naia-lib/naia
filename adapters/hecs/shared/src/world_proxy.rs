@@ -217,20 +217,18 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
     }
 
     fn insert_component<R: Replicate>(&mut self, entity: &Entity, component_ref: R) {
-        // cache type id for later
-        // todo: can we initialize this map on startup via Protocol derive?
-        let component_kind = component_ref.kind();
-        if !self.world_data.has_kind(&component_kind) {
-            self.world_data.put_kind::<R>(&component_kind);
-        }
-
         self.world
             .insert_one(*entity, component_ref)
             .expect("error inserting Component");
     }
 
     fn insert_boxed_component(&mut self, entity: &Entity, boxed_component: Box<dyn Replicate>) {
-        todo!()
+        let component_kind = boxed_component.kind();
+        if let Some(accessor) = self.world_data.component_access(&component_kind) {
+            return accessor.insert_component(&mut self.world, entity, boxed_component);
+        } else {
+            panic!("shouldn't happen")
+        }
     }
 
     fn remove_component<R: Replicate>(&mut self, entity: &Entity) -> Option<R> {

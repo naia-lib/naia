@@ -11,5 +11,6 @@ publish = false
 
 [dependencies]
 naia-shared = { path = "../../../shared" }
+naia-hecs-shared = { path = "../../../adapters/hecs/shared" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }

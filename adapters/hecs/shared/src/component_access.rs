@@ -21,6 +21,12 @@ pub trait ComponentAccess {
         mutable_entity: &Entity,
         immutable_entity: &Entity,
     );
+    fn insert_component(
+        &self,
+        world: &mut World,
+        entity: &Entity,
+        boxed_component: Box<dyn Replicate>,
+    );
 }
 
 // ComponentAccessor
@@ -79,5 +85,16 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
                 }
             }
         }
+    }
+
+    fn insert_component(
+        &self,
+        world: &mut World,
+        entity: &Entity,
+        boxed_component: Box<dyn Replicate>,
+    ) {
+        let boxed_any = boxed_component.to_boxed_any();
+        let inner: R = *(boxed_any.downcast::<R>().unwrap());
+        world.insert_one(*entity, inner).unwrap();
     }
 }
