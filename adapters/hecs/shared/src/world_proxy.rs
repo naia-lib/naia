@@ -146,8 +146,7 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
                 component_copy_opt = Some(component.copy_to_box());
             }
             if let Some(component_copy) = component_copy_opt {
-                //Protocolize::extract_and_insert(&component_copy, mutable_entity, self);
-                todo!();
+                self.insert_boxed_component(mutable_entity, component_copy);
             }
         }
     }
@@ -246,12 +245,6 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
         None
     }
 }
-
-// impl<'w, 'd> ProtocolInserter<Entity> for WorldMut<'w, 'd> {
-//     fn insert<I: Replicate>(&mut self, entity: &Entity, impl_ref: I) {
-//         self.insert_component::<I>(entity, impl_ref);
-//     }
-// }
 
 // private static methods
 fn has_entity(world: &World, entity: &Entity) -> bool {

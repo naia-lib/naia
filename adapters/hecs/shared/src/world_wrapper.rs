@@ -131,8 +131,7 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
                 component_copy_opt = Some(component.copy_to_box());
             }
             if let Some(component_copy) = component_copy_opt {
-                //Protocolize::extract_and_insert(&component_copy, mutable_entity, self);
-                todo!();
+                self.insert_boxed_component(mutable_entity, component_copy);
             }
         }
     }
@@ -231,12 +230,6 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
         None
     }
 }
-
-// impl<P: Protocolize> ProtocolInserter<P, Entity> for &mut WorldWrapper<P> {
-//     fn insert<I: Replicate<P>>(&mut self, entity: &Entity, impl_ref: I) {
-//         self.insert_component::<I>(entity, impl_ref);
-//     }
-// }
 
 // private static methods
 
