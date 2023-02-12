@@ -15,8 +15,8 @@ use naia_bevy_demo_shared::{
 use crate::resources::Global;
 
 pub fn authorization_event(
-    mut event_reader: EventReader<AuthorizationEvent<Protocol>>,
-    mut server: Server<Protocol, Channels>,
+    mut event_reader: EventReader<AuthorizationEvent>,
+    mut server: Server,
 ) {
     for event in event_reader.iter() {
         if let AuthorizationEvent(user_key, Protocol::Auth(auth)) = event {

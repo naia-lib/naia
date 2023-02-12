@@ -1,8 +1,8 @@
 use bevy_ecs::prelude::Component;
 
-use naia_shared::{derive_serde, serde, Property, Replicate};
+use naia_shared::{Serde, Property, Replicate};
 
-#[derive_serde]
+#[derive(Serde, PartialEq, Clone)]
 pub enum ColorValue {
     Red,
     Blue,
@@ -10,7 +10,6 @@ pub enum ColorValue {
 }
 
 #[derive(Component, Replicate)]
-#[protocol_path = "crate::protocol::Protocol"]
 pub struct Color {
     pub value: Property<ColorValue>,
 }

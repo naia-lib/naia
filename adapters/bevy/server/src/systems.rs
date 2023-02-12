@@ -6,7 +6,6 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 use naia_server::{
-    shared::{ChannelIndex, Protocolize},
     Event, Server,
 };
 
@@ -15,8 +14,8 @@ use super::{
     resource::ServerResource,
 };
 
-pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World) {
-    world.resource_scope(|world, mut server: Mut<Server<P, Entity, C>>| {
+pub fn before_receive_events(world: &mut World) {
+    world.resource_scope(|world, mut server: Mut<Server<Entity>>| {
         world.resource_scope(|world, mut server_resource: Mut<ServerResource>| {
             let events = server.receive();
             if events.is_empty() {
@@ -25,7 +24,7 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
             } else {
                 unsafe {
                     let mut authorize_event_writer = world
-                        .get_resource_unchecked_mut::<Events<AuthorizationEvent<P>>>()
+                        .get_resource_unchecked_mut::<Events<AuthorizationEvents>>()
                         .unwrap();
                     let mut connect_event_writer = world
                         .get_resource_unchecked_mut::<Events<ConnectionEvent>>()
@@ -34,7 +33,7 @@ pub fn before_receive_events<P: Protocolize, C: ChannelIndex>(world: &mut World)
                         .get_resource_unchecked_mut::<Events<DisconnectionEvent>>()
                         .unwrap();
                     let mut message_event_writer = world
-                        .get_resource_unchecked_mut::<Events<MessageEvent<P, C>>>()
+                        .get_resource_unchecked_mut::<Events<MessageEvents>>()
                         .unwrap();
 
                     for event in events {
@@ -76,8 +75,8 @@ pub fn finish_tick(mut resource: ResMut<ServerResource>) {
     resource.ticker.reset();
 }
 
-pub fn should_receive<P: Protocolize, C: ChannelIndex>(
-    server: Res<Server<P, Entity, C>>,
+pub fn should_receive(
+    server: Res<Server<Entity>>,
 ) -> ShouldRun {
     if server.is_listening() {
         ShouldRun::Yes

@@ -17,6 +17,11 @@ impl From<TypeId> for ComponentKind {
         Self { type_id }
     }
 }
+impl Into<TypeId> for ComponentKind {
+    fn into(self) -> TypeId {
+        self.type_id
+    }
+}
 
 impl ComponentKind {
     pub fn of<C: Replicate>() -> Self {

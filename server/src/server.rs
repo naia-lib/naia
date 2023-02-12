@@ -295,8 +295,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Sends a message to all connected users using a given channel
-    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: M) {
-        self.broadcast_message_inner(&ChannelKind::of::<C>(), Box::new(message));
+    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
+        let cloned_message = M::clone_box(message);
+        self.broadcast_message_inner(&ChannelKind::of::<C>(), cloned_message);
     }
 
     fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
