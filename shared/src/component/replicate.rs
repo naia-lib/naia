@@ -14,7 +14,7 @@ use crate::{
     messages::named::Named,
 };
 
-pub trait ReplicateBuilder: Send + Named {
+pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream
     fn read(
         &self,

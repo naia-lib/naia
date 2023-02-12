@@ -10,7 +10,7 @@ use naia_server::{
 use naia_bevy_shared::{WorldData, Protocol};
 
 use super::{
-    events::{ConnectionEvent, DisconnectionEvent},
+    events::{ConnectEvent, DisconnectEvent},
     resource::ServerResource,
     stage::{PrivateStage, Stage},
     systems::{before_receive_events, finish_tick, should_receive, should_tick},
@@ -45,17 +45,21 @@ impl Plugin {
 
 impl PluginType for Plugin {
     fn build(&self, app: &mut App) {
-        let config = self.config.lock().unwrap().deref_mut().take().unwrap();
-        let server = Server::<Entity>::new(config.server_config, config.protocol);
+
+        let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
+
+        let world_data = config.protocol.world_data();
+        app.insert_resource(world_data);
+
+        let server = Server::<Entity>::new(config.server_config, config.protocol.into());
 
         app
             // RESOURCES //
             .insert_resource(server)
             .init_resource::<ServerResource>()
-            .init_resource::<WorldData>()
             // EVENTS //
-            .add_event::<ConnectionEvent>()
-            .add_event::<DisconnectionEvent>()
+            .add_event::<ConnectEvent>()
+            .add_event::<DisconnectEvent>()
             // TODO: add these events from the Protocol
             //.add_event::<AuthorizationEvent<P>>()
             //.add_event::<MessageEvent<P, C>>()

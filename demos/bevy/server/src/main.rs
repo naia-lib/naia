@@ -3,8 +3,7 @@ use bevy_core::CorePlugin;
 use bevy_log::{info, LogPlugin};
 
 use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
-
-use naia_bevy_demo_shared::{protocol::Protocol, shared_config, Channels};
+use naia_bevy_demo_shared::protocol;
 
 mod resources;
 mod systems;
@@ -20,9 +19,9 @@ fn main() {
         .add_plugin(CorePlugin::default())
         .add_plugin(ScheduleRunnerPlugin::default())
         .add_plugin(LogPlugin::default())
-        .add_plugin(ServerPlugin::<Protocol, Channels>::new(
+        .add_plugin(ServerPlugin::new(
             ServerConfig::default(),
-            shared_config(),
+            protocol(),
         ))
         // Startup System
         .add_startup_system(init)

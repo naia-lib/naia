@@ -2,11 +2,11 @@ use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
-use crate::messages::default_channels::DefaultChannelsPlugin;
 use crate::{
     component::{component_kinds::ComponentKinds, replicate::Replicate},
     connection::compression_config::CompressionConfig,
     messages::{
+        default_channels::DefaultChannelsPlugin,
         channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
         channel_kinds::ChannelKinds,
         message::Message,
@@ -15,7 +15,7 @@ use crate::{
 };
 
 // Protocol Plugin
-pub trait Plugin {
+pub trait ProtocolPlugin {
     fn build(&self, protocol: &mut Protocol);
 }
 
@@ -46,7 +46,7 @@ impl Protocol {
         }
     }
 
-    pub fn add_plugin<P: Plugin>(&mut self, plugin: P) -> &mut Self {
+    pub fn add_plugin<P: ProtocolPlugin>(&mut self, plugin: P) -> &mut Self {
         self.check_lock();
         plugin.build(self);
         self
@@ -111,7 +111,7 @@ impl Protocol {
         self.locked = true;
     }
 
-    fn check_lock(&self) {
+    pub fn check_lock(&self) {
         if self.locked {
             panic!("Protocol already locked!");
         }

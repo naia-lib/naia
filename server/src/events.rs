@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap, marker::PhantomData, vec::IntoIter};
+use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
 use naia_shared::{Channel, ChannelKind, Message, MessageKind};
 
@@ -42,6 +42,16 @@ impl Events {
 
     pub fn read<E: Event>(&mut self) -> E::Iter {
         return E::iter(self);
+    }
+
+    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn take_auths(&mut self) -> HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>> {
+        mem::take(&mut self.auths)
+    }
+
+    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn take_messages(&mut self) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>> {
+        mem::take(&mut self.messages)
     }
 
     // Crate-public

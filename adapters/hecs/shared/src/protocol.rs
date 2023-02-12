@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use naia_shared::{
     Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig,
-    LinkConditionerConfig, Message, Plugin, Protocol as InnerProtocol, Replicate,
+    LinkConditionerConfig, Message, ProtocolPlugin, Protocol as InnerProtocol, Replicate,
 };
 
 use crate::WorldData;
@@ -24,7 +24,7 @@ impl Protocol {
         self.world_data.take().expect("should only call this once")
     }
 
-    pub fn add_plugin<P: Plugin>(&mut self, plugin: P) -> &mut Self {
+    pub fn add_plugin<P: ProtocolPlugin>(&mut self, plugin: P) -> &mut Self {
         self.inner.add_plugin(plugin);
         self
     }

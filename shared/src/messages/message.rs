@@ -11,7 +11,7 @@ use crate::{
 };
 
 // MessageBuilder
-pub trait MessageBuilder: Send {
+pub trait MessageBuilder: Send + Sync {
     /// Create new Message from incoming bit stream
     fn read(
         &self,

@@ -1,4 +1,4 @@
-use naia_shared::{Plugin, Protocol};
+use naia_shared::{ProtocolPlugin, Protocol};
 
 mod marker;
 mod square;
@@ -9,7 +9,7 @@ pub use square::{Color, Square};
 // Plugin
 pub struct ComponentsPlugin;
 
-impl Plugin for ComponentsPlugin {
+impl ProtocolPlugin for ComponentsPlugin {
     fn build(&self, protocol: &mut Protocol) {
         protocol.add_component::<Square>().add_component::<Marker>();
     }

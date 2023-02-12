@@ -1,5 +1,5 @@
 use crate::{
-    Channel, ChannelDirection, ChannelMode, Plugin, Protocol, ReliableSettings, TickBufferSettings,
+    Channel, ChannelDirection, ChannelMode, ProtocolPlugin, Protocol, ReliableSettings, TickBufferSettings,
 };
 
 #[derive(Channel)]
@@ -16,7 +16,7 @@ pub struct OrderedReliableChannel;
 pub struct TickBufferedChannel;
 
 pub(crate) struct DefaultChannelsPlugin;
-impl Plugin for DefaultChannelsPlugin {
+impl ProtocolPlugin for DefaultChannelsPlugin {
     fn build(&self, protocol: &mut Protocol) {
         protocol
             .add_channel::<UnorderedUnreliableChannel>(

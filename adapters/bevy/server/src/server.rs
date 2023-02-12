@@ -5,7 +5,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_server::{shared::{EntityHandleConverter, Replicate}, EntityRef, Event, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut, Events};
+use naia_server::{shared::{EntityHandleConverter, Replicate}, EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut, Events};
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
 use naia_server::shared::{Channel, Message, Tick};
@@ -37,10 +37,6 @@ impl<'world, 'state> Server<'world, 'state> {
                 server,
             }
         }
-    }
-
-    pub fn receive(&mut self) -> Events {
-        self.server.receive()
     }
 
     //// Connections ////
