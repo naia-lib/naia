@@ -6,9 +6,9 @@ use crate::{
     component::{component_kinds::ComponentKinds, replicate::Replicate},
     connection::compression_config::CompressionConfig,
     messages::{
-        default_channels::DefaultChannelsPlugin,
         channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
         channel_kinds::ChannelKinds,
+        default_channels::DefaultChannelsPlugin,
         message::Message,
         message_kinds::MessageKinds,
     },

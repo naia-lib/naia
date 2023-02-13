@@ -1,4 +1,3 @@
-
 use naia_shared::Message;
 
 #[derive(Message)]

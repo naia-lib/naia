@@ -1,4 +1,3 @@
-
 use naia_shared::{EntityProperty, Message};
 
 #[derive(Message)]
@@ -11,7 +10,7 @@ impl EntityAssignment {
     pub fn new(assign: bool) -> Self {
         Self {
             assign,
-            entity: EntityProperty::new_empty()
+            entity: EntityProperty::new_empty(),
         }
     }
 }

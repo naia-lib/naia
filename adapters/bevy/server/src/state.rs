@@ -4,9 +4,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_server::{
-    Server as NaiaServer,
-};
+use naia_server::Server as NaiaServer;
 
 use naia_bevy_shared::WorldProxyMut;
 
@@ -24,14 +22,12 @@ impl State {
         world.spawn_empty().despawn();
 
         // resource scope
-        world.resource_scope(
-            |world: &mut World, mut server: Mut<NaiaServer<Entity>>| {
-                // Process queued commands
-                for command in self.commands.drain(..) {
-                    command.write(&mut server, world.proxy_mut());
-                }
-            },
-        );
+        world.resource_scope(|world: &mut World, mut server: Mut<NaiaServer<Entity>>| {
+            // Process queued commands
+            for command in self.commands.drain(..) {
+                command.write(&mut server, world.proxy_mut());
+            }
+        });
     }
 
     #[inline]
@@ -58,9 +54,7 @@ unsafe impl SystemParamState for State {
     }
 }
 
-impl<'world, 'state> SystemParamFetch<'world, 'state>
-    for State
-{
+impl<'world, 'state> SystemParamFetch<'world, 'state> for State {
     type Item = Server<'world, 'state>;
 
     #[inline]

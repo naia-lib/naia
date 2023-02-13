@@ -1,28 +1,29 @@
 use bevy_ecs::{event::EventReader, system::ResMut};
 use bevy_log::info;
 
-use naia_bevy_server::{events::{AuthEvents, ConnectEvent, DisconnectEvent, MessageEvents, ErrorEvent}, shared::Random, Server, AuthEvent};
+use naia_bevy_server::{
+    events::{AuthEvents, ConnectEvent, DisconnectEvent, MessageEvents},
+    shared::Random,
+    Server,
+};
 
 use naia_bevy_demo_shared::{
-    components::{Position, Color},
-    messages::{EntityAssignment, Auth, KeyCommand},
+    channels::{EntityAssignmentChannel, PlayerCommandChannel},
+    components::{Color, ColorValue, Position},
+    messages::{Auth, EntityAssignment, KeyCommand},
 };
-use naia_bevy_demo_shared::channels::EntityAssignmentChannel;
 
 use crate::resources::Global;
 
-pub fn authorization_event(
-    mut event_reader: EventReader<AuthEvents>,
-    mut server: Server,
-) {
+pub fn authorization_event(mut event_reader: EventReader<AuthEvents>, mut server: Server) {
     for events in event_reader.iter() {
-        for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
-            if *auth.username == "charlie" && *auth.password == "12345" {
+        for (user_key, auth) in events.read::<Auth>() {
+            if auth.username == "charlie" && auth.password == "12345" {
                 // Accept incoming connection
-                server.accept_connection(user_key);
+                server.accept_connection(&user_key);
             } else {
                 // Reject incoming connection
-                server.reject_connection(user_key);
+                server.reject_connection(&user_key);
             }
         }
     }
@@ -81,7 +82,10 @@ pub fn connection_event<'world, 'state>(
         let mut assignment_message = EntityAssignment::new(true);
         assignment_message.entity.set(&server, &entity);
 
-        server.send_message::<EntityAssignmentChannel, EntityAssignment>(user_key, &assignment_message);
+        server.send_message::<EntityAssignmentChannel, EntityAssignment>(
+            user_key,
+            &assignment_message,
+        );
     }
 }
 
@@ -90,8 +94,7 @@ pub fn disconnection_event(
     mut global: ResMut<Global>,
     mut server: Server,
 ) {
-    for event in event_reader.iter() {
-        let DisconnectionEvent(user_key, user) = event;
+    for DisconnectEvent(user_key, user) in event_reader.iter() {
         info!("Naia Server disconnected from: {:?}", user.address);
 
         if let Some(entity) = global.user_to_prediction_map.remove(user_key) {
@@ -104,14 +107,12 @@ pub fn disconnection_event(
 }
 
 pub fn receive_message_event(
-    mut event_reader: EventReader<MessageEvent<Protocol, Channels>>,
+    mut event_reader: EventReader<MessageEvents>,
     mut global: ResMut<Global>,
-    server: Server<Protocol, Channels>,
+    server: Server,
 ) {
-    for event in event_reader.iter() {
-        if let MessageEvent(_user_key, Channels::PlayerCommand, Protocol::KeyCommand(key_command)) =
-            event
-        {
+    for events in event_reader.iter() {
+        for (_user_key, key_command) in events.read::<PlayerCommandChannel, KeyCommand>() {
             if let Some(entity) = &key_command.entity.get(&server) {
                 global
                     .player_last_command

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use naia_shared::{
     Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig,
-    LinkConditionerConfig, Message, ProtocolPlugin, Protocol as InnerProtocol, Replicate,
+    LinkConditionerConfig, Message, Protocol as InnerProtocol, ProtocolPlugin, Replicate,
 };
 
 use crate::WorldData;

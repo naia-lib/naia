@@ -33,7 +33,6 @@ impl FromWorld for WorldData {
 }
 
 impl WorldData {
-
     pub fn new() -> Self {
         Self {
             entities: HashSet::default(),

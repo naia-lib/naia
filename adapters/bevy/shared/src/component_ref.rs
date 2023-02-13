@@ -3,8 +3,7 @@ use std::ops::{Deref, DerefMut};
 use bevy_ecs::world::Mut as BevyMut;
 
 use naia_shared::{
-    ReplicaDynMutTrait, ReplicaDynRefTrait, ReplicaMutTrait, ReplicaRefTrait,
-    Replicate,
+    ReplicaDynMutTrait, ReplicaDynRefTrait, ReplicaMutTrait, ReplicaRefTrait, Replicate,
 };
 
 // ComponentRef

@@ -8,17 +8,16 @@ use bevy_ecs::{
 use naia_server::Server;
 
 mod naia_events {
-    pub use naia_server::{ConnectEvent, DisconnectEvent, AuthEvent, MessageEvent, ErrorEvent, TickEvent};
+    pub use naia_server::{
+        AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvent, TickEvent,
+    };
 }
 
 mod bevy_events {
-    pub use crate::events::{AuthEvents, ConnectEvent, DisconnectEvent, MessageEvents, ErrorEvent};
+    pub use crate::events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents};
 }
 
-
-use super::{
-    resource::ServerResource,
-};
+use super::resource::ServerResource;
 
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<Server<Entity>>| {
@@ -69,7 +68,6 @@ pub fn before_receive_events(world: &mut World) {
                         .get_resource_unchecked_mut::<Events<bevy_events::MessageEvents>>()
                         .unwrap();
                     message_event_writer.send(bevy_events::MessageEvents::from(&mut events));
-
                 }
             }
         });
@@ -88,9 +86,7 @@ pub fn finish_tick(mut resource: ResMut<ServerResource>) {
     resource.ticker.reset();
 }
 
-pub fn should_receive(
-    server: Res<Server<Entity>>,
-) -> ShouldRun {
+pub fn should_receive(server: Res<Server<Entity>>) -> ShouldRun {
     if server.is_listening() {
         ShouldRun::Yes
     } else {

@@ -1,5 +1,6 @@
 use crate::{
-    Channel, ChannelDirection, ChannelMode, ProtocolPlugin, Protocol, ReliableSettings, TickBufferSettings,
+    Channel, ChannelDirection, ChannelMode, Protocol, ProtocolPlugin, ReliableSettings,
+    TickBufferSettings,
 };
 
 #[derive(Channel)]

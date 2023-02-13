@@ -50,7 +50,9 @@ impl Events {
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
-    pub fn take_messages(&mut self) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>> {
+    pub fn take_messages(
+        &mut self,
+    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>> {
         mem::take(&mut self.messages)
     }
 

@@ -1,4 +1,3 @@
-
 use naia_bevy_shared::{Protocol, ProtocolPlugin};
 
 mod auth;

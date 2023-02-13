@@ -7,11 +7,7 @@ use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 use super::component_ref::{ComponentDynMut, ComponentDynRef};
 
 pub trait ComponentAccess: Send + Sync {
-    fn component<'w>(
-        &self,
-        world: &'w World,
-        entity: &Entity,
-    ) -> Option<ReplicaDynRefWrapper<'w>>;
+    fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>>;
     fn component_mut<'w>(
         &self,
         world: &'w mut World,
@@ -46,11 +42,7 @@ impl<R: Replicate> ComponentAccessor<R> {
 }
 
 impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
-    fn component<'w>(
-        &self,
-        world: &'w World,
-        entity: &Entity,
-    ) -> Option<ReplicaDynRefWrapper<'w>> {
+    fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>> {
         if let Some(component_ref) = world.get::<R>(*entity) {
             let wrapper = ComponentDynRef(component_ref);
             let component_dyn_ref = ReplicaDynRefWrapper::new(wrapper);
@@ -73,15 +65,12 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
     }
 
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<Box<dyn Replicate>> {
-        let result: Option<R> = world
-            .entity_mut(*entity)
-            .remove::<R>();
-        let casted: Option<Box<dyn Replicate>> = result
-            .map(|inner: R| {
-                let boxed_r: Box<R> = Box::new(inner);
-                let boxed_dyn: Box<dyn Replicate> = boxed_r;
-                boxed_dyn
-            });
+        let result: Option<R> = world.entity_mut(*entity).remove::<R>();
+        let casted: Option<Box<dyn Replicate>> = result.map(|inner: R| {
+            let boxed_r: Box<R> = Box::new(inner);
+            let boxed_dyn: Box<dyn Replicate> = boxed_r;
+            boxed_dyn
+        });
         casted
     }
 

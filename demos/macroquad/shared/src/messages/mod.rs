@@ -1,4 +1,4 @@
-use naia_shared::{ProtocolPlugin, Protocol};
+use naia_shared::{Protocol, ProtocolPlugin};
 
 mod auth;
 mod entity_assignment;

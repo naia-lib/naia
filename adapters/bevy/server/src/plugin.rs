@@ -3,14 +3,12 @@ use std::{ops::DerefMut, sync::Mutex};
 use bevy_app::{App, CoreStage, Plugin as PluginType};
 use bevy_ecs::{entity::Entity, schedule::SystemStage};
 
-use naia_server::{
-    Server, ServerConfig,
-};
+use naia_server::{Server, ServerConfig};
 
-use naia_bevy_shared::{WorldData, Protocol};
+use naia_bevy_shared::Protocol;
 
 use super::{
-    events::{ConnectEvent, DisconnectEvent},
+    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents},
     resource::ServerResource,
     stage::{PrivateStage, Stage},
     systems::{before_receive_events, finish_tick, should_receive, should_tick},
@@ -45,7 +43,6 @@ impl Plugin {
 
 impl PluginType for Plugin {
     fn build(&self, app: &mut App) {
-
         let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
 
         let world_data = config.protocol.world_data();
@@ -60,9 +57,9 @@ impl PluginType for Plugin {
             // EVENTS //
             .add_event::<ConnectEvent>()
             .add_event::<DisconnectEvent>()
-            // TODO: add these events from the Protocol
-            //.add_event::<AuthorizationEvent<P>>()
-            //.add_event::<MessageEvent<P, C>>()
+            .add_event::<AuthEvents>()
+            .add_event::<MessageEvents>()
+            .add_event::<ErrorEvent>()
             // STAGES //
             .add_stage_before(
                 CoreStage::PreUpdate,
@@ -85,10 +82,7 @@ impl PluginType for Plugin {
                 SystemStage::parallel().with_run_criteria(should_tick),
             )
             // SYSTEMS //
-            .add_system_to_stage(
-                PrivateStage::BeforeReceiveEvents,
-                before_receive_events,
-            )
+            .add_system_to_stage(PrivateStage::BeforeReceiveEvents, before_receive_events)
             .add_system_to_stage(PrivateStage::AfterTick, finish_tick);
     }
 }

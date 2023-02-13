@@ -2,8 +2,8 @@ use bevy_app::{App, ScheduleRunnerPlugin};
 use bevy_core::CorePlugin;
 use bevy_log::{info, LogPlugin};
 
-use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
 use naia_bevy_demo_shared::protocol;
+use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
 
 mod resources;
 mod systems;
@@ -19,10 +19,7 @@ fn main() {
         .add_plugin(CorePlugin::default())
         .add_plugin(ScheduleRunnerPlugin::default())
         .add_plugin(LogPlugin::default())
-        .add_plugin(ServerPlugin::new(
-            ServerConfig::default(),
-            protocol(),
-        ))
+        .add_plugin(ServerPlugin::new(ServerConfig::default(), protocol()))
         // Startup System
         .add_startup_system(init)
         // Receive Server Events

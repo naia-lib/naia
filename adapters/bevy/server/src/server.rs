@@ -1,11 +1,13 @@
-
 use bevy_ecs::{
     entity::Entity,
     system::SystemParam,
     world::{Mut, World},
 };
 
-use naia_server::{shared::{EntityHandleConverter, Replicate}, EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut, Events};
+use naia_server::{
+    shared::EntityHandleConverter, EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
+    ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
+};
 
 use naia_bevy_shared::{WorldProxy, WorldRef};
 use naia_server::shared::{Channel, Message, Tick};
@@ -181,8 +183,7 @@ impl<'world, 'state> SystemParam for Server<'world, 'state> {
     type Fetch = State;
 }
 
-impl<'world, 'state> EntityHandleConverter<Entity> for Server<'world, 'state>
-{
+impl<'world, 'state> EntityHandleConverter<Entity> for Server<'world, 'state> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
         self.server.handle_to_entity(entity_handle)
     }

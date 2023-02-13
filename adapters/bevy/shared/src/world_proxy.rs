@@ -1,10 +1,13 @@
-use std::any::TypeId;
 use bevy_ecs::{
     entity::Entity,
     world::{Mut, World},
 };
+use std::any::TypeId;
 
-use naia_shared::{SerdeErr, ComponentUpdate, NetEntityHandleConverter, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, WorldMutType, WorldRefType, ComponentKind};
+use naia_shared::{
+    ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynRefWrapper,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -175,10 +178,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         kinds
     }
 
-    fn component_mut<R: Replicate>(
-        &mut self,
-        entity: &Entity,
-    ) -> Option<ReplicaMutWrapper<R>> {
+    fn component_mut<R: Replicate>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
         if let Some(bevy_mut) = self.world.get_mut::<R>(*entity) {
             let wrapper = ComponentMut(bevy_mut);
             let component_mut = ReplicaMutWrapper::new(wrapper);
@@ -231,7 +231,6 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn insert_component<R: Replicate>(&mut self, entity: &Entity, component_ref: R) {
-
         // insert into ecs
         self.world.entity_mut(*entity).insert(component_ref);
     }
@@ -250,7 +249,11 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         return self.world.entity_mut(*entity).remove::<R>();
     }
 
-    fn remove_component_of_kind(&mut self, entity: &Entity, component_kind: &ComponentKind) -> Option<Box<dyn Replicate>> {
+    fn remove_component_of_kind(
+        &mut self,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) -> Option<Box<dyn Replicate>> {
         let mut output: Option<Box<dyn Replicate>> = None;
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
@@ -277,11 +280,7 @@ fn has_component<R: Replicate>(world: &World, entity: &Entity) -> bool {
     return world.get::<R>(*entity).is_some();
 }
 
-fn has_component_of_kind(
-    world: &World,
-    entity: &Entity,
-    component_kind: &ComponentKind,
-) -> bool {
+fn has_component_of_kind(world: &World, entity: &Entity, component_kind: &ComponentKind) -> bool {
     return world
         .entity(*entity)
         .contains_type_id(<ComponentKind as Into<TypeId>>::into(*component_kind));
