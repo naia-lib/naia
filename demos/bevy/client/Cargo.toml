@@ -21,7 +21,22 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 naia-bevy-client = { path = "../../../adapters/bevy/client" }
 naia-bevy-demo-shared = { path = "../shared" }
-bevy = { version = "0.9", default-features = false, features = [ "bevy_asset", "bevy_winit", "render", "x11" ] }
+
+bevy_app = { version = "0.9", default-features=false }
+bevy_asset = { version = "0.9", default-features=false }
+bevy_core = { version = "0.9", default-features=false }
+bevy_core_pipeline = { version = "0.9", default-features=false }
+bevy_ecs = { version = "0.9", default-features=false }
+bevy_input = { version = "0.9", default-features=false }
+bevy_log = { version = "0.9", default-features=false }
+bevy_math = { version = "0.9", default-features=false }
+bevy_render = { version = "0.9", default-features=false }
+bevy_sprite = { version = "0.9", default-features=false }
+bevy_time = { version = "0.9", default-features=false }
+bevy_transform = { version = "0.9", default-features=false }
+bevy_winit = { version = "0.9", default-features=false, features = ["x11"] }
+bevy_window = { version = "0.9", default-features=false }
+
 cfg-if = { version = "1.0" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

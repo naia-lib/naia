@@ -1,4 +1,6 @@
-use bevy::{ecs::system::Query, transform::components::Transform};
+
+use bevy_ecs::system::Query;
+use bevy_transform::components::Transform;
 
 use naia_bevy_demo_shared::components::Position;
 

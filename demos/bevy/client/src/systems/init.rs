@@ -1,4 +1,6 @@
-use bevy::{ecs::system::Commands, log::info, prelude::Camera2dBundle};
+use bevy_core_pipeline::prelude::Camera2dBundle;
+use bevy_ecs::system::Commands;
+use bevy_log::info;
 
 use naia_bevy_client::Client;
 

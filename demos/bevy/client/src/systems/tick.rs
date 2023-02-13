@@ -1,10 +1,12 @@
-use bevy::ecs::system::{Query, ResMut};
+
+use bevy_ecs::system::{Query, ResMut};
 
 use naia_bevy_client::Client;
 
-use naia_bevy_demo_shared::channels::PlayerCommandChannel;
-use naia_bevy_demo_shared::messages::KeyCommand;
-use naia_bevy_demo_shared::{behavior as shared_behavior, components::Position};
+use naia_bevy_demo_shared::{
+    behavior as shared_behavior, channels::PlayerCommandChannel, components::Position,
+    messages::KeyCommand,
+};
 
 use crate::resources::Global;
 
