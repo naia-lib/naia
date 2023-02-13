@@ -1,35 +1,23 @@
-use std::marker::PhantomData;
-
 use bevy_ecs::{
     system::{SystemMeta, SystemParamFetch, SystemParamState},
     world::World,
 };
 
-use naia_client::shared::{ChannelIndex, Protocolize};
-
 use super::client::Client;
 
 // State
 
-pub struct State<P: Protocolize, C: ChannelIndex> {
-    phantom_p: PhantomData<P>,
-    phantom_c: PhantomData<C>,
-}
+pub struct State;
 
 // SAFE: only local state is accessed
-unsafe impl<P: Protocolize, C: ChannelIndex> SystemParamState for State<P, C> {
+unsafe impl SystemParamState for State {
     fn init(_world: &mut World, _system_meta: &mut SystemMeta) -> Self {
-        Self {
-            phantom_p: PhantomData,
-            phantom_c: PhantomData,
-        }
+        Self
     }
 }
 
-impl<'world, 'state, P: Protocolize, C: ChannelIndex> SystemParamFetch<'world, 'state>
-    for State<P, C>
-{
-    type Item = Client<'world, P, C>;
+impl<'world, 'state> SystemParamFetch<'world, 'state> for State {
+    type Item = Client<'world>;
 
     #[inline]
     unsafe fn get_param(

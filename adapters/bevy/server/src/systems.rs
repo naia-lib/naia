@@ -1,3 +1,5 @@
+use std::{thread::sleep, time::Duration};
+
 use bevy_ecs::{
     entity::Entity,
     event::Events,
@@ -5,6 +7,7 @@ use bevy_ecs::{
     system::{Res, ResMut},
     world::{Mut, World},
 };
+
 use naia_server::Server;
 
 mod naia_events {
@@ -26,6 +29,7 @@ pub fn before_receive_events(world: &mut World) {
             if events.is_empty() {
                 // In the future, may want to stall the system if we don't receive any events
                 // to keep from the system running empty and using up CPU.
+                sleep(Duration::from_millis(5));
             } else {
                 unsafe {
                     // Connect Event
@@ -57,17 +61,17 @@ pub fn before_receive_events(world: &mut World) {
                         error_event_writer.send(bevy_events::ErrorEvent(error));
                     }
 
-                    // Auth Event
-                    let mut auth_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::AuthEvents>>()
-                        .unwrap();
-                    auth_event_writer.send(bevy_events::AuthEvents::from(&mut events));
-
                     // Message Event
                     let mut message_event_writer = world
                         .get_resource_unchecked_mut::<Events<bevy_events::MessageEvents>>()
                         .unwrap();
                     message_event_writer.send(bevy_events::MessageEvents::from(&mut events));
+
+                    // Auth Event
+                    let mut auth_event_writer = world
+                        .get_resource_unchecked_mut::<Events<bevy_events::AuthEvents>>()
+                        .unwrap();
+                    auth_event_writer.send(bevy_events::AuthEvents::from(&mut events));
                 }
             }
         });

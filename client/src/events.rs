@@ -1,4 +1,4 @@
-use std::{collections::HashMap, marker::PhantomData, net::SocketAddr, vec::IntoIter};
+use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
 use naia_shared::{Channel, ChannelKind, ComponentKind, Message, MessageKind, Replicate, Tick};
 
@@ -50,6 +50,20 @@ impl<E: Copy> Events<E> {
     pub fn read<V: Event<E>>(&mut self) -> V::Iter {
         return V::iter(self);
     }
+
+    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn take_messages(
+        &mut self,
+    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>> {
+        mem::take(&mut self.messages)
+    }
+
+    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn take_removes(&mut self) -> HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>> {
+        mem::take(&mut self.removes)
+    }
+
+    // Crate-public
 
     pub(crate) fn push_connection(&mut self, socket_addr: &SocketAddr) {
         self.connections.push(*socket_addr);

@@ -4,7 +4,7 @@ use bevy::ecs::{entity::Entity, prelude::Resource};
 
 use naia_bevy_client::CommandHistory;
 
-use naia_bevy_demo_shared::protocol::KeyCommand;
+use naia_bevy_demo_shared::messages::KeyCommand;
 
 pub struct OwnedEntity {
     pub confirmed: Entity,

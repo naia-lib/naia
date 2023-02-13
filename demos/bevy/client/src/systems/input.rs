@@ -5,18 +5,11 @@ use bevy::{
 
 use naia_bevy_client::Client;
 
-use naia_bevy_demo_shared::{
-    protocol::{KeyCommand, Protocol},
-    Channels,
-};
+use naia_bevy_demo_shared::messages::KeyCommand;
 
 use crate::resources::Global;
 
-pub fn input(
-    mut global: ResMut<Global>,
-    client: Client<Protocol, Channels>,
-    keyboard_input: Res<Input<KeyCode>>,
-) {
+pub fn input(mut global: ResMut<Global>, client: Client, keyboard_input: Res<Input<KeyCode>>) {
     let w = keyboard_input.pressed(KeyCode::W);
     let s = keyboard_input.pressed(KeyCode::S);
     let a = keyboard_input.pressed(KeyCode::A);
@@ -24,16 +17,16 @@ pub fn input(
 
     if let Some(command) = &mut global.queued_command {
         if w {
-            *command.w = true;
+            command.w = true;
         }
         if s {
-            *command.s = true;
+            command.s = true;
         }
         if a {
-            *command.a = true;
+            command.a = true;
         }
         if d {
-            *command.d = true;
+            command.d = true;
         }
     } else if let Some(owned_entity) = &global.owned_entity {
         let mut key_command = KeyCommand::new(w, s, a, d);

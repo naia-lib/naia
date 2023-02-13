@@ -57,9 +57,9 @@ impl PluginType for Plugin {
             // EVENTS //
             .add_event::<ConnectEvent>()
             .add_event::<DisconnectEvent>()
-            .add_event::<AuthEvents>()
-            .add_event::<MessageEvents>()
             .add_event::<ErrorEvent>()
+            .add_event::<MessageEvents>()
+            .add_event::<AuthEvents>()
             // STAGES //
             .add_stage_before(
                 CoreStage::PreUpdate,

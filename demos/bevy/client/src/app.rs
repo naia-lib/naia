@@ -1,8 +1,10 @@
-use bevy::{app::App, DefaultPlugins};
+use bevy::{
+    app::{App, CoreStage},
+    DefaultPlugins,
+};
 
 use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
-
-use naia_bevy_demo_shared::{protocol::Protocol, shared_config, Channels};
+use naia_bevy_demo_shared::protocol;
 
 use crate::systems::{events, init, input, sync, tick};
 
@@ -10,22 +12,19 @@ pub fn run() {
     App::default()
         // Plugins
         .add_plugins(DefaultPlugins)
-        .add_plugin(ClientPlugin::<Protocol, Channels>::new(
-            ClientConfig::default(),
-            shared_config(),
-        ))
+        .add_plugin(ClientPlugin::new(ClientConfig::default(), protocol()))
         // Startup System
         .add_startup_system(init)
         // Realtime Gameplay Loop
-        .add_system_to_stage(Stage::Connection, events::connect_event)
-        .add_system_to_stage(Stage::Disconnection, events::disconnect_event)
-        .add_system_to_stage(Stage::Rejection, events::reject_event)
-        .add_system_to_stage(Stage::ReceiveEvents, events::spawn_entity_event)
-        .add_system_to_stage(Stage::ReceiveEvents, events::insert_component_event)
-        .add_system_to_stage(Stage::ReceiveEvents, events::update_component_event)
-        .add_system_to_stage(Stage::ReceiveEvents, events::receive_message_event)
-        .add_system_to_stage(Stage::Frame, input)
-        .add_system_to_stage(Stage::PostFrame, sync)
+        .add_system_to_stage(Stage::ReceiveEvents, events::connect_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::disconnect_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::reject_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::spawn_entity_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::insert_component_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::update_component_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::message_events)
+        .add_system_to_stage(CoreStage::Update, input)
+        .add_system_to_stage(CoreStage::Update, sync)
         // Gameplay Loop on Tick
         .add_system_to_stage(Stage::Tick, tick)
         // Run App

@@ -11,36 +11,81 @@ use bevy::{
 };
 
 use naia_bevy_client::{
-    events::{InsertComponentEvent, MessageEvent, SpawnEntityEvent, UpdateComponentEvent},
+    events::{InsertComponentEvent, MessageEvents, SpawnEntityEvent, UpdateComponentEvent},
     shared::{sequence_greater_than, Tick},
     Client, CommandsExt,
 };
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
-    protocol::{Color, ColorValue, Position, Protocol, ProtocolKind},
-    Channels,
+    channels::EntityAssignmentChannel,
+    components::{Color, ColorValue, Position},
+    messages::EntityAssignment,
 };
 
 use crate::resources::{Global, OwnedEntity};
 
 const SQUARE_SIZE: f32 = 32.0;
 
-pub fn connect_event(client: Client<Protocol, Channels>) {
+pub fn connect_events(client: Client) {
     if let Ok(server_address) = client.server_address() {
         info!("Client connected to: {}", server_address);
     }
 }
 
-pub fn reject_event() {
+pub fn reject_events() {
     info!("Client rejected from connecting to Server");
 }
 
-pub fn disconnect_event() {
+pub fn disconnect_events() {
     info!("Client disconnected from Server");
 }
 
-pub fn spawn_entity_event(mut event_reader: EventReader<SpawnEntityEvent>) {
+pub fn message_events(
+    mut event_reader: EventReader<MessageEvents>,
+    mut local: Commands,
+    mut global: ResMut<Global>,
+    client: Client,
+) {
+    for events in event_reader.iter() {
+        for message in events.read::<EntityAssignmentChannel, EntityAssignment>() {
+            let assign = message.assign;
+
+            let entity = message.entity.get(&client).unwrap();
+            if assign {
+                info!("gave ownership of entity");
+
+                let prediction_entity = CommandsExt::duplicate_entity(&mut local, entity)
+                    .insert(SpriteBundle {
+                        sprite: Sprite {
+                            custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                            color: BevyColor::WHITE,
+                            ..Default::default()
+                        },
+                        transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                        ..Default::default()
+                    })
+                    .id();
+
+                global.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+            } else {
+                let mut disowned: bool = false;
+                if let Some(owned_entity) = &global.owned_entity {
+                    if owned_entity.confirmed == entity {
+                        local.entity(owned_entity.predicted).despawn();
+                        disowned = true;
+                    }
+                }
+                if disowned {
+                    info!("removed ownership of entity");
+                    global.owned_entity = None;
+                }
+            }
+        }
+    }
+}
+
+pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
     for event in event_reader.iter() {
         match event {
             SpawnEntityEvent(_entity) => {
@@ -50,13 +95,13 @@ pub fn spawn_entity_event(mut event_reader: EventReader<SpawnEntityEvent>) {
     }
 }
 
-pub fn insert_component_event(
-    mut event_reader: EventReader<InsertComponentEvent<ProtocolKind>>,
+pub fn insert_component_events(
+    mut event_reader: EventReader<InsertComponentEvent>,
     mut local: Commands,
     color_query: Query<&Color>,
 ) {
-    for event in event_reader.iter() {
-        if let InsertComponentEvent(entity, ProtocolKind::Color) = event {
+    for InsertComponentEvent(entity, component_kind) in event_reader.iter() {
+        if component_kind.is::<Color>() {
             if let Ok(color) = color_query.get(*entity) {
                 info!("add color to entity");
 
@@ -82,8 +127,8 @@ pub fn insert_component_event(
     }
 }
 
-pub fn update_component_event(
-    mut event_reader: EventReader<UpdateComponentEvent<ProtocolKind>>,
+pub fn update_component_events(
+    mut event_reader: EventReader<UpdateComponentEvent>,
     mut global: ResMut<Global>,
     mut position_query: Query<&mut Position>,
 ) {
@@ -92,9 +137,7 @@ pub fn update_component_event(
         let server_entity = owned_entity.confirmed;
         let client_entity = owned_entity.predicted;
 
-        for event in event_reader.iter() {
-            let UpdateComponentEvent(server_tick, updated_entity, _) = event;
-
+        for UpdateComponentEvent(server_tick, updated_entity, _) in event_reader.iter() {
             // If entity is owned
             if *updated_entity == server_entity {
                 if let Some(last_tick) = &mut latest_tick {
@@ -120,52 +163,6 @@ pub fn update_component_event(
                 // Replay all stored commands
                 for (_command_tick, command) in replay_commands {
                     shared_behavior::process_command(&command, &mut client_position);
-                }
-            }
-        }
-    }
-}
-
-pub fn receive_message_event(
-    mut event_reader: EventReader<MessageEvent<Protocol, Channels>>,
-    mut local: Commands,
-    mut global: ResMut<Global>,
-    client: Client<Protocol, Channels>,
-) {
-    for event in event_reader.iter() {
-        if let MessageEvent(Channels::EntityAssignment, Protocol::EntityAssignment(message)) = event
-        {
-            let assign = *message.assign;
-
-            let entity = message.entity.get(&client).unwrap();
-            if assign {
-                info!("gave ownership of entity");
-
-                let prediction_entity =
-                    CommandsExt::<Protocol>::duplicate_entity(&mut local, entity)
-                        .insert(SpriteBundle {
-                            sprite: Sprite {
-                                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                                color: BevyColor::WHITE,
-                                ..Default::default()
-                            },
-                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                            ..Default::default()
-                        })
-                        .id();
-
-                global.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
-            } else {
-                let mut disowned: bool = false;
-                if let Some(owned_entity) = &global.owned_entity {
-                    if owned_entity.confirmed == entity {
-                        local.entity(owned_entity.predicted).despawn();
-                        disowned = true;
-                    }
-                }
-                if disowned {
-                    info!("removed ownership of entity");
-                    global.owned_entity = None;
                 }
             }
         }
