@@ -1,5 +1,7 @@
-use naia_bevy_shared::{Protocol, ProtocolPlugin};
-use naia_shared::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings};
+use naia_bevy_shared::{
+    Channel, ChannelDirection, ChannelMode, Protocol, ProtocolPlugin, ReliableSettings,
+    TickBufferSettings,
+};
 
 #[derive(Channel)]
 pub struct PlayerCommandChannel;

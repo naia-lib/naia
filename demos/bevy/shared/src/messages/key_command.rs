@@ -1,4 +1,4 @@
-use naia_shared::{EntityProperty, Message};
+use naia_bevy_shared::{EntityProperty, Message};
 
 #[derive(Message)]
 pub struct KeyCommand {

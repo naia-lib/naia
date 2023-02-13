@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::Component;
 
-use naia_shared::{Property, Replicate, Serde};
+use naia_bevy_shared::{Property, Replicate, Serde};
 
 #[derive(Serde, PartialEq, Clone)]
 pub enum ColorValue {

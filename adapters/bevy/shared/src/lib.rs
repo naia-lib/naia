@@ -12,3 +12,8 @@ pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};
+
+pub use naia_shared::{
+    Channel, ChannelDirection, ChannelMode, EntityProperty, LinkConditionerConfig, Message,
+    Property, ReliableSettings, Replicate, Serde, TickBufferSettings,
+};
