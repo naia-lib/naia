@@ -12,12 +12,18 @@ pub struct Protocol {
     world_data: Option<WorldData>,
 }
 
-impl Protocol {
-    pub fn new() -> Protocol {
-        Protocol {
-            inner: InnerProtocol::new(),
+impl Default for Protocol {
+    fn default() -> Self {
+        Self {
+            inner: InnerProtocol::default(),
             world_data: Some(WorldData::new()),
         }
+    }
+}
+
+impl Protocol {
+    pub fn builder() -> Self {
+        Self::default()
     }
 
     pub fn world_data(&mut self) -> WorldData {
@@ -88,5 +94,9 @@ impl Protocol {
 
     fn check_lock(&self) {
         self.inner.check_lock();
+    }
+
+    pub fn build(&mut self) -> Self {
+        std::mem::take(self)
     }
 }

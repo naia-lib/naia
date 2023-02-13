@@ -96,12 +96,11 @@ impl App {
         for _ in events.read::<DespawnEntityEvent>() {
             info!("deletion of Character entity");
         }
-        for (_, entity, _) in events.read::<UpdateComponentEvent>() {
+        for (_, entity) in events.read::<UpdateComponentEvent<Character>>() {
             if let Some(character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
-                .component::<Character>()
-            {
+                .component::<Character>() {
                 info!(
                     "update of Character - x: {}, y: {}, name: {} {}",
                     *character.x,

@@ -61,6 +61,7 @@ pub fn message_events(
             if assign {
                 info!("gave ownership of entity");
 
+                // Here we create a local copy of the Player entity, to use for client-side prediction
                 let prediction_entity = CommandsExt::duplicate_entity(&mut local, entity)
                     .insert(SpriteBundle {
                         sprite: Sprite {
@@ -92,12 +93,8 @@ pub fn message_events(
 }
 
 pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
-    for event in event_reader.iter() {
-        match event {
-            SpawnEntityEvent(_entity) => {
-                info!("spawned entity");
-            }
-        }
+    for SpawnEntityEvent(_entity) in event_reader.iter() {
+        info!("spawned entity");
     }
 }
 
@@ -109,7 +106,9 @@ pub fn insert_component_events(
     for events in event_reader.iter() {
         for entity in events.read::<Color>() {
             if let Ok(color) = color_query.get(entity) {
-                info!("add color to entity");
+                // When we receive a replicated Color component for a given Entity,
+                // use that value to also insert a local-only SpriteBundle component into this entity
+                info!("add Color Component to entity");
 
                 let color = {
                     match *color.value {
@@ -138,6 +137,10 @@ pub fn update_component_events(
     mut global: ResMut<Global>,
     mut position_query: Query<&mut Position>,
 ) {
+    // When we receive a new Position update for the Player's Entity,
+    // we must ensure the Client-side Prediction also remains in-sync
+    // So we roll the Prediction back to the authoritative Server state
+    // and then execute all Player Commands since that tick, using the CommandHistory helper struct
     if let Some(owned_entity) = &global.owned_entity {
         let mut latest_tick: Option<Tick> = None;
         let server_entity = owned_entity.confirmed;
@@ -164,7 +167,7 @@ pub fn update_component_events(
             {
                 let replay_commands = global.command_history.replays(&server_tick);
 
-                // set to authoritative state
+                // Set to authoritative state
                 client_position.x.mirror(&server_position.x);
                 client_position.y.mirror(&server_position.y);
 

@@ -14,8 +14,7 @@ pub use position::Position;
 
 // Protocol Build
 pub fn protocol() -> Protocol {
-    let mut protocol = Protocol::new();
-    protocol
+    Protocol::builder()
         // Config
         .tick_interval(Duration::from_millis(25))
         .link_condition(LinkConditionerConfig::average_condition())
@@ -26,6 +25,7 @@ pub fn protocol() -> Protocol {
         // Components
         .add_component::<Marker>()
         .add_component::<Name>()
-        .add_component::<Position>();
-    protocol
+        .add_component::<Position>()
+        // Build Protocol
+        .build()
 }

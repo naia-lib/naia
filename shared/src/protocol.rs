@@ -1,3 +1,4 @@
+
 use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
@@ -33,9 +34,9 @@ pub struct Protocol {
     locked: bool,
 }
 
-impl Protocol {
-    pub fn new() -> Protocol {
-        Protocol {
+impl Default for Protocol {
+    fn default() -> Self {
+        Self {
             channel_kinds: ChannelKinds::new(),
             message_kinds: MessageKinds::new(),
             component_kinds: ComponentKinds::new(),
@@ -44,6 +45,12 @@ impl Protocol {
             compression: None,
             locked: false,
         }
+    }
+}
+
+impl Protocol {
+    pub fn builder() -> Self {
+        Self::default()
     }
 
     pub fn add_plugin<P: ProtocolPlugin>(&mut self, plugin: P) -> &mut Self {
@@ -115,5 +122,9 @@ impl Protocol {
         if self.locked {
             panic!("Protocol already locked!");
         }
+    }
+
+    pub fn build(&mut self) -> Self {
+        std::mem::take(self)
     }
 }
