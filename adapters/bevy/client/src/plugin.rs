@@ -3,14 +3,14 @@ use std::{ops::DerefMut, sync::Mutex};
 use bevy_app::{App, CoreStage, Plugin as PluginType};
 use bevy_ecs::{entity::Entity, schedule::SystemStage};
 
-use naia_client::{Client, ClientConfig, RejectEvent};
+use naia_client::{Client, ClientConfig};
 
 use naia_bevy_shared::Protocol;
 
 use super::{
     events::{
         ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-        MessageEvents, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvent,
+        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvent,
     },
     resource::ClientResource,
     stage::{PrivateStage, Stage},

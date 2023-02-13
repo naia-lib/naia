@@ -69,5 +69,33 @@ pub struct UpdateComponentEvent(pub Tick, pub Entity, pub ComponentKind);
 
 // RemoveComponentEvents
 pub struct RemoveComponentEvents {
-    inner: HashMap<ComponentKind, Vec<Box<dyn Replicate>>>,
+    inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>,
+}
+
+impl From<&mut Events<Entity>> for RemoveComponentEvents {
+    fn from(events: &mut Events<Entity>) -> Self {
+        Self {
+            inner: events.take_removes(),
+        }
+    }
+}
+
+impl RemoveComponentEvents {
+    pub fn read<C: Replicate>(&self) -> Vec<(Entity, C)> {
+        let mut output = Vec::new();
+
+        let component_kind = ComponentKind::of::<C>();
+        if let Some(components) = self.inner.get(&component_kind) {
+            for (entity, boxed_component) in components {
+                let boxed_any = boxed_component.copy_to_box().to_boxed_any();
+                let component: C = Box::<dyn Any + 'static>::downcast::<C>(boxed_any)
+                    .ok()
+                    .map(|boxed_c| *boxed_c)
+                    .unwrap();
+                output.push((*entity, component));
+            }
+        }
+
+        output
+    }
 }

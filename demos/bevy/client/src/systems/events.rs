@@ -11,7 +11,10 @@ use bevy::{
 };
 
 use naia_bevy_client::{
-    events::{InsertComponentEvent, MessageEvents, SpawnEntityEvent, UpdateComponentEvent},
+    events::{
+        ConnectEvent, DisconnectEvent, InsertComponentEvent, MessageEvents, RejectEvent,
+        SpawnEntityEvent, UpdateComponentEvent,
+    },
     shared::{sequence_greater_than, Tick},
     Client, CommandsExt,
 };
@@ -27,18 +30,24 @@ use crate::resources::{Global, OwnedEntity};
 
 const SQUARE_SIZE: f32 = 32.0;
 
-pub fn connect_events(client: Client) {
-    if let Ok(server_address) = client.server_address() {
-        info!("Client connected to: {}", server_address);
+pub fn connect_events(mut event_reader: EventReader<ConnectEvent>, client: Client) {
+    for _ in event_reader.iter() {
+        if let Ok(server_address) = client.server_address() {
+            info!("Client connected to: {}", server_address);
+        }
     }
 }
 
-pub fn reject_events() {
-    info!("Client rejected from connecting to Server");
+pub fn reject_events(mut event_reader: EventReader<RejectEvent>) {
+    for _ in event_reader.iter() {
+        info!("Client rejected from connecting to Server");
+    }
 }
 
-pub fn disconnect_events() {
-    info!("Client disconnected from Server");
+pub fn disconnect_events(mut event_reader: EventReader<DisconnectEvent>) {
+    for _ in event_reader.iter() {
+        info!("Client disconnected from Server");
+    }
 }
 
 pub fn message_events(
