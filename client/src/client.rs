@@ -45,7 +45,8 @@ pub struct Client<E: Copy + Eq + Hash> {
 
 impl<E: Copy + Eq + Hash> Client<E> {
     /// Create a new Client
-    pub fn new(client_config: ClientConfig, mut protocol: Protocol) -> Self {
+    pub fn new<P: Into<Protocol>>(client_config: ClientConfig, protocol: P) -> Self {
+        let mut protocol: Protocol = protocol.into();
         protocol.lock();
 
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);

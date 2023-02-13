@@ -1,11 +1,13 @@
 use std::time::Duration;
 
+use hecs::World;
+
 use naia_shared::{
     Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig,
     LinkConditionerConfig, Message, Protocol as InnerProtocol, ProtocolPlugin, Replicate,
 };
 
-use crate::WorldData;
+use crate::{WorldData, WorldWrapper};
 
 pub struct Protocol {
     inner: InnerProtocol,
@@ -21,9 +23,19 @@ impl Default for Protocol {
     }
 }
 
+impl Into<InnerProtocol> for Protocol {
+    fn into(self) -> InnerProtocol {
+        self.inner
+    }
+}
+
 impl Protocol {
     pub fn builder() -> Self {
         Self::default()
+    }
+
+    pub fn wrap_world(&mut self, hecs_world: World) -> WorldWrapper {
+        WorldWrapper::wrap(self, hecs_world)
     }
 
     pub fn world_data(&mut self) -> WorldData {
@@ -85,10 +97,6 @@ impl Protocol {
 
     pub fn lock(&mut self) {
         self.inner.lock();
-    }
-
-    pub fn into(self) -> InnerProtocol {
-        self.inner
     }
 
     pub fn build(&mut self) -> Self {

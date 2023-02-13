@@ -22,7 +22,7 @@ pub struct WorldWrapper {
 }
 
 impl WorldWrapper {
-    pub fn wrap(world: World, protocol: &mut Protocol) -> Self {
+    pub fn wrap(protocol: &mut Protocol, world: World) -> Self {
         Self {
             inner: world,
             data: protocol.world_data(),

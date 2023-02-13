@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use naia_hecs_client::{ClientConfig, Protocol, WorldWrapper as World};
+use hecs::World;
+
+use naia_hecs_client::{ClientConfig, Protocol};
 
 use naia_hecs_demo_shared::Auth;
 
@@ -12,8 +14,8 @@ pub fn app_init(
     server_addr: &str,
     auth: Auth,
 ) -> App {
-    let world = World::new(&mut protocol);
-    let mut client = Client::new(client_config, protocol.into());
+    let world = protocol.wrap_world(World::new());
+    let mut client = Client::new(client_config, protocol);
     client.auth(auth);
     client.connect(server_addr);
 

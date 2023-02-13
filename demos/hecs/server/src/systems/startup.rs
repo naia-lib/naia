@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
-use hecs::World as HecsWorld;
+use hecs::World;
 
-use naia_hecs_server::{Protocol, ServerAddrs, ServerConfig, WorldWrapper};
+use naia_hecs_server::{Protocol, ServerAddrs, ServerConfig};
 
 use naia_hecs_demo_shared::{Name, Position};
 
@@ -13,8 +13,8 @@ pub fn app_init(
     mut protocol: Protocol,
     server_addrs: ServerAddrs,
 ) -> App {
-    let mut world = WorldWrapper::wrap(HecsWorld::new(), &mut protocol);
-    let mut server = Server::new(server_config, protocol.into());
+    let mut world = protocol.wrap_world(World::new());
+    let mut server = Server::new(server_config, protocol);
     server.listen(&server_addrs);
 
     // Create a new, singular room, which will contain Users and Entities that they

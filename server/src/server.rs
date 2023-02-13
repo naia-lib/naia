@@ -74,7 +74,8 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Create a new Server
-    pub fn new(server_config: ServerConfig, mut protocol: Protocol) -> Self {
+    pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
+        let mut protocol: Protocol = protocol.into();
         protocol.lock();
 
         let socket = Socket::new(&protocol.socket);

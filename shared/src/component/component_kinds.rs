@@ -30,11 +30,6 @@ impl ComponentKind {
         }
     }
 
-    pub fn is<C: Replicate>(&self) -> bool {
-        let target_id = TypeId::of::<C>();
-        self.type_id == target_id
-    }
-
     pub fn ser(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite) {
         component_kinds.kind_to_net_id(self).ser(writer);
     }

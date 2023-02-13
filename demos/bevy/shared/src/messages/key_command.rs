@@ -12,11 +12,11 @@ pub struct KeyCommand {
 impl KeyCommand {
     pub fn new(w: bool, s: bool, a: bool, d: bool) -> Self {
         Self {
+            entity: EntityProperty::new_empty(),
             w,
             s,
             a,
             d,
-            entity: EntityProperty::new_empty(),
         }
     }
 }
