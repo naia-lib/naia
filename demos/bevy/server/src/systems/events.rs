@@ -2,7 +2,7 @@ use bevy_ecs::{event::EventReader, system::ResMut};
 use bevy_log::info;
 
 use naia_bevy_server::{
-    events::{AuthEvents, ConnectEvent, DisconnectEvent, MessageEvents},
+    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents},
     shared::Random,
     Server,
 };
@@ -15,7 +15,7 @@ use naia_bevy_demo_shared::{
 
 use crate::resources::Global;
 
-pub fn authorization_event(mut event_reader: EventReader<AuthEvents>, mut server: Server) {
+pub fn auth_events(mut event_reader: EventReader<AuthEvents>, mut server: Server) {
     for events in event_reader.iter() {
         for (user_key, auth) in events.read::<Auth>() {
             if auth.username == "charlie" && auth.password == "12345" {
@@ -29,7 +29,7 @@ pub fn authorization_event(mut event_reader: EventReader<AuthEvents>, mut server
     }
 }
 
-pub fn connection_event<'world, 'state>(
+pub fn connect_events<'world, 'state>(
     mut event_reader: EventReader<ConnectEvent>,
     mut global: ResMut<Global>,
     mut server: Server<'world, 'state>,
@@ -89,7 +89,7 @@ pub fn connection_event<'world, 'state>(
     }
 }
 
-pub fn disconnection_event(
+pub fn disconnect_events(
     mut event_reader: EventReader<DisconnectEvent>,
     mut global: ResMut<Global>,
     mut server: Server,
@@ -106,7 +106,7 @@ pub fn disconnection_event(
     }
 }
 
-pub fn receive_message_event(
+pub fn message_events(
     mut event_reader: EventReader<MessageEvents>,
     mut global: ResMut<Global>,
     server: Server,
@@ -119,5 +119,11 @@ pub fn receive_message_event(
                     .insert(*entity, key_command.clone());
             }
         }
+    }
+}
+
+pub fn error_events(mut event_reader: EventReader<ErrorEvent>) {
+    for ErrorEvent(error) in event_reader.iter() {
+        info!("Naia Server Error: {:?}", error);
     }
 }

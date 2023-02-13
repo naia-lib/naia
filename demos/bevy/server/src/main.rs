@@ -23,10 +23,11 @@ fn main() {
         // Startup System
         .add_startup_system(init)
         // Receive Server Events
-        .add_system_to_stage(Stage::ReceiveEvents, events::authorization_event)
-        .add_system_to_stage(Stage::ReceiveEvents, events::connection_event)
-        .add_system_to_stage(Stage::ReceiveEvents, events::disconnection_event)
-        .add_system_to_stage(Stage::ReceiveEvents, events::receive_message_event)
+        .add_system_to_stage(Stage::ReceiveEvents, events::auth_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::connect_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::disconnect_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::message_events)
+        .add_system_to_stage(Stage::ReceiveEvents, events::error_events)
         // Gameplay Loop on Tick
         .add_system_to_stage(Stage::Tick, tick)
         // Run App
