@@ -1,14 +1,16 @@
-use naia_shared::{Property, Replicate};
+use naia_shared::Message;
 
-#[derive(Replicate)]
-#[protocol_path = "crate::protocol::Protocol"]
+#[derive(Message)]
 pub struct Auth {
-    pub username: Property<String>,
-    pub password: Property<String>,
+    pub username: String,
+    pub password: String,
 }
 
 impl Auth {
     pub fn new(username: &str, password: &str) -> Self {
-        Auth::new_complete(username.to_string(), password.to_string())
+        Self {
+            username: username.to_string(),
+            password: password.to_string(),
+        }
     }
 }

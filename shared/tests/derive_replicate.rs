@@ -73,9 +73,8 @@ mod some_nonreplicated_replica {
 }
 
 use naia_shared::{
-    BigMapKey, BitReader, BitWriter, ComponentKinds, EntityDoesNotExistError, EntityHandle,
-    EntityHandleConverter, FakeEntityConverter, NetEntity, NetEntityHandleConverter, Protocol,
-    ProtocolBuilder, Replicate,
+    BigMapKey, BitReader, BitWriter, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
+    FakeEntityConverter, NetEntity, NetEntityHandleConverter, Protocol, Replicate,
 };
 
 use some_entity_replica::EntityPropertyHolder;
@@ -87,13 +86,16 @@ use some_unit_replica::UnitHolder;
 #[test]
 fn read_write_unit_replica() {
     // Protocol
-    Protocol::new().add_component::<UnitHolder>();
+    let mut protocol = Protocol::new();
+    protocol.add_component::<UnitHolder>();
+    let component_kinds = protocol.component_kinds;
+
     // Write
     let mut writer = BitWriter::new();
 
     let in_1 = UnitHolder::new();
 
-    in_1.write(&mut writer, &FakeEntityConverter);
+    in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
     let (buffer_length, buffer) = writer.flush();
 
@@ -101,23 +103,26 @@ fn read_write_unit_replica() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let out_1 = ComponentKinds::read(&mut reader, &FakeEntityConverter)
+    let out_1 = component_kinds
+        .read(&mut reader, &FakeEntityConverter)
         .expect("should deserialize correctly");
 
-    let _typed_in_1 = ComponentKinds::cast_ref::<UnitHolder>(&out_1).unwrap();
-    let _typed_out_1 = ComponentKinds::cast_ref::<UnitHolder>(&out_1).unwrap();
+    let _typed_out_1 = out_1.to_boxed_any().downcast_ref::<UnitHolder>().unwrap();
 }
 
 #[test]
 fn read_write_named_replica() {
     // Protocol
-    Protocol::new().add_component::<NamedStringHolder>();
+    let mut protocol = Protocol::new();
+    protocol.add_component::<NamedStringHolder>();
+    let component_kinds = protocol.component_kinds;
+
     // Write
     let mut writer = BitWriter::new();
 
     let in_1 = NamedStringHolder::new("hello world", "goodbye world");
 
-    in_1.write(&mut writer, &FakeEntityConverter);
+    in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
     let (buffer_length, buffer) = writer.flush();
 
@@ -125,10 +130,12 @@ fn read_write_named_replica() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let out_1 = ComponentKinds::read(&mut reader, &FakeEntityConverter)
-        .expect("should deserialize correctly");
+    let out_1 = component_kinds
+        .read(&mut reader, &FakeEntityConverter)
+        .expect("should deserialize correctly")
+        .to_boxed_any();
 
-    let typed_out_1 = ComponentKinds::cast_ref::<NamedStringHolder>(&out_1).unwrap();
+    let typed_out_1 = out_1.downcast_ref::<NamedStringHolder>().unwrap();
     assert!(in_1.string_1.equals(&typed_out_1.string_1));
     assert!(in_1.string_2.equals(&typed_out_1.string_2));
     assert_eq!(*in_1.string_1, "hello world".to_string());
@@ -140,13 +147,16 @@ fn read_write_named_replica() {
 #[test]
 fn read_write_tuple_replica() {
     // Protocol
-    Protocol::new().add_component::<TupleStringHolder>();
+    let mut protocol = Protocol::new();
+    protocol.add_component::<TupleStringHolder>();
+    let component_kinds = protocol.component_kinds;
+
     // Write
     let mut writer = BitWriter::new();
 
     let in_1 = TupleStringHolder::new("hello world", "goodbye world");
 
-    in_1.write(&mut writer, &FakeEntityConverter);
+    in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
     let (buffer_length, buffer) = writer.flush();
 
@@ -154,10 +164,12 @@ fn read_write_tuple_replica() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let out_1 = ComponentKinds::read(&mut reader, &FakeEntityConverter)
-        .expect("should deserialize correctly");
+    let out_1 = component_kinds
+        .read(&mut reader, &FakeEntityConverter)
+        .expect("should deserialize correctly")
+        .to_boxed_any();
 
-    let typed_out_1 = ComponentKinds::cast_ref::<TupleStringHolder>(&out_1).unwrap();
+    let typed_out_1 = out_1.downcast_ref::<TupleStringHolder>().unwrap();
     assert!(in_1.0.equals(&typed_out_1.0));
     assert!(in_1.1.equals(&typed_out_1.1));
     assert_eq!(*in_1.0, "hello world".to_string());
@@ -190,20 +202,27 @@ fn read_write_entity_replica() {
             Ok(EntityHandle::from_u64(net_entity_u16 as u64))
         }
     }
+
     // Protocol
-    Protocol::new().add_component::<EntityPropertyHolder>();
+    let mut protocol = Protocol::new();
+    protocol.add_component::<EntityPropertyHolder>();
+    let component_kinds = protocol.component_kinds;
+
     // Write
     let mut writer = BitWriter::new();
     let mut in_1 = EntityPropertyHolder::new();
     in_1.entity_1.set(&TestEntityConverter, &1);
-    in_1.write(&mut writer, &TestEntityConverter);
+    in_1.write(&component_kinds, &mut writer, &TestEntityConverter);
     let (buffer_length, buffer) = writer.flush();
+
     // Read
     let mut reader = BitReader::new(&buffer[..buffer_length]);
-    let out_1 = ComponentKinds::read(&mut reader, &TestEntityConverter)
-        .expect("should deserialize correctly");
+    let out_1 = component_kinds
+        .read(&mut reader, &TestEntityConverter)
+        .expect("should deserialize correctly")
+        .to_boxed_any();
 
-    let typed_out_1 = ComponentKinds::cast_ref::<EntityPropertyHolder>(&out_1).unwrap();
+    let typed_out_1 = out_1.downcast_ref::<EntityPropertyHolder>().unwrap();
     assert!(in_1.entity_1.equals(&typed_out_1.entity_1));
     let entity_handles = Vec::<EntityHandle>::from([EntityHandle::from_u64(1)]);
     assert_eq!(in_1.entities(), entity_handles);
@@ -217,13 +236,16 @@ fn read_write_entity_replica() {
 #[test]
 fn read_write_nonreplicated_replica() {
     // Protocol
-    Protocol::new().add_component::<MixedReplicationHolder>();
+    let mut protocol = Protocol::new();
+    protocol.add_component::<MixedReplicationHolder>();
+    let component_kinds = protocol.component_kinds;
+
     // Write
     let mut writer = BitWriter::new();
 
     let in_1 = MixedReplicationHolder::new("hello world", "goodbye world");
 
-    in_1.write(&mut writer, &FakeEntityConverter);
+    in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
     let (buffer_length, buffer) = writer.flush();
 
@@ -231,10 +253,12 @@ fn read_write_nonreplicated_replica() {
 
     let mut reader = BitReader::new(&buffer[..buffer_length]);
 
-    let out_1 = ComponentKinds::read(&mut reader, &FakeEntityConverter)
-        .expect("should deserialize correctly");
+    let out_1 = component_kinds
+        .read(&mut reader, &FakeEntityConverter)
+        .expect("should deserialize correctly")
+        .to_boxed_any();
 
-    let typed_out_1 = ComponentKinds::cast_ref::<MixedReplicationHolder>(&out_1).unwrap();
+    let typed_out_1 = out_1.downcast_ref::<MixedReplicationHolder>().unwrap();
     assert!(in_1.string_1.equals(&typed_out_1.string_1));
     assert_eq!(*in_1.string_1, "hello world".to_string());
     assert_eq!(*in_1.string_2, "goodbye world".to_string());
