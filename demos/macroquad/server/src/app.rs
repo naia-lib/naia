@@ -1,7 +1,7 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::Random, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvent, RoomKey,
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvent, Random, RoomKey,
     Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent, UserKey,
 };
 

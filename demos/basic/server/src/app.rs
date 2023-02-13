@@ -1,7 +1,7 @@
 use std::{thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::default_channels::UnorderedReliableChannel, AuthEvent, ConnectEvent, DisconnectEvent,
+    default_channels::UnorderedReliableChannel, AuthEvent, ConnectEvent, DisconnectEvent,
     ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent,
 };
 

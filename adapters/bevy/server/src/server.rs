@@ -5,14 +5,14 @@ use bevy_ecs::{
 };
 
 use naia_server::{
-    shared::EntityHandleConverter, EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
-    ServerAddrs, UserKey, UserMut, UserRef, UserScopeMut,
+    EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, UserKey, UserMut,
+    UserRef, UserScopeMut,
 };
 
-use naia_bevy_shared::{WorldProxy, WorldRef};
-use naia_server::shared::{Channel, Message, Tick};
-
-use crate::shared::{EntityDoesNotExistError, EntityHandle, WorldRefType};
+use naia_bevy_shared::{
+    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
+    WorldProxy, WorldRef, WorldRefType,
+};
 
 use super::{commands::Command, entity_mut::EntityMut, state::State};
 

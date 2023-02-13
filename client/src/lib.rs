@@ -10,7 +10,7 @@
     unused_import_braces
 )]
 
-pub use naia_shared as shared;
+pub use naia_shared::{default_channels, Random};
 
 mod client;
 mod client_config;

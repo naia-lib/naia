@@ -1,6 +1,6 @@
 use hecs::Entity;
 
-use naia_hecs_server::shared::Random;
+use naia_hecs_server::Random;
 
 use naia_hecs_demo_shared::{Marker, Name, Position};
 

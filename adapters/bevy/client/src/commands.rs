@@ -4,9 +4,7 @@ use bevy_ecs::{
     world::World,
 };
 
-use naia_bevy_shared::WorldProxyMut;
-
-use naia_client::shared::WorldMutType;
+use naia_bevy_shared::{WorldMutType, WorldProxyMut};
 
 pub trait CommandsExt<'w, 's> {
     fn duplicate_entity<'a>(&'a mut self, entity: Entity) -> EntityCommands<'w, 's, 'a>;

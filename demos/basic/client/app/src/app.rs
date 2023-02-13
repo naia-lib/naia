@@ -7,15 +7,14 @@ cfg_if! {
 }
 
 use naia_client::{
-    Client as NaiaClient, ClientConfig, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
-    ErrorEvent, MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-    UpdateComponentEvent,
+    default_channels::UnorderedReliableChannel, Client as NaiaClient, ClientConfig, ConnectEvent,
+    DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent,
+    RemoveComponentEvent, SpawnEntityEvent, TickEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World};
 
 use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage};
-use naia_client::shared::default_channels::UnorderedReliableChannel;
 
 type Client = NaiaClient<Entity>;
 

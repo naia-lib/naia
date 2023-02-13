@@ -1,10 +1,7 @@
-use std::any::Any;
-use std::collections::HashMap;
+use std::{any::Any, collections::HashMap};
 
-use naia_server::{
-    shared::{Channel, ChannelKind, Message, MessageKind},
-    Events, NaiaServerError, User, UserKey,
-};
+use naia_bevy_shared::{Channel, ChannelKind, Message, MessageKind};
+use naia_server::{Events, NaiaServerError, User, UserKey};
 
 // ConnectEvent
 pub struct ConnectEvent(pub UserKey);

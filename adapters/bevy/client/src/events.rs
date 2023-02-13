@@ -2,9 +2,10 @@ use std::{any::Any, collections::HashMap};
 
 use bevy_ecs::entity::Entity;
 
-use naia_client::{
-    shared::{Channel, ChannelKind, ComponentKind, Message, MessageKind, Replicate, Tick},
-    Events, NaiaClientError,
+use naia_client::{Events, NaiaClientError};
+
+use naia_bevy_shared::{
+    Channel, ChannelKind, ComponentKind, Message, MessageKind, Replicate, Tick,
 };
 
 // ConnectEvent

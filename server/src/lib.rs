@@ -10,11 +10,9 @@
     unused_import_braces
 )]
 
-extern crate log;
-
 pub use naia_server_socket::ServerAddrs;
 
-pub use naia_shared as shared;
+pub use naia_shared::{default_channels, Random};
 
 mod cache_map;
 mod connection;

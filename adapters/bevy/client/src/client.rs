@@ -6,13 +6,12 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_client::{
-    shared::{EntityDoesNotExistError, EntityHandle, EntityHandleConverter},
-    Client as NaiaClient, EntityRef, NaiaClientError,
-};
+use naia_client::{Client as NaiaClient, EntityRef, NaiaClientError};
 
-use naia_bevy_shared::{WorldProxy, WorldRef};
-use naia_client::shared::{Channel, Message};
+use naia_bevy_shared::{
+    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, WorldProxy,
+    WorldRef,
+};
 
 use super::state::State;
 

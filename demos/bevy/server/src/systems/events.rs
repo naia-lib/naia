@@ -3,8 +3,7 @@ use bevy_log::info;
 
 use naia_bevy_server::{
     events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents},
-    shared::Random,
-    Server,
+    Random, Server,
 };
 
 use naia_bevy_demo_shared::{

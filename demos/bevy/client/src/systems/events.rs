@@ -15,8 +15,7 @@ use naia_bevy_client::{
         ConnectEvent, DisconnectEvent, InsertComponentEvent, MessageEvents, RejectEvent,
         SpawnEntityEvent, UpdateComponentEvent,
     },
-    shared::{sequence_greater_than, Tick},
-    Client, CommandsExt,
+    sequence_greater_than, Client, CommandsExt, Tick,
 };
 
 use naia_bevy_demo_shared::{
