@@ -14,7 +14,11 @@ fn bits_needed_for(max_value: usize) -> u8 {
 }
 
 #[allow(clippy::format_push_string)]
-pub fn derive_serde_enum(enum_: &DataEnum, enum_name: &Ident, is_internal: bool) -> TokenStream {
+pub fn derive_serde_enum(
+    enum_: &DataEnum,
+    enum_name: &Ident,
+    serde_crate_name: TokenStream,
+) -> TokenStream {
     let variant_number = enum_.variants.len();
     let bits_needed = bits_needed_for(variant_number);
 
@@ -28,18 +32,7 @@ pub fn derive_serde_enum(enum_: &DataEnum, enum_name: &Ident, is_internal: bool)
     let module_name = format_ident!("define_{}", lowercase_enum_name);
 
     let import_types = quote! { Serde, BitWrite, UnsignedInteger, BitReader, SerdeErr };
-    let imports = match is_internal {
-        true => {
-            quote! {
-                use naia_serde::{#import_types};
-            }
-        }
-        false => {
-            quote! {
-                use naia_shared::{#import_types};
-            }
-        }
-    };
+    let imports = quote! { use #serde_crate_name::{#import_types}; };
 
     quote! {
         mod #module_name {

@@ -6,7 +6,7 @@ use syn::DataStruct;
 pub fn derive_serde_struct(
     struct_: &DataStruct,
     struct_name: &Ident,
-    is_internal: bool,
+    serde_crate_name: TokenStream,
 ) -> TokenStream {
     let mut ser_body = quote! {};
     let mut de_body = quote! {};
@@ -30,18 +30,7 @@ pub fn derive_serde_struct(
     let module_name = format_ident!("define_{}", lowercase_struct_name);
 
     let import_types = quote! { Serde, BitWrite, BitReader, SerdeErr };
-    let imports = match is_internal {
-        true => {
-            quote! {
-                use naia_serde::{#import_types};
-            }
-        }
-        false => {
-            quote! {
-                use naia_shared::{#import_types};
-            }
-        }
-    };
+    let imports = quote! { use #serde_crate_name::{#import_types}; };
 
     quote! {
         mod #module_name {

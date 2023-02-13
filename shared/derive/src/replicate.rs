@@ -32,7 +32,10 @@ pub enum Property {
     NonReplicated(NonReplicatedProperty),
 }
 
-pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn replicate_impl(
+    input: proc_macro::TokenStream,
+    shared_crate_name: TokenStream,
+) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     // Helper Properties
@@ -83,7 +86,7 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
         mod #module_name {
 
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any};
-            use naia_shared::{
+            use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,

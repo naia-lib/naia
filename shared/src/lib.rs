@@ -19,10 +19,11 @@ cfg_if! {
     }
 }
 
+pub use naia_derive::{
+    Channel, Message, MessageBevy, MessageHecs, Replicate, ReplicateBevy, ReplicateHecs,
+};
+pub use naia_serde::{Serde, SerdeBevy, SerdeHecs, SerdeInternal};
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
-
-pub use naia_derive::*;
-pub use naia_serde::Serde;
 
 mod backends;
 mod component;
@@ -50,7 +51,9 @@ pub use component::{
         ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
         ReplicaRefWrapper,
     },
-    replicate::{Replicate, ReplicateBuilder},
+    replicate::{
+        Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
+    },
 };
 pub use connection::{
     ack_manager::AckManager,
@@ -77,11 +80,11 @@ pub use entity::{
     },
     net_entity::NetEntity,
 };
-pub use messages::default_channels;
 pub use messages::{
     channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
     channel_kinds::{ChannelKind, ChannelKinds},
-    message::{Message, MessageBuilder},
+    default_channels,
+    message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,

@@ -1,3 +1,12 @@
+pub use naia_shared::{
+    BitReader, BitWrite, BitWriter, Channel, ChannelDirection, ChannelMode, ComponentKind,
+    ComponentKinds, ComponentUpdate, DiffMask, EntityHandle, EntityProperty, LinkConditionerConfig,
+    MessageBevy as Message, MessageBuilder, MessageKind, MessageKinds, Named,
+    NetEntityHandleConverter, OwnedBitReader, Property, PropertyMutate, PropertyMutator,
+    ReliableSettings, ReplicaDynMut, ReplicaDynRef, ReplicateBevy as Replicate, ReplicateBuilder,
+    SerdeBevy as Serde, SerdeErr, TickBufferSettings, UnsignedInteger,
+};
+
 mod component_access;
 mod component_ref;
 mod flag;
@@ -12,8 +21,3 @@ pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};
-
-pub use naia_shared::{
-    Channel, ChannelDirection, ChannelMode, EntityProperty, LinkConditionerConfig, Message,
-    Property, ReliableSettings, Replicate, Serde, TickBufferSettings,
-};

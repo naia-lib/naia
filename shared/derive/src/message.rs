@@ -4,7 +4,10 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Index, LitStr, Me
 
 use super::shared::{get_struct_type, StructType};
 
-pub fn message_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn message_impl(
+    input: proc_macro::TokenStream,
+    shared_crate_name: TokenStream,
+) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     // Helper Properties
@@ -33,7 +36,7 @@ pub fn message_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         mod #module_name {
 
             pub use std::any::Any;
-            pub use naia_shared::{
+            pub use #shared_crate_name::{
                 Named, EntityHandle, Message, BitWrite, NetEntityHandleConverter,
                 EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr
             };
