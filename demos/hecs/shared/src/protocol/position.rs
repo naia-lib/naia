@@ -1,4 +1,4 @@
-use naia_shared::{Property, Replicate};
+use naia_hecs_shared::{Property, Replicate};
 
 #[derive(Replicate)]
 pub struct Position {

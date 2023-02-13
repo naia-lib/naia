@@ -1,4 +1,4 @@
-use naia_shared::{Property, Replicate, Serde};
+use naia_hecs_shared::{Property, Replicate, Serde};
 
 // Here's an example of a Custom Property
 #[derive(Serde, PartialEq, Clone)]

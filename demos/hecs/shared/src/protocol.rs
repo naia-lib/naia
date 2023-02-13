@@ -1,7 +1,6 @@
 use std::time::Duration;
 
-use naia_hecs_shared::Protocol;
-use naia_shared::LinkConditionerConfig;
+use naia_hecs_shared::{LinkConditionerConfig, Protocol};
 
 mod auth;
 mod marker;

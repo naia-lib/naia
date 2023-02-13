@@ -1,3 +1,12 @@
+pub use naia_shared::{
+    BitReader, BitWrite, BitWriter, Channel, ChannelDirection, ChannelMode, ComponentKind,
+    ComponentKinds, ComponentUpdate, DiffMask, EntityHandle, EntityProperty, LinkConditionerConfig,
+    MessageBuilder, MessageHecs as Message, MessageKind, MessageKinds, Named,
+    NetEntityHandleConverter, OwnedBitReader, Property, PropertyMutate, PropertyMutator,
+    ReliableSettings, ReplicaDynMut, ReplicaDynRef, ReplicateBuilder, ReplicateHecs as Replicate,
+    SerdeErr, SerdeHecs as Serde, TickBufferSettings, UnsignedInteger,
+};
+
 mod component_access;
 mod component_ref;
 mod protocol;

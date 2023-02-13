@@ -1,4 +1,4 @@
-use naia_shared::Message;
+use naia_hecs_shared::Message;
 
 #[derive(Message)]
 pub struct Auth {

@@ -1,4 +1,4 @@
-use naia_shared::Replicate;
+use naia_hecs_shared::Replicate;
 
 #[derive(Replicate)]
 pub struct Marker;
