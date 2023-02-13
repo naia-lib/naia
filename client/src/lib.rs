@@ -31,6 +31,7 @@ pub use events::{
     UpdateComponentEvent,
 };
 pub use protocol::entity_ref::EntityRef;
+pub use tick::config::TickConfig;
 
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};

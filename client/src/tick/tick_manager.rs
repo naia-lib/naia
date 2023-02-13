@@ -2,10 +2,14 @@ use std::time::Duration;
 
 use naia_shared::{wrapping_diff, Instant, Serde, Tick};
 
-use crate::client::{BitReader, BitWriter};
+use crate::{
+    client::{BitReader, BitWriter},
+    TickConfig,
+};
 
 /// Manages the current tick for the host
 pub struct TickManager {
+    config: TickConfig,
     /// How much time in milliseconds does a tick last
     tick_interval_millis: f32,
     /// How much time in seconds does a tick last
@@ -24,7 +28,6 @@ pub struct TickManager {
     last_tick_instant: Instant,
     interpolation: f32,
     accumulator: f32,
-    minimum_latency: f32,
     /// Last tick offset recorded
     last_tick_offset: i16,
     ticks_recorded: u8,
@@ -32,18 +35,11 @@ pub struct TickManager {
 
 impl TickManager {
     /// Create a new TickManager with a given tick interval duration
-    pub fn new(tick_interval: Duration, minimum_latency_duration: Option<Duration>) -> Self {
-        let minimum_latency = {
-            if let Some(min_latency) = minimum_latency_duration {
-                min_latency.as_millis() as f32
-            } else {
-                0.0
-            }
-        };
-
+    pub fn new(tick_interval: Duration, config: TickConfig) -> Self {
         let tick_interval_millis = tick_interval.as_millis() as f32;
 
         TickManager {
+            config,
             tick_interval_millis,
             tick_interval_seconds: tick_interval.as_nanos() as f32 / 1000000000.0,
             tick_speed_factor: 1.0,
@@ -56,7 +52,6 @@ impl TickManager {
             last_tick_instant: Instant::now(),
             accumulator: 0.0,
             interpolation: 0.0,
-            minimum_latency,
             last_tick_offset: 0,
             ticks_recorded: 0,
         }
@@ -119,6 +114,8 @@ impl TickManager {
 
         // tick diff
         let tick_offset = wrapping_diff(self.internal_tick, server_tick);
+        let tick_offset_smoothing = self.config.tick_offset_smooth_factor;
+        let inv_tick_offset_smoothing = 1.0 - tick_offset_smoothing;
 
         if self.ticks_recorded <= 1 {
             if self.ticks_recorded == 1 {
@@ -127,10 +124,11 @@ impl TickManager {
 
             self.ticks_recorded += 1;
         } else {
-            self.tick_offset_avg = (0.9 * self.tick_offset_avg) + (0.1 * (tick_offset as f32));
+            self.tick_offset_avg = (inv_tick_offset_smoothing * self.tick_offset_avg)
+                + (tick_offset_smoothing * (tick_offset as f32));
             let tick_offset_speed = (tick_offset - self.last_tick_offset) as f32;
-            self.tick_offset_speed_avg =
-                (0.9 * self.tick_offset_speed_avg) + (0.1 * tick_offset_speed);
+            self.tick_offset_speed_avg = (inv_tick_offset_smoothing * self.tick_offset_speed_avg)
+                + (tick_offset_smoothing * tick_offset_speed);
         }
 
         self.last_tick_offset = tick_offset;
@@ -147,7 +145,8 @@ impl TickManager {
         // Calculate incoming & outgoing jitter buffer tick offsets
 
         let jitter_limit = jitter_average * 4.0;
-        self.client_receiving_tick_adjust = jitter_limit / self.tick_interval_millis;
+        self.client_receiving_tick_adjust = (jitter_limit / self.tick_interval_millis)
+            .max(self.config.minimum_recv_jitter_buffer_size as f32);
 
         // NOTE: I've struggled multiple times with why rtt_average instead of
         // ping_average exists in this calculation, figured it out, then
@@ -157,8 +156,13 @@ impl TickManager {
         // self.server_tick + ping_average / tick_interval.
         // By using rtt_average here, we are correcting for our late (and
         // lesser) self.server_tick value
-        let client_sending_adjust_millis = self.minimum_latency.max(rtt_average + jitter_limit);
-        self.client_sending_tick_adjust = client_sending_adjust_millis / self.tick_interval_millis;
+        let client_sending_adjust_millis = self
+            .config
+            .minimum_latency_millis
+            .max(rtt_average + jitter_limit);
+        self.client_sending_tick_adjust = (client_sending_adjust_millis
+            / self.tick_interval_millis)
+            .max(self.config.minimum_send_jitter_buffer_size as f32);
 
         // Calculate estimate of earliest tick Server could receive now
         let server_receivable_adjust_millis = rtt_average - jitter_limit;

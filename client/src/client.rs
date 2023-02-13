@@ -52,7 +52,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
         let tick_manager = protocol
             .tick_interval
-            .map(|duration| TickManager::new(duration, client_config.minimum_latency));
+            .map(|duration| TickManager::new(duration, client_config.tick_config));
 
         let compression_config = protocol.compression.clone();
 
@@ -497,7 +497,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
             if let Some(duration) = self.protocol.tick_interval {
                 Some(TickManager::new(
                     duration,
-                    self.client_config.minimum_latency,
+                    self.client_config.tick_config.clone(),
                 ))
             } else {
                 None
