@@ -13,9 +13,9 @@ pub struct Events<E: Copy> {
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>>,
     spawns: Vec<E>,
     despawns: Vec<E>,
-    inserts: Vec<(E, ComponentKind)>,
+    inserts: HashMap<ComponentKind, Vec<E>>,
     removes: HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>,
-    updates: Vec<(Tick, E, ComponentKind)>,
+    updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
     empty: bool,
 }
 
@@ -36,9 +36,9 @@ impl<E: Copy> Events<E> {
             messages: HashMap::new(),
             spawns: Vec::new(),
             despawns: Vec::new(),
-            inserts: Vec::new(),
+            inserts: HashMap::new(),
             removes: HashMap::new(),
-            updates: Vec::new(),
+            updates: HashMap::new(),
             empty: true,
         }
     }
@@ -56,6 +56,16 @@ impl<E: Copy> Events<E> {
         &mut self,
     ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>> {
         mem::take(&mut self.messages)
+    }
+
+    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn take_inserts(&mut self) -> HashMap<ComponentKind, Vec<E>> {
+        mem::take(&mut self.inserts)
+    }
+
+    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn take_updates(&mut self) -> HashMap<ComponentKind, Vec<(Tick, E)>> {
+        mem::take(&mut self.updates)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
@@ -116,7 +126,11 @@ impl<E: Copy> Events<E> {
     }
 
     pub(crate) fn push_insert(&mut self, entity: E, component_kind: ComponentKind) {
-        self.inserts.push((entity, component_kind));
+        if !self.inserts.contains_key(&component_kind) {
+            self.inserts.insert(component_kind, Vec::new());
+        }
+        let list = self.inserts.get_mut(&component_kind).unwrap();
+        list.push(entity);
         self.empty = false;
     }
 
@@ -131,7 +145,11 @@ impl<E: Copy> Events<E> {
     }
 
     pub(crate) fn push_update(&mut self, tick: Tick, entity: E, component_kind: ComponentKind) {
-        self.updates.push((tick, entity, component_kind));
+        if !self.updates.contains_key(&component_kind) {
+            self.updates.insert(component_kind, Vec::new());
+        }
+        let list = self.updates.get_mut(&component_kind).unwrap();
+        list.push((tick, entity));
         self.empty = false;
     }
 
@@ -264,13 +282,36 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
 }
 
 // Insert Event
-pub struct InsertComponentEvent;
-impl<E: Copy> Event<E> for InsertComponentEvent {
-    type Iter = IntoIter<(E, ComponentKind)>;
+pub struct InsertComponentEvent<C: Replicate> {
+    phantom_c: PhantomData<C>,
+}
+impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
+    type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        let list = std::mem::take(&mut events.inserts);
-        return IntoIterator::into_iter(list);
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.inserts.remove(&component_kind) {
+            return IntoIterator::into_iter(boxed_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
+    }
+}
+
+// Update Event
+pub struct UpdateComponentEvent<C: Replicate> {
+    phantom_c: PhantomData<C>,
+}
+impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
+    type Iter = IntoIter<(Tick, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.updates.remove(&component_kind) {
+            return IntoIterator::into_iter(boxed_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
     }
 }
 
@@ -296,16 +337,5 @@ impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
         }
 
         return IntoIterator::into_iter(Vec::new());
-    }
-}
-
-// Update Event
-pub struct UpdateComponentEvent;
-impl<E: Copy> Event<E> for UpdateComponentEvent {
-    type Iter = IntoIter<(Tick, E, ComponentKind)>;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        let list = std::mem::take(&mut events.updates);
-        return IntoIterator::into_iter(list);
     }
 }

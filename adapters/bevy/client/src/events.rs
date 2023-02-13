@@ -63,10 +63,52 @@ pub struct SpawnEntityEvent(pub Entity);
 pub struct DespawnEntityEvent(pub Entity);
 
 // InsertComponentEvent
-pub struct InsertComponentEvent(pub Entity, pub ComponentKind);
+pub struct InsertComponentEvents {
+    inner: HashMap<ComponentKind, Vec<Entity>>,
+}
 
-// UpdateComponentEvent
-pub struct UpdateComponentEvent(pub Tick, pub Entity, pub ComponentKind);
+impl From<&mut Events<Entity>> for InsertComponentEvents {
+    fn from(events: &mut Events<Entity>) -> Self {
+        Self {
+            inner: events.take_inserts(),
+        }
+    }
+}
+
+impl InsertComponentEvents {
+    pub fn read<C: Replicate>(&self) -> Vec<Entity> {
+        let component_kind = ComponentKind::of::<C>();
+        if let Some(components) = self.inner.get(&component_kind) {
+            return components.clone();
+        }
+
+        return Vec::new();
+    }
+}
+
+// UpdateComponentEvents
+pub struct UpdateComponentEvents {
+    inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>,
+}
+
+impl From<&mut Events<Entity>> for UpdateComponentEvents {
+    fn from(events: &mut Events<Entity>) -> Self {
+        Self {
+            inner: events.take_updates(),
+        }
+    }
+}
+
+impl UpdateComponentEvents {
+    pub fn read<C: Replicate>(&self) -> Vec<(Tick, Entity)> {
+        let component_kind = ComponentKind::of::<C>();
+        if let Some(components) = self.inner.get(&component_kind) {
+            return components.clone();
+        }
+
+        return Vec::new();
+    }
+}
 
 // RemoveComponentEvents
 pub struct RemoveComponentEvents {

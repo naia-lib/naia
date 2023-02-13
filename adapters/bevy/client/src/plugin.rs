@@ -9,8 +9,8 @@ use naia_bevy_shared::Protocol;
 
 use super::{
     events::{
-        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvent,
+        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvents,
+        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
     },
     resource::ClientResource,
     stage::{PrivateStage, Stage},
@@ -65,8 +65,8 @@ impl PluginType for Plugin {
             .add_event::<MessageEvents>()
             .add_event::<SpawnEntityEvent>()
             .add_event::<DespawnEntityEvent>()
-            .add_event::<InsertComponentEvent>()
-            .add_event::<UpdateComponentEvent>()
+            .add_event::<InsertComponentEvents>()
+            .add_event::<UpdateComponentEvents>()
             .add_event::<RemoveComponentEvents>()
             // STAGES //
             // events //

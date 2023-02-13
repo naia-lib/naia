@@ -16,7 +16,7 @@ use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, Square},
+    components::{Color, Marker, Square},
     messages::{Auth, EntityAssignment, KeyCommand},
     protocol,
 };
@@ -123,6 +123,32 @@ impl App {
             self.queued_command = None;
             self.command_history = CommandHistory::default();
         }
+        for entity_assignment in
+            events.read::<MessageEvent<EntityAssignmentChannel, EntityAssignment>>()
+        {
+            let assign = entity_assignment.assign;
+
+            let entity = entity_assignment.entity.get(&self.client).unwrap();
+            if assign {
+                info!("gave ownership of entity");
+                let prediction_entity = self.world.proxy_mut().duplicate_entity(&entity);
+                self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+            } else {
+                let mut disowned: bool = false;
+                if let Some(owned_entity) = &self.owned_entity {
+                    if owned_entity.confirmed == entity {
+                        self.world
+                            .proxy_mut()
+                            .despawn_entity(&owned_entity.predicted);
+                        disowned = true;
+                    }
+                }
+                if disowned {
+                    info!("removed ownership of entity");
+                    self.owned_entity = None;
+                }
+            }
+        }
         for _ in events.read::<TickEvent>() {
             if let Some(owned_entity) = &self.owned_entity {
                 if let Some(command) = self.queued_command.take() {
@@ -157,43 +183,11 @@ impl App {
             info!("despawned entity");
             // TODO: Sync up Predicted & Confirmed entities
         }
-        for (_entity, _component_kind) in events.read::<InsertComponentEvent>() {
+        for _entity in events.read::<InsertComponentEvent<Marker>>() {
             info!("inserted component");
             // TODO: Sync up Predicted & Confirmed entities
         }
-        for (_entity, _component) in events.read::<RemoveComponentEvent<Square>>() {
-            info!("removed component");
-            // TODO: Sync up Predicted & Confirmed entities
-        }
-        for entity_assignment in
-            events.read::<MessageEvent<EntityAssignmentChannel, EntityAssignment>>()
-        {
-            let assign = entity_assignment.assign;
-
-            let entity = entity_assignment.entity.get(&self.client).unwrap();
-            if assign {
-                info!("gave ownership of entity");
-                let prediction_entity = self.world.proxy_mut().duplicate_entity(&entity);
-                self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
-            } else {
-                let mut disowned: bool = false;
-                if let Some(owned_entity) = &self.owned_entity {
-                    if owned_entity.confirmed == entity {
-                        self.world
-                            .proxy_mut()
-                            .despawn_entity(&owned_entity.predicted);
-                        disowned = true;
-                    }
-                }
-                if disowned {
-                    info!("removed ownership of entity");
-                    self.owned_entity = None;
-                }
-            }
-        }
-        for (server_tick, updated_entity, _updated_component_type) in
-            events.read::<UpdateComponentEvent>()
-        {
+        for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Square>>() {
             if let Some(owned_entity) = &self.owned_entity {
                 let server_entity = owned_entity.confirmed;
 
@@ -218,6 +212,10 @@ impl App {
                     }
                 }
             }
+        }
+        for (_entity, _component) in events.read::<RemoveComponentEvent<Square>>() {
+            info!("removed component");
+            // TODO: Sync up Predicted & Confirmed entities
         }
         for error in events.read::<ErrorEvent>() {
             info!("Client Error: {}", error);

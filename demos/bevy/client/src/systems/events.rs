@@ -1,4 +1,3 @@
-
 use bevy_ecs::{
     event::EventReader,
     system::{Commands, Query, ResMut},
@@ -11,8 +10,8 @@ use bevy_transform::components::Transform;
 
 use naia_bevy_client::{
     events::{
-        ConnectEvent, DisconnectEvent, InsertComponentEvent, MessageEvents, RejectEvent,
-        SpawnEntityEvent, UpdateComponentEvent,
+        ConnectEvent, DisconnectEvent, InsertComponentEvents, MessageEvents, RejectEvent,
+        SpawnEntityEvent, UpdateComponentEvents,
     },
     sequence_greater_than, Client, CommandsExt, Tick,
 };
@@ -103,13 +102,13 @@ pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
 }
 
 pub fn insert_component_events(
-    mut event_reader: EventReader<InsertComponentEvent>,
+    mut event_reader: EventReader<InsertComponentEvents>,
     mut local: Commands,
     color_query: Query<&Color>,
 ) {
-    for InsertComponentEvent(entity, component_kind) in event_reader.iter() {
-        if component_kind.is::<Color>() {
-            if let Ok(color) = color_query.get(*entity) {
+    for events in event_reader.iter() {
+        for entity in events.read::<Color>() {
+            if let Ok(color) = color_query.get(entity) {
                 info!("add color to entity");
 
                 let color = {
@@ -120,7 +119,7 @@ pub fn insert_component_events(
                     }
                 };
 
-                local.entity(*entity).insert(SpriteBundle {
+                local.entity(entity).insert(SpriteBundle {
                     sprite: Sprite {
                         custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
                         color,
@@ -135,7 +134,7 @@ pub fn insert_component_events(
 }
 
 pub fn update_component_events(
-    mut event_reader: EventReader<UpdateComponentEvent>,
+    mut event_reader: EventReader<UpdateComponentEvents>,
     mut global: ResMut<Global>,
     mut position_query: Query<&mut Position>,
 ) {
@@ -144,15 +143,17 @@ pub fn update_component_events(
         let server_entity = owned_entity.confirmed;
         let client_entity = owned_entity.predicted;
 
-        for UpdateComponentEvent(server_tick, updated_entity, _) in event_reader.iter() {
-            // If entity is owned
-            if *updated_entity == server_entity {
-                if let Some(last_tick) = &mut latest_tick {
-                    if sequence_greater_than(*server_tick, *last_tick) {
-                        *last_tick = *server_tick;
+        for events in event_reader.iter() {
+            for (server_tick, updated_entity) in events.read::<Position>() {
+                // If entity is owned
+                if updated_entity == server_entity {
+                    if let Some(last_tick) = &mut latest_tick {
+                        if sequence_greater_than(server_tick, *last_tick) {
+                            *last_tick = server_tick;
+                        }
+                    } else {
+                        latest_tick = Some(server_tick);
                     }
-                } else {
-                    latest_tick = Some(*server_tick);
                 }
             }
         }

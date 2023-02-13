@@ -1,4 +1,3 @@
-
 use std::default::Default;
 
 use bevy_ecs::{entity::Entity, prelude::Resource};

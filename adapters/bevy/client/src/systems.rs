@@ -20,8 +20,8 @@ mod naia_events {
 
 mod bevy_events {
     pub use crate::events::{
-        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvent,
+        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvents,
+        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
     };
 }
 
@@ -94,28 +94,17 @@ pub fn before_receive_events(world: &mut World) {
 
                     // Insert Component Event
                     let mut insert_component_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::InsertComponentEvent>>()
+                        .get_resource_unchecked_mut::<Events<bevy_events::InsertComponentEvents>>()
                         .unwrap();
-                    for (entity, component_kind) in
-                        events.read::<naia_events::InsertComponentEvent>()
-                    {
-                        insert_component_event_writer
-                            .send(bevy_events::InsertComponentEvent(entity, component_kind));
-                    }
+                    insert_component_event_writer
+                        .send(bevy_events::InsertComponentEvents::from(&mut events));
 
                     // Update Component Event
                     let mut update_component_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::UpdateComponentEvent>>()
+                        .get_resource_unchecked_mut::<Events<bevy_events::UpdateComponentEvents>>()
                         .unwrap();
-                    for (tick, entity, component_kind) in
-                        events.read::<naia_events::UpdateComponentEvent>()
-                    {
-                        update_component_event_writer.send(bevy_events::UpdateComponentEvent(
-                            tick,
-                            entity,
-                            component_kind,
-                        ));
-                    }
+                    update_component_event_writer
+                        .send(bevy_events::UpdateComponentEvents::from(&mut events));
 
                     // Remove Component Event
                     let mut remove_component_event_writer = world

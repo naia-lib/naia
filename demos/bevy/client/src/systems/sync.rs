@@ -1,4 +1,3 @@
-
 use bevy_ecs::system::Query;
 use bevy_transform::components::Transform;
 

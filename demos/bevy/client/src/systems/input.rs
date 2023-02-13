@@ -1,4 +1,3 @@
-
 use bevy_ecs::system::{Res, ResMut};
 use bevy_input::{keyboard::KeyCode, Input};
 

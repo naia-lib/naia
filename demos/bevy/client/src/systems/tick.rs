@@ -1,4 +1,3 @@
-
 use bevy_ecs::system::{Query, ResMut};
 
 use naia_bevy_client::Client;
