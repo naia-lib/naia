@@ -1,6 +1,6 @@
 [package]
 name = "naia-bevy-server"
-version = "0.15.0"
+version = "0.16.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia_server & Bevy interop"
@@ -13,7 +13,7 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-naia-server = { version = "0.15", path = "../../../server", features = ["bevy_support"] }
-naia-bevy-shared = { version = "0.15", path = "../shared" }
+naia-server = { version = "0.16", path = "../../../server", features = ["bevy_support"] }
+naia-bevy-shared = { version = "0.16", path = "../shared" }
 bevy_app = { version = "0.9", default-features=false }
 bevy_ecs = { version = "0.9", default-features=false }
