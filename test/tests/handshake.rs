@@ -15,8 +15,7 @@ fn end_to_end_handshake_w_auth() {
     let mut reader: BitReader;
 
     // Set up Protocol
-    let mut protocol = Protocol::new();
-    protocol.add_message::<Auth>();
+    let protocol = Protocol::builder().add_message::<Auth>().build();
     let message_kinds = protocol.message_kinds;
 
     // 0. set Client auth object

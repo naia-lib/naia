@@ -86,8 +86,7 @@ use some_unit_replica::UnitHolder;
 #[test]
 fn read_write_unit_replica() {
     // Protocol
-    let mut protocol = Protocol::new();
-    protocol.add_component::<UnitHolder>();
+    let protocol = Protocol::builder().add_component::<UnitHolder>().build();
     let component_kinds = protocol.component_kinds;
 
     // Write
@@ -113,8 +112,7 @@ fn read_write_unit_replica() {
 #[test]
 fn read_write_named_replica() {
     // Protocol
-    let mut protocol = Protocol::new();
-    protocol.add_component::<NamedStringHolder>();
+    let protocol = Protocol::builder().add_component::<NamedStringHolder>().build();
     let component_kinds = protocol.component_kinds;
 
     // Write
@@ -147,8 +145,7 @@ fn read_write_named_replica() {
 #[test]
 fn read_write_tuple_replica() {
     // Protocol
-    let mut protocol = Protocol::new();
-    protocol.add_component::<TupleStringHolder>();
+    let protocol = Protocol::builder().add_component::<TupleStringHolder>().build();
     let component_kinds = protocol.component_kinds;
 
     // Write
@@ -204,8 +201,7 @@ fn read_write_entity_replica() {
     }
 
     // Protocol
-    let mut protocol = Protocol::new();
-    protocol.add_component::<EntityPropertyHolder>();
+    let protocol = Protocol::builder().add_component::<EntityPropertyHolder>().build();
     let component_kinds = protocol.component_kinds;
 
     // Write
@@ -236,8 +232,7 @@ fn read_write_entity_replica() {
 #[test]
 fn read_write_nonreplicated_replica() {
     // Protocol
-    let mut protocol = Protocol::new();
-    protocol.add_component::<MixedReplicationHolder>();
+    let protocol = Protocol::builder().add_component::<MixedReplicationHolder>().build();
     let component_kinds = protocol.component_kinds;
 
     // Write
