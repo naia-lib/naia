@@ -1,50 +1,40 @@
-use std::marker::PhantomData;
-
-use naia_shared::{Protocolize, ReplicaMutTrait, ReplicaRefTrait, ReplicateSafe};
+use naia_shared::{ReplicaMutTrait, ReplicaRefTrait, Replicate};
 
 // ComponentRef
-pub struct ComponentRef<'a, P: Protocolize, R: ReplicateSafe<P>> {
+pub struct ComponentRef<'a, R: Replicate> {
     inner: &'a R,
-    phantom: PhantomData<P>,
 }
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ComponentRef<'a, P, R> {
+impl<'a, R: Replicate> ComponentRef<'a, R> {
     pub fn new(inner: &'a R) -> Self {
-        Self {
-            inner,
-            phantom: PhantomData,
-        }
+        Self { inner }
     }
 }
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for ComponentRef<'a, P, R> {
+impl<'a, R: Replicate> ReplicaRefTrait<R> for ComponentRef<'a, R> {
     fn to_ref(&self) -> &R {
         self.inner
     }
 }
 
 // ComponentMut
-pub struct ComponentMut<'a, P: Protocolize, R: ReplicateSafe<P>> {
+pub struct ComponentMut<'a, R: Replicate> {
     inner: &'a mut R,
-    phantom: PhantomData<P>,
 }
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ComponentMut<'a, P, R> {
+impl<'a, R: Replicate> ComponentMut<'a, R> {
     pub fn new(inner: &'a mut R) -> Self {
-        Self {
-            inner,
-            phantom: PhantomData,
-        }
+        Self { inner }
     }
 }
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaRefTrait<P, R> for ComponentMut<'a, P, R> {
+impl<'a, R: Replicate> ReplicaRefTrait<R> for ComponentMut<'a, R> {
     fn to_ref(&self) -> &R {
         self.inner
     }
 }
 
-impl<'a, P: Protocolize, R: ReplicateSafe<P>> ReplicaMutTrait<P, R> for ComponentMut<'a, P, R> {
+impl<'a, R: Replicate> ReplicaMutTrait<R> for ComponentMut<'a, R> {
     fn to_mut(&mut self) -> &mut R {
         self.inner
     }

@@ -1,29 +1,25 @@
 use std::collections::HashSet;
 
-use hecs::World as HecsWorld;
+use hecs::World;
 
-use naia_hecs_server::{
-    shared::{DefaultChannels, SharedConfig},
-    ServerAddrs, ServerConfig, WorldWrapper,
-};
+use naia_hecs_server::{Protocol, ServerAddrs, ServerConfig};
 
-use naia_hecs_demo_shared::protocol::{Name, Position};
+use naia_hecs_demo_shared::{Name, Position};
 
 use crate::app::{App, Server};
 
 pub fn app_init(
     server_config: ServerConfig,
-    shared_config: SharedConfig<DefaultChannels>,
+    mut protocol: Protocol,
     server_addrs: ServerAddrs,
 ) -> App {
-    let mut server = Server::new(&server_config, &shared_config);
+    let mut world = protocol.wrap_world(World::new());
+    let mut server = Server::new(server_config, protocol);
     server.listen(&server_addrs);
 
     // Create a new, singular room, which will contain Users and Entities that they
     // can receive updates from
     let main_room_key = server.make_room().key();
-
-    let mut world = WorldWrapper::wrap(HecsWorld::new());
 
     {
         let mut count = 0;

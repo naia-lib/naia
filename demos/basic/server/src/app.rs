@@ -1,18 +1,15 @@
 use std::{thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::DefaultChannels, Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
+    default_channels::UnorderedReliableChannel, AuthEvent, ConnectEvent, DisconnectEvent,
+    ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent,
 };
 
-use naia_demo_world::{Entity, World as DemoWorld, WorldRefType};
+use naia_demo_world::{Entity, World, WorldRefType};
 
-use naia_basic_demo_shared::{
-    protocol::{Character, Protocol, StringMessage},
-    shared_config,
-};
+use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage};
 
-type World = DemoWorld<Protocol>;
-type Server = NaiaServer<Protocol, Entity, DefaultChannels>;
+type Server = NaiaServer<Entity>;
 
 pub struct App {
     server: Server,
@@ -37,7 +34,7 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server = Server::new(&ServerConfig::default(), &shared_config());
+        let mut server = Server::new(ServerConfig::default(), protocol());
         server.listen(&server_addresses);
 
         let mut world = World::default();
@@ -80,104 +77,96 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        let events = self.server.receive();
+        let mut events = self.server.receive();
         if events.is_empty() {
             // If we don't sleep here, app will loop at 100% CPU until a new message comes in
             sleep(Duration::from_millis(5));
+            return;
         } else {
-            for event in events {
-                match event {
-                    Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
-                        if *auth.username == "charlie" && *auth.password == "12345" {
-                            // Accept incoming connection
-                            self.server.accept_connection(&user_key);
-                        } else {
-                            // Reject incoming connection
-                            self.server.reject_connection(&user_key);
-                        }
-                    }
-                    Ok(Event::Connection(user_key)) => {
-                        info!(
-                            "Naia Server connected to: {}",
-                            self.server.user(&user_key).address()
-                        );
-                        self.server
-                            .room_mut(&self.main_room_key)
-                            .add_user(&user_key);
-                    }
-                    Ok(Event::Disconnection(_, user)) => {
-                        info!("Naia Server disconnected from: {:?}", user.address);
-                    }
-                    Ok(Event::Message(user_key, _, Protocol::StringMessage(message))) => {
-                        let message_contents = &(*message.contents);
-                        info!(
-                            "Server recv from ({}) <- {}",
-                            self.server.user(&user_key).address(),
-                            message_contents
-                        );
-                    }
-                    Ok(Event::Tick) => {
-                        // All game logic should happen here, on a tick event
-
-                        // Message sending
-                        for user_key in self.server.user_keys() {
-                            let new_message_contents =
-                                format!("Server Message ({})", self.tick_count);
-                            info!(
-                                "Server send to   ({}) -> {}",
-                                self.server.user(&user_key).address(),
-                                new_message_contents
-                            );
-
-                            let new_message = StringMessage::new(new_message_contents);
-                            self.server.send_message(
-                                &user_key,
-                                DefaultChannels::UnorderedReliable,
-                                &new_message,
-                            );
-                        }
-
-                        // Iterate through Characters, marching them from (0,0) to (20, N)
-                        for entity in self.server.entities(self.world.proxy()) {
-                            if let Some(mut character) = self
-                                .server
-                                .entity_mut(self.world.proxy_mut(), &entity)
-                                .component::<Character>()
-                            {
-                                character.step();
-                            }
-                        }
-
-                        // Update scopes of entities
-                        {
-                            let server = &mut self.server;
-                            let world = &self.world;
-                            for (_, user_key, entity) in server.scope_checks() {
-                                if let Some(character) =
-                                    world.proxy().component::<Character>(&entity)
-                                {
-                                    let x = *character.x;
-                                    if (5..=15).contains(&x) {
-                                        server.user_scope(&user_key).include(&entity);
-                                    } else {
-                                        server.user_scope(&user_key).exclude(&entity);
-                                    }
-                                }
-                            }
-                        }
-
-                        // VERY IMPORTANT! Calling this actually sends all update data
-                        // packets to all Clients that require it. If you don't call this
-                        // method, the Server will never communicate with it's connected Clients
-                        self.server.send_all_updates(self.world.proxy());
-
-                        self.tick_count = self.tick_count.wrapping_add(1);
-                    }
-                    Err(error) => {
-                        info!("Naia Server Error: {}", error);
-                    }
-                    _ => {}
+            for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
+                if auth.username == "charlie" && auth.password == "12345" {
+                    // Accept incoming connection
+                    self.server.accept_connection(&user_key);
+                } else {
+                    // Reject incoming connection
+                    self.server.reject_connection(&user_key);
                 }
+            }
+            for user_key in events.read::<ConnectEvent>() {
+                info!(
+                    "Naia Server connected to: {}",
+                    self.server.user(&user_key).address()
+                );
+                self.server
+                    .room_mut(&self.main_room_key)
+                    .add_user(&user_key);
+            }
+            for (_user_key, user) in events.read::<DisconnectEvent>() {
+                info!("Naia Server disconnected from: {:?}", user.address);
+            }
+            for (user_key, message) in
+                events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>()
+            {
+                let message_contents = &(*message.contents);
+                info!(
+                    "Server recv from ({}) <- {}",
+                    self.server.user(&user_key).address(),
+                    message_contents
+                );
+            }
+            for _ in events.read::<TickEvent>() {
+                // All game logic should happen here, on a tick event
+
+                // Message sending
+                for user_key in self.server.user_keys() {
+                    let new_message_contents = format!("Server Message ({})", self.tick_count);
+                    info!(
+                        "Server send to   ({}) -> {}",
+                        self.server.user(&user_key).address(),
+                        new_message_contents
+                    );
+
+                    let new_message = StringMessage::new(new_message_contents);
+                    self.server
+                        .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message);
+                }
+
+                // Iterate through Characters, marching them from (0,0) to (20, N)
+                for entity in self.server.entities(self.world.proxy()) {
+                    if let Some(mut character) = self
+                        .server
+                        .entity_mut(self.world.proxy_mut(), &entity)
+                        .component::<Character>()
+                    {
+                        character.step();
+                    }
+                }
+
+                // Update scopes of entities
+                {
+                    let server = &mut self.server;
+                    let world = &self.world;
+                    for (_, user_key, entity) in server.scope_checks() {
+                        if let Some(character) = world.proxy().component::<Character>(&entity) {
+                            let x = *character.x;
+                            if (5..=15).contains(&x) {
+                                server.user_scope(&user_key).include(&entity);
+                            } else {
+                                server.user_scope(&user_key).exclude(&entity);
+                            }
+                        }
+                    }
+                }
+
+                // VERY IMPORTANT! Calling this actually sends all update data
+                // packets to all Clients that require it. If you don't call this
+                // method, the Server will never communicate with it's connected Clients
+                self.server.send_all_updates(self.world.proxy());
+
+                self.tick_count = self.tick_count.wrapping_add(1);
+            }
+            for error in events.read::<ErrorEvent>() {
+                info!("Naia Server Error: {}", error);
             }
         }
     }

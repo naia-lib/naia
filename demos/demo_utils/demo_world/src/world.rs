@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use std::{any::Any, collections::HashMap};
 
 use naia_shared::{
-    serde::SerdeErr, BigMap, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter,
-    Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
-    Replicate, ReplicateSafe, WorldMutType, WorldRefType,
+    BigMap, ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
+    WorldRefType,
 };
 
 use super::{
@@ -17,11 +17,11 @@ use super::{
 /// use to store Entities/Components.
 /// It's recommended to use this only when you do not have another ECS library's
 /// own World available.
-pub struct World<P: Protocolize> {
-    pub entities: BigMap<Entity, HashMap<P::Kind, P>>,
+pub struct World {
+    pub entities: BigMap<Entity, HashMap<ComponentKind, Box<dyn Replicate>>>,
 }
 
-impl<P: Protocolize> Default for World<P> {
+impl Default for World {
     fn default() -> Self {
         Self {
             entities: BigMap::default(),
@@ -29,45 +29,45 @@ impl<P: Protocolize> Default for World<P> {
     }
 }
 
-impl<P: Protocolize> World<P> {
+impl World {
     /// Convert to WorldRef
-    pub fn proxy<'w>(&'w self) -> WorldRef<'w, P> {
-        WorldRef::<'w, P>::new(self)
+    pub fn proxy<'w>(&'w self) -> WorldRef<'w> {
+        WorldRef::<'w>::new(self)
     }
 
     /// Convert to WorldMut
-    pub fn proxy_mut<'w>(&'w mut self) -> WorldMut<'w, P> {
-        WorldMut::<'w, P>::new(self)
+    pub fn proxy_mut<'w>(&'w mut self) -> WorldMut<'w> {
+        WorldMut::<'w>::new(self)
     }
 }
 
 // WorldRef //
 
-pub struct WorldRef<'w, P: Protocolize> {
-    world: &'w World<P>,
+pub struct WorldRef<'w> {
+    world: &'w World,
 }
 
-impl<'w, P: Protocolize> WorldRef<'w, P> {
-    pub fn new(world: &'w World<P>) -> Self {
+impl<'w> WorldRef<'w> {
+    pub fn new(world: &'w World) -> Self {
         WorldRef { world }
     }
 }
 
 // WorldMut //
 
-pub struct WorldMut<'w, P: Protocolize> {
-    world: &'w mut World<P>,
+pub struct WorldMut<'w> {
+    world: &'w mut World,
 }
 
-impl<'w, P: Protocolize> WorldMut<'w, P> {
-    pub fn new(world: &'w mut World<P>) -> Self {
+impl<'w> WorldMut<'w> {
+    pub fn new(world: &'w mut World) -> Self {
         WorldMut { world }
     }
 }
 
 // WorldRefType //
 
-impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, P> {
+impl<'w> WorldRefType<Entity> for WorldRef<'w> {
     fn has_entity(&self, entity: &Entity) -> bool {
         has_entity(self.world, entity)
     }
@@ -76,28 +76,28 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldRef<'w, P> {
         entities(self.world)
     }
 
-    fn has_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> bool {
-        has_component::<P, R>(self.world, entity)
+    fn has_component<R: Replicate>(&self, entity: &Entity) -> bool {
+        has_component::<R>(self.world, entity)
     }
 
-    fn has_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> bool {
-        has_component_of_type(self.world, entity, component_type)
+    fn has_component_of_kind(&self, entity: &Entity, component_kind: &ComponentKind) -> bool {
+        has_component_of_type(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
+    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
         component(self.world, entity)
     }
 
     fn component_of_kind<'a>(
         &'a self,
         entity: &Entity,
-        component_type: &P::Kind,
-    ) -> Option<ReplicaDynRefWrapper<'a, P>> {
-        component_of_kind(self.world, entity, component_type)
+        component_kind: &ComponentKind,
+    ) -> Option<ReplicaDynRefWrapper<'a>> {
+        component_of_kind(self.world, entity, component_kind)
     }
 }
 
-impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, P> {
+impl<'w> WorldRefType<Entity> for WorldMut<'w> {
     fn has_entity(&self, entity: &Entity) -> bool {
         has_entity(self.world, entity)
     }
@@ -106,28 +106,28 @@ impl<'w, P: Protocolize> WorldRefType<P, Entity> for WorldMut<'w, P> {
         entities(self.world)
     }
 
-    fn has_component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> bool {
-        has_component::<P, R>(self.world, entity)
+    fn has_component<R: Replicate>(&self, entity: &Entity) -> bool {
+        has_component::<R>(self.world, entity)
     }
 
-    fn has_component_of_kind(&self, entity: &Entity, component_type: &P::Kind) -> bool {
-        has_component_of_type(self.world, entity, component_type)
+    fn has_component_of_kind(&self, entity: &Entity, component_kind: &ComponentKind) -> bool {
+        has_component_of_type(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicateSafe<P>>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<P, R>> {
+    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
         component(self.world, entity)
     }
 
     fn component_of_kind<'a>(
         &'a self,
         entity: &Entity,
-        component_type: &P::Kind,
-    ) -> Option<ReplicaDynRefWrapper<'a, P>> {
-        component_of_kind(self.world, entity, component_type)
+        component_kind: &ComponentKind,
+    ) -> Option<ReplicaDynRefWrapper<'a>> {
+        component_of_kind(self.world, entity, component_kind)
     }
 }
 
-impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
+impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn spawn_entity(&mut self) -> Entity {
         let component_map = HashMap::new();
         self.world.entities.insert(component_map)
@@ -143,12 +143,14 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
 
     fn duplicate_components(&mut self, new_entity: &Entity, old_entity: &Entity) {
         for component_kind in self.component_kinds(old_entity) {
-            let mut component_copy_opt: Option<P> = None;
+            let mut boxed_option: Option<Box<dyn Replicate>> = None;
             if let Some(component) = self.component_of_kind(old_entity, &component_kind) {
-                component_copy_opt = Some(component.protocol_copy());
+                boxed_option = Some(component.copy_to_box());
             }
-            if let Some(component_copy) = component_copy_opt {
-                Protocolize::extract_and_insert(&component_copy, new_entity, self);
+            if let Some(boxed_component) = boxed_option {
+                self.insert_boxed_component(new_entity, boxed_component);
+            } else {
+                panic!("this shouldn't happen");
             }
         }
     }
@@ -157,8 +159,8 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         self.world.entities.remove(entity);
     }
 
-    fn component_kinds(&mut self, entity: &Entity) -> Vec<P::Kind> {
-        let mut output: Vec<P::Kind> = Vec::new();
+    fn component_kinds(&mut self, entity: &Entity) -> Vec<ComponentKind> {
+        let mut output: Vec<ComponentKind> = Vec::new();
 
         if let Some(component_map) = self.world.entities.get(entity) {
             for component_kind in component_map.keys() {
@@ -169,14 +171,11 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         output
     }
 
-    fn component_mut<R: ReplicateSafe<P>>(
-        &mut self,
-        entity: &Entity,
-    ) -> Option<ReplicaMutWrapper<P, R>> {
+    fn component_mut<R: Replicate>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            if let Some(component_protocol) = component_map.get_mut(&Protocolize::kind_of::<R>()) {
-                if let Some(raw_ref) = component_protocol.cast_mut::<R>() {
-                    let wrapper = ComponentMut::<P, R>::new(raw_ref);
+            if let Some(boxed_component) = component_map.get_mut(&ComponentKind::of::<R>()) {
+                if let Some(raw_ref) = boxed_component.to_any_mut().downcast_mut::<R>() {
+                    let wrapper = ComponentMut::<R>::new(raw_ref);
                     let wrapped_ref = ReplicaMutWrapper::new(wrapper);
                     return Some(wrapped_ref);
                 }
@@ -190,8 +189,8 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         &mut self,
         converter: &dyn NetEntityHandleConverter,
         entity: &Entity,
-        component_kind: &P::Kind,
-        update: ComponentUpdate<P::Kind>,
+        component_kind: &ComponentKind,
+        update: ComponentUpdate,
     ) -> Result<(), SerdeErr> {
         if let Some(mut component) = component_mut_of_kind(self.world, entity, component_kind) {
             component.read_apply_update(converter, update)?;
@@ -209,13 +208,12 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         &mut self,
         mutable_entity: &Entity,
         immutable_entity: &Entity,
-        component_kind: &P::Kind,
+        component_kind: &ComponentKind,
     ) {
-        let immutable_component_opt: Option<P> = {
+        let immutable_component_opt: Option<Box<dyn Replicate>> = {
             if let Some(immutable_component_map) = self.world.entities.get(immutable_entity) {
                 if let Some(immutable_component) = immutable_component_map.get(component_kind) {
-                    let immutable_copy = immutable_component.dyn_ref().protocol_copy();
-                    Some(immutable_copy)
+                    Some(immutable_component.copy_to_box())
                 } else {
                     None
                 }
@@ -226,33 +224,48 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
         if let Some(immutable_component) = immutable_component_opt {
             if let Some(mutable_component_map) = self.world.entities.get_mut(mutable_entity) {
                 if let Some(mutable_component) = mutable_component_map.get_mut(component_kind) {
-                    mutable_component.dyn_mut().mirror(&immutable_component);
+                    mutable_component.mirror(immutable_component.as_ref());
                 }
             }
         }
     }
 
-    fn insert_component<R: ReplicateSafe<P>>(&mut self, entity: &Entity, component_ref: R) {
+    fn insert_component<R: Replicate>(&mut self, entity: &Entity, component: R) {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            let protocol = component_ref.into_protocol();
-            let component_kind = Protocolize::kind_of::<R>();
+            let component_kind = ComponentKind::of::<R>();
             if component_map.contains_key(&component_kind) {
                 panic!("Entity already has a Component of that type!");
             }
-            component_map.insert(component_kind, protocol);
+            component_map.insert(component_kind, Box::new(component));
         }
     }
 
-    fn remove_component<R: Replicate<P>>(&mut self, entity: &Entity) -> Option<R> {
+    fn insert_boxed_component(&mut self, entity: &Entity, boxed_component: Box<dyn Replicate>) {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            if let Some(protocol) = component_map.remove(&Protocolize::kind_of::<R>()) {
-                return protocol.cast::<R>();
+            let component_kind = boxed_component.kind();
+            if component_map.contains_key(&component_kind) {
+                panic!("Entity already has a Component of that type!");
+            }
+            component_map.insert(component_kind, boxed_component);
+        }
+    }
+
+    fn remove_component<R: Replicate>(&mut self, entity: &Entity) -> Option<R> {
+        if let Some(component_map) = self.world.entities.get_mut(entity) {
+            if let Some(boxed_component) = component_map.remove(&ComponentKind::of::<R>()) {
+                return Box::<dyn Any + 'static>::downcast::<R>(boxed_component.to_boxed_any())
+                    .ok()
+                    .map(|boxed_c| *boxed_c);
             }
         }
         None
     }
 
-    fn remove_component_of_kind(&mut self, entity: &Entity, component_kind: &P::Kind) -> Option<P> {
+    fn remove_component_of_kind(
+        &mut self,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) -> Option<Box<dyn Replicate>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             return component_map.remove(component_kind);
         }
@@ -261,19 +274,13 @@ impl<'w, P: Protocolize> WorldMutType<P, Entity> for WorldMut<'w, P> {
     }
 }
 
-impl<'w, P: Protocolize> ProtocolInserter<P, Entity> for WorldMut<'w, P> {
-    fn insert<I: ReplicateSafe<P>>(&mut self, entity: &Entity, impl_ref: I) {
-        self.insert_component::<I>(entity, impl_ref);
-    }
-}
-
 // private methods //
 
-fn has_entity<P: Protocolize>(world: &World<P>, entity: &Entity) -> bool {
+fn has_entity(world: &World, entity: &Entity) -> bool {
     world.entities.contains_key(entity)
 }
 
-fn entities<P: Protocolize>(world: &World<P>) -> Vec<Entity> {
+fn entities(world: &World) -> Vec<Entity> {
     let mut output = Vec::new();
 
     for (key, _) in world.entities.iter() {
@@ -283,34 +290,30 @@ fn entities<P: Protocolize>(world: &World<P>) -> Vec<Entity> {
     output
 }
 
-fn has_component<P: Protocolize, R: ReplicateSafe<P>>(world: &World<P>, entity: &Entity) -> bool {
+fn has_component<R: Replicate>(world: &World, entity: &Entity) -> bool {
     if let Some(component_map) = world.entities.get(entity) {
-        return component_map.contains_key(&Protocolize::kind_of::<R>());
+        return component_map.contains_key(&ComponentKind::of::<R>());
     }
 
     false
 }
 
-fn has_component_of_type<P: Protocolize>(
-    world: &World<P>,
-    entity: &Entity,
-    component_type: &P::Kind,
-) -> bool {
+fn has_component_of_type(world: &World, entity: &Entity, component_kind: &ComponentKind) -> bool {
     if let Some(component_map) = world.entities.get(entity) {
-        return component_map.contains_key(component_type);
+        return component_map.contains_key(component_kind);
     }
 
     false
 }
 
-fn component<'a, P: Protocolize, R: ReplicateSafe<P>>(
-    world: &'a World<P>,
+fn component<'a, R: Replicate>(
+    world: &'a World,
     entity: &Entity,
-) -> Option<ReplicaRefWrapper<'a, P, R>> {
+) -> Option<ReplicaRefWrapper<'a, R>> {
     if let Some(component_map) = world.entities.get(entity) {
-        if let Some(component_protocol) = component_map.get(&Protocolize::kind_of::<R>()) {
-            if let Some(raw_ref) = component_protocol.cast_ref::<R>() {
-                let wrapper = ComponentRef::<P, R>::new(raw_ref);
+        if let Some(boxed_component) = component_map.get(&ComponentKind::of::<R>()) {
+            if let Some(raw_ref) = boxed_component.to_any().downcast_ref::<R>() {
+                let wrapper = ComponentRef::<R>::new(raw_ref);
                 let wrapped_ref = ReplicaRefWrapper::new(wrapper);
                 return Some(wrapped_ref);
             }
@@ -320,13 +323,13 @@ fn component<'a, P: Protocolize, R: ReplicateSafe<P>>(
     None
 }
 
-fn component_of_kind<'a, P: Protocolize>(
-    world: &'a World<P>,
+fn component_of_kind<'a>(
+    world: &'a World,
     entity: &Entity,
-    component_type: &P::Kind,
-) -> Option<ReplicaDynRefWrapper<'a, P>> {
+    component_kind: &ComponentKind,
+) -> Option<ReplicaDynRefWrapper<'a>> {
     if let Some(component_map) = world.entities.get(entity) {
-        if let Some(component) = component_map.get(component_type) {
+        if let Some(component) = component_map.get(component_kind) {
             return Some(ReplicaDynRefWrapper::new(component.dyn_ref()));
         }
     }
@@ -334,13 +337,13 @@ fn component_of_kind<'a, P: Protocolize>(
     None
 }
 
-fn component_mut_of_kind<'a, P: Protocolize>(
-    world: &'a mut World<P>,
+fn component_mut_of_kind<'a>(
+    world: &'a mut World,
     entity: &Entity,
-    component_type: &P::Kind,
-) -> Option<ReplicaDynMutWrapper<'a, P>> {
+    component_kind: &ComponentKind,
+) -> Option<ReplicaDynMutWrapper<'a>> {
     if let Some(component_map) = world.entities.get_mut(entity) {
-        if let Some(raw_ref) = component_map.get_mut(component_type) {
+        if let Some(raw_ref) = component_map.get_mut(component_kind) {
             let wrapped_ref = ReplicaDynMutWrapper::new(raw_ref.dyn_mut());
             return Some(wrapped_ref);
         }

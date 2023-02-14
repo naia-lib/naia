@@ -1,7 +1,6 @@
-use naia_shared::Replicate;
+use naia_hecs_shared::Replicate;
 
 #[derive(Replicate)]
-#[protocol_path = "crate::protocol::Protocol"]
 pub struct Marker;
 
 impl Marker {

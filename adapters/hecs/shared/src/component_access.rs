@@ -2,53 +2,49 @@ use std::{any::Any, marker::PhantomData};
 
 use hecs::{Entity, World};
 
-use naia_shared::{Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
+use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::component_ref::{ComponentDynMut, ComponentDynRef};
 
 // ComponentAccess
-pub trait ComponentAccess<P: Protocolize> {
-    fn component<'w>(
-        &self,
-        world: &'w World,
-        entity: &Entity,
-    ) -> Option<ReplicaDynRefWrapper<'w, P>>;
+pub trait ComponentAccess {
+    fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>>;
     fn component_mut<'w>(
         &self,
         world: &'w mut World,
         entity: &Entity,
-    ) -> Option<ReplicaDynMutWrapper<'w, P>>;
-    fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P>;
+    ) -> Option<ReplicaDynMutWrapper<'w>>;
+    fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<Box<dyn Replicate>>;
     fn mirror_components(
         &self,
         world: &mut World,
         mutable_entity: &Entity,
         immutable_entity: &Entity,
     );
+    fn insert_component(
+        &self,
+        world: &mut World,
+        entity: &Entity,
+        boxed_component: Box<dyn Replicate>,
+    );
 }
 
 // ComponentAccessor
-pub struct ComponentAccessor<P: Protocolize, R: ReplicateSafe<P>> {
-    phantom_p: PhantomData<P>,
+pub struct ComponentAccessor<R: Replicate> {
     phantom_r: PhantomData<R>,
 }
 
-impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
+impl<R: Replicate> ComponentAccessor<R> {
     pub fn create() -> Box<dyn Any> {
-        let inner_box: Box<dyn ComponentAccess<P>> = Box::new(ComponentAccessor {
-            phantom_p: PhantomData::<P>,
+        let inner_box: Box<dyn ComponentAccess> = Box::new(ComponentAccessor {
             phantom_r: PhantomData::<R>,
         });
         Box::new(inner_box)
     }
 }
 
-impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
-    fn component<'w>(
-        &self,
-        world: &'w World,
-        entity: &Entity,
-    ) -> Option<ReplicaDynRefWrapper<'w, P>> {
+impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
+    fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>> {
         if let Ok(hecs_ref) = world.get::<&R>(*entity) {
             let wrapper = ComponentDynRef(hecs_ref);
             let component_dyn_ref = ReplicaDynRefWrapper::new(wrapper);
@@ -61,7 +57,7 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         &self,
         world: &'w mut World,
         entity: &Entity,
-    ) -> Option<ReplicaDynMutWrapper<'w, P>> {
+    ) -> Option<ReplicaDynMutWrapper<'w>> {
         if let Ok(hecs_mut) = world.get::<&mut R>(*entity) {
             let wrapper = ComponentDynMut(hecs_mut);
             let component_dyn_mut = ReplicaDynMutWrapper::new(wrapper);
@@ -70,10 +66,10 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         None
     }
 
-    fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P> {
+    fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<Box<dyn Replicate>> {
         world
             .remove_one::<R>(*entity)
-            .map_or(None, |v| Some(v.into_protocol()))
+            .map_or(None, |v| Some(Box::new(v)))
     }
 
     fn mirror_components(
@@ -85,9 +81,20 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         unsafe {
             if let Ok(immutable_component) = world.get_unchecked::<&R>(*immutable_entity) {
                 if let Ok(mutable_component) = world.get_unchecked::<&mut R>(*mutable_entity) {
-                    mutable_component.mirror(&immutable_component.protocol_copy());
+                    mutable_component.mirror(immutable_component);
                 }
             }
         }
+    }
+
+    fn insert_component(
+        &self,
+        world: &mut World,
+        entity: &Entity,
+        boxed_component: Box<dyn Replicate>,
+    ) {
+        let boxed_any = boxed_component.to_boxed_any();
+        let inner: R = *(boxed_any.downcast::<R>().unwrap());
+        world.insert_one(*entity, inner).unwrap();
     }
 }

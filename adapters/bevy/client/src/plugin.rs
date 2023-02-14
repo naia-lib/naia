@@ -1,137 +1,88 @@
-use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
+use std::{ops::DerefMut, sync::Mutex};
 
 use bevy_app::{App, CoreStage, Plugin as PluginType};
 use bevy_ecs::{entity::Entity, schedule::SystemStage};
 
-use naia_client::{
-    shared::{ChannelIndex, Protocolize, SharedConfig},
-    Client, ClientConfig,
-};
+use naia_client::{Client, ClientConfig};
 
-use naia_bevy_shared::WorldData;
-
-use crate::systems::{finish_reject, should_receive, should_reject};
+use naia_bevy_shared::Protocol;
 
 use super::{
     events::{
-        DespawnEntityEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent,
-        SpawnEntityEvent, UpdateComponentEvent,
+        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvents,
+        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
     },
     resource::ClientResource,
     stage::{PrivateStage, Stage},
-    systems::{
-        before_receive_events, finish_connect, finish_disconnect, finish_tick, should_connect,
-        should_disconnect, should_tick,
-    },
+    systems::{before_receive_events, finish_tick, should_receive, should_tick},
 };
 
-struct PluginConfig<C: ChannelIndex> {
+struct PluginConfig {
     client_config: ClientConfig,
-    shared_config: SharedConfig<C>,
+    protocol: Protocol,
 }
 
-impl<C: ChannelIndex> PluginConfig<C> {
-    pub fn new(client_config: ClientConfig, shared_config: SharedConfig<C>) -> Self {
+impl PluginConfig {
+    pub fn new(client_config: ClientConfig, protocol: Protocol) -> Self {
         PluginConfig {
             client_config,
-            shared_config,
+            protocol,
         }
     }
 }
 
-pub struct Plugin<P: Protocolize, C: ChannelIndex> {
-    config: Mutex<Option<PluginConfig<C>>>,
-    phantom_p: PhantomData<P>,
+pub struct Plugin {
+    config: Mutex<Option<PluginConfig>>,
 }
 
-impl<P: Protocolize, C: ChannelIndex> Plugin<P, C> {
-    pub fn new(client_config: ClientConfig, shared_config: SharedConfig<C>) -> Self {
-        let config = PluginConfig::new(client_config, shared_config);
-        Plugin {
+impl Plugin {
+    pub fn new(client_config: ClientConfig, protocol: Protocol) -> Self {
+        let config = PluginConfig::new(client_config, protocol);
+        Self {
             config: Mutex::new(Some(config)),
-            phantom_p: PhantomData,
         }
     }
 }
 
-impl<P: Protocolize, C: ChannelIndex> PluginType for Plugin<P, C> {
+impl PluginType for Plugin {
     fn build(&self, app: &mut App) {
-        let config = self.config.lock().unwrap().deref_mut().take().unwrap();
-        let client = Client::<P, Entity, C>::new(&config.client_config, &config.shared_config);
+        let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
+
+        let world_data = config.protocol.world_data();
+        app.insert_resource(world_data);
+
+        let client = Client::<Entity>::new(config.client_config, config.protocol.into());
 
         app
             // RESOURCES //
             .insert_resource(client)
             .init_resource::<ClientResource>()
-            .init_resource::<WorldData<P>>()
             // EVENTS //
+            .add_event::<ConnectEvent>()
+            .add_event::<DisconnectEvent>()
+            .add_event::<RejectEvent>()
+            .add_event::<ErrorEvent>()
+            .add_event::<MessageEvents>()
             .add_event::<SpawnEntityEvent>()
             .add_event::<DespawnEntityEvent>()
-            .add_event::<InsertComponentEvent<P::Kind>>()
-            .add_event::<UpdateComponentEvent<P::Kind>>()
-            .add_event::<RemoveComponentEvent<P>>()
-            .add_event::<MessageEvent<P, C>>()
+            .add_event::<InsertComponentEvents>()
+            .add_event::<UpdateComponentEvents>()
+            .add_event::<RemoveComponentEvents>()
             // STAGES //
             // events //
             .add_stage_before(
                 CoreStage::PreUpdate,
                 PrivateStage::BeforeReceiveEvents,
-                SystemStage::single_threaded().with_run_criteria(should_receive::<P, C>),
+                SystemStage::single_threaded().with_run_criteria(should_receive),
             )
             .add_stage_after(
                 PrivateStage::BeforeReceiveEvents,
                 Stage::ReceiveEvents,
-                SystemStage::single_threaded().with_run_criteria(should_receive::<P, C>),
-            )
-            .add_stage_after(
-                PrivateStage::BeforeReceiveEvents,
-                Stage::Connection,
-                SystemStage::single_threaded().with_run_criteria(should_connect),
-            )
-            .add_stage_after(
-                Stage::Connection,
-                PrivateStage::AfterConnection,
-                SystemStage::parallel().with_run_criteria(should_connect),
-            )
-            .add_stage_after(
-                PrivateStage::BeforeReceiveEvents,
-                Stage::Disconnection,
-                SystemStage::single_threaded().with_run_criteria(should_disconnect),
-            )
-            .add_stage_after(
-                Stage::Disconnection,
-                PrivateStage::AfterDisconnection,
-                SystemStage::parallel().with_run_criteria(should_disconnect),
-            )
-            .add_stage_after(
-                PrivateStage::BeforeReceiveEvents,
-                Stage::Rejection,
-                SystemStage::single_threaded().with_run_criteria(should_reject),
-            )
-            .add_stage_after(
-                Stage::Rejection,
-                PrivateStage::AfterRejection,
-                SystemStage::parallel().with_run_criteria(should_reject),
-            )
-            // frame //
-            .add_stage_after(
-                CoreStage::PostUpdate,
-                Stage::PreFrame,
-                SystemStage::single_threaded(),
-            )
-            .add_stage_after(
-                Stage::PreFrame,
-                Stage::Frame,
-                SystemStage::single_threaded(),
-            )
-            .add_stage_after(
-                Stage::Frame,
-                Stage::PostFrame,
-                SystemStage::single_threaded(),
+                SystemStage::single_threaded().with_run_criteria(should_receive),
             )
             // tick //
             .add_stage_after(
-                Stage::PostFrame,
+                CoreStage::PostUpdate,
                 Stage::Tick,
                 SystemStage::single_threaded().with_run_criteria(should_tick),
             )
@@ -141,13 +92,7 @@ impl<P: Protocolize, C: ChannelIndex> PluginType for Plugin<P, C> {
                 SystemStage::parallel().with_run_criteria(should_tick),
             )
             // SYSTEMS //
-            .add_system_to_stage(
-                PrivateStage::BeforeReceiveEvents,
-                before_receive_events::<P, C>,
-            )
-            .add_system_to_stage(PrivateStage::AfterConnection, finish_connect)
-            .add_system_to_stage(PrivateStage::AfterDisconnection, finish_disconnect)
-            .add_system_to_stage(PrivateStage::AfterRejection, finish_reject)
+            .add_system_to_stage(PrivateStage::BeforeReceiveEvents, before_receive_events)
             .add_system_to_stage(PrivateStage::AfterTick, finish_tick);
     }
 }

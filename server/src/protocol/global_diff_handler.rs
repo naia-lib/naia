@@ -1,14 +1,14 @@
 use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
-use naia_shared::ProtocolKindType;
+use naia_shared::ComponentKind;
 
 use super::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
-pub struct GlobalDiffHandler<E: Copy + Eq + Hash, K: ProtocolKindType> {
-    mut_receiver_builders: HashMap<(E, K), MutReceiverBuilder>,
+pub struct GlobalDiffHandler<E: Copy + Eq + Hash> {
+    mut_receiver_builders: HashMap<(E, ComponentKind), MutReceiverBuilder>,
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> Default for GlobalDiffHandler<E, K> {
+impl<E: Copy + Eq + Hash> Default for GlobalDiffHandler<E> {
     fn default() -> Self {
         Self {
             mut_receiver_builders: HashMap::default(),
@@ -16,12 +16,12 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> Default for GlobalDiffHandler<E, 
     }
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> GlobalDiffHandler<E, K> {
+impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
     // For Server
     pub fn register_component(
         &mut self,
         entity: &E,
-        component_kind: &K,
+        component_kind: &ComponentKind,
         diff_mask_length: u8,
     ) -> MutSender {
         if self
@@ -39,7 +39,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> GlobalDiffHandler<E, K> {
         sender
     }
 
-    pub fn deregister_component(&mut self, entity: &E, component_kind: &K) {
+    pub fn deregister_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         self.mut_receiver_builders
             .remove(&(*entity, *component_kind));
     }
@@ -48,7 +48,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> GlobalDiffHandler<E, K> {
         &self,
         addr: &SocketAddr,
         entity: &E,
-        component_kind: &K,
+        component_kind: &ComponentKind,
     ) -> Option<MutReceiver> {
         if let Some(builder) = self.mut_receiver_builders.get(&(*entity, *component_kind)) {
             return builder.build(addr);

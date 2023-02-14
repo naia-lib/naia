@@ -1,19 +1,19 @@
 use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
-    BigMap, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, ProtocolKindType,
+    BigMap, ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
 };
 
 use crate::{protocol::global_entity_record::GlobalEntityRecord, room::RoomKey};
 
-pub struct WorldRecord<E: Copy + Eq + Hash, K: ProtocolKindType> {
+pub struct WorldRecord<E: Copy + Eq + Hash> {
     /// Information about entities in the internal ECS World
-    entity_records: HashMap<E, GlobalEntityRecord<K>>,
+    entity_records: HashMap<E, GlobalEntityRecord>,
     /// Map from the internal [`EntityHandle`] to the external (e.g. Bevy's) entity id
     handle_entity_map: BigMap<EntityHandle, E>,
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> Default for WorldRecord<E, K> {
+impl<E: Copy + Eq + Hash> Default for WorldRecord<E> {
     fn default() -> Self {
         Self {
             entity_records: HashMap::default(),
@@ -22,7 +22,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> Default for WorldRecord<E, K> {
     }
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
+impl<E: Copy + Eq + Hash> WorldRecord<E> {
     // Sync w/ World & Server
 
     pub fn spawn_entity(&mut self, entity: &E) {
@@ -34,7 +34,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
             .insert(*entity, GlobalEntityRecord::new(entity_handle));
     }
 
-    pub fn despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord<K>> {
+    pub fn despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord> {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
@@ -42,15 +42,15 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         self.entity_records.remove(entity)
     }
 
-    pub fn add_component(&mut self, entity: &E, component_type: &K) {
+    pub fn add_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
         let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
-        component_kind_set.insert(*component_type);
+        component_kind_set.insert(*component_kind);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component_kind: &K) {
+    pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
@@ -66,7 +66,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
         self.entity_records.contains_key(entity)
     }
 
-    pub fn component_kinds(&self, entity: &E) -> Option<Vec<K>> {
+    pub fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>> {
         if !self.entity_records.contains_key(entity) {
             return None;
         }
@@ -102,7 +102,7 @@ impl<E: Copy + Eq + Hash, K: ProtocolKindType> WorldRecord<E, K> {
     }
 }
 
-impl<E: Copy + Eq + Hash, K: ProtocolKindType> EntityHandleConverter<E> for WorldRecord<E, K> {
+impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for WorldRecord<E> {
     fn handle_to_entity(&self, handle: &EntityHandle) -> E {
         return *self
             .handle_entity_map

@@ -1,15 +1,15 @@
+use std::{hash::Hash, net::SocketAddr, time::Duration};
+
 use log::warn;
-use std::{collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
-    serde::{BitReader, BitWriter, OwnedBitReader, Serde},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, HostType, Instant, PacketType,
-    PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldMutType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant,
+    OwnedBitReader, PacketType, PingManager, Protocol, ProtocolIo, Serde, StandardHeader, Tick,
+    WorldMutType,
 };
 
 use crate::{
-    error::NaiaClientError,
-    event::Event,
+    events::Events,
     protocol::entity_manager::EntityManager,
     tick::{
         tick_buffer_sender::TickBufferSender, tick_manager::TickManager, tick_queue::TickQueue,
@@ -18,29 +18,29 @@ use crate::{
 
 use super::io::Io;
 
-pub struct Connection<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
-    pub base: BaseConnection<P, C>,
-    pub entity_manager: EntityManager<P, E>,
+pub struct Connection<E: Copy + Eq + Hash> {
+    pub base: BaseConnection,
+    pub entity_manager: EntityManager<E>,
     pub ping_manager: PingManager,
-    pub tick_buffer: Option<TickBufferSender<P, C>>,
+    pub tick_buffer: Option<TickBufferSender>,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
+impl<E: Copy + Eq + Hash> Connection<E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
-        channel_config: &ChannelConfig<C>,
         tick_duration: &Option<Duration>,
+        channel_kinds: &ChannelKinds,
     ) -> Self {
         let tick_buffer = tick_duration
             .as_ref()
-            .map(|duration| TickBufferSender::new(channel_config, duration));
+            .map(|duration| TickBufferSender::new(channel_kinds, duration));
 
         Connection {
-            base: BaseConnection::new(address, HostType::Client, connection_config, channel_config),
+            base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
             entity_manager: EntityManager::default(),
             ping_manager: PingManager::new(&connection_config.ping),
             tick_buffer,
@@ -72,11 +72,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     ///
     /// Note that currently, messages are also being stored in the jitter buffer and processed
     /// on the receiving tick, even though it's not needed is the channel is not tick buffered.
-    pub fn process_buffered_packets<W: WorldMutType<P, E>>(
+    pub fn process_buffered_packets<W: WorldMutType<E>>(
         &mut self,
+        protocol: &Protocol,
         world: &mut W,
         receiving_tick: Tick,
-        incoming_events: &mut VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
+        incoming_events: &mut Events<E>,
     ) {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
@@ -85,10 +86,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
             // read messages
             {
-                let messages_result = self
-                    .base
-                    .message_manager
-                    .read_messages(&channel_reader, &mut reader);
+                let messages_result =
+                    self.base
+                        .message_manager
+                        .read_messages(protocol, &channel_reader, &mut reader);
                 if messages_result.is_err() {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming messages from packet!");
@@ -99,6 +100,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             // read entity updates
             {
                 let updates_result = self.entity_manager.read_updates(
+                    &protocol.component_kinds,
                     world,
                     server_tick,
                     &mut reader,
@@ -113,15 +115,25 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
             // read entity actions
             {
-                let actions_result =
-                    self.entity_manager
-                        .read_actions(world, &mut reader, incoming_events);
+                let actions_result = self.entity_manager.read_actions(
+                    &protocol.component_kinds,
+                    world,
+                    &mut reader,
+                    incoming_events,
+                );
                 if actions_result.is_err() {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity actions from packet!");
                     continue;
                 }
             }
+        }
+    }
+
+    pub fn receive_messages(&mut self, incoming_events: &mut Events<E>) {
+        let messages = self.base.message_manager.receive_messages();
+        for (channel_kind, message) in messages {
+            incoming_events.push_message(&channel_kind, message);
         }
     }
 
@@ -133,12 +145,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     /// * messages
     /// * acks from reliable channels
     /// * acks from the `EntityActionReceiver` for all [`EntityAction`]s
-    pub fn send_outgoing_packets(&mut self, io: &mut Io, tick_manager_opt: &Option<TickManager>) {
+    pub fn send_outgoing_packets(
+        &mut self,
+        protocol: &Protocol,
+        io: &mut Io,
+        tick_manager_opt: &Option<TickManager>,
+    ) {
         self.collect_outgoing_messages(tick_manager_opt);
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(io, tick_manager_opt) {
+            if self.send_outgoing_packet(protocol, io, tick_manager_opt) {
                 any_sent = true;
             } else {
                 break;
@@ -170,6 +187,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
     // Sends packet and returns whether or not a packet was sent
     fn send_outgoing_packet(
         &mut self,
+        protocol: &Protocol,
         io: &mut Io,
         tick_manager_opt: &Option<TickManager>,
     ) -> bool {
@@ -202,6 +220,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
 
                 // write tick buffered messages
                 self.tick_buffer.as_mut().unwrap().write_messages(
+                    &protocol,
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,
@@ -217,6 +236,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Connection<P, E, C> {
             // write messages
             {
                 self.base.message_manager.write_messages(
+                    protocol,
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,

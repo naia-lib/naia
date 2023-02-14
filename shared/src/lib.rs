@@ -19,26 +19,42 @@ cfg_if! {
     }
 }
 
+pub use naia_derive::{
+    Channel, Message, MessageBevy, MessageHecs, Replicate, ReplicateBevy, ReplicateHecs,
+};
+pub use naia_serde::{Serde, SerdeBevy, SerdeHecs, SerdeInternal};
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
-pub use naia_derive::*;
-pub use naia_serde as serde;
-pub use serde::derive_serde;
-
 mod backends;
+mod component;
 mod connection;
+mod entity;
 mod messages;
-mod protocol;
 
 mod bigmap;
 mod constants;
 mod key_generator;
-mod shared_config;
+mod protocol;
 mod types;
 mod world_type;
 mod wrapping_number;
 
 pub use backends::{Timer, Timestamp};
+pub use component::{
+    component_kinds::{ComponentKind, ComponentKinds},
+    component_update::ComponentUpdate,
+    diff_mask::DiffMask,
+    property::Property,
+    property_mutate::{PropertyMutate, PropertyMutator},
+    replica_ref::{
+        ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,
+        ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
+        ReplicaRefWrapper,
+    },
+    replicate::{
+        Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
+    },
+};
 pub use connection::{
     ack_manager::AckManager,
     bandwidth_monitor::BandwidthMonitor,
@@ -53,20 +69,7 @@ pub use connection::{
     ping_manager::{PingIndex, PingManager},
     standard_header::StandardHeader,
 };
-pub use messages::{
-    channel_config::{
-        Channel, ChannelConfig, ChannelDirection, ChannelIndex, ChannelMode, DefaultChannels,
-        ReliableSettings, TickBufferSettings,
-    },
-    message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
-    message_manager::MessageManager,
-    ordered_reliable_receiver::OrderedReliableReceiver,
-    reliable_sender::ReliableSender,
-    unordered_reliable_receiver::UnorderedReliableReceiver,
-};
-pub use protocol::{
-    component_update::ComponentUpdate,
-    diff_mask::DiffMask,
+pub use entity::{
     entity_action::EntityAction,
     entity_action_receiver::EntityActionReceiver,
     entity_action_type::EntityActionType,
@@ -76,22 +79,30 @@ pub use protocol::{
         FakeEntityConverter, NetEntityConverter, NetEntityHandleConverter,
     },
     net_entity::NetEntity,
-    property::Property,
-    property_mutate::{PropertyMutate, PropertyMutator},
+};
+pub use messages::{
+    channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
+    channel_kinds::{ChannelKind, ChannelKinds},
+    default_channels,
+    message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
+    message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
+    message_kinds::{MessageKind, MessageKinds},
+    message_manager::MessageManager,
+    named::Named,
+    ordered_reliable_receiver::OrderedReliableReceiver,
     protocol_io::ProtocolIo,
-    protocolize::{ProtocolInserter, ProtocolKindType, Protocolize},
-    replica_ref::{
-        ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,
-        ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
-        ReplicaRefWrapper,
-    },
-    replicate::{Replicate, ReplicateSafe},
+    reliable_sender::ReliableSender,
+    unordered_reliable_receiver::UnorderedReliableReceiver,
+};
+pub use naia_serde::{
+    BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, UnsignedInteger,
+    UnsignedVariableInteger,
 };
 
 pub use bigmap::{BigMap, BigMapKey};
 pub use constants::MESSAGE_HISTORY_SIZE;
 pub use key_generator::KeyGenerator;
-pub use shared_config::SharedConfig;
-pub use types::{HostType, MessageId, PacketIndex, ShortMessageId, Tick};
+pub use protocol::{Protocol, ProtocolPlugin};
+pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

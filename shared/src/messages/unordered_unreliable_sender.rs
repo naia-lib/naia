@@ -3,15 +3,16 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::{types::MessageId, Protocolize};
+use crate::messages::message_kinds::MessageKinds;
+use crate::{messages::named::Named, types::MessageIndex};
 
 use super::message_channel::{ChannelSender, ChannelWriter};
 
-pub struct UnorderedUnreliableSender<P: Protocolize> {
+pub struct UnorderedUnreliableSender<P> {
     outgoing_messages: VecDeque<P>,
 }
 
-impl<P: Protocolize> UnorderedUnreliableSender<P> {
+impl<P: Named> UnorderedUnreliableSender<P> {
     pub fn new() -> Self {
         Self {
             outgoing_messages: VecDeque::new(),
@@ -20,11 +21,12 @@ impl<P: Protocolize> UnorderedUnreliableSender<P> {
 
     fn write_message<S: BitWrite>(
         &self,
+        message_kinds: &MessageKinds,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut S,
         message: &P,
     ) {
-        channel_writer.write(bit_writer, message);
+        channel_writer.write(message_kinds, bit_writer, message);
     }
 
     fn warn_overflow(&self, message: &P, bits_needed: u16, bits_free: u16) {
@@ -35,7 +37,7 @@ impl<P: Protocolize> UnorderedUnreliableSender<P> {
     }
 }
 
-impl<P: Protocolize + Send + Sync> ChannelSender<P> for UnorderedUnreliableSender<P> {
+impl<P: Send + Sync + Named> ChannelSender<P> for UnorderedUnreliableSender<P> {
     fn send_message(&mut self, message: P) {
         self.outgoing_messages.push_back(message);
     }
@@ -50,10 +52,11 @@ impl<P: Protocolize + Send + Sync> ChannelSender<P> for UnorderedUnreliableSende
 
     fn write_messages(
         &mut self,
+        message_kinds: &MessageKinds,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
-    ) -> Option<Vec<MessageId>> {
+    ) -> Option<Vec<MessageIndex>> {
         loop {
             if self.outgoing_messages.is_empty() {
                 break;
@@ -62,7 +65,7 @@ impl<P: Protocolize + Send + Sync> ChannelSender<P> for UnorderedUnreliableSende
             // Check that we can write the next message
             let message = self.outgoing_messages.front().unwrap();
             let mut counter = bit_writer.counter();
-            self.write_message(channel_writer, &mut counter, message);
+            self.write_message(message_kinds, channel_writer, &mut counter, message);
 
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
@@ -80,7 +83,7 @@ impl<P: Protocolize + Send + Sync> ChannelSender<P> for UnorderedUnreliableSende
             true.ser(bit_writer);
 
             // write data
-            self.write_message(channel_writer, bit_writer, &message);
+            self.write_message(message_kinds, channel_writer, bit_writer, &message);
 
             // pop message we've written
             self.outgoing_messages.pop_front();
@@ -88,7 +91,7 @@ impl<P: Protocolize + Send + Sync> ChannelSender<P> for UnorderedUnreliableSende
         None
     }
 
-    fn notify_message_delivered(&mut self, _: &MessageId) {
+    fn notify_message_delivered(&mut self, _: &MessageIndex) {
         // not necessary for an unreliable channel
     }
 }

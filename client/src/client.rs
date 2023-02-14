@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, hash::Hash, marker::PhantomData, net::SocketAddr};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
@@ -8,10 +8,10 @@ use bevy_ecs::prelude::Resource;
 use naia_client_socket::Socket;
 
 pub use naia_shared::{
-    serde::{BitReader, BitWriter, Serde},
-    ChannelIndex, ConnectionConfig, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
-    PacketType, PingConfig, PingIndex, ProtocolKindType, Protocolize, ReplicateSafe, SharedConfig,
-    SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, PacketType, PingConfig,
+    PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -24,60 +24,60 @@ use crate::{
     tick::tick_manager::TickManager,
 };
 
-use super::{client_config::ClientConfig, error::NaiaClientError, event::Event};
+use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
 #[cfg_attr(feature = "bevy_support", derive(Resource))]
-pub struct Client<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> {
+pub struct Client<E: Copy + Eq + Hash> {
     // Config
     client_config: ClientConfig,
-    shared_config: SharedConfig<C>,
+    protocol: Protocol,
     // Connection
     io: Io,
-    server_connection: Option<Connection<P, E, C>>,
-    handshake_manager: HandshakeManager<P>,
+    server_connection: Option<Connection<E>>,
+    handshake_manager: HandshakeManager,
     // Events
-    incoming_events: VecDeque<Result<Event<P, E, C>, NaiaClientError>>,
+    incoming_events: Events<E>,
     // Ticks
     tick_manager: Option<TickManager>,
-    // Phantom
-    phantom_k: PhantomData<E>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
+impl<E: Copy + Eq + Hash> Client<E> {
     /// Create a new Client
-    pub fn new(client_config: &ClientConfig, shared_config: &SharedConfig<C>) -> Self {
+    pub fn new<P: Into<Protocol>>(client_config: ClientConfig, protocol: P) -> Self {
+        let mut protocol: Protocol = protocol.into();
+        protocol.lock();
+
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
-        let tick_manager = shared_config
+        let tick_manager = protocol
             .tick_interval
-            .map(|duration| TickManager::new(duration, client_config.minimum_latency));
+            .map(|duration| TickManager::new(duration, client_config.tick_config));
+
+        let compression_config = protocol.compression.clone();
 
         Client {
             // Config
             client_config: client_config.clone(),
-            shared_config: shared_config.clone(),
+            protocol,
             // Connection
             io: Io::new(
                 &client_config.connection.bandwidth_measure_duration,
-                &shared_config.compression,
+                &compression_config,
             ),
             server_connection: None,
             handshake_manager,
             // Events
-            incoming_events: VecDeque::new(),
+            incoming_events: Events::new(),
             // Ticks
             tick_manager,
-            // Phantom
-            phantom_k: PhantomData,
         }
     }
 
     /// Set the auth object to use when setting up a connection with the Server
-    pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
-        self.handshake_manager
-            .set_auth_message(auth.into_protocol());
+    pub fn auth<M: Message>(&mut self, auth: M) {
+        self.handshake_manager.set_auth_message(Box::new(auth));
     }
 
     /// Connect to the given server address
@@ -85,7 +85,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
-        let mut socket = Socket::new(&self.shared_config.socket);
+        let mut socket = Socket::new(&self.protocol.socket);
         socket.connect(server_session_url);
         self.io
             .load(socket.packet_sender(), socket.packet_receiver());
@@ -131,17 +131,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     /// Must call this regularly (preferably at the beginning of every draw
     /// frame), in a loop until it returns None.
     /// Retrieves incoming update data from the server, and maintains the connection.
-    pub fn receive<W: WorldMutType<P, E>>(
-        &mut self,
-        mut world: W,
-    ) -> VecDeque<Result<Event<P, E, C>, NaiaClientError>> {
+    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Events<E> {
         // Need to run this to maintain connection with server, and receive packets
         // until none left
         self.maintain_socket();
 
         // all other operations
-        if let Some(server_connection) = self.server_connection.as_mut() {
-            if server_connection.base.should_drop() {
+        if let Some(connection) = self.server_connection.as_mut() {
+            if connection.base.should_drop() {
                 self.disconnect_internal();
                 return std::mem::take(&mut self.incoming_events);
             }
@@ -155,14 +152,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
                     // apply updates on tick boundary
                     let receiving_tick = tick_manager.client_receiving_tick();
-                    server_connection.process_buffered_packets(
+                    connection.process_buffered_packets(
+                        &self.protocol,
                         &mut world,
                         receiving_tick,
                         &mut self.incoming_events,
                     );
                 }
             } else {
-                server_connection.process_buffered_packets(
+                connection.process_buffered_packets(
+                    &self.protocol,
                     &mut world,
                     0,
                     &mut self.incoming_events,
@@ -170,21 +169,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
             }
 
             // receive (process) messages
-            let messages = server_connection.base.message_manager.receive_messages();
-            for (channel, message) in messages {
-                self.incoming_events
-                    .push_back(Ok(Event::Message(channel, message)));
-            }
+            connection.receive_messages(&mut self.incoming_events);
 
             // send outgoing packets
-            server_connection.send_outgoing_packets(&mut self.io, &self.tick_manager);
+            connection.send_outgoing_packets(&self.protocol, &mut self.io, &self.tick_manager);
 
             // tick event
             if did_tick {
-                self.incoming_events.push_back(Ok(Event::Tick));
+                self.incoming_events.push_tick();
             }
         } else {
-            self.handshake_manager.send(&mut self.io);
+            self.handshake_manager
+                .send(&self.protocol.message_kinds, &mut self.io);
         }
 
         std::mem::take(&mut self.incoming_events)
@@ -193,9 +189,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
-        let channel_settings = self.shared_config.channel.channel(&channel);
+    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
+        let cloned_message = M::clone_box(message);
+        self.send_message_inner(&ChannelKind::of::<C>(), cloned_message);
+    }
 
+    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+        let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
         if !channel_settings.can_send_to_server() {
             panic!("Cannot send message to Server on this Channel");
         }
@@ -209,14 +209,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                         .tick_buffer
                         .as_mut()
                         .expect("connection does not have a tick buffer")
-                        .send_message(&client_tick, channel, message.protocol_copy());
+                        .send_message(&client_tick, channel_kind, message);
                 }
             }
         } else if let Some(connection) = &mut self.server_connection {
             connection
                 .base
                 .message_manager
-                .send_message(channel, message.protocol_copy());
+                .send_message(channel_kind, message);
         }
     }
 
@@ -225,12 +225,12 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<W: WorldRefType<P, E>>(&self, world: W, entity: &E) -> EntityRef<P, E, W> {
+    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
         EntityRef::new(world, entity)
     }
 
     /// Return a list of all Entities
-    pub fn entities<W: WorldRefType<P, E>>(&self, world: &W) -> Vec<E> {
+    pub fn entities<W: WorldRefType<E>>(&self, world: &W) -> Vec<E> {
         world.entities()
     }
 
@@ -436,7 +436,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                     }
                     Err(error) => {
                         self.incoming_events
-                            .push_back(Err(NaiaClientError::Wrapped(Box::new(error))));
+                            .push_error(NaiaClientError::Wrapped(Box::new(error)));
                     }
                 }
             }
@@ -454,17 +454,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                                     self.server_connection = Some(Connection::new(
                                         server_addr,
                                         &self.client_config.connection,
-                                        &self.shared_config.channel,
-                                        &self.shared_config.tick_interval,
+                                        &self.protocol.tick_interval,
+                                        &self.protocol.channel_kinds,
                                     ));
-                                    self.incoming_events
-                                        .push_back(Ok(Event::Connection(server_addr)));
+                                    self.incoming_events.push_connection(&server_addr);
                                 }
                                 Some(HandshakeResult::Rejected) => {
                                     let server_addr = self.server_address_unwrapped();
                                     self.incoming_events.clear();
-                                    self.incoming_events
-                                        .push_back(Ok(Event::Rejection(server_addr)));
+                                    self.incoming_events.push_rejection(&server_addr);
                                     self.disconnect_cleanup();
                                     return;
                                 }
@@ -476,7 +474,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
                         }
                         Err(error) => {
                             self.incoming_events
-                                .push_back(Err(NaiaClientError::Wrapped(Box::new(error))));
+                                .push_error(NaiaClientError::Wrapped(Box::new(error)));
                         }
                     }
                 }
@@ -490,18 +488,17 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
         // exit early, we're disconnected, who cares?
         self.incoming_events.clear();
-        self.incoming_events
-            .push_back(Ok(Event::Disconnection(server_addr)));
+        self.incoming_events.push_disconnection(&server_addr);
     }
 
     fn disconnect_cleanup(&mut self) {
         // this is very similar to the newtype method .. can we coalesce and reduce
         // duplication?
         let tick_manager = {
-            if let Some(duration) = self.shared_config.tick_interval {
+            if let Some(duration) = self.protocol.tick_interval {
                 Some(TickManager::new(
                     duration,
-                    self.client_config.minimum_latency,
+                    self.client_config.tick_config.clone(),
                 ))
             } else {
                 None
@@ -510,7 +507,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
 
         self.io = Io::new(
             &self.client_config.connection.bandwidth_measure_duration,
-            &self.shared_config.compression,
+            &self.protocol.compression,
         );
         self.server_connection = None;
         self.handshake_manager = HandshakeManager::new(self.client_config.send_handshake_interval);
@@ -523,9 +520,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> Client<P, E, C> {
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash, C: ChannelIndex> EntityHandleConverter<E>
-    for Client<P, E, C>
-{
+impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for Client<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         let connection = self
             .server_connection

@@ -10,16 +10,14 @@
     unused_import_braces
 )]
 
-extern crate log;
-
 pub use naia_server_socket::ServerAddrs;
 
-pub use naia_shared as shared;
+pub use naia_shared::{default_channels, Random};
 
 mod cache_map;
 mod connection;
 mod error;
-mod event;
+mod events;
 mod protocol;
 mod room;
 mod sequence_list;
@@ -30,7 +28,9 @@ mod user;
 mod user_scope;
 
 pub use error::NaiaServerError;
-pub use event::Event;
+pub use events::{
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, TickEvent,
+};
 pub use protocol::entity_ref::EntityRef;
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;

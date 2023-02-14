@@ -2,51 +2,47 @@ use std::{any::Any, marker::PhantomData};
 
 use bevy_ecs::{entity::Entity, world::World};
 
-use naia_shared::{Protocolize, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicateSafe};
+use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::component_ref::{ComponentDynMut, ComponentDynRef};
 
-pub trait ComponentAccess<P: Protocolize>: Send + Sync {
-    fn component<'w>(
-        &self,
-        world: &'w World,
-        entity: &Entity,
-    ) -> Option<ReplicaDynRefWrapper<'w, P>>;
+pub trait ComponentAccess: Send + Sync {
+    fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>>;
     fn component_mut<'w>(
         &self,
         world: &'w mut World,
         entity: &Entity,
-    ) -> Option<ReplicaDynMutWrapper<'w, P>>;
-    fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P>;
+    ) -> Option<ReplicaDynMutWrapper<'w>>;
+    fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<Box<dyn Replicate>>;
     fn mirror_components(
         &self,
         world: &mut World,
         mutable_entity: &Entity,
         immutable_entity: &Entity,
     );
+    fn insert_component(
+        &self,
+        world: &mut World,
+        entity: &Entity,
+        boxed_component: Box<dyn Replicate>,
+    );
 }
 
-pub struct ComponentAccessor<P: Protocolize, R: ReplicateSafe<P>> {
-    phantom_p: PhantomData<P>,
+pub struct ComponentAccessor<R: Replicate> {
     phantom_r: PhantomData<R>,
 }
 
-impl<P: 'static + Protocolize, R: ReplicateSafe<P>> ComponentAccessor<P, R> {
+impl<R: Replicate> ComponentAccessor<R> {
     pub fn create() -> Box<dyn Any> {
-        let inner_box: Box<dyn ComponentAccess<P>> = Box::new(ComponentAccessor {
-            phantom_p: PhantomData::<P>,
+        let inner_box: Box<dyn ComponentAccess> = Box::new(ComponentAccessor {
             phantom_r: PhantomData::<R>,
         });
         Box::new(inner_box)
     }
 }
 
-impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccessor<P, R> {
-    fn component<'w>(
-        &self,
-        world: &'w World,
-        entity: &Entity,
-    ) -> Option<ReplicaDynRefWrapper<'w, P>> {
+impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
+    fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>> {
         if let Some(component_ref) = world.get::<R>(*entity) {
             let wrapper = ComponentDynRef(component_ref);
             let component_dyn_ref = ReplicaDynRefWrapper::new(wrapper);
@@ -59,7 +55,7 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         &self,
         world: &'w mut World,
         entity: &Entity,
-    ) -> Option<ReplicaDynMutWrapper<'w, P>> {
+    ) -> Option<ReplicaDynMutWrapper<'w>> {
         if let Some(component_mut) = world.get_mut::<R>(*entity) {
             let wrapper = ComponentDynMut(component_mut);
             let component_dyn_mut = ReplicaDynMutWrapper::new(wrapper);
@@ -68,11 +64,14 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         None
     }
 
-    fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<P> {
-        return world
-            .entity_mut(*entity)
-            .remove::<R>()
-            .map(|v| v.into_protocol());
+    fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<Box<dyn Replicate>> {
+        let result: Option<R> = world.entity_mut(*entity).remove::<R>();
+        let casted: Option<Box<dyn Replicate>> = result.map(|inner: R| {
+            let boxed_r: Box<R> = Box::new(inner);
+            let boxed_dyn: Box<dyn Replicate> = boxed_r;
+            boxed_dyn
+        });
+        casted
     }
 
     fn mirror_components(
@@ -85,9 +84,21 @@ impl<P: Protocolize, R: ReplicateSafe<P>> ComponentAccess<P> for ComponentAccess
         unsafe {
             if let Ok(immutable_component) = query.get_unchecked(world, *immutable_entity) {
                 if let Ok(mut mutable_component) = query.get_unchecked(world, *mutable_entity) {
-                    mutable_component.mirror(&immutable_component.protocol_copy());
+                    let some_r: &R = &immutable_component;
+                    mutable_component.mirror(some_r);
                 }
             }
         }
+    }
+
+    fn insert_component(
+        &self,
+        world: &mut World,
+        entity: &Entity,
+        boxed_component: Box<dyn Replicate>,
+    ) {
+        let boxed_any = boxed_component.to_boxed_any();
+        let inner: R = *(boxed_any.downcast::<R>().unwrap());
+        world.entity_mut(*entity).insert(inner);
     }
 }

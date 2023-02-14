@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_set::Iter, HashMap, VecDeque},
+    collections::{hash_set::Iter, HashMap},
     hash::Hash,
     net::SocketAddr,
     panic,
@@ -13,10 +13,9 @@ use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
-    serde::{BitWriter, Serde},
-    BigMap, ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant,
-    PacketType, PropertyMutator, Protocolize, Replicate, ReplicateSafe, SharedConfig,
-    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityDoesNotExistError, EntityHandle,
+    EntityHandleConverter, Instant, Message, PacketType, PropertyMutator, Protocol, Replicate,
+    Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -36,7 +35,7 @@ use crate::{
 
 use super::{
     error::NaiaServerError,
-    event::Event,
+    events::Events,
     room::{Room, RoomKey, RoomMut, RoomRef},
     server_config::ServerConfig,
     user::{User, UserKey, UserMut, UserRef},
@@ -47,49 +46,54 @@ use super::{
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
 #[cfg_attr(feature = "bevy_support", derive(Resource))]
-pub struct Server<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     server_config: ServerConfig,
-    shared_config: SharedConfig<C>,
+    protocol: Protocol,
     socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ping_timer: Timer,
-    handshake_manager: HandshakeManager<P>,
+    handshake_manager: HandshakeManager,
     // Users
     users: BigMap<UserKey, User>,
-    user_connections: HashMap<SocketAddr, Connection<P, E, C>>,
+    user_connections: HashMap<SocketAddr, Connection<E>>,
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
-    world_record: WorldRecord<E, P::Kind>,
+    world_record: WorldRecord<E>,
     entity_scope_map: EntityScopeMap<E>,
     // Components
-    diff_handler: Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
+    diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
     // Events
-    incoming_events: VecDeque<Result<Event<P, C>, NaiaServerError>>,
+    incoming_events: Events,
     // Ticks
     tick_manager: Option<TickManager>,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<P, E, C> {
+impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Create a new Server
-    pub fn new(server_config: &ServerConfig, shared_config: &SharedConfig<C>) -> Self {
-        let socket = Socket::new(&shared_config.socket);
+    pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
+        let mut protocol: Protocol = protocol.into();
+        protocol.lock();
 
-        let tick_manager = { shared_config.tick_interval.map(TickManager::new) };
+        let socket = Socket::new(&protocol.socket);
+
+        let tick_manager = { protocol.tick_interval.map(TickManager::new) };
+
+        let io = Io::new(
+            &server_config.connection.bandwidth_measure_duration,
+            &protocol.compression,
+        );
 
         Server {
             // Config
             server_config: server_config.clone(),
-            shared_config: shared_config.clone(),
+            protocol,
             // Connection
             socket,
-            io: Io::new(
-                &server_config.connection.bandwidth_measure_duration,
-                &shared_config.compression,
-            ),
+            io,
             heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
             timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
             ping_timer: Timer::new(server_config.connection.ping.ping_interval),
@@ -105,7 +109,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             // Components
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::default())),
             // Events
-            incoming_events: VecDeque::new(),
+            incoming_events: Events::new(),
             // Ticks
             tick_manager,
         }
@@ -126,7 +130,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> VecDeque<Result<Event<P, C>, NaiaServerError>> {
+    pub fn receive(&mut self) -> Events {
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
         self.maintain_socket();
@@ -147,14 +151,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             let connection = self.user_connections.get_mut(user_address).unwrap();
 
             // receive messages from anyone
-            let messages = connection.base.message_manager.receive_messages();
-            for (channel, message) in messages {
-                self.incoming_events.push_back(Ok(Event::Message(
-                    connection.user_key,
-                    channel,
-                    message,
-                )));
-            }
+            connection.receive_messages(&mut self.incoming_events);
         }
 
         // receive (retrieve from buffer) tick buffered messages for the current server tick
@@ -163,19 +160,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             for user_address in &user_addresses {
                 let connection = self.user_connections.get_mut(user_address).unwrap();
 
-                let messages = connection
-                    .tick_buffer
-                    .receive_messages(&self.tick_manager.as_ref().unwrap().server_tick());
-                for (channel, message) in messages {
-                    self.incoming_events.push_back(Ok(Event::Message(
-                        connection.user_key,
-                        channel,
-                        message,
-                    )));
-                }
+                connection.receive_tick_buffer_messages(
+                    &self.tick_manager.as_ref().unwrap().server_tick(),
+                    &mut self.incoming_events,
+                );
             }
 
-            self.incoming_events.push_back(Ok(Event::Tick));
+            self.incoming_events.push_tick();
         }
 
         // return all received messages and reset the buffer
@@ -190,9 +181,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         if let Some(user) = self.users.get(user_key) {
             let new_connection = Connection::new(
                 &self.server_config.connection,
-                &self.shared_config.channel,
                 user.address,
                 user_key,
+                &self.protocol.channel_kinds,
                 &self.diff_handler,
             );
             // send connectaccept response
@@ -212,8 +203,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             if self.io.bandwidth_monitor_enabled() {
                 self.io.register_client(&user.address);
             }
-            self.incoming_events
-                .push_back(Ok(Event::Connection(*user_key)));
+            self.incoming_events.push_connection(user_key);
         }
     }
 
@@ -242,16 +232,23 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn send_message<R: ReplicateSafe<P>>(
+    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
+        let cloned_message = M::clone_box(message);
+        self.send_message_inner(user_key, &ChannelKind::of::<C>(), cloned_message);
+    }
+
+    /// Queues up an Message to be sent to the Client associated with a given
+    /// UserKey
+    fn send_message_inner(
         &mut self,
         user_key: &UserKey,
-        channel: C,
-        message: &R,
+        channel_kind: &ChannelKind,
+        message: Box<dyn Message>,
     ) {
         if !self
-            .shared_config
-            .channel
-            .channel(&channel)
+            .protocol
+            .channel_kinds
+            .channel(channel_kind)
             .can_send_to_client()
         {
             panic!("Cannot send message to Client on this Channel");
@@ -278,29 +275,36 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                         connection
                             .base
                             .message_manager
-                            .send_message(channel, message.protocol_copy());
+                            .send_message(channel_kind, message);
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
-                        connection
-                            .entity_manager
-                            .queue_entity_message(entities, channel, message);
+                        connection.entity_manager.queue_entity_message(
+                            entities,
+                            channel_kind,
+                            message,
+                        );
                     }
                 } else {
                     connection
                         .base
                         .message_manager
-                        .send_message(channel, message.protocol_copy());
+                        .send_message(channel_kind, message);
                 }
             }
         }
     }
 
     /// Sends a message to all connected users using a given channel
-    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
+        let cloned_message = M::clone_box(message);
+        self.broadcast_message_inner(&ChannelKind::of::<C>(), cloned_message);
+    }
+
+    fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
         self.user_keys()
             .iter()
-            .for_each(|user_key| self.send_message(user_key, channel.clone(), message))
+            .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
     }
 
     // Updates
@@ -333,7 +337,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub fn send_all_updates<W: WorldRefType<P, E>>(&mut self, world: W) {
+    pub fn send_all_updates<W: WorldRefType<E>>(&mut self, world: W) {
         let now = Instant::now();
 
         // update entity scopes
@@ -349,6 +353,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             let rtt = connection.ping_manager.rtt;
 
             connection.send_outgoing_packets(
+                &self.protocol,
                 &now,
                 &mut self.io,
                 &world,
@@ -363,7 +368,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<P, E>>(&mut self, mut world: W) -> EntityMut<P, E, W, C> {
+    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
         let entity = world.spawn_entity();
         self.spawn_entity_init(&entity);
 
@@ -378,7 +383,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity<W: WorldRefType<P, E>>(&self, world: W, entity: &E) -> EntityRef<P, E, W> {
+    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(world, entity);
         }
@@ -388,11 +393,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<P, E>>(
-        &mut self,
-        world: W,
-        entity: &E,
-    ) -> EntityMut<P, E, W, C> {
+    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
         if world.has_entity(entity) {
             return EntityMut::new(self, world, entity);
         }
@@ -400,7 +401,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     }
 
     /// Gets a Vec of all Entities in the given World
-    pub fn entities<W: WorldRefType<P, E>>(&self, world: W) -> Vec<E> {
+    pub fn entities<W: WorldRefType<E>>(&self, world: W) -> Vec<E> {
         world.entities()
     }
 
@@ -414,7 +415,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
     /// Panics if the user does not exist.
-    pub fn user(&self, user_key: &UserKey) -> UserRef<P, E, C> {
+    pub fn user(&self, user_key: &UserKey) -> UserRef<E> {
         if self.users.contains_key(user_key) {
             return UserRef::new(self, user_key);
         }
@@ -424,7 +425,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
     /// Returns None if the user does not exist.
-    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<P, E, C> {
+    pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<E> {
         if self.users.contains_key(user_key) {
             return UserMut::new(self, user_key);
         }
@@ -449,7 +450,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
-    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<P, E, C> {
+    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<E> {
         if self.users.contains_key(user_key) {
             return UserScopeMut::new(self, user_key);
         }
@@ -461,7 +462,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&mut self) -> RoomMut<P, E, C> {
+    pub fn make_room(&mut self) -> RoomMut<E> {
         let new_room = Room::new();
         let room_key = self.rooms.insert(new_room);
         RoomMut::new(self, &room_key)
@@ -475,7 +476,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room(&self, room_key: &RoomKey) -> RoomRef<P, E, C> {
+    pub fn room(&self, room_key: &RoomKey) -> RoomRef<E> {
         if self.rooms.contains_key(room_key) {
             return RoomRef::new(self, room_key);
         }
@@ -485,7 +486,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
-    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<P, E, C> {
+    pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<E> {
         if self.rooms.contains_key(room_key) {
             return RoomMut::new(self, room_key);
         }
@@ -575,7 +576,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     /// This will also remove all of the Entity’s Components.
     /// Returns true if the Entity is successfully despawned and false if the
     /// Entity does not exist.
-    pub(crate) fn despawn_entity<W: WorldMutType<P, E>>(&mut self, world: &mut W, entity: &E) {
+    pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
         if !world.has_entity(entity) {
             panic!("attempted to de-spawn nonexistent entity");
         }
@@ -622,7 +623,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     //// Components
 
     /// Adds a Component to an Entity
-    pub(crate) fn insert_component<R: ReplicateSafe<P>, W: WorldMutType<P, E>>(
+    pub(crate) fn insert_component<R: Replicate, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,
@@ -638,7 +639,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
             // Entity already has this Component type yet, update Component
 
             if let Some(mut component) = world.component_mut::<R>(entity) {
-                component.mirror(&component_ref.protocol_copy());
+                component.mirror(&component_ref);
             } else {
                 panic!("Should never happen because we checked for this above")
             }
@@ -663,13 +664,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     }
 
     /// Removes a Component from an Entity
-    pub(crate) fn remove_component<R: Replicate<P>, W: WorldMutType<P, E>>(
+    pub(crate) fn remove_component<R: Replicate, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,
     ) -> Option<R> {
         // get component key from type
-        let component_kind = P::kind_of::<R>();
+        let component_kind = ComponentKind::of::<R>();
 
         // clean up component on all connections
 
@@ -717,8 +718,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     pub(crate) fn user_disconnect(&mut self, user_key: &UserKey) {
         if let Some(user) = self.user_delete(user_key) {
-            self.incoming_events
-                .push_back(Ok(Event::Disconnection(*user_key, user)));
+            self.incoming_events.push_disconnection(user_key, user);
         }
     }
 
@@ -822,16 +822,16 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     }
 
     /// Sends a message to all connected users in a given Room using a given channel
-    pub(crate) fn room_broadcast_message<R: ReplicateSafe<P>>(
+    pub(crate) fn room_broadcast_message(
         &mut self,
-        channel: C,
-        message: &R,
+        channel_kind: &ChannelKind,
+        message: Box<dyn Message>,
         room_key: &RoomKey,
     ) {
         if let Some(room) = self.rooms.get(room_key) {
             let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
             for user_key in &user_keys {
-                self.send_message(user_key, channel.clone(), message)
+                self.send_message_inner(user_key, channel_kind, message.clone())
             }
         }
     }
@@ -1012,10 +1012,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                             continue;
                         }
                         PacketType::ClientConnectRequest => {
-                            match self
-                                .handshake_manager
-                                .recv_connect_request(&address, &mut reader)
-                            {
+                            match self.handshake_manager.recv_connect_request(
+                                &self.protocol.message_kinds,
+                                &address,
+                                &mut reader,
+                            ) {
                                 HandshakeResult::Success(auth_message_opt) => {
                                     if self.user_connections.contains_key(&address) {
                                         // send connectaccept response
@@ -1034,9 +1035,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                                         let user_key = self.users.insert(user);
 
                                         if let Some(auth_message) = auth_message_opt {
-                                            self.incoming_events.push_back(Ok(
-                                                Event::Authorization(user_key, auth_message),
-                                            ));
+                                            self.incoming_events.push_auth(&user_key, auth_message);
                                         } else {
                                             self.accept_connection(&user_key);
                                         }
@@ -1086,6 +1085,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
                                 // process data
                                 let data_result = user_connection.process_incoming_data(
+                                    &self.protocol,
                                     server_and_client_tick_opt,
                                     &mut reader,
                                     &self.world_record,
@@ -1200,7 +1200,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
                 }
                 Err(error) => {
                     self.incoming_events
-                        .push_back(Err(NaiaServerError::Wrapped(Box::new(error))));
+                        .push_error(NaiaServerError::Wrapped(Box::new(error)));
                 }
             }
         }
@@ -1214,11 +1214,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     // Entity Scopes
 
-    fn update_entity_scopes<W: WorldRefType<P, E>>(&mut self, world: &W) {
+    fn update_entity_scopes<W: WorldRefType<E>>(&mut self, world: &W) {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(user) = self.users.get(&removed_user) {
                     if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
+                        // TODO: evaluate whether the Entity really needs to be despawned!
+                        // What if the Entity shares another Room with this User? It shouldn't be despawned!
+
                         //remove entity from user connection
                         user_connection
                             .entity_manager
@@ -1274,7 +1277,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
 
     // Component Helpers
 
-    fn component_init<R: ReplicateSafe<P>>(&mut self, entity: &E, component_ref: &mut R) {
+    fn component_init<R: Replicate>(&mut self, entity: &E, component_ref: &mut R) {
         let component_kind = component_ref.kind();
         self.world_record.add_component(entity, &component_kind);
 
@@ -1292,7 +1295,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
         component_ref.set_mutator(&prop_mutator);
     }
 
-    fn component_cleanup(&mut self, entity: &E, component_kind: &P::Kind) {
+    fn component_cleanup(&mut self, entity: &E, component_kind: &ComponentKind) {
         self.world_record.remove_component(entity, component_kind);
         self.diff_handler
             .as_ref()
@@ -1302,9 +1305,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Server<
     }
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityHandleConverter<E>
-    for Server<P, E, C>
-{
+impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         self.world_record.handle_to_entity(entity_handle)
     }

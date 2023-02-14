@@ -1,22 +1,21 @@
-use naia_shared::Protocolize;
+use std::time::Duration;
 
-mod auth;
-mod entity_assignment;
-mod key_command;
-mod marker;
-mod square;
+use naia_shared::{LinkConditionerConfig, Protocol};
 
-pub use auth::Auth;
-pub use entity_assignment::EntityAssignment;
-pub use key_command::KeyCommand;
-pub use marker::Marker;
-pub use square::{Color, Square};
+use crate::{channels::ChannelsPlugin, components::ComponentsPlugin, messages::MessagesPlugin};
 
-#[derive(Protocolize)]
-pub enum Protocol {
-    Auth(Auth),
-    EntityAssignment(EntityAssignment),
-    KeyCommand(KeyCommand),
-    Square(Square),
-    Marker(Marker),
+// Protocol Build
+pub fn protocol() -> Protocol {
+    Protocol::builder()
+        // Config
+        .tick_interval(Duration::from_millis(20))
+        .link_condition(LinkConditionerConfig::average_condition())
+        // Channels
+        .add_plugin(ChannelsPlugin)
+        // Messages
+        .add_plugin(MessagesPlugin)
+        // Components
+        .add_plugin(ComponentsPlugin)
+        // Build Protocol
+        .build()
 }

@@ -3,11 +3,10 @@ use std::collections::HashSet;
 use hecs::Entity;
 
 use naia_hecs_server::{
-    shared::DefaultChannels, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig,
-    WorldWrapper as World,
+    RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldWrapper as World,
 };
 
-use naia_hecs_demo_shared::{protocol::Protocol, shared_config};
+use naia_hecs_demo_shared::protocol;
 
 use super::systems::{
     events::process_events,
@@ -15,12 +14,12 @@ use super::systems::{
     tick::{check_scopes, march_and_mark, send_updates},
 };
 
-pub type Server = NaiaServer<Protocol, Entity, DefaultChannels>;
+pub type Server = NaiaServer<Entity>;
 
 pub struct App {
     pub has_user: bool,
     pub server: Server,
-    pub world: World<Protocol>,
+    pub world: World,
     pub main_room_key: RoomKey,
     pub tick_count: u32,
     pub has_marker: HashSet<Entity>,
@@ -42,7 +41,7 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        app_init(ServerConfig::default(), shared_config(), server_addresses)
+        app_init(ServerConfig::default(), protocol(), server_addresses)
     }
 
     pub fn update(&mut self) {

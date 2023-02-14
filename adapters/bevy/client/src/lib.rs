@@ -1,4 +1,5 @@
-pub use naia_client::*;
+pub use naia_bevy_shared::{sequence_greater_than, Tick};
+pub use naia_client::{ClientConfig, CommandHistory};
 
 pub mod events;
 

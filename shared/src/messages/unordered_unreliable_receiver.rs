@@ -1,5 +1,6 @@
 use std::{collections::VecDeque, mem};
 
+use crate::messages::message_kinds::MessageKinds;
 use naia_serde::{BitReader, Serde, SerdeErr};
 
 use super::message_channel::{ChannelReader, ChannelReceiver};
@@ -17,11 +18,12 @@ impl<P> UnorderedUnreliableReceiver<P> {
 
     fn read_message(
         &mut self,
+        message_kinds: &MessageKinds,
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<P, SerdeErr> {
         // read payload
-        channel_reader.read(reader)
+        channel_reader.read(message_kinds, reader)
     }
 
     fn recv_message(&mut self, message: P) {
@@ -32,6 +34,7 @@ impl<P> UnorderedUnreliableReceiver<P> {
 impl<P: Send + Sync> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
     fn read_messages(
         &mut self,
+        message_kinds: &MessageKinds,
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
@@ -41,7 +44,7 @@ impl<P: Send + Sync> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
                 break;
             }
 
-            let message = self.read_message(channel_reader, reader)?;
+            let message = self.read_message(message_kinds, channel_reader, reader)?;
             self.recv_message(message);
         }
 

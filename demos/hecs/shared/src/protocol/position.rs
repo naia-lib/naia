@@ -1,6 +1,6 @@
-use naia_shared::{Property, Replicate};
+use naia_hecs_shared::{Property, Replicate};
+
 #[derive(Replicate)]
-#[protocol_path = "crate::protocol::Protocol"]
 pub struct Position {
     pub x: Property<u8>,
     pub y: Property<u8>,

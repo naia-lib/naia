@@ -1,9 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-    messages::{channel_config::ChannelIndex, message_manager::MessageManager},
-    protocol::protocolize::Protocolize,
-    types::PacketIndex,
+    messages::message_manager::MessageManager, types::PacketIndex,
     wrapping_number::sequence_greater_than,
 };
 
@@ -47,10 +45,10 @@ impl AckManager {
 
     /// Process an incoming packet, handle notifications of delivered / dropped
     /// packets
-    pub fn process_incoming_header<P: Protocolize, C: ChannelIndex>(
+    pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        message_manager: &mut MessageManager<P, C>,
+        message_manager: &mut MessageManager,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         let sender_packet_index = header.sender_packet_index;
@@ -127,10 +125,10 @@ impl AckManager {
         outgoing
     }
 
-    fn notify_packet_delivered<P: Protocolize, C: ChannelIndex>(
+    fn notify_packet_delivered(
         &self,
         sent_packet_index: PacketIndex,
-        message_manager: &mut MessageManager<P, C>,
+        message_manager: &mut MessageManager,
         packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
     ) {
         message_manager.notify_packet_delivered(sent_packet_index);

@@ -1,7 +1,7 @@
 // An enum representing the different types of packets that can be
 // sent/received
 
-use naia_serde::{BitReader, BitWrite, SerdeErr, UnsignedInteger};
+use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, UnsignedInteger};
 
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub enum PacketType {
@@ -32,7 +32,7 @@ pub enum PacketType {
 
 // Most packets should be Data, so lets compress this a bit more.
 // Could do this with another enum, but code would get messy.
-impl crate::serde::Serde for PacketType {
+impl Serde for PacketType {
     fn ser(&self, writer: &mut dyn BitWrite) {
         let is_data = *self == PacketType::Data;
         is_data.ser(writer);

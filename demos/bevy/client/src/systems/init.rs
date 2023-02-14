@@ -1,15 +1,14 @@
-use bevy::{ecs::system::Commands, log::info, prelude::Camera2dBundle};
+use bevy_core_pipeline::prelude::Camera2dBundle;
+use bevy_ecs::system::Commands;
+use bevy_log::info;
 
 use naia_bevy_client::Client;
 
-use naia_bevy_demo_shared::{
-    protocol::{Auth, Protocol},
-    Channels,
-};
+use naia_bevy_demo_shared::messages::Auth;
 
 use crate::resources::Global;
 
-pub fn init(mut commands: Commands, mut client: Client<Protocol, Channels>) {
+pub fn init(mut commands: Commands, mut client: Client) {
     info!("Naia Bevy Client Demo started");
 
     client.auth(Auth::new("charlie", "12345"));

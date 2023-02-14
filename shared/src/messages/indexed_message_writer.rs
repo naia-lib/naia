@@ -1,9 +1,8 @@
-use std::collections::VecDeque;
-use std::marker::PhantomData;
+use std::{collections::VecDeque, marker::PhantomData};
 
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
-use crate::{types::MessageId, wrapping_diff};
+use crate::{messages::message_kinds::MessageKinds, types::MessageIndex, wrapping_diff};
 
 use super::message_channel::ChannelWriter;
 
@@ -14,13 +13,14 @@ pub struct IndexedMessageWriter<P: Send + Sync> {
 
 impl<P: Send + Sync> IndexedMessageWriter<P> {
     pub fn write_messages(
-        outgoing_messages: &mut VecDeque<(MessageId, P)>,
+        message_kinds: &MessageKinds,
+        outgoing_messages: &mut VecDeque<(MessageIndex, P)>,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
-    ) -> Option<Vec<MessageId>> {
-        let mut last_written_id: Option<MessageId> = None;
-        let mut message_ids = Vec::new();
+    ) -> Option<Vec<MessageIndex>> {
+        let mut last_written_id: Option<MessageIndex> = None;
+        let mut message_indexs = Vec::new();
 
         loop {
             if outgoing_messages.is_empty() {
@@ -28,13 +28,14 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
             }
 
             // check that we can write the next message
-            let (message_id, message) = outgoing_messages.front().unwrap();
+            let (message_index, message) = outgoing_messages.front().unwrap();
             let mut counter = bit_writer.counter();
             Self::write_message(
+                message_kinds,
                 channel_writer,
                 &mut counter,
                 &last_written_id,
-                message_id,
+                message_index,
                 message,
             );
 
@@ -55,40 +56,42 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
 
             // write data
             Self::write_message(
+                message_kinds,
                 channel_writer,
                 bit_writer,
                 &last_written_id,
-                message_id,
+                message_index,
                 message,
             );
 
-            message_ids.push(*message_id);
-            last_written_id = Some(*message_id);
+            message_indexs.push(*message_index);
+            last_written_id = Some(*message_index);
 
             // pop message we've written
             outgoing_messages.pop_front();
         }
-        Some(message_ids)
+        Some(message_indexs)
     }
 
     fn write_message(
+        message_kinds: &MessageKinds,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut dyn BitWrite,
-        last_written_id: &Option<MessageId>,
-        message_id: &MessageId,
+        last_written_id: &Option<MessageIndex>,
+        message_index: &MessageIndex,
         message: &P,
     ) {
         if let Some(last_id) = last_written_id {
             // write message id diff
-            let id_diff = wrapping_diff(*last_id, *message_id);
+            let id_diff = wrapping_diff(*last_id, *message_index);
             let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
             id_diff_encoded.ser(bit_writer);
         } else {
             // write message id
-            message_id.ser(bit_writer);
+            message_index.ser(bit_writer);
         }
 
-        channel_writer.write(bit_writer, message);
+        channel_writer.write(message_kinds, bit_writer, message);
     }
 
     fn warn_overflow(bits_needed: u16, bits_free: u16) {

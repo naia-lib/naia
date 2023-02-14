@@ -1,7 +1,8 @@
+use crate::messages::message_kinds::MessageKinds;
 use naia_serde::{BitReader, BitWrite, BitWriter, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::types::MessageId;
+use crate::types::MessageIndex;
 
 pub trait ChannelSender<P>: Send + Sync {
     /// Queues a Message to be transmitted to the remote host into an internal buffer
@@ -13,18 +14,20 @@ pub trait ChannelSender<P>: Send + Sync {
     /// Gets Messages from the internal buffer and writes it to the channel_writer
     fn write_messages(
         &mut self,
+        message_kinds: &MessageKinds,
         channel_writer: &dyn ChannelWriter<P>,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
-    ) -> Option<Vec<MessageId>>;
+    ) -> Option<Vec<MessageIndex>>;
     /// Called when it receives acknowledgement that a Message has been received
-    fn notify_message_delivered(&mut self, message_id: &MessageId);
+    fn notify_message_delivered(&mut self, message_index: &MessageIndex);
 }
 
 pub trait ChannelReceiver<P>: Send + Sync {
     /// Read messages from raw bits, parse them and store then into an internal buffer
     fn read_messages(
         &mut self,
+        message_kinds: &MessageKinds,
         channel_reader: &dyn ChannelReader<P>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr>;
@@ -34,10 +37,10 @@ pub trait ChannelReceiver<P>: Send + Sync {
 
 pub trait ChannelWriter<T> {
     /// Writes a Message into the outgoing packet
-    fn write(&self, writer: &mut dyn BitWrite, data: &T);
+    fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, data: &T);
 }
 
 pub trait ChannelReader<T> {
     /// Reads a Message from an incoming packet
-    fn read(&self, reader: &mut BitReader) -> Result<T, SerdeErr>;
+    fn read(&self, message_kinds: &MessageKinds, reader: &mut BitReader) -> Result<T, SerdeErr>;
 }

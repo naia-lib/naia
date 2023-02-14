@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 
-use naia_shared::{EntityHandle, NetEntity, ProtocolKindType};
+use naia_shared::{ComponentKind, EntityHandle, NetEntity};
 
-pub struct EntityRecord<K: ProtocolKindType> {
+pub struct EntityRecord {
     pub net_entity: NetEntity,
-    pub component_kinds: HashSet<K>,
+    pub component_kinds: HashSet<ComponentKind>,
     pub entity_handle: EntityHandle,
 }
 
-impl<K: ProtocolKindType> EntityRecord<K> {
+impl EntityRecord {
     pub fn new(net_entity: NetEntity, entity_handle: EntityHandle) -> Self {
         EntityRecord {
             net_entity,

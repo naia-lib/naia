@@ -6,10 +6,9 @@ use std::{
 };
 
 use naia_shared::{
-    sequence_greater_than,
-    serde::{BitReader, BitWriter, Serde, SerdeErr},
-    BaseConnection, ChannelConfig, ChannelIndex, ConnectionConfig, EntityConverter, HostType,
-    Instant, PacketType, PingManager, ProtocolIo, Protocolize, StandardHeader, Tick, WorldRefType,
+    sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
+    EntityConverter, HostType, Instant, PacketType, PingManager, Protocol, ProtocolIo, Serde,
+    SerdeErr, StandardHeader, Tick, WorldRefType,
 };
 
 use crate::{
@@ -19,26 +18,27 @@ use crate::{
     },
     tick::{tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager},
     user::UserKey,
+    Events,
 };
 
 use super::io::Io;
 
-pub struct Connection<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
-    pub base: BaseConnection<P, C>,
-    pub entity_manager: EntityManager<P, E, C>,
-    pub tick_buffer: TickBufferReceiver<P, C>,
+    pub base: BaseConnection,
+    pub entity_manager: EntityManager<E>,
+    tick_buffer: TickBufferReceiver,
     pub last_received_tick: Tick,
     pub ping_manager: PingManager,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connection<P, E, C> {
+impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn new(
         connection_config: &ConnectionConfig,
-        channel_config: &ChannelConfig<C>,
         user_address: SocketAddr,
         user_key: &UserKey,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
+        channel_kinds: &ChannelKinds,
+        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
     ) -> Self {
         Connection {
             user_key: *user_key,
@@ -46,10 +46,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                 user_address,
                 HostType::Server,
                 connection_config,
-                channel_config,
+                channel_kinds,
             ),
             entity_manager: EntityManager::new(user_address, diff_handler),
-            tick_buffer: TickBufferReceiver::new(channel_config),
+            tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(&connection_config.ping),
             last_received_tick: 0,
         }
@@ -72,9 +72,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
     /// Read packet data received from a client
     pub fn process_incoming_data(
         &mut self,
+        protocol: &Protocol,
         server_and_client_tick_opt: Option<(Tick, Tick)>,
         reader: &mut BitReader,
-        world_record: &WorldRecord<E, P::Kind>,
+        world_record: &WorldRecord<E>,
     ) -> Result<(), SerdeErr> {
         let converter = EntityConverter::new(world_record, &self.entity_manager);
         let channel_reader = ProtocolIo::new(&converter);
@@ -83,6 +84,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
         {
             if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
                 self.tick_buffer.read_messages(
+                    protocol,
                     &server_tick,
                     &client_tick,
                     &channel_reader,
@@ -95,19 +97,36 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
         {
             self.base
                 .message_manager
-                .read_messages(&channel_reader, reader)?;
+                .read_messages(protocol, &channel_reader, reader)?;
         }
 
         Ok(())
     }
 
+    pub fn receive_messages(&mut self, incoming_events: &mut Events) {
+        let received_messages = self.base.message_manager.receive_messages();
+        for (channel_kind, message) in received_messages {
+            incoming_events.push_message(&self.user_key, &channel_kind, message);
+        }
+    }
+
+    pub fn receive_tick_buffer_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
+        let channel_messages = self.tick_buffer.receive_messages(host_tick);
+        for (channel_kind, received_messages) in channel_messages {
+            for message in received_messages {
+                incoming_events.push_message(&self.user_key, &channel_kind, message);
+            }
+        }
+    }
+
     // Outgoing data
-    pub fn send_outgoing_packets<W: WorldRefType<P, E>>(
+    pub fn send_outgoing_packets<W: WorldRefType<E>>(
         &mut self,
+        protocol: &Protocol,
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E, P::Kind>,
+        world_record: &WorldRecord<E>,
         tick_manager_opt: &Option<TickManager>,
         rtt_millis: &f32,
     ) {
@@ -115,7 +134,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(now, io, world, world_record, tick_manager_opt) {
+            if self.send_outgoing_packet(protocol, now, io, world, world_record, tick_manager_opt) {
                 any_sent = true;
             } else {
                 break;
@@ -139,12 +158,13 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
 
     /// Send any message, component actions and component updates to the client
     /// Will split the data into multiple packets.
-    fn send_outgoing_packet<W: WorldRefType<P, E>>(
+    fn send_outgoing_packet<W: WorldRefType<E>>(
         &mut self,
+        protocol: &Protocol,
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E, P::Kind>,
+        world_record: &WorldRecord<E>,
         tick_manager_opt: &Option<TickManager>,
     ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
@@ -181,6 +201,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
                 let converter = EntityConverter::new(world_record, &self.entity_manager);
                 let channel_writer = ProtocolIo::new(&converter);
                 self.base.message_manager.write_messages(
+                    &protocol,
                     &channel_writer,
                     &mut bit_writer,
                     next_packet_index,
@@ -195,6 +216,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
             // write entity updates
             {
                 self.entity_manager.write_updates(
+                    &protocol.component_kinds,
                     now,
                     &mut bit_writer,
                     &next_packet_index,
@@ -211,6 +233,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Connect
             // write entity actions
             {
                 self.entity_manager.write_actions(
+                    &protocol.component_kinds,
                     now,
                     &mut bit_writer,
                     &next_packet_index,

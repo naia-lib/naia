@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, net::SocketAddr};
+use std::net::SocketAddr;
 
 use bevy_ecs::{
     entity::Entity,
@@ -6,46 +6,38 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_client::{
-    shared::{
-        ChannelIndex, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Protocolize,
-        ReplicateSafe,
-    },
-    Client as NaiaClient, EntityRef, NaiaClientError,
-};
+use naia_client::{Client as NaiaClient, EntityRef, NaiaClientError};
 
-use naia_bevy_shared::{WorldProxy, WorldRef};
+use naia_bevy_shared::{
+    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, WorldProxy,
+    WorldRef,
+};
 
 use super::state::State;
 
 // Client
 
-pub struct Client<'a, P: Protocolize, C: ChannelIndex> {
+pub struct Client<'a> {
     world: &'a World,
-    client: Mut<'a, NaiaClient<P, Entity, C>>,
-    phantom_p: PhantomData<P>,
+    client: Mut<'a, NaiaClient<Entity>>,
 }
 
-impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
+impl<'a> Client<'a> {
     // Public Methods //
 
     pub fn new(world: &'a World) -> Self {
         unsafe {
             let client = world
-                .get_resource_unchecked_mut::<NaiaClient<P, Entity, C>>()
+                .get_resource_unchecked_mut::<NaiaClient<Entity>>()
                 .expect("Naia Client has not been correctly initialized!");
 
-            Self {
-                world,
-                client,
-                phantom_p: PhantomData,
-            }
+            Self { world, client }
         }
     }
 
     //// Connections ////
 
-    pub fn auth<R: ReplicateSafe<P>>(&mut self, auth: R) {
+    pub fn auth<M: Message>(&mut self, auth: M) {
         self.client.auth(auth);
     }
 
@@ -84,13 +76,13 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
     }
 
     //// Messages ////
-    pub fn send_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
-        self.client.send_message(channel, message)
+    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
+        self.client.send_message::<C, M>(message)
     }
 
     //// Entities ////
 
-    pub fn entity(&self, entity: &Entity) -> EntityRef<P, Entity, WorldRef> {
+    pub fn entity(&self, entity: &Entity) -> EntityRef<Entity, WorldRef> {
         return self.client.entity(self.world.proxy(), entity);
     }
 
@@ -105,11 +97,11 @@ impl<'a, P: Protocolize, C: ChannelIndex> Client<'a, P, C> {
     }
 }
 
-impl<'a, P: Protocolize, C: ChannelIndex> SystemParam for Client<'a, P, C> {
-    type Fetch = State<P, C>;
+impl<'a> SystemParam for Client<'a> {
+    type Fetch = State;
 }
 
-impl<'a, P: Protocolize, C: ChannelIndex> EntityHandleConverter<Entity> for Client<'a, P, C> {
+impl<'a> EntityHandleConverter<Entity> for Client<'a> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
         self.client.handle_to_entity(entity_handle)
     }

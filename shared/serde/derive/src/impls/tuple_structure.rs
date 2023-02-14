@@ -1,37 +1,52 @@
-use crate::parse::Struct;
+use proc_macro2::{Ident, Span, TokenStream};
+use quote::{format_ident, quote};
+use syn::DataStruct;
 
 #[allow(clippy::format_push_string)]
-pub fn derive_serde_tuple_struct(struct_: &Struct) -> String {
-    let mut ser_body = String::new();
+pub fn derive_serde_tuple_struct(
+    struct_: &DataStruct,
+    struct_name: &Ident,
+    serde_crate_name: TokenStream,
+) -> TokenStream {
+    let mut ser_body = quote! {};
+    let mut de_body = quote! {};
 
-    for (n, _) in struct_.fields.iter().enumerate() {
-        l!(ser_body, "self.{}.ser(writer);", n);
+    for (i, _) in struct_.fields.iter().enumerate() {
+        let field_index = i;
+        ser_body = quote! {
+            #ser_body
+            self.#field_index.ser(writer);
+        };
+        de_body = quote! {
+            #de_body
+            #field_index: Serde::de(reader)?,
+        };
     }
 
-    let mut de_body = String::new();
+    let lowercase_struct_name = Ident::new(
+        struct_name.to_string().to_lowercase().as_str(),
+        Span::call_site(),
+    );
+    let module_name = format_ident!("define_{}", lowercase_struct_name);
 
-    for (n, _) in struct_.fields.iter().enumerate() {
-        l!(de_body, "{}: Serde::de(reader)?,", n);
+    let import_types = quote! {BitWrite, Serde, BitReader, SerdeErr};
+    let imports = quote! { use #serde_crate_name::{#import_types}; };
+
+    quote! {
+        mod #module_name {
+            #imports
+            use super::#struct_name;
+            impl Serde for #struct_name {
+                 fn ser(&self, writer: &mut dyn BitWrite) {
+                    #ser_body
+                 }
+                 fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
+                    Ok(Self {
+                        #de_body
+                    })
+                 }
+
+            }
+        }
     }
-
-    let name = &struct_.name;
-
-    format!(
-        "
-        mod impl_serde_{name} {{
-            use super::serde::*;
-            use super::{name};
-            impl Serde for {name} {{
-                fn ser(&self, writer: &mut dyn BitWrite) {{
-                    {ser_body}
-                }}
-                fn de(reader: &mut BitReader) -> std::result::Result<Self, SerdeErr> {{
-                    std::result::Result::Ok(Self {{
-                        {de_body}
-                    }})
-                }}
-            }}
-        }}
-        "
-    )
 }

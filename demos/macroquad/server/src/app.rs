@@ -1,19 +1,21 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::Random, Event, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, UserKey,
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvent, Random, RoomKey,
+    Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent, UserKey,
 };
 
-use naia_demo_world::{Entity, World as DemoWorld};
+use naia_demo_world::{Entity, World};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
-    protocol::{Color, EntityAssignment, KeyCommand, Marker, Protocol, Square},
-    shared_config, Channels,
+    channels::{EntityAssignmentChannel, PlayerCommandChannel},
+    components::{Color, Marker, Square},
+    messages::{Auth, EntityAssignment, KeyCommand},
+    protocol,
 };
 
-type World = DemoWorld<Protocol>;
-type Server = NaiaServer<Protocol, Entity, Channels>;
+type Server = NaiaServer<Entity>;
 
 pub struct App {
     server: Server,
@@ -39,7 +41,7 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server = Server::new(&ServerConfig::default(), &shared_config());
+        let mut server = Server::new(ServerConfig::default(), protocol());
         server.listen(&server_addresses);
 
         // Create a new, singular room, which will contain Users and Entities that they
@@ -56,132 +58,122 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        let events = self.server.receive();
+        let mut events = self.server.receive();
         if events.is_empty() {
             // If we don't sleep here, app will loop at 100% CPU until a new message comes in
             sleep(Duration::from_millis(5));
-        } else {
-            for event in events {
-                match event {
-                    Ok(Event::Authorization(user_key, Protocol::Auth(auth))) => {
-                        if *auth.username == "charlie" && *auth.password == "12345" {
-                            // Accept incoming connection
-                            self.server.accept_connection(&user_key);
-                        } else {
-                            // Reject incoming connection
-                            self.server.reject_connection(&user_key);
-                        }
-                    }
-                    Ok(Event::Connection(user_key)) => {
-                        // New User has joined the Server
-                        let user_address = self
-                            .server
-                            .user_mut(&user_key)
-                            // User enters a Room to see the contained Entities
-                            .enter_room(&self.main_room_key)
-                            .address();
+            return;
+        }
+        for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
+            if auth.username == "charlie" && auth.password == "12345" {
+                // Accept incoming connection
+                self.server.accept_connection(&user_key);
+            } else {
+                // Reject incoming connection
+                self.server.reject_connection(&user_key);
+            }
+        }
+        for user_key in events.read::<ConnectEvent>() {
+            // New User has joined the Server
+            let user_address = self
+                .server
+                .user_mut(&user_key)
+                // User enters a Room to see the contained Entities
+                .enter_room(&self.main_room_key)
+                .address();
 
-                        info!("Naia Server connected to: {}", user_address);
+            info!("Naia Server connected to: {}", user_address);
 
-                        let total_user_count = self.server.users_count();
+            let total_user_count = self.server.users_count();
 
-                        // Spawn new Entity
-                        let mut entity = self.server.spawn_entity(self.world.proxy_mut());
+            // Spawn new Entity
+            let mut entity = self.server.spawn_entity(self.world.proxy_mut());
 
-                        // Create "Square" Component
-                        let x = Random::gen_range_u32(0, 50) * 16;
-                        let y = Random::gen_range_u32(0, 37) * 16;
+            // Create "Square" Component
+            let x = Random::gen_range_u32(0, 50) * 16;
+            let y = Random::gen_range_u32(0, 37) * 16;
 
-                        let square_color = match total_user_count % 4 {
-                            0 => Color::Yellow,
-                            1 => Color::Red,
-                            2 => Color::Blue,
-                            _ => Color::Green,
-                        };
+            let square_color = match total_user_count % 4 {
+                0 => Color::Yellow,
+                1 => Color::Red,
+                2 => Color::Blue,
+                _ => Color::Green,
+            };
 
-                        // Get Entity ID
-                        let entity_id = entity
-                            // Entity enters Room
-                            .enter_room(&self.main_room_key)
-                            // Add Square component to Entity
-                            .insert_component(Square::new(x as u16, y as u16, square_color))
-                            // Add Marker component to Entity
-                            .insert_component(Marker::new())
-                            .id();
+            // Get Entity ID
+            let entity_id = entity
+                // Entity enters Room
+                .enter_room(&self.main_room_key)
+                // Add Square component to Entity
+                .insert_component(Square::new(x as u16, y as u16, square_color))
+                // Add Marker component to Entity
+                .insert_component(Marker::new())
+                .id();
 
-                        // Associate new Entity with User that spawned it
-                        self.user_squares.insert(user_key, entity_id);
-                        self.square_last_command
-                            .insert(entity_id, KeyCommand::new(false, false, false, false));
+            // Associate new Entity with User that spawned it
+            self.user_squares.insert(user_key, entity_id);
+            self.square_last_command
+                .insert(entity_id, KeyCommand::new(false, false, false, false));
 
-                        // Send an Entity Assignment message to the User that owns the Square
-                        let mut assignment_message = EntityAssignment::new(true);
-                        assignment_message.entity.set(&self.server, &entity_id);
+            // Send an Entity Assignment message to the User that owns the Square
+            let mut assignment_message = EntityAssignment::new(true);
+            assignment_message.entity.set(&self.server, &entity_id);
 
-                        // TODO: eventually would like to do this like:
-                        // self.server.entity_property(assigment_message).set(&entity_id);
+            // TODO: eventually would like to do this like:
+            // self.server.entity_property(assigment_message).set(&entity_id);
 
-                        self.server.send_message(
-                            &user_key,
-                            Channels::EntityAssignment,
-                            &assignment_message,
-                        );
-                    }
-                    Ok(Event::Disconnection(user_key, user)) => {
-                        info!("Naia Server disconnected from: {}", user.address);
-                        if let Some(entity) = self.user_squares.remove(&user_key) {
-                            self.server
-                                .entity_mut(self.world.proxy_mut(), &entity)
-                                .leave_room(&self.main_room_key)
-                                .despawn();
-                            self.square_last_command.remove(&entity);
-                        }
-                    }
-                    Ok(Event::Message(
-                        _,
-                        Channels::PlayerCommand,
-                        Protocol::KeyCommand(key_command),
-                    )) => {
-                        if let Some(entity) = &key_command.entity.get(&self.server) {
-                            self.square_last_command.insert(*entity, key_command);
-                        }
-                    }
-                    Ok(Event::Tick) => {
-                        // All game logic should happen here, on a tick event
+            self.server
+                .send_message::<EntityAssignmentChannel, _>(&user_key, &assignment_message);
+        }
+        for (user_key, user) in events.read::<DisconnectEvent>() {
+            info!("Naia Server disconnected from: {}", user.address);
+            if let Some(entity) = self.user_squares.remove(&user_key) {
+                self.server
+                    .entity_mut(self.world.proxy_mut(), &entity)
+                    .leave_room(&self.main_room_key)
+                    .despawn();
+                self.square_last_command.remove(&entity);
+            }
+        }
+        for (_user_key, key_command) in
+            events.read::<MessageEvent<PlayerCommandChannel, KeyCommand>>()
+        {
+            if let Some(entity) = &key_command.entity.get(&self.server) {
+                self.square_last_command.insert(*entity, key_command);
+            }
+        }
+        for _ in events.read::<TickEvent>() {
+            // All game logic should happen here, on a tick event
 
-                        // Check whether Entities are in/out of all possible Scopes
-                        for (_, user_key, entity) in self.server.scope_checks() {
-                            // You'd normally do whatever checks you need to in here..
-                            // to determine whether each Entity should be in scope or not.
+            // Check whether Entities are in/out of all possible Scopes
+            for (_, user_key, entity) in self.server.scope_checks() {
+                // You'd normally do whatever checks you need to in here..
+                // to determine whether each Entity should be in scope or not.
 
-                            // This indicates the Entity should be in this scope.
-                            self.server.user_scope(&user_key).include(&entity);
+                // This indicates the Entity should be in this scope.
+                self.server.user_scope(&user_key).include(&entity);
 
-                            // And call this if Entity should NOT be in this scope.
-                            // self.server.user_scope(..).exclude(..);
-                        }
+                // And call this if Entity should NOT be in this scope.
+                // self.server.user_scope(..).exclude(..);
+            }
 
-                        for (entity, last_command) in self.square_last_command.drain() {
-                            if let Some(mut square) = self
-                                .server
-                                .entity_mut(self.world.proxy_mut(), &entity)
-                                .component::<Square>()
-                            {
-                                shared_behavior::process_command(&last_command, &mut square);
-                            }
-                        }
-
-                        // VERY IMPORTANT! Calling this actually sends all update data
-                        // packets to all Clients that require it. If you don't call this
-                        // method, the Server will never communicate with it's connected Clients
-                        self.server.send_all_updates(self.world.proxy());
-                    }
-                    Err(error) => {
-                        info!("Naia Server error: {}", error);
-                    }
-                    _ => {}
+            for (entity, last_command) in self.square_last_command.drain() {
+                if let Some(mut square) = self
+                    .server
+                    .entity_mut(self.world.proxy_mut(), &entity)
+                    .component::<Square>()
+                {
+                    shared_behavior::process_command(&last_command, &mut square);
                 }
             }
+
+            // VERY IMPORTANT! Calling this actually sends all update data
+            // packets to all Clients that require it. If you don't call this
+            // method, the Server will never communicate with it's connected Clients
+            self.server.send_all_updates(self.world.proxy());
+        }
+        for error in events.read::<ErrorEvent>() {
+            info!("Naia Server error: {}", error);
         }
     }
 }

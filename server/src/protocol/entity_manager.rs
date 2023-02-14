@@ -8,10 +8,10 @@ use std::{
 };
 
 use naia_shared::{
-    serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger},
-    wrapping_diff, ChannelIndex, DiffMask, EntityAction, EntityActionType, EntityConverter,
-    Instant, MessageId, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
-    PacketNotifiable, ProtocolKindType, Protocolize, ReplicateSafe, WorldRefType,
+    wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, DiffMask,
+    EntityAction, EntityActionType, EntityConverter, Instant, Message, MessageIndex,
+    MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Serde,
+    UnsignedVariableInteger, WorldRefType,
 };
 
 use crate::sequence_list::SequenceList;
@@ -24,32 +24,29 @@ use super::{
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 const ACTION_RECORD_TTL: Duration = Duration::from_secs(60);
 
-pub type ActionId = MessageId;
+pub type ActionId = MessageIndex;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct EntityManager<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
+pub struct EntityManager<E: Copy + Eq + Hash + Send + Sync> {
     // World
-    world_channel: WorldChannel<P, E, C>,
-    next_send_actions: VecDeque<(ActionId, EntityActionEvent<E, P::Kind>)>,
+    world_channel: WorldChannel<E>,
+    next_send_actions: VecDeque<(ActionId, EntityActionEvent<E>)>,
     #[allow(clippy::type_complexity)]
-    sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
+    sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E>)>)>,
 
     // Updates
-    next_send_updates: HashMap<E, HashSet<P::Kind>>,
+    next_send_updates: HashMap<E, HashSet<ComponentKind>>,
     #[allow(clippy::type_complexity)]
     /// Map of component updates and [`DiffMask`] that were written into each packet
-    sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, P::Kind), DiffMask>)>,
+    sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, ComponentKind), DiffMask>)>,
     /// Last [`PacketIndex`] where a component update was written by the server
     last_update_packet_index: PacketIndex,
 }
 
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityManager<P, E, C> {
-    /// Create a new NewEntityManager, given the client's address
-    pub fn new(
-        address: SocketAddr,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E, P::Kind>>>,
-    ) -> Self {
+impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
+    /// Create a new EntityManager, given the client's address
+    pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>) -> Self {
         EntityManager {
             // World
             world_channel: WorldChannel::new(address, diff_handler),
@@ -73,12 +70,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         self.world_channel.host_despawn_entity(entity);
     }
 
-    pub fn insert_component(&mut self, entity: &E, component: &P::Kind) {
-        self.world_channel.host_insert_component(entity, component);
+    pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        self.world_channel
+            .host_insert_component(entity, component_kind);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component: &P::Kind) {
-        self.world_channel.host_remove_component(entity, component);
+    pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        self.world_channel
+            .host_remove_component(entity, component_kind);
     }
 
     pub fn scope_has_entity(&self, entity: &E) -> bool {
@@ -91,17 +90,15 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
     // Messages
 
-    pub fn queue_entity_message<R: ReplicateSafe<P>>(
+    pub fn queue_entity_message(
         &mut self,
         entities: Vec<E>,
-        channel: C,
-        message: &R,
+        channel: &ChannelKind,
+        message: Box<dyn Message>,
     ) {
-        self.world_channel.delayed_entity_messages.queue_message(
-            entities,
-            channel,
-            message.protocol_copy(),
-        );
+        self.world_channel
+            .delayed_entity_messages
+            .queue_message(entities, channel, message);
     }
 
     // Writer
@@ -110,7 +107,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        message_manager: &mut MessageManager<P, C>,
+        message_manager: &mut MessageManager,
     ) {
         self.world_channel
             .delayed_entity_messages
@@ -229,17 +226,18 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         *last_id_opt = Some(*current_id);
     }
 
-    pub fn write_actions<W: WorldRefType<P, E>>(
+    pub fn write_actions<W: WorldRefType<E>>(
         &mut self,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
         world: &W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        world_record: &WorldRecord<E>,
         has_written: &mut bool,
     ) {
-        let mut last_counted_id: Option<MessageId> = None;
-        let mut last_written_id: Option<MessageId> = None;
+        let mut last_counted_id: Option<MessageIndex> = None;
+        let mut last_written_id: Option<MessageIndex> = None;
 
         loop {
             if self.next_send_actions.is_empty() {
@@ -249,6 +247,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
             // check that we can write the next message
             let mut counter = writer.counter();
             self.write_action(
+                component_kinds,
                 world,
                 world_record,
                 packet_index,
@@ -262,6 +261,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 // send warning about size of component being too big
                 if !*has_written {
                     self.warn_overflow_action(
+                        component_kinds,
                         world_record,
                         counter.bits_needed(),
                         writer.bits_free(),
@@ -286,6 +286,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
             // write data
             self.write_action(
+                component_kinds,
                 world,
                 world_record,
                 packet_index,
@@ -300,10 +301,11 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn write_action<W: WorldRefType<P, E>>(
+    fn write_action<W: WorldRefType<E>>(
         &mut self,
+        component_kinds: &ComponentKinds,
         world: &W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        world_record: &WorldRecord<E>,
         packet_index: &PacketIndex,
         bit_writer: &mut dyn BitWrite,
         last_written_id: &mut Option<ActionId>,
@@ -325,24 +327,24 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                     .ser(bit_writer);
 
                 // get component list
-                let component_kinds = match world_record.component_kinds(entity) {
+                let component_kind_list = match world_record.component_kinds(entity) {
                     Some(kind_list) => kind_list,
                     None => Vec::new(),
                 };
 
                 // write number of components
                 let components_num =
-                    UnsignedVariableInteger::<3>::new(component_kinds.len() as i128);
+                    UnsignedVariableInteger::<3>::new(component_kind_list.len() as i128);
                 components_num.ser(bit_writer);
 
-                for component_kind in &component_kinds {
+                for component_kind in &component_kind_list {
                     let converter = EntityConverter::new(world_record, self);
 
                     // write component payload
                     world
                         .component_of_kind(entity, component_kind)
                         .expect("Component does not exist in World")
-                        .write(bit_writer, &converter);
+                        .write(component_kinds, bit_writer, &converter);
                 }
 
                 // if we are writing to this packet, add it to record
@@ -353,7 +355,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                         &mut self.sent_action_packets,
                         packet_index,
                         action_id,
-                        EntityAction::SpawnEntity(*entity, component_kinds),
+                        EntityAction::SpawnEntity(*entity, component_kind_list),
                     );
                 }
             }
@@ -411,7 +413,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                     world
                         .component_of_kind(entity, component)
                         .expect("Component does not exist in World")
-                        .write(bit_writer, &converter);
+                        .write(component_kinds, bit_writer, &converter);
 
                     // if we are actually writing this packet
                     if is_writing {
@@ -427,7 +429,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                     }
                 }
             }
-            EntityActionEvent::RemoveComponent(entity, component) => {
+            EntityActionEvent::RemoveComponent(entity, component_kind) => {
                 if !self.world_channel.entity_channel_is_open(entity) {
                     EntityActionType::Noop.ser(bit_writer);
 
@@ -453,7 +455,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                         .ser(bit_writer);
 
                     // write component kind
-                    component.ser(bit_writer);
+                    component_kind.ser(component_kinds, bit_writer);
 
                     // if we are writing to this packet, add it to record
                     if is_writing {
@@ -463,7 +465,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                             &mut self.sent_action_packets,
                             packet_index,
                             action_id,
-                            EntityAction::RemoveComponent(*entity, *component),
+                            EntityAction::RemoveComponent(*entity, *component_kind),
                         );
                     }
                 }
@@ -473,10 +475,10 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
     #[allow(clippy::type_complexity)]
     fn record_action_written(
-        sent_actions: &mut SequenceList<(Instant, Vec<(ActionId, EntityAction<E, P::Kind>)>)>,
+        sent_actions: &mut SequenceList<(Instant, Vec<(ActionId, EntityAction<E>)>)>,
         packet_index: &PacketIndex,
         action_id: &ActionId,
-        action_record: EntityAction<E, P::Kind>,
+        action_record: EntityAction<E>,
     ) {
         let (_, sent_actions_list) = sent_actions.get_mut_scan_from_back(packet_index).unwrap();
         sent_actions_list.push((*action_id, action_record));
@@ -484,7 +486,8 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
     fn warn_overflow_action(
         &self,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        component_kinds: &ComponentKinds,
+        world_record: &WorldRecord<E>,
         bits_needed: u16,
         bits_free: u16,
     ) {
@@ -492,7 +495,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
         match action {
             EntityActionEvent::SpawnEntity(entity) => {
-                let component_kinds = match world_record.component_kinds(entity) {
+                let component_kind_list = match world_record.component_kinds(entity) {
                     Some(kind_list) => kind_list,
                     None => Vec::new(),
                 };
@@ -500,21 +503,21 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 let mut component_names = "".to_owned();
                 let mut added = false;
 
-                for component_kind in &component_kinds {
+                for component_kind in &component_kind_list {
                     if added {
                         component_names.push(',');
                     } else {
                         added = true;
                     }
-                    let name = component_kind.name();
+                    let name = component_kinds.kind_to_name(component_kind);
                     component_names.push_str(&name);
                 }
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Entity Spawn message with Components `{component_names}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
                 )
             }
-            EntityActionEvent::InsertComponent(_entity, component) => {
-                let component_name = component.name();
+            EntityActionEvent::InsertComponent(_entity, component_kind) => {
+                let component_name = component_kinds.kind_to_name(component_kind);
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Component Insertion message of type `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
                 )
@@ -527,13 +530,14 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         }
     }
 
-    pub fn write_updates<W: WorldRefType<P, E>>(
+    pub fn write_updates<W: WorldRefType<E>>(
         &mut self,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
         world: &W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        world_record: &WorldRecord<E>,
         has_written: &mut bool,
     ) {
         let all_update_entities: Vec<E> = self.next_send_updates.keys().copied().collect();
@@ -562,6 +566,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
             // write Components
             self.write_update(
+                component_kinds,
                 now,
                 world,
                 world_record,
@@ -579,19 +584,20 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
     /// For a given entity, write component value updates into a packet
     /// Only component values that changed in the internal (naia's) host world will be written
-    fn write_update<W: WorldRefType<P, E>>(
+    fn write_update<W: WorldRefType<E>>(
         &mut self,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         world: &W,
-        world_record: &WorldRecord<E, <P as Protocolize>::Kind>,
+        world_record: &WorldRecord<E>,
         packet_index: &PacketIndex,
         writer: &mut BitWriter,
         entity: &E,
         has_written: &mut bool,
     ) {
         let mut written_component_kinds = Vec::new();
-        let component_kinds = self.next_send_updates.get(entity).unwrap();
-        for component_kind in component_kinds {
+        let component_kind_set = self.next_send_updates.get(entity).unwrap();
+        for component_kind in component_kind_set {
             // get diff mask
             let diff_mask = self
                 .world_channel
@@ -604,7 +610,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 
             // check that we can write the next component update
             let mut counter = writer.counter();
-            component_kind.ser(&mut counter);
+            component_kind.ser(component_kinds, &mut counter);
             world
                 .component_of_kind(entity, component_kind)
                 .expect("Component does not exist in World")
@@ -614,8 +620,9 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
                 if !*has_written {
+                    let component_name = component_kinds.kind_to_name(component_kind);
                     self.warn_overflow_update(
-                        component_kind,
+                        component_name,
                         counter.bits_needed(),
                         writer.bits_free(),
                     );
@@ -630,7 +637,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
             true.ser(writer);
 
             // write component kind
-            component_kind.ser(writer);
+            component_kind.ser(component_kinds, writer);
 
             // write data
             world
@@ -667,13 +674,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
         }
     }
 
-    fn warn_overflow_update(
-        &self,
-        component_kind: &<P as Protocolize>::Kind,
-        bits_needed: u16,
-        bits_free: u16,
-    ) {
-        let component_name = component_kind.name();
+    fn warn_overflow_update(&self, component_name: String, bits_needed: u16, bits_free: u16) {
         panic!(
             "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"
         )
@@ -681,9 +682,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> EntityM
 }
 
 // PacketNotifiable
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> PacketNotifiable
-    for EntityManager<P, E, C>
-{
+impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for EntityManager<E> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         // Updates
         self.sent_updates.remove(&packet_index);
@@ -701,9 +700,7 @@ impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> PacketN
 }
 
 // NetEntityConverter
-impl<P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> NetEntityConverter<E>
-    for EntityManager<P, E, C>
-{
+impl<E: Copy + Eq + Hash + Send + Sync> NetEntityConverter<E> for EntityManager<E> {
     fn entity_to_net_entity(&self, entity: &E) -> NetEntity {
         return *self
             .world_channel

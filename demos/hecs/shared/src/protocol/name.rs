@@ -1,14 +1,13 @@
-use naia_shared::{derive_serde, serde, Property, Replicate};
+use naia_hecs_shared::{Property, Replicate, Serde};
 
 // Here's an example of a Custom Property
-#[derive_serde]
+#[derive(Serde, PartialEq, Clone)]
 pub struct Fullname {
     pub first: String,
     pub last: String,
 }
 
 #[derive(Replicate)]
-#[protocol_path = "crate::protocol::Protocol"]
 pub struct Name {
     pub full: Property<Fullname>,
 }

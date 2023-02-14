@@ -1,14 +1,14 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_shared::{Protocolize, ReplicateSafe};
+use naia_shared::{ComponentKind, Replicate};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
-pub struct WorldData<P: Protocolize> {
-    kind_to_accessor_map: HashMap<P::Kind, Box<dyn Any>>,
+pub struct WorldData {
+    kind_to_accessor_map: HashMap<ComponentKind, Box<dyn Any>>,
 }
 
-impl<P: Protocolize> Default for WorldData<P> {
+impl Default for WorldData {
     fn default() -> Self {
         Self {
             kind_to_accessor_map: HashMap::default(),
@@ -16,7 +16,7 @@ impl<P: Protocolize> Default for WorldData<P> {
     }
 }
 
-impl<P: Protocolize> WorldData<P> {
+impl WorldData {
     pub fn new() -> Self {
         WorldData {
             kind_to_accessor_map: HashMap::new(),
@@ -26,23 +26,19 @@ impl<P: Protocolize> WorldData<P> {
     #[allow(clippy::borrowed_box)]
     pub(crate) fn component_access(
         &self,
-        component_kind: &P::Kind,
-    ) -> Option<&Box<dyn ComponentAccess<P>>> {
+        component_kind: &ComponentKind,
+    ) -> Option<&Box<dyn ComponentAccess>> {
         if let Some(accessor_any) = self.kind_to_accessor_map.get(component_kind) {
-            return accessor_any.downcast_ref::<Box<dyn ComponentAccess<P>>>();
+            return accessor_any.downcast_ref::<Box<dyn ComponentAccess>>();
         }
         None
     }
 
-    pub(crate) fn has_kind(&self, component_kind: &P::Kind) -> bool {
-        self.kind_to_accessor_map.contains_key(component_kind)
-    }
-
-    pub(crate) fn put_kind<R: ReplicateSafe<P>>(&mut self, component_kind: &P::Kind) {
+    pub(crate) fn put_kind<R: Replicate>(&mut self, component_kind: &ComponentKind) {
         self.kind_to_accessor_map
-            .insert(*component_kind, ComponentAccessor::<P, R>::create());
+            .insert(*component_kind, ComponentAccessor::<R>::create());
     }
 }
 
-unsafe impl<P: Protocolize> Send for WorldData<P> {}
-unsafe impl<P: Protocolize> Sync for WorldData<P> {}
+unsafe impl Send for WorldData {}
+unsafe impl Sync for WorldData {}

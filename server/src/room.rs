@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{BigMapKey, ChannelIndex, ReplicateSafe};
+use naia_shared::{BigMapKey, Channel, ChannelKind, Message};
 
 use super::user::UserKey;
 
@@ -94,19 +94,17 @@ impl<E: Copy + Eq + Hash> Room<E> {
 
 // room references
 
-use naia_shared::Protocolize;
-
 use super::server::Server;
 
 // RoomRef
 
-pub struct RoomRef<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
-    server: &'s Server<P, E, C>,
+pub struct RoomRef<'s, E: Copy + Eq + Hash + Send + Sync> {
+    server: &'s Server<E>,
     key: RoomKey,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> RoomRef<'s, P, E, C> {
-    pub fn new(server: &'s Server<P, E, C>, key: &RoomKey) -> Self {
+impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
+    pub fn new(server: &'s Server<E>, key: &RoomKey) -> Self {
         RoomRef { server, key: *key }
     }
 
@@ -141,13 +139,13 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
 }
 
 // RoomMut
-pub struct RoomMut<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> {
-    server: &'s mut Server<P, E, C>,
+pub struct RoomMut<'s, E: Copy + Eq + Hash + Send + Sync> {
+    server: &'s mut Server<E>,
     key: RoomKey,
 }
 
-impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> RoomMut<'s, P, E, C> {
-    pub fn new(server: &'s mut Server<P, E, C>, key: &RoomKey) -> Self {
+impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
+    pub fn new(server: &'s mut Server<E>, key: &RoomKey) -> Self {
         RoomMut { server, key: *key }
     }
 
@@ -210,8 +208,8 @@ impl<'s, P: Protocolize, E: Copy + Eq + Hash + Send + Sync, C: ChannelIndex> Roo
 
     // Messages
 
-    pub fn broadcast_message<R: ReplicateSafe<P>>(&mut self, channel: C, message: &R) {
+    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: M) {
         self.server
-            .room_broadcast_message(channel, message, &self.key);
+            .room_broadcast_message(&ChannelKind::of::<C>(), Box::new(message), &self.key);
     }
 }

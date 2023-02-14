@@ -4,11 +4,7 @@ use naia_serde::{BitWriter, Serde};
 
 use crate::{
     backends::Timer,
-    messages::{
-        channel_config::{ChannelConfig, ChannelIndex},
-        message_manager::MessageManager,
-    },
-    protocol::protocolize::Protocolize,
+    messages::{channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
 };
 
@@ -19,28 +15,28 @@ use super::{
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
-pub struct BaseConnection<P: Protocolize, C: ChannelIndex> {
+pub struct BaseConnection {
     pub address: SocketAddr,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ack_manager: AckManager,
-    pub message_manager: MessageManager<P, C>,
+    pub message_manager: MessageManager,
 }
 
-impl<P: Protocolize, C: ChannelIndex> BaseConnection<P, C> {
+impl BaseConnection {
     /// Create a new BaseConnection, given the appropriate underlying managers
     pub fn new(
         address: SocketAddr,
         host_type: HostType,
         connection_config: &ConnectionConfig,
-        channel_config: &ChannelConfig<C>,
+        channel_kinds: &ChannelKinds,
     ) -> Self {
         BaseConnection {
             address,
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
-            message_manager: MessageManager::new(host_type, channel_config),
+            message_manager: MessageManager::new(host_type, channel_kinds),
         }
     }
 

@@ -2,42 +2,38 @@ use bevy_ecs::{event::EventReader, system::ResMut};
 use bevy_log::info;
 
 use naia_bevy_server::{
-    events::{AuthorizationEvent, ConnectionEvent, DisconnectionEvent, MessageEvent},
-    shared::Random,
-    Server,
+    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents},
+    Random, Server,
 };
 
 use naia_bevy_demo_shared::{
-    protocol::{Color, ColorValue, EntityAssignment, Position, Protocol},
-    Channels,
+    channels::{EntityAssignmentChannel, PlayerCommandChannel},
+    components::{Color, ColorValue, Position},
+    messages::{Auth, EntityAssignment, KeyCommand},
 };
 
 use crate::resources::Global;
 
-pub fn authorization_event(
-    mut event_reader: EventReader<AuthorizationEvent<Protocol>>,
-    mut server: Server<Protocol, Channels>,
-) {
-    for event in event_reader.iter() {
-        if let AuthorizationEvent(user_key, Protocol::Auth(auth)) = event {
-            if *auth.username == "charlie" && *auth.password == "12345" {
+pub fn auth_events(mut event_reader: EventReader<AuthEvents>, mut server: Server) {
+    for events in event_reader.iter() {
+        for (user_key, auth) in events.read::<Auth>() {
+            if auth.username == "charlie" && auth.password == "12345" {
                 // Accept incoming connection
-                server.accept_connection(user_key);
+                server.accept_connection(&user_key);
             } else {
                 // Reject incoming connection
-                server.reject_connection(user_key);
+                server.reject_connection(&user_key);
             }
         }
     }
 }
 
-pub fn connection_event<'world, 'state>(
-    mut event_reader: EventReader<ConnectionEvent>,
+pub fn connect_events<'world, 'state>(
+    mut event_reader: EventReader<ConnectEvent>,
     mut global: ResMut<Global>,
-    mut server: Server<'world, 'state, Protocol, Channels>,
+    mut server: Server<'world, 'state>,
 ) {
-    for event in event_reader.iter() {
-        let ConnectionEvent(user_key) = event;
+    for ConnectEvent(user_key) in event_reader.iter() {
         let address = server
             .user_mut(user_key)
             // Add User to the main Room
@@ -85,17 +81,19 @@ pub fn connection_event<'world, 'state>(
         let mut assignment_message = EntityAssignment::new(true);
         assignment_message.entity.set(&server, &entity);
 
-        server.send_message(user_key, Channels::EntityAssignment, &assignment_message);
+        server.send_message::<EntityAssignmentChannel, EntityAssignment>(
+            user_key,
+            &assignment_message,
+        );
     }
 }
 
-pub fn disconnection_event(
-    mut event_reader: EventReader<DisconnectionEvent>,
+pub fn disconnect_events(
+    mut event_reader: EventReader<DisconnectEvent>,
     mut global: ResMut<Global>,
-    mut server: Server<Protocol, Channels>,
+    mut server: Server,
 ) {
-    for event in event_reader.iter() {
-        let DisconnectionEvent(user_key, user) = event;
+    for DisconnectEvent(user_key, user) in event_reader.iter() {
         info!("Naia Server disconnected from: {:?}", user.address);
 
         if let Some(entity) = global.user_to_prediction_map.remove(user_key) {
@@ -107,20 +105,24 @@ pub fn disconnection_event(
     }
 }
 
-pub fn receive_message_event(
-    mut event_reader: EventReader<MessageEvent<Protocol, Channels>>,
+pub fn message_events(
+    mut event_reader: EventReader<MessageEvents>,
     mut global: ResMut<Global>,
-    server: Server<Protocol, Channels>,
+    server: Server,
 ) {
-    for event in event_reader.iter() {
-        if let MessageEvent(_user_key, Channels::PlayerCommand, Protocol::KeyCommand(key_command)) =
-            event
-        {
+    for events in event_reader.iter() {
+        for (_user_key, key_command) in events.read::<PlayerCommandChannel, KeyCommand>() {
             if let Some(entity) = &key_command.entity.get(&server) {
                 global
                     .player_last_command
                     .insert(*entity, key_command.clone());
             }
         }
+    }
+}
+
+pub fn error_events(mut event_reader: EventReader<ErrorEvent>) {
+    for ErrorEvent(error) in event_reader.iter() {
+        info!("Naia Server Error: {:?}", error);
     }
 }

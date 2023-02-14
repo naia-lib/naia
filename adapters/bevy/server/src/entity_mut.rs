@@ -1,9 +1,8 @@
 use bevy_ecs::entity::Entity;
 
-use naia_server::{
-    shared::{ChannelIndex, Protocolize, Replicate, ReplicateSafe},
-    RoomKey,
-};
+use naia_server::RoomKey;
+
+use naia_bevy_shared::Replicate;
 
 use super::{
     commands::{DespawnEntity, InsertComponent, RemoveComponent},
@@ -12,13 +11,13 @@ use super::{
 
 // EntityMut
 
-pub struct EntityMut<'s, 'world, 'state, P: Protocolize, C: ChannelIndex> {
+pub struct EntityMut<'s, 'world, 'state> {
     entity: Entity,
-    server: &'s mut Server<'world, 'state, P, C>,
+    server: &'s mut Server<'world, 'state>,
 }
 
-impl<'s, 'world, 'state, P: Protocolize, C: ChannelIndex> EntityMut<'s, 'world, 'state, P, C> {
-    pub fn new(entity: Entity, server: &'s mut Server<'world, 'state, P, C>) -> Self {
+impl<'s, 'world, 'state> EntityMut<'s, 'world, 'state> {
+    pub fn new(entity: Entity, server: &'s mut Server<'world, 'state>) -> Self {
         EntityMut { entity, server }
     }
 
@@ -35,15 +34,15 @@ impl<'s, 'world, 'state, P: Protocolize, C: ChannelIndex> EntityMut<'s, 'world, 
 
     // Components
 
-    pub fn insert<R: ReplicateSafe<P>>(&mut self, component: R) -> &mut Self {
+    pub fn insert<R: Replicate>(&mut self, component: R) -> &mut Self {
         self.server
             .queue_command(InsertComponent::new(&self.entity, component));
         self
     }
 
-    pub fn remove<R: Replicate<P>>(&mut self) -> &mut Self {
+    pub fn remove<R: Replicate>(&mut self) -> &mut Self {
         self.server
-            .queue_command(RemoveComponent::<P, R>::new(&self.entity));
+            .queue_command(RemoveComponent::<R>::new(&self.entity));
         self
     }
 
@@ -63,7 +62,7 @@ impl<'s, 'world, 'state, P: Protocolize, C: ChannelIndex> EntityMut<'s, 'world, 
 
     // Exit
 
-    pub fn server(&mut self) -> &mut Server<'world, 'state, P, C> {
+    pub fn server(&mut self) -> &mut Server<'world, 'state> {
         self.server
     }
 }

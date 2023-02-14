@@ -2,6 +2,8 @@ use std::{default::Default, time::Duration};
 
 use naia_shared::ConnectionConfig;
 
+use crate::TickConfig;
+
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone)]
 pub struct ClientConfig {
@@ -9,13 +11,8 @@ pub struct ClientConfig {
     pub connection: ConnectionConfig,
     /// The duration between the resend of certain connection handshake messages
     pub send_handshake_interval: Duration,
-    /// The minimum of measured latency to the Server that the Client use to
-    /// ensure packets arrive in time. Should be fine if this is 0,
-    /// but you'll increase the chance that packets always arrive to be
-    /// processed by the Server with a higher number. This is especially
-    /// helpful early on in the connection, when estimates of latency are
-    /// less accurate.
-    pub minimum_latency: Option<Duration>,
+    /// Configuration for options related to Tick syncing function
+    pub tick_config: TickConfig,
 }
 
 impl Default for ClientConfig {
@@ -23,7 +20,7 @@ impl Default for ClientConfig {
         Self {
             connection: ConnectionConfig::default(),
             send_handshake_interval: Duration::from_millis(250),
-            minimum_latency: None,
+            tick_config: TickConfig::default(),
         }
     }
 }

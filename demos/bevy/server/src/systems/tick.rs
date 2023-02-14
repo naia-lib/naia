@@ -2,17 +2,13 @@ use bevy_ecs::system::{Query, ResMut};
 
 use naia_bevy_server::Server;
 
-use naia_bevy_demo_shared::{
-    behavior as shared_behavior,
-    protocol::{Position, Protocol},
-    Channels,
-};
+use naia_bevy_demo_shared::{behavior as shared_behavior, components::Position};
 
 use crate::resources::Global;
 
 pub fn tick(
     mut global: ResMut<Global>,
-    mut server: Server<Protocol, Channels>,
+    mut server: Server,
     mut position_query: Query<&mut Position>,
 ) {
     // All game logic should happen here, on a tick event

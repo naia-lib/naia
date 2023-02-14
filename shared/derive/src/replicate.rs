@@ -1,17 +1,13 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Index, Lit, LitStr,
-    Member, Meta, Path, PathArguments, Result, Type,
+    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Index, LitStr, Member,
+    PathArguments, Type,
 };
 
-const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
+use crate::shared::{get_struct_type, StructType};
 
-pub enum StructType {
-    Struct,
-    UnitStruct,
-    TupleStruct,
-}
+const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
 
 pub struct NormalProperty {
     pub variable_name: Ident,
@@ -36,38 +32,29 @@ pub enum Property {
     NonReplicated(NonReplicatedProperty),
 }
 
-pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+pub fn replicate_impl(
+    input: proc_macro::TokenStream,
+    shared_crate_name: TokenStream,
+) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     // Helper Properties
     let properties = properties(&input);
     let struct_type = get_struct_type(&input);
 
-    // Paths
-    let (protocol_path, protocol_name) = protocol_path(&input);
-
     // Names
-    let replica_name = input.ident;
-    let protocol_kind_name = format_ident!("{}Kind", protocol_name);
+    let replica_name = input.ident.clone();
+    let replica_name_str = LitStr::new(&replica_name.to_string(), replica_name.span());
+    let lowercase_replica_name = Ident::new(
+        replica_name.to_string().to_lowercase().as_str(),
+        Span::call_site(),
+    );
+    let module_name = format_ident!("define_{}", lowercase_replica_name);
     let enum_name = format_ident!("{}Property", replica_name);
+    let builder_name = format_ident!("{}Builder", replica_name);
 
     // Definitions
     let property_enum_definition = property_enum(&enum_name, &properties);
-
-    // Replica Methods
-    let new_complete_method =
-        new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
-    let read_method = read_method(
-        &protocol_name,
-        &replica_name,
-        &enum_name,
-        &properties,
-        &struct_type,
-    );
-    let read_create_update_method =
-        read_create_update_method(&replica_name, &protocol_kind_name, &properties);
-
-    // ReplicateSafe Derive Methods
     let diff_mask_size = {
         let len = properties.len();
         if len == 0 {
@@ -76,63 +63,89 @@ pub fn replicate_impl(input: proc_macro::TokenStream) -> proc_macro::TokenStream
             ((len - 1) / 8) + 1
         }
     } as u8;
-    let dyn_ref_method = dyn_ref_method(&protocol_name);
-    let dyn_mut_method = dyn_mut_method(&protocol_name);
-    let to_protocol_method = into_protocol_method(&protocol_name, &replica_name);
-    let protocol_copy_method = protocol_copy_method(&protocol_name, &replica_name);
+
+    // Methods
+    let new_complete_method =
+        new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
+    let create_builder_method = create_builder_method(&builder_name);
+    let read_method = read_method(&replica_name, &enum_name, &properties, &struct_type);
+    let read_create_update_method = read_create_update_method(&replica_name, &properties);
+
+    let dyn_ref_method = dyn_ref_method();
+    let dyn_mut_method = dyn_mut_method();
     let clone_method = clone_method(&replica_name, &properties, &struct_type);
-    let mirror_method = mirror_method(&protocol_name, &replica_name, &properties, &struct_type);
+    let mirror_method = mirror_method(&replica_name, &properties, &struct_type);
     let set_mutator_method = set_mutator_method(&properties, &struct_type);
-    let read_apply_update_method =
-        read_apply_update_method(&protocol_kind_name, &properties, &struct_type);
+    let read_apply_update_method = read_apply_update_method(&properties, &struct_type);
     let write_method = write_method(&properties, &struct_type);
     let write_update_method = write_update_method(&enum_name, &properties, &struct_type);
     let has_entity_properties = has_entity_properties_method(&properties);
     let entities = entities_method(&properties, &struct_type);
-    let replica_name_str = LitStr::new(&replica_name.to_string(), replica_name.span());
 
     let gen = quote! {
-        use std::{rc::Rc, cell::RefCell, io::Cursor};
-        use naia_shared::{
-            DiffMask, PropertyMutate, ReplicateSafe, PropertyMutator, ComponentUpdate,
-            Protocolize, ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter,
-            serde::{BitReader, BitWrite, BitWriter, OwnedBitReader, Serde, SerdeErr},
-        };
-        use #protocol_path::{#protocol_name, #protocol_kind_name};
-        mod internal {
-            pub use naia_shared::{EntityProperty, EntityHandle};
-        }
+        mod #module_name {
 
-        #property_enum_definition
+            use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any};
+            use #shared_crate_name::{
+                DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
+                ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentKind, Named,
+                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,
+                EntityProperty, EntityHandle, Replicate, Property, ComponentKinds, ReplicateBuilder
+            };
+            use super::*;
 
-        impl #replica_name {
-            #new_complete_method
-            #read_method
-            #read_create_update_method
-        }
-        impl ReplicateSafe<#protocol_name> for #replica_name {
-            fn diff_mask_size(&self) -> u8 { #diff_mask_size }
-            fn kind(&self) -> #protocol_kind_name {
-                return Protocolize::kind_of::<Self>();
+            #property_enum_definition
+
+            struct #builder_name;
+            impl ReplicateBuilder for #builder_name {
+                #read_method
+                #read_create_update_method
             }
-            fn name(&self) -> String {
-                return #replica_name_str.to_string();
+            impl Named for #builder_name {
+                fn name(&self) -> String {
+                    return #replica_name_str.to_string();
+                }
             }
-            #dyn_ref_method
-            #dyn_mut_method
-            #to_protocol_method
-            #protocol_copy_method
-            #mirror_method
-            #set_mutator_method
-            #write_method
-            #write_update_method
-            #read_apply_update_method
-            #has_entity_properties
-            #entities
-        }
-        impl Replicate<#protocol_name> for #replica_name {}
-        impl Clone for #replica_name {
-            #clone_method
+
+            impl #replica_name {
+                #new_complete_method
+            }
+            impl Named for #replica_name {
+                fn name(&self) -> String {
+                    return #replica_name_str.to_string();
+                }
+            }
+            impl Replicate for #replica_name {
+                fn kind(&self) -> ComponentKind {
+                    ComponentKind::of::<#replica_name>()
+                }
+                fn to_any(&self) -> &dyn Any {
+                    self
+                }
+                fn to_any_mut(&mut self) -> &mut dyn Any {
+                    self
+                }
+                fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
+                    self
+                }
+                fn copy_to_box(&self) -> Box<dyn Replicate> {
+                    Box::new(self.clone())
+                }
+                fn diff_mask_size(&self) -> u8 { #diff_mask_size }
+                #create_builder_method
+                #dyn_ref_method
+                #dyn_mut_method
+                #mirror_method
+                #set_mutator_method
+                #write_method
+                #write_update_method
+                #read_apply_update_method
+                #has_entity_properties
+                #entities
+            }
+            impl Clone for #replica_name {
+                #clone_method
+            }
         }
     };
 
@@ -290,51 +303,6 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
     fields
 }
 
-/// Get the type of the struct
-fn get_struct_type(input: &DeriveInput) -> StructType {
-    if let Data::Struct(data_struct) = &input.data {
-        return match &data_struct.fields {
-            Fields::Named(_) => StructType::Struct,
-            Fields::Unnamed(_) => StructType::TupleStruct,
-            Fields::Unit => StructType::UnitStruct,
-        };
-    }
-    panic!("Can only derive Replicate on a struct")
-}
-
-fn protocol_path(input: &DeriveInput) -> (Path, Ident) {
-    let mut path_result: Option<Result<Path>> = None;
-
-    let attrs = &input.attrs;
-    for option in attrs {
-        let option = option.parse_meta().unwrap();
-        if let Meta::NameValue(meta_name_value) = option {
-            let path = meta_name_value.path;
-            let lit = meta_name_value.lit;
-            if let Some(ident) = path.get_ident() {
-                if ident == "protocol_path" {
-                    if let Lit::Str(lit_str) = lit {
-                        path_result = Some(lit_str.parse());
-                    }
-                }
-            }
-        }
-    }
-
-    if let Some(Ok(path)) = path_result {
-        let mut new_path = path;
-        if let Some(last_seg) = new_path.segments.pop() {
-            let name = last_seg.into_value().ident;
-            if let Some(second_seg) = new_path.segments.pop() {
-                new_path.segments.push_value(second_seg.into_value());
-                return (new_path, name);
-            }
-        }
-    }
-
-    panic!("When deriving 'Replicate' you MUST specify the path of the accompanying protocol. IE: '#[protocol_path = \"crate::MyProtocol\"]'");
-}
-
 fn property_enum(enum_name: &Ident, properties: &[Property]) -> TokenStream {
     if properties.is_empty() {
         return quote! {
@@ -368,33 +336,17 @@ fn property_enum(enum_name: &Ident, properties: &[Property]) -> TokenStream {
     }
 }
 
-fn protocol_copy_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
+pub fn dyn_ref_method() -> TokenStream {
     quote! {
-        fn protocol_copy(&self) -> #protocol_name {
-            return #protocol_name::#replica_name(self.clone());
-        }
-    }
-}
-
-fn into_protocol_method(protocol_name: &Ident, replica_name: &Ident) -> TokenStream {
-    quote! {
-        fn into_protocol(self) -> #protocol_name {
-            return #protocol_name::#replica_name(self);
-        }
-    }
-}
-
-pub fn dyn_ref_method(protocol_name: &Ident) -> TokenStream {
-    quote! {
-        fn dyn_ref(&self) -> ReplicaDynRef<'_, #protocol_name> {
+        fn dyn_ref(&self) -> ReplicaDynRef<'_> {
             return ReplicaDynRef::new(self);
         }
     }
 }
 
-pub fn dyn_mut_method(protocol_name: &Ident) -> TokenStream {
+pub fn dyn_mut_method() -> TokenStream {
     quote! {
-        fn dyn_mut(&mut self) -> ReplicaDynMut<'_, #protocol_name> {
+        fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
             return ReplicaDynMut::new(self);
         }
     }
@@ -454,7 +406,6 @@ fn clone_method(
 }
 
 fn mirror_method(
-    protocol_name: &Ident,
     replica_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
@@ -474,9 +425,11 @@ fn mirror_method(
     }
 
     quote! {
-        fn mirror(&mut self, other: &#protocol_name) {
-            if let #protocol_name::#replica_name(replica) = other {
+        fn mirror(&mut self, other: &dyn Replicate) {
+            if let Some(replica) = other.to_any().downcast_ref::<#replica_name>() {
                 #output
+            } else {
+                panic!("cannot mirror: other Component is of another type!");
             }
         }
     }
@@ -645,8 +598,15 @@ pub fn new_complete_method(
     }
 }
 
+pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
+    quote! {
+        fn create_builder() -> Box<dyn ReplicateBuilder> where Self:Sized {
+            Box::new(#builder_name)
+        }
+    }
+}
+
 pub fn read_method(
-    protocol_name: &Ident,
     replica_name: &Ident,
     enum_name: &Ident,
     properties: &[Property],
@@ -721,19 +681,15 @@ pub fn read_method(
     };
 
     quote! {
-        pub fn read(reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<#protocol_name, SerdeErr> {
+        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<Box<dyn Replicate>, SerdeErr> {
             #prop_reads
 
-            return Ok(#protocol_name::#replica_name(#replica_build));
+            return Ok(Box::new(#replica_build));
         }
     }
 }
 
-pub fn read_create_update_method(
-    replica_name: &Ident,
-    kind_name: &Ident,
-    properties: &[Property],
-) -> TokenStream {
+pub fn read_create_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {
@@ -773,7 +729,7 @@ pub fn read_create_update_method(
     }
 
     quote! {
-        pub fn read_create_update(reader: &mut BitReader) -> Result<ComponentUpdate::<#kind_name>, SerdeErr> {
+        fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
 
             let mut update_writer = BitWriter::new();
 
@@ -782,16 +738,12 @@ pub fn read_create_update_method(
             let (length, buffer) = update_writer.flush();
             let owned_reader = OwnedBitReader::new(&buffer[..length]);
 
-            return Ok(ComponentUpdate::new(#kind_name::#replica_name, owned_reader));
+            return Ok(ComponentUpdate::new(ComponentKind::of::<#replica_name>(), owned_reader));
         }
     }
 }
 
-fn read_apply_update_method(
-    kind_name: &Ident,
-    properties: &[Property],
-    struct_type: &StructType,
-) -> TokenStream {
+fn read_apply_update_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
     for (index, property) in properties.iter().enumerate() {
@@ -824,7 +776,7 @@ fn read_apply_update_method(
     }
 
     quote! {
-        fn read_apply_update(&mut self, converter: &dyn NetEntityHandleConverter, mut update: ComponentUpdate<#kind_name>) -> Result<(), SerdeErr> {
+        fn read_apply_update(&mut self, converter: &dyn NetEntityHandleConverter, mut update: ComponentUpdate) -> Result<(), SerdeErr> {
             let reader = &mut update.reader();
             #output
             Ok(())
@@ -861,8 +813,8 @@ fn write_method(properties: &[Property], struct_type: &StructType) -> TokenStrea
     }
 
     quote! {
-        fn write(&self, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-            self.kind().ser(bit_writer);
+        fn write(&self, component_kinds: &ComponentKinds, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+            self.kind().ser(component_kinds, bit_writer);
             #property_writes
         }
     }
@@ -957,7 +909,7 @@ fn entities_method(properties: &[Property], struct_type: &StructType) -> TokenSt
     }
 
     quote! {
-        fn entities(&self) -> Vec<internal::EntityHandle> {
+        fn entities(&self) -> Vec<EntityHandle> {
             let mut output = Vec::new();
             #body
             return output;

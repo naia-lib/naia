@@ -1,22 +1,27 @@
 use naia_shared::{
-    derive_channels, Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings,
+    Channel, ChannelDirection, ChannelMode, Protocol, ProtocolPlugin, ReliableSettings,
+    TickBufferSettings,
 };
 
-#[derive_channels]
-pub enum Channels {
-    PlayerCommand,
-    EntityAssignment,
-}
+#[derive(Channel)]
+pub struct PlayerCommandChannel;
 
-pub const CHANNEL_CONFIG: &[Channel<Channels>] = &[
-    Channel {
-        index: Channels::PlayerCommand,
-        direction: ChannelDirection::ClientToServer,
-        mode: ChannelMode::TickBuffered(TickBufferSettings::default()),
-    },
-    Channel {
-        index: Channels::EntityAssignment,
-        direction: ChannelDirection::ServerToClient,
-        mode: ChannelMode::UnorderedReliable(ReliableSettings::default()),
-    },
-];
+#[derive(Channel)]
+pub struct EntityAssignmentChannel;
+
+// Plugin
+pub struct ChannelsPlugin;
+
+impl ProtocolPlugin for ChannelsPlugin {
+    fn build(&self, protocol: &mut Protocol) {
+        protocol
+            .add_channel::<PlayerCommandChannel>(
+                ChannelDirection::ClientToServer,
+                ChannelMode::TickBuffered(TickBufferSettings::default()),
+            )
+            .add_channel::<EntityAssignmentChannel>(
+                ChannelDirection::ServerToClient,
+                ChannelMode::UnorderedReliable(ReliableSettings::default()),
+            );
+    }
+}

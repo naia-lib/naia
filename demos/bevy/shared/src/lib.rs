@@ -1,10 +1,7 @@
-extern crate log;
-
 pub mod behavior;
-pub mod protocol;
+pub mod channels;
+pub mod components;
+pub mod messages;
 
-mod channels;
-pub use channels::Channels;
-
-mod shared;
-pub use shared::shared_config;
+mod protocol;
+pub use protocol::protocol;

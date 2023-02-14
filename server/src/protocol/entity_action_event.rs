@@ -1,9 +1,9 @@
-use naia_shared::ProtocolKindType;
+use naia_shared::ComponentKind;
 
 #[derive(Clone, PartialEq, Eq)]
-pub enum EntityActionEvent<E: Copy, K: ProtocolKindType> {
+pub enum EntityActionEvent<E: Copy> {
     SpawnEntity(E),
     DespawnEntity(E),
-    InsertComponent(E, K),
-    RemoveComponent(E, K),
+    InsertComponent(E, ComponentKind),
+    RemoveComponent(E, ComponentKind),
 }
