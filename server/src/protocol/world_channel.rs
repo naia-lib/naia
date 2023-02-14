@@ -5,6 +5,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use log::warn;
+
 use naia_shared::{
     ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, Instant, KeyGenerator,
     NetEntity, ReliableSender,
@@ -146,7 +148,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn host_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.host_world.contains_key(entity) {
-            panic!("cannot insert component into non-existent entity");
+            warn!("World Channel: cannot insert component into non-existent entity");
+            return;
         }
 
         let components = self.host_world.get_mut(entity).unwrap();
@@ -171,7 +174,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn host_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.host_world.contains_key(entity) {
-            panic!("cannot remove component from non-existent entity");
+            warn!("World Channel: cannot remove component from non-existent entity");
+            return;
         }
 
         let components = self.host_world.get_mut(entity).unwrap();
@@ -205,7 +209,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         inserted_components: &HashSet<ComponentKind>,
     ) {
         if self.remote_world.contains_key(entity) {
-            panic!("should not be able to replace entity in remote world");
+            panic!("World Channel: should not be able to replace entity in remote world");
         }
 
         if let Some(EntityChannel::Spawning) = self.entity_channels.get(entity) {
@@ -253,13 +257,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 self.on_entity_channel_closing(entity);
             }
         } else {
-            panic!("should only receive this event if entity channel is spawning");
+            panic!("World Channel: should only receive this event if entity channel is spawning");
         }
     }
 
     pub fn remote_despawn_entity(&mut self, entity: &E) {
         if !self.remote_world.contains_key(entity) {
-            panic!("should not be able to despawn non-existent entity in remote world");
+            panic!("World Channel: should not be able to despawn non-existent entity in remote world");
         }
 
         if let Some(EntityChannel::Despawning) = self.entity_channels.get(entity) {
@@ -276,7 +280,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 self.on_entity_channel_opening(entity);
             }
         } else {
-            panic!("should only receive this event if entity channel is despawning");
+            panic!("World Channel: should only receive this event if entity channel is despawning");
         }
 
         self.remote_world.remove(entity);
@@ -284,12 +288,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.remote_world.contains_key(entity) {
-            panic!("cannot insert component into non-existent entity");
+            panic!("World Channel: cannot insert component into non-existent entity");
         }
 
         let components = self.remote_world.get_mut(entity).unwrap();
         if components.contains(component_kind) {
-            panic!("should not be able to replace component in remote world");
+            panic!("World Channel: should not be able to replace component in remote world");
         }
 
         components.insert(*component_kind);
@@ -317,7 +321,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                     self.on_component_channel_closing(entity, component_kind);
                 }
             } else {
-                panic!("cannot insert component if component channel has not been initialized");
+                panic!("World Channel: cannot insert component if component channel has not been initialized");
             }
         } else {
             // entity channel may be despawning, which is okay at this point
@@ -327,12 +331,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.remote_world.contains_key(entity) {
-            panic!("cannot remove component from non-existent entity");
+            panic!("World Channel: cannot remove component from non-existent entity");
         }
 
         let components = self.remote_world.get_mut(entity).unwrap();
         if !components.contains(component_kind) {
-            panic!("should not be able to remove non-existent component in remote world");
+            panic!("World Channel: should not be able to remove non-existent component in remote world");
         }
 
         if let Some(EntityChannel::Spawned(component_channels)) =
@@ -354,7 +358,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                         .send_message(EntityActionEvent::InsertComponent(*entity, *component_kind));
                 }
             } else {
-                panic!("cannot remove component if component channel has not initiated removal");
+                panic!("World Channel: cannot remove component if component channel has not initiated removal");
             }
         } else {
             // entity channel may be despawning, which is okay at this point
