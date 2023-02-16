@@ -1,11 +1,13 @@
 use std::time::Duration;
 
-use naia_shared::{BitReader, BitWriter, Serde, SerdeErr, Tick, Timer};
+use naia_shared::{BitReader, BitWriter, Serde, SerdeErr, Tick};
+
+use super::accumulator::Accumulator;
 
 /// Manages the current tick for the host
 pub struct TickManager {
     current_tick: Tick,
-    timer: Timer,
+    accumulator: Accumulator,
 }
 
 impl TickManager {
@@ -13,7 +15,7 @@ impl TickManager {
     pub fn new(tick_interval: Duration) -> Self {
         TickManager {
             current_tick: 0,
-            timer: Timer::new(tick_interval),
+            accumulator: Accumulator::new(tick_interval),
         }
     }
 
@@ -26,13 +28,10 @@ impl TickManager {
     }
 
     /// Whether or not we should emit a tick event
-    pub fn recv_server_tick(&mut self) -> bool {
-        if self.timer.ringing() {
-            self.timer.reset();
-            self.current_tick = self.current_tick.wrapping_add(1);
-            return true;
-        }
-        false
+    pub fn recv_server_ticks(&mut self) -> Tick {
+        let ticks = self.accumulator.take_ticks();
+        self.current_tick = self.current_tick.wrapping_add(ticks);
+        ticks
     }
 
     /// Gets the current tick on the host

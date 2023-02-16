@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use log::warn;
+use log::{info, warn};
 
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
@@ -32,6 +32,7 @@ use crate::{
     },
     tick::tick_manager::TickManager,
 };
+use crate::tick::tick_buffer_messages::TickBufferMessages;
 
 use super::{
     error::NaiaServerError,
@@ -135,14 +136,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // until none left
         self.maintain_socket();
 
-        // tick event
-        let mut did_tick = false;
-        if let Some(tick_manager) = &mut self.tick_manager {
-            if tick_manager.recv_server_tick() {
-                did_tick = true;
-            }
-        }
-
         // loop through all connections, receive Messages
         let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
         fastrand::shuffle(&mut user_addresses);
@@ -155,18 +148,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // receive (retrieve from buffer) tick buffered messages for the current server tick
-        if did_tick {
-            // Receive Tick Buffered Messages
-            for user_address in &user_addresses {
-                let connection = self.user_connections.get_mut(user_address).unwrap();
+        if let Some(tick_manager) = &mut self.tick_manager {
+            let received_ticks = tick_manager.recv_server_ticks();
 
-                connection.receive_tick_buffer_messages(
-                    &self.tick_manager.as_ref().unwrap().server_tick(),
-                    &mut self.incoming_events,
-                );
+            if received_ticks > 0 {
+                if received_ticks > 1 {
+                    if received_ticks > 1 {
+                        info!("Received {received_ticks}");
+                    }
+                }
+
+                let prev_tick = self.tick_manager.as_ref().unwrap().server_tick().wrapping_sub(received_ticks).wrapping_add(1);
+                for offset in 0..received_ticks {
+                    self.incoming_events.push_tick(prev_tick.wrapping_add(offset));
+                }
             }
-
-            self.incoming_events.push_tick();
         }
 
         // return all received messages and reset the buffer
@@ -305,6 +301,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.user_keys()
             .iter()
             .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
+    }
+
+    pub fn tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
+        let mut tick_buffer_messages = TickBufferMessages::new();
+        for (_user_address, connection) in self.user_connections.iter_mut() {
+            // receive messages from anyone
+            connection.tick_buffer_messages(tick, &mut tick_buffer_messages);
+        }
+        tick_buffer_messages
     }
 
     // Updates

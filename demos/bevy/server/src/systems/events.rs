@@ -2,15 +2,15 @@ use bevy_ecs::{event::EventReader, system::ResMut};
 use bevy_log::info;
 
 use naia_bevy_server::{
-    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents},
+    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent},
     Random, Server,
 };
 
 use naia_bevy_demo_shared::{
-    channels::{EntityAssignmentChannel, PlayerCommandChannel},
     components::{Color, ColorValue, Position},
-    messages::{Auth, EntityAssignment, KeyCommand},
+    messages::{Auth, EntityAssignment},
 };
+use naia_bevy_demo_shared::channels::EntityAssignmentChannel;
 
 use crate::resources::Global;
 
@@ -101,22 +101,6 @@ pub fn disconnect_events(
                 .entity_mut(&entity)
                 .leave_room(&global.main_room_key)
                 .despawn();
-        }
-    }
-}
-
-pub fn message_events(
-    mut event_reader: EventReader<MessageEvents>,
-    mut global: ResMut<Global>,
-    server: Server,
-) {
-    for events in event_reader.iter() {
-        for (_user_key, key_command) in events.read::<PlayerCommandChannel, KeyCommand>() {
-            if let Some(entity) = &key_command.entity.get(&server) {
-                global
-                    .player_last_command
-                    .insert(*entity, key_command.clone());
-            }
         }
     }
 }

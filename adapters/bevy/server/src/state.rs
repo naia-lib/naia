@@ -5,7 +5,6 @@ use bevy_ecs::{
 };
 
 use naia_server::Server as NaiaServer;
-
 use naia_bevy_shared::WorldProxyMut;
 
 use super::{commands::Command, server::Server};

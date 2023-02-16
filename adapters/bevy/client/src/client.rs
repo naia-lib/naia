@@ -8,10 +8,7 @@ use bevy_ecs::{
 
 use naia_client::{Client as NaiaClient, EntityRef, NaiaClientError};
 
-use naia_bevy_shared::{
-    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, WorldProxy,
-    WorldRef,
-};
+use naia_bevy_shared::{Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick, WorldProxy, WorldRef};
 
 use super::state::State;
 
@@ -77,7 +74,11 @@ impl<'a> Client<'a> {
 
     //// Messages ////
     pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
-        self.client.send_message::<C, M>(message)
+        self.client.send_message::<C, M>(message);
+    }
+
+    pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
+        self.client.send_tick_buffer_message::<C, M>(tick, message);
     }
 
     //// Entities ////
@@ -92,8 +93,21 @@ impl<'a> Client<'a> {
 
     //// Ticks ////
 
-    pub fn client_tick(&self) -> Option<u16> {
+    pub fn client_tick(&mut self) -> Option<Tick> {
         self.client.client_tick()
+    }
+
+    pub fn client_sending_tick(&mut self) -> Tick {
+        self.client.client_sending_tick()
+    }
+    pub fn client_receiving_tick(&mut self) -> Tick {
+        self.client.client_receiving_tick()
+    }
+    pub fn server_tick(&self) -> Tick {
+        self.client.server_tick()
+    }
+    pub fn client_tick_offset_avg(&self) -> f32 {
+        self.client.client_tick_offset_avg()
     }
 }
 

@@ -20,6 +20,9 @@ pub struct RejectEvent;
 // ErrorEvent
 pub struct ErrorEvent(pub NaiaClientError);
 
+// TickEvent
+pub struct TickEvent(pub Tick);
+
 // MessageEvents
 pub struct MessageEvents {
     inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>>,

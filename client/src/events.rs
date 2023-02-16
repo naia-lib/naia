@@ -8,7 +8,7 @@ pub struct Events<E: Copy> {
     connections: Vec<SocketAddr>,
     rejections: Vec<SocketAddr>,
     disconnections: Vec<SocketAddr>,
-    ticks: Vec<()>,
+    ticks: Vec<Tick>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>>,
     spawns: Vec<E>,
@@ -105,8 +105,8 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_tick(&mut self) {
-        self.ticks.push(());
+    pub(crate) fn push_tick(&mut self, tick: Tick) {
+        self.ticks.push(tick);
         self.empty = false;
     }
 
@@ -212,7 +212,7 @@ impl<E: Copy> Event<E> for DisconnectEvent {
 // Tick Event
 pub struct TickEvent;
 impl<E: Copy> Event<E> for TickEvent {
-    type Iter = IntoIter<()>;
+    type Iter = IntoIter<Tick>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.ticks);

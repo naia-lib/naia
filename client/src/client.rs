@@ -1,6 +1,6 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use log::warn;
+use log::{info, warn};
 
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
@@ -13,6 +13,7 @@ pub use naia_shared::{
     PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
     WorldMutType, WorldRefType,
 };
+use naia_shared::sequence_greater_than;
 
 use crate::{
     connection::{
@@ -41,6 +42,8 @@ pub struct Client<E: Copy + Eq + Hash> {
     incoming_events: Events<E>,
     // Ticks
     tick_manager: Option<TickManager>,
+    last_pushed_tick: Tick,
+    first_tick_passed: bool,
 }
 
 impl<E: Copy + Eq + Hash> Client<E> {
@@ -72,6 +75,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
             incoming_events: Events::new(),
             // Ticks
             tick_manager,
+            last_pushed_tick: 0,
+            first_tick_passed: false,
         }
     }
 
@@ -143,12 +148,14 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 return std::mem::take(&mut self.incoming_events);
             }
 
-            let mut did_tick = false;
-
             // update current tick
             if let Some(tick_manager) = &mut self.tick_manager {
-                if tick_manager.recv_client_tick() {
-                    did_tick = true;
+                let received_ticks = tick_manager.recv_client_ticks();
+                if received_ticks > 0 {
+
+                    if received_ticks > 1 {
+                        info!("Received {received_ticks}");
+                    }
 
                     // apply updates on tick boundary
                     let receiving_tick = tick_manager.client_receiving_tick();
@@ -158,6 +165,31 @@ impl<E: Copy + Eq + Hash> Client<E> {
                         receiving_tick,
                         &mut self.incoming_events,
                     );
+
+                    // add ticks to incoming events
+                    // tick event
+                    let target_tick = tick_manager.client_sending_tick();
+
+                    if self.first_tick_passed {
+                        if sequence_greater_than(target_tick, self.last_pushed_tick) {
+                            let mut current_tick = self.last_pushed_tick.wrapping_add(1);
+
+                            loop {
+                                self.incoming_events.push_tick(current_tick);
+
+                                if current_tick == target_tick {
+                                    self.last_pushed_tick = target_tick;
+                                    break;
+                                }
+                                current_tick = current_tick.wrapping_add(1);
+                            }
+                        }
+                    } else {
+                        self.first_tick_passed = true;
+
+                        self.incoming_events.push_tick(target_tick);
+                        self.last_pushed_tick = target_tick;
+                    }
                 }
             } else {
                 connection.process_buffered_packets(
@@ -172,12 +204,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
             connection.receive_messages(&mut self.incoming_events);
 
             // send outgoing packets
-            connection.send_outgoing_packets(&self.protocol, &mut self.io, &self.tick_manager);
+            connection.send_outgoing_packets(&self.protocol, &mut self.io, &mut self.tick_manager);
 
-            // tick event
-            if did_tick {
-                self.incoming_events.push_tick();
-            }
         } else {
             self.handshake_manager
                 .send(&self.protocol.message_kinds, &mut self.io);
@@ -217,6 +245,31 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 .base
                 .message_manager
                 .send_message(channel_kind, message);
+        }
+    }
+
+    pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
+        let cloned_message = M::clone_box(message);
+        self.send_tick_buffer_message_inner(tick, &ChannelKind::of::<C>(), cloned_message);
+    }
+
+    fn send_tick_buffer_message_inner(&mut self, tick: &Tick, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+        let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
+
+        if !channel_settings.can_send_to_server() {
+            panic!("Cannot send message to Server on this Channel");
+        }
+
+        if !channel_settings.tick_buffered() {
+            panic!("Can only send a tick buffered message on a Channel configured for it");
+        }
+
+        if let Some(connection) = self.server_connection.as_mut() {
+            connection
+                .tick_buffer
+                .as_mut()
+                .expect("connection does not have a tick buffer")
+                .send_message(tick, channel_kind, message);
         }
     }
 
@@ -260,11 +313,28 @@ impl<E: Copy + Eq + Hash> Client<E> {
     // Ticks
 
     /// Gets the current tick of the Client
-    pub fn client_tick(&self) -> Option<Tick> {
+    pub fn client_tick(&mut self) -> Option<Tick> {
         return self
             .tick_manager
-            .as_ref()
+            .as_mut()
             .map(|tick_manager| tick_manager.client_sending_tick());
+    }
+
+    pub fn client_sending_tick(&mut self) -> Tick {
+        let tick_manager = self.tick_manager.as_mut().unwrap();
+        tick_manager.client_sending_tick()
+    }
+    pub fn client_receiving_tick(&mut self) -> Tick {
+        let tick_manager = self.tick_manager.as_mut().unwrap();
+        tick_manager.client_receiving_tick()
+    }
+    pub fn server_tick(&self) -> Tick {
+        let tick_manager = self.tick_manager.as_ref().unwrap();
+        tick_manager.server_tick()
+    }
+    pub fn client_tick_offset_avg(&self) -> f32 {
+        let tick_manager = self.tick_manager.as_ref().unwrap();
+        tick_manager.tick_offset_avg()
     }
 
     // Interpolation
@@ -288,7 +358,11 @@ impl<E: Copy + Eq + Hash> Client<E> {
     // internal functions
 
     fn maintain_socket(&mut self) {
-        // get current tick
+
+        if let Some(tick_manager) = self.tick_manager.as_mut() {
+            tick_manager.accumulate_ticks();
+        }
+
         if let Some(server_connection) = self.server_connection.as_mut() {
             // connection already established
 
@@ -376,11 +450,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                         let mut incoming_tick = 0;
 
                         if let Some(tick_manager) = self.tick_manager.as_mut() {
-                            incoming_tick = tick_manager.read_server_tick(
-                                &mut reader,
-                                server_connection.ping_manager.rtt,
-                                server_connection.ping_manager.jitter,
-                            );
+                            incoming_tick = tick_manager.read_server_tick(&mut reader);
                         }
 
                         // Handle based on PacketType
@@ -405,7 +475,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                     .write_outgoing_header(PacketType::Pong, &mut writer);
 
                                 // write server tick
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
+                                if let Some(tick_manager) = self.tick_manager.as_mut() {
                                     tick_manager.write_client_tick(&mut writer);
                                 }
 
@@ -424,6 +494,13 @@ impl<E: Copy + Eq + Hash> Client<E> {
                             }
                             PacketType::Pong => {
                                 server_connection.ping_manager.process_pong(&mut reader);
+
+                                if let Some(tick_manager) = self.tick_manager.as_mut() {
+                                    tick_manager.adjust_network_conditions(
+                                        server_connection.ping_manager.rtt,
+                                        server_connection.ping_manager.jitter,
+                                    );
+                                }
                             }
                             _ => {
                                 // no other packet types matter when connection

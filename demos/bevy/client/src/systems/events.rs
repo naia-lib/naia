@@ -15,6 +15,7 @@ use naia_bevy_client::{
     },
     sequence_greater_than, Client, CommandsExt, Tick,
 };
+use naia_bevy_client::events::TickEvent;
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,

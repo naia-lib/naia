@@ -19,8 +19,8 @@ impl Default for TickConfig {
     fn default() -> Self {
         Self {
             minimum_latency_millis: 0.0,
-            minimum_recv_jitter_buffer_size: 0,
-            minimum_send_jitter_buffer_size: 0,
+            minimum_recv_jitter_buffer_size: 1,
+            minimum_send_jitter_buffer_size: 10,
             tick_offset_smooth_factor: 0.10,
         }
     }

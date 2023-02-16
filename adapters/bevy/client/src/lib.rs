@@ -6,7 +6,6 @@ pub mod events;
 mod client;
 mod commands;
 mod plugin;
-mod resource;
 mod stage;
 mod state;
 mod systems;

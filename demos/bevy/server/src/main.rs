@@ -1,14 +1,14 @@
-use bevy_app::{App, CoreStage, ScheduleRunnerPlugin};
+use bevy_app::{App, ScheduleRunnerPlugin};
 use bevy_core::CorePlugin;
 use bevy_log::{info, LogPlugin};
 
 use naia_bevy_demo_shared::protocol;
-use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
+use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig};
 
 mod resources;
 mod systems;
 
-use systems::{events, init, tick};
+use systems::{events, init, tick_events};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -23,13 +23,11 @@ fn main() {
         // Startup System
         .add_startup_system(init)
         // Receive Server Events
-        .add_system_to_stage(CoreStage::PreUpdate, events::auth_events)
-        .add_system_to_stage(CoreStage::PreUpdate, events::connect_events)
-        .add_system_to_stage(CoreStage::PreUpdate, events::disconnect_events)
-        .add_system_to_stage(CoreStage::PreUpdate, events::message_events)
-        .add_system_to_stage(CoreStage::PreUpdate, events::error_events)
-        // Gameplay Loop on Tick
-        .add_system_to_stage(Stage::Tick, tick)
+        .add_system(events::auth_events)
+        .add_system(events::connect_events)
+        .add_system(events::disconnect_events)
+        .add_system(events::error_events)
+        .add_system(tick_events)
         // Run App
         .run();
 }

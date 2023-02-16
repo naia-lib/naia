@@ -149,7 +149,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         &mut self,
         protocol: &Protocol,
         io: &mut Io,
-        tick_manager_opt: &Option<TickManager>,
+        tick_manager_opt: &mut Option<TickManager>,
     ) {
         self.collect_outgoing_messages(tick_manager_opt);
 
@@ -166,7 +166,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         }
     }
 
-    fn collect_outgoing_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
+    fn collect_outgoing_messages(&mut self, tick_manager_opt: &mut Option<TickManager>) {
         let now = Instant::now();
 
         self.base
@@ -189,7 +189,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         &mut self,
         protocol: &Protocol,
         io: &mut Io,
-        tick_manager_opt: &Option<TickManager>,
+        tick_manager_opt: &mut Option<TickManager>,
     ) -> bool {
         let tick_buffer_has_outgoing_messages = match &self.tick_buffer {
             Some(tick_buffer) => tick_buffer.has_outgoing_messages(),

@@ -5,11 +5,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
-    EntityConverter, HostType, Instant, PacketType, PingManager, Protocol, ProtocolIo, Serde,
-    SerdeErr, StandardHeader, Tick, WorldRefType,
-};
+use naia_shared::{sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter, HostType, Instant, PacketType, PingManager, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick, WorldRefType};
 
 use crate::{
     protocol::{
@@ -20,6 +16,7 @@ use crate::{
     user::UserKey,
     Events,
 };
+use crate::tick::tick_buffer_messages::TickBufferMessages;
 
 use super::io::Io;
 
@@ -110,11 +107,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
     }
 
-    pub fn receive_tick_buffer_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
-        let channel_messages = self.tick_buffer.receive_messages(host_tick);
+    pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {
+        let channel_messages = self.tick_buffer.receive_messages(tick);
         for (channel_kind, received_messages) in channel_messages {
             for message in received_messages {
-                incoming_events.push_message(&self.user_key, &channel_kind, message);
+                messages.push(&self.user_key, &channel_kind, message);
             }
         }
     }

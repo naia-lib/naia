@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use log::info;
 
 use naia_shared::{
     sequence_greater_than, BitReader, ChannelReader, Message, MessageKinds, Serde, SerdeErr,
@@ -203,6 +204,7 @@ impl IncomingMessages {
             }
             if pop {
                 self.buffer.pop_front();
+                info!("Got rid of old command");
             } else {
                 break;
             }
