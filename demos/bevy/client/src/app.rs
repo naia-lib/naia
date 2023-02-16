@@ -11,7 +11,7 @@ use bevy_transform::TransformPlugin;
 use bevy_window::WindowPlugin;
 use bevy_winit::WinitPlugin;
 
-use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
+use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin};
 use naia_bevy_demo_shared::protocol;
 
 use crate::systems::{events, init, input, sync, tick_events};

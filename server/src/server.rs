@@ -6,7 +6,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use log::{info, warn};
+use log::warn;
 
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
@@ -149,19 +149,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // receive (retrieve from buffer) tick buffered messages for the current server tick
         if let Some(tick_manager) = &mut self.tick_manager {
-            let received_ticks = tick_manager.recv_server_ticks();
-
-            if received_ticks > 0 {
-                if received_ticks > 1 {
-                    if received_ticks > 1 {
-                        info!("Received {received_ticks}");
-                    }
-                }
-
-                let prev_tick = self.tick_manager.as_ref().unwrap().server_tick().wrapping_sub(received_ticks).wrapping_add(1);
-                for offset in 0..received_ticks {
-                    self.incoming_events.push_tick(prev_tick.wrapping_add(offset));
-                }
+            if tick_manager.recv_server_tick() {
+                let server_tick = self.tick_manager.as_ref().unwrap().server_tick();
+                self.incoming_events.push_tick(server_tick);
             }
         }
 

@@ -2,7 +2,7 @@ use bevy_ecs::event::EventReader;
 use bevy_ecs::system::{Query, ResMut};
 use bevy_log::info;
 
-use naia_bevy_client::{Client, Tick, events::TickEvent};
+use naia_bevy_client::{Client, events::TickEvent};
 use naia_bevy_demo_shared::{
     behavior as shared_behavior, channels::PlayerCommandChannel, components::Position,
     messages::KeyCommand,
