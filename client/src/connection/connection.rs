@@ -4,11 +4,12 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant,
-    OwnedBitReader, PacketType, PingManager, Protocol, ProtocolIo, Serde, StandardHeader, Tick,
-    WorldMutType,
+    OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, StandardHeader, Tick, WorldMutType,
 };
 
+use crate::connection::ping_config::PingConfig;
 use crate::{
+    connection::ping_manager::PingManager,
     events::Events,
     protocol::entity_manager::EntityManager,
     tick::{
@@ -32,6 +33,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
+        ping_config: &PingConfig,
         tick_duration: &Option<Duration>,
         channel_kinds: &ChannelKinds,
     ) -> Self {
@@ -42,7 +44,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
             entity_manager: EntityManager::default(),
-            ping_manager: PingManager::new(&connection_config.ping),
+            ping_manager: PingManager::new(ping_config),
             tick_buffer,
             jitter_buffer: TickQueue::new(),
         }

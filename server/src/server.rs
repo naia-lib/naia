@@ -96,7 +96,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             io,
             heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
             timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
-            ping_timer: Timer::new(server_config.connection.ping.ping_interval),
+            ping_timer: Timer::new(server_config.ping.ping_interval),
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
             users: BigMap::default(),
@@ -181,6 +181,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if let Some(user) = self.users.get(user_key) {
             let new_connection = Connection::new(
                 &self.server_config.connection,
+                &self.server_config.ping,
                 user.address,
                 user_key,
                 &self.protocol.channel_kinds,

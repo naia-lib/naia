@@ -65,8 +65,7 @@ pub use connection::{
     encoder::Encoder,
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
-    ping_config::PingConfig,
-    ping_manager::{PingIndex, PingManager},
+    ping_store::{PingIndex, PingStore},
     standard_header::StandardHeader,
 };
 pub use entity::{

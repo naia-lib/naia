@@ -7,10 +7,11 @@ use std::{
 
 use naia_shared::{
     sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
-    EntityConverter, HostType, Instant, PacketType, PingManager, Protocol, ProtocolIo, Serde,
-    SerdeErr, StandardHeader, Tick, WorldRefType,
+    EntityConverter, HostType, Instant, PacketType, Protocol, ProtocolIo, Serde, SerdeErr,
+    StandardHeader, Tick, WorldRefType,
 };
 
+use crate::connection::ping_config::PingConfig;
 use crate::{
     protocol::{
         entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler,
@@ -21,7 +22,7 @@ use crate::{
     Events,
 };
 
-use super::io::Io;
+use super::{io::Io, ping_manager::PingManager};
 
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
@@ -35,6 +36,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn new(
         connection_config: &ConnectionConfig,
+        ping_config: &PingConfig,
         user_address: SocketAddr,
         user_key: &UserKey,
         channel_kinds: &ChannelKinds,
@@ -50,7 +52,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             ),
             entity_manager: EntityManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
-            ping_manager: PingManager::new(&connection_config.ping),
+            ping_manager: PingManager::new(ping_config),
             last_received_tick: 0,
         }
     }

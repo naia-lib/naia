@@ -1,5 +1,6 @@
 use std::{default::Default, time::Duration};
 
+use crate::connection::ping_config::PingConfig;
 use naia_shared::ConnectionConfig;
 
 use crate::TickConfig;
@@ -13,6 +14,8 @@ pub struct ClientConfig {
     pub send_handshake_interval: Duration,
     /// Configuration for options related to Tick syncing function
     pub tick_config: TickConfig,
+    /// Configuration used to monitor the ping & jitter on the network
+    pub ping_config: PingConfig,
 }
 
 impl Default for ClientConfig {
@@ -21,6 +24,7 @@ impl Default for ClientConfig {
             connection: ConnectionConfig::default(),
             send_handshake_interval: Duration::from_millis(250),
             tick_config: TickConfig::default(),
+            ping_config: PingConfig::default(),
         }
     }
 }

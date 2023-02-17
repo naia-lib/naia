@@ -1,4 +1,3 @@
-
 use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};

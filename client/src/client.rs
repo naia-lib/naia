@@ -7,11 +7,12 @@ use bevy_ecs::prelude::Resource;
 
 use naia_client_socket::Socket;
 
+use naia_shared::PingIndex;
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, PacketType, PingConfig,
-    PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, PacketType, Protocol,
+    Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{
@@ -454,6 +455,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                     self.server_connection = Some(Connection::new(
                                         server_addr,
                                         &self.client_config.connection,
+                                        &self.client_config.ping_config,
                                         &self.protocol.tick_interval,
                                         &self.protocol.channel_kinds,
                                     ));
