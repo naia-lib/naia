@@ -2,10 +2,7 @@ use std::{hash::Hash, net::SocketAddr, time::Duration};
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant,
-    OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, StandardHeader, Tick, WorldMutType,
-};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant, OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick, WorldMutType};
 
 use crate::{
     connection::{
@@ -54,9 +51,11 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             .process_incoming_header(header, &mut Some(&mut self.tick_buffer));
     }
 
-    pub fn buffer_data_packet(&mut self, incoming_tick: Tick, reader: &mut BitReader) {
+    pub fn buffer_data_packet(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
+        let incoming_tick: Tick = Tick::de(reader)?;
         self.jitter_buffer
             .add_item(incoming_tick, reader.to_owned());
+        Ok(())
     }
 
     /// Read the packets (raw bits) from the jitter buffer that correspond to the
@@ -198,7 +197,8 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             let mut has_written = false;
 
             // write tick
-            let client_tick: Tick = self.time_manager.write_client_tick(&mut bit_writer);
+            let client_tick: Tick = self.time_manager.client_sending_tick();
+            client_tick.ser(&mut bit_writer);
 
             // write tick buffered messages
             self.tick_buffer.write_messages(

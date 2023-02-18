@@ -289,18 +289,10 @@ impl<E: Copy + Eq + Hash> Client<E> {
                     .base
                     .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
-                // write client tick
-                server_connection
-                    .time_manager
-                    .write_client_tick(&mut writer);
-
                 // send packet
-                match self.io.send_writer(&mut writer) {
-                    Ok(()) => {}
-                    Err(_) => {
-                        // TODO: pass this on and handle above
-                        warn!("Client Error: Cannot send heartbeat packet to Server");
-                    }
+                if self.io.send_writer(&mut writer).is_err() {
+                    // TODO: pass this on and handle above
+                    warn!("Client Error: Cannot send heartbeat packet to Server");
                 }
                 server_connection.base.mark_sent();
             }
@@ -337,14 +329,13 @@ impl<E: Copy + Eq + Hash> Client<E> {
                         // Read incoming header
                         server_connection.process_incoming_header(&header);
 
-                        // Record incoming tick
-                        let incoming_tick =
-                            server_connection.time_manager.read_server_tick(&mut reader);
-
                         // Handle based on PacketType
                         match header.packet_type {
                             PacketType::Data => {
-                                server_connection.buffer_data_packet(incoming_tick, &mut reader);
+                                if server_connection.buffer_data_packet(&mut reader).is_err() {
+                                    warn!("unable to parse data packet");
+                                    continue;
+                                }
                             }
                             PacketType::Heartbeat => {
                                 // already marked as heard, job done
@@ -361,11 +352,6 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                 server_connection
                                     .base
                                     .write_outgoing_header(PacketType::Pong, &mut writer);
-
-                                // write server tick
-                                server_connection
-                                    .time_manager
-                                    .write_client_tick(&mut writer);
 
                                 // write index
                                 ping_index.ser(&mut writer);

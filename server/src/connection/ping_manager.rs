@@ -1,16 +1,15 @@
 use naia_shared::{BitReader, BitWriter, PingIndex, PingStore, Serde, Timer};
 
 use crate::connection::ping_config::PingConfig;
+use crate::connection::time_manager::TimeManager;
 
 /// Is responsible for sending regular ping messages between client/servers
 /// and to estimate rtt/jitter
 pub struct PingManager {
+    pub rtt_average: f32,
+    pub jitter_average: f32,
     ping_timer: Timer,
     sent_pings: PingStore,
-    pub rtt: f32,
-    pub jitter: f32,
-    rtt_smoothing_factor: f32,
-    rtt_smoothing_factor_inv: f32,
 }
 
 impl PingManager {
@@ -19,12 +18,10 @@ impl PingManager {
         let jitter_average = ping_config.jitter_initial_estimate.as_secs_f32() * 1000.0;
 
         PingManager {
+            rtt_average: rtt_average,
+            jitter_average: jitter_average,
             ping_timer: Timer::new(ping_config.ping_interval),
             sent_pings: PingStore::new(),
-            rtt: rtt_average,
-            jitter: jitter_average,
-            rtt_smoothing_factor: ping_config.rtt_smoothing_factor,
-            rtt_smoothing_factor_inv: 1.0 - ping_config.rtt_smoothing_factor,
         }
     }
 
@@ -34,22 +31,22 @@ impl PingManager {
     }
 
     /// Get an outgoing ping payload
-    pub fn write_ping(&mut self, writer: &mut BitWriter) {
+    pub fn write_ping(&mut self, writer: &mut BitWriter, time_manager: &TimeManager) {
         self.ping_timer.reset();
 
-        let ping_index = self.sent_pings.push_new();
+        let ping_index = self.sent_pings.push_new(time_manager.game_time_now());
 
         // write index
         ping_index.ser(writer);
     }
 
     /// Process an incoming pong payload
-    pub fn process_pong(&mut self, reader: &mut BitReader) {
+    pub fn process_pong(&mut self, time_manager: &TimeManager, reader: &mut BitReader) {
         if let Ok(ping_index) = PingIndex::de(reader) {
             match self.sent_pings.remove(ping_index) {
                 None => {}
-                Some(ping_instant) => {
-                    let rtt_millis = &ping_instant.elapsed().as_secs_f32() * 1000.0;
+                Some(game_instant) => {
+                    let rtt_millis = time_manager.game_time_since(&game_instant).as_millis();
                     self.process_new_rtt(rtt_millis);
                 }
             }
@@ -57,12 +54,10 @@ impl PingManager {
     }
 
     /// Recompute rtt/jitter estimations
-    fn process_new_rtt(&mut self, rtt_millis: f32) {
-        let new_jitter = ((rtt_millis - self.rtt) / 2.0).abs();
-        self.jitter = (self.rtt_smoothing_factor_inv * self.jitter)
-            + (self.rtt_smoothing_factor * new_jitter);
-
-        self.rtt =
-            (self.rtt_smoothing_factor_inv * self.rtt) + (self.rtt_smoothing_factor * rtt_millis);
+    fn process_new_rtt(&mut self, rtt_millis: u32) {
+        let rtt_millis_f32 = rtt_millis as f32;
+        let new_jitter = ((rtt_millis_f32 - self.rtt_average) / 2.0).abs();
+        self.jitter_average = (0.9 * self.jitter_average) + (0.1 * new_jitter);
+        self.rtt_average = (0.9 * self.rtt_average) + (0.1 * rtt_millis_f32);
     }
 }

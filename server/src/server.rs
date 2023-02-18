@@ -369,7 +369,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
 
-            let rtt = connection.ping_manager.rtt;
+            let rtt = connection.ping_manager.rtt_average;
 
             connection.send_outgoing_packets(
                 &self.protocol,
@@ -530,16 +530,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // Ticks
 
-    /// Gets the last received tick from the Client
-    pub fn client_tick(&self, user_key: &UserKey) -> Option<Tick> {
-        if let Some(user) = self.users.get(user_key) {
-            if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.last_received_tick);
-            }
-        }
-        None
-    }
-
     /// Gets the current tick of the Server
     pub fn server_tick(&self) -> Tick {
         return self.time_manager.server_tick();
@@ -567,7 +557,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
         if let Some(user) = self.users.get(user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.ping_manager.rtt);
+                return Some(user_connection.ping_manager.rtt_average);
             }
         }
         None
@@ -578,7 +568,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
         if let Some(user) = self.users.get(user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.ping_manager.jitter);
+                return Some(user_connection.ping_manager.jitter_average);
             }
         }
         None
@@ -940,19 +930,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .base
                         .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
-                    // write server tick
-                    self.time_manager.write_server_tick(&mut writer);
-
                     // send packet
-                    match self.io.send_writer(user_address, &mut writer) {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // TODO: pass this on and handle above
-                            warn!(
-                                "Server Error: Cannot send heartbeat packet to {}",
-                                user_address
-                            );
-                        }
+                    if self.io.send_writer(user_address, &mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!(
+                            "Server Error: Cannot send heartbeat packet to {}",
+                            user_address
+                        );
                     }
                     connection.base.mark_sent();
                 }
@@ -973,19 +957,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .base
                         .write_outgoing_header(PacketType::Ping, &mut writer);
 
-                    // write server tick
-                    self.time_manager.write_server_tick(&mut writer);
-
                     // write body
-                    connection.ping_manager.write_ping(&mut writer);
+                    connection.ping_manager.write_ping(&mut writer, &self.time_manager);
 
                     // send packet
-                    match self.io.send_writer(user_address, &mut writer) {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // TODO: pass this on and handle above
-                            warn!("Server Error: Cannot send ping packet to {}", user_address);
-                        }
+                    if self.io.send_writer(user_address, &mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Server Error: Cannot send ping packet to {}", user_address);
                     }
                     connection.base.mark_sent();
                 }
@@ -1101,14 +1079,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         match header.packet_type {
                             PacketType::Data => {
                                 // read client tick
-                                ////
                                 let Ok(client_tick) = Tick::de(&mut reader) else {
                                     // Received a malformed packet
                                     // TODO: increase suspicion against packet sender
                                     continue;
                                 };
-                                user_connection.recv_client_tick(client_tick);
-                                ////
 
                                 let server_tick = self.time_manager.server_tick();
 
@@ -1139,30 +1114,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 }
                             }
                             PacketType::Heartbeat => {
-                                // read client tick, don't need to do anything else
-                                ////
-                                let Ok(client_tick) = Tick::de(&mut reader) else {
-                                    // Received a malformed packet
-                                    // TODO: increase suspicion against packet sender
-                                    continue;
-                                };
-                                user_connection.recv_client_tick(client_tick);
-                                ////
+                                // already marked heard above
                             }
                             PacketType::Pong => {
                                 // read client tick
-                                ////
-                                let Ok(client_tick) = Tick::de(&mut reader) else {
-                                    // Received a malformed packet
-                                    // TODO: increase suspicion against packet sender
-                                    continue;
-                                };
-                                user_connection.recv_client_tick(client_tick);
-                                ////
-
-                                // TODO: send a message to client with a recommendation on how
-                                //  to speedup/slowdown simulation?
-                                user_connection.ping_manager.process_pong(&mut reader);
+                                user_connection.ping_manager.process_pong(&self.time_manager, &mut reader);
                             }
                             _ => {}
                         }

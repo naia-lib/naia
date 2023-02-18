@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use naia_socket_shared::Instant;
 
-use crate::sequence_greater_than;
+use crate::{GameInstant, sequence_greater_than};
 
 pub type PingIndex = u16;
 
@@ -12,7 +12,7 @@ pub struct PingStore {
     ping_index: PingIndex,
     // front big, back small
     // front recent, back past
-    buffer: VecDeque<(PingIndex, Instant)>,
+    buffer: VecDeque<(PingIndex, GameInstant)>,
 }
 
 impl PingStore {
@@ -23,11 +23,11 @@ impl PingStore {
         }
     }
 
-    pub fn push_new(&mut self) -> PingIndex {
+    pub fn push_new(&mut self, now: GameInstant) -> PingIndex {
         // save current ping index and add a new ping instant associated with it
         let ping_index = self.ping_index;
         self.ping_index = self.ping_index.wrapping_add(1);
-        self.buffer.push_front((ping_index, Instant::now()));
+        self.buffer.push_front((ping_index, now));
 
         // a good time to prune down the size of this buffer
         while self.buffer.len() > SENT_PINGS_HISTORY_SIZE.into() {
@@ -38,7 +38,7 @@ impl PingStore {
         ping_index
     }
 
-    pub fn remove(&mut self, ping_index: PingIndex) -> Option<Instant> {
+    pub fn remove(&mut self, ping_index: PingIndex) -> Option<GameInstant> {
         let mut vec_index = self.buffer.len();
         let mut found = false;
 

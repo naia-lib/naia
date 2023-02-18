@@ -38,6 +38,7 @@ mod protocol;
 mod types;
 mod world_type;
 mod wrapping_number;
+mod game_time;
 
 pub use backends::{Timer, Timestamp};
 pub use component::{
@@ -105,3 +106,4 @@ pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use game_time::{GameInstant, GameDuration};

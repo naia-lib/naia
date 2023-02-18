@@ -29,7 +29,6 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub base: BaseConnection,
     pub entity_manager: EntityManager<E>,
     tick_buffer: TickBufferReceiver,
-    pub last_received_tick: Tick,
     pub ping_manager: PingManager,
 }
 
@@ -53,7 +52,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             entity_manager: EntityManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
-            last_received_tick: 0,
         }
     }
 
@@ -62,13 +60,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.base
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
-    }
-
-    /// Update the last received tick tracker from the given client
-    pub fn recv_client_tick(&mut self, client_tick: Tick) {
-        if sequence_greater_than(client_tick, self.last_received_tick) {
-            self.last_received_tick = client_tick;
-        }
     }
 
     /// Read packet data received from a client
@@ -186,7 +177,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 .write_outgoing_header(PacketType::Data, &mut bit_writer);
 
             // write server tick
-            time_manager.write_server_tick(&mut bit_writer);
+            time_manager.server_tick().ser(&mut bit_writer);
 
             // info!("-- packet: {} --", next_packet_index);
             // if self.base.message_manager.has_outgoing_messages() {
