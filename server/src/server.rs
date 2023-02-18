@@ -1,4 +1,3 @@
-
 use std::{
     collections::{hash_set::Iter, HashMap},
     hash::Hash,
@@ -958,7 +957,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .write_outgoing_header(PacketType::Ping, &mut writer);
 
                     // write body
-                    connection.ping_manager.write_ping(&mut writer, &self.time_manager);
+                    connection
+                        .ping_manager
+                        .write_ping(&mut writer, &self.time_manager);
 
                     // send packet
                     if self.io.send_writer(user_address, &mut writer).is_err() {
@@ -1033,10 +1034,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             continue;
                         }
                         PacketType::Ping => {
-                            let mut response = self
-                                .time_manager
-                                .process_ping(&mut reader)
-                                .unwrap();
+                            let mut response = self.time_manager.process_ping(&mut reader).unwrap();
                             // send packet
                             if self.io.send_writer(&address, &mut response).is_err() {
                                 // TODO: pass this on and handle above
@@ -1118,7 +1116,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             }
                             PacketType::Pong => {
                                 // read client tick
-                                user_connection.ping_manager.process_pong(&self.time_manager, &mut reader);
+                                user_connection
+                                    .ping_manager
+                                    .process_pong(&self.time_manager, &mut reader);
                             }
                             _ => {}
                         }

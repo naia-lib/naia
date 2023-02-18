@@ -11,12 +11,8 @@ pub struct TimeConfig {
 impl TimeConfig {
     /// Creates a new MonitorConfig, used to monitor statistics about the
     /// network
-    pub fn new(
-        ping_interval: Duration,
-    ) -> Self {
-        TimeConfig {
-            ping_interval,
-        }
+    pub fn new(ping_interval: Duration) -> Self {
+        TimeConfig { ping_interval }
     }
 }
 

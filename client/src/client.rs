@@ -50,7 +50,6 @@ impl<E: Copy + Eq + Hash> Client<E> {
         let handshake_manager = HandshakeManager::new(
             client_config.send_handshake_interval,
             client_config.ping_config.clone(),
-            protocol.tick_interval,
         );
 
         let compression_config = protocol.compression.clone();
@@ -139,7 +138,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 return std::mem::take(&mut self.incoming_events);
             }
 
-            let mut did_tick = connection.time_manager.recv_client_tick();
+            let did_tick = connection.time_manager.recv_client_tick();
 
             // update current tick
             if did_tick {
@@ -228,7 +227,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.server_connection
             .as_ref()
             .expect("it is expected that you should verify whether the client is connected before calling this method")
-            .time_manager.rtt_avg
+            .time_manager.rtt()
     }
 
     /// Gets the average Jitter measured in connection to the Server
@@ -236,7 +235,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.server_connection
             .as_ref()
             .expect("it is expected that you should verify whether the client is connected before calling this method")
-            .time_manager.rtt_stdv
+            .time_manager.jitter()
     }
 
     // Ticks
@@ -364,7 +363,11 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                 server_connection.base.mark_sent();
                             }
                             PacketType::Pong => {
-                                if server_connection.time_manager.read_pong(&mut reader).is_err() {
+                                if server_connection
+                                    .time_manager
+                                    .read_pong(&mut reader)
+                                    .is_err()
+                                {
                                     // TODO: pass this on and handle above
                                     warn!("Client Error: Cannot process pong packet from Server");
                                 }
@@ -398,7 +401,6 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                     self.server_connection = Some(Connection::new(
                                         server_addr,
                                         &self.client_config.connection,
-                                        &self.protocol.tick_interval,
                                         &self.protocol.channel_kinds,
                                         time_manager,
                                     ));
@@ -448,7 +450,6 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.handshake_manager = HandshakeManager::new(
             self.client_config.send_handshake_interval,
             self.client_config.ping_config.clone(),
-            self.protocol.tick_interval,
         );
     }
 

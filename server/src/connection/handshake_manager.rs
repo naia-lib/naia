@@ -110,11 +110,6 @@ impl HandshakeManager {
     }
 
     // Step ? of Handshake
-    pub fn recv_connect_request(&mut self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {
-        todo!()
-    }
-
-    // Step ? of Handshake
     pub(crate) fn write_connect_response(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0).ser(&mut writer);

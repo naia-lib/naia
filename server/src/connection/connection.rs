@@ -6,9 +6,9 @@ use std::{
 };
 
 use naia_shared::{
-    sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
-    EntityConverter, HostType, Instant, PacketType, Protocol, ProtocolIo, Serde, SerdeErr,
-    StandardHeader, Tick, WorldRefType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
+    HostType, Instant, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick,
+    WorldRefType,
 };
 
 use crate::connection::tick_buffer_receiver::TickBufferReceiver;

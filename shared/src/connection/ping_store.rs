@@ -1,8 +1,6 @@
 use std::collections::VecDeque;
 
-use naia_socket_shared::Instant;
-
-use crate::{GameInstant, sequence_greater_than};
+use crate::{sequence_greater_than, GameInstant};
 
 pub type PingIndex = u16;
 
@@ -40,6 +38,11 @@ impl PingStore {
 
     pub fn remove(&mut self, ping_index: PingIndex) -> Option<GameInstant> {
         let mut vec_index = self.buffer.len();
+
+        if vec_index == 0 {
+            return None;
+        }
+
         let mut found = false;
 
         loop {
@@ -69,5 +72,9 @@ impl PingStore {
                 return None;
             }
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.buffer.clear();
     }
 }

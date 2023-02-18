@@ -33,12 +33,12 @@ mod messages;
 
 mod bigmap;
 mod constants;
+mod game_time;
 mod key_generator;
 mod protocol;
 mod types;
 mod world_type;
 mod wrapping_number;
-mod game_time;
 
 pub use backends::{Timer, Timestamp};
 pub use component::{
@@ -101,9 +101,9 @@ pub use naia_serde::{
 
 pub use bigmap::{BigMap, BigMapKey};
 pub use constants::MESSAGE_HISTORY_SIZE;
+pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
-pub use game_time::{GameInstant, GameDuration};

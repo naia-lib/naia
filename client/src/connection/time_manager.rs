@@ -1,20 +1,22 @@
-use naia_shared::{BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, PingStore, Serde, SerdeErr, StandardHeader, Tick, Timer};
-use std::time::Duration;
-use log::{info, warn};
-use crate::connection::io::Io;
+use naia_shared::{
+    BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, PingStore,
+    Serde, SerdeErr, StandardHeader, Tick, Timer, GAME_TIME_LIMIT,
+};
 
-use crate::connection::time_config::TimeConfig;
+use log::{info, warn};
+
+use crate::connection::{io::Io, time_config::TimeConfig};
 
 const HANDSHAKE_PONGS_REQUIRED: usize = 20;
 
 /// Is responsible for sending regular ping messages between client/servers
 /// and to estimate rtt/jitter
 pub struct TimeManager {
-    pub rtt_avg: f32,
-    pub rtt_stdv: f32,
-    pub offset_avg: f32,
-    pub offset_stdv: f32,
-    pub tick_duration: f32,
+    pruned_rtt_avg: f32,
+    rtt_stdv: f32,
+    pruned_offset_avg: f32,
+    offset_stdv: f32,
+    tick_duration: f32,
     ping_timer: Timer,
     sent_pings: PingStore,
     handshake_finished: bool,
@@ -24,11 +26,10 @@ pub struct TimeManager {
 
 impl TimeManager {
     pub fn new(time_config: &TimeConfig) -> Self {
-
         TimeManager {
-            rtt_avg: 0.0,
+            pruned_rtt_avg: 0.0,
             rtt_stdv: 0.0,
-            offset_avg: 0.0,
+            pruned_offset_avg: 0.0,
             offset_stdv: 0.0,
             tick_duration: 0.0,
             ping_timer: Timer::new(time_config.ping_interval),
@@ -42,7 +43,6 @@ impl TimeManager {
     // Ping & Pong
 
     fn send_ping(&mut self, io: &mut Io) {
-
         let mut writer = BitWriter::new();
 
         // write header
@@ -64,7 +64,6 @@ impl TimeManager {
     }
 
     pub fn read_pong(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
-
         // important to record receipt time ASAP
         let client_received_time = self.game_time_now();
 
@@ -94,8 +93,12 @@ impl TimeManager {
 
         // info!("Send Offset: {send_offset_millis}, Recv Offset: {recv_offset_millis}");
 
-        let round_trip_time_millis = client_received_time.time_since(&client_sent_time).as_millis();
-        let server_process_time_millis = server_sent_time.time_since(&server_received_time).as_millis();
+        let round_trip_time_millis = client_received_time
+            .time_since(&client_sent_time)
+            .as_millis();
+        let server_process_time_millis = server_sent_time
+            .time_since(&server_received_time)
+            .as_millis();
 
         // info!("Total RTT: {round_trip_time_millis}, Server Processing Time: {server_process_time_millis}");
 
@@ -131,16 +134,15 @@ impl TimeManager {
     }
 
     fn handshake_buffer_stats(&mut self, time_offset_millis: i32, rtt_millis: u32) {
-
         let time_offset_millis_f32 = time_offset_millis as f32;
         let rtt_millis_f32 = rtt_millis as f32;
 
-        self.handshake_pongs.push((time_offset_millis_f32, rtt_millis_f32));
+        self.handshake_pongs
+            .push((time_offset_millis_f32, rtt_millis_f32));
     }
 
     // This happens when a necessary # of handshake pongs have been recorded
     fn handshake_finalize(&mut self) {
-
         let sample_count = self.handshake_pongs.len() as f32;
 
         let pongs = std::mem::take(&mut self.handshake_pongs);
@@ -197,19 +199,34 @@ impl TimeManager {
         pruned_rtt_mean /= pruned_sample_count;
 
         // Get values we were looking for
-        self.rtt_avg = pruned_rtt_mean;
-        self.offset_avg = pruned_offset_mean;
+        self.pruned_rtt_avg = pruned_rtt_mean;
+        self.pruned_offset_avg = pruned_offset_mean;
         self.rtt_stdv = rtt_stdv;
         self.offset_stdv = offset_stdv;
 
-        info!("RTT AVG: {pruned_rtt_mean}, RTT STDV: {rtt_stdv}, OFFSET AVG: {pruned_offset_mean}, OFFSET STDV: {offset_stdv}");
+        info!(" ******** RTT AVG: {pruned_rtt_mean}, RTT STDV: {rtt_stdv}, OFFSET AVG: {pruned_offset_mean}, OFFSET STDV: {offset_stdv}");
+
+        // Set internal time to match offset
+        if self.pruned_offset_avg < 0.0 {
+            let offset_ms = (self.pruned_offset_avg * -1.0) as u32;
+            self.start_instant.subtract_millis(offset_ms);
+        } else {
+            let offset_ms = self.pruned_offset_avg as u32;
+            // start_instant should only be able to go BACK in time, otherwise `.elapsed()` might not work
+            self.start_instant
+                .subtract_millis(GAME_TIME_LIMIT - offset_ms);
+        }
+
+        self.pruned_offset_avg = 0.0;
+
+        // Clear out outstanding pings
+        self.sent_pings.clear();
     }
 
     // Connection
 
     pub fn connection_send(&mut self, io: &mut Io) -> bool {
         if self.ping_timer.ringing() {
-
             self.ping_timer.reset();
 
             self.send_ping(io);
@@ -221,13 +238,18 @@ impl TimeManager {
     }
 
     fn connection_process_stats(&mut self, time_offset_millis: i32, rtt_millis: u32) {
-        let rtt_millis_f32 = rtt_millis as f32;
+        let offset_avg = self.pruned_offset_avg;
+        let rtt_avg = self.pruned_rtt_avg;
+        info!(" ------- Average Offset: {offset_avg}, Average RTT: {rtt_avg}");
+        info!(" ------- Incoming Offset: {time_offset_millis}, Incoming RTT: {rtt_millis}");
 
-        // TODO: return to proper standard deviation measure
-        let new_jitter = ((rtt_millis_f32 - self.rtt_avg) / 2.0).abs();
+        //let rtt_millis_f32 = rtt_millis as f32;
 
-        self.rtt_stdv = (0.9 * self.rtt_stdv) + (0.1 * new_jitter);
-        self.rtt_avg = (0.9 * self.rtt_avg) + (0.1 * rtt_millis_f32);
+        // // TODO: return to proper standard deviation measure
+        // let new_jitter = ((rtt_millis_f32 - self.rtt_avg) / 2.0).abs();
+        //
+        // self.rtt_stdv = (0.9 * self.rtt_stdv) + (0.1 * new_jitter);
+        // self.rtt_avg = (0.9 * self.rtt_avg) + (0.1 * rtt_millis_f32);
     }
 
     // GameTime
@@ -243,24 +265,31 @@ impl TimeManager {
     // Tick
 
     pub(crate) fn recv_client_tick(&self) -> bool {
-        todo!()
+        false
     }
 
     pub(crate) fn client_sending_tick(&self) -> Tick {
-        todo!()
+        0
     }
 
     pub(crate) fn client_receiving_tick(&self) -> Tick {
-        todo!()
+        0
     }
 
     pub(crate) fn server_receivable_tick(&self) -> Tick {
-        todo!()
+        0
     }
 
     // Interpolation
 
     pub(crate) fn interpolation(&self) -> f32 {
-        todo!()
+        0.0
+    }
+
+    pub(crate) fn rtt(&self) -> f32 {
+        self.pruned_rtt_avg
+    }
+    pub(crate) fn jitter(&self) -> f32 {
+        self.rtt_stdv // TODO: is this correct? or needs to be rtt_stdv / 2 ?
     }
 }

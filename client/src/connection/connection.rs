@@ -1,13 +1,16 @@
-use std::{hash::Hash, net::SocketAddr, time::Duration};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant, OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick, WorldMutType};
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant,
+    OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick,
+    WorldMutType,
+};
 
 use crate::{
     connection::{
-        tick_buffer_sender::TickBufferSender, tick_queue::TickQueue, time_config::TimeConfig,
-        time_manager::TimeManager,
+        tick_buffer_sender::TickBufferSender, tick_queue::TickQueue, time_manager::TimeManager,
     },
     events::Events,
     protocol::entity_manager::EntityManager,
@@ -29,11 +32,10 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
-        tick_duration: &Duration,
         channel_kinds: &ChannelKinds,
         time_manager: TimeManager,
     ) -> Self {
-        let tick_buffer = TickBufferSender::new(channel_kinds, tick_duration);
+        let tick_buffer = TickBufferSender::new(channel_kinds);
 
         Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
@@ -166,7 +168,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
         self.base
             .message_manager
-            .collect_outgoing_messages(&now, &self.time_manager.rtt_avg);
+            .collect_outgoing_messages(&now, &self.time_manager.rtt());
 
         self.tick_buffer.collect_outgoing_messages(
             &self.time_manager.client_sending_tick(),

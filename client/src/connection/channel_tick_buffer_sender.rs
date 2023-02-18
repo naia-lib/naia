@@ -1,10 +1,10 @@
-use std::{collections::VecDeque, time::Duration};
+use std::collections::VecDeque;
 
 use log::{info, warn};
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter, ChannelWriter,
-    Instant, Message, MessageKinds, Serde, ShortMessageIndex, Tick, UnsignedVariableInteger,
+    Message, MessageKinds, Serde, ShortMessageIndex, Tick, UnsignedVariableInteger,
     MESSAGE_HISTORY_SIZE,
 };
 

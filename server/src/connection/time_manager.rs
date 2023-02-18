@@ -1,6 +1,9 @@
-use naia_shared::{BaseConnection, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, Serde, SerdeErr, StandardHeader, Tick, Timer};
 use std::time::Duration;
-use log::info;
+
+use naia_shared::{
+    BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, Serde,
+    SerdeErr, StandardHeader, Tick, Timer,
+};
 
 /// Manages the current tick for the host
 pub struct TimeManager {
@@ -42,10 +45,7 @@ impl TimeManager {
         self.game_time_now().time_since(previous_instant)
     }
 
-    pub(crate) fn process_ping(
-        &self,
-        reader: &mut BitReader,
-    ) -> Result<BitWriter, SerdeErr> {
+    pub(crate) fn process_ping(&self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {
         let server_received_time = self.game_time_now();
 
         // read incoming ping index

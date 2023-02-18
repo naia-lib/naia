@@ -34,12 +34,11 @@ pub struct HandshakeManager {
     pre_connection_digest: Option<Vec<u8>>,
     auth_message: Option<Box<dyn Message>>,
     time_config: TimeConfig,
-    tick_duration: Duration,
     time_manager: Option<TimeManager>,
 }
 
 impl HandshakeManager {
-    pub fn new(send_interval: Duration, time_config: TimeConfig, tick_duration: Duration) -> Self {
+    pub fn new(send_interval: Duration, time_config: TimeConfig) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
@@ -52,7 +51,6 @@ impl HandshakeManager {
             connection_state: HandshakeState::AwaitingChallengeResponse,
             auth_message: None,
             time_config,
-            tick_duration,
             time_manager: None,
         }
     }

@@ -1,10 +1,10 @@
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, UnsignedInteger};
 use naia_socket_shared::Instant;
 
-const GAME_TIME_LIMIT: u32 = 4194304; // 2^22
+pub const GAME_TIME_LIMIT: u32 = 4194304; // 2^22
 const GAME_TIME_LIMIT_U128: u128 = GAME_TIME_LIMIT as u128;
 const GAME_TIME_MAX: u32 = 4194303; // 2^22 - 1
-const TIME_OFFSET_MAX: i32 = 2097151;  // 2^21 - 1
+const TIME_OFFSET_MAX: i32 = 2097151; // 2^21 - 1
 const TIME_OFFSET_MIN: i32 = -2097152; // 2^21 * -1
 
 // GameInstant measures the # of milliseconds since the start of the Server
@@ -16,11 +16,10 @@ pub struct GameInstant {
 
 impl GameInstant {
     pub fn new(start_instant: &Instant) -> Self {
+        let millis = (start_instant.elapsed().as_millis() % GAME_TIME_LIMIT_U128) as u32;
 
         // start_instant should mark the initialization of the Server's TimeManager
-        Self {
-            millis: (start_instant.elapsed().as_millis() % GAME_TIME_LIMIT_U128) as u32,
-        }
+        Self { millis }
     }
 
     // This method assumes that `previous_instant` is known to be from the past
@@ -41,7 +40,6 @@ impl GameInstant {
 
     // Returns offset to target time, in milliseconds (possibly negative)
     pub fn offset_from(&self, other: &GameInstant) -> i32 {
-
         const MAX: i32 = TIME_OFFSET_MAX;
         const MIN: i32 = TIME_OFFSET_MIN;
         const ADJUST: i32 = GAME_TIME_LIMIT as i32;
@@ -75,7 +73,7 @@ impl GameInstant {
 
     pub(crate) fn add_millis(&self, millis: u32) -> Self {
         Self {
-            millis: (self.millis + millis) % GAME_TIME_LIMIT
+            millis: (self.millis + millis) % GAME_TIME_LIMIT,
         }
     }
 
@@ -103,9 +101,7 @@ impl Serde for GameInstant {
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let integer = UnsignedInteger::<22>::de(reader)?;
         let millis = integer.get() as u32;
-        Ok(Self {
-            millis
-        })
+        Ok(Self { millis })
     }
 }
 
@@ -116,9 +112,7 @@ pub struct GameDuration {
 
 impl GameDuration {
     fn from_millis(millis: u32) -> Self {
-        Self {
-            millis,
-        }
+        Self { millis }
     }
 
     pub fn as_millis(&self) -> u32 {
@@ -129,8 +123,8 @@ impl GameDuration {
 // Tests
 #[cfg(test)]
 mod wrapping_diff_tests {
-    use crate::game_time::{GAME_TIME_LIMIT, GAME_TIME_MAX};
     use super::GameInstant;
+    use crate::game_time::{GAME_TIME_LIMIT, GAME_TIME_MAX};
 
     #[test]
     fn simple() {
@@ -154,7 +148,9 @@ mod wrapping_diff_tests {
 
     #[test]
     fn max_wrap() {
-        let a = GameInstant { millis: GAME_TIME_MAX };
+        let a = GameInstant {
+            millis: GAME_TIME_MAX,
+        };
         let b = a.add_millis(2);
 
         let result = a.offset_from(&b);
@@ -174,7 +170,9 @@ mod wrapping_diff_tests {
 
     #[test]
     fn max_wrap_backwards() {
-        let a = GameInstant { millis: GAME_TIME_MAX };
+        let a = GameInstant {
+            millis: GAME_TIME_MAX,
+        };
         let b = a.add_millis(2);
 
         let result = b.offset_from(&a);
@@ -217,7 +215,9 @@ mod wrapping_diff_tests {
     #[test]
     fn medium_max_wrap() {
         let diff = (GAME_TIME_LIMIT / 2) - 1;
-        let a = GameInstant { millis: GAME_TIME_MAX };
+        let a = GameInstant {
+            millis: GAME_TIME_MAX,
+        };
         let b = a.add_millis(diff);
 
         let result = a.offset_from(&b);
@@ -228,7 +228,9 @@ mod wrapping_diff_tests {
     #[test]
     fn medium_max_wrap_backwards() {
         let diff = (GAME_TIME_LIMIT / 2);
-        let a = GameInstant { millis: GAME_TIME_MAX };
+        let a = GameInstant {
+            millis: GAME_TIME_MAX,
+        };
         let b = a.add_millis(diff);
 
         let result = b.offset_from(&a);
