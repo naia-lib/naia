@@ -306,22 +306,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
             }
 
             // send pings
-            if server_connection.time_manager.should_send_ping() {
-                let mut writer = BitWriter::new();
-
-                // write header
-                server_connection
-                    .base
-                    .write_outgoing_header(PacketType::Ping, &mut writer);
-
-                // write body
-                server_connection.time_manager.write_ping(&mut writer);
-
-                // send packet
-                if self.io.send_writer(&mut writer).is_err() {
-                    // TODO: pass this on and handle above
-                    warn!("Client Error: Cannot send ping packet to Server");
-                }
+            if server_connection.time_manager.connection_send(&mut self.io) {
                 server_connection.base.mark_sent();
             }
 
@@ -386,17 +371,17 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                 ping_index.ser(&mut writer);
 
                                 // send packet
-                                match self.io.send_writer(&mut writer) {
-                                    Ok(()) => {}
-                                    Err(_) => {
-                                        // TODO: pass this on and handle above
-                                        warn!("Client Error: Cannot send pong packet to Server");
-                                    }
+                                if self.io.send_writer(&mut writer).is_err() {
+                                    // TODO: pass this on and handle above
+                                    warn!("Client Error: Cannot send pong packet to Server");
                                 }
                                 server_connection.base.mark_sent();
                             }
                             PacketType::Pong => {
-                                server_connection.time_manager.process_pong(&mut reader);
+                                if server_connection.time_manager.process_pong(&mut reader).is_err() {
+                                    // TODO: pass this on and handle above
+                                    warn!("Client Error: Cannot process pong packet from Server");
+                                }
                             }
                             _ => {
                                 // no other packet types matter when connection

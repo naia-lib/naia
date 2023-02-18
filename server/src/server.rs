@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+
 use std::{
     collections::{hash_set::Iter, HashMap},
     hash::Hash,
@@ -1055,17 +1055,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             continue;
                         }
                         PacketType::Ping => {
-                            todo!();
-                            // let mut response = self
-                            //     .time_manager
-                            //     .process_ping(&mut user_connection.base, &mut reader)
-                            //     .unwrap();
-                            // // send packet
-                            // if self.io.send_writer(&address, &mut response).is_err() {
-                            //     // TODO: pass this on and handle above
-                            //     warn!("Server Error: Cannot send pong packet to {}", &address);
-                            // };
-                            // user_connection.base.mark_sent();
+                            let mut response = self
+                                .time_manager
+                                .process_ping(&mut reader)
+                                .unwrap();
+                            // send packet
+                            if self.io.send_writer(&address, &mut response).is_err() {
+                                // TODO: pass this on and handle above
+                                warn!("Server Error: Cannot send pong packet to {}", &address);
+                            };
+                            if let Some(user_connection) = self.user_connections.get_mut(&address) {
+                                user_connection.base.mark_sent();
+                            }
+                            continue;
                         }
                         PacketType::ClientConnectRequest => {
                             if self.user_connections.contains_key(&address) {
@@ -1083,6 +1085,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                     .expect("should be a user by now, from validation step");
                                 self.finalize_connection(&user_key);
                             }
+                            continue;
                         }
                         _ => {}
                     }

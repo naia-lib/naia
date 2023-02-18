@@ -92,7 +92,15 @@ impl HandshakeManager {
                 HandshakeState::TimeSync => {
                     // use time manager to send initial pings until client/server time is synced
                     // then, move state to AwaitingConnectResponse
-                    todo!()
+                    let Some(time_manager) = &mut self.time_manager else {
+                        panic!("Client Error: Time Manager should be initialized at this point in handshake");
+                    };
+
+                    if time_manager.handshake_finished() {
+                        self.connection_state = HandshakeState::AwaitingConnectResponse;
+                    } else {
+                        time_manager.handshake_send(io);
+                    }
                 }
                 HandshakeState::AwaitingConnectResponse => {
                     let mut writer = self.write_connect_request();
@@ -132,7 +140,13 @@ impl HandshakeManager {
             }
             PacketType::Pong => {
                 // Time Manager should record incoming Pongs in order to sync time
-                todo!();
+                if let Some(time_manager) = &mut self.time_manager {
+                    if time_manager.process_pong(reader).is_err() {
+                        // TODO: bubble this up
+                        warn!("Time Manager cannot process pong");
+                    }
+                }
+                return None;
             }
             PacketType::Data
             | PacketType::Heartbeat

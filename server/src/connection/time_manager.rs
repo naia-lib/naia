@@ -1,7 +1,6 @@
-use naia_shared::{
-    BaseConnection, BitReader, BitWriter, PacketType, PingIndex, Serde, SerdeErr, Tick, Timer,
-};
+use naia_shared::{BaseConnection, BitReader, BitWriter, PacketType, PingIndex, Serde, SerdeErr, StandardHeader, Tick, Timer};
 use std::time::Duration;
+use log::info;
 
 /// Manages the current tick for the host
 pub struct TimeManager {
@@ -39,23 +38,26 @@ impl TimeManager {
 
     pub(crate) fn process_ping(
         &self,
-        connection: &mut BaseConnection,
         reader: &mut BitReader,
     ) -> Result<BitWriter, SerdeErr> {
         // read incoming ping index
         let ping_index = PingIndex::de(reader)?;
 
-        // write pong payload
+        //info!("received Ping: {ping_index} from Client");
+
+        // start packet writer
         let mut writer = BitWriter::new();
 
-        // write header
-        connection.write_outgoing_header(PacketType::Pong, &mut writer);
+        // write pong payload
+        StandardHeader::new(PacketType::Pong, 0, 0, 0).ser(&mut writer);
 
         // write server tick
         self.current_tick.ser(&mut writer);
 
         // write index
         ping_index.ser(&mut writer);
+
+        //info!("sent Ping: {ping_index} to Client");
 
         Ok(writer)
     }
