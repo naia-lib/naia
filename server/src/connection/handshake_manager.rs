@@ -2,10 +2,10 @@ use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
 use ring::{hmac, rand};
 
-pub use naia_shared::{ MessageKinds,
+pub use naia_shared::{
     wrapping_diff, BaseConnection, BitReader, BitWriter, ConnectionConfig, FakeEntityConverter,
-    Instant, KeyGenerator, Message, PacketType, PropertyMutate, PropertyMutator, Replicate, Serde,
-    SerdeErr, StandardHeader, Timer, WorldMutType, WorldRefType,
+    Instant, KeyGenerator, Message, MessageKinds, PacketType, PropertyMutate, PropertyMutator,
+    Replicate, Serde, SerdeErr, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::cache_map::CacheMap;
@@ -110,10 +110,7 @@ impl HandshakeManager {
     }
 
     // Step ? of Handshake
-    pub fn recv_connect_request(
-        &mut self,
-        reader: &mut BitReader,
-    ) -> Result<BitWriter, SerdeErr> {
+    pub fn recv_connect_request(&mut self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {
         todo!()
     }
 

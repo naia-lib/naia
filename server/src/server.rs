@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::{
     collections::{hash_set::Iter, HashMap},
     hash::Hash,
@@ -5,7 +6,6 @@ use std::{
     panic,
     sync::{Arc, RwLock},
 };
-use std::collections::HashSet;
 
 use log::warn;
 
@@ -1070,18 +1070,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         PacketType::ClientConnectRequest => {
                             if self.user_connections.contains_key(&address) {
                                 // send connect response
-                                let mut writer =
-                                    self.handshake_manager.write_connect_response();
+                                let mut writer = self.handshake_manager.write_connect_response();
                                 if self.io.send_writer(&address, &mut writer).is_err() {
                                     // TODO: pass this on and handle above
                                     warn!("Server Error: Cannot send connect success response packet to {}", &address);
                                 };
                                 //
                             } else {
-                                let user_key = *self.validated_users.get(&address).expect("should be a user by now, from validation step");
+                                let user_key = *self
+                                    .validated_users
+                                    .get(&address)
+                                    .expect("should be a user by now, from validation step");
                                 self.finalize_connection(&user_key);
                             }
-
                         }
                         _ => {}
                     }

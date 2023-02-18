@@ -134,8 +134,13 @@ impl HandshakeManager {
                 // Time Manager should record incoming Pongs in order to sync time
                 todo!();
             }
-            PacketType::Data | PacketType::Heartbeat | PacketType::ClientChallengeRequest |
-            PacketType::ClientValidateRequest | PacketType::ClientConnectRequest | PacketType::Ping | PacketType::Disconnect => {
+            PacketType::Data
+            | PacketType::Heartbeat
+            | PacketType::ClientChallengeRequest
+            | PacketType::ClientValidateRequest
+            | PacketType::ClientConnectRequest
+            | PacketType::Ping
+            | PacketType::Disconnect => {
                 return None;
             }
         }
@@ -218,7 +223,10 @@ impl HandshakeManager {
 
         self.connection_state = HandshakeState::Connected;
 
-        let time_manager = self.time_manager.take().expect("How could there be no Time Manager here?");
+        let time_manager = self
+            .time_manager
+            .take()
+            .expect("How could there be no Time Manager here?");
 
         return Some(HandshakeResult::Connected(time_manager));
     }
