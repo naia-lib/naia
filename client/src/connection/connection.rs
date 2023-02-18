@@ -166,7 +166,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
         self.base
             .message_manager
-            .collect_outgoing_messages(&now, &self.time_manager.rtt);
+            .collect_outgoing_messages(&now, &self.time_manager.rtt_avg);
 
         self.tick_buffer.collect_outgoing_messages(
             &self.time_manager.client_sending_tick(),

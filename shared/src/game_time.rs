@@ -28,6 +28,10 @@ impl GameInstant {
         let previous_millis = previous_instant.millis;
         let current_millis = self.millis;
 
+        if previous_millis == current_millis {
+            return GameDuration { millis: 0 };
+        }
+
         if previous_millis < current_millis {
             return GameDuration::from_millis(current_millis - previous_millis);
         } else {
@@ -63,6 +67,10 @@ impl GameInstant {
                 panic!("integer overflow, this shouldn't happen");
             }
         }
+    }
+
+    pub fn as_millis(&self) -> u32 {
+        self.millis
     }
 
     pub(crate) fn add_millis(&self, millis: u32) -> Self {

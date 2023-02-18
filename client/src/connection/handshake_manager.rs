@@ -141,7 +141,7 @@ impl HandshakeManager {
             PacketType::Pong => {
                 // Time Manager should record incoming Pongs in order to sync time
                 if let Some(time_manager) = &mut self.time_manager {
-                    if time_manager.process_pong(reader).is_err() {
+                    if time_manager.read_pong(reader).is_err() {
                         // TODO: bubble this up
                         warn!("Time Manager cannot process pong");
                     }
@@ -218,7 +218,7 @@ impl HandshakeManager {
     // Step 4 of Handshake
     pub fn recv_validate_response(&mut self) {
         self.connection_state = HandshakeState::TimeSync;
-        self.time_manager = Some(TimeManager::new(&self.time_config, &self.tick_duration));
+        self.time_manager = Some(TimeManager::new(&self.time_config));
     }
 
     // Step 6 of Handshake

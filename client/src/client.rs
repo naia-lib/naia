@@ -228,7 +228,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.server_connection
             .as_ref()
             .expect("it is expected that you should verify whether the client is connected before calling this method")
-            .time_manager.rtt
+            .time_manager.rtt_avg
     }
 
     /// Gets the average Jitter measured in connection to the Server
@@ -236,7 +236,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.server_connection
             .as_ref()
             .expect("it is expected that you should verify whether the client is connected before calling this method")
-            .time_manager.jitter
+            .time_manager.rtt_stdv
     }
 
     // Ticks
@@ -364,7 +364,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                 server_connection.base.mark_sent();
                             }
                             PacketType::Pong => {
-                                if server_connection.time_manager.process_pong(&mut reader).is_err() {
+                                if server_connection.time_manager.read_pong(&mut reader).is_err() {
                                     // TODO: pass this on and handle above
                                     warn!("Client Error: Cannot process pong packet from Server");
                                 }
