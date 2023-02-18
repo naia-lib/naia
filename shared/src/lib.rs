@@ -80,7 +80,7 @@ pub use entity::{
     net_entity::NetEntity,
 };
 pub use messages::{
-    channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
+    channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings},
     channel_kinds::{ChannelKind, ChannelKinds},
     default_channels,
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},

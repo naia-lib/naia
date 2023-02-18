@@ -19,7 +19,6 @@ mod connection;
 mod error;
 mod events;
 mod protocol;
-mod tick;
 
 pub use client::Client;
 pub use client_config::ClientConfig;
@@ -31,7 +30,6 @@ pub use events::{
     UpdateComponentEvent,
 };
 pub use protocol::entity_ref::EntityRef;
-pub use tick::config::TickConfig;
 
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};

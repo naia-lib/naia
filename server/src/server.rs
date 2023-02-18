@@ -18,6 +18,7 @@ use naia_shared::{
     Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
+use crate::connection::time_manager::TimeManager;
 use crate::{
     connection::{
         connection::Connection,
@@ -31,7 +32,6 @@ use crate::{
         world_record::WorldRecord,
     },
 };
-use crate::connection::time_manager::TimeManager;
 
 use super::{
     error::NaiaServerError,

@@ -18,11 +18,8 @@ impl TickBufferSender {
         // initialize senders
         let mut channel_senders = HashMap::new();
         for (channel_index, channel) in channel_kinds.channels() {
-            if let ChannelMode::TickBuffered(settings) = &channel.mode {
-                channel_senders.insert(
-                    channel_index,
-                    ChannelTickBufferSender::new(tick_duration, settings),
-                );
+            if let ChannelMode::TickBuffered = &channel.mode {
+                channel_senders.insert(channel_index, ChannelTickBufferSender::new());
             }
         }
 

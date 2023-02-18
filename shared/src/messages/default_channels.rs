@@ -1,7 +1,4 @@
-use crate::{
-    Channel, ChannelDirection, ChannelMode, Protocol, ProtocolPlugin, ReliableSettings,
-    TickBufferSettings,
-};
+use crate::{Channel, ChannelDirection, ChannelMode, Protocol, ProtocolPlugin, ReliableSettings};
 
 #[derive(Channel)]
 pub struct UnorderedUnreliableChannel;
@@ -42,7 +39,7 @@ impl ProtocolPlugin for DefaultChannelsPlugin {
             )
             .add_channel::<TickBufferedChannel>(
                 ChannelDirection::ClientToServer,
-                ChannelMode::TickBuffered(TickBufferSettings::default()),
+                ChannelMode::TickBuffered,
             );
     }
 }

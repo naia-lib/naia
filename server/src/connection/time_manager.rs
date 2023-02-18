@@ -1,5 +1,7 @@
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, PacketType, PingIndex, Serde, SerdeErr, Tick, Timer,
+};
 use std::time::Duration;
-use naia_shared::{BaseConnection, BitReader, BitWriter, PacketType, PingIndex, Serde, SerdeErr, Tick, Timer};
 
 /// Manages the current tick for the host
 pub struct TimeManager {
@@ -40,9 +42,6 @@ impl TimeManager {
         connection: &mut BaseConnection,
         reader: &mut BitReader,
     ) -> Result<BitWriter, SerdeErr> {
-        // read client tick
-        let client_tick = Tick::de(reader)?;
-
         // read incoming ping index
         let ping_index = PingIndex::de(reader)?;
 

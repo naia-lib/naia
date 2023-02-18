@@ -4,30 +4,22 @@ use log::{info, warn};
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter, ChannelWriter,
-    Instant, Message, MessageKinds, Serde, ShortMessageIndex, Tick, TickBufferSettings,
-    UnsignedVariableInteger, MESSAGE_HISTORY_SIZE,
+    Instant, Message, MessageKinds, Serde, ShortMessageIndex, Tick, UnsignedVariableInteger,
+    MESSAGE_HISTORY_SIZE,
 };
 
 pub struct ChannelTickBufferSender {
     sending_messages: OutgoingMessages,
     outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageIndex, Box<dyn Message>)>)>,
-    resend_interval: Duration,
-    resend_interval_millis: u32,
-    last_sent: Instant,
+    last_sent: Tick,
 }
 
 impl ChannelTickBufferSender {
-    pub fn new(tick_duration: &Duration, settings: &TickBufferSettings) -> Self {
-        let resend_interval = Duration::from_millis(
-            ((settings.tick_resend_factor as u128) * tick_duration.as_millis()) as u64,
-        );
-
+    pub fn new() -> Self {
         Self {
             sending_messages: OutgoingMessages::new(),
             outgoing_messages: VecDeque::new(),
-            resend_interval,
-            resend_interval_millis: resend_interval.as_millis() as u32,
-            last_sent: Instant::now(),
+            last_sent: 0,
         }
     }
 
@@ -36,12 +28,12 @@ impl ChannelTickBufferSender {
         client_sending_tick: &Tick,
         server_receivable_tick: &Tick,
     ) {
-        if self.last_sent.elapsed() >= self.resend_interval {
+        if sequence_greater_than(*client_sending_tick, self.last_sent) {
             // Remove messages that would never be able to reach the Server
             self.sending_messages
                 .pop_back_until_excluding(server_receivable_tick);
 
-            self.last_sent = Instant::now();
+            self.last_sent = *client_sending_tick;
 
             // Loop through outstanding messages and add them to the outgoing list
             for (message_tick, message_map) in self.sending_messages.iter() {
@@ -61,9 +53,6 @@ impl ChannelTickBufferSender {
 
     pub fn send_message(&mut self, host_tick: &Tick, message: Box<dyn Message>) {
         self.sending_messages.push(*host_tick, message);
-
-        self.last_sent = Instant::now();
-        self.last_sent.subtract_millis(self.resend_interval_millis);
     }
 
     pub fn has_messages(&self) -> bool {

@@ -6,21 +6,21 @@ use std::{
 };
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    HostType, Instant, PacketType, Protocol, ProtocolIo, sequence_greater_than, Serde, SerdeErr,
+    sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
+    EntityConverter, HostType, Instant, PacketType, Protocol, ProtocolIo, Serde, SerdeErr,
     StandardHeader, Tick, WorldRefType,
 };
 
+use crate::connection::tick_buffer_receiver::TickBufferReceiver;
 use crate::{
     connection::{ping_config::PingConfig, time_manager::TimeManager},
-    Events,
     protocol::{
         entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler,
         world_record::WorldRecord,
     },
     user::UserKey,
+    Events,
 };
-use crate::connection::tick_buffer_receiver::TickBufferReceiver;
 
 use super::{io::Io, ping_manager::PingManager};
 

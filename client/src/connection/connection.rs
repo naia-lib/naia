@@ -7,14 +7,13 @@ use naia_shared::{
     OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, StandardHeader, Tick, WorldMutType,
 };
 
-use crate::connection::time_config::TimeConfig;
 use crate::{
-    connection::time_manager::TimeManager,
+    connection::{
+        tick_buffer_sender::TickBufferSender, tick_queue::TickQueue, time_config::TimeConfig,
+        time_manager::TimeManager,
+    },
     events::Events,
     protocol::entity_manager::EntityManager,
-    tick::{
-        tick_buffer_sender::TickBufferSender, tick_manager::TickManager, tick_queue::TickQueue,
-    },
 };
 
 use super::io::Io;
@@ -22,7 +21,7 @@ use super::io::Io;
 pub struct Connection<E: Copy + Eq + Hash> {
     pub base: BaseConnection,
     pub entity_manager: EntityManager<E>,
-    pub ping_manager: TimeManager,
+    pub time_manager: TimeManager,
     pub tick_buffer: TickBufferSender,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
@@ -33,16 +32,16 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
-        ping_config: &TimeConfig,
         tick_duration: &Duration,
         channel_kinds: &ChannelKinds,
+        time_manager: TimeManager,
     ) -> Self {
         let tick_buffer = TickBufferSender::new(channel_kinds, tick_duration);
 
         Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
             entity_manager: EntityManager::default(),
-            ping_manager: TimeManager::new(ping_config),
+            time_manager,
             tick_buffer,
             jitter_buffer: TickQueue::new(),
         }
@@ -95,14 +94,17 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             // read entity updates
             {
-                let updates_result = self.entity_manager.read_updates(
-                    &protocol.component_kinds,
-                    world,
-                    server_tick,
-                    &mut reader,
-                    incoming_events,
-                );
-                if updates_result.is_err() {
+                if self
+                    .entity_manager
+                    .read_updates(
+                        &protocol.component_kinds,
+                        world,
+                        server_tick,
+                        &mut reader,
+                        incoming_events,
+                    )
+                    .is_err()
+                {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity updates from packet!");
                     continue;
@@ -111,13 +113,16 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             // read entity actions
             {
-                let actions_result = self.entity_manager.read_actions(
-                    &protocol.component_kinds,
-                    world,
-                    &mut reader,
-                    incoming_events,
-                );
-                if actions_result.is_err() {
+                if self
+                    .entity_manager
+                    .read_actions(
+                        &protocol.component_kinds,
+                        world,
+                        &mut reader,
+                        incoming_events,
+                    )
+                    .is_err()
+                {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity actions from packet!");
                     continue;
@@ -141,17 +146,12 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     /// * messages
     /// * acks from reliable channels
     /// * acks from the `EntityActionReceiver` for all [`EntityAction`]s
-    pub fn send_outgoing_packets(
-        &mut self,
-        protocol: &Protocol,
-        io: &mut Io,
-        tick_manager: &TickManager,
-    ) {
-        self.collect_outgoing_messages(tick_manager);
+    pub fn send_outgoing_packets(&mut self, protocol: &Protocol, io: &mut Io) {
+        self.collect_outgoing_messages();
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, io, tick_manager) {
+            if self.send_outgoing_packet(protocol, io) {
                 any_sent = true;
             } else {
                 break;
@@ -162,26 +162,21 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         }
     }
 
-    fn collect_outgoing_messages(&mut self, tick_manager: &TickManager) {
+    fn collect_outgoing_messages(&mut self) {
         let now = Instant::now();
 
         self.base
             .message_manager
-            .collect_outgoing_messages(&now, &self.ping_manager.rtt);
+            .collect_outgoing_messages(&now, &self.time_manager.rtt);
 
         self.tick_buffer.collect_outgoing_messages(
-            &tick_manager.client_sending_tick(),
-            &tick_manager.server_receivable_tick(),
+            &self.time_manager.client_sending_tick(),
+            &self.time_manager.server_receivable_tick(),
         );
     }
 
     // Sends packet and returns whether or not a packet was sent
-    fn send_outgoing_packet(
-        &mut self,
-        protocol: &Protocol,
-        io: &mut Io,
-        tick_manager: &TickManager,
-    ) -> bool {
+    fn send_outgoing_packet(&mut self, protocol: &Protocol, io: &mut Io) -> bool {
         let tick_buffer_has_outgoing_messages = self.tick_buffer.has_outgoing_messages();
 
         if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
@@ -203,7 +198,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             let mut has_written = false;
 
             // write tick
-            let client_tick = tick_manager.write_client_tick(&mut bit_writer);
+            let client_tick: Tick = self.time_manager.write_client_tick(&mut bit_writer);
 
             // write tick buffered messages
             self.tick_buffer.write_messages(

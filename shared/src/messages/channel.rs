@@ -24,7 +24,7 @@ impl ChannelSettings {
             ChannelMode::UnorderedReliable(_) => true,
             ChannelMode::SequencedReliable(_) => true,
             ChannelMode::OrderedReliable(_) => true,
-            ChannelMode::TickBuffered(_) => false,
+            ChannelMode::TickBuffered => false,
         }
     }
 
@@ -62,19 +62,6 @@ impl ReliableSettings {
     }
 }
 
-#[derive(Clone)]
-pub struct TickBufferSettings {
-    pub tick_resend_factor: u8,
-}
-
-impl TickBufferSettings {
-    pub const fn default() -> Self {
-        Self {
-            tick_resend_factor: 1,
-        }
-    }
-}
-
 // ChannelMode
 #[derive(Clone)]
 pub enum ChannelMode {
@@ -83,12 +70,12 @@ pub enum ChannelMode {
     UnorderedReliable(ReliableSettings),
     SequencedReliable(ReliableSettings),
     OrderedReliable(ReliableSettings),
-    TickBuffered(TickBufferSettings),
+    TickBuffered,
 }
 
 impl ChannelMode {
     pub fn tick_buffered(&self) -> bool {
-        matches!(self, ChannelMode::TickBuffered(_))
+        matches!(self, ChannelMode::TickBuffered)
     }
 }
 

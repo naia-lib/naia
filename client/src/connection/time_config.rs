@@ -10,9 +10,6 @@ pub struct TimeConfig {
     pub rtt_initial_estimate: Duration,
     /// The initial estimate for Jitter
     pub jitter_initial_estimate: Duration,
-    /// Factor to smooth out estimate of RTT. A higher number will
-    /// smooth out measurements, but at the cost of responsiveness
-    pub rtt_smoothing_factor: f32,
 }
 
 impl TimeConfig {
@@ -22,13 +19,11 @@ impl TimeConfig {
         ping_interval: Duration,
         rtt_initial_estimate: Duration,
         jitter_initial_estimate: Duration,
-        rtt_smoothing_factor: f32,
     ) -> Self {
         TimeConfig {
             ping_interval,
             rtt_initial_estimate,
             jitter_initial_estimate,
-            rtt_smoothing_factor,
         }
     }
 }
@@ -39,7 +34,6 @@ impl Default for TimeConfig {
             ping_interval: Duration::from_secs(1),
             rtt_initial_estimate: Duration::from_millis(200),
             jitter_initial_estimate: Duration::from_millis(20),
-            rtt_smoothing_factor: 0.1,
         }
     }
 }

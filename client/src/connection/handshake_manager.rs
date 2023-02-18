@@ -1,6 +1,8 @@
 use log::warn;
 use std::time::Duration;
 
+use crate::connection::time_config::TimeConfig;
+use crate::connection::time_manager::TimeManager;
 use naia_shared::{BitReader, BitWriter, FakeEntityConverter, Message, MessageKinds, Serde};
 pub use naia_shared::{
     ConnectionConfig, PacketType, Replicate, StandardHeader, Timer, Timestamp as stamp_time,
@@ -11,15 +13,16 @@ use super::io::Io;
 
 pub type Timestamp = u64;
 
-#[derive(Debug, Eq, PartialEq)]
+#[derive(Eq, PartialEq)]
 pub enum HandshakeState {
     AwaitingChallengeResponse,
     AwaitingConnectResponse,
+    TimeSync,
     Connected,
 }
 
 pub enum HandshakeResult {
-    Connected,
+    Connected(TimeManager),
     Rejected,
 }
 
@@ -29,10 +32,13 @@ pub struct HandshakeManager {
     pre_connection_digest: Option<Vec<u8>>,
     pub connection_state: HandshakeState,
     auth_message: Option<Box<dyn Message>>,
+    time_config: TimeConfig,
+    tick_duration: Duration,
+    time_manager: Option<TimeManager>,
 }
 
 impl HandshakeManager {
-    pub fn new(send_interval: Duration) -> Self {
+    pub fn new(send_interval: Duration, time_config: TimeConfig, tick_duration: Duration) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
@@ -44,6 +50,9 @@ impl HandshakeManager {
             pre_connection_digest: None,
             connection_state: HandshakeState::AwaitingChallengeResponse,
             auth_message: None,
+            time_config,
+            tick_duration,
+            time_manager: None,
         }
     }
 
@@ -65,9 +74,6 @@ impl HandshakeManager {
             self.handshake_timer.reset();
 
             match self.connection_state {
-                HandshakeState::Connected => {
-                    // do nothing, not necessary
-                }
                 HandshakeState::AwaitingChallengeResponse => {
                     let mut writer = self.write_challenge_request();
                     match io.send_writer(&mut writer) {
@@ -88,6 +94,13 @@ impl HandshakeManager {
                         }
                     }
                 }
+                HandshakeState::TimeSync => {
+                    // use time manager to send initial pings until client/server time is synced
+                    todo!()
+                }
+                HandshakeState::Connected => {
+                    // do nothing, not necessary
+                }
             }
         }
     }
@@ -104,7 +117,10 @@ impl HandshakeManager {
                 self.recv_challenge_response(reader);
                 None
             }
-            PacketType::ServerConnectResponse => self.recv_connect_response(),
+            PacketType::ServerConnectResponse => {
+                self.recv_connect_response();
+                None
+            }
             PacketType::ServerRejectResponse => Some(HandshakeResult::Rejected),
             _ => None,
         }
@@ -166,15 +182,9 @@ impl HandshakeManager {
     }
 
     // Step 4 of Handshake
-    pub fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
-        let was_not_connected = self.connection_state != HandshakeState::Connected;
-
-        self.connection_state = HandshakeState::Connected;
-
-        match was_not_connected {
-            true => Some(HandshakeResult::Connected),
-            false => None,
-        }
+    pub fn recv_connect_response(&mut self) {
+        self.connection_state = HandshakeState::TimeSync;
+        self.time_manager = Some(TimeManager::new(&self.time_config, &self.tick_duration));
     }
 
     // Send 10 disconnect packets
