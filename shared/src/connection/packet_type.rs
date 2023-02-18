@@ -13,6 +13,10 @@ pub enum PacketType {
     ClientChallengeRequest,
     // The Server's response to the Client's initial handshake message
     ServerChallengeResponse,
+    // The handshake message validating the Client
+    ClientValidateRequest,
+    // The Server's response to the Client's validation request
+    ServerValidateResponse,
     // The final handshake message sent by the Client
     ClientConnectRequest,
     // The final handshake message sent by the Server, indicating that the
@@ -46,12 +50,14 @@ impl Serde for PacketType {
             PacketType::Heartbeat => 0,
             PacketType::ClientChallengeRequest => 1,
             PacketType::ServerChallengeResponse => 2,
-            PacketType::ClientConnectRequest => 3,
-            PacketType::ServerConnectResponse => 4,
-            PacketType::ServerRejectResponse => 5,
-            PacketType::Ping => 6,
-            PacketType::Pong => 7,
-            PacketType::Disconnect => 8,
+            PacketType::ClientValidateRequest => 3,
+            PacketType::ServerValidateResponse => 4,
+            PacketType::ClientConnectRequest => 5,
+            PacketType::ServerConnectResponse => 6,
+            PacketType::ServerRejectResponse => 7,
+            PacketType::Ping => 8,
+            PacketType::Pong => 9,
+            PacketType::Disconnect => 10,
         };
 
         UnsignedInteger::<4>::new(index).ser(writer);
@@ -67,12 +73,14 @@ impl Serde for PacketType {
             0 => Ok(PacketType::Heartbeat),
             1 => Ok(PacketType::ClientChallengeRequest),
             2 => Ok(PacketType::ServerChallengeResponse),
-            3 => Ok(PacketType::ClientConnectRequest),
-            4 => Ok(PacketType::ServerConnectResponse),
-            5 => Ok(PacketType::ServerRejectResponse),
-            6 => Ok(PacketType::Ping),
-            7 => Ok(PacketType::Pong),
-            8 => Ok(PacketType::Disconnect),
+            3 => Ok(PacketType::ClientValidateRequest),
+            4 => Ok(PacketType::ServerValidateResponse),
+            5 => Ok(PacketType::ClientConnectRequest),
+            6 => Ok(PacketType::ServerConnectResponse),
+            7 => Ok(PacketType::ServerRejectResponse),
+            8 => Ok(PacketType::Ping),
+            9 => Ok(PacketType::Pong),
+            10 => Ok(PacketType::Disconnect),
             _ => panic!("shouldn't happen, caught above"),
         }
     }

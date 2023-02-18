@@ -16,8 +16,9 @@ pub type Timestamp = u64;
 #[derive(Eq, PartialEq)]
 pub enum HandshakeState {
     AwaitingChallengeResponse,
-    AwaitingConnectResponse,
+    AwaitingValidateResponse,
     TimeSync,
+    AwaitingConnectResponse,
     Connected,
 }
 
@@ -27,10 +28,10 @@ pub enum HandshakeResult {
 }
 
 pub struct HandshakeManager {
+    pub connection_state: HandshakeState,
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Vec<u8>>,
-    pub connection_state: HandshakeState,
     auth_message: Option<Box<dyn Message>>,
     time_config: TimeConfig,
     tick_duration: Duration,
@@ -76,27 +77,29 @@ impl HandshakeManager {
             match self.connection_state {
                 HandshakeState::AwaitingChallengeResponse => {
                     let mut writer = self.write_challenge_request();
-                    match io.send_writer(&mut writer) {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // TODO: pass this on and handle above
-                            warn!("Client Error: Cannot send challenge request packet to Server");
-                        }
+                    if io.send_writer(&mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send challenge request packet to Server");
                     }
                 }
-                HandshakeState::AwaitingConnectResponse => {
-                    let mut writer = self.write_connect_request(message_kinds);
-                    match io.send_writer(&mut writer) {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // TODO: pass this on and handle above
-                            warn!("Client Error: Cannot send connect request packet to Server");
-                        }
+                HandshakeState::AwaitingValidateResponse => {
+                    let mut writer = self.write_validate_request(message_kinds);
+                    if io.send_writer(&mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send validate request packet to Server");
                     }
                 }
                 HandshakeState::TimeSync => {
                     // use time manager to send initial pings until client/server time is synced
+                    // then, move state to AwaitingConnectResponse
                     todo!()
+                }
+                HandshakeState::AwaitingConnectResponse => {
+                    let mut writer = self.write_connect_request();
+                    if io.send_writer(&mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send connect request packet to Server");
+                    }
                 }
                 HandshakeState::Connected => {
                     // do nothing, not necessary
@@ -115,14 +118,26 @@ impl HandshakeManager {
         match header.packet_type {
             PacketType::ServerChallengeResponse => {
                 self.recv_challenge_response(reader);
-                None
+                return None;
+            }
+            PacketType::ServerValidateResponse => {
+                self.recv_validate_response();
+                return None;
             }
             PacketType::ServerConnectResponse => {
-                self.recv_connect_response();
-                None
+                return self.recv_connect_response();
             }
-            PacketType::ServerRejectResponse => Some(HandshakeResult::Rejected),
-            _ => None,
+            PacketType::ServerRejectResponse => {
+                return Some(HandshakeResult::Rejected);
+            }
+            PacketType::Pong => {
+                // Time Manager should record incoming Pongs in order to sync time
+                todo!();
+            }
+            PacketType::Data | PacketType::Heartbeat | PacketType::ClientChallengeRequest |
+            PacketType::ClientValidateRequest | PacketType::ClientConnectRequest | PacketType::Ping | PacketType::Disconnect => {
+                return None;
+            }
         }
     }
 
@@ -153,16 +168,16 @@ impl HandshakeManager {
                 let digest_bytes = digest_bytes_result.unwrap();
                 self.pre_connection_digest = Some(digest_bytes);
 
-                self.connection_state = HandshakeState::AwaitingConnectResponse;
+                self.connection_state = HandshakeState::AwaitingValidateResponse;
             }
         }
     }
 
     // Step 3 of Handshake
-    pub fn write_connect_request(&self, message_kinds: &MessageKinds) -> BitWriter {
+    pub fn write_validate_request(&self, message_kinds: &MessageKinds) -> BitWriter {
         let mut writer = BitWriter::new();
 
-        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::ClientValidateRequest, 0, 0, 0).ser(&mut writer);
 
         // write timestamp & digest into payload
         self.write_signed_timestamp(&mut writer);
@@ -182,9 +197,30 @@ impl HandshakeManager {
     }
 
     // Step 4 of Handshake
-    pub fn recv_connect_response(&mut self) {
+    pub fn recv_validate_response(&mut self) {
         self.connection_state = HandshakeState::TimeSync;
         self.time_manager = Some(TimeManager::new(&self.time_config, &self.tick_duration));
+    }
+
+    // Step 6 of Handshake
+    pub fn write_connect_request(&self) -> BitWriter {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0).ser(&mut writer);
+
+        writer
+    }
+
+    // Step 7 of Handshake
+    fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
+        if self.connection_state == HandshakeState::Connected {
+            return None;
+        }
+
+        self.connection_state = HandshakeState::Connected;
+
+        let time_manager = self.time_manager.take().expect("How could there be no Time Manager here?");
+
+        return Some(HandshakeResult::Connected(time_manager));
     }
 
     // Send 10 disconnect packets

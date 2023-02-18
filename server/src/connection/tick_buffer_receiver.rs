@@ -16,7 +16,7 @@ impl TickBufferReceiver {
         // initialize receivers
         let mut channel_receivers = HashMap::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
-            if let ChannelMode::TickBuffered(_) = channel_settings.mode {
+            if let ChannelMode::TickBuffered = channel_settings.mode {
                 channel_receivers.insert(channel_kind, ChannelTickBufferReceiver::new());
             }
         }

@@ -5,6 +5,7 @@ use std::{
     panic,
     sync::{Arc, RwLock},
 };
+use std::collections::HashSet;
 
 use log::warn;
 
@@ -59,6 +60,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Users
     users: BigMap<UserKey, User>,
     user_connections: HashMap<SocketAddr, Connection<E>>,
+    validated_users: HashMap<SocketAddr, UserKey>,
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
@@ -101,6 +103,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Users
             users: BigMap::default(),
             user_connections: HashMap::new(),
+            validated_users: HashMap::new(),
             // Rooms
             rooms: BigMap::default(),
             // Entities
@@ -176,34 +179,51 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Accepts an incoming Client User, allowing them to establish a connection
     /// with the Server
     pub fn accept_connection(&mut self, user_key: &UserKey) {
-        if let Some(user) = self.users.get(user_key) {
-            let new_connection = Connection::new(
-                &self.server_config.connection,
-                &self.server_config.ping,
-                user.address,
-                user_key,
-                &self.protocol.channel_kinds,
-                &self.diff_handler,
+        let Some(user) = self.users.get(user_key) else {
+            warn!("unknown user is finalizing connection...");
+            return;
+        };
+        // send validate response
+        let mut writer = self.handshake_manager.write_validate_response();
+        if self.io.send_writer(&user.address, &mut writer).is_err() {
+            // TODO: pass this on and handle above
+            warn!(
+                "Server Error: Cannot send validate response packet to {}",
+                &user.address
             );
-            // send connectaccept response
-            let mut writer = self.handshake_manager.write_connect_response();
-            match self.io.send_writer(&user.address, &mut writer) {
-                Ok(()) => {}
-                Err(_) => {
-                    // TODO: pass this on and handle above
-                    warn!(
-                        "Server Error: Cannot send connect response packet to {}",
-                        &user.address
-                    );
-                }
-            }
-            //
-            self.user_connections.insert(user.address, new_connection);
-            if self.io.bandwidth_monitor_enabled() {
-                self.io.register_client(&user.address);
-            }
-            self.incoming_events.push_connection(user_key);
         }
+        //
+        self.validated_users.insert(user.address, *user_key);
+    }
+
+    fn finalize_connection(&mut self, user_key: &UserKey) {
+        let Some(user) = self.users.get(user_key) else {
+            warn!("unknown user is finalizing connection...");
+            return;
+        };
+        let new_connection = Connection::new(
+            &self.server_config.connection,
+            &self.server_config.ping,
+            user.address,
+            user_key,
+            &self.protocol.channel_kinds,
+            &self.diff_handler,
+        );
+        // send connectaccept response
+        let mut writer = self.handshake_manager.write_connect_response();
+        if self.io.send_writer(&user.address, &mut writer).is_err() {
+            // TODO: pass this on and handle above
+            warn!(
+                "Server Error: Cannot send connect response packet to {}",
+                &user.address
+            );
+        }
+        //
+        self.user_connections.insert(user.address, new_connection);
+        if self.io.bandwidth_monitor_enabled() {
+            self.io.register_client(&user.address);
+        }
+        self.incoming_events.push_connection(user_key);
     }
 
     /// Rejects an incoming Client User, terminating their attempt to establish
@@ -979,13 +999,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let mut reader = owned_reader.borrow();
 
                     // Read header
-                    let header_result = StandardHeader::de(&mut reader);
-                    if header_result.is_err() {
+                    let Ok(header) = StandardHeader::de(&mut reader) else {
                         // Received a malformed packet
                         // TODO: increase suspicion against packet sender
                         continue;
-                    }
-                    let header = header_result.unwrap();
+                    };
 
                     // Handshake stuff
                     match header.packet_type {
@@ -1003,23 +1021,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             }
                             continue;
                         }
-                        PacketType::ClientConnectRequest => {
-                            match self.handshake_manager.recv_connect_request(
+                        PacketType::ClientValidateRequest => {
+                            match self.handshake_manager.recv_validate_request(
                                 &self.protocol.message_kinds,
                                 &address,
                                 &mut reader,
                             ) {
                                 HandshakeResult::Success(auth_message_opt) => {
-                                    if self.user_connections.contains_key(&address) {
-                                        // send connectaccept response
+                                    if self.validated_users.contains_key(&address) {
+                                        // send validate response
                                         let mut writer =
-                                            self.handshake_manager.write_connect_response();
-                                        match self.io.send_writer(&address, &mut writer) {
-                                            Ok(()) => {}
-                                            Err(_) => {
-                                                // TODO: pass this on and handle above
-                                                warn!("Server Error: Cannot send connect success response packet to {}", &address);
-                                            }
+                                            self.handshake_manager.write_validate_response();
+                                        if self.io.send_writer(&address, &mut writer).is_err() {
+                                            // TODO: pass this on and handle above
+                                            warn!("Server Error: Cannot send validate success response packet to {}", &address);
                                         };
                                         //
                                     } else {
@@ -1038,6 +1053,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 }
                             }
                             continue;
+                        }
+                        PacketType::Ping => {
+                            todo!();
+                            // let mut response = self
+                            //     .time_manager
+                            //     .process_ping(&mut user_connection.base, &mut reader)
+                            //     .unwrap();
+                            // // send packet
+                            // if self.io.send_writer(&address, &mut response).is_err() {
+                            //     // TODO: pass this on and handle above
+                            //     warn!("Server Error: Cannot send pong packet to {}", &address);
+                            // };
+                            // user_connection.base.mark_sent();
+                        }
+                        PacketType::ClientConnectRequest => {
+                            if self.user_connections.contains_key(&address) {
+                                // send connect response
+                                let mut writer =
+                                    self.handshake_manager.write_connect_response();
+                                if self.io.send_writer(&address, &mut writer).is_err() {
+                                    // TODO: pass this on and handle above
+                                    warn!("Server Error: Cannot send connect success response packet to {}", &address);
+                                };
+                                //
+                            } else {
+                                let user_key = *self.validated_users.get(&address).expect("should be a user by now, from validation step");
+                                self.finalize_connection(&user_key);
+                            }
+
                         }
                         _ => {}
                     }
@@ -1100,18 +1144,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 };
                                 user_connection.recv_client_tick(client_tick);
                                 ////
-                            }
-                            PacketType::Ping => {
-                                let mut response = self
-                                    .time_manager
-                                    .process_ping(&mut user_connection.base, &mut reader)
-                                    .unwrap();
-                                // send packet
-                                if self.io.send_writer(&address, &mut response).is_err() {
-                                    // TODO: pass this on and handle above
-                                    warn!("Server Error: Cannot send pong packet to {}", &address);
-                                };
-                                user_connection.base.mark_sent();
                             }
                             PacketType::Pong => {
                                 // read client tick
