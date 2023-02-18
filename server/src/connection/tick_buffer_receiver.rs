@@ -5,7 +5,7 @@ use naia_shared::{
     SerdeErr, Tick,
 };
 
-use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
+use crate::connection::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
 
 pub struct TickBufferReceiver {
     channel_receivers: HashMap<ChannelKind, ChannelTickBufferReceiver>,

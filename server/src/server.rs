@@ -30,8 +30,8 @@ use crate::{
         global_diff_handler::GlobalDiffHandler,
         world_record::WorldRecord,
     },
-    tick::tick_manager::TickManager,
 };
+use crate::connection::time_manager::TimeManager;
 
 use super::{
     error::NaiaServerError,
@@ -69,7 +69,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Events
     incoming_events: Events,
     // Ticks
-    tick_manager: TickManager,
+    time_manager: TimeManager,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
@@ -80,7 +80,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         let socket = Socket::new(&protocol.socket);
 
-        let tick_manager = TickManager::new(protocol.tick_interval);
+        let time_manager = TimeManager::new(protocol.tick_interval);
 
         let io = Io::new(
             &server_config.connection.bandwidth_measure_duration,
@@ -111,7 +111,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Events
             incoming_events: Events::new(),
             // Ticks
-            tick_manager,
+            time_manager,
         }
     }
 
@@ -137,7 +137,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // tick event
         let mut did_tick = false;
-        if self.tick_manager.recv_server_tick() {
+        if self.time_manager.recv_server_tick() {
             did_tick = true;
         }
 
@@ -159,7 +159,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 let connection = self.user_connections.get_mut(user_address).unwrap();
 
                 connection.receive_tick_buffer_messages(
-                    &self.tick_manager.server_tick(),
+                    &self.time_manager.server_tick(),
                     &mut self.incoming_events,
                 );
             }
@@ -357,7 +357,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &mut self.io,
                 &world,
                 &self.world_record,
-                &self.tick_manager,
+                &self.time_manager,
                 &rtt,
             );
         }
@@ -522,7 +522,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Gets the current tick of the Server
     pub fn server_tick(&self) -> Tick {
-        return self.tick_manager.server_tick();
+        return self.time_manager.server_tick();
     }
 
     // Bandwidth monitoring
@@ -921,7 +921,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
                     // write server tick
-                    self.tick_manager.write_server_tick(&mut writer);
+                    self.time_manager.write_server_tick(&mut writer);
 
                     // send packet
                     match self.io.send_writer(user_address, &mut writer) {
@@ -954,7 +954,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .write_outgoing_header(PacketType::Ping, &mut writer);
 
                     // write server tick
-                    self.tick_manager.write_server_tick(&mut writer);
+                    self.time_manager.write_server_tick(&mut writer);
 
                     // write body
                     connection.ping_manager.write_ping(&mut writer);
@@ -1062,7 +1062,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 user_connection.recv_client_tick(client_tick);
                                 ////
 
-                                let server_tick = self.tick_manager.server_tick();
+                                let server_tick = self.time_manager.server_tick();
 
                                 // process data
                                 if user_connection
@@ -1102,7 +1102,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 ////
                             }
                             PacketType::Ping => {
-                                let mut response = user_connection
+                                let mut response = self
                                     .time_manager
                                     .process_ping(&mut user_connection.base, &mut reader)
                                     .unwrap();

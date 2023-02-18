@@ -1,14 +1,38 @@
-use naia_shared::{
-    BaseConnection, BitReader, BitWriter, PacketType, PingIndex, Serde, SerdeErr, Tick,
-};
+use std::time::Duration;
+use naia_shared::{BaseConnection, BitReader, BitWriter, PacketType, PingIndex, Serde, SerdeErr, Tick, Timer};
 
+/// Manages the current tick for the host
 pub struct TimeManager {
     current_tick: Tick,
+    timer: Timer,
 }
 
 impl TimeManager {
-    pub fn new() -> Self {
-        Self { current_tick: 0 }
+    /// Create a new TickManager with a given tick interval duration
+    pub fn new(tick_interval: Duration) -> Self {
+        Self {
+            current_tick: 0,
+            timer: Timer::new(tick_interval),
+        }
+    }
+
+    pub fn write_server_tick(&self, writer: &mut BitWriter) {
+        self.current_tick.ser(writer);
+    }
+
+    /// Whether or not we should emit a tick event
+    pub fn recv_server_tick(&mut self) -> bool {
+        if self.timer.ringing() {
+            self.timer.reset();
+            self.current_tick = self.current_tick.wrapping_add(1);
+            return true;
+        }
+        false
+    }
+
+    /// Gets the current tick on the host
+    pub fn server_tick(&self) -> Tick {
+        self.current_tick
     }
 
     pub(crate) fn process_ping(

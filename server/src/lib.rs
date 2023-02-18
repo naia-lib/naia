@@ -23,7 +23,6 @@ mod room;
 mod sequence_list;
 mod server;
 mod server_config;
-mod tick;
 mod user;
 mod user_scope;
 

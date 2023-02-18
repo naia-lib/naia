@@ -6,22 +6,21 @@ use std::{
 };
 
 use naia_shared::{
-    sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
-    EntityConverter, HostType, Instant, PacketType, Protocol, ProtocolIo, Serde, SerdeErr,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
+    HostType, Instant, PacketType, Protocol, ProtocolIo, sequence_greater_than, Serde, SerdeErr,
     StandardHeader, Tick, WorldRefType,
 };
 
-use crate::connection::ping_config::PingConfig;
-use crate::connection::time_manager::TimeManager;
 use crate::{
+    connection::{ping_config::PingConfig, time_manager::TimeManager},
+    Events,
     protocol::{
         entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler,
         world_record::WorldRecord,
     },
-    tick::{tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager},
     user::UserKey,
-    Events,
 };
+use crate::connection::tick_buffer_receiver::TickBufferReceiver;
 
 use super::{io::Io, ping_manager::PingManager};
 
@@ -32,7 +31,6 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     tick_buffer: TickBufferReceiver,
     pub last_received_tick: Tick,
     pub ping_manager: PingManager,
-    pub time_manager: TimeManager,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
@@ -55,7 +53,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             entity_manager: EntityManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
-            time_manager: TimeManager::new(),
             last_received_tick: 0,
         }
     }
@@ -131,14 +128,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         io: &mut Io,
         world: &W,
         world_record: &WorldRecord<E>,
-        tick_manager_opt: &TickManager,
+        time_manager: &TimeManager,
         rtt_millis: &f32,
     ) {
         self.collect_outgoing_messages(now, rtt_millis);
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, now, io, world, world_record, tick_manager_opt) {
+            if self.send_outgoing_packet(protocol, now, io, world, world_record, time_manager) {
                 any_sent = true;
             } else {
                 break;
@@ -169,7 +166,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         io: &mut Io,
         world: &W,
         world_record: &WorldRecord<E>,
-        tick_manager: &TickManager,
+        time_manager: &TimeManager,
     ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
             || self.entity_manager.has_outgoing_messages()
@@ -189,7 +186,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 .write_outgoing_header(PacketType::Data, &mut bit_writer);
 
             // write server tick
-            tick_manager.write_server_tick(&mut bit_writer);
+            time_manager.write_server_tick(&mut bit_writer);
 
             // info!("-- packet: {} --", next_packet_index);
             // if self.base.message_manager.has_outgoing_messages() {
