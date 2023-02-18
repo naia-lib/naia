@@ -158,7 +158,7 @@ impl<'world, 'state> Server<'world, 'state> {
         self.server.client_tick(user_key)
     }
 
-    pub fn server_tick(&self) -> Option<Tick> {
+    pub fn server_tick(&self) -> Tick {
         self.server.server_tick()
     }
 

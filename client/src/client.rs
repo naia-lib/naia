@@ -41,7 +41,7 @@ pub struct Client<E: Copy + Eq + Hash> {
     // Events
     incoming_events: Events<E>,
     // Ticks
-    tick_manager: Option<TickManager>,
+    tick_manager: TickManager,
 }
 
 impl<E: Copy + Eq + Hash> Client<E> {
@@ -52,9 +52,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
         let handshake_manager = HandshakeManager::new(client_config.send_handshake_interval);
 
-        let tick_manager = protocol
-            .tick_interval
-            .map(|duration| TickManager::new(duration, client_config.tick_config));
+        let tick_manager = TickManager::new(protocol.tick_interval, client_config.tick_config);
 
         let compression_config = protocol.compression.clone();
 
@@ -147,24 +145,15 @@ impl<E: Copy + Eq + Hash> Client<E> {
             let mut did_tick = false;
 
             // update current tick
-            if let Some(tick_manager) = &mut self.tick_manager {
-                if tick_manager.recv_client_tick() {
-                    did_tick = true;
+            if self.tick_manager.recv_client_tick() {
+                did_tick = true;
 
-                    // apply updates on tick boundary
-                    let receiving_tick = tick_manager.client_receiving_tick();
-                    connection.process_buffered_packets(
-                        &self.protocol,
-                        &mut world,
-                        receiving_tick,
-                        &mut self.incoming_events,
-                    );
-                }
-            } else {
+                // apply updates on tick boundary
+                let receiving_tick = self.tick_manager.client_receiving_tick();
                 connection.process_buffered_packets(
                     &self.protocol,
                     &mut world,
-                    0,
+                    receiving_tick,
                     &mut self.incoming_events,
                 );
             }
@@ -204,14 +193,11 @@ impl<E: Copy + Eq + Hash> Client<E> {
         let tick_buffered = channel_settings.tick_buffered();
 
         if tick_buffered {
-            if let Some(client_tick) = self.client_tick() {
-                if let Some(connection) = self.server_connection.as_mut() {
-                    connection
-                        .tick_buffer
-                        .as_mut()
-                        .expect("connection does not have a tick buffer")
-                        .send_message(&client_tick, channel_kind, message);
-                }
+            let client_tick = self.client_tick();
+            if let Some(connection) = self.server_connection.as_mut() {
+                connection
+                    .tick_buffer
+                    .send_message(&client_tick, channel_kind, message);
             }
         } else if let Some(connection) = &mut self.server_connection {
             connection
@@ -261,20 +247,15 @@ impl<E: Copy + Eq + Hash> Client<E> {
     // Ticks
 
     /// Gets the current tick of the Client
-    pub fn client_tick(&self) -> Option<Tick> {
-        return self
-            .tick_manager
-            .as_ref()
-            .map(|tick_manager| tick_manager.client_sending_tick());
+    pub fn client_tick(&self) -> Tick {
+        return self.tick_manager.client_sending_tick();
     }
 
     // Interpolation
 
     /// Gets the interpolation tween amount for the current frame
-    pub fn interpolation(&self) -> Option<f32> {
-        self.tick_manager
-            .as_ref()
-            .map(|tick_manager| tick_manager.interpolation())
+    pub fn interpolation(&self) -> f32 {
+        self.tick_manager.interpolation()
     }
 
     // Bandwidth monitoring
@@ -303,9 +284,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                     .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
                 // write client tick
-                if let Some(tick_manager) = self.tick_manager.as_mut() {
-                    tick_manager.write_client_tick(&mut writer);
-                }
+                self.tick_manager.write_client_tick(&mut writer);
 
                 // send packet
                 match self.io.send_writer(&mut writer) {
@@ -328,9 +307,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                     .write_outgoing_header(PacketType::Ping, &mut writer);
 
                 // write client tick
-                if let Some(tick_manager) = self.tick_manager.as_mut() {
-                    tick_manager.write_client_tick(&mut writer);
-                }
+                self.tick_manager.write_client_tick(&mut writer);
 
                 // write body
                 server_connection.ping_manager.write_ping(&mut writer);
@@ -374,15 +351,11 @@ impl<E: Copy + Eq + Hash> Client<E> {
                         server_connection.process_incoming_header(&header);
 
                         // Record incoming tick
-                        let mut incoming_tick = 0;
-
-                        if let Some(tick_manager) = self.tick_manager.as_mut() {
-                            incoming_tick = tick_manager.read_server_tick(
-                                &mut reader,
-                                server_connection.ping_manager.rtt,
-                                server_connection.ping_manager.jitter,
-                            );
-                        }
+                        let incoming_tick = self.tick_manager.read_server_tick(
+                            &mut reader,
+                            server_connection.ping_manager.rtt,
+                            server_connection.ping_manager.jitter,
+                        );
 
                         // Handle based on PacketType
                         match header.packet_type {
@@ -406,9 +379,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                     .write_outgoing_header(PacketType::Pong, &mut writer);
 
                                 // write server tick
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    tick_manager.write_client_tick(&mut writer);
-                                }
+                                self.tick_manager.write_client_tick(&mut writer);
 
                                 // write index
                                 ping_index.ser(&mut writer);
@@ -496,16 +467,10 @@ impl<E: Copy + Eq + Hash> Client<E> {
     fn disconnect_cleanup(&mut self) {
         // this is very similar to the newtype method .. can we coalesce and reduce
         // duplication?
-        let tick_manager = {
-            if let Some(duration) = self.protocol.tick_interval {
-                Some(TickManager::new(
-                    duration,
-                    self.client_config.tick_config.clone(),
-                ))
-            } else {
-                None
-            }
-        };
+        let tick_manager = TickManager::new(
+            self.protocol.tick_interval,
+            self.client_config.tick_config.clone(),
+        );
 
         self.io = Io::new(
             &self.client_config.connection.bandwidth_measure_duration,

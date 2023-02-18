@@ -100,7 +100,8 @@ impl App {
             if let Some(character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
-                .component::<Character>() {
+                .component::<Character>()
+            {
                 info!(
                     "update of Character - x: {}, y: {}, name: {} {}",
                     *character.x,

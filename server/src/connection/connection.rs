@@ -12,6 +12,7 @@ use naia_shared::{
 };
 
 use crate::connection::ping_config::PingConfig;
+use crate::connection::time_manager::TimeManager;
 use crate::{
     protocol::{
         entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler,
@@ -31,6 +32,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     tick_buffer: TickBufferReceiver,
     pub last_received_tick: Tick,
     pub ping_manager: PingManager,
+    pub time_manager: TimeManager,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
@@ -53,6 +55,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             entity_manager: EntityManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
+            time_manager: TimeManager::new(),
             last_received_tick: 0,
         }
     }
@@ -75,7 +78,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn process_incoming_data(
         &mut self,
         protocol: &Protocol,
-        server_and_client_tick_opt: Option<(Tick, Tick)>,
+        server_tick: Tick,
+        client_tick: Tick,
         reader: &mut BitReader,
         world_record: &WorldRecord<E>,
     ) -> Result<(), SerdeErr> {
@@ -84,15 +88,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read tick-buffered messages
         {
-            if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
-                self.tick_buffer.read_messages(
-                    protocol,
-                    &server_tick,
-                    &client_tick,
-                    &channel_reader,
-                    reader,
-                )?;
-            }
+            self.tick_buffer.read_messages(
+                protocol,
+                &server_tick,
+                &client_tick,
+                &channel_reader,
+                reader,
+            )?;
         }
 
         // read messages
@@ -129,7 +131,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         io: &mut Io,
         world: &W,
         world_record: &WorldRecord<E>,
-        tick_manager_opt: &Option<TickManager>,
+        tick_manager_opt: &TickManager,
         rtt_millis: &f32,
     ) {
         self.collect_outgoing_messages(now, rtt_millis);
@@ -167,7 +169,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         io: &mut Io,
         world: &W,
         world_record: &WorldRecord<E>,
-        tick_manager_opt: &Option<TickManager>,
+        tick_manager: &TickManager,
     ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
             || self.entity_manager.has_outgoing_messages()
@@ -187,9 +189,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 .write_outgoing_header(PacketType::Data, &mut bit_writer);
 
             // write server tick
-            if let Some(tick_manager) = tick_manager_opt {
-                tick_manager.write_server_tick(&mut bit_writer);
-            }
+            tick_manager.write_server_tick(&mut bit_writer);
 
             // info!("-- packet: {} --", next_packet_index);
             // if self.base.message_manager.has_outgoing_messages() {

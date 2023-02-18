@@ -7,9 +7,9 @@ use naia_shared::{
     OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, StandardHeader, Tick, WorldMutType,
 };
 
-use crate::connection::ping_config::PingConfig;
+use crate::connection::time_config::TimeConfig;
 use crate::{
-    connection::ping_manager::PingManager,
+    connection::time_manager::TimeManager,
     events::Events,
     protocol::entity_manager::EntityManager,
     tick::{
@@ -22,8 +22,8 @@ use super::io::Io;
 pub struct Connection<E: Copy + Eq + Hash> {
     pub base: BaseConnection,
     pub entity_manager: EntityManager<E>,
-    pub ping_manager: PingManager,
-    pub tick_buffer: Option<TickBufferSender>,
+    pub ping_manager: TimeManager,
+    pub tick_buffer: TickBufferSender,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
     jitter_buffer: TickQueue<OwnedBitReader>,
@@ -33,18 +33,16 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
-        ping_config: &PingConfig,
-        tick_duration: &Option<Duration>,
+        ping_config: &TimeConfig,
+        tick_duration: &Duration,
         channel_kinds: &ChannelKinds,
     ) -> Self {
-        let tick_buffer = tick_duration
-            .as_ref()
-            .map(|duration| TickBufferSender::new(channel_kinds, duration));
+        let tick_buffer = TickBufferSender::new(channel_kinds, tick_duration);
 
         Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
             entity_manager: EntityManager::default(),
-            ping_manager: PingManager::new(ping_config),
+            ping_manager: TimeManager::new(ping_config),
             tick_buffer,
             jitter_buffer: TickQueue::new(),
         }
@@ -53,12 +51,8 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     // Incoming data
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        match &mut self.tick_buffer {
-            Some(tick_buffer) => self
-                .base
-                .process_incoming_header(header, &mut Some(tick_buffer)),
-            None => self.base.process_incoming_header(header, &mut None),
-        }
+        self.base
+            .process_incoming_header(header, &mut Some(&mut self.tick_buffer));
     }
 
     pub fn buffer_data_packet(&mut self, incoming_tick: Tick, reader: &mut BitReader) {
@@ -151,13 +145,13 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         &mut self,
         protocol: &Protocol,
         io: &mut Io,
-        tick_manager_opt: &Option<TickManager>,
+        tick_manager: &TickManager,
     ) {
-        self.collect_outgoing_messages(tick_manager_opt);
+        self.collect_outgoing_messages(tick_manager);
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, io, tick_manager_opt) {
+            if self.send_outgoing_packet(protocol, io, tick_manager) {
                 any_sent = true;
             } else {
                 break;
@@ -168,22 +162,17 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         }
     }
 
-    fn collect_outgoing_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
+    fn collect_outgoing_messages(&mut self, tick_manager: &TickManager) {
         let now = Instant::now();
 
         self.base
             .message_manager
             .collect_outgoing_messages(&now, &self.ping_manager.rtt);
 
-        if let Some(tick_manager) = tick_manager_opt {
-            self.tick_buffer
-                .as_mut()
-                .expect("connection is not configured with a Tick Buffer")
-                .collect_outgoing_messages(
-                    &tick_manager.client_sending_tick(),
-                    &tick_manager.server_receivable_tick(),
-                );
-        }
+        self.tick_buffer.collect_outgoing_messages(
+            &tick_manager.client_sending_tick(),
+            &tick_manager.server_receivable_tick(),
+        );
     }
 
     // Sends packet and returns whether or not a packet was sent
@@ -191,12 +180,9 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         &mut self,
         protocol: &Protocol,
         io: &mut Io,
-        tick_manager_opt: &Option<TickManager>,
+        tick_manager: &TickManager,
     ) -> bool {
-        let tick_buffer_has_outgoing_messages = match &self.tick_buffer {
-            Some(tick_buffer) => tick_buffer.has_outgoing_messages(),
-            None => false,
-        };
+        let tick_buffer_has_outgoing_messages = self.tick_buffer.has_outgoing_messages();
 
         if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
             let next_packet_index = self.base.next_packet_index();
@@ -216,24 +202,22 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             let mut has_written = false;
 
-            if let Some(tick_manager) = tick_manager_opt {
-                // write tick
-                let client_tick = tick_manager.write_client_tick(&mut bit_writer);
+            // write tick
+            let client_tick = tick_manager.write_client_tick(&mut bit_writer);
 
-                // write tick buffered messages
-                self.tick_buffer.as_mut().unwrap().write_messages(
-                    &protocol,
-                    &channel_writer,
-                    &mut bit_writer,
-                    next_packet_index,
-                    &client_tick,
-                    &mut has_written,
-                );
+            // write tick buffered messages
+            self.tick_buffer.write_messages(
+                &protocol,
+                &channel_writer,
+                &mut bit_writer,
+                next_packet_index,
+                &client_tick,
+                &mut has_written,
+            );
 
-                // finish tick buffered messages
-                false.ser(&mut bit_writer);
-                bit_writer.release_bits(1);
-            }
+            // finish tick buffered messages
+            false.ser(&mut bit_writer);
+            bit_writer.release_bits(1);
 
             // write messages
             {

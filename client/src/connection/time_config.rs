@@ -2,7 +2,7 @@ use std::{default::Default, time::Duration};
 
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone, Debug)]
-pub struct PingConfig {
+pub struct TimeConfig {
     /// The duration to wait before sending a ping message to the remote host,
     /// in order to estimate RTT time
     pub ping_interval: Duration,
@@ -15,7 +15,7 @@ pub struct PingConfig {
     pub rtt_smoothing_factor: f32,
 }
 
-impl PingConfig {
+impl TimeConfig {
     /// Creates a new MonitorConfig, used to monitor statistics about the
     /// network
     pub fn new(
@@ -24,7 +24,7 @@ impl PingConfig {
         jitter_initial_estimate: Duration,
         rtt_smoothing_factor: f32,
     ) -> Self {
-        PingConfig {
+        TimeConfig {
             ping_interval,
             rtt_initial_estimate,
             jitter_initial_estimate,
@@ -33,7 +33,7 @@ impl PingConfig {
     }
 }
 
-impl Default for PingConfig {
+impl Default for TimeConfig {
     fn default() -> Self {
         Self {
             ping_interval: Duration::from_secs(1),

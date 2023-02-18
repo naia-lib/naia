@@ -1,6 +1,4 @@
-use std::collections::VecDeque;
-
-use naia_shared::{BitReader, BitWriter, Instant, PingIndex, PingStore, Serde, Timer};
+use naia_shared::{BitReader, BitWriter, PingIndex, PingStore, Serde, Timer};
 
 use crate::connection::ping_config::PingConfig;
 

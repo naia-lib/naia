@@ -1,12 +1,10 @@
-use std::collections::VecDeque;
+use naia_shared::{BitReader, BitWriter, PingIndex, PingStore, Serde, Timer};
 
-use naia_shared::{BitReader, BitWriter, Instant, PingIndex, PingStore, Serde, Timer};
-
-use crate::connection::ping_config::PingConfig;
+use crate::connection::time_config::TimeConfig;
 
 /// Is responsible for sending regular ping messages between client/servers
 /// and to estimate rtt/jitter
-pub struct PingManager {
+pub struct TimeManager {
     ping_timer: Timer,
     sent_pings: PingStore,
     pub rtt: f32,
@@ -15,12 +13,12 @@ pub struct PingManager {
     rtt_smoothing_factor_inv: f32,
 }
 
-impl PingManager {
-    pub fn new(ping_config: &PingConfig) -> Self {
+impl TimeManager {
+    pub fn new(ping_config: &TimeConfig) -> Self {
         let rtt_average = ping_config.rtt_initial_estimate.as_secs_f32() * 1000.0;
         let jitter_average = ping_config.jitter_initial_estimate.as_secs_f32() * 1000.0;
 
-        PingManager {
+        TimeManager {
             ping_timer: Timer::new(ping_config.ping_interval),
             sent_pings: PingStore::new(),
             rtt: rtt_average,

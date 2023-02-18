@@ -69,7 +69,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Events
     incoming_events: Events,
     // Ticks
-    tick_manager: Option<TickManager>,
+    tick_manager: TickManager,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
@@ -80,7 +80,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         let socket = Socket::new(&protocol.socket);
 
-        let tick_manager = { protocol.tick_interval.map(TickManager::new) };
+        let tick_manager = TickManager::new(protocol.tick_interval);
 
         let io = Io::new(
             &server_config.connection.bandwidth_measure_duration,
@@ -137,10 +137,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // tick event
         let mut did_tick = false;
-        if let Some(tick_manager) = &mut self.tick_manager {
-            if tick_manager.recv_server_tick() {
-                did_tick = true;
-            }
+        if self.tick_manager.recv_server_tick() {
+            did_tick = true;
         }
 
         // loop through all connections, receive Messages
@@ -161,7 +159,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 let connection = self.user_connections.get_mut(user_address).unwrap();
 
                 connection.receive_tick_buffer_messages(
-                    &self.tick_manager.as_ref().unwrap().server_tick(),
+                    &self.tick_manager.server_tick(),
                     &mut self.incoming_events,
                 );
             }
@@ -523,11 +521,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Gets the current tick of the Server
-    pub fn server_tick(&self) -> Option<Tick> {
-        return self
-            .tick_manager
-            .as_ref()
-            .map(|tick_manager| tick_manager.server_tick());
+    pub fn server_tick(&self) -> Tick {
+        return self.tick_manager.server_tick();
     }
 
     // Bandwidth monitoring
@@ -926,9 +921,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
                     // write server tick
-                    if let Some(tick_manager) = self.tick_manager.as_mut() {
-                        tick_manager.write_server_tick(&mut writer);
-                    }
+                    self.tick_manager.write_server_tick(&mut writer);
 
                     // send packet
                     match self.io.send_writer(user_address, &mut writer) {
@@ -960,10 +953,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .base
                         .write_outgoing_header(PacketType::Ping, &mut writer);
 
-                    // write client tick
-                    if let Some(tick_manager) = self.tick_manager.as_mut() {
-                        tick_manager.write_server_tick(&mut writer);
-                    }
+                    // write server tick
+                    self.tick_manager.write_server_tick(&mut writer);
 
                     // write body
                     connection.ping_manager.write_ping(&mut writer);
@@ -1062,41 +1053,33 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         match header.packet_type {
                             PacketType::Data => {
                                 // read client tick
-                                let server_and_client_tick_opt = {
-                                    if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                        ////
-                                        let client_tick_result =
-                                            tick_manager.read_client_tick(&mut reader);
-                                        if client_tick_result.is_err() {
-                                            // Received a malformed packet
-                                            // TODO: increase suspicion against packet sender
-                                            continue;
-                                        }
-                                        let client_tick = client_tick_result.unwrap();
-                                        user_connection.recv_client_tick(client_tick);
-                                        ////
-
-                                        let server_tick = tick_manager.server_tick();
-
-                                        Some((server_tick, client_tick))
-                                    } else {
-                                        None
-                                    }
+                                ////
+                                let Ok(client_tick) = Tick::de(&mut reader) else {
+                                    // Received a malformed packet
+                                    // TODO: increase suspicion against packet sender
+                                    continue;
                                 };
+                                user_connection.recv_client_tick(client_tick);
+                                ////
+
+                                let server_tick = self.tick_manager.server_tick();
 
                                 // process data
-                                let data_result = user_connection.process_incoming_data(
-                                    &self.protocol,
-                                    server_and_client_tick_opt,
-                                    &mut reader,
-                                    &self.world_record,
-                                );
-                                if data_result.is_err() {
+                                if user_connection
+                                    .process_incoming_data(
+                                        &self.protocol,
+                                        server_tick,
+                                        client_tick,
+                                        &mut reader,
+                                        &self.world_record,
+                                    )
+                                    .is_err()
+                                {
                                     // Received a malformed packet
                                     // TODO: increase suspicion against packet sender
                                     warn!("Error reading incoming packet!");
                                     continue;
-                                }
+                                };
                             }
                             PacketType::Disconnect => {
                                 if self
@@ -1109,83 +1092,37 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             }
                             PacketType::Heartbeat => {
                                 // read client tick, don't need to do anything else
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    ////
-                                    let client_tick_result =
-                                        tick_manager.read_client_tick(&mut reader);
-                                    if client_tick_result.is_err() {
-                                        // Received a malformed packet
-                                        // TODO: increase suspicion against packet sender
-                                        continue;
-                                    }
-                                    let client_tick = client_tick_result.unwrap();
-                                    user_connection.recv_client_tick(client_tick);
-                                    ////
-                                }
+                                ////
+                                let Ok(client_tick) = Tick::de(&mut reader) else {
+                                    // Received a malformed packet
+                                    // TODO: increase suspicion against packet sender
+                                    continue;
+                                };
+                                user_connection.recv_client_tick(client_tick);
+                                ////
                             }
                             PacketType::Ping => {
-                                // read client tick
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    ////
-                                    let client_tick_result =
-                                        tick_manager.read_client_tick(&mut reader);
-                                    if client_tick_result.is_err() {
-                                        // Received a malformed packet
-                                        // TODO: increase suspicion against packet sender
-                                        continue;
-                                    }
-                                    let client_tick = client_tick_result.unwrap();
-                                    user_connection.recv_client_tick(client_tick);
-                                    ////
-                                }
-
-                                // read incoming ping index
-                                let ping_index = u16::de(&mut reader).unwrap();
-
-                                // write pong payload
-                                let mut writer = BitWriter::new();
-
-                                // write header
-                                user_connection
-                                    .base
-                                    .write_outgoing_header(PacketType::Pong, &mut writer);
-
-                                // write server tick
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    tick_manager.write_server_tick(&mut writer);
-                                }
-
-                                // write index
-                                ping_index.ser(&mut writer);
-
+                                let mut response = user_connection
+                                    .time_manager
+                                    .process_ping(&mut user_connection.base, &mut reader)
+                                    .unwrap();
                                 // send packet
-                                match self.io.send_writer(&address, &mut writer) {
-                                    Ok(()) => {}
-                                    Err(_) => {
-                                        // TODO: pass this on and handle above
-                                        warn!(
-                                            "Server Error: Cannot send pong packet to {}",
-                                            &address
-                                        );
-                                    }
+                                if self.io.send_writer(&address, &mut response).is_err() {
+                                    // TODO: pass this on and handle above
+                                    warn!("Server Error: Cannot send pong packet to {}", &address);
                                 };
                                 user_connection.base.mark_sent();
                             }
                             PacketType::Pong => {
                                 // read client tick
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    ////
-                                    let client_tick_result =
-                                        tick_manager.read_client_tick(&mut reader);
-                                    if client_tick_result.is_err() {
-                                        // Received a malformed packet
-                                        // TODO: increase suspicion against packet sender
-                                        continue;
-                                    }
-                                    let client_tick = client_tick_result.unwrap();
-                                    user_connection.recv_client_tick(client_tick);
-                                    ////
-                                }
+                                ////
+                                let Ok(client_tick) = Tick::de(&mut reader) else {
+                                    // Received a malformed packet
+                                    // TODO: increase suspicion against packet sender
+                                    continue;
+                                };
+                                user_connection.recv_client_tick(client_tick);
+                                ////
 
                                 // TODO: send a message to client with a recommendation on how
                                 //  to speedup/slowdown simulation?

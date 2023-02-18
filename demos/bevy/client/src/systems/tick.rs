@@ -22,18 +22,17 @@ pub fn tick(
             .as_ref()
             .map(|owned_entity| owned_entity.predicted)
         {
-            if let Some(client_tick) = client.client_tick() {
-                if global.command_history.can_insert(&client_tick) {
-                    // Record command
-                    global.command_history.insert(client_tick, command.clone());
+            let client_tick = client.client_tick();
+            if global.command_history.can_insert(&client_tick) {
+                // Record command
+                global.command_history.insert(client_tick, command.clone());
 
-                    // Send command
-                    client.send_message::<PlayerCommandChannel, KeyCommand>(&command);
+                // Send command
+                client.send_message::<PlayerCommandChannel, KeyCommand>(&command);
 
-                    // Apply command
-                    if let Ok(mut position) = position_query.get_mut(predicted_entity) {
-                        shared_behavior::process_command(&command, &mut position);
-                    }
+                // Apply command
+                if let Ok(mut position) = position_query.get_mut(predicted_entity) {
+                    shared_behavior::process_command(&command, &mut position);
                 }
             }
         }

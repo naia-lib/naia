@@ -27,7 +27,7 @@ pub struct Protocol {
     /// Used to configure the underlying socket
     pub socket: SocketConfig,
     /// The duration between each tick
-    pub tick_interval: Option<Duration>,
+    pub tick_interval: Duration,
     /// Configuration used to control compression parameters
     pub compression: Option<CompressionConfig>,
     locked: bool,
@@ -40,7 +40,7 @@ impl Default for Protocol {
             message_kinds: MessageKinds::new(),
             component_kinds: ComponentKinds::new(),
             socket: SocketConfig::new(None, None),
-            tick_interval: None,
+            tick_interval: Duration::from_millis(50),
             compression: None,
             locked: false,
         }
@@ -72,7 +72,7 @@ impl Protocol {
 
     pub fn tick_interval(&mut self, duration: Duration) -> &mut Self {
         self.check_lock();
-        self.tick_interval = Some(duration);
+        self.tick_interval = duration;
         self
     }
 

@@ -9,8 +9,8 @@ use bevy_ecs::{
 use naia_client::{Client as NaiaClient, EntityRef, NaiaClientError};
 
 use naia_bevy_shared::{
-    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, WorldProxy,
-    WorldRef,
+    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
+    WorldProxy, WorldRef,
 };
 
 use super::state::State;
@@ -71,7 +71,7 @@ impl<'a> Client<'a> {
 
     // Interpolation
 
-    pub fn interpolation(&self) -> Option<f32> {
+    pub fn interpolation(&self) -> f32 {
         self.client.interpolation()
     }
 
@@ -92,7 +92,7 @@ impl<'a> Client<'a> {
 
     //// Ticks ////
 
-    pub fn client_tick(&self) -> Option<u16> {
+    pub fn client_tick(&self) -> Tick {
         self.client.client_tick()
     }
 }
