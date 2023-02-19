@@ -83,12 +83,9 @@ impl TimeManager {
             let offset_avg = self.pruned_offset_avg;
             let rtt_avg = self.pruned_rtt_avg - self.initial_rtt_avg;
             info!(" ------- Average Offset: {offset_avg}, Average RTT Offset: {rtt_avg}");
-
         } else {
             info!("Pruned out Sample");
         }
-
-
     }
 
     // GameTime

@@ -1,9 +1,9 @@
 use naia_shared::{
-    BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, PingStore,
-    Serde, SerdeErr, StandardHeader,
+    sequence_greater_than, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType,
+    PingIndex, PingStore, Serde, SerdeErr, StandardHeader, Tick, UnsignedVariableInteger,
 };
 
-use log::warn;
+use log::{info, warn};
 
 use crate::connection::io::Io;
 
@@ -12,13 +12,23 @@ use crate::connection::io::Io;
 pub struct BaseTimeManager {
     pub start_instant: Instant,
     sent_pings: PingStore,
+    most_recent_ping: PingIndex,
+    last_server_tick: Tick,
+    last_server_tick_instant: GameInstant,
+    server_tick_duration_avg: GameDuration,
 }
 
 impl BaseTimeManager {
     pub fn new() -> Self {
+        let now = Instant::now();
+        let last_server_tick_instant = GameInstant::new(&now);
         Self {
             sent_pings: PingStore::new(),
-            start_instant: Instant::now(),
+            start_instant: now,
+            most_recent_ping: 0,
+            last_server_tick: 0,
+            last_server_tick_instant,
+            server_tick_duration_avg: GameDuration::from_millis(0),
         }
     }
 
@@ -49,8 +59,10 @@ impl BaseTimeManager {
         // important to record receipt time ASAP
         let client_received_time = self.game_time_now();
 
+        // read ping index
         let ping_index = PingIndex::de(reader)?;
 
+        // get client sent time from ping index
         let Some(client_sent_time) = self.sent_pings.remove(ping_index) else {
             warn!("Unknown pong received");
 
@@ -58,8 +70,30 @@ impl BaseTimeManager {
             return Err(SerdeErr);
         };
 
+        // read server received time
         let server_received_time = GameInstant::de(reader)?;
+
+        // read server tick
+        let server_tick = Tick::de(reader)?;
+
+        // read average tick duration (ms)
+        let tick_duration_avg = UnsignedVariableInteger::<6>::de(reader)?.get() as u32;
+
+        // read time since last tick
+        let server_tick_instant = GameInstant::de(reader)?;
+
+        // read server sent time
         let server_sent_time = GameInstant::de(reader)?;
+
+        // if this is the most recent Ping, set some values
+        if sequence_greater_than(ping_index, self.most_recent_ping) {
+            self.most_recent_ping = ping_index;
+            self.last_server_tick = server_tick;
+            self.last_server_tick_instant = server_tick_instant;
+            self.server_tick_duration_avg = GameDuration::from_millis(tick_duration_avg);
+
+            info!("Most Recent Ping: {ping_index}, Server Tick: {server_tick}, Avg Duration: {tick_duration_avg}");
+        }
 
         // {
         //     let client_sent_time_ms = client_sent_time.as_millis();

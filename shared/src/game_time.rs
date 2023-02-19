@@ -111,7 +111,7 @@ pub struct GameDuration {
 }
 
 impl GameDuration {
-    fn from_millis(millis: u32) -> Self {
+    pub fn from_millis(millis: u32) -> Self {
         Self { millis }
     }
 
