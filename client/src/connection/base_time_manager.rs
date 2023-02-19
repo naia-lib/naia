@@ -220,4 +220,9 @@ impl BaseTimeManager {
             return self.skewed_server_tick_instant.sub_millis((tick_diff_duration * -1) as u32);
         }
     }
+
+    // Uses skewed values
+    pub(crate) fn tick_duration_avg(&self) -> GameDuration {
+        self.skewed_server_tick_duration_avg.clone()
+    }
 }

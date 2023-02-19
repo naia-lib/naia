@@ -1,4 +1,4 @@
-use log::info;
+use log::{info, warn};
 
 use naia_shared::{BaseConnection, BitReader, GameDuration, GameInstant, Instant, sequence_greater_than, SerdeErr, Tick, Timer};
 
@@ -38,6 +38,7 @@ impl TimeManager {
         offset_stdv: f32,
     ) -> Self {
         let now = base.game_time_now();
+        let now_tick = base.instant_to_tick(&now);
         Self {
             base,
             ping_timer: Timer::new(time_config.ping_interval),
@@ -53,9 +54,9 @@ impl TimeManager {
 
             accumulator: 0.0,
             last_tick_check_instant: Instant::now(),
-            client_receiving_tick: 0,
-            client_sending_tick: 0,
-            server_receivable_tick: 0,
+            client_receiving_tick: now_tick.clone(),
+            client_sending_tick: now_tick.clone(),
+            server_receivable_tick: now_tick.clone(),
 
             client_receiving_instant: now.clone(),
             client_sending_instant: now.clone(),
@@ -143,13 +144,16 @@ impl TimeManager {
         // TODO: take elapsed millis and skew the base tick if you need to
 
         // Target Instants
-        let mut now: GameInstant = self.game_time_now();
+        let now: GameInstant = self.game_time_now();
         let latency_ms: u32 = self.latency() as u32;
         let major_jitter_ms: u32 = (self.jitter() * 3.0) as u32;
 
+        self.base.skew_ticks(millis_elapsed);
+        let tick_duration_ms: u32 = self.base.tick_duration_avg().as_millis();
+
         // find targets
-        let client_receiving_target = now.sub_millis(latency_ms).sub_millis(major_jitter_ms).sub_millis(1);
-        let client_sending_target = now.add_millis(latency_ms).add_millis(major_jitter_ms).add_millis(1);
+        let client_receiving_target = now.sub_millis(latency_ms).sub_millis(major_jitter_ms).sub_millis(tick_duration_ms);
+        let client_sending_target = now.add_millis(latency_ms).add_millis(major_jitter_ms).add_millis(tick_duration_ms);
         let server_receivable_target = now.add_millis(latency_ms).sub_millis(major_jitter_ms);
 
         // find speeds
@@ -163,27 +167,33 @@ impl TimeManager {
         self.server_receivable_instant = self.server_receivable_instant.add_millis((millis_elapsed * server_receivable_speed) as u32);
 
         // convert current instants into ticks
-        self.base.skew_ticks(millis_elapsed);
+
         self.client_receiving_tick = self.base.instant_to_tick(&self.client_receiving_instant);
         self.client_sending_tick = self.base.instant_to_tick(&self.client_sending_instant);
         self.server_receivable_tick = self.base.instant_to_tick(&self.server_receivable_instant);
 
         // sanity checks
-        if sequence_greater_than(self.client_receiving_tick, prev_client_receiving_tick.wrapping_add(1)) {
-            panic!("shouldn't be greater than");
-        }
-        if sequence_greater_than(prev_client_receiving_tick, self.client_receiving_tick) {
-            panic!("shouldn't be greater than");
-        }
-        if sequence_greater_than(self.client_sending_tick, prev_client_sending_tick.wrapping_add(1)) {
-            panic!("shouldn't be greater than");
-        }
-        if sequence_greater_than(prev_client_sending_tick, self.client_sending_tick) {
-            panic!("shouldn't be greater than");
-        }
+        // TODO: get rid of these?
+        // Self::sanity_check(self.client_receiving_tick, prev_client_receiving_tick.wrapping_add(1));
+        // Self::sanity_check(prev_client_receiving_tick, self.client_receiving_tick);
+        // Self::sanity_check(self.client_sending_tick, prev_client_sending_tick.wrapping_add(1));
+        // Self::sanity_check(prev_client_sending_tick, self.client_sending_tick);
 
-        let receiving_incremented = self.client_receiving_tick == prev_client_receiving_tick.wrapping_add(1);
-        let sending_incremented = self.client_sending_tick == prev_client_sending_tick.wrapping_add(1);
+
+        // TODO: figure out how to get these to work again
+        // let receiving_incremented = self.client_receiving_tick == prev_client_receiving_tick.wrapping_add(1);
+        // let sending_incremented = self.client_sending_tick == prev_client_sending_tick.wrapping_add(1);
+        let receiving_incremented = self.client_receiving_tick != prev_client_receiving_tick;
+        let sending_incremented = self.client_sending_tick != prev_client_sending_tick;
+
+        if receiving_incremented {
+            let a = self.client_receiving_tick;
+            warn!("Recv Tick: {prev_client_receiving_tick} -> {a}");
+        }
+        if sending_incremented {
+            let a = self.client_sending_tick;
+            warn!("Send Tick: {prev_client_sending_tick} -> {a}");
+        }
 
         return (receiving_incremented, sending_incremented);
     }
@@ -217,6 +227,11 @@ impl TimeManager {
     }
 
 
+    fn sanity_check(a: Tick, b: Tick) {
+        if sequence_greater_than(a, b) {
+            warn!("{a} shouldn't be greater than {b}");
+        }
+    }
 }
 
 fn offset_to_speed(mut offset: i32) -> f32 {

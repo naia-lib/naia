@@ -108,7 +108,7 @@ impl Serde for GameInstant {
 }
 
 // GameDuration measures the duration between two GameInstants, in milliseconds
-#[derive(PartialEq, PartialOrd, Eq)]
+#[derive(PartialEq, PartialOrd, Eq, Clone)]
 pub struct GameDuration {
     millis: u32,
 }
