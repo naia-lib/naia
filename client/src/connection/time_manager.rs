@@ -113,14 +113,14 @@ impl TimeManager {
         if offset_diff.abs() < self.offset_stdv && rtt_diff.abs() < self.rtt_stdv {
             self.pruned_offset_avg = (0.9 * self.pruned_offset_avg) + (0.1 * offset_sample);
             self.pruned_rtt_avg = (0.9 * self.pruned_rtt_avg) + (0.1 * rtt_sample);
-            info!("Ping: New Pruned Averages");
-
-            info!(" ------- Incoming Offset: {offset_millis}, Incoming RTT: {rtt_millis}");
-            let offset_avg = self.pruned_offset_avg;
-            let rtt_avg = self.pruned_rtt_avg - self.initial_rtt_avg;
-            info!(" ------- Average Offset: {offset_avg}, Average RTT Offset: {rtt_avg}");
+            // info!("Ping: New Pruned Averages");
+            //
+            // info!(" ------- Incoming Offset: {offset_millis}, Incoming RTT: {rtt_millis}");
+            // let offset_avg = self.pruned_offset_avg;
+            // let rtt_avg = self.pruned_rtt_avg - self.initial_rtt_avg;
+            // info!(" ------- Average Offset: {offset_avg}, Average RTT Offset: {rtt_avg}");
         } else {
-            info!("Ping: Pruned out Sample");
+            // info!("Ping: Pruned out Sample");
         }
     }
 
@@ -159,8 +159,8 @@ impl TimeManager {
 
         // Target Instants
         let now: GameInstant = self.game_time_now();
-        let latency_ms: u32 = self.latency() as u32;
-        let major_jitter_ms: u32 = (self.jitter() * 3.0) as u32;
+        let latency_ms: u32 = self.latency().round() as u32;
+        let major_jitter_ms: u32 = (self.jitter() * 3.0).round() as u32;
 
         // skew ticks so that tick_duration_avg and instant_to_tick() is properly adjusted
         self.base.skew_ticks(millis_elapsed_f32);
@@ -191,6 +191,10 @@ impl TimeManager {
         //     info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
         // }
 
+        // TODO: get rid of these.
+        let prev_client_receiving_instant = self.client_receiving_instant.clone();
+        let prev_client_sending_instant = self.client_sending_instant.clone();
+
         // apply speeds
         self.client_receiving_instant = self.client_receiving_instant.add_millis((millis_elapsed_f32 * client_receiving_speed) as u32);
         self.client_sending_instant = self.client_sending_instant.add_millis((millis_elapsed_f32 * client_sending_speed) as u32);
@@ -203,8 +207,8 @@ impl TimeManager {
 
         // sanity checks
         // TODO: get rid of these?
-        // Self::sanity_check(self.client_receiving_tick, prev_client_receiving_tick.wrapping_add(1));
-        // Self::sanity_check(prev_client_receiving_tick, self.client_receiving_tick);
+        Self::sanity_check("RECV |", self.client_receiving_tick, prev_client_receiving_tick);
+        Self::sanity_check("SEND |", self.client_sending_tick, prev_client_sending_tick);
         // Self::sanity_check(self.client_sending_tick, prev_client_sending_tick.wrapping_add(1));
         // Self::sanity_check(prev_client_sending_tick, self.client_sending_tick);
 
@@ -217,11 +221,15 @@ impl TimeManager {
 
         // if receiving_incremented {
         //     let a = self.client_receiving_tick;
-        //     warn!("Recv Tick: {prev_client_receiving_tick} -> {a}");
+        //     let b = prev_client_receiving_instant.as_millis();
+        //     let c = self.client_receiving_instant.as_millis();
+        //     info!("RECV | Tick: {prev_client_receiving_tick} -> {a}, Instant: {b} -> {c}");
         // }
         // if sending_incremented {
         //     let a = self.client_sending_tick;
-        //     warn!("Send Tick: {prev_client_sending_tick} -> {a}");
+        //     let b = prev_client_sending_instant.as_millis();
+        //     let c = self.client_sending_instant.as_millis();
+        //     info!("SEND | Tick: {prev_client_sending_tick} -> {a}, Instant: {b} -> {c}");
         // }
 
         return (receiving_incremented, sending_incremented);
@@ -256,9 +264,12 @@ impl TimeManager {
     }
 
 
-    fn sanity_check(a: Tick, b: Tick) {
-        if sequence_greater_than(a, b) {
-            warn!("{a} shouldn't be greater than {b}");
+    fn sanity_check(pre: &str, a: Tick, b: Tick) {
+        if sequence_greater_than(a, b.wrapping_add(1)) {
+            warn!("{pre} Current Tick: {a} shouldn't be greater than Prev Tick + 1: {b}");
+        }
+        if sequence_greater_than(b, a) {
+            warn!("{pre} Current Tick: {a} shouldn't be less than than Prev Tick: {b}");
         }
     }
 }
