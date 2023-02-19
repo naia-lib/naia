@@ -9,7 +9,7 @@ cfg_if! {
 use naia_client::{
     default_channels::UnorderedReliableChannel, Client as NaiaClient, ClientConfig, ConnectEvent,
     DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent,
-    RemoveComponentEvent, SpawnEntityEvent, TickEvent, UpdateComponentEvent,
+    RemoveComponentEvent, SpawnEntityEvent, ClientTickEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World};
@@ -120,7 +120,7 @@ impl App {
                 (*character.fullname).last,
             );
         }
-        for _ in events.read::<TickEvent>() {
+        for _ in events.read::<ClientTickEvent>() {
             //info!("tick event");
         }
         for error in events.read::<ErrorEvent>() {

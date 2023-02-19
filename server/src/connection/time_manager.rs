@@ -9,7 +9,7 @@ use naia_shared::{
 pub struct TimeManager {
     start_instant: Instant,
     current_tick: Tick,
-    tick_timer: Timer,
+    tick_interval: GameDuration,
     last_tick_instant: GameInstant,
     tick_duration_avg: f32,
 }
@@ -22,7 +22,7 @@ impl TimeManager {
         Self {
             start_instant: now,
             current_tick: 0,
-            tick_timer: Timer::new(tick_interval),
+            tick_interval: GameDuration::from_millis(tick_interval.as_millis() as u32),
             last_tick_instant,
             tick_duration_avg: tick_interval.as_millis() as f32,
         }
@@ -30,19 +30,16 @@ impl TimeManager {
 
     /// Whether or not we should emit a tick event
     pub fn recv_server_tick(&mut self) -> bool {
-        if self.tick_timer.ringing() {
-            self.tick_timer.reset();
+        let now = self.game_time_now();
+        let time_since_tick = now.time_since(&self.last_tick_instant);
 
-            let now = self.game_time_now();
-            let new_duration = now.time_since(&self.last_tick_instant);
+        if time_since_tick >= self.tick_interval {
+            self.record_tick_duration(time_since_tick);
             self.last_tick_instant = now;
-            self.record_tick_duration(new_duration);
-
             self.current_tick = self.current_tick.wrapping_add(1);
-
             return true;
         }
-        false
+        return false;
     }
 
     /// Gets the current tick on the host

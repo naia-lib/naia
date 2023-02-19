@@ -138,8 +138,9 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 return std::mem::take(&mut self.incoming_events);
             }
 
-            // update current tick
-            if connection.time_manager.recv_client_tick() {
+            let (receiving_tick_happened, sending_tick_happened) = connection.time_manager.check_ticks();
+
+            if receiving_tick_happened {
                 // apply updates on tick boundary
                 connection.process_buffered_packets(
                     &self.protocol,
@@ -150,14 +151,18 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 // receive (process) messages
                 connection.receive_messages(&mut self.incoming_events);
 
+                self.incoming_events.push_server_tick();
+            }
+
+            if sending_tick_happened {
                 // send outgoing packets
                 connection.send_outgoing_packets(&self.protocol, &mut self.io);
 
-                self.incoming_events.push_tick();
+                self.incoming_events.push_client_tick();
             }
+
         } else {
-            self.handshake_manager
-                .send(&self.protocol.message_kinds, &mut self.io);
+            self.handshake_manager.send(&self.protocol.message_kinds, &mut self.io);
         }
 
         std::mem::take(&mut self.incoming_events)

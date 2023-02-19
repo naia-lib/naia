@@ -13,7 +13,7 @@ use naia_bevy_shared::WorldProxyMut;
 mod naia_events {
     pub use naia_client::{
         ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-        MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
+        MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent, ClientTickEvent,
         UpdateComponentEvent,
     };
 }
@@ -58,7 +58,7 @@ pub fn before_receive_events(world: &mut World) {
                     }
 
                     // Tick Event
-                    for _ in events.read::<naia_events::TickEvent>() {
+                    for _ in events.read::<naia_events::ClientTickEvent>() {
                         client_resource.ticker.set();
                     }
 

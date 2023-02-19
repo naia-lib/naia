@@ -1,11 +1,10 @@
-use naia_shared::{
-    sequence_greater_than, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType,
-    PingIndex, PingStore, Serde, SerdeErr, StandardHeader, Tick, UnsignedVariableInteger,
-};
+use naia_shared::{sequence_greater_than, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, PingStore, Serde, SerdeErr, StandardHeader, Tick, UnsignedVariableInteger, wrapping_diff};
 
 use log::{info, warn};
 
 use crate::connection::io::Io;
+
+const SKEW_DURATION_MS: f32 = 1000.0; // skews occur over 1 second in milliseconds
 
 /// Is responsible for sending regular ping messages between client/servers
 /// and to estimate rtt/jitter
@@ -13,22 +12,42 @@ pub struct BaseTimeManager {
     pub start_instant: Instant,
     sent_pings: PingStore,
     most_recent_ping: PingIndex,
-    last_server_tick: Tick,
-    last_server_tick_instant: GameInstant,
+    never_been_pinged: bool,
+
+    server_tick: Tick,
+    server_tick_instant: GameInstant,
     server_tick_duration_avg: GameDuration,
+
+    last_server_tick_instant: GameInstant,
+    last_server_tick_duration_avg: GameDuration,
+
+    skew_accumulator: f32,
+    skewed_server_tick_instant: GameInstant,
+    skewed_server_tick_duration_avg: GameDuration,
 }
 
 impl BaseTimeManager {
     pub fn new() -> Self {
         let now = Instant::now();
-        let last_server_tick_instant = GameInstant::new(&now);
+        let server_tick_instant = GameInstant::new(&now);
+        let last_server_tick_instant = server_tick_instant.clone();
+        let skewed_server_tick_instant = server_tick_instant.clone();
         Self {
-            sent_pings: PingStore::new(),
             start_instant: now,
+            sent_pings: PingStore::new(),
             most_recent_ping: 0,
-            last_server_tick: 0,
-            last_server_tick_instant,
+            never_been_pinged: true,
+
+            server_tick: 0,
+            server_tick_instant,
             server_tick_duration_avg: GameDuration::from_millis(0),
+
+            last_server_tick_instant,
+            last_server_tick_duration_avg: GameDuration::from_millis(0),
+
+            skew_accumulator: 0.0,
+            skewed_server_tick_instant,
+            skewed_server_tick_duration_avg: GameDuration::from_millis(0),
         }
     }
 
@@ -85,14 +104,38 @@ impl BaseTimeManager {
         // read server sent time
         let server_sent_time = GameInstant::de(reader)?;
 
-        // if this is the most recent Ping, set some values
-        if sequence_greater_than(ping_index, self.most_recent_ping) {
+        if self.never_been_pinged {
+            // if this is the first Ping, set some initial values
+            self.never_been_pinged = false;
             self.most_recent_ping = ping_index;
-            self.last_server_tick = server_tick;
-            self.last_server_tick_instant = server_tick_instant;
+
+            self.server_tick = server_tick;
+            self.server_tick_instant = server_tick_instant;
             self.server_tick_duration_avg = GameDuration::from_millis(tick_duration_avg);
 
-            info!("Most Recent Ping: {ping_index}, Server Tick: {server_tick}, Avg Duration: {tick_duration_avg}");
+            self.skew_accumulator = 0.0;
+            self.last_server_tick_instant = self.server_tick_instant.clone();
+            self.last_server_tick_duration_avg = self.server_tick_duration_avg.clone();
+            self.skewed_server_tick_instant = self.server_tick_instant.clone();
+            self.skewed_server_tick_duration_avg = self.server_tick_duration_avg.clone();
+
+        } else {
+            // if this is the most recent Ping, set some values
+            if sequence_greater_than(ping_index, self.most_recent_ping) {
+                self.most_recent_ping = ping_index;
+
+                // find the last instant while the skew is still active
+                self.last_server_tick_instant = self.tick_to_instant(server_tick);
+                self.last_server_tick_duration_avg = self.skewed_server_tick_duration_avg.clone();
+                // reset skew
+                self.skew_accumulator = 0.0;
+
+                self.server_tick = server_tick;
+                self.server_tick_instant = server_tick_instant;
+                self.server_tick_duration_avg = GameDuration::from_millis(tick_duration_avg);
+
+                info!("Most Recent Ping: {ping_index}, Server Tick: {server_tick}, Avg Duration: {tick_duration_avg}");
+            }
         }
 
         // {
@@ -137,5 +180,44 @@ impl BaseTimeManager {
 
     pub fn sent_pings_clear(&mut self) {
         self.sent_pings.clear();
+    }
+
+    pub(crate) fn skew_ticks(&mut self, delta_millis: f32) {
+        if self.skew_accumulator >= SKEW_DURATION_MS {
+            return;
+        }
+
+        self.skew_accumulator += delta_millis;
+        if self.skew_accumulator > SKEW_DURATION_MS {
+            self.skew_accumulator = SKEW_DURATION_MS;
+        }
+
+        let interpolation = self.skew_accumulator / SKEW_DURATION_MS;
+
+        let server_tick_skew_distance = self.server_tick_instant.time_since(&self.last_server_tick_instant).as_millis() as f32;
+        self.skewed_server_tick_instant = self.last_server_tick_instant.add_millis((server_tick_skew_distance * interpolation) as u32);
+
+        let server_tick_duration_skew_distance = (self.server_tick_duration_avg.as_millis() as f32) - (self.last_server_tick_duration_avg.as_millis() as f32);
+        self.skewed_server_tick_duration_avg = self.last_server_tick_duration_avg.add_millis((server_tick_duration_skew_distance * interpolation) as u32);
+    }
+
+    // Uses skewed values
+    pub(crate) fn instant_to_tick(&self, instant: &GameInstant) -> Tick {
+        let offset_ms = self.skewed_server_tick_instant.offset_from(instant);
+        let offset_ticks_f32 = (offset_ms as f32) / (self.skewed_server_tick_duration_avg.as_millis() as f32);
+        return self.server_tick.clone().wrapping_add_signed(offset_ticks_f32 as i16);
+    }
+
+    // Uses skewed values
+    fn tick_to_instant(&self, tick: Tick) -> GameInstant {
+        let tick_diff = wrapping_diff(self.server_tick, tick);
+        let tick_diff_duration = (tick_diff as i32) * (self.skewed_server_tick_duration_avg.as_millis() as i32);
+        if tick_diff_duration >= 0 {
+            // positive
+            return self.skewed_server_tick_instant.add_millis(tick_diff_duration as u32);
+        } else {
+            // negative
+            return self.skewed_server_tick_instant.sub_millis((tick_diff_duration * -1) as u32);
+        }
     }
 }

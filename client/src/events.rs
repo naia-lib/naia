@@ -8,7 +8,8 @@ pub struct Events<E: Copy> {
     connections: Vec<SocketAddr>,
     rejections: Vec<SocketAddr>,
     disconnections: Vec<SocketAddr>,
-    ticks: Vec<()>,
+    client_ticks: Vec<()>,
+    server_ticks: Vec<()>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>>,
     spawns: Vec<E>,
@@ -31,7 +32,8 @@ impl<E: Copy> Events<E> {
             connections: Vec::new(),
             rejections: Vec::new(),
             disconnections: Vec::new(),
-            ticks: Vec::new(),
+            client_ticks: Vec::new(),
+            server_ticks: Vec::new(),
             errors: Vec::new(),
             messages: HashMap::new(),
             spawns: Vec::new(),
@@ -105,8 +107,13 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_tick(&mut self) {
-        self.ticks.push(());
+    pub(crate) fn push_client_tick(&mut self) {
+        self.client_ticks.push(());
+        self.empty = false;
+    }
+
+    pub(crate) fn push_server_tick(&mut self) {
+        self.server_ticks.push(());
         self.empty = false;
     }
 
@@ -157,7 +164,8 @@ impl<E: Copy> Events<E> {
         self.connections.clear();
         self.rejections.clear();
         self.disconnections.clear();
-        self.ticks.clear();
+        self.client_ticks.clear();
+        self.server_ticks.clear();
         self.errors.clear();
         self.messages.clear();
         self.spawns.clear();
@@ -209,13 +217,24 @@ impl<E: Copy> Event<E> for DisconnectEvent {
     }
 }
 
-// Tick Event
-pub struct TickEvent;
-impl<E: Copy> Event<E> for TickEvent {
+// Client Tick Event
+pub struct ClientTickEvent;
+impl<E: Copy> Event<E> for ClientTickEvent {
     type Iter = IntoIter<()>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        let list = std::mem::take(&mut events.ticks);
+        let list = std::mem::take(&mut events.client_ticks);
+        return IntoIterator::into_iter(list);
+    }
+}
+
+// Server Tick Event
+pub struct ServerTickEvent;
+impl<E: Copy> Event<E> for ServerTickEvent {
+    type Iter = IntoIter<()>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.server_ticks);
         return IntoIterator::into_iter(list);
     }
 }

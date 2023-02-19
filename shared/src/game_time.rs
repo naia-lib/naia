@@ -39,6 +39,8 @@ impl GameInstant {
     }
 
     // Returns offset to target time, in milliseconds (possibly negative)
+    // 10.offset_from(12) = 2
+    // 12.offset_from(10) = -2
     pub fn offset_from(&self, other: &GameInstant) -> i32 {
         const MAX: i32 = TIME_OFFSET_MAX;
         const MIN: i32 = TIME_OFFSET_MIN;
@@ -71,13 +73,13 @@ impl GameInstant {
         self.millis
     }
 
-    pub(crate) fn add_millis(&self, millis: u32) -> Self {
+    pub fn add_millis(&self, millis: u32) -> Self {
         Self {
             millis: (self.millis + millis) % GAME_TIME_LIMIT,
         }
     }
 
-    pub(crate) fn sub_millis(&self, millis: u32) -> Self {
+    pub fn sub_millis(&self, millis: u32) -> Self {
         if self.millis >= millis {
             Self {
                 millis: self.millis - millis,
@@ -106,6 +108,7 @@ impl Serde for GameInstant {
 }
 
 // GameDuration measures the duration between two GameInstants, in milliseconds
+#[derive(PartialEq, PartialOrd, Eq)]
 pub struct GameDuration {
     millis: u32,
 }
@@ -117,6 +120,10 @@ impl GameDuration {
 
     pub fn as_millis(&self) -> u32 {
         return self.millis;
+    }
+
+    pub fn add_millis(&self, millis: u32) -> Self {
+        Self { millis: self.millis + millis }
     }
 }
 

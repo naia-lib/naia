@@ -8,7 +8,7 @@ use macroquad::prelude::{
 use naia_client::{
     Client as NaiaClient, ClientConfig, CommandHistory, ConnectEvent, DespawnEntityEvent,
     DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent,
-    SpawnEntityEvent, TickEvent, UpdateComponentEvent,
+    SpawnEntityEvent, ClientTickEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
@@ -149,7 +149,7 @@ impl App {
                 }
             }
         }
-        for _ in events.read::<TickEvent>() {
+        for _ in events.read::<ClientTickEvent>() {
             if let Some(owned_entity) = &self.owned_entity {
                 if let Some(command) = self.queued_command.take() {
                     if let Some(client_tick) = self.client.client_tick() {

@@ -26,7 +26,7 @@ pub use command_history::CommandHistory;
 pub use error::NaiaClientError;
 pub use events::{
     ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events, InsertComponentEvent,
-    MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
+    MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent, ClientTickEvent,
     UpdateComponentEvent,
 };
 pub use protocol::entity_ref::EntityRef;

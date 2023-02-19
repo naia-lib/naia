@@ -233,12 +233,9 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             }
 
             // send packet
-            match io.send_writer(&mut bit_writer) {
-                Ok(()) => {}
-                Err(_) => {
-                    // TODO: pass this on and handle above
-                    warn!("Client Error: Cannot send data packet to Server");
-                }
+            if io.send_writer(&mut bit_writer).is_err() {
+                // TODO: pass this on and handle above
+                warn!("Client Error: Cannot send data packet to Server");
             }
 
             return true;
