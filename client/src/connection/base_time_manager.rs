@@ -18,14 +18,14 @@ pub struct BaseTimeManager {
 
     server_tick: Tick,
     server_tick_instant: GameInstant,
-    server_tick_duration_avg: GameDuration,
+    server_tick_duration_avg: f32,
 
     last_server_tick_instant: GameInstant,
-    last_server_tick_duration_avg: GameDuration,
+    last_server_tick_duration_avg: f32,
 
     skew_accumulator: f32,
     skewed_server_tick_instant: GameInstant,
-    skewed_server_tick_duration_avg: GameDuration,
+    skewed_server_tick_duration_avg: f32,
 }
 
 impl BaseTimeManager {
@@ -42,14 +42,14 @@ impl BaseTimeManager {
 
             server_tick: 0,
             server_tick_instant,
-            server_tick_duration_avg: GameDuration::from_millis(0),
+            server_tick_duration_avg: 0.0,
 
             last_server_tick_instant,
-            last_server_tick_duration_avg: GameDuration::from_millis(0),
+            last_server_tick_duration_avg: 0.0,
 
             skew_accumulator: 0.0,
             skewed_server_tick_instant,
-            skewed_server_tick_duration_avg: GameDuration::from_millis(0),
+            skewed_server_tick_duration_avg: 0.0,
         }
     }
 
@@ -97,8 +97,10 @@ impl BaseTimeManager {
         // read server tick
         let server_tick = Tick::de(reader)?;
 
-        // read average tick duration (ms)
-        let tick_duration_avg = UnsignedVariableInteger::<6>::de(reader)?.get() as u32;
+        // read average tick duration
+        // convert from microseconds to milliseconds
+        let tick_duration_avg = (UnsignedVariableInteger::<9>::de(reader)?.get() as f32) / 1000.0;
+        // info!("READ: Tick Duration Average: {tick_duration_avg}");
 
         // read time since last tick
         let server_tick_instant = GameInstant::de(reader)?;
@@ -113,7 +115,7 @@ impl BaseTimeManager {
 
             self.server_tick = server_tick;
             self.server_tick_instant = server_tick_instant;
-            self.server_tick_duration_avg = GameDuration::from_millis(tick_duration_avg);
+            self.server_tick_duration_avg = tick_duration_avg;
 
             self.skew_accumulator = 0.0;
             self.last_server_tick_instant = self.server_tick_instant.clone();
@@ -132,7 +134,7 @@ impl BaseTimeManager {
                     // Previous Values
                     let last_server_tick = self.server_tick;
                     let last_server_tick_instant = self.server_tick_instant.as_millis();
-                    let server_tick_duration_avg = self.server_tick_duration_avg.as_millis();
+                    let server_tick_duration_avg = self.server_tick_duration_avg;
                     info!("Previous Values     | Server Tick: {last_server_tick}, at Instant: {last_server_tick_instant}, Avg Duration: {server_tick_duration_avg}");
                 }
 
@@ -144,13 +146,13 @@ impl BaseTimeManager {
 
                 self.server_tick = server_tick;
                 self.server_tick_instant = server_tick_instant;
-                self.server_tick_duration_avg = GameDuration::from_millis(tick_duration_avg);
+                self.server_tick_duration_avg = tick_duration_avg;
 
                 {
                     // Current Last Values
                     let server_tick = self.server_tick;
                     let server_tick_instant = self.last_server_tick_instant.as_millis();
-                    let server_tick_duration_avg = self.last_server_tick_duration_avg.as_millis();
+                    let server_tick_duration_avg = self.last_server_tick_duration_avg;
                     info!("Current Last Values | Server Tick: {server_tick}, at Instant: {server_tick_instant}, Avg Duration: {server_tick_duration_avg}");
                 }
 
@@ -158,10 +160,10 @@ impl BaseTimeManager {
                     // Current Skew Values
                     let server_tick = self.server_tick;
                     let skewed_server_tick_instant = self.skewed_server_tick_instant.as_millis();
-                    let skewed_server_tick_duration_avg = self.skewed_server_tick_duration_avg.as_millis();
+                    let skewed_server_tick_duration_avg = self.skewed_server_tick_duration_avg;
                     info!("Current Skew Values | Server Tick: {server_tick}, at Instant: {skewed_server_tick_instant}, Avg Duration: {skewed_server_tick_duration_avg}");
                     let instant_diff = self.last_server_tick_instant.offset_from(&self.server_tick_instant) as f32;
-                    let tick_avg_diff = (self.server_tick_duration_avg.as_millis() as f32) - (self.last_server_tick_duration_avg.as_millis() as f32);
+                    let tick_avg_diff = self.server_tick_duration_avg - self.last_server_tick_duration_avg;
                     info!("                   Skew Distance |          Instant: {instant_diff}, Avg Duration: {tick_avg_diff}")
                 }
 
@@ -169,7 +171,7 @@ impl BaseTimeManager {
                     // Current Now Values
                     let server_tick = self.server_tick;
                     let server_tick_instant = self.server_tick_instant.as_millis();
-                    let server_tick_duration_avg = self.server_tick_duration_avg.as_millis();
+                    let server_tick_duration_avg = self.server_tick_duration_avg;
                     info!("Current Now Values  | Server Tick: {server_tick}, at Instant: {server_tick_instant}, Avg Duration: {server_tick_duration_avg}");
                 }
 
@@ -246,26 +248,19 @@ impl BaseTimeManager {
         }
 
         // Skew Tick Duration
-        let server_tick_duration_skew_distance = (self.server_tick_duration_avg.as_millis() as f32) - (self.last_server_tick_duration_avg.as_millis() as f32);
-        if server_tick_duration_skew_distance >= 0.0 {
-            // positive
-            let dis_u32 = (server_tick_duration_skew_distance * interpolation).round() as u32;
-            self.skewed_server_tick_duration_avg = self.last_server_tick_duration_avg.add_millis(dis_u32);
-        } else {
-            // negative
-            let dis_u32 = (server_tick_duration_skew_distance * interpolation * -1.0).round() as u32;
-            self.skewed_server_tick_duration_avg = self.last_server_tick_duration_avg.sub_millis(dis_u32);
-        }
+        let server_tick_duration_skew_distance = self.server_tick_duration_avg - self.last_server_tick_duration_avg;
+        let dis = server_tick_duration_skew_distance * interpolation;
+        self.skewed_server_tick_duration_avg = self.last_server_tick_duration_avg + dis;
 
         let check_interp = (interpolation * 1000.0).round() as u16;
         if check_interp % 100 == 0 {
             let skewed_server_tick_instant = self.skewed_server_tick_instant.as_millis();
-            let skewed_server_tick_duration_avg = self.skewed_server_tick_duration_avg.as_millis();
+            let skewed_server_tick_duration_avg = self.skewed_server_tick_duration_avg;
             info!("skew interpolation: {interpolation}");
             info!("          values | instant: {skewed_server_tick_instant}, duration avg: {skewed_server_tick_duration_avg}");
             if interpolation == 1.0 {
                 let server_instant = self.server_tick_instant.as_millis();
-                let server_tick_duration_avg = self.server_tick_duration_avg.as_millis() as f32;
+                let server_tick_duration_avg = self.server_tick_duration_avg;
 
                 info!("         targets | instant: {server_instant}, duration avg: {server_tick_duration_avg}");
             }
@@ -275,25 +270,27 @@ impl BaseTimeManager {
     // Uses skewed values
     pub(crate) fn instant_to_tick(&self, instant: &GameInstant) -> Tick {
         let offset_ms = self.skewed_server_tick_instant.offset_from(instant);
-        let offset_ticks_f32 = (offset_ms as f32) / (self.skewed_server_tick_duration_avg.as_millis() as f32);
+        let offset_ticks_f32 = (offset_ms as f32) / self.skewed_server_tick_duration_avg;
         return self.server_tick.clone().wrapping_add_signed(offset_ticks_f32 as i16);
     }
 
     // Uses skewed values
     fn tick_to_instant(&self, tick: Tick) -> GameInstant {
         let tick_diff = wrapping_diff(self.server_tick, tick);
-        let tick_diff_duration = (tick_diff as i32) * (self.skewed_server_tick_duration_avg.as_millis() as i32);
-        if tick_diff_duration >= 0 {
+        let tick_diff_duration = (tick_diff as f32) * self.skewed_server_tick_duration_avg;
+        if tick_diff_duration >= 0.0 {
             // positive
-            return self.skewed_server_tick_instant.add_millis(tick_diff_duration as u32);
+            let tick_diff_duration_millis: u32 = tick_diff_duration.round() as u32;
+            return self.skewed_server_tick_instant.add_millis(tick_diff_duration_millis);
         } else {
             // negative
-            return self.skewed_server_tick_instant.sub_millis((tick_diff_duration * -1) as u32);
+            let neg_tick_diff_duration_millis: u32 = (tick_diff_duration * -1.0).round() as u32;
+            return self.skewed_server_tick_instant.sub_millis(neg_tick_diff_duration_millis);
         }
     }
 
     // Uses skewed values
-    pub(crate) fn tick_duration_avg(&self) -> GameDuration {
-        self.skewed_server_tick_duration_avg.clone()
+    pub(crate) fn tick_duration_avg(&self) -> f32 {
+        self.skewed_server_tick_duration_avg
     }
 }

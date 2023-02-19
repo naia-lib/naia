@@ -41,7 +41,7 @@ impl TimeManager {
         let now = base.game_time_now();
         let latency_ms = (pruned_rtt_avg / 2.0) as u32;
         let major_jitter_ms = (rtt_stdv / 2.0 * 3.0) as u32;
-        let tick_duration_ms = base.tick_duration_avg().as_millis();
+        let tick_duration_ms = base.tick_duration_avg().round() as u32;
 
         let client_receiving_instant = get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
         let client_sending_instant = get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
@@ -163,7 +163,7 @@ impl TimeManager {
 
         // skew ticks so that tick_duration_avg and instant_to_tick() is properly adjusted
         self.base.skew_ticks(millis_elapsed);
-        let tick_duration_ms: u32 = self.base.tick_duration_avg().as_millis();
+        let tick_duration_ms: u32 = self.base.tick_duration_avg().round() as u32;
 
         // find targets
         let client_receiving_target = get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
