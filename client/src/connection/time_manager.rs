@@ -16,6 +16,10 @@ pub struct TimeManager {
     pruned_rtt_avg: f32,
     raw_rtt_avg: f32,
     rtt_stdv: f32,
+
+    client_sending_tick: Tick,
+    client_receiving_tick: Tick,
+    server_receivable_tick: Tick,
 }
 
 impl TimeManager {
@@ -38,6 +42,10 @@ impl TimeManager {
             pruned_rtt_avg,
             raw_rtt_avg: pruned_rtt_avg,
             rtt_stdv,
+
+            client_sending_tick: 0,
+            client_receiving_tick: 0,
+            server_receivable_tick: 0,
         }
     }
 
@@ -101,19 +109,22 @@ impl TimeManager {
     // Tick
 
     pub(crate) fn recv_client_tick(&self) -> bool {
-        false
+        // Updates client_sending_tick, client_receiving_tick, server_receivable_tick
+        // returns true if a tick has happened
+
+        todo!()
     }
 
     pub(crate) fn client_sending_tick(&self) -> Tick {
-        0
+        self.client_sending_tick
     }
 
     pub(crate) fn client_receiving_tick(&self) -> Tick {
-        0
+        self.client_receiving_tick
     }
 
     pub(crate) fn server_receivable_tick(&self) -> Tick {
-        0
+        self.server_receivable_tick
     }
 
     // Interpolation

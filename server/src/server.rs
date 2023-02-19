@@ -990,13 +990,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             if let Ok(mut writer) =
                                 self.handshake_manager.recv_challenge_request(&mut reader)
                             {
-                                match self.io.send_writer(&address, &mut writer) {
-                                    Ok(()) => {}
-                                    Err(_) => {
-                                        // TODO: pass this on and handle above
-                                        warn!("Server Error: Cannot send challenge response packet to {}", &address);
-                                    }
-                                };
+                                if self.io.send_writer(&address, &mut writer).is_err() {
+                                    // TODO: pass this on and handle above
+                                    warn!("Server Error: Cannot send challenge response packet to {}", &address);
+                                }
                             }
                             continue;
                         }

@@ -72,9 +72,10 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         &mut self,
         protocol: &Protocol,
         world: &mut W,
-        receiving_tick: Tick,
         incoming_events: &mut Events<E>,
     ) {
+        let receiving_tick = self.time_manager.client_receiving_tick();
+
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
 

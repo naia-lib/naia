@@ -138,28 +138,21 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 return std::mem::take(&mut self.incoming_events);
             }
 
-            let did_tick = connection.time_manager.recv_client_tick();
-
             // update current tick
-            if did_tick {
+            if connection.time_manager.recv_client_tick() {
                 // apply updates on tick boundary
-                let receiving_tick = connection.time_manager.client_receiving_tick();
                 connection.process_buffered_packets(
                     &self.protocol,
                     &mut world,
-                    receiving_tick,
                     &mut self.incoming_events,
                 );
-            }
 
-            // receive (process) messages
-            connection.receive_messages(&mut self.incoming_events);
+                // receive (process) messages
+                connection.receive_messages(&mut self.incoming_events);
 
-            // send outgoing packets
-            connection.send_outgoing_packets(&self.protocol, &mut self.io);
+                // send outgoing packets
+                connection.send_outgoing_packets(&self.protocol, &mut self.io);
 
-            // tick event
-            if did_tick {
                 self.incoming_events.push_tick();
             }
         } else {
@@ -275,7 +268,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
     // internal functions
 
     fn maintain_socket(&mut self) {
-        // get current tick
+
         if let Some(server_connection) = self.server_connection.as_mut() {
             // connection already established
 
