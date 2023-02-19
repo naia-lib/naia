@@ -4,7 +4,9 @@ use log::{info, warn};
 
 use crate::connection::io::Io;
 
-const SKEW_DURATION_MS: f32 = 1000.0; // skews occur over 1 second in milliseconds
+// skews occur over 5 seconds in milliseconds
+// should be less than the Ping rate
+const SKEW_DURATION_MS: f32 = 5000.0;
 
 /// Is responsible for sending regular ping messages between client/servers
 /// and to estimate rtt/jitter
@@ -124,9 +126,19 @@ impl BaseTimeManager {
             if sequence_greater_than(ping_index, self.most_recent_ping) {
                 self.most_recent_ping = ping_index;
 
-                // find the last instant while the skew is still active
+                {
+                    info!("-- Ping: {ping_index} --");
+
+                    // Previous Values
+                    let last_server_tick = self.server_tick;
+                    let last_server_tick_instant = self.server_tick_instant.as_millis();
+                    let server_tick_duration_avg = self.server_tick_duration_avg.as_millis();
+                    info!("Previous Values     | Server Tick: {last_server_tick}, at Instant: {last_server_tick_instant}, Avg Duration: {server_tick_duration_avg}");
+                }
+
                 self.last_server_tick_instant = self.tick_to_instant(server_tick);
                 self.last_server_tick_duration_avg = self.skewed_server_tick_duration_avg.clone();
+                self.skewed_server_tick_instant = self.last_server_tick_instant.clone();
                 // reset skew
                 self.skew_accumulator = 0.0;
 
@@ -134,7 +146,34 @@ impl BaseTimeManager {
                 self.server_tick_instant = server_tick_instant;
                 self.server_tick_duration_avg = GameDuration::from_millis(tick_duration_avg);
 
-                info!("Most Recent Ping: {ping_index}, Server Tick: {server_tick}, Avg Duration: {tick_duration_avg}");
+                {
+                    // Current Last Values
+                    let server_tick = self.server_tick;
+                    let server_tick_instant = self.last_server_tick_instant.as_millis();
+                    let server_tick_duration_avg = self.last_server_tick_duration_avg.as_millis();
+                    info!("Current Last Values | Server Tick: {server_tick}, at Instant: {server_tick_instant}, Avg Duration: {server_tick_duration_avg}");
+                }
+
+                {
+                    // Current Skew Values
+                    let server_tick = self.server_tick;
+                    let skewed_server_tick_instant = self.skewed_server_tick_instant.as_millis();
+                    let skewed_server_tick_duration_avg = self.skewed_server_tick_duration_avg.as_millis();
+                    info!("Current Skew Values | Server Tick: {server_tick}, at Instant: {skewed_server_tick_instant}, Avg Duration: {skewed_server_tick_duration_avg}");
+                    let instant_diff = self.last_server_tick_instant.offset_from(&self.server_tick_instant) as f32;
+                    let tick_avg_diff = (self.server_tick_duration_avg.as_millis() as f32) - (self.last_server_tick_duration_avg.as_millis() as f32);
+                    info!("                   Skew Distance |          Instant: {instant_diff}, Avg Duration: {tick_avg_diff}")
+                }
+
+                {
+                    // Current Now Values
+                    let server_tick = self.server_tick;
+                    let server_tick_instant = self.server_tick_instant.as_millis();
+                    let server_tick_duration_avg = self.server_tick_duration_avg.as_millis();
+                    info!("Current Now Values  | Server Tick: {server_tick}, at Instant: {server_tick_instant}, Avg Duration: {server_tick_duration_avg}");
+                }
+
+                info!("------------------");
             }
         }
 
@@ -194,11 +233,43 @@ impl BaseTimeManager {
 
         let interpolation = self.skew_accumulator / SKEW_DURATION_MS;
 
-        let server_tick_skew_distance = self.server_tick_instant.time_since(&self.last_server_tick_instant).as_millis() as f32;
-        self.skewed_server_tick_instant = self.last_server_tick_instant.add_millis((server_tick_skew_distance * interpolation) as u32);
+        // Skew Instant
+        let server_tick_skew_distance = self.last_server_tick_instant.offset_from(&self.server_tick_instant) as f32;
+        if server_tick_skew_distance >= 0.0 {
+            // positive
+            let dis_u32 = (server_tick_skew_distance * interpolation).round() as u32;
+            self.skewed_server_tick_instant = self.last_server_tick_instant.add_millis(dis_u32);
+        } else {
+            // negative
+            let dis_u32 = (server_tick_skew_distance * interpolation * -1.0).round() as u32;
+            self.skewed_server_tick_instant = self.last_server_tick_instant.sub_millis(dis_u32);
+        }
 
+        // Skew Tick Duration
         let server_tick_duration_skew_distance = (self.server_tick_duration_avg.as_millis() as f32) - (self.last_server_tick_duration_avg.as_millis() as f32);
-        self.skewed_server_tick_duration_avg = self.last_server_tick_duration_avg.add_millis((server_tick_duration_skew_distance * interpolation) as u32);
+        if server_tick_duration_skew_distance >= 0.0 {
+            // positive
+            let dis_u32 = (server_tick_duration_skew_distance * interpolation).round() as u32;
+            self.skewed_server_tick_duration_avg = self.last_server_tick_duration_avg.add_millis(dis_u32);
+        } else {
+            // negative
+            let dis_u32 = (server_tick_duration_skew_distance * interpolation * -1.0).round() as u32;
+            self.skewed_server_tick_duration_avg = self.last_server_tick_duration_avg.sub_millis(dis_u32);
+        }
+
+        let check_interp = (interpolation * 1000.0).round() as u16;
+        if check_interp % 100 == 0 {
+            let skewed_server_tick_instant = self.skewed_server_tick_instant.as_millis();
+            let skewed_server_tick_duration_avg = self.skewed_server_tick_duration_avg.as_millis();
+            info!("skew interpolation: {interpolation}");
+            info!("          values | instant: {skewed_server_tick_instant}, duration avg: {skewed_server_tick_duration_avg}");
+            if interpolation == 1.0 {
+                let server_instant = self.server_tick_instant.as_millis();
+                let server_tick_duration_avg = self.server_tick_duration_avg.as_millis() as f32;
+
+                info!("         targets | instant: {server_instant}, duration avg: {server_tick_duration_avg}");
+            }
+        }
     }
 
     // Uses skewed values

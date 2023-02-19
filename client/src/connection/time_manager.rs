@@ -37,8 +37,20 @@ impl TimeManager {
         rtt_stdv: f32,
         offset_stdv: f32,
     ) -> Self {
+
         let now = base.game_time_now();
-        let now_tick = base.instant_to_tick(&now);
+        let latency_ms = (pruned_rtt_avg / 2.0) as u32;
+        let major_jitter_ms = (rtt_stdv / 2.0 * 3.0) as u32;
+        let tick_duration_ms = base.tick_duration_avg().as_millis();
+
+        let client_receiving_instant = get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+        let client_sending_instant = get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+        let server_receivable_instant = get_server_receivable_target(&now, latency_ms, major_jitter_ms);
+
+        let client_receiving_tick = base.instant_to_tick(&client_receiving_instant);
+        let client_sending_tick = base.instant_to_tick(&client_sending_instant);
+        let server_receivable_tick = base.instant_to_tick(&server_receivable_instant);
+
         Self {
             base,
             ping_timer: Timer::new(time_config.ping_interval),
@@ -54,13 +66,14 @@ impl TimeManager {
 
             accumulator: 0.0,
             last_tick_check_instant: Instant::now(),
-            client_receiving_tick: now_tick.clone(),
-            client_sending_tick: now_tick.clone(),
-            server_receivable_tick: now_tick.clone(),
 
-            client_receiving_instant: now.clone(),
-            client_sending_instant: now.clone(),
-            server_receivable_instant: now.clone(),
+            client_receiving_tick,
+            client_sending_tick,
+            server_receivable_tick,
+
+            client_receiving_instant,
+            client_sending_instant,
+            server_receivable_instant,
         }
     }
 
@@ -148,13 +161,14 @@ impl TimeManager {
         let latency_ms: u32 = self.latency() as u32;
         let major_jitter_ms: u32 = (self.jitter() * 3.0) as u32;
 
+        // skew ticks so that tick_duration_avg and instant_to_tick() is properly adjusted
         self.base.skew_ticks(millis_elapsed);
         let tick_duration_ms: u32 = self.base.tick_duration_avg().as_millis();
 
         // find targets
-        let client_receiving_target = now.sub_millis(latency_ms).sub_millis(major_jitter_ms).sub_millis(tick_duration_ms);
-        let client_sending_target = now.add_millis(latency_ms).add_millis(major_jitter_ms).add_millis(tick_duration_ms);
-        let server_receivable_target = now.add_millis(latency_ms).sub_millis(major_jitter_ms);
+        let client_receiving_target = get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+        let client_sending_target = get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+        let server_receivable_target = get_server_receivable_target(&now, latency_ms, major_jitter_ms);
 
         // find speeds
         let client_receiving_speed = offset_to_speed(self.client_receiving_instant.offset_from(&client_receiving_target));
@@ -186,14 +200,14 @@ impl TimeManager {
         let receiving_incremented = self.client_receiving_tick != prev_client_receiving_tick;
         let sending_incremented = self.client_sending_tick != prev_client_sending_tick;
 
-        if receiving_incremented {
-            let a = self.client_receiving_tick;
-            warn!("Recv Tick: {prev_client_receiving_tick} -> {a}");
-        }
-        if sending_incremented {
-            let a = self.client_sending_tick;
-            warn!("Send Tick: {prev_client_sending_tick} -> {a}");
-        }
+        // if receiving_incremented {
+        //     let a = self.client_receiving_tick;
+        //     warn!("Recv Tick: {prev_client_receiving_tick} -> {a}");
+        // }
+        // if sending_incremented {
+        //     let a = self.client_sending_tick;
+        //     warn!("Send Tick: {prev_client_sending_tick} -> {a}");
+        // }
 
         return (receiving_incremented, sending_incremented);
     }
@@ -232,6 +246,18 @@ impl TimeManager {
             warn!("{a} shouldn't be greater than {b}");
         }
     }
+}
+
+fn get_client_receiving_target(now: &GameInstant, latency: u32, jitter: u32, tick_duration: u32) -> GameInstant {
+    now.sub_millis(latency).sub_millis(jitter).sub_millis(tick_duration)
+}
+
+fn get_client_sending_target(now: &GameInstant, latency: u32, jitter: u32, tick_duration: u32) -> GameInstant {
+    now.add_millis(latency).add_millis(jitter).add_millis(tick_duration)
+}
+
+fn get_server_receivable_target(now: &GameInstant, latency: u32, jitter: u32) -> GameInstant {
+    now.add_millis(latency).sub_millis(jitter)
 }
 
 fn offset_to_speed(mut offset: i32) -> f32 {
