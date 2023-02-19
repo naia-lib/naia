@@ -7,10 +7,12 @@ use crate::connection::{base_time_manager::BaseTimeManager, io::Io, time_config:
 pub struct TimeManager {
     base: BaseTimeManager,
     ping_timer: Timer,
+
     pruned_offset_avg: f32,
     raw_offset_avg: f32,
     offset_stdv: f32,
 
+    initial_rtt_avg: f32,
     pruned_rtt_avg: f32,
     raw_rtt_avg: f32,
     rtt_stdv: f32,
@@ -27,9 +29,12 @@ impl TimeManager {
         Self {
             base,
             ping_timer: Timer::new(time_config.ping_interval),
+
             pruned_offset_avg: 0.0,
             raw_offset_avg: 0.0,
             offset_stdv,
+
+            initial_rtt_avg: pruned_rtt_avg,
             pruned_rtt_avg,
             raw_rtt_avg: pruned_rtt_avg,
             rtt_stdv,
@@ -56,19 +61,34 @@ impl TimeManager {
         Ok(())
     }
 
-    fn process_stats(&mut self, time_offset_millis: i32, rtt_millis: u32) {
-        // let offset_avg = self.pruned_offset_avg;
-        // let rtt_avg = self.pruned_rtt_avg;
-        // info!(" ------- Average Offset: {offset_avg}, Average RTT: {rtt_avg}");
-        info!(" ------- Incoming Offset: {time_offset_millis}, Incoming RTT: {rtt_millis}");
+    fn process_stats(&mut self, offset_millis: i32, rtt_millis: u32) {
+        let offset_sample = offset_millis as f32;
+        let rtt_sample = rtt_millis as f32;
 
-        //let rtt_millis_f32 = rtt_millis as f32;
+        self.raw_offset_avg = (0.9 * self.raw_offset_avg) + (0.1 * offset_sample);
+        self.raw_rtt_avg = (0.9 * self.raw_rtt_avg) + (0.1 * rtt_sample);
 
-        // // TODO: return to proper standard deviation measure
-        // let new_jitter = ((rtt_millis_f32 - self.rtt_avg) / 2.0).abs();
-        //
-        // self.rtt_stdv = (0.9 * self.rtt_stdv) + (0.1 * new_jitter);
-        // self.rtt_avg = (0.9 * self.rtt_avg) + (0.1 * rtt_millis_f32);
+        let offset_diff = offset_sample - self.raw_offset_avg;
+        let rtt_diff = rtt_sample - self.raw_rtt_avg;
+
+        self.offset_stdv = ((0.9 * self.offset_stdv.powi(2)) + (0.1 * offset_diff.powi(2))).sqrt();
+        self.rtt_stdv = ((0.9 * self.rtt_stdv.powi(2)) + (0.1 * rtt_diff.powi(2))).sqrt();
+
+        if offset_diff.abs() < self.offset_stdv && rtt_diff.abs() < self.rtt_stdv {
+            self.pruned_offset_avg = (0.9 * self.pruned_offset_avg) + (0.1 * offset_sample);
+            self.pruned_rtt_avg = (0.9 * self.pruned_rtt_avg) + (0.1 * rtt_sample);
+            info!("New Pruned Averages");
+
+            info!(" ------- Incoming Offset: {offset_millis}, Incoming RTT: {rtt_millis}");
+            let offset_avg = self.pruned_offset_avg;
+            let rtt_avg = self.pruned_rtt_avg - self.initial_rtt_avg;
+            info!(" ------- Average Offset: {offset_avg}, Average RTT Offset: {rtt_avg}");
+
+        } else {
+            info!("Pruned out Sample");
+        }
+
+
     }
 
     // GameTime
