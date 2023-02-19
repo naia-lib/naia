@@ -113,14 +113,14 @@ impl TimeManager {
         if offset_diff.abs() < self.offset_stdv && rtt_diff.abs() < self.rtt_stdv {
             self.pruned_offset_avg = (0.9 * self.pruned_offset_avg) + (0.1 * offset_sample);
             self.pruned_rtt_avg = (0.9 * self.pruned_rtt_avg) + (0.1 * rtt_sample);
-            info!("New Pruned Averages");
+            info!("Ping: New Pruned Averages");
 
             info!(" ------- Incoming Offset: {offset_millis}, Incoming RTT: {rtt_millis}");
             let offset_avg = self.pruned_offset_avg;
             let rtt_avg = self.pruned_rtt_avg - self.initial_rtt_avg;
             info!(" ------- Average Offset: {offset_avg}, Average RTT Offset: {rtt_avg}");
         } else {
-            info!("Pruned out Sample");
+            info!("Ping: Pruned out Sample");
         }
     }
 
@@ -151,8 +151,9 @@ impl TimeManager {
                 return (false, false);
             }
         }
-        let millis_elapsed = self.accumulator;
-        self.accumulator -= millis_elapsed;
+        let millis_elapsed = self.accumulator.round() as u32;
+        let millis_elapsed_f32 = millis_elapsed as f32;
+        self.accumulator -= millis_elapsed_f32;
 
         // TODO: take elapsed millis and skew the base tick if you need to
 
@@ -162,7 +163,7 @@ impl TimeManager {
         let major_jitter_ms: u32 = (self.jitter() * 3.0) as u32;
 
         // skew ticks so that tick_duration_avg and instant_to_tick() is properly adjusted
-        self.base.skew_ticks(millis_elapsed);
+        self.base.skew_ticks(millis_elapsed_f32);
         let tick_duration_ms: u32 = self.base.tick_duration_avg().round() as u32;
 
         // find targets
@@ -170,18 +171,32 @@ impl TimeManager {
         let client_sending_target = get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
         let server_receivable_target = get_server_receivable_target(&now, latency_ms, major_jitter_ms);
 
+        // set default next instant
+        let client_receiving_default_next = self.client_receiving_instant.add_millis(millis_elapsed);
+        let client_sending_default_next = self.client_sending_instant.add_millis(millis_elapsed);
+        let server_receivable_default_next = self.server_receivable_instant.add_millis(millis_elapsed);
+
         // find speeds
-        let client_receiving_speed = offset_to_speed(self.client_receiving_instant.offset_from(&client_receiving_target));
-        let client_sending_speed = offset_to_speed(self.client_sending_instant.offset_from(&client_sending_target));
-        let server_receivable_speed = offset_to_speed(self.server_receivable_instant.offset_from(&server_receivable_target));
+        let client_receiving_speed = offset_to_speed(client_receiving_default_next.offset_from(&client_receiving_target));
+        let client_sending_speed = offset_to_speed(client_sending_default_next.offset_from(&client_sending_target));
+        let server_receivable_speed = offset_to_speed(server_receivable_default_next.offset_from(&server_receivable_target));
+
+        // {
+        //     let client_receiving_instant = client_receiving_default_next.as_millis();
+        //     let client_sending_instant = client_sending_default_next.as_millis();
+        //     let client_receiving_target_ms = client_receiving_target.as_millis();
+        //     let client_sending_target_ms = client_sending_target.as_millis();
+        //     info!("elapsed: {millis_elapsed} ms");
+        //     info!("RECV | INSTANT: {client_receiving_instant} -> TARGET: {client_receiving_target_ms} = SPEED: {client_receiving_speed}");
+        //     info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
+        // }
 
         // apply speeds
-        self.client_receiving_instant = self.client_receiving_instant.add_millis((millis_elapsed * client_receiving_speed) as u32);
-        self.client_sending_instant = self.client_sending_instant.add_millis((millis_elapsed * client_sending_speed) as u32);
-        self.server_receivable_instant = self.server_receivable_instant.add_millis((millis_elapsed * server_receivable_speed) as u32);
+        self.client_receiving_instant = self.client_receiving_instant.add_millis((millis_elapsed_f32 * client_receiving_speed) as u32);
+        self.client_sending_instant = self.client_sending_instant.add_millis((millis_elapsed_f32 * client_sending_speed) as u32);
+        self.server_receivable_instant = self.server_receivable_instant.add_millis((millis_elapsed_f32 * server_receivable_speed) as u32);
 
         // convert current instants into ticks
-
         self.client_receiving_tick = self.base.instant_to_tick(&self.client_receiving_instant);
         self.client_sending_tick = self.base.instant_to_tick(&self.client_sending_instant);
         self.server_receivable_tick = self.base.instant_to_tick(&self.server_receivable_instant);
@@ -263,66 +278,55 @@ fn get_server_receivable_target(now: &GameInstant, latency: u32, jitter: u32) ->
 fn offset_to_speed(mut offset: i32) -> f32 {
     if offset <= OFFSET_MIN {
         offset *= -1;
-        return 1.0 / (offset as f32);
+        return (INV_OFFSET_MIN as f32) / (offset as f32);
     }
 
     if offset >= OFFSET_MAX {
         return (offset as f32) / (OFFSET_MAX as f32);
     }
 
-    offset += OFFSET_FLOOR_INV;
-    // offset is now >= 0 and <= OFFSET_RANGE
-
-    let output_range = (offset as f32) / (OFFSET_RANGE as f32);
-    // output_range is now >= 0.0 and <= 1.0
-
-    return (output_range * SPEED_RANGE) + SPEED_MIN;
+    return SAFE_SPEED;
 }
 
 const OFFSET_MIN: i32 = -10;
 const OFFSET_MAX: i32 = 10;
-const SPEED_MIN: f32 = 0.1;
-const SPEED_MAX: f32 = 1.0;
-
-const OFFSET_RANGE: i32 = (OFFSET_MAX - 1) - (OFFSET_MIN + 1);
-const OFFSET_FLOOR_INV: i32 = (OFFSET_MIN + 1) * -1;
-const SPEED_RANGE: f32 = SPEED_MAX - SPEED_MIN;
+const SAFE_SPEED: f32 = 1.0;
+const INV_OFFSET_MIN: i32 = OFFSET_MIN * -1;
 
 // Tests
 #[cfg(test)]
 mod offset_to_speed_tests {
-    use crate::connection::time_manager::{OFFSET_MAX, OFFSET_MIN, OFFSET_RANGE, offset_to_speed, SPEED_MAX, SPEED_MIN, SPEED_RANGE};
+    use crate::connection::time_manager::{OFFSET_MAX, OFFSET_MIN, offset_to_speed, SAFE_SPEED};
 
     #[test]
     fn min_speed() {
-        assert_eq!(offset_to_speed(OFFSET_MIN), SPEED_MIN);
+        assert_eq!(offset_to_speed(OFFSET_MIN), SAFE_SPEED);
     }
 
     #[test]
     fn max_speed() {
-        assert_eq!(offset_to_speed(OFFSET_MAX), SPEED_MAX);
+        assert_eq!(offset_to_speed(OFFSET_MAX), SAFE_SPEED);
     }
 
     #[test]
     fn middle_speed() {
         let middle_offset = ((OFFSET_MAX - OFFSET_MIN) / 2) + OFFSET_MIN;
-        let middle_speed = ((SPEED_MAX - SPEED_MIN) / 2.0) + SPEED_MIN;
-        assert_eq!(offset_to_speed(middle_offset), middle_speed);
+        assert_eq!(offset_to_speed(middle_offset), SAFE_SPEED);
     }
 
     #[test]
     fn over_max_speed() {
-        let offset = OFFSET_MAX + OFFSET_RANGE;
+        let offset = OFFSET_MAX + 5;
 
         // TODO: derive these values?
-        assert_eq!(offset_to_speed(offset), 2.8);
+        assert_eq!(offset_to_speed(offset), 1.5);
     }
 
     #[test]
     fn under_max_speed() {
-        let offset = OFFSET_MIN - OFFSET_RANGE;
+        let offset = OFFSET_MIN - 5;
 
         // TODO: derive these values?
-        assert_eq!(offset_to_speed(offset), 0.035714287);
+        assert_eq!(offset_to_speed(offset), 0.6666667);
     }
 }
