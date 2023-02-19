@@ -297,7 +297,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
             }
 
             // send pings
-            if server_connection.time_manager.connection_send(&mut self.io) {
+            if server_connection.time_manager.send_ping(&mut self.io) {
                 server_connection.base.mark_sent();
             }
 

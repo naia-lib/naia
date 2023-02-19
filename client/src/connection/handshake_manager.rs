@@ -1,6 +1,7 @@
 use log::warn;
 use std::time::Duration;
 
+use crate::connection::handshake_time_manager::HandshakeTimeManager;
 use crate::connection::time_config::TimeConfig;
 use crate::connection::time_manager::TimeManager;
 use naia_shared::{BitReader, BitWriter, FakeEntityConverter, Message, MessageKinds, Serde};
@@ -13,13 +14,32 @@ use super::io::Io;
 
 pub type Timestamp = u64;
 
-#[derive(Eq, PartialEq)]
 pub enum HandshakeState {
     AwaitingChallengeResponse,
     AwaitingValidateResponse,
-    TimeSync,
-    AwaitingConnectResponse,
+    TimeSync(HandshakeTimeManager),
+    AwaitingConnectResponse(TimeManager),
     Connected,
+}
+
+impl HandshakeState {
+    fn get_index(&self) -> u8 {
+        match self {
+            HandshakeState::AwaitingChallengeResponse => 0,
+            HandshakeState::AwaitingValidateResponse => 1,
+            HandshakeState::TimeSync(_) => 2,
+            HandshakeState::AwaitingConnectResponse(_) => 3,
+            HandshakeState::Connected => 4,
+        }
+    }
+}
+
+impl Eq for HandshakeState {}
+
+impl PartialEq for HandshakeState {
+    fn eq(&self, other: &Self) -> bool {
+        other.get_index() == self.get_index()
+    }
 }
 
 pub enum HandshakeResult {
@@ -34,7 +54,6 @@ pub struct HandshakeManager {
     pre_connection_digest: Option<Vec<u8>>,
     auth_message: Option<Box<dyn Message>>,
     time_config: TimeConfig,
-    time_manager: Option<TimeManager>,
 }
 
 impl HandshakeManager {
@@ -51,7 +70,6 @@ impl HandshakeManager {
             connection_state: HandshakeState::AwaitingChallengeResponse,
             auth_message: None,
             time_config,
-            time_manager: None,
         }
     }
 
@@ -72,7 +90,7 @@ impl HandshakeManager {
 
             self.handshake_timer.reset();
 
-            match self.connection_state {
+            match &mut self.connection_state {
                 HandshakeState::AwaitingChallengeResponse => {
                     let mut writer = self.write_challenge_request();
                     if io.send_writer(&mut writer).is_err() {
@@ -87,20 +105,12 @@ impl HandshakeManager {
                         warn!("Client Error: Cannot send validate request packet to Server");
                     }
                 }
-                HandshakeState::TimeSync => {
+                HandshakeState::TimeSync(time_manager) => {
                     // use time manager to send initial pings until client/server time is synced
                     // then, move state to AwaitingConnectResponse
-                    let Some(time_manager) = &mut self.time_manager else {
-                        panic!("Client Error: Time Manager should be initialized at this point in handshake");
-                    };
-
-                    if time_manager.handshake_finished() {
-                        self.connection_state = HandshakeState::AwaitingConnectResponse;
-                    } else {
-                        time_manager.handshake_send(io);
-                    }
+                    time_manager.send_ping(io);
                 }
-                HandshakeState::AwaitingConnectResponse => {
+                HandshakeState::AwaitingConnectResponse(_) => {
                     let mut writer = self.write_connect_request();
                     if io.send_writer(&mut writer).is_err() {
                         // TODO: pass this on and handle above
@@ -127,7 +137,9 @@ impl HandshakeManager {
                 return None;
             }
             PacketType::ServerValidateResponse => {
-                self.recv_validate_response();
+                if self.connection_state == HandshakeState::AwaitingValidateResponse {
+                    self.recv_validate_response(self.time_config.clone());
+                }
                 return None;
             }
             PacketType::ServerConnectResponse => {
@@ -138,11 +150,21 @@ impl HandshakeManager {
             }
             PacketType::Pong => {
                 // Time Manager should record incoming Pongs in order to sync time
-                if let Some(time_manager) = &mut self.time_manager {
-                    if time_manager.read_pong(reader).is_err() {
+                let mut success = false;
+                if let HandshakeState::TimeSync(time_manager) = &mut self.connection_state {
+                    let Ok(success_inner) = time_manager.read_pong(reader) else {
                         // TODO: bubble this up
                         warn!("Time Manager cannot process pong");
-                    }
+                        return None;
+                    };
+                    success = success_inner;
+                }
+                if success {
+                    let HandshakeState::TimeSync(time_manager) = std::mem::replace(&mut self.connection_state, HandshakeState::Connected) else {
+                        panic!("should be impossible due to check above");
+                    };
+                    self.connection_state =
+                        HandshakeState::AwaitingConnectResponse(time_manager.finalize());
                 }
                 return None;
             }
@@ -214,9 +236,8 @@ impl HandshakeManager {
     }
 
     // Step 4 of Handshake
-    pub fn recv_validate_response(&mut self) {
-        self.connection_state = HandshakeState::TimeSync;
-        self.time_manager = Some(TimeManager::new(&self.time_config));
+    pub fn recv_validate_response(&mut self, time_config: TimeConfig) {
+        self.connection_state = HandshakeState::TimeSync(HandshakeTimeManager::new(time_config));
     }
 
     // Step 6 of Handshake
@@ -229,16 +250,9 @@ impl HandshakeManager {
 
     // Step 7 of Handshake
     fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
-        if self.connection_state == HandshakeState::Connected {
+        let HandshakeState::AwaitingConnectResponse(time_manager) = std::mem::replace(&mut self.connection_state, HandshakeState::Connected) else {
             return None;
-        }
-
-        self.connection_state = HandshakeState::Connected;
-
-        let time_manager = self
-            .time_manager
-            .take()
-            .expect("How could there be no Time Manager here?");
+        };
 
         return Some(HandshakeResult::Connected(time_manager));
     }
