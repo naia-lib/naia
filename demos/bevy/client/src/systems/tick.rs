@@ -16,6 +16,9 @@ pub fn tick_events(
     mut client: Client,
     mut position_query: Query<&mut Position>
 ) {
+    if !client.is_connected() {
+        return;
+    }
     let Some(command) = global.queued_command.take() else {
         info!("Command aborted: Queued Command empty");
         return;
@@ -31,7 +34,7 @@ pub fn tick_events(
 
     for ClientTickEvent(tick) in tick_reader.iter() {
 
-        info!("--- Tick: {tick}");
+        //info!("--- Tick: {tick}");
 
         //
         let last_client_tick = global.last_client_tick;

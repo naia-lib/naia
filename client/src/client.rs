@@ -1,6 +1,6 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use log::warn;
+use log::{info, warn};
 
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
@@ -152,8 +152,14 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 // receive (process) messages
                 connection.receive_messages(&mut self.incoming_events);
 
-                for tick in prev_receiving_tick..=current_receiving_tick {
-                    self.incoming_events.push_server_tick(tick);
+                let mut index_tick = prev_receiving_tick.wrapping_add(1);
+                loop {
+                    self.incoming_events.push_server_tick(index_tick);
+                    // info!("--- Push Server Tick Event: {index_tick}");
+                    if index_tick == current_receiving_tick {
+                        break;
+                    }
+                    index_tick = index_tick.wrapping_add(1);
                 }
             }
 
@@ -161,8 +167,14 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 // send outgoing packets
                 connection.send_outgoing_packets(&self.protocol, &mut self.io);
 
-                for tick in prev_sending_tick..=current_sending_tick {
-                    self.incoming_events.push_client_tick(tick);
+                let mut index_tick = prev_sending_tick.wrapping_add(1);
+                loop {
+                    self.incoming_events.push_client_tick(index_tick);
+                    // info!("--- Push Client Tick Event: {index_tick}");
+                    if index_tick == current_sending_tick {
+                        break;
+                    }
+                    index_tick = index_tick.wrapping_add(1);
                 }
             }
         } else {

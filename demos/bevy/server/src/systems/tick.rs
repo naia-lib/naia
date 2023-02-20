@@ -1,4 +1,5 @@
 use bevy_ecs::{event::EventReader, system::{Query, ResMut}};
+use bevy_log::info;
 
 use naia_bevy_server::{Server, events::TickEvent};
 
@@ -15,13 +16,20 @@ pub fn tick_events(
 
         has_ticked = true;
 
+        let mut processed = false;
+
         let messages = server.tick_buffer_messages(server_tick);
         for (_user_key, key_command) in messages.read::<PlayerCommandChannel, KeyCommand>() {
             if let Some(entity) = &key_command.entity.get(&server) {
                 if let Ok(mut position) = position_query.get_mut(*entity) {
                     shared_behavior::process_command(&key_command, &mut position);
+                    processed = true;
                 }
             }
+        }
+
+        if !processed {
+            info!("Tick without Command: {server_tick}");
         }
     }
 
