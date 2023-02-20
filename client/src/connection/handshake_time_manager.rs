@@ -6,7 +6,7 @@ use crate::connection::{
     base_time_manager::BaseTimeManager, io::Io, time_config::TimeConfig, time_manager::TimeManager,
 };
 
-const HANDSHAKE_PONGS_REQUIRED: usize = 20;
+const HANDSHAKE_PONGS_REQUIRED: usize = 7;
 
 pub struct HandshakeTimeManager {
     base: BaseTimeManager,

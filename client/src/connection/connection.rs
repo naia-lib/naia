@@ -74,7 +74,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         world: &mut W,
         incoming_events: &mut Events<E>,
     ) {
-        let receiving_tick = self.time_manager.client_receiving_tick();
+        let receiving_tick = self.time_manager.client_receiving_tick;
 
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
@@ -172,8 +172,8 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             .collect_outgoing_messages(&now, &self.time_manager.rtt());
 
         self.tick_buffer.collect_outgoing_messages(
-            &self.time_manager.client_sending_tick(),
-            &self.time_manager.server_receivable_tick(),
+            &self.time_manager.client_sending_tick,
+            &self.time_manager.server_receivable_tick,
         );
     }
 
@@ -200,7 +200,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             let mut has_written = false;
 
             // write tick
-            let client_tick: Tick = self.time_manager.client_sending_tick();
+            let client_tick: Tick = self.time_manager.client_sending_tick;
             client_tick.ser(&mut bit_writer);
 
             // write tick buffered messages

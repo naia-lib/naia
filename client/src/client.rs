@@ -140,7 +140,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
             let (receiving_tick_happened, sending_tick_happened) = connection.time_manager.check_ticks();
 
-            if receiving_tick_happened {
+            if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // apply updates on tick boundary
                 connection.process_buffered_packets(
                     &self.protocol,
@@ -154,7 +154,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 self.incoming_events.push_server_tick();
             }
 
-            if sending_tick_happened {
+            if let Some((prev_sending_tick, current_sending_tick,)) = sending_tick_happened {
                 // send outgoing packets
                 connection.send_outgoing_packets(&self.protocol, &mut self.io);
 
@@ -246,7 +246,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
             .as_ref()
             .unwrap()
             .time_manager
-            .client_sending_tick();
+            .client_sending_tick;
     }
 
     // Interpolation

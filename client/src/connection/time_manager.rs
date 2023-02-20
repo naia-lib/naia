@@ -1,6 +1,6 @@
 use log::{info, warn};
 
-use naia_shared::{BaseConnection, BitReader, GameDuration, GameInstant, Instant, sequence_greater_than, SerdeErr, Tick, Timer};
+use naia_shared::{BaseConnection, BitReader, GameDuration, GameInstant, Instant, sequence_greater_than, sequence_less_than, SerdeErr, Tick, Timer};
 
 use crate::connection::{base_time_manager::BaseTimeManager, io::Io, time_config::TimeConfig};
 
@@ -21,9 +21,9 @@ pub struct TimeManager {
     // Ticks
     accumulator: f32,
     last_tick_check_instant: Instant,
-    client_receiving_tick: Tick,
-    client_sending_tick: Tick,
-    server_receivable_tick: Tick,
+    pub client_receiving_tick: Tick,
+    pub client_sending_tick: Tick,
+    pub server_receivable_tick: Tick,
     client_receiving_instant: GameInstant,
     client_sending_instant: GameInstant,
     server_receivable_instant: GameInstant,
@@ -116,9 +116,9 @@ impl TimeManager {
             // info!("Ping: New Pruned Averages");
             //
             // info!(" ------- Incoming Offset: {offset_millis}, Incoming RTT: {rtt_millis}");
-            // let offset_avg = self.pruned_offset_avg;
-            // let rtt_avg = self.pruned_rtt_avg - self.initial_rtt_avg;
-            // info!(" ------- Average Offset: {offset_avg}, Average RTT Offset: {rtt_avg}");
+            let offset_avg = self.pruned_offset_avg;
+            let rtt_avg = self.pruned_rtt_avg - self.initial_rtt_avg;
+            info!(" ------- New Average Offset: {offset_avg}, Average RTT Offset: {rtt_avg}");
         } else {
             // info!("Ping: Pruned out Sample");
         }
@@ -136,7 +136,7 @@ impl TimeManager {
 
     // Tick
 
-    pub(crate) fn check_ticks(&mut self) -> (bool, bool) {
+    pub(crate) fn check_ticks(&mut self) -> (Option<(Tick, Tick)>, Option<(Tick, Tick)>) {
         // updates client_receiving_tick
         // returns (true, _) if a client_receiving_tick has incremented
         // returns (_, true) if a client_sending_tick or server_receivable_tick has incremented
@@ -148,14 +148,12 @@ impl TimeManager {
             self.last_tick_check_instant = Instant::now();
             self.accumulator += time_elapsed;
             if self.accumulator < 1.0 {
-                return (false, false);
+                return (None, None);
             }
         }
         let millis_elapsed = self.accumulator.round() as u32;
         let millis_elapsed_f32 = millis_elapsed as f32;
         self.accumulator -= millis_elapsed_f32;
-
-        // TODO: take elapsed millis and skew the base tick if you need to
 
         // Target Instants
         let now: GameInstant = self.game_time_now();
@@ -191,31 +189,33 @@ impl TimeManager {
         //     info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
         // }
 
-        // TODO: get rid of these.
-        let prev_client_receiving_instant = self.client_receiving_instant.clone();
-        let prev_client_sending_instant = self.client_sending_instant.clone();
-
         // apply speeds
         self.client_receiving_instant = self.client_receiving_instant.add_millis((millis_elapsed_f32 * client_receiving_speed) as u32);
         self.client_sending_instant = self.client_sending_instant.add_millis((millis_elapsed_f32 * client_sending_speed) as u32);
         self.server_receivable_instant = self.server_receivable_instant.add_millis((millis_elapsed_f32 * server_receivable_speed) as u32);
 
         // convert current instants into ticks
-        self.client_receiving_tick = self.base.instant_to_tick(&self.client_receiving_instant);
-        self.client_sending_tick = self.base.instant_to_tick(&self.client_sending_instant);
-        self.server_receivable_tick = self.base.instant_to_tick(&self.server_receivable_instant);
+        let new_client_receiving_tick = self.base.instant_to_tick(&self.client_receiving_instant);
+        let new_client_sending_tick = self.base.instant_to_tick(&self.client_sending_instant);
+        let new_server_receivable_tick = self.base.instant_to_tick(&self.server_receivable_instant);
 
-        // sanity checks
-        // TODO: get rid of these?
-        Self::sanity_check("RECV |", self.client_receiving_tick, prev_client_receiving_tick);
-        Self::sanity_check("SEND |", self.client_sending_tick, prev_client_sending_tick);
-        // Self::sanity_check(self.client_sending_tick, prev_client_sending_tick.wrapping_add(1));
-        // Self::sanity_check(prev_client_sending_tick, self.client_sending_tick);
+        // make sure nothing ticks backwards
+        if sequence_less_than(new_client_receiving_tick, self.client_receiving_tick) {
+            warn!("Client Receiving Tick attempted to Tick Backwards");
+        } else {
+            self.client_receiving_tick = new_client_receiving_tick;
+        }
+        if sequence_less_than(new_client_sending_tick, self.client_sending_tick) {
+            warn!("Client Sending Tick attempted to Tick Backwards");
+        } else {
+            self.client_sending_tick = new_client_sending_tick;
+        }
+        if sequence_less_than(new_server_receivable_tick, self.server_receivable_tick) {
+            warn!("Server Receivable Tick attempted to Tick Backwards");
+        } else {
+            self.server_receivable_tick = new_server_receivable_tick;
+        }
 
-
-        // TODO: figure out how to get these to work again
-        // let receiving_incremented = self.client_receiving_tick == prev_client_receiving_tick.wrapping_add(1);
-        // let sending_incremented = self.client_sending_tick == prev_client_sending_tick.wrapping_add(1);
         let receiving_incremented = self.client_receiving_tick != prev_client_receiving_tick;
         let sending_incremented = self.client_sending_tick != prev_client_sending_tick;
 
@@ -232,27 +232,23 @@ impl TimeManager {
         //     info!("SEND | Tick: {prev_client_sending_tick} -> {a}, Instant: {b} -> {c}");
         // }
 
-        return (receiving_incremented, sending_incremented);
+        let output_receiving = match receiving_incremented {
+            true => Some((prev_client_receiving_tick, self.client_receiving_tick)),
+            false => None,
+        };
+        let output_sending = match sending_incremented {
+            true => Some((prev_client_sending_tick, self.client_sending_tick)),
+            false => None,
+        };
+
+        return (output_receiving, output_sending);
     }
 
-    pub(crate) fn client_receiving_tick(&self) -> Tick {
-        self.client_receiving_tick
-    }
-
-    pub(crate) fn client_sending_tick(&self) -> Tick {
-        self.client_sending_tick
-    }
-
-    pub(crate) fn server_receivable_tick(&self) -> Tick {
-        self.server_receivable_tick
-    }
-
-    // Interpolation
+    // Stats
 
     pub(crate) fn interpolation(&self) -> f32 {
-        0.0
+        todo!()
     }
-
     pub(crate) fn rtt(&self) -> f32 {
         self.pruned_rtt_avg
     }
@@ -261,16 +257,6 @@ impl TimeManager {
     }
     pub(crate) fn latency(&self) -> f32 {
         self.pruned_rtt_avg / 2.0
-    }
-
-
-    fn sanity_check(pre: &str, a: Tick, b: Tick) {
-        if sequence_greater_than(a, b.wrapping_add(1)) {
-            warn!("{pre} Current Tick: {a} shouldn't be greater than Prev Tick + 1: {b}");
-        }
-        if sequence_greater_than(b, a) {
-            warn!("{pre} Current Tick: {a} shouldn't be less than than Prev Tick: {b}");
-        }
     }
 }
 
