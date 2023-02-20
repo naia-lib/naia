@@ -152,14 +152,18 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 // receive (process) messages
                 connection.receive_messages(&mut self.incoming_events);
 
-                self.incoming_events.push_server_tick();
+                for tick in prev_receiving_tick..=current_receiving_tick {
+                    self.incoming_events.push_server_tick(tick);
+                }
             }
 
             if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
                 // send outgoing packets
                 connection.send_outgoing_packets(&self.protocol, &mut self.io);
 
-                self.incoming_events.push_client_tick();
+                for tick in prev_sending_tick..=current_sending_tick {
+                    self.incoming_events.push_client_tick(tick);
+                }
             }
         } else {
             self.handshake_manager
@@ -183,20 +187,38 @@ impl<E: Copy + Eq + Hash> Client<E> {
             panic!("Cannot send message to Server on this Channel");
         }
 
-        let tick_buffered = channel_settings.tick_buffered();
+        if channel_settings.tick_buffered() {
+            panic!("Cannot call `Client.send_message()` on a Tick Buffered Channel, use `Client.send_tick_buffered_message()` instead");
+        }
 
-        if tick_buffered {
-            let client_tick = self.client_tick();
-            if let Some(connection) = self.server_connection.as_mut() {
-                connection
-                    .tick_buffer
-                    .send_message(&client_tick, channel_kind, message);
-            }
-        } else if let Some(connection) = &mut self.server_connection {
+        if let Some(connection) = &mut self.server_connection {
             connection
                 .base
                 .message_manager
                 .send_message(channel_kind, message);
+        }
+    }
+
+    pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
+        let cloned_message = M::clone_box(message);
+        self.send_tick_buffer_message_inner(tick, &ChannelKind::of::<C>(), cloned_message);
+    }
+
+    fn send_tick_buffer_message_inner(&mut self, tick: &Tick, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+        let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
+
+        if !channel_settings.can_send_to_server() {
+            panic!("Cannot send message to Server on this Channel");
+        }
+
+        if !channel_settings.tick_buffered() {
+            panic!("Can only use `Client.send_tick_buffer_message()` on a Channel that is configured for it.");
+        }
+
+        if let Some(connection) = self.server_connection.as_mut() {
+            connection
+                .tick_buffer
+                .send_message(tick, channel_kind, message);
         }
     }
 

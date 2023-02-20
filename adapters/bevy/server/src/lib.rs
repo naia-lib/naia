@@ -1,4 +1,4 @@
-pub use naia_bevy_shared::Random;
+pub use naia_bevy_shared::{Random, Tick};
 pub use naia_server::{RoomKey, ServerAddrs, ServerConfig, UserKey};
 
 pub mod events;
@@ -6,7 +6,6 @@ pub mod events;
 mod commands;
 mod entity_mut;
 mod plugin;
-mod resource;
 mod server;
 mod stage;
 mod state;

@@ -77,7 +77,11 @@ impl<'a> Client<'a> {
 
     //// Messages ////
     pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
-        self.client.send_message::<C, M>(message)
+        self.client.send_message::<C, M>(message);
+    }
+
+    pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
+        self.client.send_tick_buffer_message::<C, M>(tick, message);
     }
 
     //// Entities ////

@@ -14,7 +14,7 @@ mod naia_events {
     pub use naia_client::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvent, MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent,
-        UpdateComponentEvent,
+        UpdateComponentEvent, ServerTickEvent,
     };
 }
 
@@ -22,14 +22,12 @@ mod bevy_events {
     pub use crate::events::{
         ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvents,
         MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
+        ClientTickEvent, ServerTickEvent,
     };
 }
 
-use crate::resource::ClientResource;
-
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<Entity>>| {
-        world.resource_scope(|world, mut client_resource: Mut<ClientResource>| {
             let mut events = client.receive(world.proxy_mut());
             if !events.is_empty() {
                 unsafe {
@@ -57,17 +55,28 @@ pub fn before_receive_events(world: &mut World) {
                         reject_event_writer.send(bevy_events::RejectEvent);
                     }
 
-                    // Tick Event
-                    for _ in events.read::<naia_events::ClientTickEvent>() {
-                        client_resource.ticker.set();
-                    }
-
                     // Error Event
                     let mut error_event_writer = world
                         .get_resource_unchecked_mut::<Events<bevy_events::ErrorEvent>>()
                         .unwrap();
                     for error in events.read::<naia_events::ErrorEvent>() {
                         error_event_writer.send(bevy_events::ErrorEvent(error));
+                    }
+
+                    // Client Tick Event
+                    let mut client_tick_event_writer = world
+                        .get_resource_unchecked_mut::<Events<bevy_events::ClientTickEvent>>()
+                        .unwrap();
+                    for tick in events.read::<naia_events::ClientTickEvent>() {
+                        client_tick_event_writer.send(bevy_events::ClientTickEvent(tick));
+                    }
+
+                    // Server Tick Event
+                    let mut server_tick_event_writer = world
+                        .get_resource_unchecked_mut::<Events<bevy_events::ServerTickEvent>>()
+                        .unwrap();
+                    for tick in events.read::<naia_events::ServerTickEvent>() {
+                        server_tick_event_writer.send(bevy_events::ServerTickEvent(tick));
                     }
 
                     // Message Event
@@ -114,20 +123,7 @@ pub fn before_receive_events(world: &mut World) {
                         .send(bevy_events::RemoveComponentEvents::from(&mut events));
                 }
             }
-        });
     });
-}
-
-pub fn should_tick(resource: Res<ClientResource>) -> ShouldRun {
-    if resource.ticker.is_set() {
-        ShouldRun::Yes
-    } else {
-        ShouldRun::No
-    }
-}
-
-pub fn finish_tick(mut resource: ResMut<ClientResource>) {
-    resource.ticker.reset();
 }
 
 pub fn should_receive(client: Res<Client<Entity>>) -> ShouldRun {

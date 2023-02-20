@@ -4,10 +4,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_server::{
-    EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, UserKey, UserMut,
-    UserRef, UserScopeMut,
-};
+use naia_server::{EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut};
 
 use naia_bevy_shared::{
     Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
@@ -63,6 +60,10 @@ impl<'world, 'state> Server<'world, 'state> {
     /// Sends a message to all connected users using a given channel
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         self.server.broadcast_message::<C, M>(message);
+    }
+
+    pub fn tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
+        self.server.tick_buffer_messages(tick)
     }
 
     //// Updates ////

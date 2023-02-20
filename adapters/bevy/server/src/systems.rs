@@ -17,14 +17,11 @@ mod naia_events {
 }
 
 mod bevy_events {
-    pub use crate::events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents};
+    pub use crate::events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents, TickEvent};
 }
-
-use super::resource::ServerResource;
 
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<Server<Entity>>| {
-        world.resource_scope(|world, mut server_resource: Mut<ServerResource>| {
             let mut events = server.receive();
             if events.is_empty() {
                 // In the future, may want to stall the system if we don't receive any events
@@ -48,17 +45,20 @@ pub fn before_receive_events(world: &mut World) {
                         disconnect_event_writer.send(bevy_events::DisconnectEvent(user_key, user));
                     }
 
-                    // Tick Event
-                    for _ in events.read::<naia_events::TickEvent>() {
-                        server_resource.ticker.set();
-                    }
-
                     // Error Event
                     let mut error_event_writer = world
                         .get_resource_unchecked_mut::<Events<bevy_events::ErrorEvent>>()
                         .unwrap();
                     for error in events.read::<naia_events::ErrorEvent>() {
                         error_event_writer.send(bevy_events::ErrorEvent(error));
+                    }
+
+                    // Tick Event
+                    let mut tick_event_writer = world
+                        .get_resource_unchecked_mut::<Events<bevy_events::TickEvent>>()
+                        .unwrap();
+                    for tick in events.read::<naia_events::TickEvent>() {
+                        tick_event_writer.send(bevy_events::TickEvent(tick));
                     }
 
                     // Message Event
@@ -74,20 +74,7 @@ pub fn before_receive_events(world: &mut World) {
                     auth_event_writer.send(bevy_events::AuthEvents::from(&mut events));
                 }
             }
-        });
     });
-}
-
-pub fn should_tick(resource: Res<ServerResource>) -> ShouldRun {
-    if resource.ticker.is_set() {
-        ShouldRun::Yes
-    } else {
-        ShouldRun::No
-    }
-}
-
-pub fn finish_tick(mut resource: ResMut<ServerResource>) {
-    resource.ticker.reset();
 }
 
 pub fn should_receive(server: Res<Server<Entity>>) -> ShouldRun {

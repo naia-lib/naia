@@ -27,7 +27,7 @@ pub use error::NaiaClientError;
 pub use events::{
     ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events,
     InsertComponentEvent, MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent,
-    UpdateComponentEvent,
+    UpdateComponentEvent, ServerTickEvent
 };
 pub use protocol::entity_ref::EntityRef;
 

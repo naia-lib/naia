@@ -32,6 +32,7 @@ use crate::{
         world_record::WorldRecord,
     },
 };
+use crate::connection::tick_buffer_messages::TickBufferMessages;
 
 use super::{
     error::NaiaServerError,
@@ -138,9 +139,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.maintain_socket();
 
         // tick event
-        let mut did_tick = false;
         if self.time_manager.recv_server_tick() {
-            did_tick = true;
+            self.incoming_events.push_tick(self.time_manager.server_tick());
         }
 
         // loop through all connections, receive Messages
@@ -152,21 +152,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
             // receive messages from anyone
             connection.receive_messages(&mut self.incoming_events);
-        }
-
-        // receive (retrieve from buffer) tick buffered messages for the current server tick
-        if did_tick {
-            // Receive Tick Buffered Messages
-            for user_address in &user_addresses {
-                let connection = self.user_connections.get_mut(user_address).unwrap();
-
-                connection.receive_tick_buffer_messages(
-                    &self.time_manager.server_tick(),
-                    &mut self.incoming_events,
-                );
-            }
-
-            self.incoming_events.push_tick();
         }
 
         // return all received messages and reset the buffer
@@ -323,6 +308,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.user_keys()
             .iter()
             .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
+    }
+
+    pub fn tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
+        let mut tick_buffer_messages = TickBufferMessages::new();
+        for (_user_address, connection) in self.user_connections.iter_mut() {
+            // receive messages from anyone
+            connection.tick_buffer_messages(tick, &mut tick_buffer_messages);
+        }
+        tick_buffer_messages
     }
 
     // Updates

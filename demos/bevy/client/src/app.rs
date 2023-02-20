@@ -14,7 +14,7 @@ use bevy_winit::WinitPlugin;
 use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, Stage};
 use naia_bevy_demo_shared::protocol;
 
-use crate::systems::{events, init, input, sync, tick};
+use crate::systems::{events, init, input, sync, tick_events};
 
 pub fn run() {
     App::default()
@@ -43,10 +43,9 @@ pub fn run() {
         .add_system_to_stage(CoreStage::PreUpdate, events::insert_component_events)
         .add_system_to_stage(CoreStage::PreUpdate, events::update_component_events)
         .add_system_to_stage(CoreStage::PreUpdate, events::message_events)
+        .add_system_to_stage(CoreStage::PreUpdate, tick_events)
         .add_system_to_stage(CoreStage::Update, input)
         .add_system_to_stage(CoreStage::Update, sync)
-        // Gameplay Loop on Tick
-        .add_system_to_stage(Stage::Tick, tick)
         // Run App
         .run();
 }

@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_bevy_shared::{Channel, ChannelKind, Message, MessageKind};
+use naia_bevy_shared::{Channel, ChannelKind, Message, MessageKind, Tick};
 use naia_server::{Events, NaiaServerError, User, UserKey};
 
 // ConnectEvent
@@ -11,6 +11,9 @@ pub struct DisconnectEvent(pub UserKey, pub User);
 
 // ErrorEvent
 pub struct ErrorEvent(pub NaiaServerError);
+
+// TickEvent
+pub struct TickEvent(pub Tick);
 
 // AuthEvents
 pub struct AuthEvents {

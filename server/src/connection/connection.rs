@@ -21,6 +21,7 @@ use crate::{
     user::UserKey,
     Events,
 };
+use crate::connection::tick_buffer_messages::TickBufferMessages;
 
 use super::{io::Io, ping_manager::PingManager};
 
@@ -102,11 +103,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
     }
 
-    pub fn receive_tick_buffer_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
-        let channel_messages = self.tick_buffer.receive_messages(host_tick);
+    pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {
+        let channel_messages = self.tick_buffer.receive_messages(tick);
         for (channel_kind, received_messages) in channel_messages {
             for message in received_messages {
-                incoming_events.push_message(&self.user_key, &channel_kind, message);
+                messages.push(&self.user_key, &channel_kind, message);
             }
         }
     }

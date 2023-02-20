@@ -2,7 +2,7 @@ use std::default::Default;
 
 use bevy_ecs::{entity::Entity, prelude::Resource};
 
-use naia_bevy_client::CommandHistory;
+use naia_bevy_client::{CommandHistory, Tick};
 
 use naia_bevy_demo_shared::messages::KeyCommand;
 
@@ -25,4 +25,5 @@ pub struct Global {
     pub owned_entity: Option<OwnedEntity>,
     pub queued_command: Option<KeyCommand>,
     pub command_history: CommandHistory<KeyCommand>,
+    pub last_client_tick: Tick,
 }

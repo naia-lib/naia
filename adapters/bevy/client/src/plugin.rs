@@ -11,10 +11,10 @@ use super::{
     events::{
         ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvents,
         MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
+        ClientTickEvent, ServerTickEvent
     },
-    resource::ClientResource,
     stage::{PrivateStage, Stage},
-    systems::{before_receive_events, finish_tick, should_receive, should_tick},
+    systems::{before_receive_events, should_receive},
 };
 
 struct PluginConfig {
@@ -56,12 +56,13 @@ impl PluginType for Plugin {
         app
             // RESOURCES //
             .insert_resource(client)
-            .init_resource::<ClientResource>()
             // EVENTS //
             .add_event::<ConnectEvent>()
             .add_event::<DisconnectEvent>()
             .add_event::<RejectEvent>()
             .add_event::<ErrorEvent>()
+            .add_event::<ClientTickEvent>()
+            .add_event::<ServerTickEvent>()
             .add_event::<MessageEvents>()
             .add_event::<SpawnEntityEvent>()
             .add_event::<DespawnEntityEvent>()
@@ -80,19 +81,7 @@ impl PluginType for Plugin {
                 Stage::ReceiveEvents,
                 SystemStage::single_threaded().with_run_criteria(should_receive),
             )
-            // tick //
-            .add_stage_after(
-                CoreStage::PostUpdate,
-                Stage::Tick,
-                SystemStage::single_threaded().with_run_criteria(should_tick),
-            )
-            .add_stage_after(
-                Stage::Tick,
-                PrivateStage::AfterTick,
-                SystemStage::parallel().with_run_criteria(should_tick),
-            )
             // SYSTEMS //
-            .add_system_to_stage(PrivateStage::BeforeReceiveEvents, before_receive_events)
-            .add_system_to_stage(PrivateStage::AfterTick, finish_tick);
+            .add_system_to_stage(PrivateStage::BeforeReceiveEvents, before_receive_events);
     }
 }

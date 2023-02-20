@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
-use naia_shared::{Channel, ChannelKind, Message, MessageKind};
+use naia_shared::{Channel, ChannelKind, Message, MessageKind, Tick};
 
 use super::user::{User, UserKey};
 use crate::NaiaServerError;
@@ -8,7 +8,7 @@ use crate::NaiaServerError;
 pub struct Events {
     connections: Vec<UserKey>,
     disconnections: Vec<(UserKey, User)>,
-    ticks: Vec<()>,
+    ticks: Vec<Tick>,
     errors: Vec<NaiaServerError>,
     auths: HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>>,
@@ -97,8 +97,8 @@ impl Events {
         self.empty = false;
     }
 
-    pub(crate) fn push_tick(&mut self) {
-        self.ticks.push(());
+    pub(crate) fn push_tick(&mut self, tick: Tick) {
+        self.ticks.push(tick);
         self.empty = false;
     }
 
@@ -140,7 +140,7 @@ impl Event for DisconnectEvent {
 // Tick Event
 pub struct TickEvent;
 impl Event for TickEvent {
-    type Iter = IntoIter<()>;
+    type Iter = IntoIter<Tick>;
 
     fn iter(events: &mut Events) -> Self::Iter {
         let list = std::mem::take(&mut events.ticks);
