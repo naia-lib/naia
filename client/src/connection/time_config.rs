@@ -19,7 +19,7 @@ impl TimeConfig {
 impl Default for TimeConfig {
     fn default() -> Self {
         Self {
-            ping_interval: Duration::from_secs(7),
+            ping_interval: Duration::from_secs(3),
         }
     }
 }

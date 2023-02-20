@@ -166,7 +166,7 @@ impl TimeManager {
         let major_jitter_ms: u32 = (self.jitter() * 3.0).round() as u32;
 
         // skew ticks so that tick_duration_avg and instant_to_tick() is properly adjusted
-        self.base.skew_ticks(millis_elapsed_f32);
+        self.skew_ticks(millis_elapsed_f32);
         let tick_duration_ms: u32 = self.base.tick_duration_avg().round() as u32;
 
         // find targets
@@ -263,6 +263,22 @@ impl TimeManager {
         return (output_receiving, output_sending);
     }
 
+    fn skew_ticks(&mut self, millis_elapsed_f32: f32) {
+        if !self.base.will_skew_ticks() {
+            return;
+        }
+
+        let client_receiving_interp = self.base.get_interp(self.client_receiving_tick, &self.client_receiving_instant);
+        let client_sending_interp = self.base.get_interp(self.client_sending_tick, &self.client_sending_instant);
+        let server_receivable_interp = self.base.get_interp(self.server_receivable_tick, &self.server_receivable_instant);
+
+        self.base.skew_ticks(millis_elapsed_f32);
+
+        self.client_receiving_instant = self.base.instant_from_interp(self.client_receiving_tick, client_receiving_interp);
+        self.client_sending_instant = self.base.instant_from_interp(self.client_sending_tick, client_sending_interp);
+        self.server_receivable_instant = self.base.instant_from_interp(self.server_receivable_tick, server_receivable_interp);
+    }
+
     // Stats
 
     pub(crate) fn interpolation(&self) -> f32 {
@@ -298,7 +314,7 @@ fn get_client_sending_target(
 ) -> GameInstant {
     now.add_millis(latency)
         .add_millis(jitter)
-        .add_millis(tick_duration)
+        .add_millis(tick_duration * 2)
 }
 
 fn get_server_receivable_target(now: &GameInstant, latency: u32, jitter: u32) -> GameInstant {

@@ -8,9 +8,9 @@ use log::{info, warn};
 
 use crate::connection::io::Io;
 
-// skews occur over 5 seconds in milliseconds
+// skews occur over 3 seconds in milliseconds
 // should be less than the Ping rate
-const SKEW_DURATION_MS: f32 = 5000.0;
+const SKEW_DURATION_MS: f32 = 1000.0;
 
 /// Is responsible for sending regular ping messages between client/servers
 /// and to estimate rtt/jitter
@@ -127,8 +127,10 @@ impl BaseTimeManager {
             self.skewed_server_tick_instant = self.server_tick_instant.clone();
             self.skewed_server_tick_duration_avg = self.server_tick_duration_avg.clone();
         } else {
-            // if this is the most recent Ping, set some values
-            if sequence_greater_than(ping_index, self.most_recent_ping) {
+            // if this is the most recent Ping, initiate skew
+            if self.skew_accumulator < SKEW_DURATION_MS {
+                info!("new Skew abort because still in progress");
+            } else if sequence_greater_than(ping_index, self.most_recent_ping) {
                 self.most_recent_ping = ping_index;
 
                 // {
@@ -150,6 +152,13 @@ impl BaseTimeManager {
                 self.server_tick = server_tick;
                 self.server_tick_instant = server_tick_instant;
                 self.server_tick_duration_avg = tick_duration_avg;
+
+                {
+                    info!("---SKEW START---");
+                    let instant_diff = self.last_server_tick_instant.offset_from(&self.server_tick_instant) as f32;
+                    let tick_avg_diff = self.server_tick_duration_avg - self.last_server_tick_duration_avg;
+                    info!("      Distance | Instant: {instant_diff}, Avg Duration: {tick_avg_diff}")
+                }
 
                 // {
                 //     // Current Last Values
@@ -226,14 +235,19 @@ impl BaseTimeManager {
         self.sent_pings.clear();
     }
 
+    pub(crate) fn will_skew_ticks(&self) -> bool {
+        self.skew_accumulator < SKEW_DURATION_MS
+    }
+
     pub(crate) fn skew_ticks(&mut self, delta_millis: f32) {
-        if self.skew_accumulator >= SKEW_DURATION_MS {
+        if !self.will_skew_ticks() {
             return;
         }
 
         self.skew_accumulator += delta_millis;
         if self.skew_accumulator > SKEW_DURATION_MS {
             self.skew_accumulator = SKEW_DURATION_MS;
+            info!("---SKEW FINISH---");
         }
 
         let interpolation = self.skew_accumulator / SKEW_DURATION_MS;
@@ -284,7 +298,7 @@ impl BaseTimeManager {
     }
 
     // Uses skewed values
-    fn tick_to_instant(&self, tick: Tick) -> GameInstant {
+    pub(crate) fn tick_to_instant(&self, tick: Tick) -> GameInstant {
         let tick_diff = wrapping_diff(self.server_tick, tick);
         let tick_diff_duration = (tick_diff as f32) * self.skewed_server_tick_duration_avg;
         if tick_diff_duration >= 0.0 {
@@ -305,5 +319,24 @@ impl BaseTimeManager {
     // Uses skewed values
     pub(crate) fn tick_duration_avg(&self) -> f32 {
         self.skewed_server_tick_duration_avg
+    }
+
+    pub(crate) fn get_interp(&self, tick: Tick, instant: &GameInstant) -> f32 {
+        let output = (self.tick_to_instant(tick).offset_from(&instant) as f32) / self.skewed_server_tick_duration_avg;
+        output
+    }
+
+    pub(crate) fn instant_from_interp(&self, tick: Tick, interp: f32) -> GameInstant {
+        let tick_length_interped = interp * self.skewed_server_tick_duration_avg;
+        if tick_length_interped >= 0.0 {
+            // positive
+            let millis = tick_length_interped.round() as u32;
+            return self.tick_to_instant(tick).add_millis(millis);
+        } else {
+            // negative
+            let millis = (tick_length_interped.round() * -1.0) as u32;
+            return self.tick_to_instant(tick).sub_millis(millis);
+        }
+
     }
 }
