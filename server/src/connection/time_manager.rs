@@ -1,5 +1,5 @@
-use std::time::Duration;
 use log::info;
+use std::time::Duration;
 
 use naia_shared::{
     BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, Serde,
@@ -94,7 +94,8 @@ impl TimeManager {
         //     let tick_duration_avg = self.tick_duration_avg;
         //     info!("SEND: Tick Duration Average: {tick_duration_avg}");
         // }
-        let tick_duration_avg = UnsignedVariableInteger::<9>::new((self.tick_duration_avg * 1000.0).round() as i128);
+        let tick_duration_avg =
+            UnsignedVariableInteger::<9>::new((self.tick_duration_avg * 1000.0).round() as i128);
         tick_duration_avg.ser(&mut writer);
 
         // write instant of last tick

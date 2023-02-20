@@ -123,11 +123,15 @@ impl GameDuration {
     }
 
     pub fn add_millis(&self, millis: u32) -> Self {
-        Self { millis: self.millis + millis }
+        Self {
+            millis: self.millis + millis,
+        }
     }
 
     pub fn sub_millis(&self, millis: u32) -> Self {
-        Self { millis: self.millis - millis }
+        Self {
+            millis: self.millis - millis,
+        }
     }
 }
 

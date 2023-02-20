@@ -1,6 +1,9 @@
 use log::{info, warn};
 
-use naia_shared::{BaseConnection, BitReader, GameDuration, GameInstant, Instant, sequence_greater_than, sequence_less_than, SerdeErr, Tick, Timer};
+use naia_shared::{
+    sequence_greater_than, sequence_less_than, BaseConnection, BitReader, GameDuration,
+    GameInstant, Instant, SerdeErr, Tick, Timer,
+};
 
 use crate::connection::{base_time_manager::BaseTimeManager, io::Io, time_config::TimeConfig};
 
@@ -37,15 +40,17 @@ impl TimeManager {
         rtt_stdv: f32,
         offset_stdv: f32,
     ) -> Self {
-
         let now = base.game_time_now();
         let latency_ms = (pruned_rtt_avg / 2.0) as u32;
         let major_jitter_ms = (rtt_stdv / 2.0 * 3.0) as u32;
         let tick_duration_ms = base.tick_duration_avg().round() as u32;
 
-        let client_receiving_instant = get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
-        let client_sending_instant = get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
-        let server_receivable_instant = get_server_receivable_target(&now, latency_ms, major_jitter_ms);
+        let client_receiving_instant =
+            get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+        let client_sending_instant =
+            get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+        let server_receivable_instant =
+            get_server_receivable_target(&now, latency_ms, major_jitter_ms);
 
         let client_receiving_tick = base.instant_to_tick(&client_receiving_instant);
         let client_sending_tick = base.instant_to_tick(&client_sending_instant);
@@ -165,19 +170,27 @@ impl TimeManager {
         let tick_duration_ms: u32 = self.base.tick_duration_avg().round() as u32;
 
         // find targets
-        let client_receiving_target = get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
-        let client_sending_target = get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
-        let server_receivable_target = get_server_receivable_target(&now, latency_ms, major_jitter_ms);
+        let client_receiving_target =
+            get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+        let client_sending_target =
+            get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+        let server_receivable_target =
+            get_server_receivable_target(&now, latency_ms, major_jitter_ms);
 
         // set default next instant
-        let client_receiving_default_next = self.client_receiving_instant.add_millis(millis_elapsed);
+        let client_receiving_default_next =
+            self.client_receiving_instant.add_millis(millis_elapsed);
         let client_sending_default_next = self.client_sending_instant.add_millis(millis_elapsed);
-        let server_receivable_default_next = self.server_receivable_instant.add_millis(millis_elapsed);
+        let server_receivable_default_next =
+            self.server_receivable_instant.add_millis(millis_elapsed);
 
         // find speeds
-        let client_receiving_speed = offset_to_speed(client_receiving_default_next.offset_from(&client_receiving_target));
-        let client_sending_speed = offset_to_speed(client_sending_default_next.offset_from(&client_sending_target));
-        let server_receivable_speed = offset_to_speed(server_receivable_default_next.offset_from(&server_receivable_target));
+        let client_receiving_speed =
+            offset_to_speed(client_receiving_default_next.offset_from(&client_receiving_target));
+        let client_sending_speed =
+            offset_to_speed(client_sending_default_next.offset_from(&client_sending_target));
+        let server_receivable_speed =
+            offset_to_speed(server_receivable_default_next.offset_from(&server_receivable_target));
 
         // {
         //     let client_receiving_instant = client_receiving_default_next.as_millis();
@@ -190,9 +203,15 @@ impl TimeManager {
         // }
 
         // apply speeds
-        self.client_receiving_instant = self.client_receiving_instant.add_millis((millis_elapsed_f32 * client_receiving_speed) as u32);
-        self.client_sending_instant = self.client_sending_instant.add_millis((millis_elapsed_f32 * client_sending_speed) as u32);
-        self.server_receivable_instant = self.server_receivable_instant.add_millis((millis_elapsed_f32 * server_receivable_speed) as u32);
+        self.client_receiving_instant = self
+            .client_receiving_instant
+            .add_millis((millis_elapsed_f32 * client_receiving_speed) as u32);
+        self.client_sending_instant = self
+            .client_sending_instant
+            .add_millis((millis_elapsed_f32 * client_sending_speed) as u32);
+        self.server_receivable_instant = self
+            .server_receivable_instant
+            .add_millis((millis_elapsed_f32 * server_receivable_speed) as u32);
 
         // convert current instants into ticks
         let new_client_receiving_tick = self.base.instant_to_tick(&self.client_receiving_instant);
@@ -260,12 +279,26 @@ impl TimeManager {
     }
 }
 
-fn get_client_receiving_target(now: &GameInstant, latency: u32, jitter: u32, tick_duration: u32) -> GameInstant {
-    now.sub_millis(latency).sub_millis(jitter).sub_millis(tick_duration)
+fn get_client_receiving_target(
+    now: &GameInstant,
+    latency: u32,
+    jitter: u32,
+    tick_duration: u32,
+) -> GameInstant {
+    now.sub_millis(latency)
+        .sub_millis(jitter)
+        .sub_millis(tick_duration)
 }
 
-fn get_client_sending_target(now: &GameInstant, latency: u32, jitter: u32, tick_duration: u32) -> GameInstant {
-    now.add_millis(latency).add_millis(jitter).add_millis(tick_duration)
+fn get_client_sending_target(
+    now: &GameInstant,
+    latency: u32,
+    jitter: u32,
+    tick_duration: u32,
+) -> GameInstant {
+    now.add_millis(latency)
+        .add_millis(jitter)
+        .add_millis(tick_duration)
 }
 
 fn get_server_receivable_target(now: &GameInstant, latency: u32, jitter: u32) -> GameInstant {
@@ -293,7 +326,7 @@ const INV_OFFSET_MIN: i32 = OFFSET_MIN * -1;
 // Tests
 #[cfg(test)]
 mod offset_to_speed_tests {
-    use crate::connection::time_manager::{OFFSET_MAX, OFFSET_MIN, offset_to_speed, SAFE_SPEED};
+    use crate::connection::time_manager::{offset_to_speed, OFFSET_MAX, OFFSET_MIN, SAFE_SPEED};
 
     #[test]
     fn min_speed() {

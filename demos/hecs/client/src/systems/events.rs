@@ -1,8 +1,8 @@
 use log::info;
 
 use naia_hecs_client::{
-    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-    RemoveComponentEvent, SpawnEntityEvent, ClientTickEvent,
+    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+    InsertComponentEvent, RemoveComponentEvent, SpawnEntityEvent,
 };
 use naia_hecs_demo_shared::{Marker, Name, Position};
 

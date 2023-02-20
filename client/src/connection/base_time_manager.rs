@@ -1,4 +1,8 @@
-use naia_shared::{sequence_greater_than, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, PingStore, Serde, SerdeErr, StandardHeader, Tick, UnsignedVariableInteger, wrapping_diff};
+use naia_shared::{
+    sequence_greater_than, wrapping_diff, BitReader, BitWriter, GameDuration, GameInstant, Instant,
+    PacketType, PingIndex, PingStore, Serde, SerdeErr, StandardHeader, Tick,
+    UnsignedVariableInteger,
+};
 
 use log::{info, warn};
 
@@ -122,7 +126,6 @@ impl BaseTimeManager {
             self.last_server_tick_duration_avg = self.server_tick_duration_avg.clone();
             self.skewed_server_tick_instant = self.server_tick_instant.clone();
             self.skewed_server_tick_duration_avg = self.server_tick_duration_avg.clone();
-
         } else {
             // if this is the most recent Ping, set some values
             if sequence_greater_than(ping_index, self.most_recent_ping) {
@@ -236,7 +239,9 @@ impl BaseTimeManager {
         let interpolation = self.skew_accumulator / SKEW_DURATION_MS;
 
         // Skew Instant
-        let server_tick_skew_distance = self.last_server_tick_instant.offset_from(&self.server_tick_instant) as f32;
+        let server_tick_skew_distance = self
+            .last_server_tick_instant
+            .offset_from(&self.server_tick_instant) as f32;
         if server_tick_skew_distance >= 0.0 {
             // positive
             let dis_u32 = (server_tick_skew_distance * interpolation).round() as u32;
@@ -248,7 +253,8 @@ impl BaseTimeManager {
         }
 
         // Skew Tick Duration
-        let server_tick_duration_skew_distance = self.server_tick_duration_avg - self.last_server_tick_duration_avg;
+        let server_tick_duration_skew_distance =
+            self.server_tick_duration_avg - self.last_server_tick_duration_avg;
         let dis = server_tick_duration_skew_distance * interpolation;
         self.skewed_server_tick_duration_avg = self.last_server_tick_duration_avg + dis;
 
@@ -271,7 +277,10 @@ impl BaseTimeManager {
     pub(crate) fn instant_to_tick(&self, instant: &GameInstant) -> Tick {
         let offset_ms = self.skewed_server_tick_instant.offset_from(instant);
         let offset_ticks_f32 = (offset_ms as f32) / self.skewed_server_tick_duration_avg;
-        return self.server_tick.clone().wrapping_add_signed(offset_ticks_f32 as i16);
+        return self
+            .server_tick
+            .clone()
+            .wrapping_add_signed(offset_ticks_f32 as i16);
     }
 
     // Uses skewed values
@@ -281,11 +290,15 @@ impl BaseTimeManager {
         if tick_diff_duration >= 0.0 {
             // positive
             let tick_diff_duration_millis: u32 = tick_diff_duration.round() as u32;
-            return self.skewed_server_tick_instant.add_millis(tick_diff_duration_millis);
+            return self
+                .skewed_server_tick_instant
+                .add_millis(tick_diff_duration_millis);
         } else {
             // negative
             let neg_tick_diff_duration_millis: u32 = (tick_diff_duration * -1.0).round() as u32;
-            return self.skewed_server_tick_instant.sub_millis(neg_tick_diff_duration_millis);
+            return self
+                .skewed_server_tick_instant
+                .sub_millis(neg_tick_diff_duration_millis);
         }
     }
 

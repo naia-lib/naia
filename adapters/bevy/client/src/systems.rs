@@ -12,8 +12,8 @@ use naia_bevy_shared::WorldProxyMut;
 
 mod naia_events {
     pub use naia_client::{
-        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-        MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent, ClientTickEvent,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        InsertComponentEvent, MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent,
         UpdateComponentEvent,
     };
 }

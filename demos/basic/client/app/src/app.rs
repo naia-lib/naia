@@ -7,9 +7,9 @@ cfg_if! {
 }
 
 use naia_client::{
-    default_channels::UnorderedReliableChannel, Client as NaiaClient, ClientConfig, ConnectEvent,
-    DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent,
-    RemoveComponentEvent, SpawnEntityEvent, ClientTickEvent, UpdateComponentEvent,
+    default_channels::UnorderedReliableChannel, Client as NaiaClient, ClientConfig,
+    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent,
+    RejectEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World};

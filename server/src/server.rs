@@ -992,7 +992,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             {
                                 if self.io.send_writer(&address, &mut writer).is_err() {
                                     // TODO: pass this on and handle above
-                                    warn!("Server Error: Cannot send challenge response packet to {}", &address);
+                                    warn!(
+                                        "Server Error: Cannot send challenge response packet to {}",
+                                        &address
+                                    );
                                 }
                             }
                             continue;

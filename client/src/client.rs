@@ -138,7 +138,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 return std::mem::take(&mut self.incoming_events);
             }
 
-            let (receiving_tick_happened, sending_tick_happened) = connection.time_manager.check_ticks();
+            let (receiving_tick_happened, sending_tick_happened) =
+                connection.time_manager.check_ticks();
 
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // apply updates on tick boundary
@@ -154,15 +155,15 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 self.incoming_events.push_server_tick();
             }
 
-            if let Some((prev_sending_tick, current_sending_tick,)) = sending_tick_happened {
+            if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
                 // send outgoing packets
                 connection.send_outgoing_packets(&self.protocol, &mut self.io);
 
                 self.incoming_events.push_client_tick();
             }
-
         } else {
-            self.handshake_manager.send(&self.protocol.message_kinds, &mut self.io);
+            self.handshake_manager
+                .send(&self.protocol.message_kinds, &mut self.io);
         }
 
         std::mem::take(&mut self.incoming_events)
@@ -273,7 +274,6 @@ impl<E: Copy + Eq + Hash> Client<E> {
     // internal functions
 
     fn maintain_socket(&mut self) {
-
         if let Some(server_connection) = self.server_connection.as_mut() {
             // connection already established
 
