@@ -1,6 +1,6 @@
-use log::info;
+use log::{info, warn};
 
-use naia_shared::{BitReader, SerdeErr, GAME_TIME_LIMIT};
+use naia_shared::{BitReader, SerdeErr, GAME_TIME_LIMIT, Tick, GameInstant, Serde};
 
 use crate::connection::{
     base_time_manager::BaseTimeManager, io::Io, time_config::TimeConfig, time_manager::TimeManager,
@@ -12,14 +12,22 @@ pub struct HandshakeTimeManager {
     base: BaseTimeManager,
     time_config: TimeConfig,
     pong_stats: Vec<(f32, f32)>,
+    server_tick: Tick,
+    server_tick_instant: GameInstant,
+    server_tick_duration_avg: f32,
 }
 
 impl HandshakeTimeManager {
     pub fn new(time_config: TimeConfig) -> Self {
+        let base = BaseTimeManager::new();
+        let server_tick_instant = base.game_time_now();
         Self {
-            base: BaseTimeManager::new(),
+            base,
             time_config: time_config.clone(),
             pong_stats: Vec::new(),
+            server_tick: 0,
+            server_tick_instant,
+            server_tick_duration_avg: 0.0,
         }
     }
 
@@ -28,11 +36,22 @@ impl HandshakeTimeManager {
     }
 
     pub(crate) fn read_pong(&mut self, reader: &mut BitReader) -> Result<bool, SerdeErr> {
-        let (offset_millis, rtt_millis) = self.base.read_pong(reader)?;
 
-        self.buffer_stats(offset_millis, rtt_millis);
-        if self.pong_stats.len() >= HANDSHAKE_PONGS_REQUIRED {
-            return Ok(true);
+        // read server tick
+        let server_tick = Tick::de(reader)?;
+
+        // read time since last tick
+        let server_tick_instant = GameInstant::de(reader)?;
+
+        if let Some((duration_avg, offset_millis, rtt_millis)) = self.base.read_pong(reader)? {
+            self.server_tick = server_tick;
+            self.server_tick_instant = server_tick_instant;
+            self.server_tick_duration_avg = duration_avg;
+
+            self.buffer_stats(offset_millis, rtt_millis);
+            if self.pong_stats.len() >= HANDSHAKE_PONGS_REQUIRED {
+                return Ok(true);
+            }
         }
 
         return Ok(false);
@@ -125,6 +144,9 @@ impl HandshakeTimeManager {
         TimeManager::from_parts(
             self.time_config,
             self.base,
+            self.server_tick,
+            self.server_tick_instant,
+            self.server_tick_duration_avg,
             pruned_rtt_mean,
             rtt_stdv,
             offset_stdv,

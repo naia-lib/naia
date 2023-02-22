@@ -54,6 +54,10 @@ impl TimeManager {
         self.current_tick
     }
 
+    pub fn server_tick_instant(&self) -> GameInstant {
+        self.last_tick_game_instant.clone()
+    }
+
     pub fn game_time_now(&self) -> GameInstant {
         GameInstant::new(&self.start_instant)
     }
@@ -80,14 +84,17 @@ impl TimeManager {
         // write pong payload
         StandardHeader::new(PacketType::Pong, 0, 0, 0).ser(&mut writer);
 
+        // write server tick
+        self.current_tick.ser(&mut writer);
+
+        // write server tick instant
+        self.last_tick_game_instant.ser(&mut writer);
+
         // write index
         ping_index.ser(&mut writer);
 
         // write received time
         server_received_time.ser(&mut writer);
-
-        // write current tick
-        self.current_tick.ser(&mut writer);
 
         // write average tick duration as microseconds
         // {
@@ -97,9 +104,6 @@ impl TimeManager {
         let tick_duration_avg =
             UnsignedVariableInteger::<9>::new((self.tick_duration_avg * 1000.0).round() as i128);
         tick_duration_avg.ser(&mut writer);
-
-        // write instant of last tick
-        self.last_tick_game_instant.ser(&mut writer);
 
         // write send time
         self.game_time_now().ser(&mut writer);

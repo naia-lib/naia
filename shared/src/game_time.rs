@@ -69,6 +69,10 @@ impl GameInstant {
         }
     }
 
+    pub fn is_more_than(&self, other: &GameInstant) -> bool {
+        return self.offset_from(other) < 0;
+    }
+
     pub fn as_millis(&self) -> u32 {
         self.millis
     }
@@ -90,6 +94,14 @@ impl GameInstant {
             Self {
                 millis: GAME_TIME_LIMIT - delta,
             }
+        }
+    }
+
+    pub fn add_signed_millis(&self, millis: i32) -> Self {
+        if millis >= 0 {
+            return self.add_millis(millis as u32);
+        } else {
+            return self.sub_millis((millis * -1) as u32);
         }
     }
 }

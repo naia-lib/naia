@@ -7,7 +7,7 @@ use bevy_ecs::prelude::Resource;
 
 use naia_client_socket::Socket;
 
-use naia_shared::PingIndex;
+use naia_shared::{GameInstant, PingIndex};
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, PacketType, Protocol,
@@ -360,10 +360,24 @@ impl<E: Copy + Eq + Hash> Client<E> {
                         // Read incoming header
                         server_connection.process_incoming_header(&header);
 
+                        // read server tick
+                        let Ok(server_tick) = Tick::de(&mut reader) else {
+                            warn!("unable to parse server_tick from packet");
+                            continue;
+                        };
+
+                        // read time since last tick
+                        let Ok(server_tick_instant) = GameInstant::de(&mut reader) else {
+                            warn!("unable to parse server_tick_instant from packet");
+                            continue;
+                        };
+
+                        server_connection.time_manager.recv_tick_instant(&server_tick, &server_tick_instant);
+
                         // Handle based on PacketType
                         match header.packet_type {
                             PacketType::Data => {
-                                if server_connection.buffer_data_packet(&mut reader).is_err() {
+                                if server_connection.buffer_data_packet(&server_tick, &mut reader).is_err() {
                                     warn!("unable to parse data packet");
                                     continue;
                                 }

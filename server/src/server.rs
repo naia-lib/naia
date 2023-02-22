@@ -923,6 +923,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .base
                         .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
+                    // write server tick
+                    self.time_manager.server_tick().ser(&mut writer);
+
+                    // write server tick instant
+                    self.time_manager.server_tick_instant().ser(&mut writer);
+
                     // send packet
                     if self.io.send_writer(user_address, &mut writer).is_err() {
                         // TODO: pass this on and handle above
@@ -949,6 +955,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     connection
                         .base
                         .write_outgoing_header(PacketType::Ping, &mut writer);
+
+                    // write server tick
+                    self.time_manager.server_tick().ser(&mut writer);
+
+                    // write server tick instant
+                    self.time_manager.server_tick_instant().ser(&mut writer);
 
                     // write body
                     connection
