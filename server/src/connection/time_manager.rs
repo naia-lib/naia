@@ -13,6 +13,7 @@ pub struct TimeManager {
     tick_duration_avg: f32,
     tick_duration_avg_min: f32,
     tick_duration_avg_max: f32,
+    tick_speedup_potential: f32,
     client_diff_avg: f32,
 }
 
@@ -35,6 +36,7 @@ impl TimeManager {
             tick_duration_avg_min: tick_duration_avg,
             tick_duration_avg_max: tick_duration_avg,
             client_diff_avg: 0.0,
+            tick_speedup_potential: 0.0,
         }
     }
 
@@ -90,6 +92,8 @@ impl TimeManager {
             self.tick_duration_avg_max = (0.999 * self.tick_duration_avg_max) + (0.001 * self.tick_duration_avg);
         }
 
+        self.tick_speedup_potential = (((self.tick_duration_avg_max - self.tick_duration_avg_min) / self.tick_duration_avg_min) * 30.0).max(0.0).min(10.0);
+
         // let tick_duration_avg_ms = self.tick_duration_avg;
         // info!("Actual Tick Duration: {duration_ms} ms | New Average: {tick_duration_avg_ms}");
     }
@@ -129,13 +133,9 @@ impl TimeManager {
             UnsignedVariableInteger::<9>::new((self.tick_duration_avg * 1000.0).round() as i128);
         tick_duration_avg.ser(&mut writer);
 
-        let tick_duration_avg_min =
-            UnsignedVariableInteger::<9>::new((self.tick_duration_avg_min * 1000.0).round() as i128);
-        tick_duration_avg_min.ser(&mut writer);
-
-        let tick_duration_avg_max =
-            UnsignedVariableInteger::<9>::new((self.tick_duration_avg_max * 1000.0).round() as i128);
-        tick_duration_avg_max.ser(&mut writer);
+        let tick_speedup_potential =
+            UnsignedVariableInteger::<9>::new((self.tick_speedup_potential * 1000.0).round() as i128);
+        tick_speedup_potential.ser(&mut writer);
 
         // write send time
         self.game_time_now().ser(&mut writer);

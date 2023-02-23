@@ -24,9 +24,7 @@ pub struct TimeManager {
     server_tick: Tick,
     server_tick_instant: GameInstant,
     server_tick_duration_avg: f32,
-    server_tick_duration_min: f32,
-    server_tick_duration_max: f32,
-    danger_adjust: f32,
+    server_speedup_potential: f32,
 
     last_tick_check_instant: Instant,
     pub client_receiving_tick: Tick,
@@ -44,8 +42,7 @@ impl TimeManager {
         server_tick: Tick,
         server_tick_instant: GameInstant,
         server_tick_duration_avg: f32,
-        server_tick_duration_min: f32,
-        server_tick_duration_max: f32,
+        server_speedup_potential: f32,
         pruned_rtt_avg: f32,
         rtt_stdv: f32,
         offset_stdv: f32,
@@ -84,9 +81,7 @@ impl TimeManager {
             server_tick,
             server_tick_instant,
             server_tick_duration_avg,
-            server_tick_duration_min,
-            server_tick_duration_max,
-            danger_adjust: 1.0,
+            server_speedup_potential,
 
             last_tick_check_instant: Instant::now(),
 
@@ -115,9 +110,9 @@ impl TimeManager {
     }
 
     pub fn read_pong(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
-        if let Some((tick_duration_avg, tick_duration_min, tick_duration_max, offset_millis, rtt_millis)) = self.base.read_pong(reader)? {
+        if let Some((tick_duration_avg, speedup_potential, offset_millis, rtt_millis)) = self.base.read_pong(reader)? {
             self.process_stats(offset_millis, rtt_millis);
-            self.recv_tick_duration_avg(tick_duration_avg, tick_duration_min, tick_duration_max);
+            self.recv_tick_duration_avg(tick_duration_avg, speedup_potential);
         }
         Ok(())
     }
@@ -212,7 +207,7 @@ impl TimeManager {
         // }
     }
 
-    pub(crate) fn recv_tick_duration_avg(&mut self, server_tick_duration_avg: f32, server_tick_duration_min: f32, server_tick_duration_max: f32) {
+    pub(crate) fn recv_tick_duration_avg(&mut self, server_tick_duration_avg: f32, server_speedup_potential: f32) {
 
         // let prev_sending_instant = self.client_sending_instant.clone();
 
@@ -233,18 +228,7 @@ impl TimeManager {
         // //
 
         self.server_tick_duration_avg = server_tick_duration_avg;
-        self.server_tick_duration_min = server_tick_duration_min;
-        self.server_tick_duration_max = server_tick_duration_max;
-
-        self.danger_adjust = (((self.server_tick_duration_max - self.server_tick_duration_min) / self.server_tick_duration_min) * 30.0).max(0.0).min(10.0);
-
-        {
-            let avg = self.server_tick_duration_avg;
-            let min = self.server_tick_duration_min;
-            let max = self.server_tick_duration_max;
-            let danger = self.danger_adjust;
-            info!(" ---------- Avg: {avg}, Min: {min}, Max: {max}, Danger: {danger}");
-        }
+        self.server_speedup_potential = server_speedup_potential;
 
         // if server_tick_duration_avg < self.server_tick_duration_avg {
         //     // Ticks are getting shorter, need to respond ASAP
@@ -329,7 +313,7 @@ impl TimeManager {
             get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
 
         let client_sending_target =
-            get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms, self.danger_adjust);
+            get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms, self.server_speedup_potential);
         let server_receivable_target =
             get_server_receivable_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
 
