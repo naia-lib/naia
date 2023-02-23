@@ -60,10 +60,6 @@ impl ChannelTickBufferSender {
                 let messages = message_map.collect_messages();
                 self.outgoing_messages.push_back((*message_tick, messages));
             }
-
-            // if self.outgoing_messages.len() > 0 {
-            //     info!("outgoing_messages.len() = {} messages",
-            // self.outgoing_messages.len()); }
         }
     }
 

@@ -188,18 +188,6 @@ impl TimeManager {
         let prev_server_tick_instant = self.tick_to_instant(*server_tick);
         let offset = prev_server_tick_instant.offset_from(&server_tick_instant);
 
-        // {
-        //     let server_tick_instant_ms = server_tick_instant.as_millis();
-        //     let prev_server_tick_instant_ms = prev_server_tick_instant.as_millis();
-        //     info!("Incoming    | Tick: {server_tick}: ({prev_server_tick_instant_ms}) -> ({server_tick_instant_ms}) | diff: {offset}");
-        // }
-
-        // // todo: remove
-        // let prev_recv_instant = self.client_receiving_instant.as_millis();
-        // let prev_send_instant = self.client_sending_instant.as_millis();
-        // let prev_svrc_instant = self.server_receivable_instant.as_millis();
-        // //
-
         self.server_tick = *server_tick;
         self.server_tick_instant = server_tick_instant.clone();
 
@@ -207,25 +195,6 @@ impl TimeManager {
         self.client_receiving_instant = self.client_receiving_instant.add_signed_millis(offset);
         self.client_sending_instant = self.client_sending_instant.add_signed_millis(offset);
         self.server_receivable_instant = self.server_receivable_instant.add_signed_millis(offset);
-
-        // {
-        //     let recv_tick = self.client_receiving_tick;
-        //     let recv_instant = self.client_receiving_instant.as_millis();
-        //     let recv_diff = (recv_instant as i32)-(prev_recv_instant as i32);
-        //
-        //     let send_tick = self.client_sending_tick;
-        //     let send_instant = self.client_sending_instant.as_millis();
-        //     let send_diff = (send_instant as i32)-(prev_send_instant as i32);
-        //
-        //     let svrc_tick = self.server_receivable_tick;
-        //     let svrc_instant = self.server_receivable_instant.as_millis();
-        //     let svrc_diff = (svrc_instant as i32)-(prev_svrc_instant as i32);
-        //
-        //     info!("Client Recv | Tick: {recv_tick}, ({prev_recv_instant}) -> ({recv_instant}) | diff: {recv_diff}");
-        //     info!("Client Send | Tick: {send_tick}, ({prev_send_instant}) -> ({send_instant}) | diff {send_diff}");
-        //     info!("Server Recv | Tick: {svrc_tick}, ({prev_svrc_instant}) -> ({svrc_instant}) | diff {svrc_diff}");
-        //     info!("...");
-        // }
     }
 
     pub(crate) fn recv_tick_duration_avg(
@@ -233,8 +202,6 @@ impl TimeManager {
         server_tick_duration_avg: f32,
         server_speedup_potential: f32,
     ) {
-        // let prev_sending_instant = self.client_sending_instant.clone();
-
         let client_receiving_interp =
             self.get_interp(self.client_receiving_tick, &self.client_receiving_instant);
         let client_sending_interp =
@@ -242,35 +209,8 @@ impl TimeManager {
         let server_receivable_interp =
             self.get_interp(self.server_receivable_tick, &self.server_receivable_instant);
 
-        // {
-        //     let prev_server_tick_duration_avg = self.server_tick_duration_avg;
-        //     let diff = server_tick_duration_avg - prev_server_tick_duration_avg;
-        //     info!("Incoming    | Duration: ({prev_server_tick_duration_avg}) -> ({server_tick_duration_avg}) | diff: {diff}");
-        // }
-
-        // // todo: remove
-        // let prev_recv_instant = self.client_receiving_instant.as_millis();
-        // let prev_send_instant = self.client_sending_instant.as_millis();
-        // let prev_svrc_instant = self.server_receivable_instant.as_millis();
-        // //
-
         self.server_tick_duration_avg = server_tick_duration_avg;
         self.server_speedup_potential = server_speedup_potential;
-
-        // if server_tick_duration_avg < self.server_tick_duration_avg {
-        //     // Ticks are getting shorter, need to respond ASAP
-        //
-        //     //info!("XXXXXXXXXXX     Duration adjusted down!     XXXXXXXXXXXXXXXX");
-        //     info!("Duration avg down to: {server_tick_duration_avg}");
-        // } else {
-        //     // Ticks are getting longer
-        //     // This is tricky because if it drops again, it may throw our estimation off
-        //     // and we may miss time-critical commands
-        //     self.server_tick_duration_avg = (0.999 * self.server_tick_duration_avg) + (0.001 * server_tick_duration_avg);
-        //     let server_tick_duration_avg_ms = self.server_tick_duration_avg;
-        //     info!("Duration avg up to:   {server_tick_duration_avg_ms}");
-        // }
-        //self.server_tick_duration_avg = server_tick_duration_avg;
 
         // Adjust tick instants to new incoming instant
         self.client_receiving_instant =
@@ -279,32 +219,6 @@ impl TimeManager {
             self.instant_from_interp(self.client_sending_tick, client_sending_interp);
         self.server_receivable_instant =
             self.instant_from_interp(self.server_receivable_tick, server_receivable_interp);
-
-        // let sending_skew_distance = self.client_sending_instant.offset_from(&prev_sending_instant);
-        // if sending_skew_distance > self.client_sending_instant_skew_adjust as i32 {
-        //     self.client_sending_instant_skew_adjust = sending_skew_distance as u32;
-        //     let adjust = self.client_sending_instant_skew_adjust;
-        //     info!("Skew Adjust: {adjust} ms");
-        // }
-
-        // {
-        //     let recv_tick = self.client_receiving_tick;
-        //     let recv_instant = self.client_receiving_instant.as_millis();
-        //     let recv_diff = (recv_instant as i32)-(prev_recv_instant as i32);
-        //
-        //     let send_tick = self.client_sending_tick;
-        //     let send_instant = self.client_sending_instant.as_millis();
-        //     let send_diff = (send_instant as i32)-(prev_send_instant as i32);
-        //
-        //     let svrc_tick = self.server_receivable_tick;
-        //     let svrc_instant = self.server_receivable_instant.as_millis();
-        //     let svrc_diff = (svrc_instant as i32)-(prev_svrc_instant as i32);
-        //
-        //     info!("Client Recv | Tick: {recv_tick}, ({prev_recv_instant}) -> ({recv_instant}) | diff: {recv_diff}");
-        //     info!("Client Send | Tick: {send_tick}, ({prev_send_instant}) -> ({send_instant}) | diff {send_diff}");
-        //     info!("Server Recv | Tick: {svrc_tick}, ({prev_svrc_instant}) -> ({svrc_instant}) | diff {svrc_diff}");
-        //     info!("...");
-        // }
     }
 
     pub(crate) fn check_ticks(&mut self) -> (Option<(Tick, Tick)>, Option<(Tick, Tick)>) {
@@ -361,20 +275,6 @@ impl TimeManager {
             offset_to_speed(client_sending_default_next.offset_from(&client_sending_target));
         let server_receivable_speed =
             offset_to_speed(server_receivable_default_next.offset_from(&server_receivable_target));
-
-        // {
-        //     let client_receiving_instant = client_receiving_default_next.as_millis();
-        //     let client_sending_instant = client_sending_default_next.as_millis();
-        //     let client_receiving_target_ms = client_receiving_target.as_millis();
-        //     let client_sending_target_ms = client_sending_target.as_millis();
-        //     //info!("elapsed: {millis_elapsed} ms");
-        //     if client_receiving_speed != 1.0 {
-        //         info!("RECV | INSTANT: {client_receiving_instant} -> TARGET: {client_receiving_target_ms} = SPEED: {client_receiving_speed}");
-        //     }
-        //     if client_sending_speed != 1.0 {
-        //         info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
-        //     }
-        // }
 
         // apply speeds
         self.client_receiving_instant = self
@@ -445,19 +345,6 @@ impl TimeManager {
         let receiving_incremented = self.client_receiving_tick != prev_client_receiving_tick;
         let sending_incremented = self.client_sending_tick != prev_client_sending_tick;
 
-        // if receiving_incremented {
-        //     let a = self.client_receiving_tick;
-        //     let b = prev_client_receiving_instant.as_millis();
-        //     let c = self.client_receiving_instant.as_millis();
-        //     info!("RECV | Tick: {prev_client_receiving_tick} -> {a}, Instant: {b} -> {c}");
-        // }
-        // if sending_incremented {
-        //     let a = self.client_sending_tick;
-        //     let b = prev_client_sending_instant.as_millis();
-        //     let c = self.client_sending_instant.as_millis();
-        //     info!("SEND | Tick: {prev_client_sending_tick} -> {a}, Instant: {b} -> {c}");
-        // }
-
         let output_receiving = match receiving_incremented {
             true => Some((prev_client_receiving_tick, self.client_receiving_tick)),
             false => None,
@@ -475,12 +362,15 @@ impl TimeManager {
     pub(crate) fn interpolation(&self) -> f32 {
         todo!()
     }
+
     pub(crate) fn rtt(&self) -> f32 {
         self.pruned_rtt_avg
     }
+
     pub(crate) fn jitter(&self) -> f32 {
         self.rtt_stdv / 2.0
     }
+
     pub(crate) fn latency(&self) -> f32 {
         self.pruned_rtt_avg / 2.0
     }

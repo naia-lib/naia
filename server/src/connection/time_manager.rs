@@ -131,10 +131,6 @@ impl TimeManager {
         server_received_time.ser(&mut writer);
 
         // write average tick duration as microseconds
-        // {
-        //     let tick_duration_avg = self.tick_duration_avg;
-        //     info!("SEND: Tick Duration Average: {tick_duration_avg}");
-        // }
         let tick_duration_avg =
             UnsignedVariableInteger::<9>::new((self.tick_duration_avg * 1000.0).round() as i128);
         tick_duration_avg.ser(&mut writer);
