@@ -236,7 +236,7 @@ impl TimeManager {
         self.server_tick_duration_min = server_tick_duration_min;
         self.server_tick_duration_max = server_tick_duration_max;
 
-        self.danger_adjust = (1.0 + (((self.server_tick_duration_max - self.server_tick_duration_min) / self.server_tick_duration_min) * 6.0)).max(1.35).min(3.0);
+        self.danger_adjust = (((self.server_tick_duration_max - self.server_tick_duration_min) / self.server_tick_duration_min) * 30.0).max(0.0).min(10.0);
 
         {
             let avg = self.server_tick_duration_avg;
@@ -346,19 +346,19 @@ impl TimeManager {
         let server_receivable_speed =
             offset_to_speed(server_receivable_default_next.offset_from(&server_receivable_target));
 
-        // {
-        //     let client_receiving_instant = client_receiving_default_next.as_millis();
-        //     let client_sending_instant = client_sending_default_next.as_millis();
-        //     let client_receiving_target_ms = client_receiving_target.as_millis();
-        //     let client_sending_target_ms = client_sending_target.as_millis();
-        //     //info!("elapsed: {millis_elapsed} ms");
-        //     if client_receiving_speed != 1.0 {
-        //         info!("RECV | INSTANT: {client_receiving_instant} -> TARGET: {client_receiving_target_ms} = SPEED: {client_receiving_speed}");
-        //     }
-        //     if client_sending_speed != 1.0 {
-        //         info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
-        //     }
-        // }
+        {
+            let client_receiving_instant = client_receiving_default_next.as_millis();
+            let client_sending_instant = client_sending_default_next.as_millis();
+            let client_receiving_target_ms = client_receiving_target.as_millis();
+            let client_sending_target_ms = client_sending_target.as_millis();
+            //info!("elapsed: {millis_elapsed} ms");
+            if client_receiving_speed != 1.0 {
+                info!("RECV | INSTANT: {client_receiving_instant} -> TARGET: {client_receiving_target_ms} = SPEED: {client_receiving_speed}");
+            }
+            if client_sending_speed != 1.0 {
+                info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
+            }
+        }
 
         // apply speeds
         self.client_receiving_instant = self
@@ -491,7 +491,7 @@ fn get_client_sending_target(
     tick_duration: u32,
     danger: f32,
 ) -> GameInstant {
-    let millis = latency + jitter + ((tick_duration * 3) as f32 * danger).round() as u32;
+    let millis = latency + jitter + (tick_duration * 4) + (tick_duration as f32 * danger).round() as u32;
     now.add_millis(millis)
 }
 

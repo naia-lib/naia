@@ -9,7 +9,7 @@ pub fn process_events(app: &mut App) {
     let mut events = app.server.receive();
     if events.is_empty() {
         // If we don't sleep here, app will loop at 100% CPU until a new message comes in
-        sleep(Duration::from_millis(5));
+        sleep(Duration::from_millis(1));
         return;
     } else {
         for (user_key, auth) in events.read::<AuthEvent<Auth>>() {

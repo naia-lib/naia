@@ -69,7 +69,7 @@ pub fn before_receive_events(world: &mut World) {
             auth_event_writer.send(bevy_events::AuthEvents::from(&mut events));
         }
 
-        sleep(server.duration_until_next_tick());
+        sleep(Duration::from_millis(1));
     });
 }
 

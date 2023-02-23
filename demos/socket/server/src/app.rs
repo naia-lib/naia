@@ -57,7 +57,7 @@ impl App {
             }
             Ok(None) => {
                 // If we don't sleep here, app will loop at 100% CPU until a new message comes in
-                sleep(Duration::from_millis(5));
+                sleep(Duration::from_millis(1));
             }
             Err(error) => {
                 info!("Server Error: {}", error);

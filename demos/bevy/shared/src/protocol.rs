@@ -9,7 +9,7 @@ pub fn protocol() -> Protocol {
     Protocol::builder()
         // Config
         .tick_interval(Duration::from_millis(16))
-        .link_condition(LinkConditionerConfig::new(350, 0, 0.0))
+        .link_condition(LinkConditionerConfig::good_condition())
         // Channels
         .add_plugin(ChannelsPlugin)
         // Messages

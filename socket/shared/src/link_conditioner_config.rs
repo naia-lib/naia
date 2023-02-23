@@ -26,9 +26,9 @@ impl LinkConditionerConfig {
     /// good condition
     pub fn good_condition() -> Self {
         LinkConditionerConfig {
-            incoming_latency: 50,
-            incoming_jitter: 10,
-            incoming_loss: 0.01,
+            incoming_latency: 40,
+            incoming_jitter: 6,
+            incoming_loss: 0.002,
         }
     }
 
@@ -36,9 +36,9 @@ impl LinkConditionerConfig {
     /// average condition
     pub fn average_condition() -> Self {
         LinkConditionerConfig {
-            incoming_latency: 200,
-            incoming_jitter: 20,
-            incoming_loss: 0.055,
+            incoming_latency: 170,
+            incoming_jitter: 45,
+            incoming_loss: 0.02,
         }
     }
 
@@ -46,9 +46,9 @@ impl LinkConditionerConfig {
     /// poor condition
     pub fn poor_condition() -> Self {
         LinkConditionerConfig {
-            incoming_latency: 350,
-            incoming_jitter: 30,
-            incoming_loss: 0.1,
+            incoming_latency: 300,
+            incoming_jitter: 84,
+            incoming_loss: 0.04,
         }
     }
 }
