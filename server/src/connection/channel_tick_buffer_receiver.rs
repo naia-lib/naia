@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use log::info;
 
 use naia_shared::{
     sequence_greater_than, BitReader, ChannelReader, Message, MessageKinds, Serde, SerdeErr,
@@ -188,6 +189,7 @@ impl IncomingMessages {
             }
         } else {
             // command is too late to insert in incoming message queue
+            info!("Server received Command too late!");
             false
         }
     }

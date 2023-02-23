@@ -1,10 +1,7 @@
 use log::info;
 use std::time::Duration;
 
-use naia_shared::{
-    BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, Serde,
-    SerdeErr, StandardHeader, Tick, Timer, UnsignedVariableInteger,
-};
+use naia_shared::{BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, Serde, SerdeErr, StandardHeader, Tick, Timer, UnsignedVariableInteger, wrapping_diff};
 
 /// Manages the current tick for the host
 pub struct TimeManager {
@@ -14,6 +11,9 @@ pub struct TimeManager {
     last_tick_instant: Instant,
     tick_interval_millis: f32,
     tick_duration_avg: f32,
+    tick_duration_avg_min: f32,
+    tick_duration_avg_max: f32,
+    client_diff_avg: f32,
 }
 
 impl TimeManager {
@@ -32,7 +32,16 @@ impl TimeManager {
             last_tick_instant,
             tick_interval_millis,
             tick_duration_avg,
+            tick_duration_avg_min: tick_duration_avg,
+            tick_duration_avg_max: tick_duration_avg,
+            client_diff_avg: 0.0,
         }
+    }
+
+    pub(crate) fn duration_until_next_tick(&self) -> Duration {
+        let mut new_instant = self.last_tick_instant.clone();
+        new_instant.add_millis(self.tick_interval_millis as u32);
+        return new_instant.until();
     }
 
     /// Whether or not we should emit a tick event
@@ -67,7 +76,22 @@ impl TimeManager {
     }
 
     pub fn record_tick_duration(&mut self, duration_ms: f32) {
-        self.tick_duration_avg = (0.96 * self.tick_duration_avg) + (0.04 * duration_ms);
+        self.tick_duration_avg = (0.9 * self.tick_duration_avg) + (0.1 * duration_ms);
+
+        if self.tick_duration_avg < self.tick_duration_avg_min {
+            self.tick_duration_avg_min = self.tick_duration_avg;
+        } else {
+            self.tick_duration_avg_min = (0.99999 * self.tick_duration_avg_min) + (0.00001 * self.tick_duration_avg);
+        }
+
+        if self.tick_duration_avg > self.tick_duration_avg_max {
+            self.tick_duration_avg_max = self.tick_duration_avg;
+        } else {
+            self.tick_duration_avg_max = (0.999 * self.tick_duration_avg_max) + (0.001 * self.tick_duration_avg);
+        }
+
+        // let tick_duration_avg_ms = self.tick_duration_avg;
+        // info!("Actual Tick Duration: {duration_ms} ms | New Average: {tick_duration_avg_ms}");
     }
 
     pub(crate) fn process_ping(&self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {
@@ -105,11 +129,26 @@ impl TimeManager {
             UnsignedVariableInteger::<9>::new((self.tick_duration_avg * 1000.0).round() as i128);
         tick_duration_avg.ser(&mut writer);
 
+        let tick_duration_avg_min =
+            UnsignedVariableInteger::<9>::new((self.tick_duration_avg_min * 1000.0).round() as i128);
+        tick_duration_avg_min.ser(&mut writer);
+
+        let tick_duration_avg_max =
+            UnsignedVariableInteger::<9>::new((self.tick_duration_avg_max * 1000.0).round() as i128);
+        tick_duration_avg_max.ser(&mut writer);
+
         // write send time
         self.game_time_now().ser(&mut writer);
 
         //info!("sent Ping: {ping_index} to Client");
 
         Ok(writer)
+    }
+
+    pub(crate) fn record_client_tick(&mut self, client_tick: Tick) {
+        let ticks_client_ahead_by = wrapping_diff(self.current_tick, client_tick) as f32;
+        self.client_diff_avg = (0.9 * self.client_diff_avg) + (0.1 * ticks_client_ahead_by);
+        let client_diff_avg = self.client_diff_avg;
+        info!("On average client is ahead by: {client_diff_avg} Ticks");
     }
 }

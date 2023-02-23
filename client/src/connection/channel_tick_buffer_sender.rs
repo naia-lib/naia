@@ -12,6 +12,7 @@ pub struct ChannelTickBufferSender {
     sending_messages: OutgoingMessages,
     outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageIndex, Box<dyn Message>)>)>,
     last_sent: Tick,
+    never_sent: bool,
 }
 
 impl ChannelTickBufferSender {
@@ -20,6 +21,7 @@ impl ChannelTickBufferSender {
             sending_messages: OutgoingMessages::new(),
             outgoing_messages: VecDeque::new(),
             last_sent: 0,
+            never_sent: true,
         }
     }
 
@@ -28,12 +30,15 @@ impl ChannelTickBufferSender {
         client_sending_tick: &Tick,
         server_receivable_tick: &Tick,
     ) {
-        if sequence_greater_than(*client_sending_tick, self.last_sent) {
+        if sequence_greater_than(*client_sending_tick, self.last_sent) || self.never_sent {
             // Remove messages that would never be able to reach the Server
-            self.sending_messages
-                .pop_back_until_excluding(server_receivable_tick);
+            self.sending_messages.pop_back_until_excluding(server_receivable_tick);
+
+            let buffer_length = self.sending_messages.buffer.len();
+            info!("Collect Message | Receivable Tick: {server_receivable_tick}, Sending Tick: {client_sending_tick}, Buffer Length: {buffer_length}");
 
             self.last_sent = *client_sending_tick;
+            self.never_sent = true;
 
             // Loop through outstanding messages and add them to the outgoing list
             let mut last_message_tick: Option<Tick> = None;
@@ -278,7 +283,7 @@ impl OutgoingMessages {
         // a good time to prune down this list
         while self.buffer.len() > MESSAGE_HISTORY_SIZE.into() {
             self.buffer.pop_back();
-            info!("pruning outgoing_messages buffer cause it got too big");
+            //info!("pruning outgoing_messages buffer cause it got too big");
         }
     }
 

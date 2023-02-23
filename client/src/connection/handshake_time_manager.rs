@@ -15,6 +15,8 @@ pub struct HandshakeTimeManager {
     server_tick: Tick,
     server_tick_instant: GameInstant,
     server_tick_duration_avg: f32,
+    server_tick_duration_min: f32,
+    server_tick_duration_max: f32,
 }
 
 impl HandshakeTimeManager {
@@ -28,6 +30,8 @@ impl HandshakeTimeManager {
             server_tick: 0,
             server_tick_instant,
             server_tick_duration_avg: 0.0,
+            server_tick_duration_min: 0.0,
+            server_tick_duration_max: 0.0,
         }
     }
 
@@ -43,10 +47,12 @@ impl HandshakeTimeManager {
         // read time since last tick
         let server_tick_instant = GameInstant::de(reader)?;
 
-        if let Some((duration_avg, offset_millis, rtt_millis)) = self.base.read_pong(reader)? {
+        if let Some((duration_avg, duration_min, duration_max, offset_millis, rtt_millis)) = self.base.read_pong(reader)? {
             self.server_tick = server_tick;
             self.server_tick_instant = server_tick_instant;
             self.server_tick_duration_avg = duration_avg;
+            self.server_tick_duration_min = duration_min;
+            self.server_tick_duration_max = duration_max;
 
             self.buffer_stats(offset_millis, rtt_millis);
             if self.pong_stats.len() >= HANDSHAKE_PONGS_REQUIRED {
@@ -147,6 +153,8 @@ impl HandshakeTimeManager {
             self.server_tick,
             self.server_tick_instant,
             self.server_tick_duration_avg,
+            self.server_tick_duration_min,
+            self.server_tick_duration_max,
             pruned_rtt_mean,
             rtt_stdv,
             offset_stdv,

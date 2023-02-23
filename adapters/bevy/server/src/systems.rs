@@ -22,58 +22,54 @@ mod bevy_events {
 
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<Server<Entity>>| {
-            let mut events = server.receive();
-            if events.is_empty() {
-                // In the future, may want to stall the system if we don't receive any events
-                // to keep from the system running empty and using up CPU.
-                sleep(Duration::from_millis(5));
-            } else {
-                unsafe {
-                    // Connect Event
-                    let mut connect_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::ConnectEvent>>()
-                        .unwrap();
-                    for user_key in events.read::<naia_events::ConnectEvent>() {
-                        connect_event_writer.send(bevy_events::ConnectEvent(user_key));
-                    }
-
-                    // Disconnect Event
-                    let mut disconnect_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::DisconnectEvent>>()
-                        .unwrap();
-                    for (user_key, user) in events.read::<naia_events::DisconnectEvent>() {
-                        disconnect_event_writer.send(bevy_events::DisconnectEvent(user_key, user));
-                    }
-
-                    // Error Event
-                    let mut error_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::ErrorEvent>>()
-                        .unwrap();
-                    for error in events.read::<naia_events::ErrorEvent>() {
-                        error_event_writer.send(bevy_events::ErrorEvent(error));
-                    }
-
-                    // Tick Event
-                    let mut tick_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::TickEvent>>()
-                        .unwrap();
-                    for tick in events.read::<naia_events::TickEvent>() {
-                        tick_event_writer.send(bevy_events::TickEvent(tick));
-                    }
-
-                    // Message Event
-                    let mut message_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::MessageEvents>>()
-                        .unwrap();
-                    message_event_writer.send(bevy_events::MessageEvents::from(&mut events));
-
-                    // Auth Event
-                    let mut auth_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::AuthEvents>>()
-                        .unwrap();
-                    auth_event_writer.send(bevy_events::AuthEvents::from(&mut events));
-                }
+        let mut events = server.receive();
+        unsafe {
+            // Connect Event
+            let mut connect_event_writer = world
+                .get_resource_unchecked_mut::<Events<bevy_events::ConnectEvent>>()
+                .unwrap();
+            for user_key in events.read::<naia_events::ConnectEvent>() {
+                connect_event_writer.send(bevy_events::ConnectEvent(user_key));
             }
+
+            // Disconnect Event
+            let mut disconnect_event_writer = world
+                .get_resource_unchecked_mut::<Events<bevy_events::DisconnectEvent>>()
+                .unwrap();
+            for (user_key, user) in events.read::<naia_events::DisconnectEvent>() {
+                disconnect_event_writer.send(bevy_events::DisconnectEvent(user_key, user));
+            }
+
+            // Error Event
+            let mut error_event_writer = world
+                .get_resource_unchecked_mut::<Events<bevy_events::ErrorEvent>>()
+                .unwrap();
+            for error in events.read::<naia_events::ErrorEvent>() {
+                error_event_writer.send(bevy_events::ErrorEvent(error));
+            }
+
+            // Tick Event
+            let mut tick_event_writer = world
+                .get_resource_unchecked_mut::<Events<bevy_events::TickEvent>>()
+                .unwrap();
+            for tick in events.read::<naia_events::TickEvent>() {
+                tick_event_writer.send(bevy_events::TickEvent(tick));
+            }
+
+            // Message Event
+            let mut message_event_writer = world
+                .get_resource_unchecked_mut::<Events<bevy_events::MessageEvents>>()
+                .unwrap();
+            message_event_writer.send(bevy_events::MessageEvents::from(&mut events));
+
+            // Auth Event
+            let mut auth_event_writer = world
+                .get_resource_unchecked_mut::<Events<bevy_events::AuthEvents>>()
+                .unwrap();
+            auth_event_writer.send(bevy_events::AuthEvents::from(&mut events));
+        }
+
+        sleep(server.duration_until_next_tick());
     });
 }
 

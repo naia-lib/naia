@@ -55,7 +55,7 @@ impl BaseTimeManager {
         }
     }
 
-    pub fn read_pong(&mut self, reader: &mut BitReader) -> Result<Option<(f32, i32, u32)>, SerdeErr> {
+    pub fn read_pong(&mut self, reader: &mut BitReader) -> Result<Option<(f32, f32, f32, i32, u32)>, SerdeErr> {
         // important to record receipt time ASAP
         let client_received_time = self.game_time_now();
 
@@ -77,6 +77,10 @@ impl BaseTimeManager {
         // convert from microseconds to milliseconds
         let tick_duration_avg = (UnsignedVariableInteger::<9>::de(reader)?.get() as f32) / 1000.0;
         // info!("READ: Tick Duration Average: {tick_duration_avg}");
+
+        let tick_duration_min = (UnsignedVariableInteger::<9>::de(reader)?.get() as f32) / 1000.0;
+
+        let tick_duration_max = (UnsignedVariableInteger::<9>::de(reader)?.get() as f32) / 1000.0;
 
         // read server sent time
         let server_sent_time = GameInstant::de(reader)?;
@@ -104,7 +108,7 @@ impl BaseTimeManager {
             let time_offset_millis = (send_offset_millis + recv_offset_millis) / 2;
             let round_trip_delay_millis = round_trip_time_millis - server_process_time_millis;
 
-            return Ok(Some((tick_duration_avg,  time_offset_millis, round_trip_delay_millis)));
+            return Ok(Some((tick_duration_avg, tick_duration_min, tick_duration_max,  time_offset_millis, round_trip_delay_millis)));
         }
 
         return Ok(None);

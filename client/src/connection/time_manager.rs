@@ -21,10 +21,12 @@ pub struct TimeManager {
     // Ticks
     accumulator: f32,
 
-    last_received_tick: Tick,
     server_tick: Tick,
     server_tick_instant: GameInstant,
     server_tick_duration_avg: f32,
+    server_tick_duration_min: f32,
+    server_tick_duration_max: f32,
+    danger_adjust: f32,
 
     last_tick_check_instant: Instant,
     pub client_receiving_tick: Tick,
@@ -42,6 +44,8 @@ impl TimeManager {
         server_tick: Tick,
         server_tick_instant: GameInstant,
         server_tick_duration_avg: f32,
+        server_tick_duration_min: f32,
+        server_tick_duration_max: f32,
         pruned_rtt_avg: f32,
         rtt_stdv: f32,
         offset_stdv: f32,
@@ -54,9 +58,9 @@ impl TimeManager {
         let client_receiving_instant =
             get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
         let client_sending_instant =
-            get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+            get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms, 1.0);
         let server_receivable_instant =
-            get_server_receivable_target(&now, latency_ms, major_jitter_ms);
+            get_server_receivable_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
 
         let client_receiving_tick = instant_to_tick(&server_tick, &server_tick_instant, server_tick_duration_avg, &client_receiving_instant);
         let client_sending_tick = instant_to_tick(&server_tick, &server_tick_instant, server_tick_duration_avg, &client_sending_instant);
@@ -77,10 +81,12 @@ impl TimeManager {
 
             accumulator: 0.0,
 
-            last_received_tick: 0,
             server_tick,
             server_tick_instant,
             server_tick_duration_avg,
+            server_tick_duration_min,
+            server_tick_duration_max,
+            danger_adjust: 1.0,
 
             last_tick_check_instant: Instant::now(),
 
@@ -109,9 +115,9 @@ impl TimeManager {
     }
 
     pub fn read_pong(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
-        if let Some((tick_duration_avg, offset_millis, rtt_millis)) = self.base.read_pong(reader)? {
+        if let Some((tick_duration_avg, tick_duration_min, tick_duration_max, offset_millis, rtt_millis)) = self.base.read_pong(reader)? {
             self.process_stats(offset_millis, rtt_millis);
-            self.recv_tick_duration_avg(tick_duration_avg);
+            self.recv_tick_duration_avg(tick_duration_avg, tick_duration_min, tick_duration_max);
         }
         Ok(())
     }
@@ -206,7 +212,9 @@ impl TimeManager {
         // }
     }
 
-    pub(crate) fn recv_tick_duration_avg(&mut self, server_tick_duration_avg: f32) {
+    pub(crate) fn recv_tick_duration_avg(&mut self, server_tick_duration_avg: f32, server_tick_duration_min: f32, server_tick_duration_max: f32) {
+
+        // let prev_sending_instant = self.client_sending_instant.clone();
 
         let client_receiving_interp = self.get_interp(self.client_receiving_tick, &self.client_receiving_instant);
         let client_sending_interp = self.get_interp(self.client_sending_tick, &self.client_sending_instant);
@@ -224,21 +232,46 @@ impl TimeManager {
         // let prev_svrc_instant = self.server_receivable_instant.as_millis();
         // //
 
-        if server_tick_duration_avg < self.server_tick_duration_avg {
-            // Ticks are getting shorter, need to respond ASAP
-            self.server_tick_duration_avg = server_tick_duration_avg;
-            info!("XXXXXXXXXXX     Duration adjusted down!     XXXXXXXXXXXXXXXX");
-        } else {
-            // Ticks are getting longer
-            // This is tricky because if it drops again, it may throw our estimation off
-            // and we may miss time-critical commands
-            self.server_tick_duration_avg = (0.9 * self.server_tick_duration_avg) + (0.1 * server_tick_duration_avg);
+        self.server_tick_duration_avg = server_tick_duration_avg;
+        self.server_tick_duration_min = server_tick_duration_min;
+        self.server_tick_duration_max = server_tick_duration_max;
+
+        self.danger_adjust = (1.0 + (((self.server_tick_duration_max - self.server_tick_duration_min) / self.server_tick_duration_min) * 6.0)).max(1.35).min(3.0);
+
+        {
+            let avg = self.server_tick_duration_avg;
+            let min = self.server_tick_duration_min;
+            let max = self.server_tick_duration_max;
+            let danger = self.danger_adjust;
+            info!(" ---------- Avg: {avg}, Min: {min}, Max: {max}, Danger: {danger}");
         }
+
+        // if server_tick_duration_avg < self.server_tick_duration_avg {
+        //     // Ticks are getting shorter, need to respond ASAP
+        //
+        //     //info!("XXXXXXXXXXX     Duration adjusted down!     XXXXXXXXXXXXXXXX");
+        //     info!("Duration avg down to: {server_tick_duration_avg}");
+        // } else {
+        //     // Ticks are getting longer
+        //     // This is tricky because if it drops again, it may throw our estimation off
+        //     // and we may miss time-critical commands
+        //     self.server_tick_duration_avg = (0.999 * self.server_tick_duration_avg) + (0.001 * server_tick_duration_avg);
+        //     let server_tick_duration_avg_ms = self.server_tick_duration_avg;
+        //     info!("Duration avg up to:   {server_tick_duration_avg_ms}");
+        // }
+        //self.server_tick_duration_avg = server_tick_duration_avg;
 
         // Adjust tick instants to new incoming instant
         self.client_receiving_instant = self.instant_from_interp(self.client_receiving_tick, client_receiving_interp);
         self.client_sending_instant = self.instant_from_interp(self.client_sending_tick, client_sending_interp);
         self.server_receivable_instant = self.instant_from_interp(self.server_receivable_tick, server_receivable_interp);
+
+        // let sending_skew_distance = self.client_sending_instant.offset_from(&prev_sending_instant);
+        // if sending_skew_distance > self.client_sending_instant_skew_adjust as i32 {
+        //     self.client_sending_instant_skew_adjust = sending_skew_distance as u32;
+        //     let adjust = self.client_sending_instant_skew_adjust;
+        //     info!("Skew Adjust: {adjust} ms");
+        // }
 
         // {
         //     let recv_tick = self.client_receiving_tick;
@@ -294,10 +327,11 @@ impl TimeManager {
         // find targets
         let client_receiving_target =
             get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+
         let client_sending_target =
-            get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+            get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms, self.danger_adjust);
         let server_receivable_target =
-            get_server_receivable_target(&now, latency_ms, major_jitter_ms);
+            get_server_receivable_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
 
         // set default next instant
         let client_receiving_default_next = self.client_receiving_instant.add_millis(millis_elapsed);
@@ -312,19 +346,19 @@ impl TimeManager {
         let server_receivable_speed =
             offset_to_speed(server_receivable_default_next.offset_from(&server_receivable_target));
 
-        {
-            let client_receiving_instant = client_receiving_default_next.as_millis();
-            let client_sending_instant = client_sending_default_next.as_millis();
-            let client_receiving_target_ms = client_receiving_target.as_millis();
-            let client_sending_target_ms = client_sending_target.as_millis();
-            //info!("elapsed: {millis_elapsed} ms");
-            if client_receiving_speed != 1.0 {
-                info!("RECV | INSTANT: {client_receiving_instant} -> TARGET: {client_receiving_target_ms} = SPEED: {client_receiving_speed}");
-            }
-            if client_sending_speed != 1.0 {
-                info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
-            }
-        }
+        // {
+        //     let client_receiving_instant = client_receiving_default_next.as_millis();
+        //     let client_sending_instant = client_sending_default_next.as_millis();
+        //     let client_receiving_target_ms = client_receiving_target.as_millis();
+        //     let client_sending_target_ms = client_sending_target.as_millis();
+        //     //info!("elapsed: {millis_elapsed} ms");
+        //     if client_receiving_speed != 1.0 {
+        //         info!("RECV | INSTANT: {client_receiving_instant} -> TARGET: {client_receiving_target_ms} = SPEED: {client_receiving_speed}");
+        //     }
+        //     if client_sending_speed != 1.0 {
+        //         info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
+        //     }
+        // }
 
         // apply speeds
         self.client_receiving_instant = self
@@ -447,9 +481,7 @@ fn get_client_receiving_target(
     jitter: u32,
     tick_duration: u32,
 ) -> GameInstant {
-    now.sub_millis(latency)
-        .sub_millis(jitter)
-        .sub_millis(tick_duration)
+    now.sub_millis(latency + jitter + tick_duration)
 }
 
 fn get_client_sending_target(
@@ -457,33 +489,37 @@ fn get_client_sending_target(
     latency: u32,
     jitter: u32,
     tick_duration: u32,
+    danger: f32,
 ) -> GameInstant {
-    now.add_millis(latency)
-        .add_millis(jitter)
-        .add_millis(tick_duration * 2)
+    let millis = latency + jitter + ((tick_duration * 3) as f32 * danger).round() as u32;
+    now.add_millis(millis)
 }
 
-fn get_server_receivable_target(now: &GameInstant, latency: u32, jitter: u32) -> GameInstant {
-    now.add_millis(latency).sub_millis(jitter)
+fn get_server_receivable_target(now: &GameInstant, latency: u32, jitter: u32, tick_duration: u32) -> GameInstant {
+    let millis = (((latency + (tick_duration * 2)) as i32) - (jitter as i32)).max(0) as u32;
+    now.add_millis(millis)
 }
 
 fn offset_to_speed(mut offset: i32) -> f32 {
     if offset <= OFFSET_MIN {
-        offset *= -1;
-        return ((INV_OFFSET_MIN as f32) / (offset as f32)).max(SPEED_MIN);
+        let under = (OFFSET_MIN - offset) as f32;
+        return (RANGE_MIN / (under + RANGE_MIN)).max(SPEED_MIN);
     }
 
     if offset >= OFFSET_MAX {
-        return ((offset as f32) / (OFFSET_MAX as f32)).min(SPEED_MAX);
+        let over = (offset - OFFSET_MAX) as f32;
+        return (1.0 + (over / RANGE_MAX)).min(SPEED_MAX);
     }
 
     return SAFE_SPEED;
 }
 
-const OFFSET_MIN: i32 = -100;
-const OFFSET_MAX: i32 = 100;
+const OFFSET_MIN: i32 = -50;
+const OFFSET_MAX: i32 = 50;
 const SAFE_SPEED: f32 = 1.0;
-const SPEED_MAX: f32 = 100.0;
+const RANGE_MAX: f32 = 20.0;
+const RANGE_MIN: f32 = 20.0;
+const SPEED_MAX: f32 = 10.0;
 const SPEED_MIN: f32 = 1.0 / SPEED_MAX;
 
 const INV_OFFSET_MIN: i32 = OFFSET_MIN * -1;

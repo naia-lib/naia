@@ -5,6 +5,7 @@ use std::{
     panic,
     sync::{Arc, RwLock},
 };
+use std::time::Duration;
 
 use log::warn;
 
@@ -129,6 +130,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// listening for Clients
     pub fn is_listening(&self) -> bool {
         self.io.is_loaded()
+    }
+
+    pub fn duration_until_next_tick(&self) -> Duration {
+        self.time_manager.duration_until_next_tick()
     }
 
     /// Must be called regularly, maintains connection to and receives messages
@@ -1088,6 +1093,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                     // TODO: increase suspicion against packet sender
                                     continue;
                                 };
+
+                                self.time_manager.record_client_tick(client_tick);
 
                                 let server_tick = self.time_manager.server_tick();
 
