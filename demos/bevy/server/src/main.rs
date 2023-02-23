@@ -8,7 +8,7 @@ use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig};
 mod resources;
 mod systems;
 
-use systems::{events, init, tick_events};
+use systems::{events, init};
 
 fn main() {
     info!("Naia Bevy Server Demo starting up");
@@ -26,9 +26,8 @@ fn main() {
         .add_system(events::auth_events)
         .add_system(events::connect_events)
         .add_system(events::disconnect_events)
-        .add_system(events::message_events)
         .add_system(events::error_events)
-        .add_system(tick_events)
+        .add_system(events::tick_events)
         // Run App
         .run();
 }
