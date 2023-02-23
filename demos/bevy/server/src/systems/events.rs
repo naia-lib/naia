@@ -75,7 +75,7 @@ pub fn connect_events<'world, 'state>(
             // return Entity id
             .id();
 
-        global.user_to_prediction_map.insert(*user_key, entity);
+        global.user_to_entity_map.insert(*user_key, entity);
 
         // Send an Entity Assignment message to the User that owns the Square
         let mut assignment_message = EntityAssignment::new(true);
@@ -96,7 +96,7 @@ pub fn disconnect_events(
     for DisconnectEvent(user_key, user) in event_reader.iter() {
         info!("Naia Server disconnected from: {:?}", user.address);
 
-        if let Some(entity) = global.user_to_prediction_map.remove(user_key) {
+        if let Some(entity) = global.user_to_entity_map.remove(user_key) {
             server
                 .entity_mut(&entity)
                 .leave_room(&global.main_room_key)

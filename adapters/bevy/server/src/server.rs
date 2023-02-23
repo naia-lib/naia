@@ -65,8 +65,8 @@ impl<'world, 'state> Server<'world, 'state> {
         self.server.broadcast_message::<C, M>(message);
     }
 
-    pub fn tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
-        self.server.tick_buffer_messages(tick)
+    pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
+        self.server.receive_tick_buffer_messages(tick)
     }
 
     //// Updates ////

@@ -316,7 +316,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
     }
 
-    pub fn tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
+    pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
         let mut tick_buffer_messages = TickBufferMessages::new();
         for (_user_address, connection) in self.user_connections.iter_mut() {
             // receive messages from anyone

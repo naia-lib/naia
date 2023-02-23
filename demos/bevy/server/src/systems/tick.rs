@@ -20,7 +20,7 @@ pub fn tick_events(
 
         let mut processed = false;
 
-        let messages = server.tick_buffer_messages(server_tick);
+        let messages = server.receive_tick_buffer_messages(server_tick);
         for (_user_key, key_command) in messages.read::<PlayerCommandChannel, KeyCommand>() {
             if let Some(entity) = &key_command.entity.get(&server) {
                 if let Ok(mut position) = position_query.get_mut(*entity) {
