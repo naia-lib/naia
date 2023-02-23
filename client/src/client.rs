@@ -49,7 +49,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
         let handshake_manager = HandshakeManager::new(
             client_config.send_handshake_interval,
-            client_config.ping_config.clone(),
+            client_config.time.clone(),
         );
 
         let compression_config = protocol.compression.clone();
@@ -155,7 +155,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 let mut index_tick = prev_receiving_tick.wrapping_add(1);
                 loop {
                     self.incoming_events.push_server_tick(index_tick);
-                    // info!("--- Push Server Tick Event: {index_tick}");
+
                     if index_tick == current_receiving_tick {
                         break;
                     }
@@ -170,7 +170,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                 let mut index_tick = prev_sending_tick.wrapping_add(1);
                 loop {
                     self.incoming_events.push_client_tick(index_tick);
-                    // info!("--- Push Client Tick Event: {index_tick}");
+
                     if index_tick == current_sending_tick {
                         break;
                     }
@@ -505,7 +505,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.server_connection = None;
         self.handshake_manager = HandshakeManager::new(
             self.client_config.send_handshake_interval,
-            self.client_config.ping_config.clone(),
+            self.client_config.time.clone(),
         );
     }
 

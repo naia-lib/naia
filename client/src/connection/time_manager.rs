@@ -153,14 +153,12 @@ impl TimeManager {
         if offset_diff.abs() < self.offset_stdv && rtt_diff.abs() < self.rtt_stdv {
             self.pruned_offset_avg = (0.9 * self.pruned_offset_avg) + (0.1 * offset_sample);
             self.pruned_rtt_avg = (0.9 * self.pruned_rtt_avg) + (0.1 * rtt_sample);
-            // info!("Ping: New Pruned Averages");
-            //
-            // info!(" ------- Incoming Offset: {offset_millis}, Incoming RTT: {rtt_millis}");
+
             let offset_avg = self.pruned_offset_avg;
             let rtt_avg = self.pruned_rtt_avg - self.initial_rtt_avg;
             info!(" ------- New Average Offset: {offset_avg}, Average RTT Offset: {rtt_avg}");
         } else {
-            // info!("Ping: Pruned out Sample");
+            // Pruned out sample
         }
     }
 

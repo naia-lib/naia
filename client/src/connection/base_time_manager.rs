@@ -74,7 +74,6 @@ impl BaseTimeManager {
         // read average tick duration
         // convert from microseconds to milliseconds
         let tick_duration_avg = (UnsignedVariableInteger::<9>::de(reader)?.get() as f32) / 1000.0;
-        // info!("READ: Tick Duration Average: {tick_duration_avg}");
 
         let tick_speeedup_potential =
             (UnsignedVariableInteger::<9>::de(reader)?.get() as f32) / 1000.0;
@@ -90,16 +89,12 @@ impl BaseTimeManager {
             let send_offset_millis = server_received_time.offset_from(&client_sent_time);
             let recv_offset_millis = server_sent_time.offset_from(&client_received_time);
 
-            // info!("Send Offset: {send_offset_millis}, Recv Offset: {recv_offset_millis}");
-
             let round_trip_time_millis = client_received_time
                 .time_since(&client_sent_time)
                 .as_millis();
             let server_process_time_millis = server_sent_time
                 .time_since(&server_received_time)
                 .as_millis();
-
-            // info!("Total RTT: {round_trip_time_millis}, Server Processing Time: {server_process_time_millis}");
 
             // Final values
             let time_offset_millis = (send_offset_millis + recv_offset_millis) / 2;

@@ -178,15 +178,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 .write_outgoing_header(PacketType::Data, &mut bit_writer);
 
             // write server tick
-            time_manager.server_tick().ser(&mut bit_writer);
+            time_manager.current_tick().ser(&mut bit_writer);
 
             // write server tick instant
-            time_manager.server_tick_instant().ser(&mut bit_writer);
-
-            // info!("-- packet: {} --", next_packet_index);
-            // if self.base.message_manager.has_outgoing_messages() {
-            //     info!("writing some messages");
-            // }
+            time_manager.current_tick_instant().ser(&mut bit_writer);
 
             let mut has_written = false;
 

@@ -64,11 +64,11 @@ impl TimeManager {
     }
 
     /// Gets the current tick on the host
-    pub fn server_tick(&self) -> Tick {
+    pub fn current_tick(&self) -> Tick {
         self.current_tick
     }
 
-    pub fn server_tick_instant(&self) -> GameInstant {
+    pub fn current_tick_instant(&self) -> GameInstant {
         self.last_tick_game_instant.clone()
     }
 
@@ -102,9 +102,6 @@ impl TimeManager {
             * 30.0)
             .max(0.0)
             .min(10.0);
-
-        // let tick_duration_avg_ms = self.tick_duration_avg;
-        // info!("Actual Tick Duration: {duration_ms} ms | New Average: {tick_duration_avg_ms}");
     }
 
     pub(crate) fn process_ping(&self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {

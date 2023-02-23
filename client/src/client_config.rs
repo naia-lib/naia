@@ -11,7 +11,7 @@ pub struct ClientConfig {
     /// The duration between the resend of certain connection handshake messages
     pub send_handshake_interval: Duration,
     /// Configuration used to monitor the ping & jitter on the network
-    pub ping_config: TimeConfig,
+    pub time: TimeConfig,
 }
 
 impl Default for ClientConfig {
@@ -19,7 +19,7 @@ impl Default for ClientConfig {
         Self {
             connection: ConnectionConfig::default(),
             send_handshake_interval: Duration::from_millis(250),
-            ping_config: TimeConfig::default(),
+            time: TimeConfig::default(),
         }
     }
 }

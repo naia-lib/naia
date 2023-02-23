@@ -158,8 +158,8 @@ impl<'world, 'state> Server<'world, 'state> {
 
     //// Ticks ////
 
-    pub fn server_tick(&self) -> Tick {
-        self.server.server_tick()
+    pub fn current_tick(&self) -> Tick {
+        self.server.current_tick()
     }
 
     // Crate-public methods

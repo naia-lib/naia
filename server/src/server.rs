@@ -146,7 +146,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // tick event
         if self.time_manager.recv_server_tick() {
             self.incoming_events
-                .push_tick(self.time_manager.server_tick());
+                .push_tick(self.time_manager.current_tick());
         }
 
         // loop through all connections, receive Messages
@@ -530,8 +530,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     // Ticks
 
     /// Gets the current tick of the Server
-    pub fn server_tick(&self) -> Tick {
-        return self.time_manager.server_tick();
+    pub fn current_tick(&self) -> Tick {
+        return self.time_manager.current_tick();
     }
 
     // Bandwidth monitoring
@@ -930,10 +930,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
                     // write server tick
-                    self.time_manager.server_tick().ser(&mut writer);
+                    self.time_manager.current_tick().ser(&mut writer);
 
                     // write server tick instant
-                    self.time_manager.server_tick_instant().ser(&mut writer);
+                    self.time_manager.current_tick_instant().ser(&mut writer);
 
                     // send packet
                     if self.io.send_writer(user_address, &mut writer).is_err() {
@@ -963,10 +963,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .write_outgoing_header(PacketType::Ping, &mut writer);
 
                     // write server tick
-                    self.time_manager.server_tick().ser(&mut writer);
+                    self.time_manager.current_tick().ser(&mut writer);
 
                     // write server tick instant
-                    self.time_manager.server_tick_instant().ser(&mut writer);
+                    self.time_manager.current_tick_instant().ser(&mut writer);
 
                     // write body
                     connection
@@ -1097,7 +1097,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                                 self.time_manager.record_client_tick(client_tick);
 
-                                let server_tick = self.time_manager.server_tick();
+                                let server_tick = self.time_manager.current_tick();
 
                                 // process data
                                 if user_connection
