@@ -1,19 +1,19 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use log::{info, warn};
+use log::warn;
 
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
 use naia_client_socket::Socket;
 
-use naia_shared::{GameInstant, PingIndex};
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, PacketType, Protocol,
     Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
     WorldRefType,
 };
+use naia_shared::{GameInstant, PingIndex};
 
 use crate::{
     connection::{
@@ -216,7 +216,12 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.send_tick_buffer_message_inner(tick, &ChannelKind::of::<C>(), cloned_message);
     }
 
-    fn send_tick_buffer_message_inner(&mut self, tick: &Tick, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+    fn send_tick_buffer_message_inner(
+        &mut self,
+        tick: &Tick,
+        channel_kind: &ChannelKind,
+        message: Box<dyn Message>,
+    ) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
         if !channel_settings.can_send_to_server() {
@@ -372,12 +377,17 @@ impl<E: Copy + Eq + Hash> Client<E> {
                             continue;
                         };
 
-                        server_connection.time_manager.recv_tick_instant(&server_tick, &server_tick_instant);
+                        server_connection
+                            .time_manager
+                            .recv_tick_instant(&server_tick, &server_tick_instant);
 
                         // Handle based on PacketType
                         match header.packet_type {
                             PacketType::Data => {
-                                if server_connection.buffer_data_packet(&server_tick, &mut reader).is_err() {
+                                if server_connection
+                                    .buffer_data_packet(&server_tick, &mut reader)
+                                    .is_err()
+                                {
                                     warn!("unable to parse data packet");
                                     continue;
                                 }

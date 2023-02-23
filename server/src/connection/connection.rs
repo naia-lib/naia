@@ -11,6 +11,7 @@ use naia_shared::{
     WorldRefType,
 };
 
+use crate::connection::tick_buffer_messages::TickBufferMessages;
 use crate::connection::tick_buffer_receiver::TickBufferReceiver;
 use crate::{
     connection::{ping_config::PingConfig, time_manager::TimeManager},
@@ -21,7 +22,6 @@ use crate::{
     user::UserKey,
     Events,
 };
-use crate::connection::tick_buffer_messages::TickBufferMessages;
 
 use super::{io::Io, ping_manager::PingManager};
 

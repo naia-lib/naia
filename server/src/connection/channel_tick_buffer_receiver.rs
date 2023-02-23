@@ -1,5 +1,5 @@
-use std::collections::{HashMap, VecDeque};
 use log::info;
+use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
     sequence_greater_than, BitReader, ChannelReader, Message, MessageKinds, Serde, SerdeErr,

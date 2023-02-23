@@ -32,7 +32,8 @@ impl ChannelTickBufferSender {
     ) {
         if sequence_greater_than(*client_sending_tick, self.last_sent) || self.never_sent {
             // Remove messages that would never be able to reach the Server
-            self.sending_messages.pop_back_until_excluding(server_receivable_tick);
+            self.sending_messages
+                .pop_back_until_excluding(server_receivable_tick);
 
             let buffer_length = self.sending_messages.buffer.len();
             info!("Collect Message | Receivable Tick: {server_receivable_tick}, Sending Tick: {client_sending_tick}, Buffer Length: {buffer_length}");

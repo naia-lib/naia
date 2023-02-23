@@ -2,7 +2,11 @@ use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, GameInstant, HostType, Instant, OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick, WorldMutType};
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant,
+    OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick,
+    WorldMutType,
+};
 
 use crate::{
     connection::{
@@ -49,7 +53,11 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             .process_incoming_header(header, &mut Some(&mut self.tick_buffer));
     }
 
-    pub fn buffer_data_packet(&mut self, incoming_tick: &Tick, reader: &mut BitReader) -> Result<(), SerdeErr> {
+    pub fn buffer_data_packet(
+        &mut self,
+        incoming_tick: &Tick,
+        reader: &mut BitReader,
+    ) -> Result<(), SerdeErr> {
         self.jitter_buffer
             .add_item(*incoming_tick, reader.to_owned());
         Ok(())

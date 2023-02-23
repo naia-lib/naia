@@ -9,9 +9,9 @@ use naia_bevy_shared::Protocol;
 
 use super::{
     events::{
-        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvents,
-        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
-        ClientTickEvent, ServerTickEvent
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        InsertComponentEvents, MessageEvents, RejectEvent, RemoveComponentEvents, ServerTickEvent,
+        SpawnEntityEvent, UpdateComponentEvents,
     },
     stage::{PrivateStage, Stage},
     systems::{before_receive_events, should_receive},

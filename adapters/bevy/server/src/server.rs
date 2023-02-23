@@ -4,7 +4,10 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_server::{EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut};
+use naia_server::{
+    EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages,
+    UserKey, UserMut, UserRef, UserScopeMut,
+};
 
 use naia_bevy_shared::{
     Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,

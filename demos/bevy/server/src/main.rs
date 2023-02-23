@@ -1,9 +1,9 @@
-use bevy_app::{App, CoreStage, ScheduleRunnerPlugin};
+use bevy_app::{App, ScheduleRunnerPlugin};
 use bevy_core::CorePlugin;
 use bevy_log::{info, LogPlugin};
 
 use naia_bevy_demo_shared::protocol;
-use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig, Stage};
+use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig};
 
 mod resources;
 mod systems;

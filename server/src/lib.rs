@@ -26,6 +26,7 @@ mod server_config;
 mod user;
 mod user_scope;
 
+pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, TickEvent,
@@ -36,7 +37,6 @@ pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::{User, UserKey, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
-pub use connection::tick_buffer_messages::TickBufferMessages;
 
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};

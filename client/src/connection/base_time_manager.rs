@@ -1,16 +1,11 @@
 use naia_shared::{
-    sequence_greater_than, wrapping_diff, BitReader, BitWriter, GameDuration, GameInstant, Instant,
-    PacketType, PingIndex, PingStore, Serde, SerdeErr, StandardHeader, Tick,
-    UnsignedVariableInteger,
+    sequence_greater_than, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType,
+    PingIndex, PingStore, Serde, SerdeErr, StandardHeader, UnsignedVariableInteger,
 };
 
-use log::{info, warn};
+use log::warn;
 
 use crate::connection::io::Io;
-
-// skews occur over 3 seconds in milliseconds
-// should be less than the Ping rate
-const SKEW_DURATION_MS: f32 = 1000.0;
 
 /// Is responsible for sending regular ping messages between client/servers
 /// and to estimate rtt/jitter
@@ -55,7 +50,10 @@ impl BaseTimeManager {
         }
     }
 
-    pub fn read_pong(&mut self, reader: &mut BitReader) -> Result<Option<(f32, f32, i32, u32)>, SerdeErr> {
+    pub fn read_pong(
+        &mut self,
+        reader: &mut BitReader,
+    ) -> Result<Option<(f32, f32, i32, u32)>, SerdeErr> {
         // important to record receipt time ASAP
         let client_received_time = self.game_time_now();
 
@@ -78,7 +76,8 @@ impl BaseTimeManager {
         let tick_duration_avg = (UnsignedVariableInteger::<9>::de(reader)?.get() as f32) / 1000.0;
         // info!("READ: Tick Duration Average: {tick_duration_avg}");
 
-        let tick_speeedup_potential = (UnsignedVariableInteger::<9>::de(reader)?.get() as f32) / 1000.0;
+        let tick_speeedup_potential =
+            (UnsignedVariableInteger::<9>::de(reader)?.get() as f32) / 1000.0;
 
         // read server sent time
         let server_sent_time = GameInstant::de(reader)?;
@@ -106,7 +105,12 @@ impl BaseTimeManager {
             let time_offset_millis = (send_offset_millis + recv_offset_millis) / 2;
             let round_trip_delay_millis = round_trip_time_millis - server_process_time_millis;
 
-            return Ok(Some((tick_duration_avg, tick_speeedup_potential,  time_offset_millis, round_trip_delay_millis)));
+            return Ok(Some((
+                tick_duration_avg,
+                tick_speeedup_potential,
+                time_offset_millis,
+                round_trip_delay_millis,
+            )));
         }
 
         return Ok(None);

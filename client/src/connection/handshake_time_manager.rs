@@ -1,6 +1,6 @@
-use log::{info, warn};
+use log::info;
 
-use naia_shared::{BitReader, SerdeErr, GAME_TIME_LIMIT, Tick, GameInstant, Serde};
+use naia_shared::{BitReader, GameInstant, Serde, SerdeErr, Tick, GAME_TIME_LIMIT};
 
 use crate::connection::{
     base_time_manager::BaseTimeManager, io::Io, time_config::TimeConfig, time_manager::TimeManager,
@@ -38,14 +38,15 @@ impl HandshakeTimeManager {
     }
 
     pub(crate) fn read_pong(&mut self, reader: &mut BitReader) -> Result<bool, SerdeErr> {
-
         // read server tick
         let server_tick = Tick::de(reader)?;
 
         // read time since last tick
         let server_tick_instant = GameInstant::de(reader)?;
 
-        if let Some((duration_avg, speedup_potential, offset_millis, rtt_millis)) = self.base.read_pong(reader)? {
+        if let Some((duration_avg, speedup_potential, offset_millis, rtt_millis)) =
+            self.base.read_pong(reader)?
+        {
             self.server_tick = server_tick;
             self.server_tick_instant = server_tick_instant;
             self.server_tick_duration_avg = duration_avg;

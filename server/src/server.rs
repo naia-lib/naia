@@ -1,3 +1,4 @@
+use std::time::Duration;
 use std::{
     collections::{hash_set::Iter, HashMap},
     hash::Hash,
@@ -5,7 +6,6 @@ use std::{
     panic,
     sync::{Arc, RwLock},
 };
-use std::time::Duration;
 
 use log::warn;
 
@@ -19,6 +19,7 @@ use naia_shared::{
     Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
+use crate::connection::tick_buffer_messages::TickBufferMessages;
 use crate::connection::time_manager::TimeManager;
 use crate::{
     connection::{
@@ -33,7 +34,6 @@ use crate::{
         world_record::WorldRecord,
     },
 };
-use crate::connection::tick_buffer_messages::TickBufferMessages;
 
 use super::{
     error::NaiaServerError,
@@ -145,7 +145,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // tick event
         if self.time_manager.recv_server_tick() {
-            self.incoming_events.push_tick(self.time_manager.server_tick());
+            self.incoming_events
+                .push_tick(self.time_manager.server_tick());
         }
 
         // loop through all connections, receive Messages

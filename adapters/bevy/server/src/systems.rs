@@ -4,7 +4,7 @@ use bevy_ecs::{
     entity::Entity,
     event::Events,
     schedule::ShouldRun,
-    system::{Res, ResMut},
+    system::Res,
     world::{Mut, World},
 };
 
@@ -17,7 +17,9 @@ mod naia_events {
 }
 
 mod bevy_events {
-    pub use crate::events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents, TickEvent};
+    pub use crate::events::{
+        AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents, TickEvent,
+    };
 }
 
 pub fn before_receive_events(world: &mut World) {

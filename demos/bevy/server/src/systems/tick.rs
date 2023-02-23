@@ -1,9 +1,12 @@
-use bevy_ecs::{event::EventReader, system::{Query, ResMut}};
+use bevy_ecs::{event::EventReader, system::Query};
 use bevy_log::info;
 
-use naia_bevy_server::{Server, events::TickEvent};
+use naia_bevy_server::{events::TickEvent, Server};
 
-use naia_bevy_demo_shared::{behavior as shared_behavior, components::Position, channels::PlayerCommandChannel, messages::KeyCommand};
+use naia_bevy_demo_shared::{
+    behavior as shared_behavior, channels::PlayerCommandChannel, components::Position,
+    messages::KeyCommand,
+};
 
 pub fn tick_events(
     mut server: Server,
@@ -13,7 +16,6 @@ pub fn tick_events(
     let mut has_ticked = false;
 
     for TickEvent(server_tick) in tick_reader.iter() {
-
         has_ticked = true;
 
         let mut processed = false;

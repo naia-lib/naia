@@ -1,7 +1,10 @@
 use log::info;
 use std::time::Duration;
 
-use naia_shared::{BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, Serde, SerdeErr, StandardHeader, Tick, Timer, UnsignedVariableInteger, wrapping_diff};
+use naia_shared::{
+    wrapping_diff, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex,
+    Serde, SerdeErr, StandardHeader, Tick, UnsignedVariableInteger,
+};
 
 /// Manages the current tick for the host
 pub struct TimeManager {
@@ -83,16 +86,22 @@ impl TimeManager {
         if self.tick_duration_avg < self.tick_duration_avg_min {
             self.tick_duration_avg_min = self.tick_duration_avg;
         } else {
-            self.tick_duration_avg_min = (0.99999 * self.tick_duration_avg_min) + (0.00001 * self.tick_duration_avg);
+            self.tick_duration_avg_min =
+                (0.99999 * self.tick_duration_avg_min) + (0.00001 * self.tick_duration_avg);
         }
 
         if self.tick_duration_avg > self.tick_duration_avg_max {
             self.tick_duration_avg_max = self.tick_duration_avg;
         } else {
-            self.tick_duration_avg_max = (0.999 * self.tick_duration_avg_max) + (0.001 * self.tick_duration_avg);
+            self.tick_duration_avg_max =
+                (0.999 * self.tick_duration_avg_max) + (0.001 * self.tick_duration_avg);
         }
 
-        self.tick_speedup_potential = (((self.tick_duration_avg_max - self.tick_duration_avg_min) / self.tick_duration_avg_min) * 30.0).max(0.0).min(10.0);
+        self.tick_speedup_potential = (((self.tick_duration_avg_max - self.tick_duration_avg_min)
+            / self.tick_duration_avg_min)
+            * 30.0)
+            .max(0.0)
+            .min(10.0);
 
         // let tick_duration_avg_ms = self.tick_duration_avg;
         // info!("Actual Tick Duration: {duration_ms} ms | New Average: {tick_duration_avg_ms}");
@@ -133,8 +142,9 @@ impl TimeManager {
             UnsignedVariableInteger::<9>::new((self.tick_duration_avg * 1000.0).round() as i128);
         tick_duration_avg.ser(&mut writer);
 
-        let tick_speedup_potential =
-            UnsignedVariableInteger::<9>::new((self.tick_speedup_potential * 1000.0).round() as i128);
+        let tick_speedup_potential = UnsignedVariableInteger::<9>::new(
+            (self.tick_speedup_potential * 1000.0).round() as i128,
+        );
         tick_speedup_potential.ser(&mut writer);
 
         // write send time

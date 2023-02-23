@@ -1,8 +1,10 @@
-use bevy_ecs::event::EventReader;
-use bevy_ecs::system::{Query, ResMut};
+use bevy_ecs::{
+    event::EventReader,
+    system::{Query, ResMut},
+};
 use bevy_log::info;
 
-use naia_bevy_client::{Client, Tick, events::ClientTickEvent};
+use naia_bevy_client::{events::ClientTickEvent, Client};
 use naia_bevy_demo_shared::{
     behavior as shared_behavior, channels::PlayerCommandChannel, components::Position,
     messages::KeyCommand,
@@ -14,7 +16,7 @@ pub fn tick_events(
     mut tick_reader: EventReader<ClientTickEvent>,
     mut global: ResMut<Global>,
     mut client: Client,
-    mut position_query: Query<&mut Position>
+    mut position_query: Query<&mut Position>,
 ) {
     if !client.is_connected() {
         return;
@@ -33,7 +35,6 @@ pub fn tick_events(
     };
 
     for ClientTickEvent(tick) in tick_reader.iter() {
-
         //info!("--- Tick: {tick}");
 
         //

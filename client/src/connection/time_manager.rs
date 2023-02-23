@@ -1,6 +1,9 @@
 use log::{info, warn};
 
-use naia_shared::{sequence_greater_than, sequence_less_than, BaseConnection, BitReader, GameDuration, GameInstant, Instant, SerdeErr, Tick, Timer, wrapping_diff};
+use naia_shared::{
+    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, GameDuration, GameInstant,
+    Instant, SerdeErr, Tick, Timer,
+};
 
 use crate::connection::{base_time_manager::BaseTimeManager, io::Io, time_config::TimeConfig};
 
@@ -59,9 +62,24 @@ impl TimeManager {
         let server_receivable_instant =
             get_server_receivable_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
 
-        let client_receiving_tick = instant_to_tick(&server_tick, &server_tick_instant, server_tick_duration_avg, &client_receiving_instant);
-        let client_sending_tick = instant_to_tick(&server_tick, &server_tick_instant, server_tick_duration_avg, &client_sending_instant);
-        let server_receivable_tick = instant_to_tick(&server_tick, &server_tick_instant, server_tick_duration_avg, &server_receivable_instant);
+        let client_receiving_tick = instant_to_tick(
+            &server_tick,
+            &server_tick_instant,
+            server_tick_duration_avg,
+            &client_receiving_instant,
+        );
+        let client_sending_tick = instant_to_tick(
+            &server_tick,
+            &server_tick_instant,
+            server_tick_duration_avg,
+            &client_sending_instant,
+        );
+        let server_receivable_tick = instant_to_tick(
+            &server_tick,
+            &server_tick_instant,
+            server_tick_duration_avg,
+            &server_receivable_instant,
+        );
 
         Self {
             base,
@@ -110,7 +128,9 @@ impl TimeManager {
     }
 
     pub fn read_pong(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
-        if let Some((tick_duration_avg, speedup_potential, offset_millis, rtt_millis)) = self.base.read_pong(reader)? {
+        if let Some((tick_duration_avg, speedup_potential, offset_millis, rtt_millis)) =
+            self.base.read_pong(reader)?
+        {
             self.process_stats(offset_millis, rtt_millis);
             self.recv_tick_duration_avg(tick_duration_avg, speedup_potential);
         }
@@ -156,8 +176,11 @@ impl TimeManager {
 
     // Tick
 
-    pub(crate) fn recv_tick_instant(&mut self, server_tick: &Tick, server_tick_instant: &GameInstant) {
-
+    pub(crate) fn recv_tick_instant(
+        &mut self,
+        server_tick: &Tick,
+        server_tick_instant: &GameInstant,
+    ) {
         // only continue if this tick is the most recent
         if !sequence_greater_than(*server_tick, self.server_tick) {
             // We've already received the most recent tick
@@ -207,13 +230,19 @@ impl TimeManager {
         // }
     }
 
-    pub(crate) fn recv_tick_duration_avg(&mut self, server_tick_duration_avg: f32, server_speedup_potential: f32) {
-
+    pub(crate) fn recv_tick_duration_avg(
+        &mut self,
+        server_tick_duration_avg: f32,
+        server_speedup_potential: f32,
+    ) {
         // let prev_sending_instant = self.client_sending_instant.clone();
 
-        let client_receiving_interp = self.get_interp(self.client_receiving_tick, &self.client_receiving_instant);
-        let client_sending_interp = self.get_interp(self.client_sending_tick, &self.client_sending_instant);
-        let server_receivable_interp = self.get_interp(self.server_receivable_tick, &self.server_receivable_instant);
+        let client_receiving_interp =
+            self.get_interp(self.client_receiving_tick, &self.client_receiving_instant);
+        let client_sending_interp =
+            self.get_interp(self.client_sending_tick, &self.client_sending_instant);
+        let server_receivable_interp =
+            self.get_interp(self.server_receivable_tick, &self.server_receivable_instant);
 
         // {
         //     let prev_server_tick_duration_avg = self.server_tick_duration_avg;
@@ -246,9 +275,12 @@ impl TimeManager {
         //self.server_tick_duration_avg = server_tick_duration_avg;
 
         // Adjust tick instants to new incoming instant
-        self.client_receiving_instant = self.instant_from_interp(self.client_receiving_tick, client_receiving_interp);
-        self.client_sending_instant = self.instant_from_interp(self.client_sending_tick, client_sending_interp);
-        self.server_receivable_instant = self.instant_from_interp(self.server_receivable_tick, server_receivable_interp);
+        self.client_receiving_instant =
+            self.instant_from_interp(self.client_receiving_tick, client_receiving_interp);
+        self.client_sending_instant =
+            self.instant_from_interp(self.client_sending_tick, client_sending_interp);
+        self.server_receivable_instant =
+            self.instant_from_interp(self.server_receivable_tick, server_receivable_interp);
 
         // let sending_skew_distance = self.client_sending_instant.offset_from(&prev_sending_instant);
         // if sending_skew_distance > self.client_sending_instant_skew_adjust as i32 {
@@ -284,11 +316,6 @@ impl TimeManager {
         let prev_client_receiving_tick = self.client_receiving_tick;
         let prev_client_sending_tick = self.client_sending_tick;
 
-        // todo: remove
-        let prev_client_receiving_instant = self.client_receiving_instant.clone();
-        let prev_client_sending_instant = self.client_sending_instant.clone();
-        //
-
         {
             let time_elapsed = self.last_tick_check_instant.elapsed().as_secs_f32() * 1000.0;
             self.last_tick_check_instant = Instant::now();
@@ -312,15 +339,22 @@ impl TimeManager {
         let client_receiving_target =
             get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
 
-        let client_sending_target =
-            get_client_sending_target(&now, latency_ms, major_jitter_ms, tick_duration_ms, self.server_speedup_potential);
+        let client_sending_target = get_client_sending_target(
+            &now,
+            latency_ms,
+            major_jitter_ms,
+            tick_duration_ms,
+            self.server_speedup_potential,
+        );
         let server_receivable_target =
             get_server_receivable_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
 
         // set default next instant
-        let client_receiving_default_next = self.client_receiving_instant.add_millis(millis_elapsed);
+        let client_receiving_default_next =
+            self.client_receiving_instant.add_millis(millis_elapsed);
         let client_sending_default_next = self.client_sending_instant.add_millis(millis_elapsed);
-        let server_receivable_default_next = self.server_receivable_instant.add_millis(millis_elapsed);
+        let server_receivable_default_next =
+            self.server_receivable_instant.add_millis(millis_elapsed);
 
         // find speeds
         let client_receiving_speed =
@@ -330,44 +364,68 @@ impl TimeManager {
         let server_receivable_speed =
             offset_to_speed(server_receivable_default_next.offset_from(&server_receivable_target));
 
-        {
-            let client_receiving_instant = client_receiving_default_next.as_millis();
-            let client_sending_instant = client_sending_default_next.as_millis();
-            let client_receiving_target_ms = client_receiving_target.as_millis();
-            let client_sending_target_ms = client_sending_target.as_millis();
-            //info!("elapsed: {millis_elapsed} ms");
-            if client_receiving_speed != 1.0 {
-                info!("RECV | INSTANT: {client_receiving_instant} -> TARGET: {client_receiving_target_ms} = SPEED: {client_receiving_speed}");
-            }
-            if client_sending_speed != 1.0 {
-                info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
-            }
-        }
+        // {
+        //     let client_receiving_instant = client_receiving_default_next.as_millis();
+        //     let client_sending_instant = client_sending_default_next.as_millis();
+        //     let client_receiving_target_ms = client_receiving_target.as_millis();
+        //     let client_sending_target_ms = client_sending_target.as_millis();
+        //     //info!("elapsed: {millis_elapsed} ms");
+        //     if client_receiving_speed != 1.0 {
+        //         info!("RECV | INSTANT: {client_receiving_instant} -> TARGET: {client_receiving_target_ms} = SPEED: {client_receiving_speed}");
+        //     }
+        //     if client_sending_speed != 1.0 {
+        //         info!("SEND | INSTANT: {client_sending_instant} -> TARGET: {client_sending_target_ms} = SPEED: {client_sending_speed}");
+        //     }
+        // }
 
         // apply speeds
         self.client_receiving_instant = self
             .client_receiving_instant
             .add_millis((millis_elapsed_f32 * client_receiving_speed) as u32);
-        if self.client_receiving_instant.is_more_than(&client_receiving_target) {
+        if self
+            .client_receiving_instant
+            .is_more_than(&client_receiving_target)
+        {
             self.client_receiving_instant = client_receiving_target;
         }
         self.client_sending_instant = self
             .client_sending_instant
             .add_millis((millis_elapsed_f32 * client_sending_speed) as u32);
-        if self.client_sending_instant.is_more_than(&client_sending_target) {
+        if self
+            .client_sending_instant
+            .is_more_than(&client_sending_target)
+        {
             self.client_sending_instant = client_sending_target;
         }
         self.server_receivable_instant = self
             .server_receivable_instant
             .add_millis((millis_elapsed_f32 * server_receivable_speed) as u32);
-        if self.server_receivable_instant.is_more_than(&server_receivable_target) {
+        if self
+            .server_receivable_instant
+            .is_more_than(&server_receivable_target)
+        {
             self.server_receivable_instant = server_receivable_target;
         }
 
         // convert current instants into ticks
-        let new_client_receiving_tick = instant_to_tick(&self.server_tick, &self.server_tick_instant, self.server_tick_duration_avg, &self.client_receiving_instant);
-        let new_client_sending_tick = instant_to_tick(&self.server_tick, &self.server_tick_instant, self.server_tick_duration_avg, &self.client_sending_instant);
-        let new_server_receivable_tick = instant_to_tick(&self.server_tick, &self.server_tick_instant, self.server_tick_duration_avg, &self.server_receivable_instant);
+        let new_client_receiving_tick = instant_to_tick(
+            &self.server_tick,
+            &self.server_tick_instant,
+            self.server_tick_duration_avg,
+            &self.client_receiving_instant,
+        );
+        let new_client_sending_tick = instant_to_tick(
+            &self.server_tick,
+            &self.server_tick_instant,
+            self.server_tick_duration_avg,
+            &self.client_sending_instant,
+        );
+        let new_server_receivable_tick = instant_to_tick(
+            &self.server_tick,
+            &self.server_tick_instant,
+            self.server_tick_duration_avg,
+            &self.server_receivable_instant,
+        );
 
         // make sure nothing ticks backwards
         if sequence_less_than(new_client_receiving_tick, self.client_receiving_tick) {
@@ -431,18 +489,24 @@ impl TimeManager {
 
     pub(crate) fn tick_to_instant(&self, tick: Tick) -> GameInstant {
         let tick_diff = wrapping_diff(self.server_tick, tick);
-        let tick_diff_duration = ((tick_diff as f32) * self.server_tick_duration_avg).round() as i32;
-        return self.server_tick_instant.add_signed_millis(tick_diff_duration);
+        let tick_diff_duration =
+            ((tick_diff as f32) * self.server_tick_duration_avg).round() as i32;
+        return self
+            .server_tick_instant
+            .add_signed_millis(tick_diff_duration);
     }
 
     pub(crate) fn get_interp(&self, tick: Tick, instant: &GameInstant) -> f32 {
-        let output = (self.tick_to_instant(tick).offset_from(&instant) as f32) / self.server_tick_duration_avg;
+        let output = (self.tick_to_instant(tick).offset_from(&instant) as f32)
+            / self.server_tick_duration_avg;
         output
     }
 
     pub(crate) fn instant_from_interp(&self, tick: Tick, interp: f32) -> GameInstant {
         let tick_length_interped = (interp * self.server_tick_duration_avg).round() as i32;
-        return self.tick_to_instant(tick).add_signed_millis(tick_length_interped);
+        return self
+            .tick_to_instant(tick)
+            .add_signed_millis(tick_length_interped);
     }
 }
 
@@ -450,7 +514,7 @@ fn instant_to_tick(
     server_tick: &Tick,
     server_tick_instant: &GameInstant,
     server_tick_duration_avg: f32,
-    instant: &GameInstant
+    instant: &GameInstant,
 ) -> Tick {
     let offset_ms = server_tick_instant.offset_from(instant);
     let offset_ticks_f32 = (offset_ms as f32) / server_tick_duration_avg;
@@ -475,16 +539,22 @@ fn get_client_sending_target(
     tick_duration: u32,
     danger: f32,
 ) -> GameInstant {
-    let millis = latency + jitter + (tick_duration * 4) + (tick_duration as f32 * danger).round() as u32;
+    let millis =
+        latency + jitter + (tick_duration * 4) + (tick_duration as f32 * danger).round() as u32;
     now.add_millis(millis)
 }
 
-fn get_server_receivable_target(now: &GameInstant, latency: u32, jitter: u32, tick_duration: u32) -> GameInstant {
+fn get_server_receivable_target(
+    now: &GameInstant,
+    latency: u32,
+    jitter: u32,
+    tick_duration: u32,
+) -> GameInstant {
     let millis = (((latency + (tick_duration * 2)) as i32) - (jitter as i32)).max(0) as u32;
     now.add_millis(millis)
 }
 
-fn offset_to_speed(mut offset: i32) -> f32 {
+fn offset_to_speed(offset: i32) -> f32 {
     if offset <= OFFSET_MIN {
         let under = (OFFSET_MIN - offset) as f32;
         return (RANGE_MIN / (under + RANGE_MIN)).max(SPEED_MIN);
@@ -505,8 +575,6 @@ const RANGE_MAX: f32 = 20.0;
 const RANGE_MIN: f32 = 20.0;
 const SPEED_MAX: f32 = 10.0;
 const SPEED_MIN: f32 = 1.0 / SPEED_MAX;
-
-const INV_OFFSET_MIN: i32 = OFFSET_MIN * -1;
 
 // Tests
 #[cfg(test)]
