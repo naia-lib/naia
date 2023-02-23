@@ -359,8 +359,12 @@ impl TimeManager {
 
     // Stats
 
-    pub(crate) fn interpolation(&self) -> f32 {
-        todo!()
+    pub(crate) fn client_interpolation(&self) -> f32 {
+        self.get_interp(self.client_sending_tick, &self.client_sending_instant)
+    }
+
+    pub(crate) fn server_interpolation(&self) -> f32 {
+        self.get_interp(self.client_receiving_tick, &self.client_receiving_instant)
     }
 
     pub(crate) fn rtt(&self) -> f32 {

@@ -291,14 +291,20 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
     // Interpolation
 
-    /// Gets the interpolation tween amount for the current frame
-    pub fn interpolation(&self) -> f32 {
-        // TODO: don't just unwrap this!
-        self.server_connection
-            .as_ref()
-            .unwrap()
-            .time_manager
-            .interpolation()
+    /// Gets the interpolation tween amount for the current frame, for use by entities on the Client Tick (i.e. predicted)
+    pub fn client_interpolation(&self) -> Option<f32> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.time_manager.client_interpolation());
+        }
+        return None;
+    }
+
+    /// Gets the interpolation tween amount for the current frame, for use by entities on the Server Tick (i.e. authoritative)
+    pub fn server_interpolation(&self) -> Option<f32> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.time_manager.server_interpolation());
+        }
+        return None;
     }
 
     // Bandwidth monitoring

@@ -71,8 +71,12 @@ impl<'a> Client<'a> {
 
     // Interpolation
 
-    pub fn interpolation(&self) -> f32 {
-        self.client.interpolation()
+    pub fn client_interpolation(&self) -> Option<f32> {
+        self.client.client_interpolation()
+    }
+
+    pub fn server_interpolation(&self) -> Option<f32> {
+        self.client.server_interpolation()
     }
 
     //// Messages ////
