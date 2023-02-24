@@ -24,7 +24,7 @@ impl ChannelSettings {
             ChannelMode::UnorderedReliable(_) => true,
             ChannelMode::SequencedReliable(_) => true,
             ChannelMode::OrderedReliable(_) => true,
-            ChannelMode::TickBuffered => false,
+            ChannelMode::TickBuffered(_) => false,
         }
     }
 
@@ -62,6 +62,21 @@ impl ReliableSettings {
     }
 }
 
+#[derive(Clone)]
+pub struct TickBufferSettings {
+    /// Describes a maximum of messages that may be kept in the buffer.
+    /// Oldest messages are pruned out first.
+    pub message_capacity: usize,
+}
+
+impl TickBufferSettings {
+    pub const fn default() -> Self {
+        Self {
+            message_capacity: 64,
+        }
+    }
+}
+
 // ChannelMode
 #[derive(Clone)]
 pub enum ChannelMode {
@@ -70,12 +85,12 @@ pub enum ChannelMode {
     UnorderedReliable(ReliableSettings),
     SequencedReliable(ReliableSettings),
     OrderedReliable(ReliableSettings),
-    TickBuffered,
+    TickBuffered(TickBufferSettings),
 }
 
 impl ChannelMode {
     pub fn tick_buffered(&self) -> bool {
-        matches!(self, ChannelMode::TickBuffered)
+        matches!(self, ChannelMode::TickBuffered(_))
     }
 }
 

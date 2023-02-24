@@ -1,10 +1,10 @@
-use std::time::Duration;
 use std::{
     collections::{hash_set::Iter, HashMap},
     hash::Hash,
     net::SocketAddr,
     panic,
     sync::{Arc, RwLock},
+    time::Duration,
 };
 
 use log::warn;
@@ -19,13 +19,13 @@ use naia_shared::{
     Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
-use crate::connection::tick_buffer_messages::TickBufferMessages;
-use crate::connection::time_manager::TimeManager;
 use crate::{
     connection::{
         connection::Connection,
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
+        tick_buffer_messages::TickBufferMessages,
+        time_manager::TimeManager,
     },
     protocol::{
         entity_ref::{EntityMut, EntityRef},
@@ -173,6 +173,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             warn!("unknown user is finalizing connection...");
             return;
         };
+
         // send validate response
         let mut writer = self.handshake_manager.write_validate_response();
         if self.io.send_writer(&user.address, &mut writer).is_err() {
@@ -182,7 +183,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &user.address
             );
         }
-        //
+
         self.validated_users.insert(user.address, *user_key);
     }
 
@@ -199,7 +200,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             &self.protocol.channel_kinds,
             &self.diff_handler,
         );
-        // send connectaccept response
+
+        // send connect response
         let mut writer = self.handshake_manager.write_connect_response();
         if self.io.send_writer(&user.address, &mut writer).is_err() {
             // TODO: pass this on and handle above
@@ -208,7 +210,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &user.address
             );
         }
-        //
+
         self.user_connections.insert(user.address, new_connection);
         if self.io.bandwidth_monitor_enabled() {
             self.io.register_client(&user.address);
@@ -731,6 +733,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> Option<User> {
         if let Some(user) = self.users.remove(user_key) {
             if self.user_connections.remove(&user.address).is_some() {
+                self.validated_users.remove(&user.address);
                 self.entity_scope_map.remove_user(user_key);
                 self.handshake_manager.delete_user(&user.address);
 
@@ -1027,7 +1030,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                             // TODO: pass this on and handle above
                                             warn!("Server Error: Cannot send validate success response packet to {}", &address);
                                         };
-                                        //
                                     } else {
                                         let user = User::new(address);
                                         let user_key = self.users.insert(user);

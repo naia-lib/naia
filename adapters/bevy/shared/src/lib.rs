@@ -5,7 +5,8 @@ pub use naia_shared::{
     MessageBevy as Message, MessageBuilder, MessageKind, MessageKinds, Named,
     NetEntityHandleConverter, OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random,
     ReliableSettings, ReplicaDynMut, ReplicaDynRef, ReplicateBevy as Replicate, ReplicateBuilder,
-    SerdeBevy as Serde, SerdeErr, Tick, UnsignedInteger, WorldMutType, WorldRefType,
+    SerdeBevy as Serde, SerdeErr, Tick, TickBufferSettings, UnsignedInteger, WorldMutType,
+    WorldRefType,
 };
 
 mod component_access;

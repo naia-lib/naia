@@ -1,5 +1,6 @@
 use naia_bevy_shared::{
     Channel, ChannelDirection, ChannelMode, Protocol, ProtocolPlugin, ReliableSettings,
+    TickBufferSettings,
 };
 
 #[derive(Channel)]
@@ -16,7 +17,7 @@ impl ProtocolPlugin for ChannelsPlugin {
         protocol
             .add_channel::<PlayerCommandChannel>(
                 ChannelDirection::ClientToServer,
-                ChannelMode::TickBuffered,
+                ChannelMode::TickBuffered(TickBufferSettings::default()),
             )
             .add_channel::<EntityAssignmentChannel>(
                 ChannelDirection::ServerToClient,

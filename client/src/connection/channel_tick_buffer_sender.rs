@@ -4,8 +4,8 @@ use log::warn;
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter, ChannelWriter,
-    Message, MessageKinds, Serde, ShortMessageIndex, Tick, UnsignedVariableInteger,
-    MESSAGE_HISTORY_SIZE,
+    Message, MessageKinds, Serde, ShortMessageIndex, Tick, TickBufferSettings,
+    UnsignedVariableInteger,
 };
 
 pub struct ChannelTickBufferSender {
@@ -16,9 +16,9 @@ pub struct ChannelTickBufferSender {
 }
 
 impl ChannelTickBufferSender {
-    pub fn new() -> Self {
+    pub fn new(settings: TickBufferSettings) -> Self {
         Self {
-            sending_messages: OutgoingMessages::new(),
+            sending_messages: OutgoingMessages::new(settings.message_capacity),
             outgoing_messages: VecDeque::new(),
             last_sent: 0,
             never_sent: true,
@@ -233,12 +233,15 @@ struct OutgoingMessages {
     // front big, back small
     // front recent, back past
     buffer: VecDeque<(Tick, MessageMap)>,
+    // this is the maximum length of the buffer
+    capacity: usize,
 }
 
 impl OutgoingMessages {
-    pub fn new() -> Self {
+    pub fn new(capacity: usize) -> Self {
         OutgoingMessages {
             buffer: VecDeque::new(),
+            capacity,
         }
     }
 
@@ -266,7 +269,7 @@ impl OutgoingMessages {
         self.buffer.push_front((message_tick, msg_map));
 
         // a good time to prune down this list
-        while self.buffer.len() > MESSAGE_HISTORY_SIZE.into() {
+        while self.buffer.len() > self.capacity {
             self.buffer.pop_back();
         }
     }

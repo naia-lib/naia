@@ -1,3 +1,4 @@
+use crate::messages::channel::TickBufferSettings;
 use crate::{Channel, ChannelDirection, ChannelMode, Protocol, ProtocolPlugin, ReliableSettings};
 
 #[derive(Channel)]
@@ -39,7 +40,7 @@ impl ProtocolPlugin for DefaultChannelsPlugin {
             )
             .add_channel::<TickBufferedChannel>(
                 ChannelDirection::ClientToServer,
-                ChannelMode::TickBuffered,
+                ChannelMode::TickBuffered(TickBufferSettings::default()),
             );
     }
 }

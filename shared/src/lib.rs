@@ -81,7 +81,7 @@ pub use entity::{
     net_entity::NetEntity,
 };
 pub use messages::{
-    channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings},
+    channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
     channel_kinds::{ChannelKind, ChannelKinds},
     default_channels,
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
@@ -100,7 +100,6 @@ pub use naia_serde::{
 };
 
 pub use bigmap::{BigMap, BigMapKey};
-pub use constants::MESSAGE_HISTORY_SIZE;
 pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
 pub use protocol::{Protocol, ProtocolPlugin};

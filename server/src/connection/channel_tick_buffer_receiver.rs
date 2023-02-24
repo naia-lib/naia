@@ -2,7 +2,7 @@ use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
     sequence_greater_than, BitReader, ChannelReader, Message, MessageKinds, Serde, SerdeErr,
-    ShortMessageIndex, Tick, UnsignedVariableInteger,
+    ShortMessageIndex, Tick, TickBufferSettings, UnsignedVariableInteger,
 };
 
 /// Receive updates from the client and store them in a buffer along with the corresponding
@@ -12,7 +12,7 @@ pub struct ChannelTickBufferReceiver {
 }
 
 impl ChannelTickBufferReceiver {
-    pub fn new() -> Self {
+    pub fn new(_settings: TickBufferSettings) -> Self {
         Self {
             incoming_messages: IncomingMessages::new(),
         }
@@ -110,11 +110,6 @@ impl IncomingMessages {
         }
     }
 
-    // TODO:
-    //  * add unit test?
-    //  * should there be a maximum buffer size?
-    //  * fasten client simulation if too many ticks are received too late (i.e. received client ticks are too old) ?
-    //  * slow client simulation if ticks are received too in advance (buffer is too big) ?
     /// Insert a message from the client into the tick-buffer
     /// Will only insert messages that are from future ticks compared to the current server tick
     pub fn insert(
@@ -124,6 +119,10 @@ impl IncomingMessages {
         message_index: ShortMessageIndex,
         new_message: Box<dyn Message>,
     ) -> bool {
+        // TODO:
+        //  * add unit test?
+        //  * should there be a maximum buffer size?
+
         if sequence_greater_than(*message_tick, *host_tick) {
             let mut index = self.buffer.len();
 
