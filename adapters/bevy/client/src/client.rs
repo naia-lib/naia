@@ -69,16 +69,6 @@ impl<'a> Client<'a> {
         self.client.jitter()
     }
 
-    // Interpolation
-
-    pub fn client_interpolation(&self) -> Option<f32> {
-        self.client.client_interpolation()
-    }
-
-    pub fn server_interpolation(&self) -> Option<f32> {
-        self.client.server_interpolation()
-    }
-
     //// Messages ////
     pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
         self.client.send_message::<C, M>(message);
@@ -106,6 +96,16 @@ impl<'a> Client<'a> {
 
     pub fn server_tick(&self) -> Option<Tick> {
         self.client.server_tick()
+    }
+
+    // Interpolation
+
+    pub fn client_interpolation(&self) -> Option<f32> {
+        self.client.client_interpolation()
+    }
+
+    pub fn server_interpolation(&self) -> Option<f32> {
+        self.client.server_interpolation()
     }
 }
 

@@ -536,6 +536,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return self.time_manager.current_tick();
     }
 
+    /// Gets the current average tick duration of the Server
+    pub fn average_tick_duration(&self) -> Duration {
+        self.time_manager.average_tick_duration()
+    }
+
     // Bandwidth monitoring
     pub fn outgoing_bandwidth_total(&mut self) -> f32 {
         self.io.outgoing_bandwidth_total()

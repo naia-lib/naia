@@ -62,13 +62,17 @@ impl TimeManager {
         return false;
     }
 
-    /// Gets the current tick on the host
+    /// Gets the current tick of the Server
     pub fn current_tick(&self) -> Tick {
         self.current_tick
     }
 
     pub fn current_tick_instant(&self) -> GameInstant {
         self.last_tick_game_instant.clone()
+    }
+
+    pub fn average_tick_duration(&self) -> Duration {
+        Duration::from_millis(self.tick_duration_avg.round() as u64)
     }
 
     pub fn game_time_now(&self) -> GameInstant {

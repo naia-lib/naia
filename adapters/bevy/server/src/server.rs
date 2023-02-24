@@ -3,6 +3,7 @@ use bevy_ecs::{
     system::SystemParam,
     world::{Mut, World},
 };
+use std::time::Duration;
 
 use naia_server::{
     EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages,
@@ -160,6 +161,10 @@ impl<'world, 'state> Server<'world, 'state> {
 
     pub fn current_tick(&self) -> Tick {
         self.server.current_tick()
+    }
+
+    pub fn average_tick_duration(&self) -> Duration {
+        self.server.average_tick_duration()
     }
 
     // Crate-public methods
