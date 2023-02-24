@@ -1,7 +1,8 @@
 use std::{default::Default, time::Duration};
 
-use crate::connection::time_config::TimeConfig;
 use naia_shared::ConnectionConfig;
+
+use crate::connection::time_config::TimeConfig;
 
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone)]

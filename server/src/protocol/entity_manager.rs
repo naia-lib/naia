@@ -349,8 +349,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    //info!("write SpawnEntity({})", action_id);
-
                     Self::record_action_written(
                         &mut self.sent_action_packets,
                         packet_index,
@@ -370,8 +368,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
-                    //info!("write DespawnEntity({})", action_id);
-
                     Self::record_action_written(
                         &mut self.sent_action_packets,
                         packet_index,
@@ -388,8 +384,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
                     // if we are actually writing this packet
                     if is_writing {
-                        //info!("write Noop({})", action_id);
-
                         // add it to action record
                         Self::record_action_written(
                             &mut self.sent_action_packets,
@@ -417,8 +411,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
                     // if we are actually writing this packet
                     if is_writing {
-                        //info!("write InsertComponent({})", action_id);
-
                         // add it to action record
                         Self::record_action_written(
                             &mut self.sent_action_packets,
@@ -435,8 +427,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
                     // if we are actually writing this packet
                     if is_writing {
-                        //info!("write Noop({})", action_id);
-
                         // add it to action record
                         Self::record_action_written(
                             &mut self.sent_action_packets,
@@ -459,8 +449,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
                     // if we are writing to this packet, add it to record
                     if is_writing {
-                        //info!("write RemoveComponent({})", action_id);
-
                         Self::record_action_written(
                             &mut self.sent_action_packets,
                             packet_index,
@@ -646,8 +634,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 .write_update(&diff_mask, writer, &converter);
 
             written_component_kinds.push(*component_kind);
-
-            //info!("writing UpdateComponent");
 
             // place diff mask in a special transmission record - like map
             self.last_update_packet_index = *packet_index;

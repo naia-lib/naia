@@ -190,7 +190,6 @@ pub fn tick_events(
         return;
     }
     let Some(command) = global.queued_command.take() else {
-        info!("Command aborted: Queued Command empty");
         return;
     };
 
@@ -198,24 +197,16 @@ pub fn tick_events(
         .owned_entity
         .as_ref()
         .map(|owned_entity| owned_entity.predicted) else {
-        info!("Command aborted: no Owned Entity");
+        // No owned Entity
         return;
     };
 
     for ClientTickEvent(tick) in tick_reader.iter() {
-        //info!("--- Tick: {tick}");
-
-        //
-        let last_client_tick = global.last_client_tick;
-        if *tick != last_client_tick.wrapping_add(1) {
-            info!("Skipped? Last Tick at: {last_client_tick}, Current Command at {tick}");
-        }
         global.last_client_tick = *tick;
-        //
 
         //All game logic should happen here, on a tick event
         if !global.command_history.can_insert(tick) {
-            info!("Command aborted: History full");
+            // History is full
             continue;
         }
 

@@ -7,8 +7,7 @@ use log::warn;
 
 use crate::connection::io::Io;
 
-/// Is responsible for sending regular ping messages between client/servers
-/// and to estimate rtt/jitter
+/// Responsible for keeping track of internal time, as well as sending and receiving Ping/Pong messages
 pub struct BaseTimeManager {
     pub start_instant: Instant,
     sent_pings: PingStore,
@@ -40,8 +39,6 @@ impl BaseTimeManager {
 
         // write index
         ping_index.ser(&mut writer);
-
-        //info!("sent Ping: {ping_index} to Server");
 
         // send packet
         if io.send_writer(&mut writer).is_err() {

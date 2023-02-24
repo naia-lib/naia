@@ -236,8 +236,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 bit_writer.release_bits(1);
             }
 
-            //info!("--------------\n");
-
             // send packet
             match io.send_writer(&self.base.address, &mut bit_writer) {
                 Ok(()) => {}

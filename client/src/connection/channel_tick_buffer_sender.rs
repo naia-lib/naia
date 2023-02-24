@@ -35,9 +35,6 @@ impl ChannelTickBufferSender {
             self.sending_messages
                 .pop_back_until_excluding(server_receivable_tick);
 
-            let buffer_length = self.sending_messages.buffer.len();
-            info!("Collect Message | Receivable Tick: {server_receivable_tick}, Sending Tick: {client_sending_tick}, Buffer Length: {buffer_length}");
-
             self.last_sent = *client_sending_tick;
             self.never_sent = true;
 
@@ -280,7 +277,6 @@ impl OutgoingMessages {
         // a good time to prune down this list
         while self.buffer.len() > MESSAGE_HISTORY_SIZE.into() {
             self.buffer.pop_back();
-            //info!("pruning outgoing_messages buffer cause it got too big");
         }
     }
 
@@ -315,7 +311,6 @@ impl OutgoingMessages {
                 if *old_tick == *tick {
                     // found it!
                     message_map.remove(message_index);
-                    //info!("removed delivered message! tick: {}, msg_id: {}", tick, msg_id);
                     if message_map.len() == 0 {
                         remove = true;
                     }

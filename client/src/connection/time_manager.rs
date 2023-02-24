@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::warn;
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, GameDuration, GameInstant,
@@ -15,8 +15,6 @@ pub struct TimeManager {
     pruned_offset_avg: f32,
     raw_offset_avg: f32,
     offset_stdv: f32,
-
-    initial_rtt_avg: f32,
     pruned_rtt_avg: f32,
     raw_rtt_avg: f32,
     rtt_stdv: f32,
@@ -89,7 +87,6 @@ impl TimeManager {
             raw_offset_avg: 0.0,
             offset_stdv,
 
-            initial_rtt_avg: pruned_rtt_avg,
             pruned_rtt_avg,
             raw_rtt_avg: pruned_rtt_avg,
             rtt_stdv,
@@ -153,10 +150,6 @@ impl TimeManager {
         if offset_diff.abs() < self.offset_stdv && rtt_diff.abs() < self.rtt_stdv {
             self.pruned_offset_avg = (0.9 * self.pruned_offset_avg) + (0.1 * offset_sample);
             self.pruned_rtt_avg = (0.9 * self.pruned_rtt_avg) + (0.1 * rtt_sample);
-
-            let offset_avg = self.pruned_offset_avg;
-            let rtt_avg = self.pruned_rtt_avg - self.initial_rtt_avg;
-            info!(" ------- New Average Offset: {offset_avg}, Average RTT Offset: {rtt_avg}");
         } else {
             // Pruned out sample
         }

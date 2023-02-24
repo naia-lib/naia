@@ -1,4 +1,3 @@
-use log::info;
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
@@ -86,8 +85,7 @@ impl ChannelTickBufferReceiver {
                 .incoming_messages
                 .insert(host_tick, &remote_tick, message_index, new_message)
             {
-                //info!("failed command. server: {}, client: {}",
-                // server_tick, client_tick);
+                // Failed to Insert Command
             }
         }
 
@@ -134,8 +132,6 @@ impl IncomingMessages {
                 let mut map = HashMap::new();
                 map.insert(message_index, new_message);
                 self.buffer.push_back((*message_tick, map));
-                //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (empty q)",
-                // server_tick, client_tick, owned_entity);
                 return true;
             }
 
@@ -152,10 +148,7 @@ impl IncomingMessages {
                             existing_messages.entry(message_index)
                         {
                             e.insert(new_message);
-                            //info!("inserting command at tick: {}", client_tick);
-                            //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (map
-                            // xzist)", server_tick, client_tick, owned_entity);
-                            // inserted command into existing tick
+
                             return true;
                         } else {
                             // TODO: log hash collisions?
@@ -172,8 +165,6 @@ impl IncomingMessages {
                     let mut new_messages = HashMap::new();
                     new_messages.insert(message_index, new_message);
                     self.buffer.insert(index + 1, (*message_tick, new_messages));
-                    //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (midbck
-                    // insrt)", server_tick, client_tick, owned_entity);
                     return true;
                 }
 
@@ -182,14 +173,11 @@ impl IncomingMessages {
                     let mut new_messages = HashMap::new();
                     new_messages.insert(message_index, new_message);
                     self.buffer.push_front((*message_tick, new_messages));
-                    //info!("msg server_tick: {}, client_tick: {}, for entity: {} ... (front
-                    // insrt)", server_tick, client_tick, owned_entity);
                     return true;
                 }
             }
         } else {
             // command is too late to insert in incoming message queue
-            info!("Server received Command too late!");
             false
         }
     }

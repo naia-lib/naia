@@ -30,7 +30,6 @@ impl PingStore {
         // a good time to prune down the size of this buffer
         while self.buffer.len() > SENT_PINGS_HISTORY_SIZE.into() {
             self.buffer.pop_back();
-            //info!("pruning sent_pings buffer cause it got too big");
         }
 
         ping_index
@@ -63,7 +62,6 @@ impl PingStore {
 
             if found {
                 let (_, ping_instant) = self.buffer.remove(vec_index).unwrap();
-                //info!("found and removed ping: {}", index);
                 return Some(ping_instant);
             }
 

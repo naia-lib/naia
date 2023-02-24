@@ -169,9 +169,6 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
         for action in incoming_actions {
             match action {
                 EntityAction::SpawnEntity(net_entity, components) => {
-                    //let e_u16: u16 = net_entity.into();
-                    //info!("spawn entity: {}", e_u16);
-
                     if self.local_to_world_entity.contains_key(&net_entity) {
                         panic!("attempted to insert duplicate entity");
                     }
@@ -202,9 +199,6 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                     self.entity_records.insert(world_entity, entity_record);
                 }
                 EntityAction::DespawnEntity(net_entity) => {
-                    //let e_u16: u16 = net_entity.into();
-                    //info!("despawn entity: {}", e_u16);
-
                     if let Some(world_entity) = self.local_to_world_entity.remove(&net_entity) {
                         if self.entity_records.remove(&world_entity).is_none() {
                             panic!("despawning an uninitialized entity");
@@ -228,9 +222,6 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                     }
                 }
                 EntityAction::InsertComponent(net_entity, component_kind) => {
-                    //let e_u16: u16 = net_entity.into();
-                    //info!("insert component for: {}", e_u16);
-
                     let component = self
                         .received_components
                         .remove(&(net_entity, component_kind))
@@ -254,9 +245,6 @@ impl<E: Copy + Eq + Hash> EntityManager<E> {
                     }
                 }
                 EntityAction::RemoveComponent(net_entity, component_kind) => {
-                    //let e_u16: u16 = net_entity.into();
-                    //info!("remove component for: {}", e_u16);
-
                     let world_entity = self
                         .local_to_world_entity
                         .get_mut(&net_entity)

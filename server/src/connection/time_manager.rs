@@ -1,4 +1,3 @@
-use log::info;
 use std::time::Duration;
 
 use naia_shared::{
@@ -110,8 +109,6 @@ impl TimeManager {
         // read incoming ping index
         let ping_index = PingIndex::de(reader)?;
 
-        //info!("received Ping: {ping_index} from Client");
-
         // start packet writer
         let mut writer = BitWriter::new();
 
@@ -143,15 +140,11 @@ impl TimeManager {
         // write send time
         self.game_time_now().ser(&mut writer);
 
-        //info!("sent Ping: {ping_index} to Client");
-
         Ok(writer)
     }
 
     pub(crate) fn record_client_tick(&mut self, client_tick: Tick) {
         let ticks_client_ahead_by = wrapping_diff(self.current_tick, client_tick) as f32;
         self.client_diff_avg = (0.9 * self.client_diff_avg) + (0.1 * ticks_client_ahead_by);
-        let client_diff_avg = self.client_diff_avg;
-        info!("On average client is ahead by: {client_diff_avg} Ticks");
     }
 }

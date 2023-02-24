@@ -1,5 +1,3 @@
-use log::info;
-
 use naia_shared::{BitReader, GameInstant, Serde, SerdeErr, Tick, GAME_TIME_LIMIT};
 
 use crate::connection::{
@@ -127,8 +125,6 @@ impl HandshakeTimeManager {
         pruned_rtt_mean /= pruned_sample_count;
 
         // Get values we were looking for
-
-        info!(" ******** RTT AVG: {pruned_rtt_mean}, RTT STDV: {rtt_stdv}, OFFSET AVG: {pruned_offset_mean}, OFFSET STDV: {offset_stdv}");
 
         // Set internal time to match offset
         if pruned_offset_mean < 0.0 {
