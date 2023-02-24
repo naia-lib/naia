@@ -49,7 +49,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
         let handshake_manager = HandshakeManager::new(
             client_config.send_handshake_interval,
-            client_config.time.clone(),
+            client_config.ping_interval,
+            client_config.handshake_pings,
         );
 
         let compression_config = protocol.compression.clone();
@@ -516,7 +517,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.server_connection = None;
         self.handshake_manager = HandshakeManager::new(
             self.client_config.send_handshake_interval,
-            self.client_config.time.clone(),
+            self.client_config.ping_interval,
+            self.client_config.handshake_pings,
         );
     }
 

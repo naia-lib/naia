@@ -1,11 +1,12 @@
 use log::warn;
+use std::time::Duration;
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, GameDuration, GameInstant,
     Instant, SerdeErr, Tick, Timer,
 };
 
-use crate::connection::{base_time_manager::BaseTimeManager, io::Io, time_config::TimeConfig};
+use crate::connection::{base_time_manager::BaseTimeManager, io::Io};
 
 pub struct TimeManager {
     base: BaseTimeManager,
@@ -38,7 +39,7 @@ pub struct TimeManager {
 
 impl TimeManager {
     pub fn from_parts(
-        time_config: TimeConfig,
+        ping_interval: Duration,
         base: BaseTimeManager,
         server_tick: Tick,
         server_tick_instant: GameInstant,
@@ -81,7 +82,7 @@ impl TimeManager {
 
         Self {
             base,
-            ping_timer: Timer::new(time_config.ping_interval),
+            ping_timer: Timer::new(ping_interval),
 
             pruned_offset_avg: 0.0,
             raw_offset_avg: 0.0,

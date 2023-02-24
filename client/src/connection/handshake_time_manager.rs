@@ -1,14 +1,13 @@
+use std::time::Duration;
+
 use naia_shared::{BitReader, GameInstant, Serde, SerdeErr, Tick, GAME_TIME_LIMIT};
 
-use crate::connection::{
-    base_time_manager::BaseTimeManager, io::Io, time_config::TimeConfig, time_manager::TimeManager,
-};
-
-const HANDSHAKE_PONGS_REQUIRED: usize = 7;
+use crate::connection::{base_time_manager::BaseTimeManager, io::Io, time_manager::TimeManager};
 
 pub struct HandshakeTimeManager {
     base: BaseTimeManager,
-    time_config: TimeConfig,
+    handshake_pings: u8,
+    ping_interval: Duration,
     pong_stats: Vec<(f32, f32)>,
     server_tick: Tick,
     server_tick_instant: GameInstant,
@@ -17,12 +16,13 @@ pub struct HandshakeTimeManager {
 }
 
 impl HandshakeTimeManager {
-    pub fn new(time_config: TimeConfig) -> Self {
+    pub fn new(ping_interval: Duration, handshake_pings: u8) -> Self {
         let base = BaseTimeManager::new();
         let server_tick_instant = base.game_time_now();
         Self {
             base,
-            time_config: time_config.clone(),
+            ping_interval,
+            handshake_pings,
             pong_stats: Vec::new(),
             server_tick: 0,
             server_tick_instant,
@@ -51,7 +51,7 @@ impl HandshakeTimeManager {
             self.server_speedup_potential = speedup_potential;
 
             self.buffer_stats(offset_millis, rtt_millis);
-            if self.pong_stats.len() >= HANDSHAKE_PONGS_REQUIRED {
+            if self.pong_stats.len() >= self.handshake_pings as usize {
                 return Ok(true);
             }
         }
@@ -142,7 +142,7 @@ impl HandshakeTimeManager {
         self.base.sent_pings_clear();
 
         TimeManager::from_parts(
-            self.time_config,
+            self.ping_interval,
             self.base,
             self.server_tick,
             self.server_tick_instant,

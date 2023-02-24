@@ -3,15 +3,12 @@ use std::time::Duration;
 use log::warn;
 
 use naia_shared::{
-    BitReader, BitWriter, ConnectionConfig, FakeEntityConverter, Message, MessageKinds, PacketType,
-    Replicate, Serde, StandardHeader, Timer, Timestamp as stamp_time, WorldMutType, WorldRefType,
+    BitReader, BitWriter, FakeEntityConverter, Message, MessageKinds, PacketType, Serde,
+    StandardHeader, Timer, Timestamp as stamp_time,
 };
 
 use super::io::Io;
-use crate::connection::{
-    handshake_time_manager::HandshakeTimeManager, time_config::TimeConfig,
-    time_manager::TimeManager,
-};
+use crate::connection::{handshake_time_manager::HandshakeTimeManager, time_manager::TimeManager};
 
 pub type Timestamp = u64;
 
@@ -49,16 +46,17 @@ pub enum HandshakeResult {
 }
 
 pub struct HandshakeManager {
+    ping_interval: Duration,
+    handshake_pings: u8,
     pub connection_state: HandshakeState,
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Vec<u8>>,
     auth_message: Option<Box<dyn Message>>,
-    time_config: TimeConfig,
 }
 
 impl HandshakeManager {
-    pub fn new(send_interval: Duration, time_config: TimeConfig) -> Self {
+    pub fn new(send_interval: Duration, ping_interval: Duration, handshake_pings: u8) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
@@ -70,7 +68,8 @@ impl HandshakeManager {
             pre_connection_digest: None,
             connection_state: HandshakeState::AwaitingChallengeResponse,
             auth_message: None,
-            time_config,
+            ping_interval,
+            handshake_pings,
         }
     }
 
@@ -139,7 +138,7 @@ impl HandshakeManager {
             }
             PacketType::ServerValidateResponse => {
                 if self.connection_state == HandshakeState::AwaitingValidateResponse {
-                    self.recv_validate_response(self.time_config.clone());
+                    self.recv_validate_response();
                 }
                 return None;
             }
@@ -237,8 +236,11 @@ impl HandshakeManager {
     }
 
     // Step 4 of Handshake
-    pub fn recv_validate_response(&mut self, time_config: TimeConfig) {
-        self.connection_state = HandshakeState::TimeSync(HandshakeTimeManager::new(time_config));
+    pub fn recv_validate_response(&mut self) {
+        self.connection_state = HandshakeState::TimeSync(HandshakeTimeManager::new(
+            self.ping_interval,
+            self.handshake_pings,
+        ));
     }
 
     // Step 6 of Handshake
