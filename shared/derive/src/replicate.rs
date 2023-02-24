@@ -792,12 +792,12 @@ fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenS
         let new_output_right = match property {
             Property::Normal(_) => {
                 quote! {
-                    Property::write(&self.#field_name, bit_writer);
+                    Property::write(&self.#field_name, writer);
                 }
             }
             Property::Entity(_) => {
                 quote! {
-                    EntityProperty::write(&self.#field_name, bit_writer, converter);
+                    EntityProperty::write(&self.#field_name, writer, converter);
                 }
             }
             Property::NonReplicated(_) => {
@@ -813,8 +813,8 @@ fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenS
     }
 
     quote! {
-        fn write(&self, component_kinds: &ComponentKinds, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-            self.kind().ser(component_kinds, bit_writer);
+        fn write(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+            self.kind().ser(component_kinds, writer);
             #property_writes
         }
     }

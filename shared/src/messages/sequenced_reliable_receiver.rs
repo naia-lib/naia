@@ -2,10 +2,11 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::messages::message_channel::MessageChannelReceiver;
 use crate::{
-    messages::message_kinds::MessageKinds, sequence_less_than, types::MessageIndex, Message,
-    ProtocolIo,
+    messages::{message_channel::MessageChannelReceiver, message_kinds::MessageKinds},
+    sequence_less_than,
+    types::MessageIndex,
+    Message, NetEntityHandleConverter,
 };
 
 use super::{indexed_message_reader::IndexedMessageReader, message_channel::ChannelReceiver};
@@ -125,10 +126,10 @@ impl MessageChannelReceiver for SequencedReliableReceiver {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_reader: &ProtocolIo,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, channel_reader, reader)?;
+        let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;
         for (id, message) in id_w_msgs {
             self.buffer_message(id, message);
         }

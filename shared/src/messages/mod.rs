@@ -9,7 +9,6 @@ pub mod message_kinds;
 pub mod message_manager;
 pub mod named;
 pub mod ordered_reliable_receiver;
-pub mod protocol_io;
 pub mod reliable_sender;
 pub mod sequenced_reliable_receiver;
 pub mod sequenced_unreliable_receiver;

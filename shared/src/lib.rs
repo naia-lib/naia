@@ -90,7 +90,6 @@ pub use messages::{
     message_manager::MessageManager,
     named::Named,
     ordered_reliable_receiver::OrderedReliableReceiver,
-    protocol_io::ProtocolIo,
     reliable_sender::ReliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
 };

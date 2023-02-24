@@ -3,7 +3,8 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
 use crate::{
-    messages::message_kinds::MessageKinds, types::MessageIndex, wrapping_diff, Message, ProtocolIo,
+    messages::message_kinds::MessageKinds, types::MessageIndex, wrapping_diff, Message,
+    NetEntityHandleConverter,
 };
 
 // Sender
@@ -13,8 +14,8 @@ impl IndexedMessageWriter {
     pub fn write_messages(
         message_kinds: &MessageKinds,
         outgoing_messages: &mut VecDeque<(MessageIndex, Box<dyn Message>)>,
-        channel_writer: &ProtocolIo,
-        bit_writer: &mut BitWriter,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
         let mut last_written_id: Option<MessageIndex> = None;
@@ -27,10 +28,10 @@ impl IndexedMessageWriter {
 
             // check that we can write the next message
             let (message_index, message) = outgoing_messages.front().unwrap();
-            let mut counter = bit_writer.counter();
+            let mut counter = writer.counter();
             Self::write_message(
                 message_kinds,
-                channel_writer,
+                converter,
                 &mut counter,
                 &last_written_id,
                 message_index,
@@ -41,7 +42,7 @@ impl IndexedMessageWriter {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of message being too big
                 if !*has_written {
-                    Self::warn_overflow(counter.bits_needed(), bit_writer.bits_free());
+                    Self::warn_overflow(counter.bits_needed(), writer.bits_free());
                 }
 
                 break;
@@ -50,13 +51,13 @@ impl IndexedMessageWriter {
             *has_written = true;
 
             // write MessageContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // write data
             Self::write_message(
                 message_kinds,
-                channel_writer,
-                bit_writer,
+                converter,
+                writer,
                 &last_written_id,
                 message_index,
                 message,
@@ -73,8 +74,8 @@ impl IndexedMessageWriter {
 
     fn write_message(
         message_kinds: &MessageKinds,
-        channel_writer: &ProtocolIo,
-        bit_writer: &mut dyn BitWrite,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut dyn BitWrite,
         last_written_id: &Option<MessageIndex>,
         message_index: &MessageIndex,
         message: &Box<dyn Message>,
@@ -83,13 +84,13 @@ impl IndexedMessageWriter {
             // write message id diff
             let id_diff = wrapping_diff(*last_id, *message_index);
             let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
-            id_diff_encoded.ser(bit_writer);
+            id_diff_encoded.ser(writer);
         } else {
             // write message id
-            message_index.ser(bit_writer);
+            message_index.ser(writer);
         }
 
-        channel_writer.write(message_kinds, bit_writer, message);
+        message.write(message_kinds, writer, converter);
     }
 
     fn warn_overflow(bits_needed: u16, bits_free: u16) {

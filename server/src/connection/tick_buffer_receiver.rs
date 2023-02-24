@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    BitReader, ChannelKind, ChannelKinds, ChannelMode, Message, Protocol, ProtocolIo, Serde,
-    SerdeErr, Tick,
+    BitReader, ChannelKind, ChannelKinds, ChannelMode, Message, NetEntityHandleConverter, Protocol,
+    Serde, SerdeErr, Tick,
 };
 
 use crate::connection::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
@@ -35,7 +35,7 @@ impl TickBufferReceiver {
         protocol: &Protocol,
         host_tick: &Tick,
         remote_tick: &Tick,
-        channel_reader: &ProtocolIo,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -53,7 +53,7 @@ impl TickBufferReceiver {
                 &protocol.message_kinds,
                 host_tick,
                 remote_tick,
-                channel_reader,
+                converter,
                 reader,
             )?;
         }

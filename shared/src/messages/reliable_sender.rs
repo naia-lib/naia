@@ -3,11 +3,13 @@ use std::{collections::VecDeque, mem, time::Duration};
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::messages::message_channel::MessageChannelSender;
 use crate::{
-    messages::{indexed_message_writer::IndexedMessageWriter, message_kinds::MessageKinds},
+    messages::{
+        indexed_message_writer::IndexedMessageWriter, message_channel::MessageChannelSender,
+        message_kinds::MessageKinds,
+    },
     types::MessageIndex,
-    Message, ProtocolIo,
+    Message, NetEntityHandleConverter,
 };
 
 use super::message_channel::ChannelSender;
@@ -125,15 +127,15 @@ impl MessageChannelSender for ReliableSender<Box<dyn Message>> {
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_writer: &ProtocolIo,
-        bit_writer: &mut BitWriter,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
         IndexedMessageWriter::write_messages(
             message_kinds,
             &mut self.outgoing_messages,
-            channel_writer,
-            bit_writer,
+            converter,
+            writer,
             has_written,
         )
     }

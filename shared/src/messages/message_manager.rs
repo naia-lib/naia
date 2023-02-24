@@ -10,7 +10,7 @@ use crate::{
         message_channel::{MessageChannelReceiver, MessageChannelSender},
     },
     types::{HostType, MessageIndex, PacketIndex},
-    Message, Protocol, ProtocolIo,
+    Message, NetEntityHandleConverter, Protocol,
 };
 
 use super::{
@@ -162,8 +162,8 @@ impl MessageManager {
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        channel_writer: &ProtocolIo,
-        bit_writer: &mut BitWriter,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
@@ -173,7 +173,7 @@ impl MessageManager {
             }
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
-            let mut counter = bit_writer.counter();
+            let mut counter = writer.counter();
             channel_index.ser(&protocol.channel_kinds, &mut counter);
             counter.write_bit(false);
 
@@ -182,21 +182,18 @@ impl MessageManager {
             }
 
             // write ChannelContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // reserve MessageContinue bit
-            bit_writer.reserve_bits(1);
+            writer.reserve_bits(1);
 
             // write ChannelIndex
-            channel_index.ser(&protocol.channel_kinds, bit_writer);
+            channel_index.ser(&protocol.channel_kinds, writer);
 
             // write Messages
-            if let Some(message_indexs) = channel.write_messages(
-                &protocol.message_kinds,
-                channel_writer,
-                bit_writer,
-                has_written,
-            ) {
+            if let Some(message_indexs) =
+                channel.write_messages(&protocol.message_kinds, converter, writer, has_written)
+            {
                 self.packet_to_message_map
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
@@ -205,8 +202,8 @@ impl MessageManager {
             }
 
             // write MessageContinue finish bit, release
-            false.ser(bit_writer);
-            bit_writer.release_bits(1);
+            false.ser(writer);
+            writer.release_bits(1);
         }
     }
 
@@ -215,7 +212,7 @@ impl MessageManager {
     pub fn read_messages(
         &mut self,
         protocol: &Protocol,
-        channel_reader: &ProtocolIo,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -229,7 +226,7 @@ impl MessageManager {
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(&protocol.message_kinds, channel_reader, reader)?;
+            channel.read_messages(&protocol.message_kinds, converter, reader)?;
         }
 
         Ok(())

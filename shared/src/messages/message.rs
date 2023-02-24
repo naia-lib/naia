@@ -33,7 +33,7 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
     fn write(
         &self,
         message_kinds: &MessageKinds,
-        bit_writer: &mut dyn BitWrite,
+        writer: &mut dyn BitWrite,
         converter: &dyn NetEntityHandleConverter,
     );
     /// Returns whether has any EntityProperties

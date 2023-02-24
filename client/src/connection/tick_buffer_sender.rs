@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, Message, PacketIndex,
-    PacketNotifiable, Protocol, ProtocolIo, Serde, ShortMessageIndex, Tick,
+    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, Message, NetEntityHandleConverter,
+    PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick,
 };
 
 use super::channel_tick_buffer_sender::ChannelTickBufferSender;
@@ -67,8 +67,8 @@ impl TickBufferSender {
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        channel_writer: &ProtocolIo,
-        bit_writer: &mut BitWriter,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         packet_index: PacketIndex,
         host_tick: &Tick,
         has_written: &mut bool,
@@ -79,7 +79,7 @@ impl TickBufferSender {
             }
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
-            let mut counter = bit_writer.counter();
+            let mut counter = writer.counter();
             channel_kind.ser(&protocol.channel_kinds, &mut counter);
             counter.write_bit(false);
 
@@ -88,19 +88,19 @@ impl TickBufferSender {
             }
 
             // write ChannelContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // reserve MessageContinue bit
-            bit_writer.reserve_bits(1);
+            writer.reserve_bits(1);
 
             // write ChannelIndex
-            channel_kind.ser(&protocol.channel_kinds, bit_writer);
+            channel_kind.ser(&protocol.channel_kinds, writer);
 
             // write Messages
             if let Some(message_indexes) = channel.write_messages(
                 &protocol.message_kinds,
-                channel_writer,
-                bit_writer,
+                converter,
+                writer,
                 host_tick,
                 has_written,
             ) {
@@ -112,8 +112,8 @@ impl TickBufferSender {
             }
 
             // write MessageContinue finish bit, release
-            false.ser(bit_writer);
-            bit_writer.release_bits(1);
+            false.ser(writer);
+            writer.release_bits(1);
         }
     }
 }

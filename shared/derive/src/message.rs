@@ -160,12 +160,12 @@ fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
         let new_output_right = match field {
             Field::Normal(_) => {
                 quote! {
-                    self.#field_name.ser(bit_writer);
+                    self.#field_name.ser(writer);
                 }
             }
             Field::EntityProperty(_) => {
                 quote! {
-                    EntityProperty::write(&self.#field_name, bit_writer, converter);
+                    EntityProperty::write(&self.#field_name, writer, converter);
                 }
             }
         };
@@ -178,8 +178,8 @@ fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 
     quote! {
-        fn write(&self, message_kinds: &MessageKinds, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-            self.kind().ser(message_kinds, bit_writer);
+        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+            self.kind().ser(message_kinds, writer);
             #field_writes
         }
     }

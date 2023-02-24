@@ -210,7 +210,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
     // Writing actions
 
     fn write_action_id(
-        bit_writer: &mut dyn BitWrite,
+        writer: &mut dyn BitWrite,
         last_id_opt: &mut Option<ActionId>,
         current_id: &ActionId,
     ) {
@@ -218,10 +218,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
             // write diff
             let id_diff = wrapping_diff(*last_id, *current_id);
             let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
-            id_diff_encoded.ser(bit_writer);
+            id_diff_encoded.ser(writer);
         } else {
             // write message id
-            current_id.ser(bit_writer);
+            current_id.ser(writer);
         }
         *last_id_opt = Some(*current_id);
     }
@@ -307,24 +307,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         world: &W,
         world_record: &WorldRecord<E>,
         packet_index: &PacketIndex,
-        bit_writer: &mut dyn BitWrite,
+        writer: &mut dyn BitWrite,
         last_written_id: &mut Option<ActionId>,
         is_writing: bool,
     ) {
         let (action_id, action) = self.next_send_actions.front().unwrap();
 
         // write message id
-        Self::write_action_id(bit_writer, last_written_id, action_id);
+        Self::write_action_id(writer, last_written_id, action_id);
 
         match action {
             EntityActionEvent::SpawnEntity(entity) => {
-                EntityActionType::SpawnEntity.ser(bit_writer);
+                EntityActionType::SpawnEntity.ser(writer);
 
                 // write net entity
                 self.world_channel
                     .entity_to_net_entity(entity)
                     .unwrap()
-                    .ser(bit_writer);
+                    .ser(writer);
 
                 // get component list
                 let component_kind_list = match world_record.component_kinds(entity) {
@@ -335,7 +335,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 // write number of components
                 let components_num =
                     UnsignedVariableInteger::<3>::new(component_kind_list.len() as i128);
-                components_num.ser(bit_writer);
+                components_num.ser(writer);
 
                 for component_kind in &component_kind_list {
                     let converter = EntityConverter::new(world_record, self);
@@ -344,7 +344,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                     world
                         .component_of_kind(entity, component_kind)
                         .expect("Component does not exist in World")
-                        .write(component_kinds, bit_writer, &converter);
+                        .write(component_kinds, writer, &converter);
                 }
 
                 // if we are writing to this packet, add it to record
@@ -358,13 +358,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 }
             }
             EntityActionEvent::DespawnEntity(entity) => {
-                EntityActionType::DespawnEntity.ser(bit_writer);
+                EntityActionType::DespawnEntity.ser(writer);
 
                 // write net entity
                 self.world_channel
                     .entity_to_net_entity(entity)
                     .unwrap()
-                    .ser(bit_writer);
+                    .ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -380,7 +380,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                 if !world.has_component_of_kind(entity, component)
                     || !self.world_channel.entity_channel_is_open(entity)
                 {
-                    EntityActionType::Noop.ser(bit_writer);
+                    EntityActionType::Noop.ser(writer);
 
                     // if we are actually writing this packet
                     if is_writing {
@@ -393,13 +393,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                         );
                     }
                 } else {
-                    EntityActionType::InsertComponent.ser(bit_writer);
+                    EntityActionType::InsertComponent.ser(writer);
 
                     // write net entity
                     self.world_channel
                         .entity_to_net_entity(entity)
                         .unwrap()
-                        .ser(bit_writer);
+                        .ser(writer);
 
                     let converter = EntityConverter::new(world_record, self);
 
@@ -407,7 +407,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                     world
                         .component_of_kind(entity, component)
                         .expect("Component does not exist in World")
-                        .write(component_kinds, bit_writer, &converter);
+                        .write(component_kinds, writer, &converter);
 
                     // if we are actually writing this packet
                     if is_writing {
@@ -423,7 +423,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
             }
             EntityActionEvent::RemoveComponent(entity, component_kind) => {
                 if !self.world_channel.entity_channel_is_open(entity) {
-                    EntityActionType::Noop.ser(bit_writer);
+                    EntityActionType::Noop.ser(writer);
 
                     // if we are actually writing this packet
                     if is_writing {
@@ -436,16 +436,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
                         );
                     }
                 } else {
-                    EntityActionType::RemoveComponent.ser(bit_writer);
+                    EntityActionType::RemoveComponent.ser(writer);
 
                     // write net entity
                     self.world_channel
                         .entity_to_net_entity(entity)
                         .unwrap()
-                        .ser(bit_writer);
+                        .ser(writer);
 
                     // write component kind
-                    component_kind.ser(component_kinds, bit_writer);
+                    component_kind.ser(component_kinds, writer);
 
                     // if we are writing to this packet, add it to record
                     if is_writing {

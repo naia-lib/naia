@@ -8,8 +8,7 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    HostType, Instant, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick,
-    WorldRefType,
+    HostType, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldRefType,
 };
 
 use crate::{
@@ -75,7 +74,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         world_record: &WorldRecord<E>,
     ) -> Result<(), SerdeErr> {
         let converter = EntityConverter::new(world_record, &self.entity_manager);
-        let channel_reader = ProtocolIo::new(&converter);
 
         // read tick-buffered messages
         {
@@ -83,7 +81,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 protocol,
                 &server_tick,
                 &client_tick,
-                &channel_reader,
+                &converter,
                 reader,
             )?;
         }
@@ -92,7 +90,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         {
             self.base
                 .message_manager
-                .read_messages(protocol, &channel_reader, reader)?;
+                .read_messages(protocol, &converter, reader)?;
         }
 
         Ok(())
@@ -167,41 +165,40 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         {
             let next_packet_index = self.base.next_packet_index();
 
-            let mut bit_writer = BitWriter::new();
+            let mut writer = BitWriter::new();
 
             // Reserve bits we know will be required to finish the message:
             // 1. Messages finish bit
             // 2. Updates finish bit
             // 3. Actions finish bit
-            bit_writer.reserve_bits(3);
+            writer.reserve_bits(3);
 
             // write header
             self.base
-                .write_outgoing_header(PacketType::Data, &mut bit_writer);
+                .write_outgoing_header(PacketType::Data, &mut writer);
 
             // write server tick
-            time_manager.current_tick().ser(&mut bit_writer);
+            time_manager.current_tick().ser(&mut writer);
 
             // write server tick instant
-            time_manager.current_tick_instant().ser(&mut bit_writer);
+            time_manager.current_tick_instant().ser(&mut writer);
 
             let mut has_written = false;
 
             // write messages
             {
                 let converter = EntityConverter::new(world_record, &self.entity_manager);
-                let channel_writer = ProtocolIo::new(&converter);
                 self.base.message_manager.write_messages(
                     &protocol,
-                    &channel_writer,
-                    &mut bit_writer,
+                    &converter,
+                    &mut writer,
                     next_packet_index,
                     &mut has_written,
                 );
 
                 // finish messages
-                false.ser(&mut bit_writer);
-                bit_writer.release_bits(1);
+                false.ser(&mut writer);
+                writer.release_bits(1);
             }
 
             // write entity updates
@@ -209,7 +206,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 self.entity_manager.write_updates(
                     &protocol.component_kinds,
                     now,
-                    &mut bit_writer,
+                    &mut writer,
                     &next_packet_index,
                     world,
                     world_record,
@@ -217,8 +214,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 );
 
                 // finish updates
-                false.ser(&mut bit_writer);
-                bit_writer.release_bits(1);
+                false.ser(&mut writer);
+                writer.release_bits(1);
             }
 
             // write entity actions
@@ -226,7 +223,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 self.entity_manager.write_actions(
                     &protocol.component_kinds,
                     now,
-                    &mut bit_writer,
+                    &mut writer,
                     &next_packet_index,
                     world,
                     world_record,
@@ -234,12 +231,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 );
 
                 // finish actions
-                false.ser(&mut bit_writer);
-                bit_writer.release_bits(1);
+                false.ser(&mut writer);
+                writer.release_bits(1);
             }
 
             // send packet
-            match io.send_writer(&self.base.address, &mut bit_writer) {
+            match io.send_writer(&self.base.address, &mut writer) {
                 Ok(()) => {}
                 Err(_) => {
                     // TODO: pass this on and handle above

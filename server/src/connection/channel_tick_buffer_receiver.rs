@@ -1,8 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    sequence_greater_than, BitReader, Message, MessageKinds, ProtocolIo, Serde, SerdeErr,
-    ShortMessageIndex, Tick, TickBufferSettings, UnsignedVariableInteger,
+    sequence_greater_than, BitReader, Message, MessageKinds, NetEntityHandleConverter, Serde,
+    SerdeErr, ShortMessageIndex, Tick, TickBufferSettings, UnsignedVariableInteger,
 };
 
 /// Receive updates from the client and store them in a buffer along with the corresponding
@@ -30,7 +30,7 @@ impl ChannelTickBufferReceiver {
         message_kinds: &MessageKinds,
         host_tick: &Tick,
         remote_tick: &Tick,
-        channel_reader: &ProtocolIo,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_tick = *remote_tick;
@@ -45,7 +45,7 @@ impl ChannelTickBufferReceiver {
                 message_kinds,
                 host_tick,
                 &mut last_read_tick,
-                channel_reader,
+                converter,
                 reader,
             )?;
         }
@@ -60,7 +60,7 @@ impl ChannelTickBufferReceiver {
         message_kinds: &MessageKinds,
         host_tick: &Tick,
         last_read_tick: &mut Tick,
-        channel_reader: &ProtocolIo,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read remote tick
@@ -79,7 +79,7 @@ impl ChannelTickBufferReceiver {
             last_read_message_index = message_index;
 
             // read payload
-            let new_message = channel_reader.read(message_kinds, reader)?;
+            let new_message = message_kinds.read(reader, converter)?;
 
             if !self
                 .incoming_messages

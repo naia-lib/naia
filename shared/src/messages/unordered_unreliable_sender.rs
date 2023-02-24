@@ -3,11 +3,10 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::messages::message_channel::MessageChannelSender;
 use crate::{
-    messages::{message_kinds::MessageKinds, named::Named},
+    messages::{message_channel::MessageChannelSender, message_kinds::MessageKinds, named::Named},
     types::MessageIndex,
-    Message, ProtocolIo,
+    Message, NetEntityHandleConverter,
 };
 
 use super::message_channel::ChannelSender;
@@ -23,14 +22,14 @@ impl UnorderedUnreliableSender {
         }
     }
 
-    fn write_message<S: BitWrite>(
+    fn write_message(
         &self,
         message_kinds: &MessageKinds,
-        channel_writer: &ProtocolIo,
-        bit_writer: &mut S,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut dyn BitWrite,
         message: &Box<dyn Message>,
     ) {
-        channel_writer.write(message_kinds, bit_writer, message);
+        message.write(message_kinds, writer, converter);
     }
 
     fn warn_overflow(&self, message: &Box<dyn Message>, bits_needed: u16, bits_free: u16) {
@@ -63,8 +62,8 @@ impl MessageChannelSender for UnorderedUnreliableSender {
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_writer: &ProtocolIo,
-        bit_writer: &mut BitWriter,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
         loop {
@@ -74,14 +73,14 @@ impl MessageChannelSender for UnorderedUnreliableSender {
 
             // Check that we can write the next message
             let message = self.outgoing_messages.front().unwrap();
-            let mut counter = bit_writer.counter();
-            self.write_message(message_kinds, channel_writer, &mut counter, message);
+            let mut counter = writer.counter();
+            self.write_message(message_kinds, converter, &mut counter, message);
 
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of message being too big
                 if !*has_written {
-                    self.warn_overflow(message, counter.bits_needed(), bit_writer.bits_free());
+                    self.warn_overflow(message, counter.bits_needed(), writer.bits_free());
                 }
 
                 break;
@@ -90,10 +89,10 @@ impl MessageChannelSender for UnorderedUnreliableSender {
             *has_written = true;
 
             // write MessageContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // write data
-            self.write_message(message_kinds, channel_writer, bit_writer, &message);
+            self.write_message(message_kinds, converter, writer, &message);
 
             // pop message we've written
             self.outgoing_messages.pop_front();

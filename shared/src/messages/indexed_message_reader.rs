@@ -1,13 +1,15 @@
 use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
-use crate::{messages::message_kinds::MessageKinds, types::MessageIndex, Message, ProtocolIo};
+use crate::{
+    messages::message_kinds::MessageKinds, types::MessageIndex, Message, NetEntityHandleConverter,
+};
 
 pub struct IndexedMessageReader;
 
 impl IndexedMessageReader {
     pub fn read_messages(
         message_kinds: &MessageKinds,
-        channel_reader: &ProtocolIo,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<Vec<(MessageIndex, Box<dyn Message>)>, SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
@@ -19,8 +21,7 @@ impl IndexedMessageReader {
                 break;
             }
 
-            let id_w_msg =
-                Self::read_message(message_kinds, channel_reader, reader, &last_read_id)?;
+            let id_w_msg = Self::read_message(message_kinds, converter, reader, &last_read_id)?;
             last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
@@ -30,7 +31,7 @@ impl IndexedMessageReader {
 
     fn read_message(
         message_kinds: &MessageKinds,
-        channel_reader: &ProtocolIo,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
         last_read_id: &Option<MessageIndex>,
     ) -> Result<(MessageIndex, Box<dyn Message>), SerdeErr> {
@@ -43,7 +44,7 @@ impl IndexedMessageReader {
         };
 
         // read payload
-        let new_message = channel_reader.read(message_kinds, reader)?;
+        let new_message = message_kinds.read(reader, converter)?;
 
         Ok((message_index, new_message))
     }
