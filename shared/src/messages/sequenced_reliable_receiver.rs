@@ -2,22 +2,22 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::messages::message_kinds::MessageKinds;
-use crate::{sequence_less_than, types::MessageIndex};
-
-use super::{
-    indexed_message_reader::IndexedMessageReader,
-    message_channel::{ChannelReader, ChannelReceiver},
+use crate::messages::message_channel::MessageChannelReceiver;
+use crate::{
+    messages::message_kinds::MessageKinds, sequence_less_than, types::MessageIndex, Message,
+    ProtocolIo,
 };
 
-pub struct SequencedReliableReceiver<P> {
+use super::{indexed_message_reader::IndexedMessageReader, message_channel::ChannelReceiver};
+
+pub struct SequencedReliableReceiver {
     newest_received_message_index: MessageIndex,
     oldest_received_message_index: MessageIndex,
     record: VecDeque<(MessageIndex, bool)>,
-    incoming_messages: Vec<(MessageIndex, P)>,
+    incoming_messages: Vec<(MessageIndex, Box<dyn Message>)>,
 }
 
-impl<P> Default for SequencedReliableReceiver<P> {
+impl Default for SequencedReliableReceiver {
     fn default() -> Self {
         Self {
             newest_received_message_index: 0,
@@ -28,10 +28,10 @@ impl<P> Default for SequencedReliableReceiver<P> {
     }
 }
 
-impl<P> SequencedReliableReceiver<P> {
+impl SequencedReliableReceiver {
     // Private methods
 
-    pub fn buffer_message(&mut self, message_index: MessageIndex, message: P) {
+    pub fn buffer_message(&mut self, message_index: MessageIndex, message: Box<dyn Message>) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_kind has been instantiated
         // already if it has, put the message into the slot
@@ -90,7 +90,7 @@ impl<P> SequencedReliableReceiver<P> {
         }
     }
 
-    pub fn receive_messages(&mut self) -> Vec<(MessageIndex, P)> {
+    pub fn receive_messages(&mut self) -> Vec<(MessageIndex, Box<dyn Message>)> {
         // clear all received messages from record
         loop {
             let mut has_message = false;
@@ -111,11 +111,21 @@ impl<P> SequencedReliableReceiver<P> {
     }
 }
 
-impl<P: Send + Sync> ChannelReceiver<P> for SequencedReliableReceiver<P> {
+impl ChannelReceiver<Box<dyn Message>> for SequencedReliableReceiver {
+    fn receive_messages(&mut self) -> Vec<Box<dyn Message>> {
+        let mut output: Vec<Box<dyn Message>> = Vec::new();
+        for (_, message) in self.receive_messages() {
+            output.push(message);
+        }
+        output
+    }
+}
+
+impl MessageChannelReceiver for SequencedReliableReceiver {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, channel_reader, reader)?;
@@ -123,13 +133,5 @@ impl<P: Send + Sync> ChannelReceiver<P> for SequencedReliableReceiver<P> {
             self.buffer_message(id, message);
         }
         Ok(())
-    }
-
-    fn receive_messages(&mut self) -> Vec<P> {
-        let mut output: Vec<P> = Vec::new();
-        for (_, message) in self.receive_messages() {
-            output.push(message);
-        }
-        output
     }
 }

@@ -1,9 +1,6 @@
-use crate::messages::message_kinds::MessageKinds;
-use crate::{
-    messages::message_channel::{ChannelReader, ChannelWriter},
-    Message, NetEntityHandleConverter,
-};
 use naia_serde::{BitReader, BitWrite, SerdeErr};
+
+use crate::{messages::message_kinds::MessageKinds, Message, NetEntityHandleConverter};
 
 pub struct ProtocolIo<'c> {
     converter: &'c dyn NetEntityHandleConverter,
@@ -13,10 +10,8 @@ impl<'c> ProtocolIo<'c> {
     pub fn new(converter: &'c dyn NetEntityHandleConverter) -> Self {
         Self { converter }
     }
-}
 
-impl<'c> ChannelWriter<Box<dyn Message>> for ProtocolIo<'c> {
-    fn write(
+    pub fn write(
         &self,
         message_kinds: &MessageKinds,
         writer: &mut dyn BitWrite,
@@ -24,10 +19,8 @@ impl<'c> ChannelWriter<Box<dyn Message>> for ProtocolIo<'c> {
     ) {
         data.write(message_kinds, writer, self.converter);
     }
-}
 
-impl<'c> ChannelReader<Box<dyn Message>> for ProtocolIo<'c> {
-    fn read(
+    pub fn read(
         &self,
         message_kinds: &MessageKinds,
         reader: &mut BitReader,

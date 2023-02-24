@@ -1,20 +1,15 @@
-use std::marker::PhantomData;
-
 use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
-use crate::messages::message_kinds::MessageKinds;
-use crate::{messages::message_channel::ChannelReader, types::MessageIndex};
+use crate::{messages::message_kinds::MessageKinds, types::MessageIndex, Message, ProtocolIo};
 
-pub struct IndexedMessageReader<P> {
-    phantom_p: PhantomData<P>,
-}
+pub struct IndexedMessageReader;
 
-impl<P> IndexedMessageReader<P> {
+impl IndexedMessageReader {
     pub fn read_messages(
         message_kinds: &MessageKinds,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
-    ) -> Result<Vec<(MessageIndex, P)>, SerdeErr> {
+    ) -> Result<Vec<(MessageIndex, Box<dyn Message>)>, SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
         let mut output = Vec::new();
 
@@ -35,10 +30,10 @@ impl<P> IndexedMessageReader<P> {
 
     fn read_message(
         message_kinds: &MessageKinds,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
         last_read_id: &Option<MessageIndex>,
-    ) -> Result<(MessageIndex, P), SerdeErr> {
+    ) -> Result<(MessageIndex, Box<dyn Message>), SerdeErr> {
         let message_index: MessageIndex = if let Some(last_id) = last_read_id {
             let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
             last_id.wrapping_add(id_diff)

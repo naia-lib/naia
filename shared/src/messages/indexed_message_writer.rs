@@ -1,21 +1,19 @@
-use std::{collections::VecDeque, marker::PhantomData};
+use std::collections::VecDeque;
 
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
-use crate::{messages::message_kinds::MessageKinds, types::MessageIndex, wrapping_diff};
-
-use super::message_channel::ChannelWriter;
+use crate::{
+    messages::message_kinds::MessageKinds, types::MessageIndex, wrapping_diff, Message, ProtocolIo,
+};
 
 // Sender
-pub struct IndexedMessageWriter<P: Send + Sync> {
-    phantom_p: PhantomData<P>,
-}
+pub struct IndexedMessageWriter;
 
-impl<P: Send + Sync> IndexedMessageWriter<P> {
+impl IndexedMessageWriter {
     pub fn write_messages(
         message_kinds: &MessageKinds,
-        outgoing_messages: &mut VecDeque<(MessageIndex, P)>,
-        channel_writer: &dyn ChannelWriter<P>,
+        outgoing_messages: &mut VecDeque<(MessageIndex, Box<dyn Message>)>,
+        channel_writer: &ProtocolIo,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
@@ -75,11 +73,11 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
 
     fn write_message(
         message_kinds: &MessageKinds,
-        channel_writer: &dyn ChannelWriter<P>,
+        channel_writer: &ProtocolIo,
         bit_writer: &mut dyn BitWrite,
         last_written_id: &Option<MessageIndex>,
         message_index: &MessageIndex,
-        message: &P,
+        message: &Box<dyn Message>,
     ) {
         if let Some(last_id) = last_written_id {
             // write message id diff

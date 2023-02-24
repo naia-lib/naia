@@ -2,13 +2,13 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::messages::message_kinds::MessageKinds;
-use crate::{sequence_less_than, types::MessageIndex};
-
-use super::{
-    indexed_message_reader::IndexedMessageReader,
-    message_channel::{ChannelReader, ChannelReceiver},
+use crate::messages::message_channel::MessageChannelReceiver;
+use crate::{
+    messages::message_kinds::MessageKinds, sequence_less_than, types::MessageIndex, Message,
+    ProtocolIo,
 };
+
+use super::{indexed_message_reader::IndexedMessageReader, message_channel::ChannelReceiver};
 
 pub struct UnorderedReliableReceiver<P> {
     oldest_received_message_index: MessageIndex,
@@ -101,10 +101,20 @@ impl<P> UnorderedReliableReceiver<P> {
 }
 
 impl<P: Send + Sync> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
+    fn receive_messages(&mut self) -> Vec<P> {
+        let mut output: Vec<P> = Vec::new();
+        for (_, message) in self.receive_messages() {
+            output.push(message);
+        }
+        output
+    }
+}
+
+impl MessageChannelReceiver for UnorderedReliableReceiver<Box<dyn Message>> {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, channel_reader, reader)?;
@@ -112,13 +122,5 @@ impl<P: Send + Sync> ChannelReceiver<P> for UnorderedReliableReceiver<P> {
             self.buffer_message(id, message);
         }
         Ok(())
-    }
-
-    fn receive_messages(&mut self) -> Vec<P> {
-        let mut output: Vec<P> = Vec::new();
-        for (_, message) in self.receive_messages() {
-            output.push(message);
-        }
-        output
     }
 }

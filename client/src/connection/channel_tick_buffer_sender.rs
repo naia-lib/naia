@@ -3,8 +3,8 @@ use std::collections::VecDeque;
 use log::warn;
 
 use naia_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter, ChannelWriter,
-    Message, MessageKinds, Serde, ShortMessageIndex, Tick, TickBufferSettings,
+    sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter, Message,
+    MessageKinds, ProtocolIo, Serde, ShortMessageIndex, Tick, TickBufferSettings,
     UnsignedVariableInteger,
 };
 
@@ -64,7 +64,7 @@ impl ChannelTickBufferSender {
     pub fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
+        channel_writer: &ProtocolIo,
         bit_writer: &mut BitWriter,
         host_tick: &Tick,
         has_written: &mut bool,
@@ -130,7 +130,7 @@ impl ChannelTickBufferSender {
     fn write_message(
         &self,
         message_kinds: &MessageKinds,
-        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
+        channel_writer: &ProtocolIo,
         bit_writer: &mut dyn BitWrite,
         last_written_tick: &Tick,
         message_tick: &Tick,

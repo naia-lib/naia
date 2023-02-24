@@ -1,13 +1,16 @@
 use std::{collections::VecDeque, mem, time::Duration};
 
 use naia_serde::BitWriter;
-
 use naia_socket_shared::Instant;
 
-use crate::messages::message_kinds::MessageKinds;
-use crate::{messages::indexed_message_writer::IndexedMessageWriter, types::MessageIndex};
+use crate::messages::message_channel::MessageChannelSender;
+use crate::{
+    messages::{indexed_message_writer::IndexedMessageWriter, message_kinds::MessageKinds},
+    types::MessageIndex,
+    Message, ProtocolIo,
+};
 
-use super::message_channel::{ChannelSender, ChannelWriter};
+use super::message_channel::ChannelSender;
 
 // Sender
 pub struct ReliableSender<P: Send + Sync> {
@@ -113,10 +116,16 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         !self.outgoing_messages.is_empty()
     }
 
+    fn notify_message_delivered(&mut self, message_index: &MessageIndex) {
+        self.deliver_message(message_index);
+    }
+}
+
+impl MessageChannelSender for ReliableSender<Box<dyn Message>> {
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_writer: &dyn ChannelWriter<P>,
+        channel_writer: &ProtocolIo,
         bit_writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
@@ -127,9 +136,5 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
             bit_writer,
             has_written,
         )
-    }
-
-    fn notify_message_delivered(&mut self, message_index: &MessageIndex) {
-        self.deliver_message(message_index);
     }
 }

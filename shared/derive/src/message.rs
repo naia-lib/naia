@@ -73,7 +73,11 @@ pub fn message_impl(
     proc_macro::TokenStream::from(gen)
 }
 
-fn get_clone_method(replica_name: &Ident, fields: &[Field], struct_type: &StructType) -> TokenStream {
+fn get_clone_method(
+    replica_name: &Ident,
+    fields: &[Field],
+    struct_type: &StructType,
+) -> TokenStream {
     let mut output = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
@@ -189,7 +193,11 @@ pub fn get_create_builder_method(builder_name: &Ident) -> TokenStream {
     }
 }
 
-pub fn get_read_method(struct_name: &Ident, fields: &[Field], struct_type: &StructType) -> TokenStream {
+pub fn get_read_method(
+    struct_name: &Ident,
+    fields: &[Field],
+    struct_type: &StructType,
+) -> TokenStream {
     let mut field_names = quote! {};
     for field in fields.iter() {
         let field_name = field.variable_name();

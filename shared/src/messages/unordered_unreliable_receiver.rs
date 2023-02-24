@@ -1,15 +1,17 @@
 use std::{collections::VecDeque, mem};
 
-use crate::messages::message_kinds::MessageKinds;
 use naia_serde::{BitReader, Serde, SerdeErr};
 
-use super::message_channel::{ChannelReader, ChannelReceiver};
+use crate::messages::message_channel::MessageChannelReceiver;
+use crate::{messages::message_kinds::MessageKinds, Message, ProtocolIo};
 
-pub struct UnorderedUnreliableReceiver<P> {
-    incoming_messages: VecDeque<P>,
+use super::message_channel::ChannelReceiver;
+
+pub struct UnorderedUnreliableReceiver {
+    incoming_messages: VecDeque<Box<dyn Message>>,
 }
 
-impl<P> UnorderedUnreliableReceiver<P> {
+impl UnorderedUnreliableReceiver {
     pub fn new() -> Self {
         Self {
             incoming_messages: VecDeque::new(),
@@ -19,23 +21,29 @@ impl<P> UnorderedUnreliableReceiver<P> {
     fn read_message(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
-    ) -> Result<P, SerdeErr> {
+    ) -> Result<Box<dyn Message>, SerdeErr> {
         // read payload
         channel_reader.read(message_kinds, reader)
     }
 
-    fn recv_message(&mut self, message: P) {
+    fn recv_message(&mut self, message: Box<dyn Message>) {
         self.incoming_messages.push_back(message);
     }
 }
 
-impl<P: Send + Sync> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
+impl ChannelReceiver<Box<dyn Message>> for UnorderedUnreliableReceiver {
+    fn receive_messages(&mut self) -> Vec<Box<dyn Message>> {
+        Vec::from(mem::take(&mut self.incoming_messages))
+    }
+}
+
+impl MessageChannelReceiver for UnorderedUnreliableReceiver {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_reader: &dyn ChannelReader<P>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -49,9 +57,5 @@ impl<P: Send + Sync> ChannelReceiver<P> for UnorderedUnreliableReceiver<P> {
         }
 
         Ok(())
-    }
-
-    fn receive_messages(&mut self) -> Vec<P> {
-        Vec::from(mem::take(&mut self.incoming_messages))
     }
 }

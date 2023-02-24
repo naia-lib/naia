@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ChannelWriter, Message,
-    PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick,
+    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, Message, PacketIndex,
+    PacketNotifiable, Protocol, ProtocolIo, Serde, ShortMessageIndex, Tick,
 };
 
 use super::channel_tick_buffer_sender::ChannelTickBufferSender;
@@ -67,7 +67,7 @@ impl TickBufferSender {
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
+        channel_writer: &ProtocolIo,
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
         host_tick: &Tick,

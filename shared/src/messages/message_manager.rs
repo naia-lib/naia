@@ -5,17 +5,17 @@ use naia_socket_shared::Instant;
 
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
-    messages::channel_kinds::{ChannelKind, ChannelKinds},
+    messages::{
+        channel_kinds::{ChannelKind, ChannelKinds},
+        message_channel::{MessageChannelReceiver, MessageChannelSender},
+    },
     types::{HostType, MessageIndex, PacketIndex},
-    Message, Protocol,
+    Message, Protocol, ProtocolIo,
 };
 
 use super::{
-    channel::ChannelMode,
-    message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
-    ordered_reliable_receiver::OrderedReliableReceiver,
-    reliable_sender::ReliableSender,
-    sequenced_reliable_receiver::SequencedReliableReceiver,
+    channel::ChannelMode, ordered_reliable_receiver::OrderedReliableReceiver,
+    reliable_sender::ReliableSender, sequenced_reliable_receiver::SequencedReliableReceiver,
     sequenced_unreliable_receiver::SequencedUnreliableReceiver,
     sequenced_unreliable_sender::SequencedUnreliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
@@ -26,8 +26,8 @@ use super::{
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager {
-    channel_senders: HashMap<ChannelKind, Box<dyn ChannelSender<Box<dyn Message>>>>,
-    channel_receivers: HashMap<ChannelKind, Box<dyn ChannelReceiver<Box<dyn Message>>>>,
+    channel_senders: HashMap<ChannelKind, Box<dyn MessageChannelSender>>,
+    channel_receivers: HashMap<ChannelKind, Box<dyn MessageChannelReceiver>>,
     packet_to_message_map: HashMap<PacketIndex, Vec<(ChannelKind, Vec<MessageIndex>)>>,
 }
 
@@ -37,8 +37,7 @@ impl MessageManager {
         // initialize all reliable channels
 
         // initialize senders
-        let mut channel_senders =
-            HashMap::<ChannelKind, Box<dyn ChannelSender<Box<dyn Message>>>>::new();
+        let mut channel_senders = HashMap::<ChannelKind, Box<dyn MessageChannelSender>>::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
             match &host_type {
                 HostType::Server => {
@@ -77,8 +76,7 @@ impl MessageManager {
         }
 
         // initialize receivers
-        let mut channel_receivers =
-            HashMap::<ChannelKind, Box<dyn ChannelReceiver<Box<dyn Message>>>>::new();
+        let mut channel_receivers = HashMap::<ChannelKind, Box<dyn MessageChannelReceiver>>::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
             match &host_type {
                 HostType::Server => {
@@ -164,7 +162,7 @@ impl MessageManager {
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
+        channel_writer: &ProtocolIo,
         bit_writer: &mut BitWriter,
         packet_index: PacketIndex,
         has_written: &mut bool,
@@ -217,7 +215,7 @@ impl MessageManager {
     pub fn read_messages(
         &mut self,
         protocol: &Protocol,
-        channel_reader: &dyn ChannelReader<Box<dyn Message>>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    BitReader, ChannelKind, ChannelKinds, ChannelMode, ChannelReader, Message, Protocol, Serde,
+    BitReader, ChannelKind, ChannelKinds, ChannelMode, Message, Protocol, ProtocolIo, Serde,
     SerdeErr, Tick,
 };
 
@@ -35,7 +35,7 @@ impl TickBufferReceiver {
         protocol: &Protocol,
         host_tick: &Tick,
         remote_tick: &Tick,
-        channel_reader: &dyn ChannelReader<Box<dyn Message>>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {

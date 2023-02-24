@@ -1,7 +1,7 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    sequence_greater_than, BitReader, ChannelReader, Message, MessageKinds, Serde, SerdeErr,
+    sequence_greater_than, BitReader, Message, MessageKinds, ProtocolIo, Serde, SerdeErr,
     ShortMessageIndex, Tick, TickBufferSettings, UnsignedVariableInteger,
 };
 
@@ -30,7 +30,7 @@ impl ChannelTickBufferReceiver {
         message_kinds: &MessageKinds,
         host_tick: &Tick,
         remote_tick: &Tick,
-        channel_reader: &dyn ChannelReader<Box<dyn Message>>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_tick = *remote_tick;
@@ -60,7 +60,7 @@ impl ChannelTickBufferReceiver {
         message_kinds: &MessageKinds,
         host_tick: &Tick,
         last_read_tick: &mut Tick,
-        channel_reader: &dyn ChannelReader<Box<dyn Message>>,
+        channel_reader: &ProtocolIo,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read remote tick
