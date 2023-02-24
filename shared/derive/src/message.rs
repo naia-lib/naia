@@ -25,12 +25,12 @@ pub fn message_impl(
     let builder_name = format_ident!("{}Builder", struct_name);
 
     // Methods
-    let clone_method = clone_method(&struct_name, &fields, &struct_type);
-    let has_entity_properties_method = has_entity_properties_method(&fields);
-    let entities_method = entities_method(&fields, &struct_type);
-    let write_method = write_method(&fields, &struct_type);
-    let create_builder_method = create_builder_method(&builder_name);
-    let read_method = read_method(&struct_name, &fields, &struct_type);
+    let clone_method = get_clone_method(&struct_name, &fields, &struct_type);
+    let has_entity_properties_method = get_has_entity_properties_method(&fields);
+    let entities_method = get_entities_method(&fields, &struct_type);
+    let write_method = get_write_method(&fields, &struct_type);
+    let create_builder_method = get_create_builder_method(&builder_name);
+    let read_method = get_read_method(&struct_name, &fields, &struct_type);
 
     let gen = quote! {
         mod #module_name {
@@ -73,7 +73,7 @@ pub fn message_impl(
     proc_macro::TokenStream::from(gen)
 }
 
-fn clone_method(replica_name: &Ident, fields: &[Field], struct_type: &StructType) -> TokenStream {
+fn get_clone_method(replica_name: &Ident, fields: &[Field], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
@@ -102,7 +102,7 @@ fn clone_method(replica_name: &Ident, fields: &[Field], struct_type: &StructType
     }
 }
 
-fn has_entity_properties_method(fields: &[Field]) -> TokenStream {
+fn get_has_entity_properties_method(fields: &[Field]) -> TokenStream {
     for field in fields.iter() {
         if let Field::EntityProperty(_) = field {
             return quote! {
@@ -120,7 +120,7 @@ fn has_entity_properties_method(fields: &[Field]) -> TokenStream {
     }
 }
 
-fn entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
@@ -148,7 +148,7 @@ fn entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 }
 
-fn write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     let mut field_writes = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
@@ -181,7 +181,7 @@ fn write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 }
 
-pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
+pub fn get_create_builder_method(builder_name: &Ident) -> TokenStream {
     quote! {
         fn create_builder() -> Box<dyn MessageBuilder> where Self:Sized {
             Box::new(#builder_name)
@@ -189,7 +189,7 @@ pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
     }
 }
 
-pub fn read_method(struct_name: &Ident, fields: &[Field], struct_type: &StructType) -> TokenStream {
+pub fn get_read_method(struct_name: &Ident, fields: &[Field], struct_type: &StructType) -> TokenStream {
     let mut field_names = quote! {};
     for field in fields.iter() {
         let field_name = field.variable_name();

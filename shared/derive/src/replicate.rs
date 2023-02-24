@@ -39,7 +39,7 @@ pub fn replicate_impl(
     let input = parse_macro_input!(input as DeriveInput);
 
     // Helper Properties
-    let properties = properties(&input);
+    let properties = get_properties(&input);
     let struct_type = get_struct_type(&input);
 
     // Names
@@ -54,7 +54,7 @@ pub fn replicate_impl(
     let builder_name = format_ident!("{}Builder", replica_name);
 
     // Definitions
-    let property_enum_definition = property_enum(&enum_name, &properties);
+    let property_enum_definition = get_property_enum_definition(&enum_name, &properties);
     let diff_mask_size = {
         let len = properties.len();
         if len == 0 {
@@ -66,21 +66,21 @@ pub fn replicate_impl(
 
     // Methods
     let new_complete_method =
-        new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
-    let create_builder_method = create_builder_method(&builder_name);
-    let read_method = read_method(&replica_name, &enum_name, &properties, &struct_type);
-    let read_create_update_method = read_create_update_method(&replica_name, &properties);
+        get_new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
+    let create_builder_method = get_create_builder_method(&builder_name);
+    let read_method = get_read_method(&replica_name, &enum_name, &properties, &struct_type);
+    let read_create_update_method = get_read_create_update_method(&replica_name, &properties);
 
-    let dyn_ref_method = dyn_ref_method();
-    let dyn_mut_method = dyn_mut_method();
-    let clone_method = clone_method(&replica_name, &properties, &struct_type);
-    let mirror_method = mirror_method(&replica_name, &properties, &struct_type);
-    let set_mutator_method = set_mutator_method(&properties, &struct_type);
-    let read_apply_update_method = read_apply_update_method(&properties, &struct_type);
-    let write_method = write_method(&properties, &struct_type);
-    let write_update_method = write_update_method(&enum_name, &properties, &struct_type);
-    let has_entity_properties = has_entity_properties_method(&properties);
-    let entities = entities_method(&properties, &struct_type);
+    let dyn_ref_method = get_dyn_ref_method();
+    let dyn_mut_method = get_dyn_mut_method();
+    let clone_method = get_clone_method(&replica_name, &properties, &struct_type);
+    let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type);
+    let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
+    let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
+    let write_method = get_write_method(&properties, &struct_type);
+    let write_update_method = get_write_update_method(&enum_name, &properties, &struct_type);
+    let has_entity_properties = get_has_entity_properties_method(&properties);
+    let entities = get_entities_method(&properties, &struct_type);
 
     let gen = quote! {
         mod #module_name {
@@ -227,7 +227,7 @@ impl Property {
     }
 }
 
-fn properties(input: &DeriveInput) -> Vec<Property> {
+fn get_properties(input: &DeriveInput) -> Vec<Property> {
     let mut fields = Vec::new();
 
     if let Data::Struct(data_struct) = &input.data {
@@ -303,7 +303,7 @@ fn properties(input: &DeriveInput) -> Vec<Property> {
     fields
 }
 
-fn property_enum(enum_name: &Ident, properties: &[Property]) -> TokenStream {
+fn get_property_enum_definition(enum_name: &Ident, properties: &[Property]) -> TokenStream {
     if properties.is_empty() {
         return quote! {
             enum #enum_name {}
@@ -336,7 +336,7 @@ fn property_enum(enum_name: &Ident, properties: &[Property]) -> TokenStream {
     }
 }
 
-pub fn dyn_ref_method() -> TokenStream {
+pub fn get_dyn_ref_method() -> TokenStream {
     quote! {
         fn dyn_ref(&self) -> ReplicaDynRef<'_> {
             return ReplicaDynRef::new(self);
@@ -344,7 +344,7 @@ pub fn dyn_ref_method() -> TokenStream {
     }
 }
 
-pub fn dyn_mut_method() -> TokenStream {
+pub fn get_dyn_mut_method() -> TokenStream {
     quote! {
         fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
             return ReplicaDynMut::new(self);
@@ -352,7 +352,7 @@ pub fn dyn_mut_method() -> TokenStream {
     }
 }
 
-fn clone_method(
+fn get_clone_method(
     replica_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
@@ -405,7 +405,7 @@ fn clone_method(
     }
 }
 
-fn mirror_method(
+fn get_mirror_method(
     replica_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
@@ -435,7 +435,7 @@ fn mirror_method(
     }
 }
 
-fn set_mutator_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+fn get_set_mutator_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
     for (index, property) in properties.iter().filter(|p| p.is_replicated()).enumerate() {
@@ -457,7 +457,7 @@ fn set_mutator_method(properties: &[Property], struct_type: &StructType) -> Toke
     }
 }
 
-pub fn new_complete_method(
+pub fn get_new_complete_method(
     replica_name: &Ident,
     enum_name: &Ident,
     properties: &[Property],
@@ -598,7 +598,7 @@ pub fn new_complete_method(
     }
 }
 
-pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
+pub fn get_create_builder_method(builder_name: &Ident) -> TokenStream {
     quote! {
         fn create_builder() -> Box<dyn ReplicateBuilder> where Self:Sized {
             Box::new(#builder_name)
@@ -606,7 +606,7 @@ pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
     }
 }
 
-pub fn read_method(
+pub fn get_read_method(
     replica_name: &Ident,
     enum_name: &Ident,
     properties: &[Property],
@@ -689,7 +689,7 @@ pub fn read_method(
     }
 }
 
-pub fn read_create_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
+pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {
@@ -743,7 +743,7 @@ pub fn read_create_update_method(replica_name: &Ident, properties: &[Property]) 
     }
 }
 
-fn read_apply_update_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+fn get_read_apply_update_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
     for (index, property) in properties.iter().enumerate() {
@@ -784,7 +784,7 @@ fn read_apply_update_method(properties: &[Property], struct_type: &StructType) -
     }
 }
 
-fn write_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut property_writes = quote! {};
 
     for (index, property) in properties.iter().enumerate() {
@@ -820,7 +820,7 @@ fn write_method(properties: &[Property], struct_type: &StructType) -> TokenStrea
     }
 }
 
-fn write_update_method(
+fn get_write_update_method(
     enum_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
@@ -871,7 +871,7 @@ fn write_update_method(
     }
 }
 
-fn has_entity_properties_method(properties: &[Property]) -> TokenStream {
+fn get_has_entity_properties_method(properties: &[Property]) -> TokenStream {
     for property in properties.iter() {
         if let Property::Entity(_) = property {
             return quote! {
@@ -889,7 +889,7 @@ fn has_entity_properties_method(properties: &[Property]) -> TokenStream {
     }
 }
 
-fn entities_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+fn get_entities_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
     for (index, property) in properties.iter().enumerate() {
