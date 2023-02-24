@@ -8,6 +8,7 @@ use crate::{
     messages::{
         channel_kinds::{ChannelKind, ChannelKinds},
         message_channel::{MessageChannelReceiver, MessageChannelSender},
+        message_container::MessageContainer
     },
     types::{HostType, MessageIndex, PacketIndex},
     Message, NetEntityHandleConverter, Protocol,
@@ -66,7 +67,7 @@ impl MessageManager {
                 | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         channel_kind,
-                        Box::new(ReliableSender::<Box<dyn Message>>::new(
+                        Box::new(ReliableSender::<MessageContainer>::new(
                             settings.rtt_resend_factor,
                         )),
                     );
@@ -137,9 +138,13 @@ impl MessageManager {
 
     /// Queues an Message to be transmitted to the remote host
     pub fn send_message(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
-        if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
-            channel.send_message(message);
-        }
+        let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
+            panic!("Channel not configured correctly! Cannot send message.");
+        };
+
+        let message_container = MessageContainer::from(message);
+
+        channel.send_message(message_container);
     }
 
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {

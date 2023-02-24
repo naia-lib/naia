@@ -2,7 +2,7 @@ use naia_serde::{BitReader, BitWriter, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{
-    messages::message_kinds::MessageKinds, types::MessageIndex, Message, NetEntityHandleConverter,
+    messages::{message_kinds::MessageKinds, message_container::MessageContainer}, types::MessageIndex, Message, NetEntityHandleConverter,
 };
 
 pub trait ChannelSender<P>: Send + Sync {
@@ -16,7 +16,7 @@ pub trait ChannelSender<P>: Send + Sync {
     fn notify_message_delivered(&mut self, message_index: &MessageIndex);
 }
 
-pub trait MessageChannelSender: ChannelSender<Box<dyn Message>> {
+pub trait MessageChannelSender: ChannelSender<MessageContainer> {
     /// Gets Messages from the internal buffer and writes it to the BitWriter
     fn write_messages(
         &mut self,

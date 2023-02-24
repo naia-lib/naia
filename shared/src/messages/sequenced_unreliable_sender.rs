@@ -8,6 +8,7 @@ use crate::{
         indexed_message_writer::IndexedMessageWriter,
         message_channel::{ChannelSender, MessageChannelSender},
         message_kinds::MessageKinds,
+        message_container::MessageContainer,
     },
     types::MessageIndex,
     Message, NetEntityHandleConverter,
@@ -15,7 +16,7 @@ use crate::{
 
 pub struct SequencedUnreliableSender {
     /// Buffer of the next messages to send along with their MessageKind
-    outgoing_messages: VecDeque<(MessageIndex, Box<dyn Message>)>,
+    outgoing_messages: VecDeque<(MessageIndex, MessageContainer)>,
     /// Next message id to use (not yet used in the buffer)
     next_send_message_index: MessageIndex,
 }
@@ -29,8 +30,8 @@ impl SequencedUnreliableSender {
     }
 }
 
-impl ChannelSender<Box<dyn Message>> for SequencedUnreliableSender {
-    fn send_message(&mut self, message: Box<dyn Message>) {
+impl ChannelSender<MessageContainer> for SequencedUnreliableSender {
+    fn send_message(&mut self, message: MessageContainer) {
         self.outgoing_messages
             .push_back((self.next_send_message_index, message));
         self.next_send_message_index = self.next_send_message_index.wrapping_add(1);

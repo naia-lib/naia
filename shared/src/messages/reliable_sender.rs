@@ -6,7 +6,7 @@ use naia_socket_shared::Instant;
 use crate::{
     messages::{
         indexed_message_writer::IndexedMessageWriter, message_channel::MessageChannelSender,
-        message_kinds::MessageKinds,
+        message_kinds::MessageKinds, message_container::MessageContainer,
     },
     types::MessageIndex,
     Message, NetEntityHandleConverter,
@@ -123,7 +123,7 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
     }
 }
 
-impl MessageChannelSender for ReliableSender<Box<dyn Message>> {
+impl MessageChannelSender for ReliableSender<MessageContainer> {
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,

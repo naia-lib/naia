@@ -1,5 +1,5 @@
-use crate::messages::channel::TickBufferSettings;
-use crate::{Channel, ChannelDirection, ChannelMode, Protocol, ProtocolPlugin, ReliableSettings};
+
+use crate::{Channel, ChannelDirection, ChannelMode, Protocol, ProtocolPlugin, ReliableSettings, messages::channel::TickBufferSettings};
 
 #[derive(Channel)]
 pub struct UnorderedUnreliableChannel;

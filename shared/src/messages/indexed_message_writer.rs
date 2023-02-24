@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
 use crate::{
-    messages::message_kinds::MessageKinds, types::MessageIndex, wrapping_diff, Message,
+    messages::{message_kinds::MessageKinds, message_container::MessageContainer}, types::MessageIndex, wrapping_diff, Message,
     NetEntityHandleConverter,
 };
 
@@ -13,7 +13,7 @@ pub struct IndexedMessageWriter;
 impl IndexedMessageWriter {
     pub fn write_messages(
         message_kinds: &MessageKinds,
-        outgoing_messages: &mut VecDeque<(MessageIndex, Box<dyn Message>)>,
+        outgoing_messages: &mut VecDeque<(MessageIndex, MessageContainer)>,
         converter: &dyn NetEntityHandleConverter,
         writer: &mut BitWriter,
         has_written: &mut bool,
@@ -78,7 +78,7 @@ impl IndexedMessageWriter {
         writer: &mut dyn BitWrite,
         last_written_id: &Option<MessageIndex>,
         message_index: &MessageIndex,
-        message: &Box<dyn Message>,
+        message: &MessageContainer,
     ) {
         if let Some(last_id) = last_written_id {
             // write message id diff

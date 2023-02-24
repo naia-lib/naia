@@ -28,6 +28,7 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
     fn create_builder() -> Box<dyn MessageBuilder>
     where
         Self: Sized;
+    fn bit_length(&self) -> u32;
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Component on the client
     fn write(
