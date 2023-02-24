@@ -243,7 +243,7 @@ impl HandshakeManager {
         ));
     }
 
-    // Step 6 of Handshake
+    // Step 5 of Handshake
     pub fn write_connect_request(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0).ser(&mut writer);
@@ -251,7 +251,7 @@ impl HandshakeManager {
         writer
     }
 
-    // Step 7 of Handshake
+    // Step 6 of Handshake
     fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
         let HandshakeState::AwaitingConnectResponse(time_manager) = std::mem::replace(&mut self.connection_state, HandshakeState::Connected) else {
             return None;

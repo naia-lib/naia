@@ -1,9 +1,10 @@
-use log::warn;
 use std::{
     hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
+
+use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
@@ -11,10 +12,11 @@ use naia_shared::{
     WorldRefType,
 };
 
-use crate::connection::tick_buffer_messages::TickBufferMessages;
-use crate::connection::tick_buffer_receiver::TickBufferReceiver;
 use crate::{
-    connection::{ping_config::PingConfig, time_manager::TimeManager},
+    connection::{
+        ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
+        tick_buffer_receiver::TickBufferReceiver, time_manager::TimeManager,
+    },
     protocol::{
         entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler,
         world_record::WorldRecord,

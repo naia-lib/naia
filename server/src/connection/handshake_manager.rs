@@ -102,14 +102,14 @@ impl HandshakeManager {
         return HandshakeResult::Success(Some(auth_message));
     }
 
-    // Step 3 of Handshake
+    // Step 4 of Handshake
     pub fn write_validate_response(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerValidateResponse, 0, 0, 0).ser(&mut writer);
         writer
     }
 
-    // Step ? of Handshake
+    // Step 5 of Handshake
     pub(crate) fn write_connect_response(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0).ser(&mut writer);
