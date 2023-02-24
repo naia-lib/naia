@@ -100,8 +100,12 @@ impl<'a> Client<'a> {
 
     //// Ticks ////
 
-    pub fn client_tick(&self) -> Tick {
+    pub fn client_tick(&self) -> Option<Tick> {
         self.client.client_tick()
+    }
+
+    pub fn server_tick(&self) -> Option<Tick> {
+        self.client.server_tick()
     }
 }
 

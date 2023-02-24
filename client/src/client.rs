@@ -279,14 +279,19 @@ impl<E: Copy + Eq + Hash> Client<E> {
     // Ticks
 
     /// Gets the current tick of the Client
-    pub fn client_tick(&self) -> Tick {
-        // TODO: don't just unwrap this!
-        return self
-            .server_connection
-            .as_ref()
-            .unwrap()
-            .time_manager
-            .client_sending_tick;
+    pub fn client_tick(&self) -> Option<Tick> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.time_manager.client_sending_tick);
+        }
+        return None;
+    }
+
+    /// Gets the current tick of the Server
+    pub fn server_tick(&self) -> Option<Tick> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.time_manager.client_receiving_tick);
+        }
+        return None;
     }
 
     // Interpolation

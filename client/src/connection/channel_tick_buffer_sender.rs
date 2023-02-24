@@ -39,20 +39,11 @@ impl ChannelTickBufferSender {
             self.never_sent = true;
 
             // Loop through outstanding messages and add them to the outgoing list
-            let mut last_message_tick: Option<Tick> = None;
             for (message_tick, message_map) in self.sending_messages.iter() {
                 if sequence_greater_than(*message_tick, *client_sending_tick) {
-                    info!("found message that is more recent than client sending tick! (how?)");
+                    warn!("Sending message that is more recent than client sending tick! This shouldn't be possible.");
                     break;
                 }
-
-                //TODO: get rid of logging here
-                if let Some(last_msg_tick) = last_message_tick {
-                    if sequence_greater_than(*message_tick, last_msg_tick.wrapping_add(1)) {
-                        info!("Gap in TickBufferSender. No Commands between {last_msg_tick} -> {message_tick}");
-                    }
-                }
-                last_message_tick = Some(*message_tick);
 
                 let messages = message_map.collect_messages();
                 self.outgoing_messages.push_back((*message_tick, messages));
