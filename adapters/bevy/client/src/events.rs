@@ -56,6 +56,12 @@ impl MessageEvents {
     }
 }
 
+// ClientTickEvent
+pub struct ClientTickEvent(pub Tick);
+
+// ServerTickEvent
+pub struct ServerTickEvent(pub Tick);
+
 // SpawnEntityEvent
 pub struct SpawnEntityEvent(pub Entity);
 

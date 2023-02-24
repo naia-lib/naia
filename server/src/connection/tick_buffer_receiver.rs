@@ -5,7 +5,7 @@ use naia_shared::{
     SerdeErr, Tick,
 };
 
-use super::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
+use crate::connection::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
 
 pub struct TickBufferReceiver {
     channel_receivers: HashMap<ChannelKind, ChannelTickBufferReceiver>,
@@ -16,8 +16,11 @@ impl TickBufferReceiver {
         // initialize receivers
         let mut channel_receivers = HashMap::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
-            if let ChannelMode::TickBuffered(_) = channel_settings.mode {
-                channel_receivers.insert(channel_kind, ChannelTickBufferReceiver::new());
+            if let ChannelMode::TickBuffered(settings) = channel_settings.mode {
+                channel_receivers.insert(
+                    channel_kind,
+                    ChannelTickBufferReceiver::new(settings.clone()),
+                );
             }
         }
 

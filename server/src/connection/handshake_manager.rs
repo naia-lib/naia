@@ -2,11 +2,10 @@ use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
 use ring::{hmac, rand};
 
-use naia_shared::MessageKinds;
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BitReader, BitWriter, ConnectionConfig, FakeEntityConverter,
-    Instant, KeyGenerator, Message, PacketType, PropertyMutate, PropertyMutator, Replicate, Serde,
-    SerdeErr, StandardHeader, Timer, WorldMutType, WorldRefType,
+    Instant, KeyGenerator, Message, MessageKinds, PacketType, PropertyMutate, PropertyMutator,
+    Replicate, Serde, SerdeErr, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::cache_map::CacheMap;
@@ -71,7 +70,7 @@ impl HandshakeManager {
     }
 
     // Step 3 of Handshake
-    pub fn recv_connect_request(
+    pub fn recv_validate_request(
         &mut self,
         message_kinds: &MessageKinds,
         address: &SocketAddr,
@@ -79,34 +78,39 @@ impl HandshakeManager {
     ) -> HandshakeResult {
         // Verify that timestamp hash has been written by this
         // server instance
-        if let Some(timestamp) = self.timestamp_validate(reader) {
-            // Timestamp hash is validated, now start configured auth process
-            if let Ok(has_auth) = bool::de(reader) {
-                if has_auth != self.require_auth {
-                    return HandshakeResult::Invalid;
-                }
-
-                self.address_to_timestamp_map.insert(*address, timestamp);
-
-                if has_auth {
-                    if let Ok(auth_message) = message_kinds.read(reader, &FakeEntityConverter) {
-                        HandshakeResult::Success(Some(auth_message))
-                    } else {
-                        HandshakeResult::Invalid
-                    }
-                } else {
-                    HandshakeResult::Success(None)
-                }
-            } else {
-                HandshakeResult::Invalid
-            }
-        } else {
-            HandshakeResult::Invalid
+        let Some(timestamp) = self.timestamp_validate(reader) else {
+            return HandshakeResult::Invalid;
+        };
+        // Timestamp hash is validated, now start configured auth process
+        let Ok(has_auth) = bool::de(reader) else {
+            return HandshakeResult::Invalid;
+        };
+        if has_auth != self.require_auth {
+            return HandshakeResult::Invalid;
         }
+
+        self.address_to_timestamp_map.insert(*address, timestamp);
+
+        if !has_auth {
+            return HandshakeResult::Success(None);
+        }
+
+        let Ok(auth_message) = message_kinds.read(reader, &FakeEntityConverter) else {
+            return HandshakeResult::Invalid;
+        };
+
+        return HandshakeResult::Success(Some(auth_message));
     }
 
-    // Step 3 of Handshake
-    pub fn write_connect_response(&self) -> BitWriter {
+    // Step 4 of Handshake
+    pub fn write_validate_response(&self) -> BitWriter {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::ServerValidateResponse, 0, 0, 0).ser(&mut writer);
+        writer
+    }
+
+    // Step 5 of Handshake
+    pub(crate) fn write_connect_response(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0).ser(&mut writer);
         writer

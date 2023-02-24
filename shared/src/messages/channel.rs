@@ -64,13 +64,15 @@ impl ReliableSettings {
 
 #[derive(Clone)]
 pub struct TickBufferSettings {
-    pub tick_resend_factor: u8,
+    /// Describes a maximum of messages that may be kept in the buffer.
+    /// Oldest messages are pruned out first.
+    pub message_capacity: usize,
 }
 
 impl TickBufferSettings {
     pub const fn default() -> Self {
         Self {
-            tick_resend_factor: 1,
+            message_capacity: 64,
         }
     }
 }

@@ -1,38 +1,62 @@
-use log::warn;
 use std::time::Duration;
 
-use naia_shared::{BitReader, BitWriter, FakeEntityConverter, Message, MessageKinds, Serde};
-pub use naia_shared::{
-    ConnectionConfig, PacketType, Replicate, StandardHeader, Timer, Timestamp as stamp_time,
-    WorldMutType, WorldRefType,
+use log::warn;
+
+use naia_shared::{
+    BitReader, BitWriter, FakeEntityConverter, Message, MessageKinds, PacketType, Serde,
+    StandardHeader, Timer, Timestamp as stamp_time,
 };
 
 use super::io::Io;
+use crate::connection::{handshake_time_manager::HandshakeTimeManager, time_manager::TimeManager};
 
 pub type Timestamp = u64;
 
-#[derive(Debug, Eq, PartialEq)]
 pub enum HandshakeState {
     AwaitingChallengeResponse,
-    AwaitingConnectResponse,
+    AwaitingValidateResponse,
+    TimeSync(HandshakeTimeManager),
+    AwaitingConnectResponse(TimeManager),
     Connected,
 }
 
+impl HandshakeState {
+    fn get_index(&self) -> u8 {
+        match self {
+            HandshakeState::AwaitingChallengeResponse => 0,
+            HandshakeState::AwaitingValidateResponse => 1,
+            HandshakeState::TimeSync(_) => 2,
+            HandshakeState::AwaitingConnectResponse(_) => 3,
+            HandshakeState::Connected => 4,
+        }
+    }
+}
+
+impl Eq for HandshakeState {}
+
+impl PartialEq for HandshakeState {
+    fn eq(&self, other: &Self) -> bool {
+        other.get_index() == self.get_index()
+    }
+}
+
 pub enum HandshakeResult {
-    Connected,
+    Connected(TimeManager),
     Rejected,
 }
 
 pub struct HandshakeManager {
+    ping_interval: Duration,
+    handshake_pings: u8,
+    pub connection_state: HandshakeState,
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Vec<u8>>,
-    pub connection_state: HandshakeState,
     auth_message: Option<Box<dyn Message>>,
 }
 
 impl HandshakeManager {
-    pub fn new(send_interval: Duration) -> Self {
+    pub fn new(send_interval: Duration, ping_interval: Duration, handshake_pings: u8) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
@@ -44,6 +68,8 @@ impl HandshakeManager {
             pre_connection_digest: None,
             connection_state: HandshakeState::AwaitingChallengeResponse,
             auth_message: None,
+            ping_interval,
+            handshake_pings,
         }
     }
 
@@ -64,29 +90,35 @@ impl HandshakeManager {
 
             self.handshake_timer.reset();
 
-            match self.connection_state {
-                HandshakeState::Connected => {
-                    // do nothing, not necessary
-                }
+            match &mut self.connection_state {
                 HandshakeState::AwaitingChallengeResponse => {
                     let mut writer = self.write_challenge_request();
-                    match io.send_writer(&mut writer) {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // TODO: pass this on and handle above
-                            warn!("Client Error: Cannot send challenge request packet to Server");
-                        }
+                    if io.send_writer(&mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send challenge request packet to Server");
                     }
                 }
-                HandshakeState::AwaitingConnectResponse => {
-                    let mut writer = self.write_connect_request(message_kinds);
-                    match io.send_writer(&mut writer) {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // TODO: pass this on and handle above
-                            warn!("Client Error: Cannot send connect request packet to Server");
-                        }
+                HandshakeState::AwaitingValidateResponse => {
+                    let mut writer = self.write_validate_request(message_kinds);
+                    if io.send_writer(&mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send validate request packet to Server");
                     }
+                }
+                HandshakeState::TimeSync(time_manager) => {
+                    // use time manager to send initial pings until client/server time is synced
+                    // then, move state to AwaitingConnectResponse
+                    time_manager.send_ping(io);
+                }
+                HandshakeState::AwaitingConnectResponse(_) => {
+                    let mut writer = self.write_connect_request();
+                    if io.send_writer(&mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send connect request packet to Server");
+                    }
+                }
+                HandshakeState::Connected => {
+                    // do nothing, not necessary
                 }
             }
         }
@@ -102,11 +134,49 @@ impl HandshakeManager {
         match header.packet_type {
             PacketType::ServerChallengeResponse => {
                 self.recv_challenge_response(reader);
-                None
+                return None;
             }
-            PacketType::ServerConnectResponse => self.recv_connect_response(),
-            PacketType::ServerRejectResponse => Some(HandshakeResult::Rejected),
-            _ => None,
+            PacketType::ServerValidateResponse => {
+                if self.connection_state == HandshakeState::AwaitingValidateResponse {
+                    self.recv_validate_response();
+                }
+                return None;
+            }
+            PacketType::ServerConnectResponse => {
+                return self.recv_connect_response();
+            }
+            PacketType::ServerRejectResponse => {
+                return Some(HandshakeResult::Rejected);
+            }
+            PacketType::Pong => {
+                // Time Manager should record incoming Pongs in order to sync time
+                let mut success = false;
+                if let HandshakeState::TimeSync(time_manager) = &mut self.connection_state {
+                    let Ok(success_inner) = time_manager.read_pong(reader) else {
+                        // TODO: bubble this up
+                        warn!("Time Manager cannot process pong");
+                        return None;
+                    };
+                    success = success_inner;
+                }
+                if success {
+                    let HandshakeState::TimeSync(time_manager) = std::mem::replace(&mut self.connection_state, HandshakeState::Connected) else {
+                        panic!("should be impossible due to check above");
+                    };
+                    self.connection_state =
+                        HandshakeState::AwaitingConnectResponse(time_manager.finalize());
+                }
+                return None;
+            }
+            PacketType::Data
+            | PacketType::Heartbeat
+            | PacketType::ClientChallengeRequest
+            | PacketType::ClientValidateRequest
+            | PacketType::ClientConnectRequest
+            | PacketType::Ping
+            | PacketType::Disconnect => {
+                return None;
+            }
         }
     }
 
@@ -137,16 +207,16 @@ impl HandshakeManager {
                 let digest_bytes = digest_bytes_result.unwrap();
                 self.pre_connection_digest = Some(digest_bytes);
 
-                self.connection_state = HandshakeState::AwaitingConnectResponse;
+                self.connection_state = HandshakeState::AwaitingValidateResponse;
             }
         }
     }
 
     // Step 3 of Handshake
-    pub fn write_connect_request(&self, message_kinds: &MessageKinds) -> BitWriter {
+    pub fn write_validate_request(&self, message_kinds: &MessageKinds) -> BitWriter {
         let mut writer = BitWriter::new();
 
-        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::ClientValidateRequest, 0, 0, 0).ser(&mut writer);
 
         // write timestamp & digest into payload
         self.write_signed_timestamp(&mut writer);
@@ -166,15 +236,28 @@ impl HandshakeManager {
     }
 
     // Step 4 of Handshake
-    pub fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
-        let was_not_connected = self.connection_state != HandshakeState::Connected;
+    pub fn recv_validate_response(&mut self) {
+        self.connection_state = HandshakeState::TimeSync(HandshakeTimeManager::new(
+            self.ping_interval,
+            self.handshake_pings,
+        ));
+    }
 
-        self.connection_state = HandshakeState::Connected;
+    // Step 5 of Handshake
+    pub fn write_connect_request(&self) -> BitWriter {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0).ser(&mut writer);
 
-        match was_not_connected {
-            true => Some(HandshakeResult::Connected),
-            false => None,
-        }
+        writer
+    }
+
+    // Step 6 of Handshake
+    fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
+        let HandshakeState::AwaitingConnectResponse(time_manager) = std::mem::replace(&mut self.connection_state, HandshakeState::Connected) else {
+            return None;
+        };
+
+        return Some(HandshakeResult::Connected(time_manager));
     }
 
     // Send 10 disconnect packets

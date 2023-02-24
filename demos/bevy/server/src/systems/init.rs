@@ -32,7 +32,6 @@ pub fn init(mut commands: Commands, mut server: Server) {
     // Resources
     commands.insert_resource(Global {
         main_room_key,
-        user_to_prediction_map: HashMap::new(),
-        player_last_command: HashMap::new(),
+        user_to_entity_map: HashMap::new(),
     })
 }

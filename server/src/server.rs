@@ -4,6 +4,7 @@ use std::{
     net::SocketAddr,
     panic,
     sync::{Arc, RwLock},
+    time::Duration,
 };
 
 use log::warn;
@@ -23,6 +24,8 @@ use crate::{
         connection::Connection,
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
+        tick_buffer_messages::TickBufferMessages,
+        time_manager::TimeManager,
     },
     protocol::{
         entity_ref::{EntityMut, EntityRef},
@@ -30,7 +33,6 @@ use crate::{
         global_diff_handler::GlobalDiffHandler,
         world_record::WorldRecord,
     },
-    tick::tick_manager::TickManager,
 };
 
 use super::{
@@ -59,6 +61,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Users
     users: BigMap<UserKey, User>,
     user_connections: HashMap<SocketAddr, Connection<E>>,
+    validated_users: HashMap<SocketAddr, UserKey>,
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
@@ -69,7 +72,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Events
     incoming_events: Events,
     // Ticks
-    tick_manager: Option<TickManager>,
+    time_manager: TimeManager,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
@@ -80,7 +83,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         let socket = Socket::new(&protocol.socket);
 
-        let tick_manager = { protocol.tick_interval.map(TickManager::new) };
+        let time_manager = TimeManager::new(protocol.tick_interval);
 
         let io = Io::new(
             &server_config.connection.bandwidth_measure_duration,
@@ -96,11 +99,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             io,
             heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
             timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
-            ping_timer: Timer::new(server_config.connection.ping.ping_interval),
+            ping_timer: Timer::new(server_config.ping.ping_interval),
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
             users: BigMap::default(),
             user_connections: HashMap::new(),
+            validated_users: HashMap::new(),
             // Rooms
             rooms: BigMap::default(),
             // Entities
@@ -111,7 +115,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Events
             incoming_events: Events::new(),
             // Ticks
-            tick_manager,
+            time_manager,
         }
     }
 
@@ -128,6 +132,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.io.is_loaded()
     }
 
+    pub fn duration_until_next_tick(&self) -> Duration {
+        self.time_manager.duration_until_next_tick()
+    }
+
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub fn receive(&mut self) -> Events {
@@ -136,11 +144,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.maintain_socket();
 
         // tick event
-        let mut did_tick = false;
-        if let Some(tick_manager) = &mut self.tick_manager {
-            if tick_manager.recv_server_tick() {
-                did_tick = true;
-            }
+        if self.time_manager.recv_server_tick() {
+            self.incoming_events
+                .push_tick(self.time_manager.current_tick());
         }
 
         // loop through all connections, receive Messages
@@ -154,21 +160,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             connection.receive_messages(&mut self.incoming_events);
         }
 
-        // receive (retrieve from buffer) tick buffered messages for the current server tick
-        if did_tick {
-            // Receive Tick Buffered Messages
-            for user_address in &user_addresses {
-                let connection = self.user_connections.get_mut(user_address).unwrap();
-
-                connection.receive_tick_buffer_messages(
-                    &self.tick_manager.as_ref().unwrap().server_tick(),
-                    &mut self.incoming_events,
-                );
-            }
-
-            self.incoming_events.push_tick();
-        }
-
         // return all received messages and reset the buffer
         std::mem::take(&mut self.incoming_events)
     }
@@ -178,33 +169,53 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Accepts an incoming Client User, allowing them to establish a connection
     /// with the Server
     pub fn accept_connection(&mut self, user_key: &UserKey) {
-        if let Some(user) = self.users.get(user_key) {
-            let new_connection = Connection::new(
-                &self.server_config.connection,
-                user.address,
-                user_key,
-                &self.protocol.channel_kinds,
-                &self.diff_handler,
+        let Some(user) = self.users.get(user_key) else {
+            warn!("unknown user is finalizing connection...");
+            return;
+        };
+
+        // send validate response
+        let mut writer = self.handshake_manager.write_validate_response();
+        if self.io.send_writer(&user.address, &mut writer).is_err() {
+            // TODO: pass this on and handle above
+            warn!(
+                "Server Error: Cannot send validate response packet to {}",
+                &user.address
             );
-            // send connectaccept response
-            let mut writer = self.handshake_manager.write_connect_response();
-            match self.io.send_writer(&user.address, &mut writer) {
-                Ok(()) => {}
-                Err(_) => {
-                    // TODO: pass this on and handle above
-                    warn!(
-                        "Server Error: Cannot send connect response packet to {}",
-                        &user.address
-                    );
-                }
-            }
-            //
-            self.user_connections.insert(user.address, new_connection);
-            if self.io.bandwidth_monitor_enabled() {
-                self.io.register_client(&user.address);
-            }
-            self.incoming_events.push_connection(user_key);
         }
+
+        self.validated_users.insert(user.address, *user_key);
+    }
+
+    fn finalize_connection(&mut self, user_key: &UserKey) {
+        let Some(user) = self.users.get(user_key) else {
+            warn!("unknown user is finalizing connection...");
+            return;
+        };
+        let new_connection = Connection::new(
+            &self.server_config.connection,
+            &self.server_config.ping,
+            user.address,
+            user_key,
+            &self.protocol.channel_kinds,
+            &self.diff_handler,
+        );
+
+        // send connect response
+        let mut writer = self.handshake_manager.write_connect_response();
+        if self.io.send_writer(&user.address, &mut writer).is_err() {
+            // TODO: pass this on and handle above
+            warn!(
+                "Server Error: Cannot send connect response packet to {}",
+                &user.address
+            );
+        }
+
+        self.user_connections.insert(user.address, new_connection);
+        if self.io.bandwidth_monitor_enabled() {
+            self.io.register_client(&user.address);
+        }
+        self.incoming_events.push_connection(user_key);
     }
 
     /// Rejects an incoming Client User, terminating their attempt to establish
@@ -307,6 +318,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
     }
 
+    pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
+        let mut tick_buffer_messages = TickBufferMessages::new();
+        for (_user_address, connection) in self.user_connections.iter_mut() {
+            // receive messages from anyone
+            connection.tick_buffer_messages(tick, &mut tick_buffer_messages);
+        }
+        tick_buffer_messages
+    }
+
     // Updates
 
     /// Used to evaluate whether, given a User & Entity that are in the
@@ -350,7 +370,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
 
-            let rtt = connection.ping_manager.rtt;
+            let rtt = connection.ping_manager.rtt_average;
 
             connection.send_outgoing_packets(
                 &self.protocol,
@@ -358,7 +378,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &mut self.io,
                 &world,
                 &self.world_record,
-                &self.tick_manager,
+                &self.time_manager,
                 &rtt,
             );
         }
@@ -511,22 +531,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // Ticks
 
-    /// Gets the last received tick from the Client
-    pub fn client_tick(&self, user_key: &UserKey) -> Option<Tick> {
-        if let Some(user) = self.users.get(user_key) {
-            if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.last_received_tick);
-            }
-        }
-        None
+    /// Gets the current tick of the Server
+    pub fn current_tick(&self) -> Tick {
+        return self.time_manager.current_tick();
     }
 
-    /// Gets the current tick of the Server
-    pub fn server_tick(&self) -> Option<Tick> {
-        return self
-            .tick_manager
-            .as_ref()
-            .map(|tick_manager| tick_manager.server_tick());
+    /// Gets the current average tick duration of the Server
+    pub fn average_tick_duration(&self) -> Duration {
+        self.time_manager.average_tick_duration()
     }
 
     // Bandwidth monitoring
@@ -551,7 +563,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
         if let Some(user) = self.users.get(user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.ping_manager.rtt);
+                return Some(user_connection.ping_manager.rtt_average);
             }
         }
         None
@@ -562,7 +574,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
         if let Some(user) = self.users.get(user_key) {
             if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.ping_manager.jitter);
+                return Some(user_connection.ping_manager.jitter_average);
             }
         }
         None
@@ -726,6 +738,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> Option<User> {
         if let Some(user) = self.users.remove(user_key) {
             if self.user_connections.remove(&user.address).is_some() {
+                self.validated_users.remove(&user.address);
                 self.entity_scope_map.remove_user(user_key);
                 self.handshake_manager.delete_user(&user.address);
 
@@ -925,20 +938,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
                     // write server tick
-                    if let Some(tick_manager) = self.tick_manager.as_mut() {
-                        tick_manager.write_server_tick(&mut writer);
-                    }
+                    self.time_manager.current_tick().ser(&mut writer);
+
+                    // write server tick instant
+                    self.time_manager.current_tick_instant().ser(&mut writer);
 
                     // send packet
-                    match self.io.send_writer(user_address, &mut writer) {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // TODO: pass this on and handle above
-                            warn!(
-                                "Server Error: Cannot send heartbeat packet to {}",
-                                user_address
-                            );
-                        }
+                    if self.io.send_writer(user_address, &mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!(
+                            "Server Error: Cannot send heartbeat packet to {}",
+                            user_address
+                        );
                     }
                     connection.base.mark_sent();
                 }
@@ -959,21 +970,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .base
                         .write_outgoing_header(PacketType::Ping, &mut writer);
 
-                    // write client tick
-                    if let Some(tick_manager) = self.tick_manager.as_mut() {
-                        tick_manager.write_server_tick(&mut writer);
-                    }
+                    // write server tick
+                    self.time_manager.current_tick().ser(&mut writer);
+
+                    // write server tick instant
+                    self.time_manager.current_tick_instant().ser(&mut writer);
 
                     // write body
-                    connection.ping_manager.write_ping(&mut writer);
+                    connection
+                        .ping_manager
+                        .write_ping(&mut writer, &self.time_manager);
 
                     // send packet
-                    match self.io.send_writer(user_address, &mut writer) {
-                        Ok(()) => {}
-                        Err(_) => {
-                            // TODO: pass this on and handle above
-                            warn!("Server Error: Cannot send ping packet to {}", user_address);
-                        }
+                    if self.io.send_writer(user_address, &mut writer).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Server Error: Cannot send ping packet to {}", user_address);
                     }
                     connection.base.mark_sent();
                 }
@@ -987,13 +998,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let mut reader = owned_reader.borrow();
 
                     // Read header
-                    let header_result = StandardHeader::de(&mut reader);
-                    if header_result.is_err() {
+                    let Ok(header) = StandardHeader::de(&mut reader) else {
                         // Received a malformed packet
                         // TODO: increase suspicion against packet sender
                         continue;
-                    }
-                    let header = header_result.unwrap();
+                    };
 
                     // Handshake stuff
                     match header.packet_type {
@@ -1001,35 +1010,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             if let Ok(mut writer) =
                                 self.handshake_manager.recv_challenge_request(&mut reader)
                             {
-                                match self.io.send_writer(&address, &mut writer) {
-                                    Ok(()) => {}
-                                    Err(_) => {
-                                        // TODO: pass this on and handle above
-                                        warn!("Server Error: Cannot send challenge response packet to {}", &address);
-                                    }
-                                };
+                                if self.io.send_writer(&address, &mut writer).is_err() {
+                                    // TODO: pass this on and handle above
+                                    warn!(
+                                        "Server Error: Cannot send challenge response packet to {}",
+                                        &address
+                                    );
+                                }
                             }
                             continue;
                         }
-                        PacketType::ClientConnectRequest => {
-                            match self.handshake_manager.recv_connect_request(
+                        PacketType::ClientValidateRequest => {
+                            match self.handshake_manager.recv_validate_request(
                                 &self.protocol.message_kinds,
                                 &address,
                                 &mut reader,
                             ) {
                                 HandshakeResult::Success(auth_message_opt) => {
-                                    if self.user_connections.contains_key(&address) {
-                                        // send connectaccept response
+                                    if self.validated_users.contains_key(&address) {
+                                        // send validate response
                                         let mut writer =
-                                            self.handshake_manager.write_connect_response();
-                                        match self.io.send_writer(&address, &mut writer) {
-                                            Ok(()) => {}
-                                            Err(_) => {
-                                                // TODO: pass this on and handle above
-                                                warn!("Server Error: Cannot send connect success response packet to {}", &address);
-                                            }
+                                            self.handshake_manager.write_validate_response();
+                                        if self.io.send_writer(&address, &mut writer).is_err() {
+                                            // TODO: pass this on and handle above
+                                            warn!("Server Error: Cannot send validate success response packet to {}", &address);
                                         };
-                                        //
                                     } else {
                                         let user = User::new(address);
                                         let user_key = self.users.insert(user);
@@ -1047,6 +1052,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             }
                             continue;
                         }
+                        PacketType::Ping => {
+                            let mut response = self.time_manager.process_ping(&mut reader).unwrap();
+                            // send packet
+                            if self.io.send_writer(&address, &mut response).is_err() {
+                                // TODO: pass this on and handle above
+                                warn!("Server Error: Cannot send pong packet to {}", &address);
+                            };
+                            if let Some(user_connection) = self.user_connections.get_mut(&address) {
+                                user_connection.base.mark_sent();
+                            }
+                            continue;
+                        }
+                        PacketType::ClientConnectRequest => {
+                            if self.user_connections.contains_key(&address) {
+                                // send connect response
+                                let mut writer = self.handshake_manager.write_connect_response();
+                                if self.io.send_writer(&address, &mut writer).is_err() {
+                                    // TODO: pass this on and handle above
+                                    warn!("Server Error: Cannot send connect success response packet to {}", &address);
+                                };
+                                //
+                            } else {
+                                let user_key = *self
+                                    .validated_users
+                                    .get(&address)
+                                    .expect("should be a user by now, from validation step");
+                                self.finalize_connection(&user_key);
+                            }
+                            continue;
+                        }
                         _ => {}
                     }
 
@@ -1061,41 +1096,32 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         match header.packet_type {
                             PacketType::Data => {
                                 // read client tick
-                                let server_and_client_tick_opt = {
-                                    if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                        ////
-                                        let client_tick_result =
-                                            tick_manager.read_client_tick(&mut reader);
-                                        if client_tick_result.is_err() {
-                                            // Received a malformed packet
-                                            // TODO: increase suspicion against packet sender
-                                            continue;
-                                        }
-                                        let client_tick = client_tick_result.unwrap();
-                                        user_connection.recv_client_tick(client_tick);
-                                        ////
-
-                                        let server_tick = tick_manager.server_tick();
-
-                                        Some((server_tick, client_tick))
-                                    } else {
-                                        None
-                                    }
+                                let Ok(client_tick) = Tick::de(&mut reader) else {
+                                    // Received a malformed packet
+                                    // TODO: increase suspicion against packet sender
+                                    continue;
                                 };
 
+                                self.time_manager.record_client_tick(client_tick);
+
+                                let server_tick = self.time_manager.current_tick();
+
                                 // process data
-                                let data_result = user_connection.process_incoming_data(
-                                    &self.protocol,
-                                    server_and_client_tick_opt,
-                                    &mut reader,
-                                    &self.world_record,
-                                );
-                                if data_result.is_err() {
+                                if user_connection
+                                    .process_incoming_data(
+                                        &self.protocol,
+                                        server_tick,
+                                        client_tick,
+                                        &mut reader,
+                                        &self.world_record,
+                                    )
+                                    .is_err()
+                                {
                                     // Received a malformed packet
                                     // TODO: increase suspicion against packet sender
                                     warn!("Error reading incoming packet!");
                                     continue;
-                                }
+                                };
                             }
                             PacketType::Disconnect => {
                                 if self
@@ -1107,88 +1133,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 }
                             }
                             PacketType::Heartbeat => {
-                                // read client tick, don't need to do anything else
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    ////
-                                    let client_tick_result =
-                                        tick_manager.read_client_tick(&mut reader);
-                                    if client_tick_result.is_err() {
-                                        // Received a malformed packet
-                                        // TODO: increase suspicion against packet sender
-                                        continue;
-                                    }
-                                    let client_tick = client_tick_result.unwrap();
-                                    user_connection.recv_client_tick(client_tick);
-                                    ////
-                                }
-                            }
-                            PacketType::Ping => {
-                                // read client tick
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    ////
-                                    let client_tick_result =
-                                        tick_manager.read_client_tick(&mut reader);
-                                    if client_tick_result.is_err() {
-                                        // Received a malformed packet
-                                        // TODO: increase suspicion against packet sender
-                                        continue;
-                                    }
-                                    let client_tick = client_tick_result.unwrap();
-                                    user_connection.recv_client_tick(client_tick);
-                                    ////
-                                }
-
-                                // read incoming ping index
-                                let ping_index = u16::de(&mut reader).unwrap();
-
-                                // write pong payload
-                                let mut writer = BitWriter::new();
-
-                                // write header
-                                user_connection
-                                    .base
-                                    .write_outgoing_header(PacketType::Pong, &mut writer);
-
-                                // write server tick
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    tick_manager.write_server_tick(&mut writer);
-                                }
-
-                                // write index
-                                ping_index.ser(&mut writer);
-
-                                // send packet
-                                match self.io.send_writer(&address, &mut writer) {
-                                    Ok(()) => {}
-                                    Err(_) => {
-                                        // TODO: pass this on and handle above
-                                        warn!(
-                                            "Server Error: Cannot send pong packet to {}",
-                                            &address
-                                        );
-                                    }
-                                };
-                                user_connection.base.mark_sent();
+                                // already marked heard above
                             }
                             PacketType::Pong => {
                                 // read client tick
-                                if let Some(tick_manager) = self.tick_manager.as_ref() {
-                                    ////
-                                    let client_tick_result =
-                                        tick_manager.read_client_tick(&mut reader);
-                                    if client_tick_result.is_err() {
-                                        // Received a malformed packet
-                                        // TODO: increase suspicion against packet sender
-                                        continue;
-                                    }
-                                    let client_tick = client_tick_result.unwrap();
-                                    user_connection.recv_client_tick(client_tick);
-                                    ////
-                                }
-
-                                // TODO: send a message to client with a recommendation on how
-                                //  to speedup/slowdown simulation?
-                                user_connection.ping_manager.process_pong(&mut reader);
+                                user_connection
+                                    .ping_manager
+                                    .process_pong(&self.time_manager, &mut reader);
                             }
                             _ => {}
                         }

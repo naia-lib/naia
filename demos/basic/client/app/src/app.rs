@@ -7,9 +7,9 @@ cfg_if! {
 }
 
 use naia_client::{
-    default_channels::UnorderedReliableChannel, Client as NaiaClient, ClientConfig, ConnectEvent,
-    DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent,
-    RemoveComponentEvent, SpawnEntityEvent, TickEvent, UpdateComponentEvent,
+    default_channels::UnorderedReliableChannel, Client as NaiaClient, ClientConfig,
+    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent,
+    RejectEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World};
@@ -100,7 +100,8 @@ impl App {
             if let Some(character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
-                .component::<Character>() {
+                .component::<Character>()
+            {
                 info!(
                     "update of Character - x: {}, y: {}, name: {} {}",
                     *character.x,
@@ -119,7 +120,7 @@ impl App {
                 (*character.fullname).last,
             );
         }
-        for _ in events.read::<TickEvent>() {
+        for _ in events.read::<ClientTickEvent>() {
             //info!("tick event");
         }
         for error in events.read::<ErrorEvent>() {

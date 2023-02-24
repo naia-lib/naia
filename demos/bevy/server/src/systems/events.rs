@@ -1,12 +1,16 @@
-use bevy_ecs::{event::EventReader, system::ResMut};
+use bevy_ecs::{
+    event::EventReader,
+    system::{Query, ResMut},
+};
 use bevy_log::info;
 
 use naia_bevy_server::{
-    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents},
+    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, TickEvent},
     Random, Server,
 };
 
 use naia_bevy_demo_shared::{
+    behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
     components::{Color, ColorValue, Position},
     messages::{Auth, EntityAssignment, KeyCommand},
@@ -75,7 +79,7 @@ pub fn connect_events<'world, 'state>(
             // return Entity id
             .id();
 
-        global.user_to_prediction_map.insert(*user_key, entity);
+        global.user_to_entity_map.insert(*user_key, entity);
 
         // Send an Entity Assignment message to the User that owns the Square
         let mut assignment_message = EntityAssignment::new(true);
@@ -96,7 +100,7 @@ pub fn disconnect_events(
     for DisconnectEvent(user_key, user) in event_reader.iter() {
         info!("Naia Server disconnected from: {:?}", user.address);
 
-        if let Some(entity) = global.user_to_prediction_map.remove(user_key) {
+        if let Some(entity) = global.user_to_entity_map.remove(user_key) {
             server
                 .entity_mut(&entity)
                 .leave_room(&global.main_room_key)
@@ -105,24 +109,51 @@ pub fn disconnect_events(
     }
 }
 
-pub fn message_events(
-    mut event_reader: EventReader<MessageEvents>,
-    mut global: ResMut<Global>,
-    server: Server,
-) {
-    for events in event_reader.iter() {
-        for (_user_key, key_command) in events.read::<PlayerCommandChannel, KeyCommand>() {
-            if let Some(entity) = &key_command.entity.get(&server) {
-                global
-                    .player_last_command
-                    .insert(*entity, key_command.clone());
-            }
-        }
-    }
-}
-
 pub fn error_events(mut event_reader: EventReader<ErrorEvent>) {
     for ErrorEvent(error) in event_reader.iter() {
         info!("Naia Server Error: {:?}", error);
+    }
+}
+
+pub fn tick_events(
+    mut server: Server,
+    mut position_query: Query<&mut Position>,
+    mut tick_reader: EventReader<TickEvent>,
+) {
+    let mut has_ticked = false;
+
+    for TickEvent(server_tick) in tick_reader.iter() {
+        has_ticked = true;
+
+        // All game logic should happen here, on a tick event
+
+        let messages = server.receive_tick_buffer_messages(server_tick);
+        for (_user_key, key_command) in messages.read::<PlayerCommandChannel, KeyCommand>() {
+            let Some(entity) = &key_command.entity.get(&server) else {
+                continue;
+            };
+            let Ok(mut position) = position_query.get_mut(*entity) else {
+                continue;
+            };
+            shared_behavior::process_command(&key_command, &mut position);
+        }
+    }
+
+    if has_ticked {
+        // Update scopes of entities
+        for (_, user_key, entity) in server.scope_checks() {
+            // You'd normally do whatever checks you need to in here..
+            // to determine whether each Entity should be in scope or not.
+
+            // This indicates the Entity should be in this scope.
+            server.user_scope(&user_key).include(&entity);
+
+            // And call this if Entity should NOT be in this scope.
+            // server.user_scope(..).exclude(..);
+        }
+
+        // This is very important! Need to call this to actually send all update packets
+        // to all connected Clients!
+        server.send_all_updates();
     }
 }

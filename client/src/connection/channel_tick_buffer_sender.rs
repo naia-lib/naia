@@ -1,33 +1,27 @@
-use std::{collections::VecDeque, time::Duration};
+use std::collections::VecDeque;
 
-use log::{info, warn};
+use log::warn;
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter, ChannelWriter,
-    Instant, Message, MessageKinds, Serde, ShortMessageIndex, Tick, TickBufferSettings,
-    UnsignedVariableInteger, MESSAGE_HISTORY_SIZE,
+    Message, MessageKinds, Serde, ShortMessageIndex, Tick, TickBufferSettings,
+    UnsignedVariableInteger,
 };
 
 pub struct ChannelTickBufferSender {
     sending_messages: OutgoingMessages,
     outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageIndex, Box<dyn Message>)>)>,
-    resend_interval: Duration,
-    resend_interval_millis: u32,
-    last_sent: Instant,
+    last_sent: Tick,
+    never_sent: bool,
 }
 
 impl ChannelTickBufferSender {
-    pub fn new(tick_duration: &Duration, settings: &TickBufferSettings) -> Self {
-        let resend_interval = Duration::from_millis(
-            ((settings.tick_resend_factor as u128) * tick_duration.as_millis()) as u64,
-        );
-
+    pub fn new(settings: TickBufferSettings) -> Self {
         Self {
-            sending_messages: OutgoingMessages::new(),
+            sending_messages: OutgoingMessages::new(settings.message_capacity),
             outgoing_messages: VecDeque::new(),
-            resend_interval,
-            resend_interval_millis: resend_interval.as_millis() as u32,
-            last_sent: Instant::now(),
+            last_sent: 0,
+            never_sent: true,
         }
     }
 
@@ -36,34 +30,29 @@ impl ChannelTickBufferSender {
         client_sending_tick: &Tick,
         server_receivable_tick: &Tick,
     ) {
-        if self.last_sent.elapsed() >= self.resend_interval {
+        if sequence_greater_than(*client_sending_tick, self.last_sent) || self.never_sent {
             // Remove messages that would never be able to reach the Server
             self.sending_messages
                 .pop_back_until_excluding(server_receivable_tick);
 
-            self.last_sent = Instant::now();
+            self.last_sent = *client_sending_tick;
+            self.never_sent = true;
 
             // Loop through outstanding messages and add them to the outgoing list
             for (message_tick, message_map) in self.sending_messages.iter() {
                 if sequence_greater_than(*message_tick, *client_sending_tick) {
-                    //info!("found message that is more recent than client sending tick! (how?)");
+                    warn!("Sending message that is more recent than client sending tick! This shouldn't be possible.");
                     break;
                 }
+
                 let messages = message_map.collect_messages();
                 self.outgoing_messages.push_back((*message_tick, messages));
             }
-
-            // if self.next_send_messages.len() > 0 {
-            //     info!("next_send_messages.len() = {} messages",
-            // self.next_send_messages.len()); }
         }
     }
 
     pub fn send_message(&mut self, host_tick: &Tick, message: Box<dyn Message>) {
         self.sending_messages.push(*host_tick, message);
-
-        self.last_sent = Instant::now();
-        self.last_sent.subtract_millis(self.resend_interval_millis);
     }
 
     pub fn has_messages(&self) -> bool {
@@ -244,12 +233,15 @@ struct OutgoingMessages {
     // front big, back small
     // front recent, back past
     buffer: VecDeque<(Tick, MessageMap)>,
+    // this is the maximum length of the buffer
+    capacity: usize,
 }
 
 impl OutgoingMessages {
-    pub fn new() -> Self {
+    pub fn new(capacity: usize) -> Self {
         OutgoingMessages {
             buffer: VecDeque::new(),
+            capacity,
         }
     }
 
@@ -277,9 +269,8 @@ impl OutgoingMessages {
         self.buffer.push_front((message_tick, msg_map));
 
         // a good time to prune down this list
-        while self.buffer.len() > MESSAGE_HISTORY_SIZE.into() {
+        while self.buffer.len() > self.capacity {
             self.buffer.pop_back();
-            info!("pruning outgoing_messages buffer cause it got too big");
         }
     }
 
@@ -295,10 +286,6 @@ impl OutgoingMessages {
 
             self.buffer.pop_back();
         }
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = &(Tick, MessageMap)> {
-        self.buffer.iter()
     }
 
     pub fn remove_message(&mut self, tick: &Tick, message_index: &ShortMessageIndex) {
@@ -318,7 +305,6 @@ impl OutgoingMessages {
                 if *old_tick == *tick {
                     // found it!
                     message_map.remove(message_index);
-                    //info!("removed delivered message! tick: {}, msg_id: {}", tick, msg_id);
                     if message_map.len() == 0 {
                         remove = true;
                     }
@@ -339,5 +325,9 @@ impl OutgoingMessages {
                 return;
             }
         }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &(Tick, MessageMap)> {
+        self.buffer.iter()
     }
 }

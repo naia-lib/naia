@@ -8,8 +8,8 @@ use crate::{channels::ChannelsPlugin, components::ComponentsPlugin, messages::Me
 pub fn protocol() -> Protocol {
     Protocol::builder()
         // Config
-        .tick_interval(Duration::from_millis(25))
-        .link_condition(LinkConditionerConfig::average_condition())
+        .tick_interval(Duration::from_millis(16))
+        .link_condition(LinkConditionerConfig::good_condition())
         // Channels
         .add_plugin(ChannelsPlugin)
         // Messages

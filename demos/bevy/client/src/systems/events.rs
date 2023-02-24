@@ -10,17 +10,17 @@ use bevy_transform::components::Transform;
 
 use naia_bevy_client::{
     events::{
-        ConnectEvent, DisconnectEvent, InsertComponentEvents, MessageEvents, RejectEvent,
-        SpawnEntityEvent, UpdateComponentEvents,
+        ClientTickEvent, ConnectEvent, DisconnectEvent, InsertComponentEvents, MessageEvents,
+        RejectEvent, SpawnEntityEvent, UpdateComponentEvents,
     },
     sequence_greater_than, Client, CommandsExt, Tick,
 };
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
-    channels::EntityAssignmentChannel,
+    channels::{EntityAssignmentChannel, PlayerCommandChannel},
     components::{Color, ColorValue, Position},
-    messages::EntityAssignment,
+    messages::{EntityAssignment, KeyCommand},
 };
 
 use crate::resources::{Global, OwnedEntity};
@@ -176,6 +176,49 @@ pub fn update_component_events(
                     shared_behavior::process_command(&command, &mut client_position);
                 }
             }
+        }
+    }
+}
+
+pub fn tick_events(
+    mut tick_reader: EventReader<ClientTickEvent>,
+    mut global: ResMut<Global>,
+    mut client: Client,
+    mut position_query: Query<&mut Position>,
+) {
+    if !client.is_connected() {
+        return;
+    }
+    let Some(command) = global.queued_command.take() else {
+        return;
+    };
+
+    let Some(predicted_entity) = global
+        .owned_entity
+        .as_ref()
+        .map(|owned_entity| owned_entity.predicted) else {
+        // No owned Entity
+        return;
+    };
+
+    for ClientTickEvent(tick) in tick_reader.iter() {
+        global.last_client_tick = *tick;
+
+        //All game logic should happen here, on a tick event
+        if !global.command_history.can_insert(tick) {
+            // History is full
+            continue;
+        }
+
+        // Record command
+        global.command_history.insert(*tick, command.clone());
+
+        // Send command
+        client.send_tick_buffer_message::<PlayerCommandChannel, KeyCommand>(tick, &command);
+
+        // Apply command
+        if let Ok(mut position) = position_query.get_mut(predicted_entity) {
+            shared_behavior::process_command(&command, &mut position);
         }
     }
 }

@@ -19,19 +19,17 @@ mod connection;
 mod error;
 mod events;
 mod protocol;
-mod tick;
 
 pub use client::Client;
 pub use client_config::ClientConfig;
 pub use command_history::CommandHistory;
 pub use error::NaiaClientError;
 pub use events::{
-    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events, InsertComponentEvent,
-    MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-    UpdateComponentEvent,
+    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events,
+    InsertComponentEvent, MessageEvent, RejectEvent, RemoveComponentEvent, ServerTickEvent,
+    SpawnEntityEvent, UpdateComponentEvent,
 };
 pub use protocol::entity_ref::EntityRef;
-pub use tick::config::TickConfig;
 
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};

@@ -1,19 +1,19 @@
-use std::{hash::Hash, net::SocketAddr, time::Duration};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant,
-    OwnedBitReader, PacketType, PingManager, Protocol, ProtocolIo, Serde, StandardHeader, Tick,
+    OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick,
     WorldMutType,
 };
 
 use crate::{
+    connection::{
+        tick_buffer_sender::TickBufferSender, tick_queue::TickQueue, time_manager::TimeManager,
+    },
     events::Events,
     protocol::entity_manager::EntityManager,
-    tick::{
-        tick_buffer_sender::TickBufferSender, tick_manager::TickManager, tick_queue::TickQueue,
-    },
 };
 
 use super::io::Io;
@@ -21,8 +21,8 @@ use super::io::Io;
 pub struct Connection<E: Copy + Eq + Hash> {
     pub base: BaseConnection,
     pub entity_manager: EntityManager<E>,
-    pub ping_manager: PingManager,
-    pub tick_buffer: Option<TickBufferSender>,
+    pub time_manager: TimeManager,
+    pub tick_buffer: TickBufferSender,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
     jitter_buffer: TickQueue<OwnedBitReader>,
@@ -32,17 +32,15 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
-        tick_duration: &Option<Duration>,
         channel_kinds: &ChannelKinds,
+        time_manager: TimeManager,
     ) -> Self {
-        let tick_buffer = tick_duration
-            .as_ref()
-            .map(|duration| TickBufferSender::new(channel_kinds, duration));
+        let tick_buffer = TickBufferSender::new(channel_kinds);
 
         Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
             entity_manager: EntityManager::default(),
-            ping_manager: PingManager::new(&connection_config.ping),
+            time_manager,
             tick_buffer,
             jitter_buffer: TickQueue::new(),
         }
@@ -51,17 +49,18 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     // Incoming data
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        match &mut self.tick_buffer {
-            Some(tick_buffer) => self
-                .base
-                .process_incoming_header(header, &mut Some(tick_buffer)),
-            None => self.base.process_incoming_header(header, &mut None),
-        }
+        self.base
+            .process_incoming_header(header, &mut Some(&mut self.tick_buffer));
     }
 
-    pub fn buffer_data_packet(&mut self, incoming_tick: Tick, reader: &mut BitReader) {
+    pub fn buffer_data_packet(
+        &mut self,
+        incoming_tick: &Tick,
+        reader: &mut BitReader,
+    ) -> Result<(), SerdeErr> {
         self.jitter_buffer
-            .add_item(incoming_tick, reader.to_owned());
+            .add_item(*incoming_tick, reader.to_owned());
+        Ok(())
     }
 
     /// Read the packets (raw bits) from the jitter buffer that correspond to the
@@ -76,9 +75,10 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         &mut self,
         protocol: &Protocol,
         world: &mut W,
-        receiving_tick: Tick,
         incoming_events: &mut Events<E>,
     ) {
+        let receiving_tick = self.time_manager.client_receiving_tick;
+
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
 
@@ -99,14 +99,17 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             // read entity updates
             {
-                let updates_result = self.entity_manager.read_updates(
-                    &protocol.component_kinds,
-                    world,
-                    server_tick,
-                    &mut reader,
-                    incoming_events,
-                );
-                if updates_result.is_err() {
+                if self
+                    .entity_manager
+                    .read_updates(
+                        &protocol.component_kinds,
+                        world,
+                        server_tick,
+                        &mut reader,
+                        incoming_events,
+                    )
+                    .is_err()
+                {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity updates from packet!");
                     continue;
@@ -115,13 +118,16 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             // read entity actions
             {
-                let actions_result = self.entity_manager.read_actions(
-                    &protocol.component_kinds,
-                    world,
-                    &mut reader,
-                    incoming_events,
-                );
-                if actions_result.is_err() {
+                if self
+                    .entity_manager
+                    .read_actions(
+                        &protocol.component_kinds,
+                        world,
+                        &mut reader,
+                        incoming_events,
+                    )
+                    .is_err()
+                {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity actions from packet!");
                     continue;
@@ -145,17 +151,12 @@ impl<E: Copy + Eq + Hash> Connection<E> {
     /// * messages
     /// * acks from reliable channels
     /// * acks from the `EntityActionReceiver` for all [`EntityAction`]s
-    pub fn send_outgoing_packets(
-        &mut self,
-        protocol: &Protocol,
-        io: &mut Io,
-        tick_manager_opt: &Option<TickManager>,
-    ) {
-        self.collect_outgoing_messages(tick_manager_opt);
+    pub fn send_outgoing_packets(&mut self, protocol: &Protocol, io: &mut Io) {
+        self.collect_outgoing_messages();
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, io, tick_manager_opt) {
+            if self.send_outgoing_packet(protocol, io) {
                 any_sent = true;
             } else {
                 break;
@@ -166,35 +167,22 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         }
     }
 
-    fn collect_outgoing_messages(&mut self, tick_manager_opt: &Option<TickManager>) {
+    fn collect_outgoing_messages(&mut self) {
         let now = Instant::now();
 
         self.base
             .message_manager
-            .collect_outgoing_messages(&now, &self.ping_manager.rtt);
+            .collect_outgoing_messages(&now, &self.time_manager.rtt());
 
-        if let Some(tick_manager) = tick_manager_opt {
-            self.tick_buffer
-                .as_mut()
-                .expect("connection is not configured with a Tick Buffer")
-                .collect_outgoing_messages(
-                    &tick_manager.client_sending_tick(),
-                    &tick_manager.server_receivable_tick(),
-                );
-        }
+        self.tick_buffer.collect_outgoing_messages(
+            &self.time_manager.client_sending_tick,
+            &self.time_manager.server_receivable_tick,
+        );
     }
 
     // Sends packet and returns whether or not a packet was sent
-    fn send_outgoing_packet(
-        &mut self,
-        protocol: &Protocol,
-        io: &mut Io,
-        tick_manager_opt: &Option<TickManager>,
-    ) -> bool {
-        let tick_buffer_has_outgoing_messages = match &self.tick_buffer {
-            Some(tick_buffer) => tick_buffer.has_outgoing_messages(),
-            None => false,
-        };
+    fn send_outgoing_packet(&mut self, protocol: &Protocol, io: &mut Io) -> bool {
+        let tick_buffer_has_outgoing_messages = self.tick_buffer.has_outgoing_messages();
 
         if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
             let next_packet_index = self.base.next_packet_index();
@@ -214,24 +202,23 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             let mut has_written = false;
 
-            if let Some(tick_manager) = tick_manager_opt {
-                // write tick
-                let client_tick = tick_manager.write_client_tick(&mut bit_writer);
+            // write tick
+            let client_tick: Tick = self.time_manager.client_sending_tick;
+            client_tick.ser(&mut bit_writer);
 
-                // write tick buffered messages
-                self.tick_buffer.as_mut().unwrap().write_messages(
-                    &protocol,
-                    &channel_writer,
-                    &mut bit_writer,
-                    next_packet_index,
-                    &client_tick,
-                    &mut has_written,
-                );
+            // write tick buffered messages
+            self.tick_buffer.write_messages(
+                &protocol,
+                &channel_writer,
+                &mut bit_writer,
+                next_packet_index,
+                &client_tick,
+                &mut has_written,
+            );
 
-                // finish tick buffered messages
-                false.ser(&mut bit_writer);
-                bit_writer.release_bits(1);
-            }
+            // finish tick buffered messages
+            false.ser(&mut bit_writer);
+            bit_writer.release_bits(1);
 
             // write messages
             {
@@ -249,12 +236,9 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             }
 
             // send packet
-            match io.send_writer(&mut bit_writer) {
-                Ok(()) => {}
-                Err(_) => {
-                    // TODO: pass this on and handle above
-                    warn!("Client Error: Cannot send data packet to Server");
-                }
+            if io.send_writer(&mut bit_writer).is_err() {
+                // TODO: pass this on and handle above
+                warn!("Client Error: Cannot send data packet to Server");
             }
 
             return true;

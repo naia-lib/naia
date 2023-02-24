@@ -1,8 +1,8 @@
 use log::info;
 
 use naia_hecs_client::{
-    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-    RemoveComponentEvent, SpawnEntityEvent, TickEvent,
+    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+    InsertComponentEvent, RemoveComponentEvent, SpawnEntityEvent,
 };
 use naia_hecs_demo_shared::{Marker, Name, Position};
 
@@ -68,7 +68,7 @@ pub fn process_events(app: &mut App) {
     }
 
     // Tick Events
-    for _ in events.read::<TickEvent>() {
+    for _ in events.read::<ClientTickEvent>() {
         app.tick();
     }
 

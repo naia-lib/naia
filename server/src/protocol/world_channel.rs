@@ -263,7 +263,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn remote_despawn_entity(&mut self, entity: &E) {
         if !self.remote_world.contains_key(entity) {
-            panic!("World Channel: should not be able to despawn non-existent entity in remote world");
+            panic!(
+                "World Channel: should not be able to despawn non-existent entity in remote world"
+            );
         }
 
         if let Some(EntityChannel::Despawning) = self.entity_channels.get(entity) {

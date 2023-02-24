@@ -9,8 +9,8 @@ use bevy_ecs::{
 use naia_client::{Client as NaiaClient, EntityRef, NaiaClientError};
 
 use naia_bevy_shared::{
-    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, WorldProxy,
-    WorldRef,
+    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
+    WorldProxy, WorldRef,
 };
 
 use super::state::State;
@@ -69,15 +69,13 @@ impl<'a> Client<'a> {
         self.client.jitter()
     }
 
-    // Interpolation
-
-    pub fn interpolation(&self) -> Option<f32> {
-        self.client.interpolation()
-    }
-
     //// Messages ////
     pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
-        self.client.send_message::<C, M>(message)
+        self.client.send_message::<C, M>(message);
+    }
+
+    pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
+        self.client.send_tick_buffer_message::<C, M>(tick, message);
     }
 
     //// Entities ////
@@ -92,8 +90,22 @@ impl<'a> Client<'a> {
 
     //// Ticks ////
 
-    pub fn client_tick(&self) -> Option<u16> {
+    pub fn client_tick(&self) -> Option<Tick> {
         self.client.client_tick()
+    }
+
+    pub fn server_tick(&self) -> Option<Tick> {
+        self.client.server_tick()
+    }
+
+    // Interpolation
+
+    pub fn client_interpolation(&self) -> Option<f32> {
+        self.client.client_interpolation()
+    }
+
+    pub fn server_interpolation(&self) -> Option<f32> {
+        self.client.server_interpolation()
     }
 }
 

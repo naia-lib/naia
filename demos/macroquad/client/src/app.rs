@@ -6,9 +6,9 @@ use macroquad::prelude::{
 };
 
 use naia_client::{
-    Client as NaiaClient, ClientConfig, CommandHistory, ConnectEvent, DespawnEntityEvent,
-    DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent, RemoveComponentEvent,
-    SpawnEntityEvent, TickEvent, UpdateComponentEvent,
+    Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent,
+    DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
+    RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
@@ -149,28 +149,28 @@ impl App {
                 }
             }
         }
-        for _ in events.read::<TickEvent>() {
-            if let Some(owned_entity) = &self.owned_entity {
-                if let Some(command) = self.queued_command.take() {
-                    if let Some(client_tick) = self.client.client_tick() {
-                        if self.command_history.can_insert(&client_tick) {
-                            // Record command
-                            self.command_history.insert(client_tick, command.clone());
+        for client_tick in events.read::<ClientTickEvent>() {
+            let Some(owned_entity) = &self.owned_entity else {
+                continue;
+            };
+            let Some(command) = self.queued_command.take() else {
+                continue;
+            };
+            if self.command_history.can_insert(&client_tick) {
+                // Record command
+                self.command_history.insert(client_tick, command.clone());
 
-                            // Send command
-                            self.client
-                                .send_message::<PlayerCommandChannel, _>(&command);
+                // Send command
+                self.client
+                    .send_tick_buffer_message::<PlayerCommandChannel, _>(&client_tick, &command);
 
-                            // Apply command
-                            if let Some(mut square_ref) = self
-                                .world
-                                .proxy_mut()
-                                .component_mut::<Square>(&owned_entity.predicted)
-                            {
-                                shared_behavior::process_command(&command, &mut square_ref);
-                            }
-                        }
-                    }
+                // Apply command
+                if let Some(mut square_ref) = self
+                    .world
+                    .proxy_mut()
+                    .component_mut::<Square>(&owned_entity.predicted)
+                {
+                    shared_behavior::process_command(&command, &mut square_ref);
                 }
             }
         }

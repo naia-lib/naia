@@ -23,10 +23,10 @@ mod room;
 mod sequence_list;
 mod server;
 mod server_config;
-mod tick;
 mod user;
 mod user_scope;
 
+pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, TickEvent,

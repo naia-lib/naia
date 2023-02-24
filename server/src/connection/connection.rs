@@ -1,40 +1,44 @@
-use log::warn;
 use std::{
     hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
 
+use log::warn;
+
 use naia_shared::{
-    sequence_greater_than, BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
-    EntityConverter, HostType, Instant, PacketType, PingManager, Protocol, ProtocolIo, Serde,
-    SerdeErr, StandardHeader, Tick, WorldRefType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
+    HostType, Instant, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick,
+    WorldRefType,
 };
 
 use crate::{
+    connection::{
+        ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
+        tick_buffer_receiver::TickBufferReceiver, time_manager::TimeManager,
+    },
     protocol::{
         entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler,
         world_record::WorldRecord,
     },
-    tick::{tick_buffer_receiver::TickBufferReceiver, tick_manager::TickManager},
     user::UserKey,
     Events,
 };
 
-use super::io::Io;
+use super::{io::Io, ping_manager::PingManager};
 
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
     pub base: BaseConnection,
     pub entity_manager: EntityManager<E>,
     tick_buffer: TickBufferReceiver,
-    pub last_received_tick: Tick,
     pub ping_manager: PingManager,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn new(
         connection_config: &ConnectionConfig,
+        ping_config: &PingConfig,
         user_address: SocketAddr,
         user_key: &UserKey,
         channel_kinds: &ChannelKinds,
@@ -50,8 +54,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             ),
             entity_manager: EntityManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
-            ping_manager: PingManager::new(&connection_config.ping),
-            last_received_tick: 0,
+            ping_manager: PingManager::new(ping_config),
         }
     }
 
@@ -62,18 +65,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             .process_incoming_header(header, &mut Some(&mut self.entity_manager));
     }
 
-    /// Update the last received tick tracker from the given client
-    pub fn recv_client_tick(&mut self, client_tick: Tick) {
-        if sequence_greater_than(client_tick, self.last_received_tick) {
-            self.last_received_tick = client_tick;
-        }
-    }
-
     /// Read packet data received from a client
     pub fn process_incoming_data(
         &mut self,
         protocol: &Protocol,
-        server_and_client_tick_opt: Option<(Tick, Tick)>,
+        server_tick: Tick,
+        client_tick: Tick,
         reader: &mut BitReader,
         world_record: &WorldRecord<E>,
     ) -> Result<(), SerdeErr> {
@@ -82,15 +79,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read tick-buffered messages
         {
-            if let Some((server_tick, client_tick)) = server_and_client_tick_opt {
-                self.tick_buffer.read_messages(
-                    protocol,
-                    &server_tick,
-                    &client_tick,
-                    &channel_reader,
-                    reader,
-                )?;
-            }
+            self.tick_buffer.read_messages(
+                protocol,
+                &server_tick,
+                &client_tick,
+                &channel_reader,
+                reader,
+            )?;
         }
 
         // read messages
@@ -110,11 +105,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
     }
 
-    pub fn receive_tick_buffer_messages(&mut self, host_tick: &Tick, incoming_events: &mut Events) {
-        let channel_messages = self.tick_buffer.receive_messages(host_tick);
+    pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {
+        let channel_messages = self.tick_buffer.receive_messages(tick);
         for (channel_kind, received_messages) in channel_messages {
             for message in received_messages {
-                incoming_events.push_message(&self.user_key, &channel_kind, message);
+                messages.push(&self.user_key, &channel_kind, message);
             }
         }
     }
@@ -127,14 +122,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         io: &mut Io,
         world: &W,
         world_record: &WorldRecord<E>,
-        tick_manager_opt: &Option<TickManager>,
+        time_manager: &TimeManager,
         rtt_millis: &f32,
     ) {
         self.collect_outgoing_messages(now, rtt_millis);
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, now, io, world, world_record, tick_manager_opt) {
+            if self.send_outgoing_packet(protocol, now, io, world, world_record, time_manager) {
                 any_sent = true;
             } else {
                 break;
@@ -165,7 +160,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         io: &mut Io,
         world: &W,
         world_record: &WorldRecord<E>,
-        tick_manager_opt: &Option<TickManager>,
+        time_manager: &TimeManager,
     ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
             || self.entity_manager.has_outgoing_messages()
@@ -185,14 +180,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 .write_outgoing_header(PacketType::Data, &mut bit_writer);
 
             // write server tick
-            if let Some(tick_manager) = tick_manager_opt {
-                tick_manager.write_server_tick(&mut bit_writer);
-            }
+            time_manager.current_tick().ser(&mut bit_writer);
 
-            // info!("-- packet: {} --", next_packet_index);
-            // if self.base.message_manager.has_outgoing_messages() {
-            //     info!("writing some messages");
-            // }
+            // write server tick instant
+            time_manager.current_tick_instant().ser(&mut bit_writer);
 
             let mut has_written = false;
 
@@ -246,8 +237,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 false.ser(&mut bit_writer);
                 bit_writer.release_bits(1);
             }
-
-            //info!("--------------\n");
 
             // send packet
             match io.send_writer(&self.base.address, &mut bit_writer) {

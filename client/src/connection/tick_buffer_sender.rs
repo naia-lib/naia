@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::collections::HashMap;
 
 use naia_shared::{
     BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ChannelWriter, Message,
@@ -14,14 +14,14 @@ pub struct TickBufferSender {
 }
 
 impl TickBufferSender {
-    pub fn new(channel_kinds: &ChannelKinds, tick_duration: &Duration) -> Self {
+    pub fn new(channel_kinds: &ChannelKinds) -> Self {
         // initialize senders
         let mut channel_senders = HashMap::new();
         for (channel_index, channel) in channel_kinds.channels() {
             if let ChannelMode::TickBuffered(settings) = &channel.mode {
                 channel_senders.insert(
                     channel_index,
-                    ChannelTickBufferSender::new(tick_duration, settings),
+                    ChannelTickBufferSender::new(settings.clone()),
                 );
             }
         }

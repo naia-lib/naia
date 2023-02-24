@@ -33,6 +33,7 @@ mod messages;
 
 mod bigmap;
 mod constants;
+mod game_time;
 mod key_generator;
 mod protocol;
 mod types;
@@ -65,8 +66,7 @@ pub use connection::{
     encoder::Encoder,
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
-    ping_config::PingConfig,
-    ping_manager::{PingIndex, PingManager},
+    ping_store::{PingIndex, PingStore},
     standard_header::StandardHeader,
 };
 pub use entity::{
@@ -100,7 +100,7 @@ pub use naia_serde::{
 };
 
 pub use bigmap::{BigMap, BigMapKey};
-pub use constants::MESSAGE_HISTORY_SIZE;
+pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};

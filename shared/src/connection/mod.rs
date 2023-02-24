@@ -7,7 +7,6 @@ pub mod decoder;
 pub mod encoder;
 pub mod packet_notifiable;
 pub mod packet_type;
-pub mod ping_config;
-pub mod ping_manager;
+pub mod ping_store;
 pub mod sequence_buffer;
 pub mod standard_header;

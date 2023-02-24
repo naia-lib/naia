@@ -3,10 +3,11 @@ use bevy_ecs::{
     system::SystemParam,
     world::{Mut, World},
 };
+use std::time::Duration;
 
 use naia_server::{
-    EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, UserKey, UserMut,
-    UserRef, UserScopeMut,
+    EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages,
+    UserKey, UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{
@@ -63,6 +64,10 @@ impl<'world, 'state> Server<'world, 'state> {
     /// Sends a message to all connected users using a given channel
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         self.server.broadcast_message::<C, M>(message);
+    }
+
+    pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
+        self.server.receive_tick_buffer_messages(tick)
     }
 
     //// Updates ////
@@ -154,12 +159,12 @@ impl<'world, 'state> Server<'world, 'state> {
 
     //// Ticks ////
 
-    pub fn client_tick(&self, user_key: &UserKey) -> Option<Tick> {
-        self.server.client_tick(user_key)
+    pub fn current_tick(&self) -> Tick {
+        self.server.current_tick()
     }
 
-    pub fn server_tick(&self) -> Option<Tick> {
-        self.server.server_tick()
+    pub fn average_tick_duration(&self) -> Duration {
+        self.server.average_tick_duration()
     }
 
     // Crate-public methods

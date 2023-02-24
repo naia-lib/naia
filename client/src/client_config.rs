@@ -2,8 +2,6 @@ use std::{default::Default, time::Duration};
 
 use naia_shared::ConnectionConfig;
 
-use crate::TickConfig;
-
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone)]
 pub struct ClientConfig {
@@ -11,8 +9,14 @@ pub struct ClientConfig {
     pub connection: ConnectionConfig,
     /// The duration between the resend of certain connection handshake messages
     pub send_handshake_interval: Duration,
-    /// Configuration for options related to Tick syncing function
-    pub tick_config: TickConfig,
+    /// The duration to wait before sending a ping message to the remote host,
+    /// in order to estimate RTT time
+    pub ping_interval: Duration,
+    /// The number of network samples to take before completing the Connection Handshake.
+    /// Increase this for greater accuracy of network statistics, at the cost of the handshake
+    /// taking longer. Keep in mind that the network measurements affect how likely commands
+    /// are able to arrive at the server before processing.
+    pub handshake_pings: u8,
 }
 
 impl Default for ClientConfig {
@@ -20,7 +24,8 @@ impl Default for ClientConfig {
         Self {
             connection: ConnectionConfig::default(),
             send_handshake_interval: Duration::from_millis(250),
-            tick_config: TickConfig::default(),
+            ping_interval: Duration::from_secs(1),
+            handshake_pings: 10,
         }
     }
 }
