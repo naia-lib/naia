@@ -125,13 +125,17 @@ pub fn tick_events(
     for TickEvent(server_tick) in tick_reader.iter() {
         has_ticked = true;
 
+        // All game logic should happen here, on a tick event
+
         let messages = server.receive_tick_buffer_messages(server_tick);
         for (_user_key, key_command) in messages.read::<PlayerCommandChannel, KeyCommand>() {
-            if let Some(entity) = &key_command.entity.get(&server) {
-                if let Ok(mut position) = position_query.get_mut(*entity) {
-                    shared_behavior::process_command(&key_command, &mut position);
-                }
-            }
+            let Some(entity) = &key_command.entity.get(&server) else {
+                continue;
+            };
+            let Ok(mut position) = position_query.get_mut(*entity) else {
+                continue;
+            };
+            shared_behavior::process_command(&key_command, &mut position);
         }
     }
 

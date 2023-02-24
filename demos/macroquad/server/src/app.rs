@@ -1,8 +1,8 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
-    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvent, Random, RoomKey,
-    Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent, UserKey,
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Random, RoomKey, Server as NaiaServer,
+    ServerAddrs, ServerConfig, TickEvent, UserKey,
 };
 
 use naia_demo_world::{Entity, World};
@@ -135,16 +135,30 @@ impl App {
                 self.square_last_command.remove(&entity);
             }
         }
-        for (_user_key, key_command) in
-            events.read::<MessageEvent<PlayerCommandChannel, KeyCommand>>()
-        {
-            if let Some(entity) = &key_command.entity.get(&self.server) {
-                self.square_last_command.insert(*entity, key_command);
-            }
-        }
-        for _ in events.read::<TickEvent>() {
+
+        let mut has_ticked = false;
+
+        for server_tick in events.read::<TickEvent>() {
+            has_ticked = true;
+
             // All game logic should happen here, on a tick event
 
+            let messages = self.server.receive_tick_buffer_messages(&server_tick);
+            for (_user_key, key_command) in messages.read::<PlayerCommandChannel, KeyCommand>() {
+                let Some(entity) = &key_command.entity.get(&self.server) else {
+                    continue;
+                };
+                if let Some(mut square) = self
+                    .server
+                    .entity_mut(self.world.proxy_mut(), &entity)
+                    .component::<Square>()
+                {
+                    shared_behavior::process_command(&key_command, &mut square);
+                }
+            }
+        }
+
+        if has_ticked {
             // Check whether Entities are in/out of all possible Scopes
             for (_, user_key, entity) in self.server.scope_checks() {
                 // You'd normally do whatever checks you need to in here..
@@ -157,21 +171,12 @@ impl App {
                 // self.server.user_scope(..).exclude(..);
             }
 
-            for (entity, last_command) in self.square_last_command.drain() {
-                if let Some(mut square) = self
-                    .server
-                    .entity_mut(self.world.proxy_mut(), &entity)
-                    .component::<Square>()
-                {
-                    shared_behavior::process_command(&last_command, &mut square);
-                }
-            }
-
             // VERY IMPORTANT! Calling this actually sends all update data
             // packets to all Clients that require it. If you don't call this
             // method, the Server will never communicate with it's connected Clients
             self.server.send_all_updates(self.world.proxy());
         }
+
         for error in events.read::<ErrorEvent>() {
             info!("Naia Server error: {}", error);
         }
