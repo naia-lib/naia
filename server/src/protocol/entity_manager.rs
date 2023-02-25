@@ -8,8 +8,8 @@ use std::{
 };
 
 use naia_shared::{
-    wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, DiffMask,
-    EntityAction, EntityActionType, EntityConverter, Instant, Message, MessageIndex,
+    wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength,
+    DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, Message, MessageIndex,
     MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Serde,
     UnsignedVariableInteger, WorldRefType,
 };
@@ -534,9 +534,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
             // check that we can at least write a NetEntityId and a ComponentContinue bit
             let mut counter = writer.counter();
 
-            let net_entity_id = self.world_channel.entity_to_net_entity(&entity).unwrap();
-            net_entity_id.ser(&mut counter);
-
+            counter.write_bits(<NetEntity as ConstBitLength>::const_bit_length());
             counter.write_bit(false);
 
             if counter.overflowed() {
@@ -550,6 +548,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
             writer.reserve_bits(1);
 
             // write NetEntityId
+            let net_entity_id = self.world_channel.entity_to_net_entity(&entity).unwrap();
             net_entity_id.ser(writer);
 
             // write Components
@@ -598,7 +597,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 
             // check that we can write the next component update
             let mut counter = writer.counter();
-            component_kind.ser(component_kinds, &mut counter);
+            counter.write_bits(<ComponentKind as ConstBitLength>::const_bit_length());
             world
                 .component_of_kind(entity, component_kind)
                 .expect("Component does not exist in World")

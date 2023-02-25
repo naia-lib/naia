@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{
@@ -172,14 +172,14 @@ impl MessageManager {
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        for (channel_index, channel) in &mut self.channel_senders {
+        for (channel_kind, channel) in &mut self.channel_senders {
             if !channel.has_messages() {
                 continue;
             }
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
             let mut counter = writer.counter();
-            channel_index.ser(&protocol.channel_kinds, &mut counter);
+            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
             counter.write_bit(false);
 
             if counter.overflowed() {
@@ -193,7 +193,7 @@ impl MessageManager {
             writer.reserve_bits(1);
 
             // write ChannelIndex
-            channel_index.ser(&protocol.channel_kinds, writer);
+            channel_kind.ser(&protocol.channel_kinds, writer);
 
             // write Messages
             if let Some(message_indices) =
@@ -203,7 +203,7 @@ impl MessageManager {
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
-                channel_list.push((channel_index.clone(), message_indices));
+                channel_list.push((channel_kind.clone(), message_indices));
             }
 
             // write MessageContinue finish bit, release
@@ -256,8 +256,8 @@ impl PacketNotifiable for MessageManager {
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
-            for (channel_index, message_indices) in channel_list {
-                if let Some(channel) = self.channel_senders.get_mut(channel_index) {
+            for (channel_kind, message_indices) in channel_list {
+                if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
                     for message_index in message_indices {
                         channel.notify_message_delivered(message_index);
                     }

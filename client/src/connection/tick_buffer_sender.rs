@@ -18,12 +18,10 @@ impl TickBufferSender {
     pub fn new(channel_kinds: &ChannelKinds) -> Self {
         // initialize senders
         let mut channel_senders = HashMap::new();
-        for (channel_index, channel) in channel_kinds.channels() {
+        for (channel_kind, channel) in channel_kinds.channels() {
             if let ChannelMode::TickBuffered(settings) = &channel.mode {
-                channel_senders.insert(
-                    channel_index,
-                    ChannelTickBufferSender::new(settings.clone()),
-                );
+                channel_senders
+                    .insert(channel_kind, ChannelTickBufferSender::new(settings.clone()));
             }
         }
 
@@ -98,7 +96,7 @@ impl TickBufferSender {
             channel_kind.ser(&protocol.channel_kinds, writer);
 
             // write Messages
-            if let Some(message_indexes) = channel.write_messages(
+            if let Some(message_indices) = channel.write_messages(
                 &protocol.message_kinds,
                 converter,
                 writer,
@@ -109,7 +107,7 @@ impl TickBufferSender {
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
-                channel_list.push((*channel_kind, message_indexes));
+                channel_list.push((*channel_kind, message_indices));
             }
 
             // write MessageContinue finish bit, release
@@ -122,8 +120,8 @@ impl TickBufferSender {
 impl PacketNotifiable for TickBufferSender {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_channel_map.get(&packet_index) {
-            for (channel_index, message_indices) in channel_list {
-                if let Some(channel) = self.channel_senders.get_mut(channel_index) {
+            for (channel_kind, message_indices) in channel_list {
+                if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
                     for (tick, message_index) in message_indices {
                         channel.notify_message_delivered(tick, message_index);
                     }

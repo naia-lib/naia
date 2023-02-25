@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap};
 
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
 use crate::{ComponentUpdate, NetEntityHandleConverter, Replicate, ReplicateBuilder};
 
@@ -37,6 +37,12 @@ impl ComponentKind {
     pub fn de(component_kinds: &ComponentKinds, reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let net_id: NetId = NetId::de(reader)?;
         Ok(component_kinds.net_id_to_kind(&net_id))
+    }
+}
+
+impl ConstBitLength for ComponentKind {
+    fn const_bit_length() -> u32 {
+        <NetId as ConstBitLength>::const_bit_length()
     }
 }
 
