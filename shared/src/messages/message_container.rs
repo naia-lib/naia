@@ -9,7 +9,6 @@ pub struct MessageContainer {
 }
 
 impl MessageContainer {
-
     pub fn from(message: Box<dyn Message>) -> Self {
         let bit_length = message.bit_length();
         Self {

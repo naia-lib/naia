@@ -32,7 +32,8 @@ pub fn derive_serde_enum(
     );
     let module_name = format_ident!("define_{}", lowercase_enum_name);
 
-    let import_types = quote! { Serde, BitWrite, UnsignedInteger, BitReader, SerdeErr, ConstBitLength, };
+    let import_types =
+        quote! { Serde, BitWrite, UnsignedInteger, BitReader, SerdeErr, ConstBitLength, };
     let imports = quote! { use #serde_crate_name::{#import_types}; };
 
     quote! {
@@ -194,7 +195,7 @@ fn get_de_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
 
 fn get_bit_length_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
     let mut bit_length = quote! {};
-    for (index, variant) in enum_.variants.iter().enumerate() {
+    for (_, variant) in enum_.variants.iter().enumerate() {
         let variant_name = &variant.ident;
         let base = match &variant.fields {
             Fields::Unit => {

@@ -1,6 +1,6 @@
 use std::{error::Error, hash::Hash};
 
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr, ConstBitLength};
+use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 
 use crate::{
     bigmap::BigMapKey,

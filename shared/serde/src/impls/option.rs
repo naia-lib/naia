@@ -1,9 +1,8 @@
 use crate::{
     error::SerdeErr,
     reader_writer::{BitReader, BitWrite},
-    serde::Serde,
+    serde::{ConstBitLength, Serde},
 };
-use crate::serde::ConstBitLength;
 
 impl<T: Serde> Serde for Option<T> {
     fn ser(&self, writer: &mut dyn BitWrite) {

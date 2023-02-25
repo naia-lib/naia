@@ -8,7 +8,7 @@ use crate::{
     messages::{
         channel_kinds::{ChannelKind, ChannelKinds},
         message_channel::{MessageChannelReceiver, MessageChannelSender},
-        message_container::MessageContainer
+        message_container::MessageContainer,
     },
     types::{HostType, MessageIndex, PacketIndex},
     Message, NetEntityHandleConverter, Protocol,

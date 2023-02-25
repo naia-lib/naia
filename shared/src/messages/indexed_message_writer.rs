@@ -3,8 +3,9 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
 use crate::{
-    messages::{message_kinds::MessageKinds, message_container::MessageContainer}, types::MessageIndex, wrapping_diff, Message,
-    NetEntityHandleConverter,
+    messages::{message_container::MessageContainer, message_kinds::MessageKinds},
+    types::MessageIndex,
+    wrapping_diff, NetEntityHandleConverter,
 };
 
 // Sender
@@ -93,7 +94,7 @@ impl IndexedMessageWriter {
         message.write(message_kinds, writer, converter);
     }
 
-    fn warn_overflow(bits_needed: u16, bits_free: u16) {
+    fn warn_overflow(bits_needed: u32, bits_free: u32) {
         panic!(
             "Packet Write Error: Blocking overflow detected! Message requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
         )

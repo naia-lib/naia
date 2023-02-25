@@ -476,8 +476,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         &self,
         component_kinds: &ComponentKinds,
         world_record: &WorldRecord<E>,
-        bits_needed: u16,
-        bits_free: u16,
+        bits_needed: u32,
+        bits_free: u32,
     ) {
         let (_action_id, action) = self.next_send_actions.front().unwrap();
 
@@ -660,7 +660,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         }
     }
 
-    fn warn_overflow_update(&self, component_name: String, bits_needed: u16, bits_free: u16) {
+    fn warn_overflow_update(&self, component_name: String, bits_needed: u32, bits_free: u32) {
         panic!(
             "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"
         )

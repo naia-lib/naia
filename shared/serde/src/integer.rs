@@ -1,4 +1,9 @@
-use crate::{ConstBitLength, error::SerdeErr, reader_writer::{BitReader, BitWrite}, serde::Serde};
+use crate::{
+    error::SerdeErr,
+    reader_writer::{BitReader, BitWrite},
+    serde::Serde,
+    ConstBitLength,
+};
 
 pub type UnsignedInteger<const BITS: u8> = SerdeInteger<false, false, BITS>;
 pub type SignedInteger<const BITS: u8> = SerdeInteger<true, false, BITS>;

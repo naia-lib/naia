@@ -173,8 +173,8 @@ impl ChannelTickBufferSender {
     fn warn_overflow(
         &self,
         messages: &Vec<(ShortMessageIndex, Box<dyn Message>)>,
-        bits_needed: u16,
-        bits_free: u16,
+        bits_needed: u32,
+        bits_free: u32,
     ) {
         let mut message_names = "".to_string();
         let mut added = false;

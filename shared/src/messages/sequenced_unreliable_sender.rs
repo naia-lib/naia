@@ -7,11 +7,11 @@ use crate::{
     messages::{
         indexed_message_writer::IndexedMessageWriter,
         message_channel::{ChannelSender, MessageChannelSender},
-        message_kinds::MessageKinds,
         message_container::MessageContainer,
+        message_kinds::MessageKinds,
     },
     types::MessageIndex,
-    Message, NetEntityHandleConverter,
+    NetEntityHandleConverter,
 };
 
 pub struct SequencedUnreliableSender {

@@ -125,7 +125,7 @@ impl Serde for GameInstant {
 
 impl ConstBitLength for GameInstant {
     fn const_bit_length() -> u32 {
-        <UnsignedInteger::<22> as ConstBitLength>::const_bit_length()
+        <UnsignedInteger<22> as ConstBitLength>::const_bit_length()
     }
 }
 

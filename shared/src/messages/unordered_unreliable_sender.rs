@@ -4,9 +4,12 @@ use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
 use crate::{
-    messages::{message_channel::MessageChannelSender, message_kinds::MessageKinds, named::Named, message_container::MessageContainer},
+    messages::{
+        message_channel::MessageChannelSender, message_container::MessageContainer,
+        message_kinds::MessageKinds,
+    },
     types::MessageIndex,
-    Message, NetEntityHandleConverter,
+    NetEntityHandleConverter,
 };
 
 use super::message_channel::ChannelSender;
@@ -32,7 +35,7 @@ impl UnorderedUnreliableSender {
         message.write(message_kinds, writer, converter);
     }
 
-    fn warn_overflow(&self, message: &MessageContainer, bits_needed: u16, bits_free: u16) {
+    fn warn_overflow(&self, message: &MessageContainer, bits_needed: u32, bits_free: u32) {
         let message_name = message.name();
         panic!(
             "Packet Write Error: Blocking overflow detected! Message of type `{message_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Message, or send this message over a Reliable channel so it can be Fragmented)"

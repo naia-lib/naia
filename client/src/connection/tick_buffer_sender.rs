@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, Message, NetEntityHandleConverter,
-    PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick,
+    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength, Message,
+    NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex,
+    Tick,
 };
 
 use super::channel_tick_buffer_sender::ChannelTickBufferSender;
@@ -80,7 +81,7 @@ impl TickBufferSender {
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
             let mut counter = writer.counter();
-            channel_kind.ser(&protocol.channel_kinds, &mut counter);
+            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
             counter.write_bit(false);
 
             if counter.overflowed() {

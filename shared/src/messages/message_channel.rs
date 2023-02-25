@@ -2,7 +2,9 @@ use naia_serde::{BitReader, BitWriter, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{
-    messages::{message_kinds::MessageKinds, message_container::MessageContainer}, types::MessageIndex, Message, NetEntityHandleConverter,
+    messages::{message_container::MessageContainer, message_kinds::MessageKinds},
+    types::MessageIndex,
+    Message, NetEntityHandleConverter,
 };
 
 pub trait ChannelSender<P>: Send + Sync {

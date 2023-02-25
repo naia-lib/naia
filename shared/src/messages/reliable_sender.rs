@@ -6,10 +6,10 @@ use naia_socket_shared::Instant;
 use crate::{
     messages::{
         indexed_message_writer::IndexedMessageWriter, message_channel::MessageChannelSender,
-        message_kinds::MessageKinds, message_container::MessageContainer,
+        message_container::MessageContainer, message_kinds::MessageKinds,
     },
     types::MessageIndex,
-    Message, NetEntityHandleConverter,
+    NetEntityHandleConverter,
 };
 
 use super::message_channel::ChannelSender;

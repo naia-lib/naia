@@ -9,9 +9,9 @@ pub trait BitWrite {
 
 // BitCounter
 pub struct BitCounter {
-    start_bits: u16,
-    current_bits: u16,
-    max_bits: u16,
+    start_bits: u32,
+    current_bits: u32,
+    max_bits: u32,
 }
 
 impl BitCounter {
@@ -19,8 +19,12 @@ impl BitCounter {
         self.current_bits > self.max_bits
     }
 
-    pub fn bits_needed(&self) -> u16 {
+    pub fn bits_needed(&self) -> u32 {
         self.current_bits - self.start_bits
+    }
+
+    pub fn write_bits(&mut self, bits: u32) {
+        self.current_bits += bits;
     }
 }
 
@@ -39,8 +43,8 @@ pub struct BitWriter {
     scratch_index: u8,
     buffer: [u8; MTU_SIZE_BYTES],
     buffer_index: usize,
-    current_bits: u16,
-    max_bits: u16,
+    current_bits: u32,
+    max_bits: u32,
 }
 
 impl BitWriter {
@@ -85,15 +89,15 @@ impl BitWriter {
         };
     }
 
-    pub fn reserve_bits(&mut self, bits: u16) {
+    pub fn reserve_bits(&mut self, bits: u32) {
         self.max_bits -= bits;
     }
 
-    pub fn release_bits(&mut self, bits: u16) {
+    pub fn release_bits(&mut self, bits: u32) {
         self.max_bits += bits;
     }
 
-    pub fn bits_free(&self) -> u16 {
+    pub fn bits_free(&self) -> u32 {
         self.max_bits - self.current_bits
     }
 }

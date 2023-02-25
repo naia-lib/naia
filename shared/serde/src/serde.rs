@@ -18,4 +18,3 @@ pub trait Serde: Sized + Clone + PartialEq {
 pub trait ConstBitLength {
     fn const_bit_length() -> u32;
 }
-

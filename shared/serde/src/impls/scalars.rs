@@ -1,8 +1,7 @@
-
 use crate::{
     error::SerdeErr,
     reader_writer::{BitReader, BitWrite},
-    serde::{Serde, ConstBitLength},
+    serde::{ConstBitLength, Serde},
 };
 
 // Unit //
