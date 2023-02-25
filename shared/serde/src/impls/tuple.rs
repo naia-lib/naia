@@ -12,6 +12,11 @@ macro_rules! impl_reflect_tuple {
             fn de(reader: &mut BitReader) -> Result<($($name,)*), SerdeErr> {
                 Ok(($($name::de(reader)?, )*))
             }
+            fn bit_length(&self) -> u32 {
+                let mut output = 0;
+                $(output += self.$index.bit_length();)*
+                output
+            }
         }
     }
 }

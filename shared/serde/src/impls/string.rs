@@ -26,6 +26,14 @@ impl Serde for String {
         let result = std::str::from_utf8(&bytes).unwrap().to_string();
         Ok(result)
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedInteger::<9>::new(self.len() as u64);
+        output += length.bit_length();
+        output += (self.len() as u32) * 8;
+        output
+    }
 }
 
 // Tests

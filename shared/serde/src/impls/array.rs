@@ -3,6 +3,7 @@ use crate::{
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
+use crate::serde::ConstBitLength;
 
 impl<T: Serde> Serde for &[T] {
     fn ser(&self, writer: &mut dyn BitWrite) {
@@ -13,6 +14,14 @@ impl<T: Serde> Serde for &[T] {
 
     fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
         Err(SerdeErr {})
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        for item in *self {
+            output += item.bit_length();
+        }
+        output
     }
 }
 
@@ -32,6 +41,20 @@ impl<T: Serde, const N: usize> Serde for [T; N] {
             }
             Ok(to.assume_init())
         }
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        for item in self {
+            output += item.bit_length();
+        }
+        output
+    }
+}
+
+impl<T: ConstBitLength, const N: usize> ConstBitLength for [T; N] {
+    fn const_bit_length() -> u32 {
+        return T::const_bit_length() * (N as u32);
     }
 }
 

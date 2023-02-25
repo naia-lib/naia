@@ -1,7 +1,7 @@
 use crate::{
     error::SerdeErr,
     reader_writer::{BitReader, BitWrite},
-    serde::Serde,
+    serde::{Serde, ConstBitLength},
 };
 
 impl<T: Serde> Serde for Box<T> {
@@ -11,6 +11,16 @@ impl<T: Serde> Serde for Box<T> {
 
     fn de(reader: &mut BitReader) -> Result<Box<T>, SerdeErr> {
         Ok(Box::new(Serde::de(reader)?))
+    }
+
+    fn bit_length(&self) -> u32 {
+        (**self).bit_length()
+    }
+}
+
+impl<T: ConstBitLength> ConstBitLength for Box<T> {
+    fn const_bit_length() -> u32 {
+        return T::const_bit_length();
     }
 }
 

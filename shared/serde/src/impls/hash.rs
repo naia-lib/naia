@@ -28,6 +28,16 @@ impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
         }
         Ok(output)
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
+        output += length.bit_length();
+        for value in self {
+            output += value.bit_length();
+        }
+        output
+    }
 }
 
 impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
@@ -50,6 +60,17 @@ impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
             output.insert(key, value);
         }
         Ok(output)
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
+        output += length.bit_length();
+        for (key, value) in self {
+            output += key.bit_length();
+            output += value.bit_length();
+        }
+        output
     }
 }
 

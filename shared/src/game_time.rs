@@ -1,4 +1,4 @@
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, UnsignedInteger};
+use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger};
 use naia_socket_shared::Instant;
 
 pub const GAME_TIME_LIMIT: u32 = 4194304; // 2^22
@@ -116,6 +116,16 @@ impl Serde for GameInstant {
         let integer = UnsignedInteger::<22>::de(reader)?;
         let millis = integer.get() as u32;
         Ok(Self { millis })
+    }
+
+    fn bit_length(&self) -> u32 {
+        <GameInstant as ConstBitLength>::const_bit_length()
+    }
+}
+
+impl ConstBitLength for GameInstant {
+    fn const_bit_length() -> u32 {
+        <UnsignedInteger::<22> as ConstBitLength>::const_bit_length()
     }
 }
 

@@ -24,6 +24,7 @@ pub fn derive_serde_enum(
 
     let ser_method = get_ser_method(enum_, bits_needed);
     let de_method = get_de_method(enum_, bits_needed);
+    let bit_length_method = get_bit_length_method(enum_, bits_needed);
 
     let lowercase_enum_name = Ident::new(
         enum_name.to_string().to_lowercase().as_str(),
@@ -31,7 +32,7 @@ pub fn derive_serde_enum(
     );
     let module_name = format_ident!("define_{}", lowercase_enum_name);
 
-    let import_types = quote! { Serde, BitWrite, UnsignedInteger, BitReader, SerdeErr };
+    let import_types = quote! { Serde, BitWrite, UnsignedInteger, BitReader, SerdeErr, ConstBitLength, };
     let imports = quote! { use #serde_crate_name::{#import_types}; };
 
     quote! {
@@ -42,6 +43,7 @@ pub fn derive_serde_enum(
             impl Serde for #enum_name {
                 #ser_method
                 #de_method
+                #bit_length_method
             }
         }
     }
@@ -187,5 +189,85 @@ fn get_de_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
                 _ => return Err(SerdeErr)
             })
         }
+    }
+}
+
+fn get_bit_length_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
+    let mut bit_length = quote! {};
+    for (index, variant) in enum_.variants.iter().enumerate() {
+        let variant_name = &variant.ident;
+        let base = match &variant.fields {
+            Fields::Unit => {
+                quote! {
+                    Self::#variant_name => {
+                        output += <UnsignedInteger::<#bits_needed> as ConstBitLength>::const_bit_length();
+                    }
+                }
+            }
+            Fields::Named(fields) => {
+                let names: Vec<&Ident> = fields
+                    .named
+                    .iter()
+                    .map(|field| {
+                        field
+                            .ident
+                            .as_ref()
+                            .expect("expected field to have a name.")
+                    })
+                    .collect();
+                let left = quote! { Self::#variant_name{ #(#names),* } };
+                let mut right = quote! {
+                    output += <UnsignedInteger::<#bits_needed> as ConstBitLength>::const_bit_length();
+                };
+                for field in fields.named.iter() {
+                    let field_name = field
+                        .ident
+                        .as_ref()
+                        .expect("expected field to have a name.");
+                    right = quote! {
+                        #right
+                        output += #field_name.bit_length();
+                    }
+                }
+                quote! {
+                    #left => { #right }
+                }
+            }
+            Fields::Unnamed(fields) => {
+                let names: Vec<Ident> = fields
+                    .unnamed
+                    .iter()
+                    .enumerate()
+                    .map(|(i, _)| format_ident!("f{}", i))
+                    .collect();
+                let left = quote! { Self::#variant_name( #(#names),* ) };
+
+                let mut right = quote! {
+                    output += <UnsignedInteger::<#bits_needed> as ConstBitLength>::const_bit_length();
+                };
+                for field_name in names {
+                    right = quote! {
+                        #right
+                        output += #field_name.bit_length();
+                    }
+                }
+                quote! {
+                    #left => { #right }
+                }
+            }
+        };
+        bit_length = quote! {
+            #bit_length
+            #base
+        }
+    }
+    quote! {
+         fn bit_length(&self) -> u32 {
+            let mut output = 0;
+            match self {
+                #bit_length
+            }
+            output
+         }
     }
 }

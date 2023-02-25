@@ -1,6 +1,6 @@
 use std::{error::Error, hash::Hash};
 
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr, ConstBitLength};
 
 use crate::{
     bigmap::BigMapKey,
@@ -35,6 +35,10 @@ impl EntityProperty {
     }
 
     // Serialization / deserialization
+
+    pub fn bit_length(&self) -> u32 {
+        return <Option<NetEntity> as ConstBitLength>::const_bit_length();
+    }
 
     pub fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
         (*self.handle_prop)

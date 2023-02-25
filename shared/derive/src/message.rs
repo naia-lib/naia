@@ -28,6 +28,7 @@ pub fn message_impl(
     let clone_method = get_clone_method(&struct_name, &fields, &struct_type);
     let has_entity_properties_method = get_has_entity_properties_method(&fields);
     let entities_method = get_entities_method(&fields, &struct_type);
+    let bit_length_method = get_bit_length_method(&fields, &struct_type);
     let write_method = get_write_method(&fields, &struct_type);
     let create_builder_method = get_create_builder_method(&builder_name);
     let read_method = get_read_method(&struct_name, &fields, &struct_type);
@@ -38,7 +39,7 @@ pub fn message_impl(
             pub use std::any::Any;
             pub use #shared_crate_name::{
                 Named, EntityHandle, Message, BitWrite, NetEntityHandleConverter,
-                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr
+                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength
             };
             use super::*;
 
@@ -54,6 +55,7 @@ pub fn message_impl(
                 fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
                     self
                 }
+                #bit_length_method
                 #create_builder_method
                 #has_entity_properties_method
                 #entities_method
@@ -152,47 +154,6 @@ fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStrea
     }
 }
 
-fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
-    let mut field_writes = quote! {};
-
-    for (index, field) in fields.iter().enumerate() {
-        let field_name = get_field_name(field, index, struct_type);
-        let new_output_right = match field {
-            Field::Normal(_) => {
-                quote! {
-                    self.#field_name.ser(writer);
-                }
-            }
-            Field::EntityProperty(_) => {
-                quote! {
-                    EntityProperty::write(&self.#field_name, writer, converter);
-                }
-            }
-        };
-
-        let new_output_result = quote! {
-            #field_writes
-            #new_output_right
-        };
-        field_writes = new_output_result;
-    }
-
-    quote! {
-        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-            self.kind().ser(message_kinds, writer);
-            #field_writes
-        }
-    }
-}
-
-pub fn get_create_builder_method(builder_name: &Ident) -> TokenStream {
-    quote! {
-        fn create_builder() -> Box<dyn MessageBuilder> where Self:Sized {
-            Box::new(#builder_name)
-        }
-    }
-}
-
 pub fn get_read_method(
     struct_name: &Ident,
     fields: &[Field],
@@ -263,6 +224,82 @@ pub fn get_read_method(
             #field_reads
 
             return Ok(Box::new(#struct_build));
+        }
+    }
+}
+
+fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+    let mut field_writes = quote! {};
+
+    for (index, field) in fields.iter().enumerate() {
+        let field_name = get_field_name(field, index, struct_type);
+        let new_output_right = match field {
+            Field::Normal(_) => {
+                quote! {
+                    self.#field_name.ser(writer);
+                }
+            }
+            Field::EntityProperty(_) => {
+                quote! {
+                    EntityProperty::write(&self.#field_name, writer, converter);
+                }
+            }
+        };
+
+        let new_output_result = quote! {
+            #field_writes
+            #new_output_right
+        };
+        field_writes = new_output_result;
+    }
+
+    quote! {
+        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+            self.kind().ser(message_kinds, writer);
+            #field_writes
+        }
+    }
+}
+
+fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+    let mut field_bit_lengths = quote! {};
+
+    for (index, field) in fields.iter().enumerate() {
+        let field_name = get_field_name(field, index, struct_type);
+        let new_output_right = match field {
+            Field::Normal(_) => {
+                quote! {
+                    output += self.#field_name.bit_length();
+                }
+            }
+            Field::EntityProperty(_) => {
+                quote! {
+                    output += self.#field_name.bit_length();
+                }
+            }
+        };
+
+        let new_output_result = quote! {
+            #field_bit_lengths
+            #new_output_right
+        };
+        field_bit_lengths = new_output_result;
+    }
+
+    quote! {
+        fn bit_length(&self) -> u32 {
+            let mut output = 0;
+            output += <MessageKind as ConstBitLength>::const_bit_length();
+            #field_bit_lengths
+            output
+        }
+    }
+}
+
+pub fn get_create_builder_method(builder_name: &Ident) -> TokenStream {
+    quote! {
+        fn create_builder() -> Box<dyn MessageBuilder> where Self:Sized {
+            Box::new(#builder_name)
         }
     }
 }

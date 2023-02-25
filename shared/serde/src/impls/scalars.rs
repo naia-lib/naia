@@ -1,7 +1,8 @@
+
 use crate::{
     error::SerdeErr,
     reader_writer::{BitReader, BitWrite},
-    serde::Serde,
+    serde::{Serde, ConstBitLength},
 };
 
 // Unit //
@@ -11,6 +12,16 @@ impl Serde for () {
 
     fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
         Ok(())
+    }
+
+    fn bit_length(&self) -> u32 {
+        <() as ConstBitLength>::const_bit_length()
+    }
+}
+
+impl ConstBitLength for () {
+    fn const_bit_length() -> u32 {
+        0
     }
 }
 
@@ -52,6 +63,16 @@ impl Serde for bool {
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         reader.read_bit()
+    }
+
+    fn bit_length(&self) -> u32 {
+        <bool as ConstBitLength>::const_bit_length()
+    }
+}
+
+impl ConstBitLength for bool {
+    fn const_bit_length() -> u32 {
+        1
     }
 }
 
@@ -119,6 +140,16 @@ impl Serde for char {
         } else {
             Err(SerdeErr {})
         }
+    }
+
+    fn bit_length(&self) -> u32 {
+        <char as ConstBitLength>::const_bit_length()
+    }
+}
+
+impl ConstBitLength for char {
+    fn const_bit_length() -> u32 {
+        <[u8; 4] as ConstBitLength>::const_bit_length()
     }
 }
 
@@ -188,6 +219,16 @@ macro_rules! impl_serde_for {
                 }
                 Ok(container[0])
             }
+
+            fn bit_length(&self) -> u32 {
+                <$impl_type as ConstBitLength>::const_bit_length()
+            }
+        }
+        impl ConstBitLength for $impl_type {
+            fn const_bit_length() -> u32 {
+                const BYTES_LENGTH: u32 = std::mem::size_of::<$impl_type>() as u32;
+                return BYTES_LENGTH * 8;
+            }
         }
     };
 }
@@ -211,6 +252,16 @@ impl Serde for u8 {
     fn de(reader: &mut BitReader) -> Result<u8, SerdeErr> {
         reader.read_byte()
     }
+
+    fn bit_length(&self) -> u32 {
+        <u8 as ConstBitLength>::const_bit_length()
+    }
+}
+
+impl ConstBitLength for u8 {
+    fn const_bit_length() -> u32 {
+        8
+    }
 }
 
 // i8
@@ -231,6 +282,16 @@ impl Serde for i8 {
             )
         }
         Ok(container[0])
+    }
+
+    fn bit_length(&self) -> u32 {
+        <i8 as ConstBitLength>::const_bit_length()
+    }
+}
+
+impl ConstBitLength for i8 {
+    fn const_bit_length() -> u32 {
+        8
     }
 }
 
@@ -259,6 +320,16 @@ impl Serde for usize {
         }
         Ok(container[0] as usize)
     }
+
+    fn bit_length(&self) -> u32 {
+        <usize as ConstBitLength>::const_bit_length()
+    }
+}
+
+impl ConstBitLength for usize {
+    fn const_bit_length() -> u32 {
+        <[u8; 8] as ConstBitLength>::const_bit_length()
+    }
 }
 
 // isize
@@ -285,6 +356,16 @@ impl Serde for isize {
             )
         }
         Ok(container[0] as isize)
+    }
+
+    fn bit_length(&self) -> u32 {
+        <isize as ConstBitLength>::const_bit_length()
+    }
+}
+
+impl ConstBitLength for isize {
+    fn const_bit_length() -> u32 {
+        <[u8; 8] as ConstBitLength>::const_bit_length()
     }
 }
 

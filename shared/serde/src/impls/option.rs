@@ -3,6 +3,7 @@ use crate::{
     reader_writer::{BitReader, BitWrite},
     serde::Serde,
 };
+use crate::serde::ConstBitLength;
 
 impl<T: Serde> Serde for Option<T> {
     fn ser(&self, writer: &mut dyn BitWrite) {
@@ -20,6 +21,20 @@ impl<T: Serde> Serde for Option<T> {
         } else {
             Ok(None)
         }
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 1;
+        if let Some(value) = self {
+            output += value.bit_length();
+        }
+        output
+    }
+}
+
+impl<T: ConstBitLength> ConstBitLength for Option<T> {
+    fn const_bit_length() -> u32 {
+        return 1 + T::const_bit_length();
     }
 }
 

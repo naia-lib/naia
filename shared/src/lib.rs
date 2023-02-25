@@ -22,7 +22,7 @@ cfg_if! {
 pub use naia_derive::{
     Channel, Message, MessageBevy, MessageHecs, Replicate, ReplicateBevy, ReplicateHecs,
 };
-pub use naia_serde::{Serde, SerdeBevy, SerdeHecs, SerdeInternal};
+pub use naia_serde::{Serde, SerdeBevy, SerdeHecs, SerdeInternal, ConstBitLength};
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
 mod backends;

@@ -1,8 +1,4 @@
-use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
-};
+use crate::{ConstBitLength, error::SerdeErr, reader_writer::{BitReader, BitWrite}, serde::Serde};
 
 pub type UnsignedInteger<const BITS: u8> = SerdeInteger<false, false, BITS>;
 pub type SignedInteger<const BITS: u8> = SerdeInteger<true, false, BITS>;
@@ -163,6 +159,53 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
                 Ok(SerdeInteger::new_unchecked(value))
             }
         }
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output: u32 = 0;
+
+        if SIGNED {
+            output += 1;
+        }
+
+        if VARIABLE {
+            let mut proceed;
+            let mut value = self.inner.abs() as u128;
+            loop {
+                if value >= 2_u128.pow(BITS as u32) {
+                    proceed = true;
+                } else {
+                    proceed = false;
+                }
+                output += 1;
+
+                for _ in 0..BITS {
+                    output += 1;
+                    value >>= 1;
+                }
+                if !proceed {
+                    break;
+                }
+            }
+        } else {
+            output += BITS as u32;
+        }
+
+        output
+    }
+}
+
+impl<const SIGNED: bool, const BITS: u8> ConstBitLength for SerdeInteger<SIGNED, false, BITS> {
+    fn const_bit_length() -> u32 {
+        let mut output: u32 = 0;
+
+        if SIGNED {
+            output += 1;
+        }
+
+        output += BITS as u32;
+
+        output
     }
 }
 

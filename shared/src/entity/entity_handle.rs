@@ -23,4 +23,8 @@ impl Serde for EntityHandle {
     fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
         panic!("shouldn't call this");
     }
+
+    fn bit_length(&self) -> u32 {
+        panic!("shouldn't call this");
+    }
 }

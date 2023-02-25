@@ -25,6 +25,16 @@ impl<T: Serde> Serde for Vec<T> {
         }
         Ok(output)
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
+        output += length.bit_length();
+        for item in self {
+            output += item.bit_length();
+        }
+        output
+    }
 }
 
 impl<T: Serde> Serde for VecDeque<T> {
@@ -44,6 +54,16 @@ impl<T: Serde> Serde for VecDeque<T> {
             output.push_back(T::de(reader)?)
         }
         Ok(output)
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
+        output += length.bit_length();
+        for item in self {
+            output += item.bit_length();
+        }
+        output
     }
 }
 

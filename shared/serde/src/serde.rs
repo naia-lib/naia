@@ -10,4 +10,12 @@ pub trait Serde: Sized + Clone + PartialEq {
 
     /// Parse Self from a BitReader
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr>;
+
+    /// Return length of value in bits
+    fn bit_length(&self) -> u32;
 }
+
+pub trait ConstBitLength {
+    fn const_bit_length() -> u32;
+}
+

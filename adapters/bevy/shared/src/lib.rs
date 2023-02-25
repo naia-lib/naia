@@ -6,7 +6,7 @@ pub use naia_shared::{
     NetEntityHandleConverter, OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random,
     ReliableSettings, ReplicaDynMut, ReplicaDynRef, ReplicateBevy as Replicate, ReplicateBuilder,
     SerdeBevy as Serde, SerdeErr, Tick, TickBufferSettings, UnsignedInteger, WorldMutType,
-    WorldRefType,
+    WorldRefType, ConstBitLength,
 };
 
 mod component_access;

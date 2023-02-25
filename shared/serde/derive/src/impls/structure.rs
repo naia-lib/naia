@@ -10,6 +10,7 @@ pub fn derive_serde_struct(
 ) -> TokenStream {
     let mut ser_body = quote! {};
     let mut de_body = quote! {};
+    let mut bit_length_body = quote! {};
 
     for field in &struct_.fields {
         let field_name = field.ident.as_ref().expect("expected field to have a name");
@@ -21,6 +22,10 @@ pub fn derive_serde_struct(
             #de_body
             #field_name: Serde::de(reader)?,
         };
+        bit_length_body = quote! {
+            #bit_length_body
+            output += self.#field_name.bit_length();
+        };
     }
 
     let lowercase_struct_name = Ident::new(
@@ -29,7 +34,7 @@ pub fn derive_serde_struct(
     );
     let module_name = format_ident!("define_{}", lowercase_struct_name);
 
-    let import_types = quote! { Serde, BitWrite, BitReader, SerdeErr };
+    let import_types = quote! { Serde, BitWrite, ConstBitLength, BitReader, SerdeErr };
     let imports = quote! { use #serde_crate_name::{#import_types}; };
 
     quote! {
@@ -45,6 +50,11 @@ pub fn derive_serde_struct(
                         #de_body
                     })
                  }
+                fn bit_length(&self) -> u32 {
+                    let mut output = 0;
+                    #bit_length_body
+                    output
+                }
             }
         }
     }

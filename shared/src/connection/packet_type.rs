@@ -1,7 +1,7 @@
 // An enum representing the different types of packets that can be
 // sent/received
 
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, UnsignedInteger};
+use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger};
 
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub enum PacketType {
@@ -83,5 +83,20 @@ impl Serde for PacketType {
             10 => Ok(PacketType::Disconnect),
             _ => panic!("shouldn't happen, caught above"),
         }
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+
+        let is_data = *self == PacketType::Data;
+        output += is_data.bit_length();
+
+        if is_data {
+            return output;
+        }
+
+        output += <UnsignedInteger::<4> as ConstBitLength>::const_bit_length();
+
+        output
     }
 }
