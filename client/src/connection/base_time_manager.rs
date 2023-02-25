@@ -41,7 +41,7 @@ impl BaseTimeManager {
         ping_index.ser(&mut writer);
 
         // send packet
-        if io.send_writer(&mut writer).is_err() {
+        if io.send_packet(writer.to_packet()).is_err() {
             // TODO: pass this on and handle above
             warn!("Client Error: Cannot send ping packet to Server");
         }

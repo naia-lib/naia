@@ -735,8 +735,7 @@ pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Propert
 
             #prop_read_writes
 
-            let (length, buffer) = update_writer.flush();
-            let owned_reader = OwnedBitReader::new(&buffer[..length]);
+            let owned_reader = update_writer.to_owned_reader();
 
             return Ok(ComponentUpdate::new(ComponentKind::of::<#replica_name>(), owned_reader));
         }

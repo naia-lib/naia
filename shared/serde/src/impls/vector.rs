@@ -1,9 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
+    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde,
     UnsignedVariableInteger,
 };
 
@@ -72,7 +70,7 @@ impl<T: Serde> Serde for VecDeque<T> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        reader_writer::{BitReader, BitWriter},
+        bit_writer::{BitReader, BitWriter},
         serde::Serde,
     };
     use std::collections::VecDeque;

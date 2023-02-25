@@ -1,8 +1,5 @@
 use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
-    ConstBitLength,
+    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde, ConstBitLength,
 };
 
 pub type UnsignedInteger<const BITS: u8> = SerdeInteger<false, false, BITS>;
@@ -219,8 +216,8 @@ impl<const SIGNED: bool, const BITS: u8> ConstBitLength for SerdeInteger<SIGNED,
 #[cfg(test)]
 mod tests {
     use crate::{
+        bit_writer::{BitReader, BitWriter},
         integer::{SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger},
-        reader_writer::{BitReader, BitWriter},
         serde::Serde,
     };
 

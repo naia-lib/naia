@@ -1,6 +1,7 @@
 use crate::{
+    bit_reader::BitReader,
+    bit_writer::BitWrite,
     error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
     serde::{ConstBitLength, Serde},
 };
 
@@ -29,7 +30,7 @@ impl<T: ConstBitLength> ConstBitLength for Box<T> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        reader_writer::{BitReader, BitWriter},
+        bit_writer::{BitReader, BitWriter},
         serde::Serde,
     };
 

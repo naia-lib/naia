@@ -1,8 +1,5 @@
 use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
-    UnsignedInteger,
+    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde, UnsignedInteger,
 };
 
 impl Serde for String {
@@ -41,7 +38,7 @@ impl Serde for String {
 #[cfg(test)]
 mod tests {
     use crate::{
-        reader_writer::{BitReader, BitWriter},
+        bit_writer::{BitReader, BitWriter},
         serde::Serde,
     };
 

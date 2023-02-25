@@ -5,12 +5,13 @@ use naia_socket_shared::Instant;
 
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
+    constants::FRAGMENTATION_LIMIT_BITS,
     messages::{
         channel::ChannelSettings,
         channel_kinds::{ChannelKind, ChannelKinds},
-        constants::FRAGMENTATION_LIMIT_BITS,
         message_channel::{MessageChannelReceiver, MessageChannelSender},
         message_container::MessageContainer,
+        message_fragmenter::MessageFragmenter,
     },
     types::{HostType, MessageIndex, PacketIndex},
     Message, NetEntityHandleConverter, Protocol,
@@ -166,10 +167,13 @@ impl MessageManager {
             }
 
             // Now fragment this message ...
-            todo!();
+            let messages = MessageFragmenter::fragment(message);
+            for message_fragment in messages {
+                channel.send_message(message_fragment);
+            }
+        } else {
+            channel.send_message(message);
         }
-
-        channel.send_message(message);
     }
 
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {

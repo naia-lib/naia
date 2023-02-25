@@ -175,8 +175,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         };
 
         // send validate response
-        let mut writer = self.handshake_manager.write_validate_response();
-        if self.io.send_writer(&user.address, &mut writer).is_err() {
+        let writer = self.handshake_manager.write_validate_response();
+        if self
+            .io
+            .send_packet(&user.address, writer.to_packet())
+            .is_err()
+        {
             // TODO: pass this on and handle above
             warn!(
                 "Server Error: Cannot send validate response packet to {}",
@@ -202,8 +206,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         );
 
         // send connect response
-        let mut writer = self.handshake_manager.write_connect_response();
-        if self.io.send_writer(&user.address, &mut writer).is_err() {
+        let writer = self.handshake_manager.write_connect_response();
+        if self
+            .io
+            .send_packet(&user.address, writer.to_packet())
+            .is_err()
+        {
             // TODO: pass this on and handle above
             warn!(
                 "Server Error: Cannot send connect response packet to {}",
@@ -223,8 +231,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn reject_connection(&mut self, user_key: &UserKey) {
         if let Some(user) = self.users.get(user_key) {
             // send connect reject response
-            let mut writer = self.handshake_manager.write_reject_response();
-            match self.io.send_writer(&user.address, &mut writer) {
+            let writer = self.handshake_manager.write_reject_response();
+            match self.io.send_packet(&user.address, writer.to_packet()) {
                 Ok(()) => {}
                 Err(_) => {
                     // TODO: pass this on and handle above
@@ -948,7 +956,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.time_manager.current_tick_instant().ser(&mut writer);
 
                     // send packet
-                    if self.io.send_writer(user_address, &mut writer).is_err() {
+                    if self
+                        .io
+                        .send_packet(user_address, writer.to_packet())
+                        .is_err()
+                    {
                         // TODO: pass this on and handle above
                         warn!(
                             "Server Error: Cannot send heartbeat packet to {}",
@@ -986,7 +998,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .write_ping(&mut writer, &self.time_manager);
 
                     // send packet
-                    if self.io.send_writer(user_address, &mut writer).is_err() {
+                    if self
+                        .io
+                        .send_packet(user_address, writer.to_packet())
+                        .is_err()
+                    {
                         // TODO: pass this on and handle above
                         warn!("Server Error: Cannot send ping packet to {}", user_address);
                     }
@@ -1011,10 +1027,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     // Handshake stuff
                     match header.packet_type {
                         PacketType::ClientChallengeRequest => {
-                            if let Ok(mut writer) =
+                            if let Ok(writer) =
                                 self.handshake_manager.recv_challenge_request(&mut reader)
                             {
-                                if self.io.send_writer(&address, &mut writer).is_err() {
+                                if self.io.send_packet(&address, writer.to_packet()).is_err() {
                                     // TODO: pass this on and handle above
                                     warn!(
                                         "Server Error: Cannot send challenge response packet to {}",
@@ -1033,9 +1049,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 HandshakeResult::Success(auth_message_opt) => {
                                     if self.validated_users.contains_key(&address) {
                                         // send validate response
-                                        let mut writer =
+                                        let writer =
                                             self.handshake_manager.write_validate_response();
-                                        if self.io.send_writer(&address, &mut writer).is_err() {
+                                        if self
+                                            .io
+                                            .send_packet(&address, writer.to_packet())
+                                            .is_err()
+                                        {
                                             // TODO: pass this on and handle above
                                             warn!("Server Error: Cannot send validate success response packet to {}", &address);
                                         };
@@ -1057,9 +1077,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             continue;
                         }
                         PacketType::Ping => {
-                            let mut response = self.time_manager.process_ping(&mut reader).unwrap();
+                            let response = self.time_manager.process_ping(&mut reader).unwrap();
                             // send packet
-                            if self.io.send_writer(&address, &mut response).is_err() {
+                            if self.io.send_packet(&address, response.to_packet()).is_err() {
                                 // TODO: pass this on and handle above
                                 warn!("Server Error: Cannot send pong packet to {}", &address);
                             };
@@ -1071,8 +1091,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         PacketType::ClientConnectRequest => {
                             if self.user_connections.contains_key(&address) {
                                 // send connect response
-                                let mut writer = self.handshake_manager.write_connect_response();
-                                if self.io.send_writer(&address, &mut writer).is_err() {
+                                let writer = self.handshake_manager.write_connect_response();
+                                if self.io.send_packet(&address, writer.to_packet()).is_err() {
                                     // TODO: pass this on and handle above
                                     warn!("Server Error: Cannot send connect success response packet to {}", &address);
                                 };

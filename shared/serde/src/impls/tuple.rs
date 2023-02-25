@@ -1,8 +1,4 @@
-use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
-};
+use crate::{bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde};
 macro_rules! impl_reflect_tuple {
     {$($index:tt : $name:tt),*} => {
         impl<$($name : Serde,)*> Serde for ($($name,)*) {
@@ -39,7 +35,7 @@ impl_reflect_tuple! {0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J,
 #[cfg(test)]
 mod tests {
     use crate::{
-        reader_writer::{BitReader, BitWriter},
+        bit_writer::{BitReader, BitWriter},
         serde::Serde,
     };
 

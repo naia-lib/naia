@@ -22,7 +22,11 @@ cfg_if! {
 pub use naia_derive::{
     Channel, Message, MessageBevy, MessageHecs, Replicate, ReplicateBevy, ReplicateHecs,
 };
-pub use naia_serde::{ConstBitLength, Serde, SerdeBevy, SerdeHecs, SerdeInternal};
+pub use naia_serde::{
+    BitReader, BitWrite, BitWriter, ConstBitLength, OutgoingPacket, OwnedBitReader, Serde,
+    SerdeBevy, SerdeErr, SerdeHecs, SerdeInternal, UnsignedInteger, UnsignedVariableInteger,
+    MTU_SIZE_BITS, MTU_SIZE_BYTES,
+};
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
 mod backends;
@@ -93,10 +97,6 @@ pub use messages::{
     ordered_reliable_receiver::OrderedReliableReceiver,
     reliable_sender::ReliableSender,
     unordered_reliable_receiver::UnorderedReliableReceiver,
-};
-pub use naia_serde::{
-    BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, UnsignedInteger,
-    UnsignedVariableInteger,
 };
 
 pub use bigmap::{BigMap, BigMapKey};

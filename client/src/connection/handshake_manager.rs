@@ -92,15 +92,15 @@ impl HandshakeManager {
 
             match &mut self.connection_state {
                 HandshakeState::AwaitingChallengeResponse => {
-                    let mut writer = self.write_challenge_request();
-                    if io.send_writer(&mut writer).is_err() {
+                    let writer = self.write_challenge_request();
+                    if io.send_packet(writer.to_packet()).is_err() {
                         // TODO: pass this on and handle above
                         warn!("Client Error: Cannot send challenge request packet to Server");
                     }
                 }
                 HandshakeState::AwaitingValidateResponse => {
-                    let mut writer = self.write_validate_request(message_kinds);
-                    if io.send_writer(&mut writer).is_err() {
+                    let writer = self.write_validate_request(message_kinds);
+                    if io.send_packet(writer.to_packet()).is_err() {
                         // TODO: pass this on and handle above
                         warn!("Client Error: Cannot send validate request packet to Server");
                     }
@@ -111,8 +111,8 @@ impl HandshakeManager {
                     time_manager.send_ping(io);
                 }
                 HandshakeState::AwaitingConnectResponse(_) => {
-                    let mut writer = self.write_connect_request();
-                    if io.send_writer(&mut writer).is_err() {
+                    let writer = self.write_connect_request();
+                    if io.send_packet(writer.to_packet()).is_err() {
                         // TODO: pass this on and handle above
                         warn!("Client Error: Cannot send connect request packet to Server");
                     }

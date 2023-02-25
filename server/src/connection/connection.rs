@@ -236,15 +236,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
 
             // send packet
-            match io.send_writer(&self.base.address, &mut writer) {
-                Ok(()) => {}
-                Err(_) => {
-                    // TODO: pass this on and handle above
-                    warn!(
-                        "Server Error: Cannot send data packet to {}",
-                        &self.base.address
-                    );
-                }
+            if io
+                .send_packet(&self.base.address, writer.to_packet())
+                .is_err()
+            {
+                // TODO: pass this on and handle above
+                warn!(
+                    "Server Error: Cannot send data packet to {}",
+                    &self.base.address
+                );
             }
 
             return true;

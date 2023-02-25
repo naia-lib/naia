@@ -108,13 +108,10 @@ impl<E: Copy + Eq + Hash> Client<E> {
         }
 
         for _ in 0..10 {
-            let mut writer = self.handshake_manager.write_disconnect();
-            match self.io.send_writer(&mut writer) {
-                Ok(()) => {}
-                Err(_) => {
-                    // TODO: pass this on and handle above
-                    warn!("Client Error: Cannot send disconnect packet to Server");
-                }
+            let writer = self.handshake_manager.write_disconnect();
+            if self.io.send_packet(writer.to_packet()).is_err() {
+                // TODO: pass this on and handle above
+                warn!("Client Error: Cannot send disconnect packet to Server");
             }
         }
 
@@ -344,7 +341,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                     .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
                 // send packet
-                if self.io.send_writer(&mut writer).is_err() {
+                if self.io.send_packet(writer.to_packet()).is_err() {
                     // TODO: pass this on and handle above
                     warn!("Client Error: Cannot send heartbeat packet to Server");
                 }
@@ -430,7 +427,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                 ping_index.ser(&mut writer);
 
                                 // send packet
-                                if self.io.send_writer(&mut writer).is_err() {
+                                if self.io.send_packet(writer.to_packet()).is_err() {
                                     // TODO: pass this on and handle above
                                     warn!("Client Error: Cannot send pong packet to Server");
                                 }

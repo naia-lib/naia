@@ -3,7 +3,8 @@ use std::{net::SocketAddr, time::Duration};
 use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, ServerAddr};
 pub use naia_shared::{
     BandwidthMonitor, BitReader, BitWriter, CompressionConfig, ConnectionConfig, Decoder, Encoder,
-    PacketType, Replicate, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    OutgoingPacket, PacketType, Replicate, StandardHeader, Timer, Timestamp, WorldMutType,
+    WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::NaiaClientError;
@@ -61,10 +62,9 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_writer(&mut self, writer: &mut BitWriter) -> Result<(), NaiaClientSocketError> {
+    pub fn send_packet(&mut self, packet: OutgoingPacket) -> Result<(), NaiaClientSocketError> {
         // get payload
-        let (length, buffer) = writer.flush();
-        let mut payload = &buffer[0..length];
+        let mut payload = packet.slice();
 
         // Compression
         if let Some(encoder) = &mut self.outgoing_encoder {

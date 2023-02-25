@@ -6,6 +6,7 @@ pub mod indexed_message_writer;
 pub mod message;
 pub mod message_channel;
 pub mod message_container;
+mod message_fragmenter;
 pub mod message_kinds;
 pub mod message_manager;
 pub mod named;

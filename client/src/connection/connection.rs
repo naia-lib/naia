@@ -232,7 +232,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             }
 
             // send packet
-            if io.send_writer(&mut writer).is_err() {
+            if io.send_packet(writer.to_packet()).is_err() {
                 // TODO: pass this on and handle above
                 warn!("Client Error: Cannot send data packet to Server");
             }
