@@ -35,6 +35,23 @@ impl Default for SequencedReliableReceiver {
 
 impl SequencedReliableReceiver {
     // Private methods
+    fn incoming_messages_push(&mut self, message_index: MessageIndex, message: Box<dyn Message>) {
+
+        // TODO: if message is a Fragment, put it in a HashMap
+        // if all Fragments have arrived, take it out of the HashMap and then push into incoming messages
+        // only at that point should you increment the 'newest_received_message_index'
+        // if the newest_received_message_index is greater than the incoming fragment ... we've already received
+        // another full message further down the line, discard it
+
+        // note: fragmented messages compete to arrive first here
+
+        todo!(); connor
+
+        if !sequence_less_than(message_index, self.newest_received_message_index) {
+            self.newest_received_message_index = message_index;
+            self.incoming_messages.push((message_index, message));
+        }
+    }
 
     pub fn buffer_message(&mut self, message_index: MessageIndex, message: Box<dyn Message>) {
         // moving from oldest incoming message to newest
@@ -57,13 +74,7 @@ impl SequencedReliableReceiver {
                     if *old_message_index == message_index {
                         if !(*old_message) {
                             *old_message = true;
-                            if !sequence_less_than(
-                                *old_message_index,
-                                self.newest_received_message_index,
-                            ) {
-                                self.newest_received_message_index = *old_message_index;
-                                self.incoming_messages.push((*old_message_index, message));
-                            }
+                            self.incoming_messages_push(message_index, message);
                             return;
                         } else {
                             // already received this message
@@ -78,10 +89,7 @@ impl SequencedReliableReceiver {
 
                 if next_message_index == message_index {
                     self.record.push_back((next_message_index, true));
-                    if !sequence_less_than(message_index, self.newest_received_message_index) {
-                        self.newest_received_message_index = message_index;
-                        self.incoming_messages.push((message_index, message));
-                    }
+                    self.incoming_messages_push(message_index, message);
                     return;
                 } else {
                     self.record.push_back((next_message_index, false));

@@ -34,6 +34,13 @@ impl<P> Default for UnorderedReliableReceiver<P> {
 impl<P> UnorderedReliableReceiver<P> {
     // Private methods
 
+    fn incoming_messages_push(&mut self, message_index: MessageIndex, message: P) {
+        // TODO: if message is a Fragment, put it in a HashMap
+        // if all Fragments have arrived, take it out of the HashMap and then push into incoming messages
+        todo!(); connor
+        self.incoming_messages.push((message_index, message));
+    }
+
     pub fn buffer_message(&mut self, message_index: MessageIndex, message: P) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_index has been instantiated
@@ -55,7 +62,7 @@ impl<P> UnorderedReliableReceiver<P> {
                     if *old_message_index == message_index {
                         if !(*old_message) {
                             *old_message = true;
-                            self.incoming_messages.push((*old_message_index, message));
+                            self.incoming_messages_push(message_index, message);
                             return;
                         } else {
                             // already received this message
@@ -70,7 +77,7 @@ impl<P> UnorderedReliableReceiver<P> {
 
                 if next_message_index == message_index {
                     self.record.push_back((next_message_index, true));
-                    self.incoming_messages.push((message_index, message));
+                    self.incoming_messages_push(message_index, message);
                     return;
                 } else {
                     self.record.push_back((next_message_index, false));

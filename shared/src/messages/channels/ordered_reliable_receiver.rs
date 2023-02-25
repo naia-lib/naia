@@ -89,6 +89,10 @@ impl OrderedReliableReceiver {
             let mut has_message = false;
             if let Some((_, Some(_))) = self.incoming_messages.front() {
                 has_message = true;
+
+                // IF this is a FRAGMENT, check whether all subsequent fragments have been received
+                // before merging them all together and adding to outgoing list
+                todo!(); connor
             }
             if has_message {
                 let (_, message_opt) = self.incoming_messages.pop_front().unwrap();
