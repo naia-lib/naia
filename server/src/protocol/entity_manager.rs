@@ -9,9 +9,9 @@ use std::{
 
 use naia_shared::{
     wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength,
-    DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, Message, MessageIndex,
-    MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Serde,
-    UnsignedVariableInteger, WorldRefType,
+    DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer,
+    MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable,
+    Serde, UnsignedVariableInteger, WorldRefType,
 };
 
 use crate::sequence_list::SequenceList;
@@ -94,7 +94,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         &mut self,
         entities: Vec<E>,
         channel: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         self.world_channel
             .delayed_entity_messages

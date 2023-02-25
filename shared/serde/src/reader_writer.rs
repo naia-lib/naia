@@ -5,6 +5,8 @@ use crate::SerdeErr;
 pub trait BitWrite {
     fn write_bit(&mut self, bit: bool);
     fn write_byte(&mut self, byte: u8);
+    fn write_bits(&mut self, bits: u32);
+    fn is_counter(&self) -> bool;
 }
 
 // BitCounter
@@ -22,10 +24,6 @@ impl BitCounter {
     pub fn bits_needed(&self) -> u32 {
         self.current_bits - self.start_bits
     }
-
-    pub fn write_bits(&mut self, bits: u32) {
-        self.current_bits += bits;
-    }
 }
 
 impl BitWrite for BitCounter {
@@ -34,6 +32,12 @@ impl BitWrite for BitCounter {
     }
     fn write_byte(&mut self, _: u8) {
         self.current_bits += 8;
+    }
+    fn write_bits(&mut self, bits: u32) {
+        self.current_bits += bits;
+    }
+    fn is_counter(&self) -> bool {
+        true
     }
 }
 
@@ -131,6 +135,14 @@ impl BitWrite for BitWriter {
             self.write_bit(temp & 1 != 0);
             temp >>= 1;
         }
+    }
+
+    fn write_bits(&mut self, _: u32) {
+        panic!("This method should not be called for BitWriter!");
+    }
+
+    fn is_counter(&self) -> bool {
+        false
     }
 }
 

@@ -86,6 +86,7 @@ pub use messages::{
     default_channels,
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_channel::{ChannelReceiver, ChannelSender},
+    message_container::MessageContainer,
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     named::Named,

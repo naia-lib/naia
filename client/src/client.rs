@@ -9,11 +9,10 @@ use naia_client_socket::Socket;
 
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, PacketType, Protocol,
-    Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GameInstant, Message,
+    MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig,
+    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::{GameInstant, PingIndex};
 
 use crate::{
     connection::{
@@ -191,10 +190,13 @@ impl<E: Copy + Eq + Hash> Client<E> {
     /// Queues up an Message to be sent to the Server
     pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(&ChannelKind::of::<C>(), cloned_message);
+        self.send_message_inner(
+            &ChannelKind::of::<C>(),
+            MessageContainer::from(cloned_message),
+        );
     }
 
-    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
         if !channel_settings.can_send_to_server() {
             panic!("Cannot send message to Server on this Channel");
@@ -214,14 +216,18 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_tick_buffer_message_inner(tick, &ChannelKind::of::<C>(), cloned_message);
+        self.send_tick_buffer_message_inner(
+            tick,
+            &ChannelKind::of::<C>(),
+            MessageContainer::from(cloned_message),
+        );
     }
 
     fn send_tick_buffer_message_inner(
         &mut self,
         tick: &Tick,
         channel_kind: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 

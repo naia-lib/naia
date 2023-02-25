@@ -1,1 +1,1 @@
-
+pub const FRAGMENTATION_LIMIT_BITS: u32 = 400 * 8;

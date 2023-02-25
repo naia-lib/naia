@@ -15,8 +15,8 @@ use bevy_ecs::prelude::Resource;
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityDoesNotExistError, EntityHandle,
-    EntityHandleConverter, Instant, Message, PacketType, PropertyMutator, Protocol, Replicate,
-    Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    EntityHandleConverter, Instant, Message, MessageContainer, PacketType, PropertyMutator,
+    Protocol, Replicate, Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -245,7 +245,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// UserKey
     pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(user_key, &ChannelKind::of::<C>(), cloned_message);
+        self.send_message_inner(
+            user_key,
+            &ChannelKind::of::<C>(),
+            MessageContainer::from(cloned_message),
+        );
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -254,14 +258,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         user_key: &UserKey,
         channel_kind: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
-        if !self
-            .protocol
-            .channel_kinds
-            .channel(channel_kind)
-            .can_send_to_client()
-        {
+        let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
+
+        if !channel_settings.can_send_to_client() {
             panic!("Cannot send message to Client on this Channel");
         }
 
@@ -309,10 +310,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Sends a message to all connected users using a given channel
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.broadcast_message_inner(&ChannelKind::of::<C>(), cloned_message);
+        self.broadcast_message_inner(
+            &ChannelKind::of::<C>(),
+            MessageContainer::from(cloned_message),
+        );
     }
 
-    fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+    fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
         self.user_keys()
             .iter()
             .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
@@ -838,7 +842,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub(crate) fn room_broadcast_message(
         &mut self,
         channel_kind: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
         room_key: &RoomKey,
     ) {
         if let Some(room) = self.rooms.get(room_key) {

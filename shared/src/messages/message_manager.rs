@@ -6,7 +6,9 @@ use naia_socket_shared::Instant;
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
     messages::{
+        channel::ChannelSettings,
         channel_kinds::{ChannelKind, ChannelKinds},
+        constants::FRAGMENTATION_LIMIT_BITS,
         message_channel::{MessageChannelReceiver, MessageChannelSender},
         message_container::MessageContainer,
     },
@@ -29,6 +31,7 @@ use super::{
 pub struct MessageManager {
     channel_senders: HashMap<ChannelKind, Box<dyn MessageChannelSender>>,
     channel_receivers: HashMap<ChannelKind, Box<dyn MessageChannelReceiver>>,
+    channel_settings: HashMap<ChannelKind, ChannelSettings>,
     packet_to_message_map: HashMap<PacketIndex, Vec<(ChannelKind, Vec<MessageIndex>)>>,
 }
 
@@ -72,7 +75,9 @@ impl MessageManager {
                         )),
                     );
                 }
-                _ => {}
+                ChannelMode::TickBuffered(_) => {
+                    // Tick buffered channel uses another manager, skip
+                }
             };
         }
 
@@ -123,13 +128,22 @@ impl MessageManager {
                         Box::new(OrderedReliableReceiver::default()),
                     );
                 }
-                _ => {}
+                ChannelMode::TickBuffered(_) => {
+                    // Tick buffered channel uses another manager, skip
+                }
             };
+        }
+
+        // initialize settings
+        let mut channel_settings_map = HashMap::new();
+        for (channel_kind, channel_settings) in channel_kinds.channels() {
+            channel_settings_map.insert(channel_kind.clone(), channel_settings);
         }
 
         MessageManager {
             channel_senders,
             channel_receivers,
+            channel_settings: channel_settings_map,
             packet_to_message_map: HashMap::new(),
         }
     }
@@ -137,14 +151,25 @@ impl MessageManager {
     // Outgoing Messages
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn send_message(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+    pub fn send_message(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
         let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
             panic!("Channel not configured correctly! Cannot send message.");
         };
 
-        let message_container = MessageContainer::from(message);
+        let message_bit_length = message.bit_length();
+        if message_bit_length > FRAGMENTATION_LIMIT_BITS {
+            let Some(settings) = self.channel_settings.get(channel_kind) else {
+                panic!("Channel not configured correctly! Cannot send message.");
+            };
+            if !settings.reliable() {
+                panic!("ERROR: Attempting to send Message above the fragmentation size limit over an unreliable Message channel! Slim down the size of your Message, or send this Message through a reliable message channel.");
+            }
 
-        channel.send_message(message_container);
+            // Now fragment this message ...
+            todo!();
+        }
+
+        channel.send_message(message);
     }
 
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {

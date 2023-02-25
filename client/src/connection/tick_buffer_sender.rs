@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength, Message,
+    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength, MessageContainer,
     NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex,
     Tick,
 };
@@ -37,7 +37,7 @@ impl TickBufferSender {
         &mut self,
         host_tick: &Tick,
         channel_kind: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
             channel.send_message(host_tick, message);
