@@ -20,7 +20,7 @@ impl IndexedMessageWriter {
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
         let mut last_written_id: Option<MessageIndex> = None;
-        let mut message_indexs = Vec::new();
+        let mut message_indices = Vec::new();
 
         loop {
             if outgoing_messages.is_empty() {
@@ -64,13 +64,13 @@ impl IndexedMessageWriter {
                 message,
             );
 
-            message_indexs.push(*message_index);
+            message_indices.push(*message_index);
             last_written_id = Some(*message_index);
 
             // pop message we've written
             outgoing_messages.pop_front();
         }
-        Some(message_indexs)
+        Some(message_indices)
     }
 
     fn write_message(

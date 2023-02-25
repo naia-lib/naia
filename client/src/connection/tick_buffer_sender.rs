@@ -122,9 +122,9 @@ impl TickBufferSender {
 impl PacketNotifiable for TickBufferSender {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_channel_map.get(&packet_index) {
-            for (channel_index, message_indexs) in channel_list {
+            for (channel_index, message_indices) in channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_index) {
-                    for (tick, message_index) in message_indexs {
+                    for (tick, message_index) in message_indices {
                         channel.notify_message_delivered(tick, message_index);
                     }
                 }

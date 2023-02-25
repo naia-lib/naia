@@ -196,14 +196,14 @@ impl MessageManager {
             channel_index.ser(&protocol.channel_kinds, writer);
 
             // write Messages
-            if let Some(message_indexs) =
+            if let Some(message_indices) =
                 channel.write_messages(&protocol.message_kinds, converter, writer, has_written)
             {
                 self.packet_to_message_map
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
-                channel_list.push((channel_index.clone(), message_indexs));
+                channel_list.push((channel_index.clone(), message_indices));
             }
 
             // write MessageContinue finish bit, release
@@ -256,9 +256,9 @@ impl PacketNotifiable for MessageManager {
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
-            for (channel_index, message_indexs) in channel_list {
+            for (channel_index, message_indices) in channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_index) {
-                    for message_index in message_indexs {
+                    for message_index in message_indices {
                         channel.notify_message_delivered(message_index);
                     }
                 }

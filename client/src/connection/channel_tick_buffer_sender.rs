@@ -106,7 +106,7 @@ impl ChannelTickBufferSender {
             true.ser(writer);
 
             // write data
-            let message_indexs = self.write_message(
+            let message_indices = self.write_message(
                 message_kinds,
                 converter,
                 writer,
@@ -115,7 +115,7 @@ impl ChannelTickBufferSender {
                 &messages,
             );
             last_written_tick = *message_tick;
-            for message_index in message_indexs {
+            for message_index in message_indices {
                 output.push((*message_tick, message_index));
             }
 
@@ -136,7 +136,7 @@ impl ChannelTickBufferSender {
         message_tick: &Tick,
         messages: &Vec<(ShortMessageIndex, Box<dyn Message>)>,
     ) -> Vec<ShortMessageIndex> {
-        let mut message_indexs = Vec::new();
+        let mut message_indices = Vec::new();
 
         // write message tick diff
         // this is reversed (diff is always negative, but it's encoded as positive)
@@ -159,11 +159,11 @@ impl ChannelTickBufferSender {
             message.write(message_kinds, writer, converter);
 
             // record id for output
-            message_indexs.push(*message_index);
+            message_indices.push(*message_index);
             last_id_written = *message_index;
         }
 
-        message_indexs
+        message_indices
     }
 
     pub fn notify_message_delivered(&mut self, tick: &Tick, message_index: &ShortMessageIndex) {
