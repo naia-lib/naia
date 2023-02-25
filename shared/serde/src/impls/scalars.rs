@@ -15,7 +15,7 @@ impl Serde for () {
     }
 
     fn bit_length(&self) -> u32 {
-        <() as ConstBitLength>::const_bit_length()
+        <Self as ConstBitLength>::const_bit_length()
     }
 }
 
@@ -66,7 +66,7 @@ impl Serde for bool {
     }
 
     fn bit_length(&self) -> u32 {
-        <bool as ConstBitLength>::const_bit_length()
+        <Self as ConstBitLength>::const_bit_length()
     }
 }
 
@@ -143,7 +143,7 @@ impl Serde for char {
     }
 
     fn bit_length(&self) -> u32 {
-        <char as ConstBitLength>::const_bit_length()
+        <Self as ConstBitLength>::const_bit_length()
     }
 }
 
@@ -221,7 +221,7 @@ macro_rules! impl_serde_for {
             }
 
             fn bit_length(&self) -> u32 {
-                <$impl_type as ConstBitLength>::const_bit_length()
+                <Self as ConstBitLength>::const_bit_length()
             }
         }
         impl ConstBitLength for $impl_type {
@@ -254,7 +254,7 @@ impl Serde for u8 {
     }
 
     fn bit_length(&self) -> u32 {
-        <u8 as ConstBitLength>::const_bit_length()
+        <Self as ConstBitLength>::const_bit_length()
     }
 }
 
@@ -285,7 +285,7 @@ impl Serde for i8 {
     }
 
     fn bit_length(&self) -> u32 {
-        <i8 as ConstBitLength>::const_bit_length()
+        <Self as ConstBitLength>::const_bit_length()
     }
 }
 
@@ -322,13 +322,13 @@ impl Serde for usize {
     }
 
     fn bit_length(&self) -> u32 {
-        <usize as ConstBitLength>::const_bit_length()
+        <Self as ConstBitLength>::const_bit_length()
     }
 }
 
 impl ConstBitLength for usize {
     fn const_bit_length() -> u32 {
-        <[u8; 8] as ConstBitLength>::const_bit_length()
+        <u64 as ConstBitLength>::const_bit_length()
     }
 }
 
@@ -359,13 +359,13 @@ impl Serde for isize {
     }
 
     fn bit_length(&self) -> u32 {
-        <isize as ConstBitLength>::const_bit_length()
+        <Self as ConstBitLength>::const_bit_length()
     }
 }
 
 impl ConstBitLength for isize {
     fn const_bit_length() -> u32 {
-        <[u8; 8] as ConstBitLength>::const_bit_length()
+        <u64 as ConstBitLength>::const_bit_length()
     }
 }
 

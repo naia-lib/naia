@@ -1,11 +1,12 @@
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger};
 use naia_socket_shared::Instant;
 
-pub const GAME_TIME_LIMIT: u32 = 4194304; // 2^22
+const GAME_INSANT_BITS: u8 = 22;
+pub const GAME_TIME_LIMIT: u32 = 2 ^ (GAME_INSANT_BITS as u32); // 2^22
 const GAME_TIME_LIMIT_U128: u128 = GAME_TIME_LIMIT as u128;
-const GAME_TIME_MAX: u32 = 4194303; // 2^22 - 1
-const TIME_OFFSET_MAX: i32 = 2097151; // 2^21 - 1
-const TIME_OFFSET_MIN: i32 = -2097152; // 2^21 * -1
+const GAME_TIME_MAX: u32 = GAME_TIME_LIMIT - 1; // 2^22 - 1
+const TIME_OFFSET_MAX: i32 = (2 ^ ((GAME_INSANT_BITS - 1) as i32)) - 1; // 2^21 - 1
+const TIME_OFFSET_MIN: i32 = (2 ^ ((GAME_INSANT_BITS - 1) as i32)) * -1; // 2^21 * -1
 
 // GameInstant measures the # of milliseconds since the start of the Server
 // GameInstant wraps around at 2^22 milliseconds (around one hour)
@@ -108,24 +109,24 @@ impl GameInstant {
 
 impl Serde for GameInstant {
     fn ser(&self, writer: &mut dyn BitWrite) {
-        let integer = UnsignedInteger::<22>::new(self.millis as u64);
+        let integer = UnsignedInteger::<GAME_INSANT_BITS>::new(self.millis as u64);
         integer.ser(writer);
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let integer = UnsignedInteger::<22>::de(reader)?;
+        let integer = UnsignedInteger::<GAME_INSANT_BITS>::de(reader)?;
         let millis = integer.get() as u32;
         Ok(Self { millis })
     }
 
     fn bit_length(&self) -> u32 {
-        <GameInstant as ConstBitLength>::const_bit_length()
+        <Self as ConstBitLength>::const_bit_length()
     }
 }
 
 impl ConstBitLength for GameInstant {
     fn const_bit_length() -> u32 {
-        <UnsignedInteger<22> as ConstBitLength>::const_bit_length()
+        <UnsignedInteger<GAME_INSANT_BITS> as ConstBitLength>::const_bit_length()
     }
 }
 

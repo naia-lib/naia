@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
+use crate::messages::message_fragmenter::MessageFragmenter;
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
     constants::FRAGMENTATION_LIMIT_BITS,
@@ -11,7 +12,6 @@ use crate::{
         channel_kinds::{ChannelKind, ChannelKinds},
         message_channel::{MessageChannelReceiver, MessageChannelSender},
         message_container::MessageContainer,
-        message_fragmenter::BitFragmenter,
     },
     types::{HostType, MessageIndex, PacketIndex},
     Message, MessageKinds, NetEntityHandleConverter, Protocol,
@@ -34,6 +34,7 @@ pub struct MessageManager {
     channel_receivers: HashMap<ChannelKind, Box<dyn MessageChannelReceiver>>,
     channel_settings: HashMap<ChannelKind, ChannelSettings>,
     packet_to_message_map: HashMap<PacketIndex, Vec<(ChannelKind, Vec<MessageIndex>)>>,
+    message_fragmenter: MessageFragmenter,
 }
 
 impl MessageManager {
@@ -146,6 +147,7 @@ impl MessageManager {
             channel_receivers,
             channel_settings: channel_settings_map,
             packet_to_message_map: HashMap::new(),
+            message_fragmenter: MessageFragmenter::new(),
         }
     }
 
@@ -173,7 +175,9 @@ impl MessageManager {
             }
 
             // Now fragment this message ...
-            let messages = BitFragmenter::fragment_message(message_kinds, converter, message);
+            let messages =
+                self.message_fragmenter
+                    .fragment_message(message_kinds, converter, message);
             for message_fragment in messages {
                 channel.send_message(message_fragment);
             }
