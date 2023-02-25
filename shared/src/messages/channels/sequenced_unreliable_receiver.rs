@@ -3,13 +3,17 @@ use std::mem;
 use naia_serde::{BitReader, SerdeErr};
 
 use crate::{
-    messages::{message_channel::MessageChannelReceiver, message_kinds::MessageKinds},
+    messages::{
+        channels::{
+            indexed_message_reader::IndexedMessageReader,
+            message_channel::{ChannelReceiver, MessageChannelReceiver},
+        },
+        message_kinds::MessageKinds,
+    },
     sequence_greater_than,
     types::MessageIndex,
     Message, NetEntityHandleConverter,
 };
-
-use super::{indexed_message_reader::IndexedMessageReader, message_channel::ChannelReceiver};
 
 pub struct SequencedUnreliableReceiver {
     newest_received_message_index: Option<MessageIndex>,

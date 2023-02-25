@@ -5,14 +5,16 @@ use naia_socket_shared::Instant;
 
 use crate::{
     messages::{
-        indexed_message_writer::IndexedMessageWriter, message_channel::MessageChannelSender,
-        message_container::MessageContainer, message_kinds::MessageKinds,
+        channels::{
+            indexed_message_writer::IndexedMessageWriter,
+            message_channel::{ChannelSender, MessageChannelSender},
+        },
+        message_container::MessageContainer,
+        message_kinds::MessageKinds,
     },
     types::MessageIndex,
     NetEntityHandleConverter,
 };
-
-use super::message_channel::ChannelSender;
 
 // Sender
 pub struct ReliableSender<P: Send + Sync> {

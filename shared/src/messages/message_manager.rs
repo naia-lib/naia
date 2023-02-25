@@ -8,23 +8,24 @@ use crate::{
     connection::packet_notifiable::PacketNotifiable,
     constants::FRAGMENTATION_LIMIT_BITS,
     messages::{
-        channel::ChannelSettings,
-        channel_kinds::{ChannelKind, ChannelKinds},
-        message_channel::{MessageChannelReceiver, MessageChannelSender},
+        channels::{
+            channel::ChannelMode,
+            channel::ChannelSettings,
+            channel_kinds::{ChannelKind, ChannelKinds},
+            message_channel::{MessageChannelReceiver, MessageChannelSender},
+            ordered_reliable_receiver::OrderedReliableReceiver,
+            reliable_sender::ReliableSender,
+            sequenced_reliable_receiver::SequencedReliableReceiver,
+            sequenced_unreliable_receiver::SequencedUnreliableReceiver,
+            sequenced_unreliable_sender::SequencedUnreliableSender,
+            unordered_reliable_receiver::UnorderedReliableReceiver,
+            unordered_unreliable_receiver::UnorderedUnreliableReceiver,
+            unordered_unreliable_sender::UnorderedUnreliableSender,
+        },
         message_container::MessageContainer,
     },
     types::{HostType, MessageIndex, PacketIndex},
     Message, MessageKinds, NetEntityHandleConverter, Protocol,
-};
-
-use super::{
-    channel::ChannelMode, ordered_reliable_receiver::OrderedReliableReceiver,
-    reliable_sender::ReliableSender, sequenced_reliable_receiver::SequencedReliableReceiver,
-    sequenced_unreliable_receiver::SequencedUnreliableReceiver,
-    sequenced_unreliable_sender::SequencedUnreliableSender,
-    unordered_reliable_receiver::UnorderedReliableReceiver,
-    unordered_unreliable_receiver::UnorderedUnreliableReceiver,
-    unordered_unreliable_sender::UnorderedUnreliableSender,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages

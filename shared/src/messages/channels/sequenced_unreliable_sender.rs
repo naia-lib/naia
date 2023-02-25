@@ -5,8 +5,10 @@ use naia_socket_shared::Instant;
 
 use crate::{
     messages::{
-        indexed_message_writer::IndexedMessageWriter,
-        message_channel::{ChannelSender, MessageChannelSender},
+        channels::{
+            indexed_message_writer::IndexedMessageWriter,
+            message_channel::{ChannelSender, MessageChannelSender},
+        },
         message_container::MessageContainer,
         message_kinds::MessageKinds,
     },

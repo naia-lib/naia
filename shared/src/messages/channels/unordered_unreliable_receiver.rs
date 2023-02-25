@@ -3,11 +3,12 @@ use std::{collections::VecDeque, mem};
 use naia_serde::{BitReader, Serde, SerdeErr};
 
 use crate::{
-    messages::{message_channel::MessageChannelReceiver, message_kinds::MessageKinds},
+    messages::{
+        channels::message_channel::{ChannelReceiver, MessageChannelReceiver},
+        message_kinds::MessageKinds,
+    },
     Message, NetEntityHandleConverter,
 };
-
-use super::message_channel::ChannelReceiver;
 
 pub struct UnorderedUnreliableReceiver {
     incoming_messages: VecDeque<Box<dyn Message>>,

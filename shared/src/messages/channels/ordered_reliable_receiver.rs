@@ -3,13 +3,17 @@ use std::collections::VecDeque;
 use naia_serde::{BitReader, SerdeErr};
 
 use crate::{
-    messages::{message_channel::MessageChannelReceiver, message_kinds::MessageKinds},
+    messages::{
+        channels::{
+            indexed_message_reader::IndexedMessageReader,
+            message_channel::{ChannelReceiver, MessageChannelReceiver},
+        },
+        message_kinds::MessageKinds,
+    },
     types::MessageIndex,
     wrapping_number::sequence_less_than,
     Message, NetEntityHandleConverter,
 };
-
-use super::{indexed_message_reader::IndexedMessageReader, message_channel::ChannelReceiver};
 
 // OrderedReliableReceiver
 

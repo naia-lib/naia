@@ -85,18 +85,20 @@ pub use entity::{
     net_entity::NetEntity,
 };
 pub use messages::{
-    channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
-    channel_kinds::{ChannelKind, ChannelKinds},
-    default_channels,
+    channels::{
+        channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
+        channel_kinds::{ChannelKind, ChannelKinds},
+        default_channels,
+        message_channel::{ChannelReceiver, ChannelSender},
+        ordered_reliable_receiver::OrderedReliableReceiver,
+        reliable_sender::ReliableSender,
+        unordered_reliable_receiver::UnorderedReliableReceiver,
+    },
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
-    message_channel::{ChannelReceiver, ChannelSender},
     message_container::MessageContainer,
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     named::Named,
-    ordered_reliable_receiver::OrderedReliableReceiver,
-    reliable_sender::ReliableSender,
-    unordered_reliable_receiver::UnorderedReliableReceiver,
 };
 
 pub use bigmap::{BigMap, BigMapKey};

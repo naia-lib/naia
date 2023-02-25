@@ -2,7 +2,7 @@ use std::{any::TypeId, collections::HashMap};
 
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
-use crate::{messages::channel::ChannelSettings, Channel};
+use crate::messages::channels::channel::{Channel, ChannelSettings};
 
 type NetId = u16;
 

@@ -5,14 +5,13 @@ use naia_socket_shared::Instant;
 
 use crate::{
     messages::{
-        message_channel::MessageChannelSender, message_container::MessageContainer,
+        channels::message_channel::{ChannelSender, MessageChannelSender},
+        message_container::MessageContainer,
         message_kinds::MessageKinds,
     },
     types::MessageIndex,
     NetEntityHandleConverter,
 };
-
-use super::message_channel::ChannelSender;
 
 pub struct UnorderedUnreliableSender {
     outgoing_messages: VecDeque<MessageContainer>,
