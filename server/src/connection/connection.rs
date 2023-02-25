@@ -8,7 +8,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    HostType, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldRefType,
+    HostType, Instant, MessageKinds, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick,
+    WorldRefType,
 };
 
 use crate::{
@@ -123,7 +124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         time_manager: &TimeManager,
         rtt_millis: &f32,
     ) {
-        self.collect_outgoing_messages(now, rtt_millis);
+        self.collect_outgoing_messages(now, rtt_millis, &protocol.message_kinds, world_record);
 
         let mut any_sent = false;
         loop {
@@ -138,10 +139,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
     }
 
-    fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+    fn collect_outgoing_messages(
+        &mut self,
+        now: &Instant,
+        rtt_millis: &f32,
+        message_kinds: &MessageKinds,
+        world_record: &WorldRecord<E>,
+    ) {
         self.entity_manager.collect_outgoing_messages(
             now,
             rtt_millis,
+            world_record,
+            message_kinds,
             &mut self.base.message_manager,
         );
         self.base

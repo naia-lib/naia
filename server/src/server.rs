@@ -14,9 +14,10 @@ use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
-    BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityDoesNotExistError, EntityHandle,
-    EntityHandleConverter, Instant, Message, MessageContainer, PacketType, PropertyMutator,
-    Protocol, Replicate, Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, Message,
+    MessageContainer, PacketType, PropertyMutator, Protocol, Replicate, Serde, StandardHeader,
+    Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -292,10 +293,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
-                        connection
-                            .base
-                            .message_manager
-                            .send_message(channel_kind, message);
+                        let converter =
+                            EntityConverter::new(&self.world_record, &connection.entity_manager);
+                        connection.base.message_manager.send_message(
+                            &self.protocol.message_kinds,
+                            &converter,
+                            channel_kind,
+                            message,
+                        );
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
@@ -306,10 +311,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         );
                     }
                 } else {
-                    connection
-                        .base
-                        .message_manager
-                        .send_message(channel_kind, message);
+                    let converter =
+                        EntityConverter::new(&self.world_record, &connection.entity_manager);
+                    connection.base.message_manager.send_message(
+                        &self.protocol.message_kinds,
+                        &converter,
+                        channel_kind,
+                        message,
+                    );
                 }
             }
         }

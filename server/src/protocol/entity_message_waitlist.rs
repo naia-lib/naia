@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{ChannelKind, KeyGenerator, MessageContainer, MessageManager};
+use naia_shared::{ChannelKind, KeyGenerator, MessageContainer};
 
 type MessageHandle = u16;
 
@@ -102,9 +102,7 @@ impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
         self.in_scope_entities.remove(entity);
     }
 
-    pub fn collect_ready_messages(&mut self, message_manager: &mut MessageManager) {
-        for (channel, message) in self.ready_messages.drain(..) {
-            message_manager.send_message(&channel, message);
-        }
+    pub fn collect_ready_messages(&mut self) -> Vec<(ChannelKind, MessageContainer)> {
+        std::mem::replace(&mut self.ready_messages, Vec::new())
     }
 }

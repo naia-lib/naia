@@ -10,8 +10,8 @@ use std::{
 use naia_shared::{
     wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength,
     DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer,
-    MessageIndex, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable,
-    Serde, UnsignedVariableInteger, WorldRefType,
+    MessageIndex, MessageKinds, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
+    PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType,
 };
 
 use crate::sequence_list::SequenceList;
@@ -107,11 +107,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
+        world_record: &WorldRecord<E>,
+        message_kinds: &MessageKinds,
         message_manager: &mut MessageManager,
     ) {
-        self.world_channel
+        let messages = self
+            .world_channel
             .delayed_entity_messages
-            .collect_ready_messages(message_manager);
+            .collect_ready_messages();
+        let converter = EntityConverter::new(world_record, self);
+        for (channel_kind, message) in messages {
+            message_manager.send_message(message_kinds, &converter, &channel_kind, message);
+        }
 
         self.collect_dropped_update_packets(rtt_millis);
 

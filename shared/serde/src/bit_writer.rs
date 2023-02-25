@@ -45,29 +45,28 @@ impl BitWriter {
         }
     }
 
-    fn flush<const M: usize>(mut self) -> (usize, [u8; M]) {
+    fn finalize(&mut self) {
         if self.scratch_index > 0 {
             self.buffer[self.buffer_index] =
                 (self.scratch << (8 - self.scratch_index)).reverse_bits();
             self.buffer_index += 1;
         }
-
-        let output_length = self.buffer_index;
-
-        let mut output_buffer = [0; M];
-        output_buffer.clone_from_slice(&self.buffer[0..M]);
-
-        (output_length, output_buffer)
+        self.max_bits = 0;
     }
 
-    pub fn to_packet(self) -> OutgoingPacket {
-        let (payload_length, payload) = self.flush::<MTU_SIZE_BYTES>();
-        OutgoingPacket::new(payload_length, payload)
+    pub fn to_vec(mut self) -> Vec<u8> {
+        self.finalize();
+        Vec::from(&self.buffer[0..self.buffer_index])
     }
 
-    pub fn to_owned_reader(self) -> OwnedBitReader {
-        let (payload_length, payload) = self.flush::<MTU_SIZE_BYTES>();
-        OwnedBitReader::new(&payload[0..payload_length])
+    pub fn to_packet(mut self) -> OutgoingPacket {
+        self.finalize();
+        OutgoingPacket::new(self.buffer_index, self.buffer)
+    }
+
+    pub fn to_owned_reader(mut self) -> OwnedBitReader {
+        self.finalize();
+        OwnedBitReader::new(&self.buffer[0..self.buffer_index])
     }
 
     pub fn counter(&self) -> BitCounter {
@@ -140,7 +139,7 @@ mod tests {
 
         writer.write_bit(true);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
@@ -160,7 +159,7 @@ mod tests {
         writer.write_bit(true);
         writer.write_bit(true);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
@@ -188,7 +187,7 @@ mod tests {
         writer.write_bit(false);
         writer.write_bit(false);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
@@ -229,7 +228,7 @@ mod tests {
 
         writer.write_bit(true);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
@@ -280,7 +279,7 @@ mod tests {
         writer.write_bit(true);
         writer.write_bit(true);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
@@ -316,7 +315,7 @@ mod tests {
 
         writer.write_byte(123);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 
@@ -338,7 +337,7 @@ mod tests {
         writer.write_byte(34);
         writer.write_byte(2);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         let mut reader = BitReader::new(&buffer[..buffer_length]);
 

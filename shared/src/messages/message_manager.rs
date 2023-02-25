@@ -11,10 +11,10 @@ use crate::{
         channel_kinds::{ChannelKind, ChannelKinds},
         message_channel::{MessageChannelReceiver, MessageChannelSender},
         message_container::MessageContainer,
-        message_fragmenter::MessageFragmenter,
+        message_fragmenter::BitFragmenter,
     },
     types::{HostType, MessageIndex, PacketIndex},
-    Message, NetEntityHandleConverter, Protocol,
+    Message, MessageKinds, NetEntityHandleConverter, Protocol,
 };
 
 use super::{
@@ -152,7 +152,13 @@ impl MessageManager {
     // Outgoing Messages
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn send_message(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
+    pub fn send_message(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &dyn NetEntityHandleConverter,
+        channel_kind: &ChannelKind,
+        message: MessageContainer,
+    ) {
         let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
             panic!("Channel not configured correctly! Cannot send message.");
         };
@@ -167,7 +173,7 @@ impl MessageManager {
             }
 
             // Now fragment this message ...
-            let messages = MessageFragmenter::fragment(message);
+            let messages = BitFragmenter::fragment_message(message_kinds, converter, message);
             for message_fragment in messages {
                 channel.send_message(message_fragment);
             }

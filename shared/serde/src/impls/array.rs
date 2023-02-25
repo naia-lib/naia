@@ -78,7 +78,7 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         // Read
 

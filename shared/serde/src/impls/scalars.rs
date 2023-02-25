@@ -43,7 +43,7 @@ mod unit_tests {
 
         in_unit.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         // Read
         let mut reader = BitReader::new(&buffer[..buffer_length]);
@@ -96,7 +96,7 @@ mod bool_tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         // Read
 
@@ -173,7 +173,7 @@ mod char_tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let (buffer_length, buffer) = writer.to_bytes();
 
         // Read
 

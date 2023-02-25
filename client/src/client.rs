@@ -204,10 +204,12 @@ impl<E: Copy + Eq + Hash> Client<E> {
         }
 
         if let Some(connection) = &mut self.server_connection {
-            connection
-                .base
-                .message_manager
-                .send_message(channel_kind, message);
+            connection.base.message_manager.send_message(
+                &self.protocol.message_kinds,
+                &connection.entity_manager,
+                channel_kind,
+                message,
+            );
         }
     }
 

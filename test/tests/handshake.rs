@@ -26,7 +26,7 @@ fn end_to_end_handshake_w_auth() {
     // 1. Client send challenge request
     {
         writer = client.write_challenge_request();
-        let (length, buffer) = writer.flush();
+        let (length, buffer) = writer.to_bytes();
         message_length = length;
         message_buffer = buffer;
     }
@@ -40,7 +40,7 @@ fn end_to_end_handshake_w_auth() {
 
     // 3. Server send challenge response
     {
-        let (length, buffer) = writer.flush();
+        let (length, buffer) = writer.to_bytes();
         message_length = length;
         message_buffer = buffer;
     }
@@ -59,7 +59,7 @@ fn end_to_end_handshake_w_auth() {
     // 5. Client send connect request
     {
         writer = client.write_validate_request(&message_kinds);
-        let (length, buffer) = writer.flush();
+        let (length, buffer) = writer.to_bytes();
         message_length = length;
         message_buffer = buffer;
     }
@@ -95,7 +95,7 @@ fn end_to_end_handshake_w_auth() {
         let header = StandardHeader::new(PacketType::ServerValidateResponse, 0, 0, 0);
         writer = BitWriter::new();
         header.ser(&mut writer);
-        let (length, buffer) = writer.flush();
+        let (length, buffer) = writer.to_bytes();
         message_length = length;
         message_buffer = buffer;
     }
