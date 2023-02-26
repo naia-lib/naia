@@ -14,16 +14,14 @@ pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
     entity_channels: HashMap<E, EntityChannel<E>>,
 }
 
-impl<E: Copy + Hash + Eq> Default for EntityActionReceiver<E> {
-    fn default() -> Self {
+impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
+    pub fn new() -> Self {
         Self {
-            receiver: UnorderedReliableReceiver::default(),
+            receiver: UnorderedReliableReceiver::new(),
             entity_channels: HashMap::default(),
         }
     }
-}
 
-impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
     /// Buffer a read [`EntityAction`] so that it can be processed later
     pub fn buffer_action(&mut self, action_index: ActionIndex, action: EntityAction<E>) {
         self.receiver.buffer_message(action_index, action)

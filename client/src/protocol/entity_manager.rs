@@ -25,7 +25,7 @@ impl<E: Copy + Eq + Hash> Default for EntityManager<E> {
             entity_records: HashMap::default(),
             local_to_world_entity: HashMap::default(),
             handle_entity_map: BigMap::default(),
-            receiver: EntityActionReceiver::default(),
+            receiver: EntityActionReceiver::new(),
             received_components: HashMap::default(),
         }
     }

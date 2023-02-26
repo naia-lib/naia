@@ -5,6 +5,7 @@ pub mod indexed_message_reader;
 pub mod indexed_message_writer;
 pub mod message_channel;
 pub mod ordered_reliable_receiver;
+mod reliable_receiver;
 pub mod reliable_sender;
 pub mod sequenced_reliable_receiver;
 pub mod sequenced_unreliable_receiver;

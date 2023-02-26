@@ -116,19 +116,19 @@ impl MessageManager {
                 ChannelMode::UnorderedReliable(_) => {
                     channel_receivers.insert(
                         channel_kind.clone(),
-                        Box::new(UnorderedReliableReceiver::default()),
+                        Box::new(UnorderedReliableReceiver::new()),
                     );
                 }
                 ChannelMode::SequencedReliable(_) => {
                     channel_receivers.insert(
                         channel_kind.clone(),
-                        Box::new(SequencedReliableReceiver::default()),
+                        Box::new(SequencedReliableReceiver::new()),
                     );
                 }
                 ChannelMode::OrderedReliable(_) => {
                     channel_receivers.insert(
                         channel_kind.clone(),
-                        Box::new(OrderedReliableReceiver::default()),
+                        Box::new(OrderedReliableReceiver::new()),
                     );
                 }
                 ChannelMode::TickBuffered(_) => {
