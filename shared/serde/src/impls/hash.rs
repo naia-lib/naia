@@ -77,7 +77,8 @@ impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        bit_writer::{BitReader, BitWriter},
+        bit_reader::BitReader,
+        bit_writer::BitWriter,
         serde::Serde,
     };
     use std::collections::{HashMap, HashSet};
@@ -101,11 +102,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.to_bytes();
+        let buffer = writer.to_bytes();
 
-        // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = HashMap::<i32, String>::de(&mut reader).unwrap();
         let out_2 = HashMap::<u16, bool>::de(&mut reader).unwrap();
@@ -133,11 +133,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.to_bytes();
+        let buffer = writer.to_bytes();
 
-        // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = HashSet::<i32>::de(&mut reader).unwrap();
         let out_2 = HashSet::<u16>::de(&mut reader).unwrap();

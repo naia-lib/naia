@@ -35,7 +35,8 @@ impl_reflect_tuple! {0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J,
 #[cfg(test)]
 mod tests {
     use crate::{
-        bit_writer::{BitReader, BitWriter},
+        bit_reader::BitReader,
+bit_writer::BitWriter,
         serde::Serde,
     };
 
@@ -55,11 +56,10 @@ mod tests {
         in_3.ser(&mut writer);
         in_4.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.to_bytes();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();

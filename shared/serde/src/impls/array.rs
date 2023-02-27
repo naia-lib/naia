@@ -63,7 +63,8 @@ impl<T: ConstBitLength, const N: usize> ConstBitLength for [T; N] {
 #[cfg(test)]
 mod tests {
     use crate::{
-        bit_writer::{BitReader, BitWriter},
+        bit_reader::BitReader,
+        bit_writer::BitWriter,
         serde::Serde,
     };
 
@@ -78,11 +79,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.to_bytes();
+        let buffer = writer.to_bytes();
 
-        // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_1: [i32; 4] = Serde::de(&mut reader).unwrap();
         let out_2: [bool; 3] = Serde::de(&mut reader).unwrap();

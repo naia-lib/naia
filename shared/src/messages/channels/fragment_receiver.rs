@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use log::info;
 
 use naia_serde::BitReader;
 
@@ -43,9 +44,10 @@ impl FragmentReceiver {
         let fragment_id = fragment.id();
         let fragment_index = fragment.index();
         let fragment_total = fragment.total().as_usize();
+        info!("fragment_total: {fragment_total}");
         if !self.map.contains_key(&fragment_id) {
             self.map
-                .insert(fragment_id, (0, Vec::with_capacity(fragment_total)));
+                .insert(fragment_id, (0, vec![Vec::new(); fragment_total]));
         }
         let (fragments_received, fragment_list) = self.map.get_mut(&fragment_id).unwrap();
         fragment_list[fragment_index.as_usize()] = fragment.to_payload();

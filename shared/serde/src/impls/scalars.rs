@@ -30,7 +30,8 @@ impl ConstBitLength for () {
 #[cfg(test)]
 mod unit_tests {
     use crate::{
-        bit_writer::{BitReader, BitWriter},
+        bit_reader::BitReader,
+        bit_writer::BitWriter,
         serde::Serde,
     };
 
@@ -43,10 +44,10 @@ mod unit_tests {
 
         in_unit.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.to_bytes();
+        let buffer = writer.to_bytes();
 
-        // Read
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_unit = Serde::de(&mut reader).unwrap();
 
@@ -81,7 +82,8 @@ impl ConstBitLength for bool {
 #[cfg(test)]
 mod bool_tests {
     use crate::{
-        bit_writer::{BitReader, BitWriter},
+        bit_reader::BitReader,
+bit_writer::BitWriter,
         serde::Serde,
     };
 
@@ -96,11 +98,10 @@ mod bool_tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.to_bytes();
+        let buffer = writer.to_bytes();
 
-        // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();
@@ -158,7 +159,8 @@ impl ConstBitLength for char {
 #[cfg(test)]
 mod char_tests {
     use crate::{
-        bit_writer::{BitReader, BitWriter},
+        bit_reader::BitReader,
+bit_writer::BitWriter,
         serde::Serde,
     };
 
@@ -173,11 +175,10 @@ mod char_tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.to_bytes();
+        let buffer = writer.to_bytes();
 
-        // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();
@@ -376,7 +377,8 @@ macro_rules! test_serde_for {
         #[test]
         fn $test_name() {
             use crate::{
-                reader_writer::{BitReader, BitWriter},
+                bit_reader::BitReader,
+                bit_writer::BitWriter,
                 serde::Serde,
             };
 
@@ -387,10 +389,10 @@ macro_rules! test_serde_for {
 
             in_1.ser(&mut writer);
 
-            let (buffer_length, buffer) = writer.flush();
+            let buffer = writer.to_bytes();
 
-            // Read
-            let mut reader = BitReader::new(&buffer[..buffer_length]);
+            //Read
+            let mut reader = BitReader::new(&buffer);
 
             let out_1 = Serde::de(&mut reader).unwrap();
 

@@ -70,7 +70,8 @@ impl<T: Serde> Serde for VecDeque<T> {
 #[cfg(test)]
 mod tests {
     use crate::{
-        bit_writer::{BitReader, BitWriter},
+        bit_reader::BitReader,
+bit_writer::BitWriter,
         serde::Serde,
     };
     use std::collections::VecDeque;
@@ -86,11 +87,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.to_bytes();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1: Vec<i32> = Serde::de(&mut reader).unwrap();
         let out_2: Vec<bool> = Serde::de(&mut reader).unwrap();
@@ -123,11 +123,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.to_bytes();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1: VecDeque<i32> = Serde::de(&mut reader).unwrap();
         let out_2: VecDeque<bool> = Serde::de(&mut reader).unwrap();
