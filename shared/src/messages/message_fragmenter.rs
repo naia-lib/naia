@@ -1,4 +1,4 @@
-use naia_derive::MessageInternal;
+use naia_derive::MessageFragment;
 use naia_serde::{
     BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr, UnsignedInteger,
 };
@@ -189,7 +189,7 @@ impl BitWrite for FragmentWriter {
     }
 }
 
-#[derive(MessageInternal)]
+#[derive(MessageFragment)]
 pub struct FragmentedMessage {
     id: FragmentId,
     index: FragmentIndex,

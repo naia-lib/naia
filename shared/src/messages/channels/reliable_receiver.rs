@@ -5,6 +5,7 @@ use naia_serde::{BitReader, SerdeErr};
 use crate::{
     messages::{
         channels::{
+            fragment_receiver::{FragmentReceiver, IsFragment},
             indexed_message_reader::IndexedMessageReader,
             message_channel::{ChannelReceiver, MessageChannelReceiver},
         },
@@ -31,21 +32,27 @@ pub struct ReliableReceiver<A: ReceiverArranger<M>, M> {
     record: VecDeque<(MessageIndex, bool)>,
     incoming_messages: Vec<(MessageIndex, M)>,
     arranger: A,
+    fragment_receiver: FragmentReceiver,
 }
 
-impl<A: ReceiverArranger<M>, M> ReliableReceiver<A, M> {
+impl<A: ReceiverArranger<M>, M: IsFragment> ReliableReceiver<A, M> {
     pub fn with_arranger(arranger: A) -> Self {
         Self {
             oldest_received_message_index: 0,
             record: VecDeque::default(),
             incoming_messages: Vec::default(),
             arranger,
+            fragment_receiver: FragmentReceiver::new(),
         }
     }
 
     fn push_message(&mut self, message_index: MessageIndex, message: M) {
-        self.arranger
-            .process(&mut self.incoming_messages, message_index, message);
+        if let Some((first_index, full_message)) =
+            self.fragment_receiver.receive(message_index, message)
+        {
+            self.arranger
+                .process(&mut self.incoming_messages, first_index, full_message);
+        }
     }
 
     pub fn buffer_message(&mut self, message_index: MessageIndex, message: M) {
@@ -124,7 +131,9 @@ impl<A: ReceiverArranger<M>, M> ReliableReceiver<A, M> {
     }
 }
 
-impl<A: ReceiverArranger<M>, M: Send + Sync> ChannelReceiver<M> for ReliableReceiver<A, M> {
+impl<A: ReceiverArranger<M>, M: Send + Sync + IsFragment> ChannelReceiver<M>
+    for ReliableReceiver<A, M>
+{
     fn receive_messages(&mut self) -> Vec<M> {
         self.receive_messages()
             .drain(..)

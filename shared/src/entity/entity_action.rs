@@ -1,4 +1,7 @@
-use crate::component::component_kinds::ComponentKind;
+use crate::{
+    component::component_kinds::ComponentKind,
+    messages::{channels::fragment_receiver::IsFragment, message_fragmenter::FragmentedMessage},
+};
 
 pub enum EntityAction<E: Copy> {
     SpawnEntity(E, Vec<ComponentKind>),
@@ -17,5 +20,15 @@ impl<E: Copy> EntityAction<E> {
             EntityAction::RemoveComponent(entity, _) => Some(*entity),
             EntityAction::Noop => None,
         }
+    }
+}
+
+impl<E: Copy> IsFragment for EntityAction<E> {
+    fn is_fragment(&self) -> bool {
+        false
+    }
+
+    fn to_fragment(self) -> Option<FragmentedMessage> {
+        None
     }
 }

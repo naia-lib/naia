@@ -1,11 +1,14 @@
 use crate::{
-    messages::channels::reliable_receiver::{ReceiverArranger, ReliableReceiver},
+    messages::channels::{
+        fragment_receiver::IsFragment,
+        reliable_receiver::{ReceiverArranger, ReliableReceiver},
+    },
     types::MessageIndex,
 };
 
 pub type UnorderedReliableReceiver<M> = ReliableReceiver<UnorderedArranger, M>;
 
-impl<M> UnorderedReliableReceiver<M> {
+impl<M: IsFragment> UnorderedReliableReceiver<M> {
     pub fn new() -> Self {
         Self::with_arranger(UnorderedArranger)
     }
@@ -21,9 +24,6 @@ impl<M> ReceiverArranger<M> for UnorderedArranger {
         message_index: MessageIndex,
         message: M,
     ) {
-        // TODO: if message is a Fragment, put it in a HashMap
-        // if all Fragments have arrived, take it out of the HashMap and then push into incoming messages
-        todo!(); // connor
         incoming_messages.push((message_index, message));
     }
 }

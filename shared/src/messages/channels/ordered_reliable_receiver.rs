@@ -1,14 +1,17 @@
 use std::collections::VecDeque;
 
 use crate::{
-    messages::channels::reliable_receiver::{ReceiverArranger, ReliableReceiver},
+    messages::channels::{
+        fragment_receiver::IsFragment,
+        reliable_receiver::{ReceiverArranger, ReliableReceiver},
+    },
     types::MessageIndex,
 };
 
 // OrderedReliableReceiver
 pub type OrderedReliableReceiver<M> = ReliableReceiver<OrderedArranger<M>, M>;
 
-impl<M: Send + Sync> OrderedReliableReceiver<M> {
+impl<M: Send + Sync + IsFragment> OrderedReliableReceiver<M> {
     pub fn new() -> Self {
         Self::with_arranger(OrderedArranger::<M> {
             oldest_received_message_index: 0,
@@ -69,10 +72,6 @@ impl<M: Send + Sync> ReceiverArranger<M> for OrderedArranger<M> {
             let Some((index, Some(message))) = self.buffer.pop_front() else {
                 panic!("shouldn't be possible due to above check");
             };
-
-            // IF this is a FRAGMENT, check whether all subsequent fragments have been received
-            // before merging them all together and adding to outgoing list
-            todo!(); // connor
 
             incoming_messages.push((index, message));
             self.oldest_received_message_index = self.oldest_received_message_index.wrapping_add(1);

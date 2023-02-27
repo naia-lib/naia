@@ -7,6 +7,7 @@ use super::shared::{get_struct_type, StructType};
 pub fn message_impl(
     input: proc_macro::TokenStream,
     shared_crate_name: TokenStream,
+    is_fragment: bool,
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -32,6 +33,7 @@ pub fn message_impl(
     let write_method = get_write_method(&fields, &struct_type);
     let create_builder_method = get_create_builder_method(&builder_name);
     let read_method = get_read_method(&struct_name, &fields, &struct_type);
+    let is_fragment_method = get_is_fragment_method(is_fragment);
 
     let gen = quote! {
         mod #module_name {
@@ -55,6 +57,7 @@ pub fn message_impl(
                 fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
                     self
                 }
+                #is_fragment_method
                 #bit_length_method
                 #create_builder_method
                 #has_entity_properties_method
@@ -73,6 +76,21 @@ pub fn message_impl(
     };
 
     proc_macro::TokenStream::from(gen)
+}
+
+fn get_is_fragment_method(is_fragment: bool) -> TokenStream {
+    let value = {
+        if is_fragment {
+            quote! { true }
+        } else {
+            quote! { false }
+        }
+    };
+    quote! {
+        fn is_fragment(&self) -> bool {
+            #value
+        }
+    }
 }
 
 fn get_clone_method(

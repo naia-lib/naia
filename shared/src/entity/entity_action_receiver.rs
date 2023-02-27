@@ -4,9 +4,9 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::component::component_kinds::ComponentKind;
 use crate::{
-    sequence_less_than, EntityAction, MessageIndex as ActionIndex, UnorderedReliableReceiver,
+    component::component_kinds::ComponentKind, sequence_less_than, EntityAction,
+    MessageIndex as ActionIndex, UnorderedReliableReceiver,
 };
 
 pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
