@@ -10,7 +10,7 @@ use crate::{
 
 pub struct FragmentReceiver {
     current_index: MessageIndex,
-    map: HashMap<FragmentId, (u32, Vec<Vec<u8>>)>,
+    map: HashMap<FragmentId, (u32, Vec<Box<[u8]>>)>,
 }
 
 impl FragmentReceiver {
@@ -47,7 +47,7 @@ impl FragmentReceiver {
         info!("fragment_total: {fragment_total}");
         if !self.map.contains_key(&fragment_id) {
             self.map
-                .insert(fragment_id, (0, vec![Vec::new(); fragment_total]));
+                .insert(fragment_id, (0, vec![Box::new([]); fragment_total]));
         }
         let (fragments_received, fragment_list) = self.map.get_mut(&fragment_id).unwrap();
         fragment_list[fragment_index.as_usize()] = fragment.to_payload();
@@ -59,8 +59,7 @@ impl FragmentReceiver {
         // we have received all fragments! put it all together
         let (_, fragment_list) = self.map.remove(&fragment_id).unwrap();
         let concat_list = fragment_list.concat();
-        let total_bytes = concat_list.as_slice();
-        let mut reader = BitReader::new(total_bytes);
+        let mut reader = BitReader::new(&concat_list);
         let full_message_result = message_kinds.read(&mut reader, converter);
         if full_message_result.is_err() {
             // TODO: bubble up error instead of panicking here

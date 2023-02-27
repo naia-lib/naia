@@ -1,9 +1,4 @@
-use crate::{
-    bit_reader::BitReader,
-    bit_writer::BitWrite,
-    error::SerdeErr,
-    serde::{ConstBitLength, Serde},
-};
+use crate::{bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::{ConstBitLength, Serde}, UnsignedVariableInteger};
 
 impl<T: Serde> Serde for Box<T> {
     fn ser(&self, writer: &mut dyn BitWrite) {
@@ -22,6 +17,36 @@ impl<T: Serde> Serde for Box<T> {
 impl<T: ConstBitLength> ConstBitLength for Box<T> {
     fn const_bit_length() -> u32 {
         return T::const_bit_length();
+    }
+}
+
+impl Serde for Box<[u8]> {
+    fn ser(&self, writer: &mut dyn BitWrite) {
+        let length = UnsignedVariableInteger::<9>::new(self.len() as u64);
+        length.ser(writer);
+        let bytes: &[u8] = self;
+        for byte in bytes {
+            writer.write_byte(*byte);
+        }
+    }
+
+    fn de(reader: &mut BitReader) -> Result<Box<[u8]>, SerdeErr> {
+        let length_int = UnsignedVariableInteger::<9>::de(reader)?;
+        let length_usize = length_int.get() as usize;
+        let mut bytes: Vec<u8> = Vec::with_capacity(length_usize);
+        for _ in 0..length_usize {
+            bytes.push(reader.read_byte()?);
+        }
+
+        Ok(bytes.into_boxed_slice())
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<9>::new(self.len() as u64);
+        output += length.bit_length();
+        output += (self.len() as u32) * 8;
+        output
     }
 }
 

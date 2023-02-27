@@ -18,7 +18,7 @@ impl Serde for String {
             bytes.push(reader.read_byte()?);
         }
 
-        let result = std::str::from_utf8(&bytes).unwrap().to_string();
+        let result = String::from_utf8_lossy(&bytes).into_owned();
         Ok(result)
     }
 

@@ -54,11 +54,6 @@ impl BitWriter {
         self.max_bits = 0;
     }
 
-    pub fn to_vec(mut self) -> Vec<u8> {
-        self.finalize();
-        Vec::from(&self.buffer[0..self.buffer_index])
-    }
-
     pub fn to_packet(mut self) -> OutgoingPacket {
         self.finalize();
         OutgoingPacket::new(self.buffer_index, self.buffer)

@@ -148,7 +148,7 @@ impl FragmentWriter {
             &mut self.current_writer,
             BitWriter::with_capacity(FRAGMENTATION_LIMIT_BITS),
         );
-        let bytes = current.to_vec();
+        let bytes = current.to_bytes();
         let fragmented_message =
             FragmentedMessage::new(self.fragment_id, self.current_fragment_index, bytes);
         self.current_fragment_index.increment();
@@ -198,11 +198,11 @@ pub struct FragmentedMessage {
     id: FragmentId,
     index: FragmentIndex,
     total: FragmentIndex,
-    bytes: Vec<u8>,
+    bytes: Box<[u8]>,
 }
 
 impl FragmentedMessage {
-    pub fn new(id: FragmentId, index: FragmentIndex, bytes: Vec<u8>) -> Self {
+    pub fn new(id: FragmentId, index: FragmentIndex, bytes: Box<[u8]>) -> Self {
         Self {
             id,
             index,
@@ -227,7 +227,7 @@ impl FragmentedMessage {
         self.total
     }
 
-    pub(crate) fn to_payload(self) -> Vec<u8> {
+    pub(crate) fn to_payload(self) -> Box<[u8]> {
         self.bytes
     }
 }
