@@ -13,7 +13,7 @@ const FRAGMENT_INDEX_BITS: u8 = 20;
 const FRAGMENT_INDEX_LIMIT: u32 = 2 ^ (FRAGMENT_INDEX_BITS as u32);
 
 // FragmentId
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct FragmentId {
     inner: u16,
 }
@@ -70,6 +70,10 @@ impl FragmentIndex {
         if self.inner >= FRAGMENT_INDEX_LIMIT {
             panic!("Attempting to fragment large message, but hit fragment limit of {FRAGMENT_INDEX_LIMIT}. This means you're trying to transmit about 500 megabytes, which is a bad idea.")
         }
+    }
+
+    pub fn as_usize(&self) -> usize {
+        self.inner as usize
     }
 }
 
@@ -209,5 +213,21 @@ impl FragmentedMessage {
 
     pub(crate) fn set_total(&mut self, total: FragmentIndex) {
         self.total = total;
+    }
+
+    pub(crate) fn id(&self) -> FragmentId {
+        self.id
+    }
+
+    pub(crate) fn index(&self) -> FragmentIndex {
+        self.index
+    }
+
+    pub(crate) fn total(&self) -> FragmentIndex {
+        self.total
+    }
+
+    pub(crate) fn to_payload(self) -> Vec<u8> {
+        self.bytes
     }
 }

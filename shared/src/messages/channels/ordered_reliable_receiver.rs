@@ -1,19 +1,17 @@
 use std::collections::VecDeque;
 
 use crate::{
-    messages::channels::{
-        fragment_receiver::IsFragment,
-        reliable_receiver::{ReceiverArranger, ReliableReceiver},
-    },
+    messages::channels::reliable_receiver::{ReceiverArranger, ReliableReceiver},
     types::MessageIndex,
+    Message,
 };
 
 // OrderedReliableReceiver
-pub type OrderedReliableReceiver<M> = ReliableReceiver<OrderedArranger<M>, M>;
+pub type OrderedReliableReceiver = ReliableReceiver<OrderedArranger>;
 
-impl<M: Send + Sync + IsFragment> OrderedReliableReceiver<M> {
+impl OrderedReliableReceiver {
     pub fn new() -> Self {
-        Self::with_arranger(OrderedArranger::<M> {
+        Self::with_arranger(OrderedArranger {
             oldest_received_message_index: 0,
             buffer: VecDeque::new(),
         })
@@ -21,17 +19,17 @@ impl<M: Send + Sync + IsFragment> OrderedReliableReceiver<M> {
 }
 
 // OrderedArranger
-pub struct OrderedArranger<M> {
-    buffer: VecDeque<(MessageIndex, Option<M>)>,
+pub struct OrderedArranger {
+    buffer: VecDeque<(MessageIndex, Option<Box<dyn Message>>)>,
     oldest_received_message_index: MessageIndex,
 }
 
-impl<M: Send + Sync> ReceiverArranger<M> for OrderedArranger<M> {
+impl ReceiverArranger for OrderedArranger {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, M)>,
+        incoming_messages: &mut Vec<(MessageIndex, Box<dyn Message>)>,
         message_index: MessageIndex,
-        message: M,
+        message: Box<dyn Message>,
     ) {
         let mut current_index = 0;
 

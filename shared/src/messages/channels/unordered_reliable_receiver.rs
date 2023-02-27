@@ -1,14 +1,12 @@
 use crate::{
-    messages::channels::{
-        fragment_receiver::IsFragment,
-        reliable_receiver::{ReceiverArranger, ReliableReceiver},
-    },
+    messages::channels::reliable_receiver::{ReceiverArranger, ReliableReceiver},
     types::MessageIndex,
+    Message,
 };
 
-pub type UnorderedReliableReceiver<M> = ReliableReceiver<UnorderedArranger, M>;
+pub type UnorderedReliableReceiver = ReliableReceiver<UnorderedArranger>;
 
-impl<M: IsFragment> UnorderedReliableReceiver<M> {
+impl UnorderedReliableReceiver {
     pub fn new() -> Self {
         Self::with_arranger(UnorderedArranger)
     }
@@ -17,12 +15,12 @@ impl<M: IsFragment> UnorderedReliableReceiver<M> {
 // UnorderedArranger
 pub struct UnorderedArranger;
 
-impl<M> ReceiverArranger<M> for UnorderedArranger {
+impl ReceiverArranger for UnorderedArranger {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, M)>,
+        incoming_messages: &mut Vec<(MessageIndex, Box<dyn Message>)>,
         message_index: MessageIndex,
-        message: M,
+        message: Box<dyn Message>,
     ) {
         incoming_messages.push((message_index, message));
     }

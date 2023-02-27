@@ -5,7 +5,7 @@ use naia_serde::{BitReader, SerdeErr};
 use crate::{
     messages::{
         channels::{
-            fragment_receiver::{FragmentReceiver, IsFragment},
+            fragment_receiver::FragmentReceiver,
             indexed_message_reader::IndexedMessageReader,
             message_channel::{ChannelReceiver, MessageChannelReceiver},
         },
@@ -17,25 +17,25 @@ use crate::{
 };
 
 // Receiver Arranger Trait
-pub trait ReceiverArranger<M>: Send + Sync {
+pub trait ReceiverArranger: Send + Sync {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, M)>,
+        incoming_messages: &mut Vec<(MessageIndex, Box<dyn Message>)>,
         message_index: MessageIndex,
-        message: M,
+        message: Box<dyn Message>,
     );
 }
 
 // Reliable Receiver
-pub struct ReliableReceiver<A: ReceiverArranger<M>, M> {
+pub struct ReliableReceiver<A: ReceiverArranger> {
     oldest_received_message_index: MessageIndex,
     record: VecDeque<(MessageIndex, bool)>,
-    incoming_messages: Vec<(MessageIndex, M)>,
+    incoming_messages: Vec<(MessageIndex, Box<dyn Message>)>,
     arranger: A,
     fragment_receiver: FragmentReceiver,
 }
 
-impl<A: ReceiverArranger<M>, M: IsFragment> ReliableReceiver<A, M> {
+impl<A: ReceiverArranger> ReliableReceiver<A> {
     pub fn with_arranger(arranger: A) -> Self {
         Self {
             oldest_received_message_index: 0,
@@ -46,16 +46,28 @@ impl<A: ReceiverArranger<M>, M: IsFragment> ReliableReceiver<A, M> {
         }
     }
 
-    fn push_message(&mut self, message_index: MessageIndex, message: M) {
+    fn push_message(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &dyn NetEntityHandleConverter,
+        message: Box<dyn Message>,
+    ) {
         if let Some((first_index, full_message)) =
-            self.fragment_receiver.receive(message_index, message)
+            self.fragment_receiver
+                .receive(message_kinds, converter, message)
         {
             self.arranger
                 .process(&mut self.incoming_messages, first_index, full_message);
         }
     }
 
-    pub fn buffer_message(&mut self, message_index: MessageIndex, message: M) {
+    pub fn buffer_message(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &dyn NetEntityHandleConverter,
+        message_index: MessageIndex,
+        message: Box<dyn Message>,
+    ) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_index has been instantiated
         // already if it has, put the message into the slot
@@ -99,7 +111,7 @@ impl<A: ReceiverArranger<M>, M: IsFragment> ReliableReceiver<A, M> {
             }
 
             if should_push_message {
-                self.push_message(message_index, message);
+                self.push_message(message_kinds, converter, message);
                 self.clear_old_messages();
                 return;
             }
@@ -108,7 +120,7 @@ impl<A: ReceiverArranger<M>, M: IsFragment> ReliableReceiver<A, M> {
         }
     }
 
-    pub fn receive_messages(&mut self) -> Vec<(MessageIndex, M)> {
+    pub fn receive_messages(&mut self) -> Vec<(MessageIndex, Box<dyn Message>)> {
         // return buffer
         mem::take(&mut self.incoming_messages)
     }
@@ -131,10 +143,8 @@ impl<A: ReceiverArranger<M>, M: IsFragment> ReliableReceiver<A, M> {
     }
 }
 
-impl<A: ReceiverArranger<M>, M: Send + Sync + IsFragment> ChannelReceiver<M>
-    for ReliableReceiver<A, M>
-{
-    fn receive_messages(&mut self) -> Vec<M> {
+impl<A: ReceiverArranger> ChannelReceiver<Box<dyn Message>> for ReliableReceiver<A> {
+    fn receive_messages(&mut self) -> Vec<Box<dyn Message>> {
         self.receive_messages()
             .drain(..)
             .map(|(_, message)| message)
@@ -142,9 +152,7 @@ impl<A: ReceiverArranger<M>, M: Send + Sync + IsFragment> ChannelReceiver<M>
     }
 }
 
-impl<A: ReceiverArranger<Box<dyn Message>>> MessageChannelReceiver
-    for ReliableReceiver<A, Box<dyn Message>>
-{
+impl<A: ReceiverArranger> MessageChannelReceiver for ReliableReceiver<A> {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
@@ -153,7 +161,7 @@ impl<A: ReceiverArranger<Box<dyn Message>>> MessageChannelReceiver
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;
         for (id, message) in id_w_msgs {
-            self.buffer_message(id, message);
+            self.buffer_message(message_kinds, converter, id, message);
         }
         Ok(())
     }

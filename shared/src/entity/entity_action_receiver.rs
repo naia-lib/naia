@@ -5,26 +5,26 @@ use std::{
 };
 
 use crate::{
-    component::component_kinds::ComponentKind, sequence_less_than, EntityAction,
-    MessageIndex as ActionIndex, UnorderedReliableReceiver,
+    component::component_kinds::ComponentKind, entity::action_receiver::ActionReceiver,
+    sequence_less_than, EntityAction, MessageIndex as ActionIndex,
 };
 
 pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
-    receiver: UnorderedReliableReceiver<EntityAction<E>>,
+    receiver: ActionReceiver<E>,
     entity_channels: HashMap<E, EntityChannel<E>>,
 }
 
 impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
     pub fn new() -> Self {
         Self {
-            receiver: UnorderedReliableReceiver::new(),
+            receiver: ActionReceiver::new(),
             entity_channels: HashMap::default(),
         }
     }
 
     /// Buffer a read [`EntityAction`] so that it can be processed later
     pub fn buffer_action(&mut self, action_index: ActionIndex, action: EntityAction<E>) {
-        self.receiver.buffer_message(action_index, action)
+        self.receiver.buffer_message(action_index, action);
     }
 
     /// Read all buffered [`EntityAction`] inside the `receiver` and process them.
