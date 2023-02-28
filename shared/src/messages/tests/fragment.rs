@@ -104,7 +104,6 @@ fn convert_multiple_fragments() {
     // Receive Fragments
     let mut incoming_message_container_opt = None;
     for i in 0..fragments.len() {
-
         // shuffle indexes
         let j = match i {
             0 => 1,
