@@ -230,7 +230,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_min_wrap() {
-        let diff = (GAME_TIME_LIMIT / 2);
+        let diff = GAME_TIME_LIMIT / 2;
         let a = GameInstant { millis: 0 };
         let b = a.sub_millis(diff);
 
@@ -265,7 +265,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_max_wrap_backwards() {
-        let diff = (GAME_TIME_LIMIT / 2);
+        let diff = GAME_TIME_LIMIT / 2;
         let a = GameInstant {
             millis: GAME_TIME_MAX,
         };

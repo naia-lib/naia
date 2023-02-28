@@ -5,3 +5,6 @@ pub mod message_container;
 pub mod message_kinds;
 pub mod message_manager;
 pub mod named;
+
+#[cfg(test)]
+mod tests;
