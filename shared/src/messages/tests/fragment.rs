@@ -1,6 +1,12 @@
 use naia_derive::MessageInternal;
 
-use crate::{FakeEntityConverter, MessageContainer, MessageKinds, Protocol, messages::channels::{receivers::fragment_receiver::FragmentReceiver, senders::message_fragmenter::MessageFragmenter}};
+use crate::{
+    messages::channels::{
+        receivers::fragment_receiver::FragmentReceiver,
+        senders::message_fragmenter::MessageFragmenter,
+    },
+    FakeEntityConverter, MessageContainer, MessageKinds, Protocol,
+};
 
 #[derive(MessageInternal)]
 pub struct StringMessage {
@@ -15,7 +21,12 @@ impl StringMessage {
     }
 }
 
-fn setup() -> (MessageKinds, FakeEntityConverter, MessageFragmenter, FragmentReceiver) {
+fn setup() -> (
+    MessageKinds,
+    FakeEntityConverter,
+    MessageFragmenter,
+    FragmentReceiver,
+) {
     // Protocol
     let mut protocol = Protocol::builder();
     protocol.add_message::<StringMessage>();
@@ -49,7 +60,9 @@ fn convert_single_fragment() {
     // Receive Fragments
     let mut incoming_message_container_opt = None;
     for fragment in fragments {
-        if let Some((_, reassembled_message)) = receiver.receive(&message_kinds, &converter, fragment) {
+        if let Some((_, reassembled_message)) =
+            receiver.receive(&message_kinds, &converter, fragment)
+        {
             incoming_message_container_opt = Some(reassembled_message);
             break;
         }
@@ -91,7 +104,9 @@ fn convert_multiple_fragments() {
     // Receive Fragments
     let mut incoming_message_container_opt = None;
     for fragment in fragments {
-        if let Some((_, reassembled_message)) = receiver.receive(&message_kinds, &converter, fragment) {
+        if let Some((_, reassembled_message)) =
+            receiver.receive(&message_kinds, &converter, fragment)
+        {
             incoming_message_container_opt = Some(reassembled_message);
             break;
         }

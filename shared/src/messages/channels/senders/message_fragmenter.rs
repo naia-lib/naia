@@ -1,8 +1,9 @@
 use naia_serde::{BitWrite, BitWriter};
 
 use crate::{
-    constants::FRAGMENTATION_LIMIT_BITS, messages::fragment::{FragmentIndex, FragmentedMessage, FragmentId}, MessageContainer,
-    MessageKinds, NetEntityHandleConverter,
+    constants::FRAGMENTATION_LIMIT_BITS,
+    messages::fragment::{FragmentId, FragmentIndex, FragmentedMessage},
+    MessageContainer, MessageKinds, NetEntityHandleConverter,
 };
 
 // MessageFragmenter
