@@ -4,7 +4,7 @@ pub use naia_shared::{
     MessageBuilder, MessageHecs as Message, MessageKind, MessageKinds, Named,
     NetEntityHandleConverter, OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random,
     ReliableSettings, ReplicaDynMut, ReplicaDynRef, ReplicateBuilder, ReplicateHecs as Replicate,
-    SerdeErr, SerdeHecs as Serde, TickBufferSettings, UnsignedInteger,
+    SerdeErr, SerdeHecs as Serde, TickBufferSettings, UnsignedInteger, ConstBitLength, MessageContainer
 };
 
 mod component_access;
