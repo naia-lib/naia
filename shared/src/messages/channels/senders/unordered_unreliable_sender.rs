@@ -5,7 +5,7 @@ use naia_socket_shared::Instant;
 
 use crate::{
     messages::{
-        channels::message_channel::{ChannelSender, MessageChannelSender},
+        channels::senders::channel_sender::{ChannelSender, MessageChannelSender},
         message_container::MessageContainer,
         message_kinds::MessageKinds,
     },

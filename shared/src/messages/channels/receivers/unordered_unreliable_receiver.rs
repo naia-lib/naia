@@ -4,7 +4,7 @@ use naia_serde::{BitReader, Serde, SerdeErr};
 
 use crate::{
     messages::{
-        channels::message_channel::{ChannelReceiver, MessageChannelReceiver},
+        channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
         message_kinds::MessageKinds,
     },
     MessageContainer, NetEntityHandleConverter,

@@ -5,7 +5,7 @@ use log::info;
 use naia_serde::BitReader;
 
 use crate::{
-    messages::message_fragmenter::{FragmentId, FragmentedMessage},
+    messages::fragment::{FragmentId, FragmentedMessage},
     MessageContainer, MessageIndex, MessageKinds, NetEntityHandleConverter,
 };
 

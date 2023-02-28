@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
-use crate::messages::message_fragmenter::FragmentedMessage;
 use crate::{
     component::{component_kinds::ComponentKinds, replicate::Replicate},
     connection::compression_config::CompressionConfig,
@@ -12,6 +11,7 @@ use crate::{
             channel_kinds::ChannelKinds,
             default_channels::DefaultChannelsPlugin,
         },
+        fragment::FragmentedMessage,
         message::Message,
         message_kinds::MessageKinds,
     },

@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::{
-    messages::channels::reliable_receiver::{ReceiverArranger, ReliableReceiver},
+    messages::channels::receivers::reliable_receiver::{ReceiverArranger, ReliableReceiver},
     types::MessageIndex,
     MessageContainer,
 };

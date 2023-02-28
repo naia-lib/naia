@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::messages::message_fragmenter::MessageFragmenter;
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
     constants::FRAGMENTATION_LIMIT_BITS,
@@ -12,15 +11,20 @@ use crate::{
             channel::ChannelMode,
             channel::ChannelSettings,
             channel_kinds::{ChannelKind, ChannelKinds},
-            message_channel::{MessageChannelReceiver, MessageChannelSender},
-            ordered_reliable_receiver::OrderedReliableReceiver,
-            reliable_sender::ReliableSender,
-            sequenced_reliable_receiver::SequencedReliableReceiver,
-            sequenced_unreliable_receiver::SequencedUnreliableReceiver,
-            sequenced_unreliable_sender::SequencedUnreliableSender,
-            unordered_reliable_receiver::UnorderedReliableReceiver,
-            unordered_unreliable_receiver::UnorderedUnreliableReceiver,
-            unordered_unreliable_sender::UnorderedUnreliableSender,
+            receivers::{
+                channel_receiver::MessageChannelReceiver,
+                ordered_reliable_receiver::OrderedReliableReceiver,
+                sequenced_reliable_receiver::SequencedReliableReceiver,
+                sequenced_unreliable_receiver::SequencedUnreliableReceiver,
+                unordered_reliable_receiver::UnorderedReliableReceiver,
+                unordered_unreliable_receiver::UnorderedUnreliableReceiver,
+            },
+            senders::{
+                channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
+                reliable_sender::ReliableSender,
+                sequenced_unreliable_sender::SequencedUnreliableSender,
+                unordered_unreliable_sender::UnorderedUnreliableSender,
+            },
         },
         message_container::MessageContainer,
     },

@@ -4,9 +4,9 @@ use naia_serde::{BitReader, SerdeErr};
 
 use crate::{
     messages::{
-        channels::{
+        channels::receivers::{
+            channel_receiver::{ChannelReceiver, MessageChannelReceiver},
             indexed_message_reader::IndexedMessageReader,
-            message_channel::{ChannelReceiver, MessageChannelReceiver},
         },
         message_kinds::MessageKinds,
     },
