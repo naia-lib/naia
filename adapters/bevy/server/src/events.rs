@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_bevy_shared::{Channel, ChannelKind, Message, MessageKind, Tick};
+use naia_bevy_shared::{Channel, ChannelKind, Message, MessageContainer, MessageKind, Tick};
 use naia_server::{Events, NaiaServerError, User, UserKey};
 
 // ConnectEvent
@@ -17,7 +17,7 @@ pub struct TickEvent(pub Tick);
 
 // AuthEvents
 pub struct AuthEvents {
-    inner: HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>,
+    inner: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
 }
 
 impl From<&mut Events> for AuthEvents {
@@ -36,7 +36,7 @@ impl AuthEvents {
 
         if let Some(messages) = self.inner.get(&message_kind) {
             for (user_key, boxed_message) in messages {
-                let boxed_any = boxed_message.clone_box().to_boxed_any();
+                let boxed_any = boxed_message.clone().to_boxed_any();
                 let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_any)
                     .ok()
                     .map(|boxed_m| *boxed_m)
@@ -51,7 +51,7 @@ impl AuthEvents {
 
 // MessageEvents
 pub struct MessageEvents {
-    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>>,
+    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
 }
 
 impl From<&mut Events> for MessageEvents {
@@ -71,7 +71,7 @@ impl MessageEvents {
             let message_kind = MessageKind::of::<M>();
             if let Some(messages) = message_map.get(&message_kind) {
                 for (user_key, boxed_message) in messages {
-                    let boxed_any = boxed_message.clone_box().to_boxed_any();
+                    let boxed_any = boxed_message.clone().to_boxed_any();
                     let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_any)
                         .ok()
                         .map(|boxed_m| *boxed_m)

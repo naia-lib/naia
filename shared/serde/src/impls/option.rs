@@ -1,7 +1,8 @@
 use crate::{
+    bit_reader::BitReader,
+    bit_writer::BitWrite,
     error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
+    serde::{ConstBitLength, Serde},
 };
 
 impl<T: Serde> Serde for Option<T> {
@@ -21,16 +22,27 @@ impl<T: Serde> Serde for Option<T> {
             Ok(None)
         }
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 1;
+        if let Some(value) = self {
+            output += value.bit_length();
+        }
+        output
+    }
+}
+
+impl<T: ConstBitLength> ConstBitLength for Option<T> {
+    fn const_bit_length() -> u32 {
+        return 1 + T::const_bit_length();
+    }
 }
 
 // Tests
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        reader_writer::{BitReader, BitWriter},
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
 
     #[test]
     fn read_write() {
@@ -43,11 +55,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
-        // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = Option::<u8>::de(&mut reader).unwrap();
         let out_2 = Option::<f32>::de(&mut reader).unwrap();

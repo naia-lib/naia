@@ -1,9 +1,7 @@
 use std::collections::VecDeque;
 
 use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
+    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde,
     UnsignedVariableInteger,
 };
 
@@ -25,6 +23,16 @@ impl<T: Serde> Serde for Vec<T> {
         }
         Ok(output)
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
+        output += length.bit_length();
+        for item in self {
+            output += item.bit_length();
+        }
+        output
+    }
 }
 
 impl<T: Serde> Serde for VecDeque<T> {
@@ -45,16 +53,23 @@ impl<T: Serde> Serde for VecDeque<T> {
         }
         Ok(output)
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
+        output += length.bit_length();
+        for item in self {
+            output += item.bit_length();
+        }
+        output
+    }
 }
 
 // Tests
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        reader_writer::{BitReader, BitWriter},
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
     use std::collections::VecDeque;
 
     #[test]
@@ -68,11 +83,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1: Vec<i32> = Serde::de(&mut reader).unwrap();
         let out_2: Vec<bool> = Serde::de(&mut reader).unwrap();
@@ -105,11 +119,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1: VecDeque<i32> = Serde::de(&mut reader).unwrap();
         let out_2: VecDeque<bool> = Serde::de(&mut reader).unwrap();

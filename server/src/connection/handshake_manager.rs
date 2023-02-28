@@ -4,8 +4,8 @@ use ring::{hmac, rand};
 
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BitReader, BitWriter, ConnectionConfig, FakeEntityConverter,
-    Instant, KeyGenerator, Message, MessageKinds, PacketType, PropertyMutate, PropertyMutator,
-    Replicate, Serde, SerdeErr, StandardHeader, Timer, WorldMutType, WorldRefType,
+    Instant, KeyGenerator, Message, MessageContainer, MessageKinds, PacketType, PropertyMutate,
+    PropertyMutator, Replicate, Serde, SerdeErr, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::cache_map::CacheMap;
@@ -16,7 +16,7 @@ pub type Timestamp = u64;
 
 pub enum HandshakeResult {
     Invalid,
-    Success(Option<Box<dyn Message>>),
+    Success(Option<MessageContainer>),
 }
 
 pub struct HandshakeManager {

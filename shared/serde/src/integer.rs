@@ -1,7 +1,5 @@
 use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
+    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde, ConstBitLength,
 };
 
 pub type UnsignedInteger<const BITS: u8> = SerdeInteger<false, false, BITS>;
@@ -164,6 +162,53 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
             }
         }
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output: u32 = 0;
+
+        if SIGNED {
+            output += 1;
+        }
+
+        if VARIABLE {
+            let mut proceed;
+            let mut value = self.inner.abs() as u128;
+            loop {
+                if value >= 2_u128.pow(BITS as u32) {
+                    proceed = true;
+                } else {
+                    proceed = false;
+                }
+                output += 1;
+
+                for _ in 0..BITS {
+                    output += 1;
+                    value >>= 1;
+                }
+                if !proceed {
+                    break;
+                }
+            }
+        } else {
+            output += BITS as u32;
+        }
+
+        output
+    }
+}
+
+impl<const SIGNED: bool, const BITS: u8> ConstBitLength for SerdeInteger<SIGNED, false, BITS> {
+    fn const_bit_length() -> u32 {
+        let mut output: u32 = 0;
+
+        if SIGNED {
+            output += 1;
+        }
+
+        output += BITS as u32;
+
+        output
+    }
 }
 
 // Tests
@@ -171,8 +216,9 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> Serde
 #[cfg(test)]
 mod tests {
     use crate::{
+        bit_reader::BitReader,
+        bit_writer::BitWriter,
         integer::{SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger},
-        reader_writer::{BitReader, BitWriter},
         serde::Serde,
     };
 
@@ -198,11 +244,10 @@ mod tests {
         in_2.ser(&mut writer);
         in_3.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();
@@ -226,11 +271,10 @@ mod tests {
         in_2.ser(&mut writer);
         in_3.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();
@@ -254,11 +298,10 @@ mod tests {
         in_2.ser(&mut writer);
         in_3.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();
@@ -282,11 +325,10 @@ mod tests {
         in_2.ser(&mut writer);
         in_3.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();

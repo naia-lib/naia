@@ -1,13 +1,11 @@
 use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
-    UnsignedInteger,
+    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde,
+    UnsignedVariableInteger,
 };
 
 impl Serde for String {
     fn ser(&self, writer: &mut dyn BitWrite) {
-        let length = UnsignedInteger::<9>::new(self.len() as u64);
+        let length = UnsignedVariableInteger::<9>::new(self.len() as u64);
         length.ser(writer);
         let bytes = self.as_bytes();
         for byte in bytes {
@@ -16,15 +14,23 @@ impl Serde for String {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let length_int = UnsignedInteger::<9>::de(reader)?;
+        let length_int = UnsignedVariableInteger::<9>::de(reader)?;
         let length_usize = length_int.get() as usize;
         let mut bytes: Vec<u8> = Vec::with_capacity(length_usize);
         for _ in 0..length_usize {
             bytes.push(reader.read_byte()?);
         }
 
-        let result = std::str::from_utf8(&bytes).unwrap().to_string();
+        let result = String::from_utf8_lossy(&bytes).into_owned();
         Ok(result)
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<9>::new(self.len() as u64);
+        output += length.bit_length();
+        output += (self.len() as u32) * 8;
+        output
     }
 }
 
@@ -32,10 +38,7 @@ impl Serde for String {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        reader_writer::{BitReader, BitWriter},
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
 
     #[test]
     fn read_write() {
@@ -48,11 +51,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1: String = Serde::de(&mut reader).unwrap();
         let out_2: String = Serde::de(&mut reader).unwrap();

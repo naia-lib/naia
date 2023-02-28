@@ -1,8 +1,9 @@
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, UnsignedInteger};
+use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger};
 use naia_socket_shared::Instant;
 
+const GAME_INSANT_BITS: u8 = 22;
 pub const GAME_TIME_LIMIT: u32 = 4194304; // 2^22
-const GAME_TIME_LIMIT_U128: u128 = GAME_TIME_LIMIT as u128;
+const GAME_TIME_LIMIT_U128: u128 = 4194304;
 const GAME_TIME_MAX: u32 = 4194303; // 2^22 - 1
 const TIME_OFFSET_MAX: i32 = 2097151; // 2^21 - 1
 const TIME_OFFSET_MIN: i32 = -2097152; // 2^21 * -1
@@ -108,14 +109,24 @@ impl GameInstant {
 
 impl Serde for GameInstant {
     fn ser(&self, writer: &mut dyn BitWrite) {
-        let integer = UnsignedInteger::<22>::new(self.millis as u64);
+        let integer = UnsignedInteger::<GAME_INSANT_BITS>::new(self.millis as u64);
         integer.ser(writer);
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let integer = UnsignedInteger::<22>::de(reader)?;
+        let integer = UnsignedInteger::<GAME_INSANT_BITS>::de(reader)?;
         let millis = integer.get() as u32;
         Ok(Self { millis })
+    }
+
+    fn bit_length(&self) -> u32 {
+        <Self as ConstBitLength>::const_bit_length()
+    }
+}
+
+impl ConstBitLength for GameInstant {
+    fn const_bit_length() -> u32 {
+        <UnsignedInteger<GAME_INSANT_BITS> as ConstBitLength>::const_bit_length()
     }
 }
 
@@ -219,7 +230,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_min_wrap() {
-        let diff = (GAME_TIME_LIMIT / 2);
+        let diff = GAME_TIME_LIMIT / 2;
         let a = GameInstant { millis: 0 };
         let b = a.sub_millis(diff);
 
@@ -254,7 +265,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_max_wrap_backwards() {
-        let diff = (GAME_TIME_LIMIT / 2);
+        let diff = GAME_TIME_LIMIT / 2;
         let a = GameInstant {
             millis: GAME_TIME_MAX,
         };

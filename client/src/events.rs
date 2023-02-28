@@ -1,6 +1,8 @@
 use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
-use naia_shared::{Channel, ChannelKind, ComponentKind, Message, MessageKind, Replicate, Tick};
+use naia_shared::{
+    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick,
+};
 
 use crate::NaiaClientError;
 
@@ -11,7 +13,7 @@ pub struct Events<E: Copy> {
     client_ticks: Vec<Tick>,
     server_ticks: Vec<Tick>,
     errors: Vec<NaiaClientError>,
-    messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>>,
+    messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
     spawns: Vec<E>,
     despawns: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<E>>,
@@ -56,7 +58,7 @@ impl<E: Copy> Events<E> {
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     pub fn take_messages(
         &mut self,
-    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>> {
+    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>> {
         mem::take(&mut self.messages)
     }
 
@@ -92,7 +94,7 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_message(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+    pub(crate) fn push_message(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
         if !self.messages.contains_key(&channel_kind) {
             self.messages.insert(*channel_kind, HashMap::new());
         }

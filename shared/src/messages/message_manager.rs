@@ -1,34 +1,45 @@
 use std::collections::HashMap;
 
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
-    messages::channel_kinds::{ChannelKind, ChannelKinds},
+    constants::FRAGMENTATION_LIMIT_BITS,
+    messages::{
+        channels::{
+            channel::ChannelMode,
+            channel::ChannelSettings,
+            channel_kinds::{ChannelKind, ChannelKinds},
+            receivers::{
+                channel_receiver::MessageChannelReceiver,
+                ordered_reliable_receiver::OrderedReliableReceiver,
+                sequenced_reliable_receiver::SequencedReliableReceiver,
+                sequenced_unreliable_receiver::SequencedUnreliableReceiver,
+                unordered_reliable_receiver::UnorderedReliableReceiver,
+                unordered_unreliable_receiver::UnorderedUnreliableReceiver,
+            },
+            senders::{
+                channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
+                reliable_sender::ReliableSender,
+                sequenced_unreliable_sender::SequencedUnreliableSender,
+                unordered_unreliable_sender::UnorderedUnreliableSender,
+            },
+        },
+        message_container::MessageContainer,
+    },
     types::{HostType, MessageIndex, PacketIndex},
-    Message, Protocol,
-};
-
-use super::{
-    channel::ChannelMode,
-    message_channel::{ChannelReader, ChannelReceiver, ChannelSender, ChannelWriter},
-    ordered_reliable_receiver::OrderedReliableReceiver,
-    reliable_sender::ReliableSender,
-    sequenced_reliable_receiver::SequencedReliableReceiver,
-    sequenced_unreliable_receiver::SequencedUnreliableReceiver,
-    sequenced_unreliable_sender::SequencedUnreliableSender,
-    unordered_reliable_receiver::UnorderedReliableReceiver,
-    unordered_unreliable_receiver::UnorderedUnreliableReceiver,
-    unordered_unreliable_sender::UnorderedUnreliableSender,
+    MessageKinds, NetEntityHandleConverter, Protocol,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager {
-    channel_senders: HashMap<ChannelKind, Box<dyn ChannelSender<Box<dyn Message>>>>,
-    channel_receivers: HashMap<ChannelKind, Box<dyn ChannelReceiver<Box<dyn Message>>>>,
+    channel_senders: HashMap<ChannelKind, Box<dyn MessageChannelSender>>,
+    channel_receivers: HashMap<ChannelKind, Box<dyn MessageChannelReceiver>>,
+    channel_settings: HashMap<ChannelKind, ChannelSettings>,
     packet_to_message_map: HashMap<PacketIndex, Vec<(ChannelKind, Vec<MessageIndex>)>>,
+    message_fragmenter: MessageFragmenter,
 }
 
 impl MessageManager {
@@ -37,8 +48,7 @@ impl MessageManager {
         // initialize all reliable channels
 
         // initialize senders
-        let mut channel_senders =
-            HashMap::<ChannelKind, Box<dyn ChannelSender<Box<dyn Message>>>>::new();
+        let mut channel_senders = HashMap::<ChannelKind, Box<dyn MessageChannelSender>>::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
             match &host_type {
                 HostType::Server => {
@@ -67,18 +77,19 @@ impl MessageManager {
                 | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         channel_kind,
-                        Box::new(ReliableSender::<Box<dyn Message>>::new(
+                        Box::new(ReliableSender::<MessageContainer>::new(
                             settings.rtt_resend_factor,
                         )),
                     );
                 }
-                _ => {}
+                ChannelMode::TickBuffered(_) => {
+                    // Tick buffered channel uses another manager, skip
+                }
             };
         }
 
         // initialize receivers
-        let mut channel_receivers =
-            HashMap::<ChannelKind, Box<dyn ChannelReceiver<Box<dyn Message>>>>::new();
+        let mut channel_receivers = HashMap::<ChannelKind, Box<dyn MessageChannelReceiver>>::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
             match &host_type {
                 HostType::Server => {
@@ -109,37 +120,73 @@ impl MessageManager {
                 ChannelMode::UnorderedReliable(_) => {
                     channel_receivers.insert(
                         channel_kind.clone(),
-                        Box::new(UnorderedReliableReceiver::default()),
+                        Box::new(UnorderedReliableReceiver::new()),
                     );
                 }
                 ChannelMode::SequencedReliable(_) => {
                     channel_receivers.insert(
                         channel_kind.clone(),
-                        Box::new(SequencedReliableReceiver::default()),
+                        Box::new(SequencedReliableReceiver::new()),
                     );
                 }
                 ChannelMode::OrderedReliable(_) => {
                     channel_receivers.insert(
                         channel_kind.clone(),
-                        Box::new(OrderedReliableReceiver::default()),
+                        Box::new(OrderedReliableReceiver::new()),
                     );
                 }
-                _ => {}
+                ChannelMode::TickBuffered(_) => {
+                    // Tick buffered channel uses another manager, skip
+                }
             };
+        }
+
+        // initialize settings
+        let mut channel_settings_map = HashMap::new();
+        for (channel_kind, channel_settings) in channel_kinds.channels() {
+            channel_settings_map.insert(channel_kind.clone(), channel_settings);
         }
 
         MessageManager {
             channel_senders,
             channel_receivers,
+            channel_settings: channel_settings_map,
             packet_to_message_map: HashMap::new(),
+            message_fragmenter: MessageFragmenter::new(),
         }
     }
 
     // Outgoing Messages
 
     /// Queues an Message to be transmitted to the remote host
-    pub fn send_message(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
-        if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
+    pub fn send_message(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &dyn NetEntityHandleConverter,
+        channel_kind: &ChannelKind,
+        message: MessageContainer,
+    ) {
+        let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
+            panic!("Channel not configured correctly! Cannot send message.");
+        };
+
+        let message_bit_length = message.bit_length();
+        if message_bit_length > FRAGMENTATION_LIMIT_BITS {
+            let Some(settings) = self.channel_settings.get(channel_kind) else {
+                panic!("Channel not configured correctly! Cannot send message.");
+            };
+            if !settings.reliable() {
+                panic!("ERROR: Attempting to send Message above the fragmentation size limit over an unreliable Message channel! Slim down the size of your Message, or send this Message through a reliable message channel.");
+            }
+
+            // Now fragment this message ...
+            let messages =
+                self.message_fragmenter
+                    .fragment_message(message_kinds, converter, message);
+            for message_fragment in messages {
+                channel.send_message(message_fragment);
+            }
+        } else {
             channel.send_message(message);
         }
     }
@@ -164,19 +211,19 @@ impl MessageManager {
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
-        bit_writer: &mut BitWriter,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        for (channel_index, channel) in &mut self.channel_senders {
+        for (channel_kind, channel) in &mut self.channel_senders {
             if !channel.has_messages() {
                 continue;
             }
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
-            let mut counter = bit_writer.counter();
-            channel_index.ser(&protocol.channel_kinds, &mut counter);
+            let mut counter = writer.counter();
+            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
             counter.write_bit(false);
 
             if counter.overflowed() {
@@ -184,31 +231,28 @@ impl MessageManager {
             }
 
             // write ChannelContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // reserve MessageContinue bit
-            bit_writer.reserve_bits(1);
+            writer.reserve_bits(1);
 
             // write ChannelIndex
-            channel_index.ser(&protocol.channel_kinds, bit_writer);
+            channel_kind.ser(&protocol.channel_kinds, writer);
 
             // write Messages
-            if let Some(message_indexs) = channel.write_messages(
-                &protocol.message_kinds,
-                channel_writer,
-                bit_writer,
-                has_written,
-            ) {
+            if let Some(message_indices) =
+                channel.write_messages(&protocol.message_kinds, converter, writer, has_written)
+            {
                 self.packet_to_message_map
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
-                channel_list.push((channel_index.clone(), message_indexs));
+                channel_list.push((channel_kind.clone(), message_indices));
             }
 
             // write MessageContinue finish bit, release
-            false.ser(bit_writer);
-            bit_writer.release_bits(1);
+            false.ser(writer);
+            writer.release_bits(1);
         }
     }
 
@@ -217,7 +261,7 @@ impl MessageManager {
     pub fn read_messages(
         &mut self,
         protocol: &Protocol,
-        channel_reader: &dyn ChannelReader<Box<dyn Message>>,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -231,14 +275,14 @@ impl MessageManager {
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(&protocol.message_kinds, channel_reader, reader)?;
+            channel.read_messages(&protocol.message_kinds, converter, reader)?;
         }
 
         Ok(())
     }
 
     /// Retrieve all messages from the channel buffers
-    pub fn receive_messages(&mut self) -> Vec<(ChannelKind, Box<dyn Message>)> {
+    pub fn receive_messages(&mut self) -> Vec<(ChannelKind, MessageContainer)> {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
@@ -256,9 +300,9 @@ impl PacketNotifiable for MessageManager {
     /// status of Messages in that packet.
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
-            for (channel_index, message_indexs) in channel_list {
-                if let Some(channel) = self.channel_senders.get_mut(channel_index) {
-                    for message_index in message_indexs {
+            for (channel_kind, message_indices) in channel_list {
+                if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
+                    for message_index in message_indices {
                         channel.notify_message_delivered(message_index);
                     }
                 }

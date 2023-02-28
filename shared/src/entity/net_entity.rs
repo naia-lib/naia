@@ -1,6 +1,6 @@
 // Local Entity
 
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, UnsignedVariableInteger};
+use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedVariableInteger};
 
 // An Entity in the Client's scope, that is being
 // synced to the Client
@@ -27,5 +27,15 @@ impl Serde for NetEntity {
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let value = UnsignedVariableInteger::<7>::de(reader)?.get();
         Ok(NetEntity(value as u16))
+    }
+
+    fn bit_length(&self) -> u32 {
+        UnsignedVariableInteger::<7>::new(self.0).bit_length()
+    }
+}
+
+impl ConstBitLength for NetEntity {
+    fn const_bit_length() -> u32 {
+        <u16 as ConstBitLength>::const_bit_length()
     }
 }

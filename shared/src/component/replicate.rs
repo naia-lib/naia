@@ -56,7 +56,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
     fn write(
         &self,
         component_kinds: &ComponentKinds,
-        bit_writer: &mut dyn BitWrite,
+        writer: &mut dyn BitWrite,
         converter: &dyn NetEntityHandleConverter,
     );
     /// Write data into an outgoing byte stream, sufficient only to update the
@@ -64,7 +64,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
     fn write_update(
         &self,
         diff_mask: &DiffMask,
-        bit_writer: &mut dyn BitWrite,
+        writer: &mut dyn BitWrite,
         converter: &dyn NetEntityHandleConverter,
     );
     /// Reads data from an incoming packet, sufficient to sync the in-memory

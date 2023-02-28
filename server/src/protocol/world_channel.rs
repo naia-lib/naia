@@ -67,7 +67,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             remote_world: CheckedMap::new(),
             entity_channels: CheckedMap::new(),
             outgoing_actions: ReliableSender::new(RESEND_ACTION_RTT_FACTOR),
-            delivered_actions: EntityActionReceiver::default(),
+            delivered_actions: EntityActionReceiver::new(),
 
             address,
             diff_handler: UserDiffHandler::new(diff_handler),

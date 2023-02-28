@@ -3,33 +3,38 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::messages::message_kinds::MessageKinds;
-use crate::{messages::named::Named, types::MessageIndex};
+use crate::{
+    messages::{
+        channels::senders::channel_sender::{ChannelSender, MessageChannelSender},
+        message_container::MessageContainer,
+        message_kinds::MessageKinds,
+    },
+    types::MessageIndex,
+    NetEntityHandleConverter,
+};
 
-use super::message_channel::{ChannelSender, ChannelWriter};
-
-pub struct UnorderedUnreliableSender<P> {
-    outgoing_messages: VecDeque<P>,
+pub struct UnorderedUnreliableSender {
+    outgoing_messages: VecDeque<MessageContainer>,
 }
 
-impl<P: Named> UnorderedUnreliableSender<P> {
+impl UnorderedUnreliableSender {
     pub fn new() -> Self {
         Self {
             outgoing_messages: VecDeque::new(),
         }
     }
 
-    fn write_message<S: BitWrite>(
+    fn write_message(
         &self,
         message_kinds: &MessageKinds,
-        channel_writer: &dyn ChannelWriter<P>,
-        bit_writer: &mut S,
-        message: &P,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut dyn BitWrite,
+        message: &MessageContainer,
     ) {
-        channel_writer.write(message_kinds, bit_writer, message);
+        message.write(message_kinds, writer, converter);
     }
 
-    fn warn_overflow(&self, message: &P, bits_needed: u16, bits_free: u16) {
+    fn warn_overflow(&self, message: &MessageContainer, bits_needed: u32, bits_free: u32) {
         let message_name = message.name();
         panic!(
             "Packet Write Error: Blocking overflow detected! Message of type `{message_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Message, or send this message over a Reliable channel so it can be Fragmented)"
@@ -37,8 +42,8 @@ impl<P: Named> UnorderedUnreliableSender<P> {
     }
 }
 
-impl<P: Send + Sync + Named> ChannelSender<P> for UnorderedUnreliableSender<P> {
-    fn send_message(&mut self, message: P) {
+impl ChannelSender<MessageContainer> for UnorderedUnreliableSender {
+    fn send_message(&mut self, message: MessageContainer) {
         self.outgoing_messages.push_back(message);
     }
 
@@ -50,11 +55,17 @@ impl<P: Send + Sync + Named> ChannelSender<P> for UnorderedUnreliableSender<P> {
         !self.outgoing_messages.is_empty()
     }
 
+    fn notify_message_delivered(&mut self, _: &MessageIndex) {
+        // not necessary for an unreliable channel
+    }
+}
+
+impl MessageChannelSender for UnorderedUnreliableSender {
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_writer: &dyn ChannelWriter<P>,
-        bit_writer: &mut BitWriter,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
         loop {
@@ -64,14 +75,14 @@ impl<P: Send + Sync + Named> ChannelSender<P> for UnorderedUnreliableSender<P> {
 
             // Check that we can write the next message
             let message = self.outgoing_messages.front().unwrap();
-            let mut counter = bit_writer.counter();
-            self.write_message(message_kinds, channel_writer, &mut counter, message);
+            let mut counter = writer.counter();
+            self.write_message(message_kinds, converter, &mut counter, message);
 
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of message being too big
                 if !*has_written {
-                    self.warn_overflow(message, counter.bits_needed(), bit_writer.bits_free());
+                    self.warn_overflow(message, counter.bits_needed(), writer.bits_free());
                 }
 
                 break;
@@ -80,18 +91,14 @@ impl<P: Send + Sync + Named> ChannelSender<P> for UnorderedUnreliableSender<P> {
             *has_written = true;
 
             // write MessageContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // write data
-            self.write_message(message_kinds, channel_writer, bit_writer, &message);
+            self.write_message(message_kinds, converter, writer, &message);
 
             // pop message we've written
             self.outgoing_messages.pop_front();
         }
         None
-    }
-
-    fn notify_message_delivered(&mut self, _: &MessageIndex) {
-        // not necessary for an unreliable channel
     }
 }

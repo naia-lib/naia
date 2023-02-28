@@ -1,8 +1,4 @@
-use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
-};
+use crate::{bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde};
 macro_rules! impl_reflect_tuple {
     {$($index:tt : $name:tt),*} => {
         impl<$($name : Serde,)*> Serde for ($($name,)*) {
@@ -11,6 +7,11 @@ macro_rules! impl_reflect_tuple {
             }
             fn de(reader: &mut BitReader) -> Result<($($name,)*), SerdeErr> {
                 Ok(($($name::de(reader)?, )*))
+            }
+            fn bit_length(&self) -> u32 {
+                let mut output = 0;
+                $(output += self.$index.bit_length();)*
+                output
             }
         }
     }
@@ -33,10 +34,7 @@ impl_reflect_tuple! {0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J,
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        reader_writer::{BitReader, BitWriter},
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
 
     #[test]
     fn read_write() {
@@ -54,11 +52,10 @@ mod tests {
         in_3.ser(&mut writer);
         in_4.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
         // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = Serde::de(&mut reader).unwrap();
         let out_2 = Serde::de(&mut reader).unwrap();

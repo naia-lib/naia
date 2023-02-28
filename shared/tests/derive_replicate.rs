@@ -96,7 +96,7 @@ fn read_write_unit_replica() {
 
     in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
-    let (buffer_length, buffer) = writer.flush();
+    let (buffer_length, buffer) = writer.to_bytes();
 
     // Read
 
@@ -124,7 +124,7 @@ fn read_write_named_replica() {
 
     in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
-    let (buffer_length, buffer) = writer.flush();
+    let (buffer_length, buffer) = writer.to_bytes();
 
     // Read
 
@@ -159,7 +159,7 @@ fn read_write_tuple_replica() {
 
     in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
-    let (buffer_length, buffer) = writer.flush();
+    let (buffer_length, buffer) = writer.to_bytes();
 
     // Read
 
@@ -215,7 +215,7 @@ fn read_write_entity_replica() {
     let mut in_1 = EntityPropertyHolder::new();
     in_1.entity_1.set(&TestEntityConverter, &1);
     in_1.write(&component_kinds, &mut writer, &TestEntityConverter);
-    let (buffer_length, buffer) = writer.flush();
+    let (buffer_length, buffer) = writer.to_bytes();
 
     // Read
     let mut reader = BitReader::new(&buffer[..buffer_length]);
@@ -250,7 +250,7 @@ fn read_write_nonreplicated_replica() {
 
     in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
-    let (buffer_length, buffer) = writer.flush();
+    let (buffer_length, buffer) = writer.to_bytes();
 
     // Read
 

@@ -1,7 +1,5 @@
 use crate::{
-    error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
+    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde,
     UnsignedVariableInteger,
 };
 use std::{
@@ -28,6 +26,16 @@ impl<K: Serde + Eq + Hash> Serde for HashSet<K> {
         }
         Ok(output)
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
+        output += length.bit_length();
+        for value in self {
+            output += value.bit_length();
+        }
+        output
+    }
 }
 
 impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
@@ -51,16 +59,24 @@ impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
         }
         Ok(output)
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        let length = UnsignedVariableInteger::<5>::new(self.len() as u64);
+        output += length.bit_length();
+        for (key, value) in self {
+            output += key.bit_length();
+            output += value.bit_length();
+        }
+        output
+    }
 }
 
 // Tests
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        reader_writer::{BitReader, BitWriter},
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
     use std::collections::{HashMap, HashSet};
 
     #[test]
@@ -82,11 +98,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
-        // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = HashMap::<i32, String>::de(&mut reader).unwrap();
         let out_2 = HashMap::<u16, bool>::de(&mut reader).unwrap();
@@ -114,11 +129,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
-        // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_1 = HashSet::<i32>::de(&mut reader).unwrap();
         let out_2 = HashSet::<u16>::de(&mut reader).unwrap();

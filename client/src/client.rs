@@ -9,11 +9,10 @@ use naia_client_socket::Socket;
 
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, PacketType, Protocol,
-    Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GameInstant, Message,
+    MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig,
+    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
-use naia_shared::{GameInstant, PingIndex};
 
 use crate::{
     connection::{
@@ -73,7 +72,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
-        self.handshake_manager.set_auth_message(Box::new(auth));
+        self.handshake_manager
+            .set_auth_message(MessageContainer::from(Box::new(auth)));
     }
 
     /// Connect to the given server address
@@ -109,13 +109,10 @@ impl<E: Copy + Eq + Hash> Client<E> {
         }
 
         for _ in 0..10 {
-            let mut writer = self.handshake_manager.write_disconnect();
-            match self.io.send_writer(&mut writer) {
-                Ok(()) => {}
-                Err(_) => {
-                    // TODO: pass this on and handle above
-                    warn!("Client Error: Cannot send disconnect packet to Server");
-                }
+            let writer = self.handshake_manager.write_disconnect();
+            if self.io.send_packet(writer.to_packet()).is_err() {
+                // TODO: pass this on and handle above
+                warn!("Client Error: Cannot send disconnect packet to Server");
             }
         }
 
@@ -191,10 +188,13 @@ impl<E: Copy + Eq + Hash> Client<E> {
     /// Queues up an Message to be sent to the Server
     pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(&ChannelKind::of::<C>(), cloned_message);
+        self.send_message_inner(
+            &ChannelKind::of::<C>(),
+            MessageContainer::from(cloned_message),
+        );
     }
 
-    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
         if !channel_settings.can_send_to_server() {
             panic!("Cannot send message to Server on this Channel");
@@ -205,23 +205,29 @@ impl<E: Copy + Eq + Hash> Client<E> {
         }
 
         if let Some(connection) = &mut self.server_connection {
-            connection
-                .base
-                .message_manager
-                .send_message(channel_kind, message);
+            connection.base.message_manager.send_message(
+                &self.protocol.message_kinds,
+                &connection.entity_manager,
+                channel_kind,
+                message,
+            );
         }
     }
 
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_tick_buffer_message_inner(tick, &ChannelKind::of::<C>(), cloned_message);
+        self.send_tick_buffer_message_inner(
+            tick,
+            &ChannelKind::of::<C>(),
+            MessageContainer::from(cloned_message),
+        );
     }
 
     fn send_tick_buffer_message_inner(
         &mut self,
         tick: &Tick,
         channel_kind: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
@@ -338,7 +344,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                     .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
                 // send packet
-                if self.io.send_writer(&mut writer).is_err() {
+                if self.io.send_packet(writer.to_packet()).is_err() {
                     // TODO: pass this on and handle above
                     warn!("Client Error: Cannot send heartbeat packet to Server");
                 }
@@ -424,7 +430,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                 ping_index.ser(&mut writer);
 
                                 // send packet
-                                if self.io.send_writer(&mut writer).is_err() {
+                                if self.io.send_packet(writer.to_packet()).is_err() {
                                     // TODO: pass this on and handle above
                                     warn!("Client Error: Cannot send pong packet to Server");
                                 }

@@ -3,14 +3,14 @@ use std::collections::VecDeque;
 use log::warn;
 
 use naia_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter, ChannelWriter,
-    Message, MessageKinds, Serde, ShortMessageIndex, Tick, TickBufferSettings,
-    UnsignedVariableInteger,
+    sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter,
+    MessageContainer, MessageKinds, NetEntityHandleConverter, Serde, ShortMessageIndex, Tick,
+    TickBufferSettings, UnsignedVariableInteger,
 };
 
 pub struct ChannelTickBufferSender {
     sending_messages: OutgoingMessages,
-    outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageIndex, Box<dyn Message>)>)>,
+    outgoing_messages: VecDeque<(Tick, Vec<(ShortMessageIndex, MessageContainer)>)>,
     last_sent: Tick,
     never_sent: bool,
 }
@@ -51,7 +51,7 @@ impl ChannelTickBufferSender {
         }
     }
 
-    pub fn send_message(&mut self, host_tick: &Tick, message: Box<dyn Message>) {
+    pub fn send_message(&mut self, host_tick: &Tick, message: MessageContainer) {
         self.sending_messages.push(*host_tick, message);
     }
 
@@ -64,8 +64,8 @@ impl ChannelTickBufferSender {
     pub fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
-        bit_writer: &mut BitWriter,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         host_tick: &Tick,
         has_written: &mut bool,
     ) -> Option<Vec<(Tick, ShortMessageIndex)>> {
@@ -80,10 +80,10 @@ impl ChannelTickBufferSender {
             let (message_tick, messages) = self.outgoing_messages.front().unwrap();
 
             // check that we can write the next message
-            let mut counter = bit_writer.counter();
+            let mut counter = writer.counter();
             self.write_message(
                 message_kinds,
-                channel_writer,
+                converter,
                 &mut counter,
                 &last_written_tick,
                 message_tick,
@@ -94,7 +94,7 @@ impl ChannelTickBufferSender {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of message being too big
                 if !*has_written {
-                    self.warn_overflow(messages, counter.bits_needed(), bit_writer.bits_free());
+                    self.warn_overflow(messages, counter.bits_needed(), writer.bits_free());
                 }
 
                 break;
@@ -103,19 +103,19 @@ impl ChannelTickBufferSender {
             *has_written = true;
 
             // write MessageContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // write data
-            let message_indexs = self.write_message(
+            let message_indices = self.write_message(
                 message_kinds,
-                channel_writer,
-                bit_writer,
+                converter,
+                writer,
                 &last_written_tick,
                 &message_tick,
                 &messages,
             );
             last_written_tick = *message_tick;
-            for message_index in message_indexs {
+            for message_index in message_indices {
                 output.push((*message_tick, message_index));
             }
 
@@ -130,40 +130,40 @@ impl ChannelTickBufferSender {
     fn write_message(
         &self,
         message_kinds: &MessageKinds,
-        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
-        bit_writer: &mut dyn BitWrite,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut dyn BitWrite,
         last_written_tick: &Tick,
         message_tick: &Tick,
-        messages: &Vec<(ShortMessageIndex, Box<dyn Message>)>,
+        messages: &Vec<(ShortMessageIndex, MessageContainer)>,
     ) -> Vec<ShortMessageIndex> {
-        let mut message_indexs = Vec::new();
+        let mut message_indices = Vec::new();
 
         // write message tick diff
         // this is reversed (diff is always negative, but it's encoded as positive)
         // because packet tick is always larger than past ticks
         let message_tick_diff = wrapping_diff(*message_tick, *last_written_tick);
         let message_tick_diff_encoded = UnsignedVariableInteger::<3>::new(message_tick_diff);
-        message_tick_diff_encoded.ser(bit_writer);
+        message_tick_diff_encoded.ser(writer);
 
         // write number of messages
         let message_count = UnsignedVariableInteger::<3>::new(messages.len() as u64);
-        message_count.ser(bit_writer);
+        message_count.ser(writer);
 
         let mut last_id_written: ShortMessageIndex = 0;
         for (message_index, message) in messages {
             // write message id diff
             let id_diff = UnsignedVariableInteger::<2>::new(*message_index - last_id_written);
-            id_diff.ser(bit_writer);
+            id_diff.ser(writer);
 
             // write payload
-            channel_writer.write(message_kinds, bit_writer, message);
+            message.write(message_kinds, writer, converter);
 
             // record id for output
-            message_indexs.push(*message_index);
+            message_indices.push(*message_index);
             last_id_written = *message_index;
         }
 
-        message_indexs
+        message_indices
     }
 
     pub fn notify_message_delivered(&mut self, tick: &Tick, message_index: &ShortMessageIndex) {
@@ -172,9 +172,9 @@ impl ChannelTickBufferSender {
 
     fn warn_overflow(
         &self,
-        messages: &Vec<(ShortMessageIndex, Box<dyn Message>)>,
-        bits_needed: u16,
-        bits_free: u16,
+        messages: &Vec<(ShortMessageIndex, MessageContainer)>,
+        bits_needed: u32,
+        bits_free: u32,
     ) {
         let mut message_names = "".to_string();
         let mut added = false;
@@ -194,7 +194,7 @@ impl ChannelTickBufferSender {
 
 // MessageMap
 struct MessageMap {
-    list: Vec<Option<Box<dyn Message>>>,
+    list: Vec<Option<MessageContainer>>,
 }
 
 impl MessageMap {
@@ -202,11 +202,11 @@ impl MessageMap {
         MessageMap { list: Vec::new() }
     }
 
-    pub fn insert(&mut self, message: Box<dyn Message>) {
+    pub fn insert(&mut self, message: MessageContainer) {
         self.list.push(Some(message));
     }
 
-    pub fn collect_messages(&self) -> Vec<(ShortMessageIndex, Box<dyn Message>)> {
+    pub fn collect_messages(&self) -> Vec<(ShortMessageIndex, MessageContainer)> {
         let mut output = Vec::new();
         for (index, message_opt) in self.list.iter().enumerate() {
             if let Some(message) = message_opt {
@@ -246,11 +246,11 @@ impl OutgoingMessages {
     }
 
     // should only push increasing ticks of messages
-    pub fn push(&mut self, message_tick: Tick, message_protocol: Box<dyn Message>) {
+    pub fn push(&mut self, message_tick: Tick, message: MessageContainer) {
         if let Some((front_tick, msg_map)) = self.buffer.front_mut() {
             if message_tick == *front_tick {
                 // been here before, cool
-                msg_map.insert(message_protocol);
+                msg_map.insert(message);
                 return;
             }
 
@@ -265,7 +265,7 @@ impl OutgoingMessages {
         }
 
         let mut msg_map = MessageMap::new();
-        msg_map.insert(message_protocol);
+        msg_map.insert(message);
         self.buffer.push_front((message_tick, msg_map));
 
         // a good time to prune down this list

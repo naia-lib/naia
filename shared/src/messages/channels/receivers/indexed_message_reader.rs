@@ -1,20 +1,18 @@
-use std::marker::PhantomData;
-
 use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
-use crate::messages::message_kinds::MessageKinds;
-use crate::{messages::message_channel::ChannelReader, types::MessageIndex};
+use crate::{
+    messages::message_kinds::MessageKinds, types::MessageIndex, MessageContainer,
+    NetEntityHandleConverter,
+};
 
-pub struct IndexedMessageReader<P> {
-    phantom_p: PhantomData<P>,
-}
+pub struct IndexedMessageReader;
 
-impl<P> IndexedMessageReader<P> {
+impl IndexedMessageReader {
     pub fn read_messages(
         message_kinds: &MessageKinds,
-        channel_reader: &dyn ChannelReader<P>,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
-    ) -> Result<Vec<(MessageIndex, P)>, SerdeErr> {
+    ) -> Result<Vec<(MessageIndex, MessageContainer)>, SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
         let mut output = Vec::new();
 
@@ -24,8 +22,7 @@ impl<P> IndexedMessageReader<P> {
                 break;
             }
 
-            let id_w_msg =
-                Self::read_message(message_kinds, channel_reader, reader, &last_read_id)?;
+            let id_w_msg = Self::read_message(message_kinds, converter, reader, &last_read_id)?;
             last_read_id = Some(id_w_msg.0);
             output.push(id_w_msg);
         }
@@ -35,10 +32,10 @@ impl<P> IndexedMessageReader<P> {
 
     fn read_message(
         message_kinds: &MessageKinds,
-        channel_reader: &dyn ChannelReader<P>,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
         last_read_id: &Option<MessageIndex>,
-    ) -> Result<(MessageIndex, P), SerdeErr> {
+    ) -> Result<(MessageIndex, MessageContainer), SerdeErr> {
         let message_index: MessageIndex = if let Some(last_id) = last_read_id {
             let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
             last_id.wrapping_add(id_diff)
@@ -48,7 +45,7 @@ impl<P> IndexedMessageReader<P> {
         };
 
         // read payload
-        let new_message = channel_reader.read(message_kinds, reader)?;
+        let new_message = message_kinds.read(reader, converter)?;
 
         Ok((message_index, new_message))
     }

@@ -3,7 +3,7 @@ use std::time::Duration;
 use log::warn;
 
 use naia_shared::{
-    BitReader, BitWriter, FakeEntityConverter, Message, MessageKinds, PacketType, Serde,
+    BitReader, BitWriter, FakeEntityConverter, MessageContainer, MessageKinds, PacketType, Serde,
     StandardHeader, Timer, Timestamp as stamp_time,
 };
 
@@ -52,7 +52,7 @@ pub struct HandshakeManager {
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Vec<u8>>,
-    auth_message: Option<Box<dyn Message>>,
+    auth_message: Option<MessageContainer>,
 }
 
 impl HandshakeManager {
@@ -73,7 +73,7 @@ impl HandshakeManager {
         }
     }
 
-    pub fn set_auth_message(&mut self, auth: Box<dyn Message>) {
+    pub fn set_auth_message(&mut self, auth: MessageContainer) {
         self.auth_message = Some(auth);
     }
 
@@ -92,15 +92,15 @@ impl HandshakeManager {
 
             match &mut self.connection_state {
                 HandshakeState::AwaitingChallengeResponse => {
-                    let mut writer = self.write_challenge_request();
-                    if io.send_writer(&mut writer).is_err() {
+                    let writer = self.write_challenge_request();
+                    if io.send_packet(writer.to_packet()).is_err() {
                         // TODO: pass this on and handle above
                         warn!("Client Error: Cannot send challenge request packet to Server");
                     }
                 }
                 HandshakeState::AwaitingValidateResponse => {
-                    let mut writer = self.write_validate_request(message_kinds);
-                    if io.send_writer(&mut writer).is_err() {
+                    let writer = self.write_validate_request(message_kinds);
+                    if io.send_packet(writer.to_packet()).is_err() {
                         // TODO: pass this on and handle above
                         warn!("Client Error: Cannot send validate request packet to Server");
                     }
@@ -111,8 +111,8 @@ impl HandshakeManager {
                     time_manager.send_ping(io);
                 }
                 HandshakeState::AwaitingConnectResponse(_) => {
-                    let mut writer = self.write_connect_request();
-                    if io.send_writer(&mut writer).is_err() {
+                    let writer = self.write_connect_request();
+                    if io.send_packet(writer.to_packet()).is_err() {
                         // TODO: pass this on and handle above
                         warn!("Client Error: Cannot send connect request packet to Server");
                     }

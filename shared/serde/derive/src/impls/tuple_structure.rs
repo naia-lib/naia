@@ -10,6 +10,7 @@ pub fn derive_serde_tuple_struct(
 ) -> TokenStream {
     let mut ser_body = quote! {};
     let mut de_body = quote! {};
+    let mut bit_length_body = quote! {};
 
     for (i, _) in struct_.fields.iter().enumerate() {
         let field_index = i;
@@ -21,6 +22,10 @@ pub fn derive_serde_tuple_struct(
             #de_body
             #field_index: Serde::de(reader)?,
         };
+        bit_length_body = quote! {
+            #bit_length_body
+            output += self.#field_index.bit_length();
+        };
     }
 
     let lowercase_struct_name = Ident::new(
@@ -29,7 +34,7 @@ pub fn derive_serde_tuple_struct(
     );
     let module_name = format_ident!("define_{}", lowercase_struct_name);
 
-    let import_types = quote! {BitWrite, Serde, BitReader, SerdeErr};
+    let import_types = quote! {BitWrite, Serde, ConstBitLength, BitReader, SerdeErr};
     let imports = quote! { use #serde_crate_name::{#import_types}; };
 
     quote! {
@@ -45,7 +50,11 @@ pub fn derive_serde_tuple_struct(
                         #de_body
                     })
                  }
-
+                 fn bit_length(&self) -> u32 {
+                    let mut output = 0;
+                    #bit_length_body
+                    output
+                }
             }
         }
     }

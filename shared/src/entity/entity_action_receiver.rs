@@ -4,29 +4,27 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::component::component_kinds::ComponentKind;
 use crate::{
-    sequence_less_than, EntityAction, MessageIndex as ActionIndex, UnorderedReliableReceiver,
+    component::component_kinds::ComponentKind, entity::action_receiver::ActionReceiver,
+    sequence_less_than, EntityAction, MessageIndex as ActionIndex,
 };
 
 pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
-    receiver: UnorderedReliableReceiver<EntityAction<E>>,
+    receiver: ActionReceiver<E>,
     entity_channels: HashMap<E, EntityChannel<E>>,
 }
 
-impl<E: Copy + Hash + Eq> Default for EntityActionReceiver<E> {
-    fn default() -> Self {
+impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
+    pub fn new() -> Self {
         Self {
-            receiver: UnorderedReliableReceiver::default(),
+            receiver: ActionReceiver::new(),
             entity_channels: HashMap::default(),
         }
     }
-}
 
-impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
     /// Buffer a read [`EntityAction`] so that it can be processed later
     pub fn buffer_action(&mut self, action_index: ActionIndex, action: EntityAction<E>) {
-        self.receiver.buffer_message(action_index, action)
+        self.receiver.buffer_message(action_index, action);
     }
 
     /// Read all buffered [`EntityAction`] inside the `receiver` and process them.

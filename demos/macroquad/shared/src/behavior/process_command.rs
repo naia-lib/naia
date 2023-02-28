@@ -1,6 +1,6 @@
 use crate::{components::Square, messages::KeyCommand};
 
-const SQUARE_SPEED: u16 = 3;
+const SQUARE_SPEED: u16 = 2;
 
 pub fn process_command(key_command: &KeyCommand, square: &mut Square) {
     if key_command.w {

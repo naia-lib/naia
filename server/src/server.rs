@@ -14,9 +14,10 @@ use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
-    BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityDoesNotExistError, EntityHandle,
-    EntityHandleConverter, Instant, Message, PacketType, PropertyMutator, Protocol, Replicate,
-    Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, Message,
+    MessageContainer, PacketType, PropertyMutator, Protocol, Replicate, Serde, StandardHeader,
+    Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -175,8 +176,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         };
 
         // send validate response
-        let mut writer = self.handshake_manager.write_validate_response();
-        if self.io.send_writer(&user.address, &mut writer).is_err() {
+        let writer = self.handshake_manager.write_validate_response();
+        if self
+            .io
+            .send_packet(&user.address, writer.to_packet())
+            .is_err()
+        {
             // TODO: pass this on and handle above
             warn!(
                 "Server Error: Cannot send validate response packet to {}",
@@ -202,8 +207,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         );
 
         // send connect response
-        let mut writer = self.handshake_manager.write_connect_response();
-        if self.io.send_writer(&user.address, &mut writer).is_err() {
+        let writer = self.handshake_manager.write_connect_response();
+        if self
+            .io
+            .send_packet(&user.address, writer.to_packet())
+            .is_err()
+        {
             // TODO: pass this on and handle above
             warn!(
                 "Server Error: Cannot send connect response packet to {}",
@@ -223,8 +232,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn reject_connection(&mut self, user_key: &UserKey) {
         if let Some(user) = self.users.get(user_key) {
             // send connect reject response
-            let mut writer = self.handshake_manager.write_reject_response();
-            match self.io.send_writer(&user.address, &mut writer) {
+            let writer = self.handshake_manager.write_reject_response();
+            match self.io.send_packet(&user.address, writer.to_packet()) {
                 Ok(()) => {}
                 Err(_) => {
                     // TODO: pass this on and handle above
@@ -245,7 +254,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// UserKey
     pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(user_key, &ChannelKind::of::<C>(), cloned_message);
+        self.send_message_inner(
+            user_key,
+            &ChannelKind::of::<C>(),
+            MessageContainer::from(cloned_message),
+        );
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -254,14 +267,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         user_key: &UserKey,
         channel_kind: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
-        if !self
-            .protocol
-            .channel_kinds
-            .channel(channel_kind)
-            .can_send_to_client()
-        {
+        let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
+
+        if !channel_settings.can_send_to_client() {
             panic!("Cannot send message to Client on this Channel");
         }
 
@@ -283,10 +293,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
-                        connection
-                            .base
-                            .message_manager
-                            .send_message(channel_kind, message);
+                        let converter =
+                            EntityConverter::new(&self.world_record, &connection.entity_manager);
+                        connection.base.message_manager.send_message(
+                            &self.protocol.message_kinds,
+                            &converter,
+                            channel_kind,
+                            message,
+                        );
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
@@ -297,10 +311,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         );
                     }
                 } else {
-                    connection
-                        .base
-                        .message_manager
-                        .send_message(channel_kind, message);
+                    let converter =
+                        EntityConverter::new(&self.world_record, &connection.entity_manager);
+                    connection.base.message_manager.send_message(
+                        &self.protocol.message_kinds,
+                        &converter,
+                        channel_kind,
+                        message,
+                    );
                 }
             }
         }
@@ -309,10 +327,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Sends a message to all connected users using a given channel
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.broadcast_message_inner(&ChannelKind::of::<C>(), cloned_message);
+        self.broadcast_message_inner(
+            &ChannelKind::of::<C>(),
+            MessageContainer::from(cloned_message),
+        );
     }
 
-    fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: Box<dyn Message>) {
+    fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
         self.user_keys()
             .iter()
             .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
@@ -838,7 +859,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub(crate) fn room_broadcast_message(
         &mut self,
         channel_kind: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
         room_key: &RoomKey,
     ) {
         if let Some(room) = self.rooms.get(room_key) {
@@ -944,7 +965,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.time_manager.current_tick_instant().ser(&mut writer);
 
                     // send packet
-                    if self.io.send_writer(user_address, &mut writer).is_err() {
+                    if self
+                        .io
+                        .send_packet(user_address, writer.to_packet())
+                        .is_err()
+                    {
                         // TODO: pass this on and handle above
                         warn!(
                             "Server Error: Cannot send heartbeat packet to {}",
@@ -982,7 +1007,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .write_ping(&mut writer, &self.time_manager);
 
                     // send packet
-                    if self.io.send_writer(user_address, &mut writer).is_err() {
+                    if self
+                        .io
+                        .send_packet(user_address, writer.to_packet())
+                        .is_err()
+                    {
                         // TODO: pass this on and handle above
                         warn!("Server Error: Cannot send ping packet to {}", user_address);
                     }
@@ -1007,10 +1036,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     // Handshake stuff
                     match header.packet_type {
                         PacketType::ClientChallengeRequest => {
-                            if let Ok(mut writer) =
+                            if let Ok(writer) =
                                 self.handshake_manager.recv_challenge_request(&mut reader)
                             {
-                                if self.io.send_writer(&address, &mut writer).is_err() {
+                                if self.io.send_packet(&address, writer.to_packet()).is_err() {
                                     // TODO: pass this on and handle above
                                     warn!(
                                         "Server Error: Cannot send challenge response packet to {}",
@@ -1029,9 +1058,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 HandshakeResult::Success(auth_message_opt) => {
                                     if self.validated_users.contains_key(&address) {
                                         // send validate response
-                                        let mut writer =
+                                        let writer =
                                             self.handshake_manager.write_validate_response();
-                                        if self.io.send_writer(&address, &mut writer).is_err() {
+                                        if self
+                                            .io
+                                            .send_packet(&address, writer.to_packet())
+                                            .is_err()
+                                        {
                                             // TODO: pass this on and handle above
                                             warn!("Server Error: Cannot send validate success response packet to {}", &address);
                                         };
@@ -1053,9 +1086,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             continue;
                         }
                         PacketType::Ping => {
-                            let mut response = self.time_manager.process_ping(&mut reader).unwrap();
+                            let response = self.time_manager.process_ping(&mut reader).unwrap();
                             // send packet
-                            if self.io.send_writer(&address, &mut response).is_err() {
+                            if self.io.send_packet(&address, response.to_packet()).is_err() {
                                 // TODO: pass this on and handle above
                                 warn!("Server Error: Cannot send pong packet to {}", &address);
                             };
@@ -1067,8 +1100,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         PacketType::ClientConnectRequest => {
                             if self.user_connections.contains_key(&address) {
                                 // send connect response
-                                let mut writer = self.handshake_manager.write_connect_response();
-                                if self.io.send_writer(&address, &mut writer).is_err() {
+                                let writer = self.handshake_manager.write_connect_response();
+                                if self.io.send_packet(&address, writer.to_packet()).is_err() {
                                     // TODO: pass this on and handle above
                                     warn!("Server Error: Cannot send connect success response packet to {}", &address);
                                 };

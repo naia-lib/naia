@@ -4,8 +4,9 @@ use naia_server_socket::{NaiaServerSocketError, PacketReceiver, PacketSender};
 
 pub use naia_shared::{
     wrapping_diff, BaseConnection, BitWriter, CompressionConfig, ConnectionConfig, Decoder,
-    Encoder, Instant, KeyGenerator, OwnedBitReader, PacketType, PropertyMutate, PropertyMutator,
-    Replicate, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    Encoder, Instant, KeyGenerator, OutgoingPacket, OwnedBitReader, PacketType, PropertyMutate,
+    PropertyMutator, Replicate, StandardHeader, Timer, Timestamp, WorldMutType, WorldRefType,
+    MTU_SIZE_BYTES,
 };
 
 use super::bandwidth_monitor::BandwidthMonitor;
@@ -63,14 +64,13 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_writer(
+    pub fn send_packet(
         &mut self,
         address: &SocketAddr,
-        writer: &mut BitWriter,
+        packet: OutgoingPacket,
     ) -> Result<(), NaiaServerSocketError> {
         // get payload
-        let (length, buffer) = writer.flush();
-        let mut payload = &buffer[0..length];
+        let mut payload = packet.slice();
 
         // Compression
         if let Some(encoder) = &mut self.outgoing_encoder {

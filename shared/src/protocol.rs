@@ -6,9 +6,12 @@ use crate::{
     component::{component_kinds::ComponentKinds, replicate::Replicate},
     connection::compression_config::CompressionConfig,
     messages::{
-        channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
-        channel_kinds::ChannelKinds,
-        default_channels::DefaultChannelsPlugin,
+        channels::{
+            channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
+            channel_kinds::ChannelKinds,
+            default_channels::DefaultChannelsPlugin,
+        },
+        fragment::FragmentedMessage,
         message::Message,
         message_kinds::MessageKinds,
     },
@@ -35,9 +38,11 @@ pub struct Protocol {
 
 impl Default for Protocol {
     fn default() -> Self {
+        let mut message_kinds = MessageKinds::new();
+        message_kinds.add_message::<FragmentedMessage>();
         Self {
             channel_kinds: ChannelKinds::new(),
-            message_kinds: MessageKinds::new(),
+            message_kinds,
             component_kinds: ComponentKinds::new(),
             socket: SocketConfig::new(None, None),
             tick_interval: Duration::from_millis(50),

@@ -1,7 +1,8 @@
 use crate::{
+    bit_reader::BitReader,
+    bit_writer::BitWrite,
     error::SerdeErr,
-    reader_writer::{BitReader, BitWrite},
-    serde::Serde,
+    serde::{ConstBitLength, Serde},
 };
 
 impl<T: Serde> Serde for &[T] {
@@ -13,6 +14,14 @@ impl<T: Serde> Serde for &[T] {
 
     fn de(_: &mut BitReader) -> Result<Self, SerdeErr> {
         Err(SerdeErr {})
+    }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        for item in *self {
+            output += item.bit_length();
+        }
+        output
     }
 }
 
@@ -33,16 +42,27 @@ impl<T: Serde, const N: usize> Serde for [T; N] {
             Ok(to.assume_init())
         }
     }
+
+    fn bit_length(&self) -> u32 {
+        let mut output = 0;
+        for item in self {
+            output += item.bit_length();
+        }
+        output
+    }
+}
+
+impl<T: ConstBitLength, const N: usize> ConstBitLength for [T; N] {
+    fn const_bit_length() -> u32 {
+        return T::const_bit_length() * (N as u32);
+    }
 }
 
 // Tests
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        reader_writer::{BitReader, BitWriter},
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
 
     #[test]
     fn read_write() {
@@ -55,11 +75,10 @@ mod tests {
         in_1.ser(&mut writer);
         in_2.ser(&mut writer);
 
-        let (buffer_length, buffer) = writer.flush();
+        let buffer = writer.to_bytes();
 
-        // Read
-
-        let mut reader = BitReader::new(&buffer[..buffer_length]);
+        //Read
+        let mut reader = BitReader::new(&buffer);
 
         let out_1: [i32; 4] = Serde::de(&mut reader).unwrap();
         let out_2: [bool; 3] = Serde::de(&mut reader).unwrap();

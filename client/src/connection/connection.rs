@@ -4,8 +4,7 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant,
-    OwnedBitReader, PacketType, Protocol, ProtocolIo, Serde, SerdeErr, StandardHeader, Tick,
-    WorldMutType,
+    OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldMutType,
 };
 
 use crate::{
@@ -82,14 +81,13 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
 
-            let channel_reader = ProtocolIo::new(&self.entity_manager);
-
             // read messages
             {
-                let messages_result =
-                    self.base
-                        .message_manager
-                        .read_messages(protocol, &channel_reader, &mut reader);
+                let messages_result = self.base.message_manager.read_messages(
+                    protocol,
+                    &self.entity_manager,
+                    &mut reader,
+                );
                 if messages_result.is_err() {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming messages from packet!");
@@ -187,56 +185,54 @@ impl<E: Copy + Eq + Hash> Connection<E> {
         if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
             let next_packet_index = self.base.next_packet_index();
 
-            let mut bit_writer = BitWriter::new();
+            let mut writer = BitWriter::new();
 
             // Reserve bits we know will be required to finish the message:
             // 1. Tick buffer finish bit
             // 2. Messages finish bit
-            bit_writer.reserve_bits(2);
+            writer.reserve_bits(2);
 
             // write header
             self.base
-                .write_outgoing_header(PacketType::Data, &mut bit_writer);
-
-            let channel_writer = ProtocolIo::new(&self.entity_manager);
+                .write_outgoing_header(PacketType::Data, &mut writer);
 
             let mut has_written = false;
 
             // write tick
             let client_tick: Tick = self.time_manager.client_sending_tick;
-            client_tick.ser(&mut bit_writer);
+            client_tick.ser(&mut writer);
 
             // write tick buffered messages
             self.tick_buffer.write_messages(
                 &protocol,
-                &channel_writer,
-                &mut bit_writer,
+                &self.entity_manager,
+                &mut writer,
                 next_packet_index,
                 &client_tick,
                 &mut has_written,
             );
 
             // finish tick buffered messages
-            false.ser(&mut bit_writer);
-            bit_writer.release_bits(1);
+            false.ser(&mut writer);
+            writer.release_bits(1);
 
             // write messages
             {
                 self.base.message_manager.write_messages(
                     protocol,
-                    &channel_writer,
-                    &mut bit_writer,
+                    &self.entity_manager,
+                    &mut writer,
                     next_packet_index,
                     &mut has_written,
                 );
 
                 // finish messages
-                false.ser(&mut bit_writer);
-                bit_writer.release_bits(1);
+                false.ser(&mut writer);
+                writer.release_bits(1);
             }
 
             // send packet
-            if io.send_writer(&mut bit_writer).is_err() {
+            if io.send_packet(writer.to_packet()).is_err() {
                 // TODO: pass this on and handle above
                 warn!("Client Error: Cannot send data packet to Server");
             }

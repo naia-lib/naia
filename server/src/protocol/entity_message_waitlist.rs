@@ -3,16 +3,16 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{ChannelKind, KeyGenerator, Message, MessageManager};
+use naia_shared::{ChannelKind, KeyGenerator, MessageContainer};
 
 type MessageHandle = u16;
 
 pub struct EntityMessageWaitlist<E: Copy + Eq + Hash> {
     message_handle_store: KeyGenerator<MessageHandle>,
-    messages: HashMap<MessageHandle, (Vec<E>, ChannelKind, Box<dyn Message>)>,
+    messages: HashMap<MessageHandle, (Vec<E>, ChannelKind, MessageContainer)>,
     waiting_entities: HashMap<E, HashSet<MessageHandle>>,
     in_scope_entities: HashSet<E>,
-    ready_messages: Vec<(ChannelKind, Box<dyn Message>)>,
+    ready_messages: Vec<(ChannelKind, MessageContainer)>,
 }
 
 impl<E: Copy + Eq + Hash> Default for EntityMessageWaitlist<E> {
@@ -32,7 +32,7 @@ impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
         &mut self,
         entities: Vec<E>,
         channel: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         let new_handle = self.message_handle_store.generate();
 
@@ -102,9 +102,7 @@ impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
         self.in_scope_entities.remove(entity);
     }
 
-    pub fn collect_ready_messages(&mut self, message_manager: &mut MessageManager) {
-        for (channel, message) in self.ready_messages.drain(..) {
-            message_manager.send_message(&channel, message);
-        }
+    pub fn collect_ready_messages(&mut self) -> Vec<(ChannelKind, MessageContainer)> {
+        std::mem::replace(&mut self.ready_messages, Vec::new())
     }
 }

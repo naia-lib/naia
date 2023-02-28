@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ChannelWriter, Message,
-    PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick,
+    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength, MessageContainer,
+    NetEntityHandleConverter, PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex,
+    Tick,
 };
 
 use super::channel_tick_buffer_sender::ChannelTickBufferSender;
@@ -17,12 +18,10 @@ impl TickBufferSender {
     pub fn new(channel_kinds: &ChannelKinds) -> Self {
         // initialize senders
         let mut channel_senders = HashMap::new();
-        for (channel_index, channel) in channel_kinds.channels() {
+        for (channel_kind, channel) in channel_kinds.channels() {
             if let ChannelMode::TickBuffered(settings) = &channel.mode {
-                channel_senders.insert(
-                    channel_index,
-                    ChannelTickBufferSender::new(settings.clone()),
-                );
+                channel_senders
+                    .insert(channel_kind, ChannelTickBufferSender::new(settings.clone()));
             }
         }
 
@@ -38,7 +37,7 @@ impl TickBufferSender {
         &mut self,
         host_tick: &Tick,
         channel_kind: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
             channel.send_message(host_tick, message);
@@ -67,8 +66,8 @@ impl TickBufferSender {
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        channel_writer: &dyn ChannelWriter<Box<dyn Message>>,
-        bit_writer: &mut BitWriter,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         packet_index: PacketIndex,
         host_tick: &Tick,
         has_written: &mut bool,
@@ -79,8 +78,8 @@ impl TickBufferSender {
             }
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
-            let mut counter = bit_writer.counter();
-            channel_kind.ser(&protocol.channel_kinds, &mut counter);
+            let mut counter = writer.counter();
+            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
             counter.write_bit(false);
 
             if counter.overflowed() {
@@ -88,19 +87,19 @@ impl TickBufferSender {
             }
 
             // write ChannelContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // reserve MessageContinue bit
-            bit_writer.reserve_bits(1);
+            writer.reserve_bits(1);
 
             // write ChannelIndex
-            channel_kind.ser(&protocol.channel_kinds, bit_writer);
+            channel_kind.ser(&protocol.channel_kinds, writer);
 
             // write Messages
-            if let Some(message_indexes) = channel.write_messages(
+            if let Some(message_indices) = channel.write_messages(
                 &protocol.message_kinds,
-                channel_writer,
-                bit_writer,
+                converter,
+                writer,
                 host_tick,
                 has_written,
             ) {
@@ -108,12 +107,12 @@ impl TickBufferSender {
                     .entry(packet_index)
                     .or_insert_with(Vec::new);
                 let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
-                channel_list.push((*channel_kind, message_indexes));
+                channel_list.push((*channel_kind, message_indices));
             }
 
             // write MessageContinue finish bit, release
-            false.ser(bit_writer);
-            bit_writer.release_bits(1);
+            false.ser(writer);
+            writer.release_bits(1);
         }
     }
 }
@@ -121,9 +120,9 @@ impl TickBufferSender {
 impl PacketNotifiable for TickBufferSender {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_channel_map.get(&packet_index) {
-            for (channel_index, message_indexs) in channel_list {
-                if let Some(channel) = self.channel_senders.get_mut(channel_index) {
-                    for (tick, message_index) in message_indexs {
+            for (channel_kind, message_indices) in channel_list {
+                if let Some(channel) = self.channel_senders.get_mut(channel_kind) {
+                    for (tick, message_index) in message_indices {
                         channel.notify_message_delivered(tick, message_index);
                     }
                 }

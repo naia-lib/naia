@@ -1,8 +1,9 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
-use naia_shared::{Channel, ChannelKind, Message, MessageKind, Tick};
+use naia_shared::{Channel, ChannelKind, Message, MessageContainer, MessageKind, Tick};
 
 use super::user::{User, UserKey};
+
 use crate::NaiaServerError;
 
 pub struct Events {
@@ -10,8 +11,8 @@ pub struct Events {
     disconnections: Vec<(UserKey, User)>,
     ticks: Vec<Tick>,
     errors: Vec<NaiaServerError>,
-    auths: HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>,
-    messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>>,
+    auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
+    messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
     empty: bool,
 }
 
@@ -47,12 +48,12 @@ impl Events {
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
     pub fn take_messages(
         &mut self,
-    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>>> {
+    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>> {
         mem::take(&mut self.messages)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
-    pub fn take_auths(&mut self) -> HashMap<MessageKind, Vec<(UserKey, Box<dyn Message>)>> {
+    pub fn take_auths(&mut self) -> HashMap<MessageKind, Vec<(UserKey, MessageContainer)>> {
         mem::take(&mut self.auths)
     }
 
@@ -68,7 +69,7 @@ impl Events {
         self.empty = false;
     }
 
-    pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: Box<dyn Message>) {
+    pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: MessageContainer) {
         let auth_message_type_id = auth_message.kind();
         if !self.auths.contains_key(&auth_message_type_id) {
             self.auths.insert(auth_message_type_id, Vec::new());
@@ -82,7 +83,7 @@ impl Events {
         &mut self,
         user_key: &UserKey,
         channel_kind: &ChannelKind,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         if !self.messages.contains_key(&channel_kind) {
             self.messages.insert(*channel_kind, HashMap::new());

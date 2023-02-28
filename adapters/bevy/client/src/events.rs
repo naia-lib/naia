@@ -5,7 +5,7 @@ use bevy_ecs::entity::Entity;
 use naia_client::{Events, NaiaClientError};
 
 use naia_bevy_shared::{
-    Channel, ChannelKind, ComponentKind, Message, MessageKind, Replicate, Tick,
+    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick,
 };
 
 // ConnectEvent
@@ -22,7 +22,7 @@ pub struct ErrorEvent(pub NaiaClientError);
 
 // MessageEvents
 pub struct MessageEvents {
-    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<Box<dyn Message>>>>,
+    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
 }
 
 impl From<&mut Events<Entity>> for MessageEvents {
@@ -42,7 +42,7 @@ impl MessageEvents {
             let message_kind = MessageKind::of::<M>();
             if let Some(messages) = message_map.get(&message_kind) {
                 for boxed_message in messages {
-                    let boxed_any = boxed_message.clone_box().to_boxed_any();
+                    let boxed_any = boxed_message.clone().to_boxed_any();
                     let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_any)
                         .ok()
                         .map(|boxed_m| *boxed_m)

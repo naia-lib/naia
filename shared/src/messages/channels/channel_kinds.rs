@@ -1,8 +1,8 @@
 use std::{any::TypeId, collections::HashMap};
 
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
-use crate::{messages::channel::ChannelSettings, Channel};
+use crate::messages::channels::channel::{Channel, ChannelSettings};
 
 type NetId = u16;
 
@@ -34,6 +34,12 @@ impl ChannelKind {
     pub fn de(channel_kinds: &ChannelKinds, reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let net_id: NetId = NetId::de(reader)?;
         Ok(channel_kinds.net_id_to_kind(&net_id))
+    }
+}
+
+impl ConstBitLength for ChannelKind {
+    fn const_bit_length() -> u32 {
+        <NetId as ConstBitLength>::const_bit_length()
     }
 }
 

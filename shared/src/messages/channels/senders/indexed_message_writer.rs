@@ -1,26 +1,26 @@
-use std::{collections::VecDeque, marker::PhantomData};
+use std::collections::VecDeque;
 
 use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 
-use crate::{messages::message_kinds::MessageKinds, types::MessageIndex, wrapping_diff};
-
-use super::message_channel::ChannelWriter;
+use crate::{
+    messages::{message_container::MessageContainer, message_kinds::MessageKinds},
+    types::MessageIndex,
+    wrapping_diff, NetEntityHandleConverter,
+};
 
 // Sender
-pub struct IndexedMessageWriter<P: Send + Sync> {
-    phantom_p: PhantomData<P>,
-}
+pub struct IndexedMessageWriter;
 
-impl<P: Send + Sync> IndexedMessageWriter<P> {
+impl IndexedMessageWriter {
     pub fn write_messages(
         message_kinds: &MessageKinds,
-        outgoing_messages: &mut VecDeque<(MessageIndex, P)>,
-        channel_writer: &dyn ChannelWriter<P>,
-        bit_writer: &mut BitWriter,
+        outgoing_messages: &mut VecDeque<(MessageIndex, MessageContainer)>,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
         let mut last_written_id: Option<MessageIndex> = None;
-        let mut message_indexs = Vec::new();
+        let mut message_indices = Vec::new();
 
         loop {
             if outgoing_messages.is_empty() {
@@ -29,10 +29,10 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
 
             // check that we can write the next message
             let (message_index, message) = outgoing_messages.front().unwrap();
-            let mut counter = bit_writer.counter();
+            let mut counter = writer.counter();
             Self::write_message(
                 message_kinds,
-                channel_writer,
+                converter,
                 &mut counter,
                 &last_written_id,
                 message_index,
@@ -43,7 +43,7 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of message being too big
                 if !*has_written {
-                    Self::warn_overflow(counter.bits_needed(), bit_writer.bits_free());
+                    Self::warn_overflow(counter.bits_needed(), writer.bits_free());
                 }
 
                 break;
@@ -52,49 +52,49 @@ impl<P: Send + Sync> IndexedMessageWriter<P> {
             *has_written = true;
 
             // write MessageContinue bit
-            true.ser(bit_writer);
+            true.ser(writer);
 
             // write data
             Self::write_message(
                 message_kinds,
-                channel_writer,
-                bit_writer,
+                converter,
+                writer,
                 &last_written_id,
                 message_index,
                 message,
             );
 
-            message_indexs.push(*message_index);
+            message_indices.push(*message_index);
             last_written_id = Some(*message_index);
 
             // pop message we've written
             outgoing_messages.pop_front();
         }
-        Some(message_indexs)
+        Some(message_indices)
     }
 
     fn write_message(
         message_kinds: &MessageKinds,
-        channel_writer: &dyn ChannelWriter<P>,
-        bit_writer: &mut dyn BitWrite,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut dyn BitWrite,
         last_written_id: &Option<MessageIndex>,
         message_index: &MessageIndex,
-        message: &P,
+        message: &MessageContainer,
     ) {
         if let Some(last_id) = last_written_id {
             // write message id diff
             let id_diff = wrapping_diff(*last_id, *message_index);
             let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
-            id_diff_encoded.ser(bit_writer);
+            id_diff_encoded.ser(writer);
         } else {
             // write message id
-            message_index.ser(bit_writer);
+            message_index.ser(writer);
         }
 
-        channel_writer.write(message_kinds, bit_writer, message);
+        message.write(message_kinds, writer, converter);
     }
 
-    fn warn_overflow(bits_needed: u16, bits_free: u16) {
+    fn warn_overflow(bits_needed: u32, bits_free: u32) {
         panic!(
             "Packet Write Error: Blocking overflow detected! Message requires {bits_needed} bits, but packet only has {bits_free} bits available! This condition should never be reached, as large Messages should be Fragmented in the Reliable channel"
         )

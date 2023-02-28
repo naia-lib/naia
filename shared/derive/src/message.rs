@@ -7,6 +7,7 @@ use super::shared::{get_struct_type, StructType};
 pub fn message_impl(
     input: proc_macro::TokenStream,
     shared_crate_name: TokenStream,
+    is_fragment: bool,
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -25,12 +26,14 @@ pub fn message_impl(
     let builder_name = format_ident!("{}Builder", struct_name);
 
     // Methods
-    let clone_method = clone_method(&struct_name, &fields, &struct_type);
-    let has_entity_properties_method = has_entity_properties_method(&fields);
-    let entities_method = entities_method(&fields, &struct_type);
-    let write_method = write_method(&fields, &struct_type);
-    let create_builder_method = create_builder_method(&builder_name);
-    let read_method = read_method(&struct_name, &fields, &struct_type);
+    let clone_method = get_clone_method(&struct_name, &fields, &struct_type);
+    let has_entity_properties_method = get_has_entity_properties_method(&fields);
+    let entities_method = get_entities_method(&fields, &struct_type);
+    let bit_length_method = get_bit_length_method(&fields, &struct_type);
+    let write_method = get_write_method(&fields, &struct_type);
+    let create_builder_method = get_create_builder_method(&builder_name);
+    let read_method = get_read_method(&struct_name, &fields, &struct_type);
+    let is_fragment_method = get_is_fragment_method(is_fragment);
 
     let gen = quote! {
         mod #module_name {
@@ -38,7 +41,7 @@ pub fn message_impl(
             pub use std::any::Any;
             pub use #shared_crate_name::{
                 Named, EntityHandle, Message, BitWrite, NetEntityHandleConverter,
-                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr
+                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer
             };
             use super::*;
 
@@ -54,6 +57,8 @@ pub fn message_impl(
                 fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
                     self
                 }
+                #is_fragment_method
+                #bit_length_method
                 #create_builder_method
                 #has_entity_properties_method
                 #entities_method
@@ -73,7 +78,26 @@ pub fn message_impl(
     proc_macro::TokenStream::from(gen)
 }
 
-fn clone_method(replica_name: &Ident, fields: &[Field], struct_type: &StructType) -> TokenStream {
+fn get_is_fragment_method(is_fragment: bool) -> TokenStream {
+    let value = {
+        if is_fragment {
+            quote! { true }
+        } else {
+            quote! { false }
+        }
+    };
+    quote! {
+        fn is_fragment(&self) -> bool {
+            #value
+        }
+    }
+}
+
+fn get_clone_method(
+    replica_name: &Ident,
+    fields: &[Field],
+    struct_type: &StructType,
+) -> TokenStream {
     let mut output = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
@@ -102,7 +126,7 @@ fn clone_method(replica_name: &Ident, fields: &[Field], struct_type: &StructType
     }
 }
 
-fn has_entity_properties_method(fields: &[Field]) -> TokenStream {
+fn get_has_entity_properties_method(fields: &[Field]) -> TokenStream {
     for field in fields.iter() {
         if let Field::EntityProperty(_) = field {
             return quote! {
@@ -120,7 +144,7 @@ fn has_entity_properties_method(fields: &[Field]) -> TokenStream {
     }
 }
 
-fn entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
@@ -148,48 +172,11 @@ fn entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 }
 
-fn write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
-    let mut field_writes = quote! {};
-
-    for (index, field) in fields.iter().enumerate() {
-        let field_name = get_field_name(field, index, struct_type);
-        let new_output_right = match field {
-            Field::Normal(_) => {
-                quote! {
-                    self.#field_name.ser(bit_writer);
-                }
-            }
-            Field::EntityProperty(_) => {
-                quote! {
-                    EntityProperty::write(&self.#field_name, bit_writer, converter);
-                }
-            }
-        };
-
-        let new_output_result = quote! {
-            #field_writes
-            #new_output_right
-        };
-        field_writes = new_output_result;
-    }
-
-    quote! {
-        fn write(&self, message_kinds: &MessageKinds, bit_writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-            self.kind().ser(message_kinds, bit_writer);
-            #field_writes
-        }
-    }
-}
-
-pub fn create_builder_method(builder_name: &Ident) -> TokenStream {
-    quote! {
-        fn create_builder() -> Box<dyn MessageBuilder> where Self:Sized {
-            Box::new(#builder_name)
-        }
-    }
-}
-
-pub fn read_method(struct_name: &Ident, fields: &[Field], struct_type: &StructType) -> TokenStream {
+pub fn get_read_method(
+    struct_name: &Ident,
+    fields: &[Field],
+    struct_type: &StructType,
+) -> TokenStream {
     let mut field_names = quote! {};
     for field in fields.iter() {
         let field_name = field.variable_name();
@@ -251,10 +238,86 @@ pub fn read_method(struct_name: &Ident, fields: &[Field], struct_type: &StructTy
     };
 
     quote! {
-        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<Box<dyn Message>, SerdeErr> {
+        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<MessageContainer, SerdeErr> {
             #field_reads
 
-            return Ok(Box::new(#struct_build));
+            return Ok(MessageContainer::from(Box::new(#struct_build)));
+        }
+    }
+}
+
+fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+    let mut field_writes = quote! {};
+
+    for (index, field) in fields.iter().enumerate() {
+        let field_name = get_field_name(field, index, struct_type);
+        let new_output_right = match field {
+            Field::Normal(_) => {
+                quote! {
+                    self.#field_name.ser(writer);
+                }
+            }
+            Field::EntityProperty(_) => {
+                quote! {
+                    EntityProperty::write(&self.#field_name, writer, converter);
+                }
+            }
+        };
+
+        let new_output_result = quote! {
+            #field_writes
+            #new_output_right
+        };
+        field_writes = new_output_result;
+    }
+
+    quote! {
+        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+            self.kind().ser(message_kinds, writer);
+            #field_writes
+        }
+    }
+}
+
+fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+    let mut field_bit_lengths = quote! {};
+
+    for (index, field) in fields.iter().enumerate() {
+        let field_name = get_field_name(field, index, struct_type);
+        let new_output_right = match field {
+            Field::Normal(_) => {
+                quote! {
+                    output += self.#field_name.bit_length();
+                }
+            }
+            Field::EntityProperty(_) => {
+                quote! {
+                    output += self.#field_name.bit_length();
+                }
+            }
+        };
+
+        let new_output_result = quote! {
+            #field_bit_lengths
+            #new_output_right
+        };
+        field_bit_lengths = new_output_result;
+    }
+
+    quote! {
+        fn bit_length(&self) -> u32 {
+            let mut output = 0;
+            output += <MessageKind as ConstBitLength>::const_bit_length();
+            #field_bit_lengths
+            output
+        }
+    }
+}
+
+pub fn get_create_builder_method(builder_name: &Ident) -> TokenStream {
+    quote! {
+        fn create_builder() -> Box<dyn MessageBuilder> where Self:Sized {
+            Box::new(#builder_name)
         }
     }
 }

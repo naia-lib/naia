@@ -1,8 +1,8 @@
 use std::{any::TypeId, collections::HashMap};
 
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
-use crate::{Message, MessageBuilder, NetEntityHandleConverter};
+use crate::{Message, MessageBuilder, MessageContainer, NetEntityHandleConverter};
 
 type NetId = u16;
 
@@ -37,6 +37,12 @@ impl MessageKind {
     }
 }
 
+impl ConstBitLength for MessageKind {
+    fn const_bit_length() -> u32 {
+        <NetId as ConstBitLength>::const_bit_length()
+    }
+}
+
 // MessageKinds
 pub struct MessageKinds {
     current_net_id: NetId,
@@ -68,7 +74,7 @@ impl MessageKinds {
         &self,
         reader: &mut BitReader,
         converter: &dyn NetEntityHandleConverter,
-    ) -> Result<Box<dyn Message>, SerdeErr> {
+    ) -> Result<MessageContainer, SerdeErr> {
         let message_kind: MessageKind = MessageKind::de(self, reader)?;
         return self.kind_to_builder(&message_kind).read(reader, converter);
     }
