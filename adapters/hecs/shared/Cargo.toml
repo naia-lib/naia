@@ -1,6 +1,6 @@
 [package]
 name = "naia-hecs-shared"
-# 0.17 is unpublished for now, due to lack of use of this crate, as well as plans for rapid releases - 2/24/2023
+# 0.18 is unpublished for now, due to lack of use of this crate, as well as plans for rapid releases - 2/28/2023
 version = "0.18.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
