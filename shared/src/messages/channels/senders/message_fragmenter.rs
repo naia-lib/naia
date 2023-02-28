@@ -83,10 +83,11 @@ impl BitWrite for FragmentWriter {
     }
 
     fn write_byte(&mut self, byte: u8) {
-        if self.current_writer.bits_free() < 8 {
-            self.flush_current();
+        let mut temp = byte;
+        for _ in 0..8 {
+            self.write_bit(temp & 1 != 0);
+            temp >>= 1;
         }
-        self.current_writer.write_byte(byte);
     }
 
     fn write_bits(&mut self, _bits: u32) {
