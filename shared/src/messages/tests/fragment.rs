@@ -103,9 +103,18 @@ fn convert_multiple_fragments() {
 
     // Receive Fragments
     let mut incoming_message_container_opt = None;
-    for fragment in fragments {
+    for i in 0..fragments.len() {
+
+        // shuffle indexes
+        let j = match i {
+            0 => 1,
+            1 => 0,
+            x => x,
+        };
+
+        let fragment = &fragments[j];
         if let Some((_, reassembled_message)) =
-            receiver.receive(&message_kinds, &converter, fragment)
+            receiver.receive(&message_kinds, &converter, fragment.clone())
         {
             incoming_message_container_opt = Some(reassembled_message);
             break;
