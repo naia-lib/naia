@@ -2,7 +2,7 @@ use std::{any::TypeId, collections::HashMap};
 
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
-use crate::{Message, MessageBuilder, NetEntityHandleConverter};
+use crate::{Message, MessageBuilder, MessageContainer, NetEntityHandleConverter};
 
 type NetId = u16;
 
@@ -74,7 +74,7 @@ impl MessageKinds {
         &self,
         reader: &mut BitReader,
         converter: &dyn NetEntityHandleConverter,
-    ) -> Result<Box<dyn Message>, SerdeErr> {
+    ) -> Result<MessageContainer, SerdeErr> {
         let message_kind: MessageKind = MessageKind::de(self, reader)?;
         return self.kind_to_builder(&message_kind).read(reader, converter);
     }

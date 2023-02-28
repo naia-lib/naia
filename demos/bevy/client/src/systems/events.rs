@@ -55,7 +55,6 @@ pub fn message_events(
 ) {
     for events in event_reader.iter() {
         for message in events.read::<EntityAssignmentChannel, EntityAssignment>() {
-
             let hidden_string = message.big_thing;
             info!("Here's the text: {hidden_string}");
 

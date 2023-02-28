@@ -4,7 +4,7 @@ use naia_bevy_shared::{EntityProperty, Message};
 pub struct EntityAssignment {
     pub entity: EntityProperty,
     pub assign: bool,
-    pub big_thing: String
+    pub big_thing: String,
 }
 
 impl EntityAssignment {

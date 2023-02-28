@@ -1,7 +1,7 @@
 use crate::{
     messages::channels::reliable_receiver::{ReceiverArranger, ReliableReceiver},
     types::MessageIndex,
-    Message,
+    MessageContainer,
 };
 
 pub type UnorderedReliableReceiver = ReliableReceiver<UnorderedArranger>;
@@ -18,9 +18,9 @@ pub struct UnorderedArranger;
 impl ReceiverArranger for UnorderedArranger {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, Box<dyn Message>)>,
+        incoming_messages: &mut Vec<(MessageIndex, MessageContainer)>,
         message_index: MessageIndex,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         incoming_messages.push((message_index, message));
     }

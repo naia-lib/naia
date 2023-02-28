@@ -7,11 +7,11 @@ use crate::{
         channels::message_channel::{ChannelReceiver, MessageChannelReceiver},
         message_kinds::MessageKinds,
     },
-    Message, NetEntityHandleConverter,
+    MessageContainer, NetEntityHandleConverter,
 };
 
 pub struct UnorderedUnreliableReceiver {
-    incoming_messages: VecDeque<Box<dyn Message>>,
+    incoming_messages: VecDeque<MessageContainer>,
 }
 
 impl UnorderedUnreliableReceiver {
@@ -26,18 +26,18 @@ impl UnorderedUnreliableReceiver {
         message_kinds: &MessageKinds,
         converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
-    ) -> Result<Box<dyn Message>, SerdeErr> {
+    ) -> Result<MessageContainer, SerdeErr> {
         // read payload
         message_kinds.read(reader, converter)
     }
 
-    fn recv_message(&mut self, message: Box<dyn Message>) {
+    fn recv_message(&mut self, message: MessageContainer) {
         self.incoming_messages.push_back(message);
     }
 }
 
-impl ChannelReceiver<Box<dyn Message>> for UnorderedUnreliableReceiver {
-    fn receive_messages(&mut self) -> Vec<Box<dyn Message>> {
+impl ChannelReceiver<MessageContainer> for UnorderedUnreliableReceiver {
+    fn receive_messages(&mut self) -> Vec<MessageContainer> {
         Vec::from(mem::take(&mut self.incoming_messages))
     }
 }

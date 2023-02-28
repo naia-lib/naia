@@ -3,7 +3,7 @@ use std::time::Duration;
 use log::warn;
 
 use naia_shared::{
-    BitReader, BitWriter, FakeEntityConverter, Message, MessageKinds, PacketType, Serde,
+    BitReader, BitWriter, FakeEntityConverter, MessageContainer, MessageKinds, PacketType, Serde,
     StandardHeader, Timer, Timestamp as stamp_time,
 };
 
@@ -52,7 +52,7 @@ pub struct HandshakeManager {
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Vec<u8>>,
-    auth_message: Option<Box<dyn Message>>,
+    auth_message: Option<MessageContainer>,
 }
 
 impl HandshakeManager {
@@ -73,7 +73,7 @@ impl HandshakeManager {
         }
     }
 
-    pub fn set_auth_message(&mut self, auth: Box<dyn Message>) {
+    pub fn set_auth_message(&mut self, auth: MessageContainer) {
         self.auth_message = Some(auth);
     }
 

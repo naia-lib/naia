@@ -7,7 +7,7 @@ use crate::{
         message_kinds::{MessageKind, MessageKinds},
         named::Named,
     },
-    EntityHandle, NetEntityHandleConverter,
+    EntityHandle, MessageContainer, NetEntityHandleConverter,
 };
 
 // MessageBuilder
@@ -17,7 +17,7 @@ pub trait MessageBuilder: Send + Sync {
         &self,
         reader: &mut BitReader,
         converter: &dyn NetEntityHandleConverter,
-    ) -> Result<Box<dyn Message>, SerdeErr>;
+    ) -> Result<MessageContainer, SerdeErr>;
 }
 
 // Message

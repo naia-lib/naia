@@ -1,11 +1,12 @@
 use std::collections::HashMap;
+
 use log::info;
 
 use naia_serde::BitReader;
 
 use crate::{
     messages::message_fragmenter::{FragmentId, FragmentedMessage},
-    Message, MessageIndex, MessageKinds, NetEntityHandleConverter,
+    MessageContainer, MessageIndex, MessageKinds, NetEntityHandleConverter,
 };
 
 pub struct FragmentReceiver {
@@ -25,8 +26,8 @@ impl FragmentReceiver {
         &mut self,
         message_kinds: &MessageKinds,
         converter: &dyn NetEntityHandleConverter,
-        message: Box<dyn Message>,
-    ) -> Option<(MessageIndex, Box<dyn Message>)> {
+        message: MessageContainer,
+    ) -> Option<(MessageIndex, MessageContainer)> {
         // returns a new index, 1 per full message
 
         // Pass right through if not a fragment

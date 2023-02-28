@@ -72,7 +72,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
-        self.handshake_manager.set_auth_message(Box::new(auth));
+        self.handshake_manager
+            .set_auth_message(MessageContainer::from(Box::new(auth)));
     }
 
     /// Connect to the given server address

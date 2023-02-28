@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use crate::{
     messages::channels::reliable_receiver::{ReceiverArranger, ReliableReceiver},
     types::MessageIndex,
-    Message,
+    MessageContainer,
 };
 
 // OrderedReliableReceiver
@@ -20,16 +20,16 @@ impl OrderedReliableReceiver {
 
 // OrderedArranger
 pub struct OrderedArranger {
-    buffer: VecDeque<(MessageIndex, Option<Box<dyn Message>>)>,
+    buffer: VecDeque<(MessageIndex, Option<MessageContainer>)>,
     oldest_received_message_index: MessageIndex,
 }
 
 impl ReceiverArranger for OrderedArranger {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, Box<dyn Message>)>,
+        incoming_messages: &mut Vec<(MessageIndex, MessageContainer)>,
         message_index: MessageIndex,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         let mut current_index = 0;
 

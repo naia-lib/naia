@@ -217,7 +217,7 @@ impl<const SIGNED: bool, const BITS: u8> ConstBitLength for SerdeInteger<SIGNED,
 mod tests {
     use crate::{
         bit_reader::BitReader,
-bit_writer::BitWriter,
+        bit_writer::BitWriter,
         integer::{SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger},
         serde::Serde,
     };

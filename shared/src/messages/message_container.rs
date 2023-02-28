@@ -1,6 +1,8 @@
+use std::any::Any;
+
 use naia_serde::BitWrite;
 
-use crate::{EntityHandle, Message, MessageKinds, NetEntityHandleConverter};
+use crate::{EntityHandle, Message, MessageKind, MessageKinds, NetEntityHandleConverter};
 
 #[derive(Clone)]
 pub struct MessageContainer {
@@ -44,5 +46,17 @@ impl MessageContainer {
 
     pub fn entities(&self) -> Vec<EntityHandle> {
         return self.inner.entities();
+    }
+
+    pub fn is_fragment(&self) -> bool {
+        return self.inner.is_fragment();
+    }
+
+    pub fn to_boxed_any(self) -> Box<dyn Any> {
+        return self.inner.to_boxed_any();
+    }
+
+    pub fn kind(&self) -> MessageKind {
+        return self.inner.kind();
     }
 }

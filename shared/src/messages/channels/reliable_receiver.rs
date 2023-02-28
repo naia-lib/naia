@@ -13,16 +13,16 @@ use crate::{
     },
     sequence_less_than,
     types::MessageIndex,
-    Message, NetEntityHandleConverter,
+    MessageContainer, NetEntityHandleConverter,
 };
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, Box<dyn Message>)>,
+        incoming_messages: &mut Vec<(MessageIndex, MessageContainer)>,
         message_index: MessageIndex,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     );
 }
 
@@ -30,7 +30,7 @@ pub trait ReceiverArranger: Send + Sync {
 pub struct ReliableReceiver<A: ReceiverArranger> {
     oldest_received_message_index: MessageIndex,
     record: VecDeque<(MessageIndex, bool)>,
-    incoming_messages: Vec<(MessageIndex, Box<dyn Message>)>,
+    incoming_messages: Vec<(MessageIndex, MessageContainer)>,
     arranger: A,
     fragment_receiver: FragmentReceiver,
 }
@@ -50,7 +50,7 @@ impl<A: ReceiverArranger> ReliableReceiver<A> {
         &mut self,
         message_kinds: &MessageKinds,
         converter: &dyn NetEntityHandleConverter,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         if let Some((first_index, full_message)) =
             self.fragment_receiver
@@ -66,7 +66,7 @@ impl<A: ReceiverArranger> ReliableReceiver<A> {
         message_kinds: &MessageKinds,
         converter: &dyn NetEntityHandleConverter,
         message_index: MessageIndex,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         // moving from oldest incoming message to newest
         // compare existing slots and see if the message_index has been instantiated
@@ -120,7 +120,7 @@ impl<A: ReceiverArranger> ReliableReceiver<A> {
         }
     }
 
-    pub fn receive_messages(&mut self) -> Vec<(MessageIndex, Box<dyn Message>)> {
+    pub fn receive_messages(&mut self) -> Vec<(MessageIndex, MessageContainer)> {
         // return buffer
         mem::take(&mut self.incoming_messages)
     }
@@ -143,8 +143,8 @@ impl<A: ReceiverArranger> ReliableReceiver<A> {
     }
 }
 
-impl<A: ReceiverArranger> ChannelReceiver<Box<dyn Message>> for ReliableReceiver<A> {
-    fn receive_messages(&mut self) -> Vec<Box<dyn Message>> {
+impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableReceiver<A> {
+    fn receive_messages(&mut self) -> Vec<MessageContainer> {
         self.receive_messages()
             .drain(..)
             .map(|(_, message)| message)

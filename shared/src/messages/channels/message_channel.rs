@@ -4,7 +4,7 @@ use naia_socket_shared::Instant;
 use crate::{
     messages::{message_container::MessageContainer, message_kinds::MessageKinds},
     types::MessageIndex,
-    Message, NetEntityHandleConverter,
+    NetEntityHandleConverter,
 };
 
 pub trait ChannelSender<P>: Send + Sync {
@@ -34,7 +34,7 @@ pub trait ChannelReceiver<P>: Send + Sync {
     fn receive_messages(&mut self) -> Vec<P>;
 }
 
-pub trait MessageChannelReceiver: ChannelReceiver<Box<dyn Message>> {
+pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {
     /// Read messages from raw bits, parse them and store then into an internal buffer
     fn read_messages(
         &mut self,

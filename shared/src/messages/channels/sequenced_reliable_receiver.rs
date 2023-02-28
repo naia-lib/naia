@@ -2,7 +2,7 @@ use crate::{
     messages::channels::reliable_receiver::{ReceiverArranger, ReliableReceiver},
     sequence_less_than,
     types::MessageIndex,
-    Message,
+    MessageContainer,
 };
 
 pub type SequencedReliableReceiver = ReliableReceiver<SequencedArranger>;
@@ -23,9 +23,9 @@ pub struct SequencedArranger {
 impl ReceiverArranger for SequencedArranger {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, Box<dyn Message>)>,
+        incoming_messages: &mut Vec<(MessageIndex, MessageContainer)>,
         message_index: MessageIndex,
-        message: Box<dyn Message>,
+        message: MessageContainer,
     ) {
         if !sequence_less_than(message_index, self.newest_received_message_index) {
             self.newest_received_message_index = message_index;

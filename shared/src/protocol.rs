@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
+use crate::messages::message_fragmenter::FragmentedMessage;
 use crate::{
     component::{component_kinds::ComponentKinds, replicate::Replicate},
     connection::compression_config::CompressionConfig,
@@ -15,7 +16,6 @@ use crate::{
         message_kinds::MessageKinds,
     },
 };
-use crate::messages::message_fragmenter::FragmentedMessage;
 
 // Protocol Plugin
 pub trait ProtocolPlugin {

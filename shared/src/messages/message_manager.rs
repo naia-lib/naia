@@ -25,7 +25,7 @@ use crate::{
         message_container::MessageContainer,
     },
     types::{HostType, MessageIndex, PacketIndex},
-    Message, MessageKinds, NetEntityHandleConverter, Protocol,
+    MessageKinds, NetEntityHandleConverter, Protocol,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -278,7 +278,7 @@ impl MessageManager {
     }
 
     /// Retrieve all messages from the channel buffers
-    pub fn receive_messages(&mut self) -> Vec<(ChannelKind, Box<dyn Message>)> {
+    pub fn receive_messages(&mut self) -> Vec<(ChannelKind, MessageContainer)> {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {

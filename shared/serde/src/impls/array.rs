@@ -62,11 +62,7 @@ impl<T: ConstBitLength, const N: usize> ConstBitLength for [T; N] {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        bit_reader::BitReader,
-        bit_writer::BitWriter,
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
 
     #[test]
     fn read_write() {

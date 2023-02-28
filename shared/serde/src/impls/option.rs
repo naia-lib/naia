@@ -42,11 +42,7 @@ impl<T: ConstBitLength> ConstBitLength for Option<T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        bit_reader::BitReader,
-        bit_writer::BitWriter,
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
 
     #[test]
     fn read_write() {

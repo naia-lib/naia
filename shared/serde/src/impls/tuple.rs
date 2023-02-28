@@ -34,11 +34,7 @@ impl_reflect_tuple! {0: A, 1: B, 2: C, 3: D, 4: E, 5: F, 6: G, 7: H, 8: I, 9: J,
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        bit_reader::BitReader,
-bit_writer::BitWriter,
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
 
     #[test]
     fn read_write() {

@@ -76,11 +76,7 @@ impl<K: Serde + Eq + Hash, V: Serde> Serde for HashMap<K, V> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        bit_reader::BitReader,
-        bit_writer::BitWriter,
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
     use std::collections::{HashMap, HashSet};
 
     #[test]

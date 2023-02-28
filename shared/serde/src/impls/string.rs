@@ -1,4 +1,7 @@
-use crate::{bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde, UnsignedInteger, UnsignedVariableInteger};
+use crate::{
+    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde,
+    UnsignedVariableInteger,
+};
 
 impl Serde for String {
     fn ser(&self, writer: &mut dyn BitWrite) {
@@ -35,11 +38,7 @@ impl Serde for String {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        bit_reader::BitReader,
-bit_writer::BitWriter,
-        serde::Serde,
-    };
+    use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
 
     #[test]
     fn read_write() {

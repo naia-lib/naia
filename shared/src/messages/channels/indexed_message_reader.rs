@@ -1,7 +1,8 @@
 use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
 use crate::{
-    messages::message_kinds::MessageKinds, types::MessageIndex, Message, NetEntityHandleConverter,
+    messages::message_kinds::MessageKinds, types::MessageIndex, MessageContainer,
+    NetEntityHandleConverter,
 };
 
 pub struct IndexedMessageReader;
@@ -11,7 +12,7 @@ impl IndexedMessageReader {
         message_kinds: &MessageKinds,
         converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
-    ) -> Result<Vec<(MessageIndex, Box<dyn Message>)>, SerdeErr> {
+    ) -> Result<Vec<(MessageIndex, MessageContainer)>, SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
         let mut output = Vec::new();
 
@@ -34,7 +35,7 @@ impl IndexedMessageReader {
         converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
         last_read_id: &Option<MessageIndex>,
-    ) -> Result<(MessageIndex, Box<dyn Message>), SerdeErr> {
+    ) -> Result<(MessageIndex, MessageContainer), SerdeErr> {
         let message_index: MessageIndex = if let Some(last_id) = last_read_id {
             let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
             last_id.wrapping_add(id_diff)

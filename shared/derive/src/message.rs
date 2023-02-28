@@ -41,7 +41,7 @@ pub fn message_impl(
             pub use std::any::Any;
             pub use #shared_crate_name::{
                 Named, EntityHandle, Message, BitWrite, NetEntityHandleConverter,
-                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength
+                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer
             };
             use super::*;
 
@@ -238,10 +238,10 @@ pub fn get_read_method(
     };
 
     quote! {
-        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<Box<dyn Message>, SerdeErr> {
+        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<MessageContainer, SerdeErr> {
             #field_reads
 
-            return Ok(Box::new(#struct_build));
+            return Ok(MessageContainer::from(Box::new(#struct_build)));
         }
     }
 }

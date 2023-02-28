@@ -1,8 +1,8 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    sequence_greater_than, BitReader, Message, MessageKinds, NetEntityHandleConverter, Serde,
-    SerdeErr, ShortMessageIndex, Tick, TickBufferSettings, UnsignedVariableInteger,
+    sequence_greater_than, BitReader, MessageContainer, MessageKinds, NetEntityHandleConverter,
+    Serde, SerdeErr, ShortMessageIndex, Tick, TickBufferSettings, UnsignedVariableInteger,
 };
 
 /// Receive updates from the client and store them in a buffer along with the corresponding
@@ -19,7 +19,7 @@ impl ChannelTickBufferReceiver {
     }
 
     /// Read the stored buffer-data corresponding to the given [`Tick`]
-    pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<Box<dyn Message>> {
+    pub fn receive_messages(&mut self, host_tick: &Tick) -> Vec<MessageContainer> {
         self.incoming_messages.collect(host_tick)
     }
 
@@ -100,7 +100,7 @@ struct IncomingMessages {
     // front is present, back is future
     /// Buffer containing messages from the client, along with the corresponding tick
     /// We do not store anything for empty ticks
-    buffer: VecDeque<(Tick, HashMap<ShortMessageIndex, Box<dyn Message>>)>,
+    buffer: VecDeque<(Tick, HashMap<ShortMessageIndex, MessageContainer>)>,
 }
 
 impl IncomingMessages {
@@ -117,7 +117,7 @@ impl IncomingMessages {
         host_tick: &Tick,
         message_tick: &Tick,
         message_index: ShortMessageIndex,
-        new_message: Box<dyn Message>,
+        new_message: MessageContainer,
     ) -> bool {
         // TODO:
         //  * add unit test?
@@ -199,7 +199,7 @@ impl IncomingMessages {
     }
 
     /// Retrieve from the buffer data corresponding to the provided [`Tick`]
-    pub fn collect(&mut self, host_tick: &Tick) -> Vec<Box<dyn Message>> {
+    pub fn collect(&mut self, host_tick: &Tick) -> Vec<MessageContainer> {
         self.prune_outdated_commands(host_tick);
 
         // now get the newest applicable command

@@ -12,12 +12,12 @@ use crate::{
     },
     sequence_greater_than,
     types::MessageIndex,
-    Message, NetEntityHandleConverter,
+    MessageContainer, NetEntityHandleConverter,
 };
 
 pub struct SequencedUnreliableReceiver {
     newest_received_message_index: Option<MessageIndex>,
-    incoming_messages: Vec<Box<dyn Message>>,
+    incoming_messages: Vec<MessageContainer>,
 }
 
 impl SequencedUnreliableReceiver {
@@ -28,7 +28,7 @@ impl SequencedUnreliableReceiver {
         }
     }
 
-    pub fn buffer_message(&mut self, message_index: MessageIndex, message: Box<dyn Message>) {
+    pub fn buffer_message(&mut self, message_index: MessageIndex, message: MessageContainer) {
         if let Some(most_recent_id) = self.newest_received_message_index {
             if sequence_greater_than(message_index, most_recent_id) {
                 self.incoming_messages.push(message);
@@ -41,8 +41,8 @@ impl SequencedUnreliableReceiver {
     }
 }
 
-impl ChannelReceiver<Box<dyn Message>> for SequencedUnreliableReceiver {
-    fn receive_messages(&mut self) -> Vec<Box<dyn Message>> {
+impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
+    fn receive_messages(&mut self) -> Vec<MessageContainer> {
         Vec::from(mem::take(&mut self.incoming_messages))
     }
 }
