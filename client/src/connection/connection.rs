@@ -19,7 +19,7 @@ use super::io::Io;
 
 pub struct Connection<E: Copy + Eq + Hash> {
     pub base: BaseConnection,
-    pub entity_manager: RemoteWorldManager<E>,
+    pub remote_world_manager: RemoteWorldManager<E>,
     pub time_manager: TimeManager,
     pub tick_buffer: TickBufferSender,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
@@ -38,7 +38,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
         Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
-            entity_manager: RemoteWorldManager::default(),
+            remote_world_manager: RemoteWorldManager::default(),
             time_manager,
             tick_buffer,
             jitter_buffer: TickQueue::new(),
@@ -85,7 +85,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             {
                 let messages_result = self.base.message_manager.read_messages(
                     protocol,
-                    &self.entity_manager,
+                    &self.remote_world_manager,
                     &mut reader,
                 );
                 if messages_result.is_err() {
@@ -97,7 +97,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             // read entity updates
             {
-                let Ok(events) = self.entity_manager.read_updates(&protocol.component_kinds, world, server_tick, &mut reader) else {
+                let Ok(events) = self.remote_world_manager.read_updates(&protocol.component_kinds, world, server_tick, &mut reader) else {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity updates from packet!");
                     continue;
@@ -109,7 +109,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             // read entity actions
             {
-                let Ok(events) = self.entity_manager.read_actions(&protocol.component_kinds, world, &mut reader) else {
+                let Ok(events) = self.remote_world_manager.read_actions(&protocol.component_kinds, world, &mut reader) else {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity actions from packet!");
                     continue;
@@ -205,7 +205,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             // write tick buffered messages
             self.tick_buffer.write_messages(
                 &protocol,
-                &self.entity_manager,
+                &self.remote_world_manager,
                 &mut writer,
                 next_packet_index,
                 &client_tick,
@@ -220,7 +220,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
             {
                 self.base.message_manager.write_messages(
                     protocol,
-                    &self.entity_manager,
+                    &self.remote_world_manager,
                     &mut writer,
                     next_packet_index,
                     &mut has_written,

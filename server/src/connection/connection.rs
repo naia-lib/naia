@@ -26,7 +26,7 @@ use super::{io::Io, ping_manager::PingManager};
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
     pub base: BaseConnection,
-    pub entity_manager: HostWorldManager<E>,
+    pub host_world_manager: HostWorldManager<E>,
     tick_buffer: TickBufferReceiver,
     pub ping_manager: PingManager,
 }
@@ -48,7 +48,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 connection_config,
                 channel_kinds,
             ),
-            entity_manager: HostWorldManager::new(user_address, diff_handler),
+            host_world_manager: HostWorldManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
         }
@@ -58,7 +58,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.base
-            .process_incoming_header(header, &mut Some(&mut self.entity_manager));
+            .process_incoming_header(header, &mut Some(&mut self.host_world_manager));
     }
 
     /// Read packet data received from a client
@@ -70,7 +70,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         reader: &mut BitReader,
         world_record: &WorldRecord<E>,
     ) -> Result<(), SerdeErr> {
-        let converter = EntityConverter::new(world_record, &self.entity_manager);
+        let converter = EntityConverter::new(world_record, &self.host_world_manager);
 
         // read tick-buffered messages
         {
@@ -142,7 +142,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         message_kinds: &MessageKinds,
         world_record: &WorldRecord<E>,
     ) {
-        self.entity_manager.collect_outgoing_messages(
+        self.host_world_manager.collect_outgoing_messages(
             now,
             rtt_millis,
             world_record,
@@ -166,7 +166,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         time_manager: &TimeManager,
     ) -> bool {
         if self.base.message_manager.has_outgoing_messages()
-            || self.entity_manager.has_outgoing_messages()
+            || self.host_world_manager.has_outgoing_messages()
         {
             let next_packet_index = self.base.next_packet_index();
 
@@ -192,7 +192,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // write messages
             {
-                let converter = EntityConverter::new(world_record, &self.entity_manager);
+                let converter = EntityConverter::new(world_record, &self.host_world_manager);
                 self.base.message_manager.write_messages(
                     &protocol,
                     &converter,
@@ -208,7 +208,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // write entity updates
             {
-                self.entity_manager.write_updates(
+                self.host_world_manager.write_updates(
                     &protocol.component_kinds,
                     now,
                     &mut writer,
@@ -225,7 +225,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // write entity actions
             {
-                self.entity_manager.write_actions(
+                self.host_world_manager.write_actions(
                     &protocol.component_kinds,
                     now,
                     &mut writer,

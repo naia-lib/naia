@@ -207,7 +207,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
         if let Some(connection) = &mut self.server_connection {
             connection.base.message_manager.send_message(
                 &self.protocol.message_kinds,
-                &connection.entity_manager,
+                &connection.remote_world_manager,
                 channel_kind,
                 message,
             );
@@ -540,7 +540,7 @@ impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for Client<E> {
             .server_connection
             .as_ref()
             .expect("cannot handle entity properties unless connection is established");
-        connection.entity_manager.handle_to_entity(entity_handle)
+        connection.remote_world_manager.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
@@ -548,6 +548,6 @@ impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for Client<E> {
             .server_connection
             .as_ref()
             .expect("cannot handle entity properties unless connection is established");
-        connection.entity_manager.entity_to_handle(entity)
+        connection.remote_world_manager.entity_to_handle(entity)
     }
 }
