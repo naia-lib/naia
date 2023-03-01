@@ -632,6 +632,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // Delete scope
         self.entity_scope_map.remove_entity(entity);
 
+        // Delete room cache entry
+        self.entity_room_map.remove(entity);
+
         // Remove from ECS Record
         self.world_record.despawn_entity(entity);
     }
