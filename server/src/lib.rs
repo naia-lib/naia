@@ -20,7 +20,6 @@ mod error;
 mod events;
 mod protocol;
 mod room;
-mod sequence_list;
 mod server;
 mod server_config;
 mod user;

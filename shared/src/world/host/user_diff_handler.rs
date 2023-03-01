@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
-use naia_shared::{ComponentKind, DiffMask};
+use crate::{ComponentKind, DiffMask};
 
 use super::{global_diff_handler::GlobalDiffHandler, mut_channel::MutReceiver};
 

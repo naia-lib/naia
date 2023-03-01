@@ -1,5 +1,5 @@
-// use naia_shared::sequence_greater_than;
-use naia_shared::sequence_less_than;
+
+use crate::sequence_less_than;
 
 pub struct SequenceList<T> {
     list: Vec<(u16, T)>,

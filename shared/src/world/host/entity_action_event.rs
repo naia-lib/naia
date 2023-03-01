@@ -1,4 +1,4 @@
-use naia_shared::ComponentKind;
+use crate::ComponentKind;
 
 #[derive(Clone, PartialEq, Eq)]
 pub enum EntityActionEvent<E: Copy> {

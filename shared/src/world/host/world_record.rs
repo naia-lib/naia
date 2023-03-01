@@ -1,10 +1,10 @@
 use std::{collections::HashMap, hash::Hash};
 
-use naia_shared::{
+use crate::{
     BigMap, ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
 };
 
-use crate::{protocol::global_entity_record::GlobalEntityRecord, room::RoomKey};
+use super::global_entity_record::GlobalEntityRecord;
 
 pub struct WorldRecord<E: Copy + Eq + Hash> {
     /// Information about entities in the internal ECS World
@@ -73,32 +73,6 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
 
         let component_kind_set = &self.entity_records.get(entity).unwrap().component_kinds;
         return Some(component_kind_set.iter().copied().collect());
-    }
-
-    // Rooms
-
-    pub(crate) fn entity_is_in_room(&self, entity: &E, room_key: &RoomKey) -> bool {
-        if let Some(entity_record) = self.entity_records.get(entity) {
-            if let Some(actual_room_key) = entity_record.room_key {
-                return *room_key == actual_room_key;
-            }
-        }
-        false
-    }
-
-    pub(crate) fn entity_enter_room(&mut self, entity: &E, room_key: &RoomKey) {
-        if let Some(entity_record) = self.entity_records.get_mut(entity) {
-            if entity_record.room_key.is_some() {
-                panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
-            }
-            entity_record.room_key = Some(*room_key);
-        }
-    }
-
-    pub(crate) fn entity_leave_rooms(&mut self, entity: &E) {
-        if let Some(entity_record) = self.entity_records.get_mut(entity) {
-            entity_record.room_key = None;
-        }
     }
 }
 

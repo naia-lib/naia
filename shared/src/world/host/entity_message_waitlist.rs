@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{ChannelKind, KeyGenerator, MessageContainer};
+use crate::{ChannelKind, KeyGenerator, MessageContainer};
 
 type MessageHandle = u16;
 

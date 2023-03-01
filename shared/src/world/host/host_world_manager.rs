@@ -7,18 +7,14 @@ use std::{
     time::Duration,
 };
 
-use naia_shared::{
-    wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength,
-    DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer,
-    MessageIndex, MessageKinds, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
-    PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType,
-};
-
-use crate::sequence_list::SequenceList;
+use crate::{wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength,
+            DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer,
+            MessageIndex, MessageKinds, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
+            PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType,};
 
 use super::{
     entity_action_event::EntityActionEvent, global_diff_handler::GlobalDiffHandler,
-    world_channel::WorldChannel, world_record::WorldRecord,
+    world_channel::WorldChannel, world_record::WorldRecord, sequence_list::SequenceList
 };
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
@@ -28,7 +24,7 @@ pub type ActionId = MessageIndex;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct EntityManager<E: Copy + Eq + Hash + Send + Sync> {
+pub struct HostWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     // World
     world_channel: WorldChannel<E>,
     next_send_actions: VecDeque<(ActionId, EntityActionEvent<E>)>,
@@ -44,10 +40,10 @@ pub struct EntityManager<E: Copy + Eq + Hash + Send + Sync> {
     last_update_packet_index: PacketIndex,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
-    /// Create a new EntityManager, given the client's address
+impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
+    /// Create a new HostWorldManager, given the client's address
     pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>) -> Self {
-        EntityManager {
+        HostWorldManager {
             // World
             world_channel: WorldChannel::new(address, diff_handler),
             next_send_actions: VecDeque::new(),
@@ -674,7 +670,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityManager<E> {
 }
 
 // PacketNotifiable
-impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for EntityManager<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for HostWorldManager<E> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         // Updates
         self.sent_updates.remove(&packet_index);
@@ -692,7 +688,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for EntityManager<E> {
 }
 
 // NetEntityConverter
-impl<E: Copy + Eq + Hash + Send + Sync> NetEntityConverter<E> for EntityManager<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> NetEntityConverter<E> for HostWorldManager<E> {
     fn entity_to_net_entity(&self, entity: &E) -> NetEntity {
         return *self
             .world_channel

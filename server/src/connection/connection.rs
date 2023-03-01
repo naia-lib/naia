@@ -6,20 +6,14 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    HostType, Instant, MessageKinds, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick,
-    WorldRefType,
-};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter, HostType,
+                  Instant, MessageKinds, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldRefType,
+                  HostWorldManager, GlobalDiffHandler, WorldRecord};
 
 use crate::{
     connection::{
         ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
         tick_buffer_receiver::TickBufferReceiver, time_manager::TimeManager,
-    },
-    protocol::{
-        entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler,
-        world_record::WorldRecord,
     },
     user::UserKey,
     Events,
@@ -30,7 +24,7 @@ use super::{io::Io, ping_manager::PingManager};
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
     pub base: BaseConnection,
-    pub entity_manager: EntityManager<E>,
+    pub entity_manager: HostWorldManager<E>,
     tick_buffer: TickBufferReceiver,
     pub ping_manager: PingManager,
 }
@@ -52,7 +46,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 connection_config,
                 channel_kinds,
             ),
-            entity_manager: EntityManager::new(user_address, diff_handler),
+            entity_manager: HostWorldManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
         }

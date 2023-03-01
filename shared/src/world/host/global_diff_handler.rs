@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
-use naia_shared::ComponentKind;
+use crate::ComponentKind;
 
 use super::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 

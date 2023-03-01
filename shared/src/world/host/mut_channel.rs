@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
-use naia_shared::{DiffMask, PropertyMutate};
+use crate::{DiffMask, PropertyMutate};
 
 // MutChannel
 #[derive(Clone)]
@@ -50,31 +50,31 @@ impl MutChannel {
 }
 
 struct MutChannelData {
-    recv_map: HashMap<SocketAddr, MutReceiver>,
+    receiver_map: HashMap<SocketAddr, MutReceiver>,
     diff_mask_length: u8,
 }
 
 impl MutChannelData {
     pub fn new(diff_mask_length: u8) -> Self {
         Self {
-            recv_map: HashMap::new(),
+            receiver_map: HashMap::new(),
             diff_mask_length,
         }
     }
 
     pub fn new_receiver(&mut self, addr: &SocketAddr) -> Option<MutReceiver> {
-        if let Some(recvr) = self.recv_map.get(addr) {
-            Some(recvr.clone())
+        if let Some(receiver) = self.receiver_map.get(addr) {
+            Some(receiver.clone())
         } else {
-            let q = MutReceiver::new(self.diff_mask_length);
-            self.recv_map.insert(*addr, q.clone());
+            let receiver = MutReceiver::new(self.diff_mask_length);
+            self.receiver_map.insert(*addr, receiver.clone());
 
-            Some(q)
+            Some(receiver)
         }
     }
 
     pub fn send(&self, diff: u8) {
-        for (_, receiver) in self.recv_map.iter() {
+        for (_, receiver) in self.receiver_map.iter() {
             receiver.mutate(diff);
         }
     }

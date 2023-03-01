@@ -7,13 +7,13 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
+use crate::{
     ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, Instant, KeyGenerator,
     NetEntity, ReliableSender,
 };
 
-use crate::protocol::{
-    entity_action_event::EntityActionEvent, entity_manager::ActionId,
+use super::{
+    entity_action_event::EntityActionEvent, host_world_manager::ActionId,
     entity_message_waitlist::EntityMessageWaitlist, global_diff_handler::GlobalDiffHandler,
     user_diff_handler::UserDiffHandler,
 };

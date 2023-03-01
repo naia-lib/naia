@@ -17,7 +17,8 @@ use naia_shared::{
     BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, Message,
     MessageContainer, PacketType, PropertyMutator, Protocol, Replicate, Serde, StandardHeader,
-    Tick, Timer, WorldMutType, WorldRefType,
+    Tick, Timer, WorldMutType, WorldRefType, GlobalDiffHandler,
+    WorldRecord,
 };
 
 use crate::{
@@ -31,8 +32,7 @@ use crate::{
     protocol::{
         entity_ref::{EntityMut, EntityRef},
         entity_scope_map::EntityScopeMap,
-        global_diff_handler::GlobalDiffHandler,
-        world_record::WorldRecord,
+
     },
 };
 
@@ -66,6 +66,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
+    entity_room_map: HashMap<E, RoomKey>,
     world_record: WorldRecord<E>,
     entity_scope_map: EntityScopeMap<E>,
     // Components
@@ -109,6 +110,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Rooms
             rooms: BigMap::default(),
             // Entities
+            entity_room_map: HashMap::new(),
             world_record: WorldRecord::default(),
             entity_scope_map: EntityScopeMap::new(),
             // Components
@@ -875,7 +877,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &E) -> bool {
-        self.world_record.entity_is_in_room(entity, room_key)
+        let Some(actual_room_key) = self.entity_room_map.get(entity) else {
+            return false;
+        };
+        return *room_key == *actual_room_key;
     }
 
     /// Add an Entity to a Room associated with the given RoomKey.
@@ -887,16 +892,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             room.add_entity(entity);
             is_some = true;
         }
-        if is_some {
-            self.world_record.entity_enter_room(entity, room_key);
+        if !is_some {
+            return;
         }
+        if self.entity_room_map.contains_key(entity) {
+            panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
+        }
+        self.entity_room_map.insert(*entity, *room_key);
     }
 
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &E) {
         if let Some(room) = self.rooms.get_mut(room_key) {
             room.remove_entity(entity);
-            self.world_record.entity_leave_rooms(entity);
+            self.entity_room_map.remove(entity);
         }
     }
 
@@ -906,7 +915,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let entities: Vec<E> = room.entities().copied().collect();
             for entity in entities {
                 room.remove_entity(&entity);
-                self.world_record.entity_leave_rooms(&entity);
+                self.entity_room_map.remove(&entity);
             }
         }
     }
