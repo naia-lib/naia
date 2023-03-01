@@ -38,7 +38,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
         Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
-            remote_world_manager: RemoteWorldManager::default(),
+            remote_world_manager: RemoteWorldManager::new(),
             time_manager,
             tick_buffer,
             jitter_buffer: TickQueue::new(),

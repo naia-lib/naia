@@ -71,10 +71,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
             address,
             diff_handler: UserDiffHandler::new(diff_handler),
-            net_entity_generator: KeyGenerator::default(),
+            net_entity_generator: KeyGenerator::new(),
             net_entity_to_entity_map: HashMap::new(),
             entity_to_net_entity_map: HashMap::new(),
-            delayed_entity_messages: EntityMessageWaitlist::default(),
+            delayed_entity_messages: EntityMessageWaitlist::new(),
         }
     }
 

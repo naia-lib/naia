@@ -100,17 +100,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             ping_timer: Timer::new(server_config.ping.ping_interval),
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
-            users: BigMap::default(),
+            users: BigMap::new(),
             user_connections: HashMap::new(),
             validated_users: HashMap::new(),
             // Rooms
-            rooms: BigMap::default(),
+            rooms: BigMap::new(),
             // Entities
             entity_room_map: HashMap::new(),
-            world_record: WorldRecord::default(),
+            world_record: WorldRecord::new(),
             entity_scope_map: EntityScopeMap::new(),
             // Components
-            diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::default())),
+            diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             // Events
             incoming_events: Events::new(),
             // Ticks
@@ -285,14 +285,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                     // check whether all entities are in scope for the connection
                     let all_entities_in_scope = {
-                        entities
-                            .iter()
-                            .all(|entity| connection.host_world_manager.entity_channel_is_open(entity))
+                        entities.iter().all(|entity| {
+                            connection.host_world_manager.entity_channel_is_open(entity)
+                        })
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
-                        let converter =
-                            EntityConverter::new(&self.world_record, &connection.host_world_manager);
+                        let converter = EntityConverter::new(
+                            &self.world_record,
+                            &connection.host_world_manager,
+                        );
                         connection.base.message_manager.send_message(
                             &self.protocol.message_kinds,
                             &converter,

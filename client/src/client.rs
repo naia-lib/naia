@@ -20,7 +20,7 @@ use crate::{
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
     },
-    protocol::entity_ref::EntityRef,
+    entity_ref::EntityRef,
 };
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
@@ -540,7 +540,9 @@ impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for Client<E> {
             .server_connection
             .as_ref()
             .expect("cannot handle entity properties unless connection is established");
-        connection.remote_world_manager.handle_to_entity(entity_handle)
+        connection
+            .remote_world_manager
+            .handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {

@@ -15,19 +15,17 @@ pub struct EntityMessageWaitlist<E: Copy + Eq + Hash> {
     ready_messages: Vec<(ChannelKind, MessageContainer)>,
 }
 
-impl<E: Copy + Eq + Hash> Default for EntityMessageWaitlist<E> {
-    fn default() -> Self {
+impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
+    pub fn new() -> Self {
         Self {
-            messages: HashMap::default(),
-            message_handle_store: KeyGenerator::default(),
-            waiting_entities: HashMap::default(),
-            in_scope_entities: HashSet::default(),
-            ready_messages: Vec::default(),
+            messages: HashMap::new(),
+            message_handle_store: KeyGenerator::new(),
+            waiting_entities: HashMap::new(),
+            in_scope_entities: HashSet::new(),
+            ready_messages: Vec::new(),
         }
     }
-}
 
-impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
     pub fn queue_message(
         &mut self,
         entities: Vec<E>,

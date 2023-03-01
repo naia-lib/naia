@@ -17,19 +17,16 @@ pub struct RemoteWorldManager<E: Copy + Eq + Hash> {
     received_components: HashMap<(NetEntity, ComponentKind), Box<dyn Replicate>>,
 }
 
-impl<E: Copy + Eq + Hash> Default for RemoteWorldManager<E> {
-    fn default() -> Self {
+impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
+    pub fn new() -> Self {
         Self {
             entity_records: HashMap::default(),
             local_to_world_entity: HashMap::default(),
-            handle_entity_map: BigMap::default(),
+            handle_entity_map: BigMap::new(),
             receiver: EntityActionReceiver::new(),
             received_components: HashMap::default(),
         }
     }
-}
-
-impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
     // Action Reader
     fn read_message_index(
         reader: &mut BitReader,

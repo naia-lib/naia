@@ -8,15 +8,13 @@ pub struct GlobalDiffHandler<E: Copy + Eq + Hash> {
     mut_receiver_builders: HashMap<(E, ComponentKind), MutReceiverBuilder>,
 }
 
-impl<E: Copy + Eq + Hash> Default for GlobalDiffHandler<E> {
-    fn default() -> Self {
+impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
+    pub fn new() -> Self {
         Self {
-            mut_receiver_builders: HashMap::default(),
+            mut_receiver_builders: HashMap::new(),
         }
     }
-}
 
-impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
     // For Server
     pub fn register_component(
         &mut self,
