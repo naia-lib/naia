@@ -23,9 +23,9 @@ pub use naia_derive::{
     Channel, Message, MessageBevy, MessageHecs, Replicate, ReplicateBevy, ReplicateHecs,
 };
 pub use naia_serde::{
-    BitReader, BitWrite, BitWriter, ConstBitLength, MTU_SIZE_BITS, MTU_SIZE_BYTES, OutgoingPacket,
-    OwnedBitReader, Serde, SerdeBevy, SerdeErr, SerdeHecs, SerdeInternal,
-    UnsignedInteger, UnsignedVariableInteger,
+    BitReader, BitWrite, BitWriter, ConstBitLength, OutgoingPacket, OwnedBitReader, Serde,
+    SerdeBevy, SerdeErr, SerdeHecs, SerdeInternal, UnsignedInteger, UnsignedVariableInteger,
+    MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
@@ -103,12 +103,17 @@ pub use messages::{
 };
 pub use world::{
     host::{
-        global_diff_handler::GlobalDiffHandler, world_record::WorldRecord, host_world_manager::HostWorldManager,
-    }
+        global_diff_handler::GlobalDiffHandler, host_world_manager::HostWorldManager,
+        world_record::WorldRecord,
+    },
+    remote::{
+        entity_action_event::EntityActionEvent, entity_record::EntityRecord,
+        remote_world_manager::RemoteWorldManager,
+    },
 };
 
 pub use bigmap::{BigMap, BigMapKey};
-pub use game_time::{GAME_TIME_LIMIT, GameDuration, GameInstant};
+pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};

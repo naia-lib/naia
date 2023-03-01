@@ -6,9 +6,11 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter, HostType,
-                  Instant, MessageKinds, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldRefType,
-                  HostWorldManager, GlobalDiffHandler, WorldRecord};
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
+    GlobalDiffHandler, HostType, HostWorldManager, Instant, MessageKinds, PacketType, Protocol,
+    Serde, SerdeErr, StandardHeader, Tick, WorldRecord, WorldRefType,
+};
 
 use crate::{
     connection::{

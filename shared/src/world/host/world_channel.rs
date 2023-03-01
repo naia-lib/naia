@@ -13,8 +13,8 @@ use crate::{
 };
 
 use super::{
-    entity_action_event::EntityActionEvent, host_world_manager::ActionId,
-    entity_message_waitlist::EntityMessageWaitlist, global_diff_handler::GlobalDiffHandler,
+    entity_action_event::EntityActionEvent, entity_message_waitlist::EntityMessageWaitlist,
+    global_diff_handler::GlobalDiffHandler, host_world_manager::ActionId,
     user_diff_handler::UserDiffHandler,
 };
 

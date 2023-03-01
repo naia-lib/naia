@@ -1,4 +1,3 @@
-
 use crate::sequence_less_than;
 
 pub struct SequenceList<T> {

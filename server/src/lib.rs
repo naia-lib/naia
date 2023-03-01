@@ -16,9 +16,10 @@ pub use naia_shared::{default_channels, Random};
 
 mod cache_map;
 mod connection;
+pub mod entity_ref;
+pub mod entity_scope_map;
 mod error;
 mod events;
-mod protocol;
 mod room;
 mod server;
 mod server_config;
@@ -26,11 +27,11 @@ mod user;
 mod user_scope;
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
+pub use entity_ref::EntityRef;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, TickEvent,
 };
-pub use protocol::entity_ref::EntityRef;
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;

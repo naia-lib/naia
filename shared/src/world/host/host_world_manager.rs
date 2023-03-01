@@ -7,14 +7,16 @@ use std::{
     time::Duration,
 };
 
-use crate::{wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength,
-            DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer,
-            MessageIndex, MessageKinds, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
-            PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType,};
+use crate::{
+    wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength,
+    DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer,
+    MessageIndex, MessageKinds, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
+    PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType,
+};
 
 use super::{
     entity_action_event::EntityActionEvent, global_diff_handler::GlobalDiffHandler,
-    world_channel::WorldChannel, world_record::WorldRecord, sequence_list::SequenceList
+    sequence_list::SequenceList, world_channel::WorldChannel, world_record::WorldRecord,
 };
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;

@@ -3,8 +3,9 @@ use std::{hash::Hash, net::SocketAddr};
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostType, Instant,
-    OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldMutType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityActionEvent,
+    HostType, Instant, OwnedBitReader, PacketType, Protocol, RemoteWorldManager, Serde, SerdeErr,
+    StandardHeader, Tick, WorldMutType,
 };
 
 use crate::{
@@ -12,14 +13,13 @@ use crate::{
         tick_buffer_sender::TickBufferSender, tick_queue::TickQueue, time_manager::TimeManager,
     },
     events::Events,
-    protocol::entity_manager::EntityManager,
 };
 
 use super::io::Io;
 
 pub struct Connection<E: Copy + Eq + Hash> {
     pub base: BaseConnection,
-    pub entity_manager: EntityManager<E>,
+    pub entity_manager: RemoteWorldManager<E>,
     pub time_manager: TimeManager,
     pub tick_buffer: TickBufferSender,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
@@ -38,7 +38,7 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
         Connection {
             base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
-            entity_manager: EntityManager::default(),
+            entity_manager: RemoteWorldManager::default(),
             time_manager,
             tick_buffer,
             jitter_buffer: TickQueue::new(),
@@ -97,38 +97,38 @@ impl<E: Copy + Eq + Hash> Connection<E> {
 
             // read entity updates
             {
-                if self
-                    .entity_manager
-                    .read_updates(
-                        &protocol.component_kinds,
-                        world,
-                        server_tick,
-                        &mut reader,
-                        incoming_events,
-                    )
-                    .is_err()
-                {
+                let Ok(events) = self.entity_manager.read_updates(&protocol.component_kinds, world, server_tick, &mut reader) else {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity updates from packet!");
                     continue;
+                };
+                for (tick, entity, component_kind) in events {
+                    incoming_events.push_update(tick, entity, component_kind);
                 }
             }
 
             // read entity actions
             {
-                if self
-                    .entity_manager
-                    .read_actions(
-                        &protocol.component_kinds,
-                        world,
-                        &mut reader,
-                        incoming_events,
-                    )
-                    .is_err()
-                {
+                let Ok(events) = self.entity_manager.read_actions(&protocol.component_kinds, world, &mut reader) else {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading incoming entity actions from packet!");
                     continue;
+                };
+                for event in events {
+                    match event {
+                        EntityActionEvent::SpawnEntity(entity) => {
+                            incoming_events.push_spawn(entity);
+                        }
+                        EntityActionEvent::DespawnEntity(entity) => {
+                            incoming_events.push_despawn(entity);
+                        }
+                        EntityActionEvent::InsertComponent(entity, component_kind) => {
+                            incoming_events.push_insert(entity, component_kind);
+                        }
+                        EntityActionEvent::RemoveComponent(entity, component) => {
+                            incoming_events.push_remove(entity, component);
+                        }
+                    }
                 }
             }
         }
