@@ -73,15 +73,10 @@ pub struct InsertComponentEvents {
     inner: HashMap<ComponentKind, Vec<Entity>>,
 }
 
-impl From<&mut Events<Entity>> for InsertComponentEvents {
-    fn from(events: &mut Events<Entity>) -> Self {
-        Self {
-            inner: events.take_inserts(),
-        }
-    }
-}
-
 impl InsertComponentEvents {
+    pub fn new(inner: HashMap<ComponentKind, Vec<Entity>>) -> Self {
+        Self { inner }
+    }
     pub fn read<C: Replicate>(&self) -> Vec<Entity> {
         let component_kind = ComponentKind::of::<C>();
         if let Some(components) = self.inner.get(&component_kind) {
@@ -97,15 +92,11 @@ pub struct UpdateComponentEvents {
     inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>,
 }
 
-impl From<&mut Events<Entity>> for UpdateComponentEvents {
-    fn from(events: &mut Events<Entity>) -> Self {
-        Self {
-            inner: events.take_updates(),
-        }
-    }
-}
-
 impl UpdateComponentEvents {
+    pub fn new(inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>) -> Self {
+        Self { inner }
+    }
+
     pub fn read<C: Replicate>(&self) -> Vec<(Tick, Entity)> {
         let component_kind = ComponentKind::of::<C>();
         if let Some(components) = self.inner.get(&component_kind) {
@@ -121,15 +112,11 @@ pub struct RemoveComponentEvents {
     inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>,
 }
 
-impl From<&mut Events<Entity>> for RemoveComponentEvents {
-    fn from(events: &mut Events<Entity>) -> Self {
-        Self {
-            inner: events.take_removes(),
-        }
-    }
-}
-
 impl RemoveComponentEvents {
+    pub fn new(inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>) -> Self {
+        Self { inner }
+    }
+
     pub fn read<C: Replicate>(&self) -> Vec<(Entity, C)> {
         let mut output = Vec::new();
 

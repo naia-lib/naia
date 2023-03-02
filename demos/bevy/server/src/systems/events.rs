@@ -1,11 +1,14 @@
 use bevy_ecs::{
     event::EventReader,
-    system::{Query, ResMut},
+    system::{Commands, Query, ResMut},
 };
 use bevy_log::info;
 
 use naia_bevy_server::{
-    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, TickEvent},
+    events::{
+        AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, InsertComponentEvents,
+        SpawnEntityEvent, TickEvent, UpdateComponentEvents,
+    },
     Random, Server,
 };
 
@@ -32,10 +35,10 @@ pub fn auth_events(mut event_reader: EventReader<AuthEvents>, mut server: Server
     }
 }
 
-pub fn connect_events<'world, 'state>(
+pub fn connect_events(
     mut event_reader: EventReader<ConnectEvent>,
     mut global: ResMut<Global>,
-    mut server: Server<'world, 'state>,
+    mut server: Server,
 ) {
     for ConnectEvent(user_key) in event_reader.iter() {
         let address = server
@@ -155,5 +158,31 @@ pub fn tick_events(
         // This is very important! Need to call this to actually send all update packets
         // to all connected Clients!
         server.send_all_updates();
+    }
+}
+
+pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
+    for SpawnEntityEvent(_entity) in event_reader.iter() {
+        info!("spawned client entity");
+    }
+}
+
+pub fn insert_component_events(
+    mut event_reader: EventReader<InsertComponentEvents>,
+    mut local: Commands,
+    color_query: Query<&Color>,
+) {
+    for events in event_reader.iter() {
+        info!("insert component into client entity");
+    }
+}
+
+pub fn update_component_events(
+    mut event_reader: EventReader<UpdateComponentEvents>,
+    mut global: ResMut<Global>,
+    mut position_query: Query<&mut Position>,
+) {
+    for events in event_reader.iter() {
+        info!("update component in client entity");
     }
 }

@@ -23,6 +23,7 @@ impl OwnedEntity {
 #[derive(Default, Resource)]
 pub struct Global {
     pub owned_entity: Option<OwnedEntity>,
+    pub client_authoritative_entity: Option<Entity>,
     pub queued_command: Option<KeyCommand>,
     pub command_history: CommandHistory<KeyCommand>,
     pub last_client_tick: Tick,

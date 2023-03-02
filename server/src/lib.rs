@@ -30,7 +30,9 @@ pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use entity_ref::EntityRef;
 pub use error::NaiaServerError;
 pub use events::{
-    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, TickEvent,
+    AuthEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events,
+    InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
+    UpdateComponentEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;

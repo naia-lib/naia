@@ -62,17 +62,26 @@ impl<E: Copy> Events<E> {
         mem::take(&mut self.messages)
     }
 
-    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_inserts(&self) -> bool {
+        !self.inserts.is_empty()
+    }
     pub fn take_inserts(&mut self) -> HashMap<ComponentKind, Vec<E>> {
         mem::take(&mut self.inserts)
     }
 
-    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_updates(&self) -> bool {
+        !self.updates.is_empty()
+    }
     pub fn take_updates(&mut self) -> HashMap<ComponentKind, Vec<(Tick, E)>> {
         mem::take(&mut self.updates)
     }
 
-    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_removes(&self) -> bool {
+        !self.removes.is_empty()
+    }
     pub fn take_removes(&mut self) -> HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>> {
         mem::take(&mut self.removes)
     }

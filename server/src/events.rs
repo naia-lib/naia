@@ -69,6 +69,30 @@ impl<E: Copy> Events<E> {
         mem::take(&mut self.auths)
     }
 
+    // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_inserts(&self) -> bool {
+        !self.inserts.is_empty()
+    }
+    pub fn take_inserts(&mut self) -> HashMap<ComponentKind, Vec<E>> {
+        mem::take(&mut self.inserts)
+    }
+
+    // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_updates(&self) -> bool {
+        !self.updates.is_empty()
+    }
+    pub fn take_updates(&mut self) -> HashMap<ComponentKind, Vec<(Tick, E)>> {
+        mem::take(&mut self.updates)
+    }
+
+    // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_removes(&self) -> bool {
+        !self.removes.is_empty()
+    }
+    pub fn take_removes(&mut self) -> HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>> {
+        mem::take(&mut self.removes)
+    }
+
     // Crate-public
 
     pub(crate) fn push_connection(&mut self, user_key: &UserKey) {
@@ -264,6 +288,87 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
                 return IntoIterator::into_iter(output_list);
             }
         }
+        return IntoIterator::into_iter(Vec::new());
+    }
+}
+
+// Spawn Event
+pub struct SpawnEntityEvent;
+impl<E: Copy> Event<E> for SpawnEntityEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.spawns);
+        return IntoIterator::into_iter(list);
+    }
+}
+
+// Despawn Event
+pub struct DespawnEntityEvent;
+impl<E: Copy> Event<E> for DespawnEntityEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.despawns);
+        return IntoIterator::into_iter(list);
+    }
+}
+
+// Insert Event
+pub struct InsertComponentEvent<C: Replicate> {
+    phantom_c: PhantomData<C>,
+}
+impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.inserts.remove(&component_kind) {
+            return IntoIterator::into_iter(boxed_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
+    }
+}
+
+// Update Event
+pub struct UpdateComponentEvent<C: Replicate> {
+    phantom_c: PhantomData<C>,
+}
+impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
+    type Iter = IntoIter<(Tick, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.updates.remove(&component_kind) {
+            return IntoIterator::into_iter(boxed_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
+    }
+}
+
+// Remove Event
+pub struct RemoveComponentEvent<C: Replicate> {
+    phantom_c: PhantomData<C>,
+}
+impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
+    type Iter = IntoIter<(E, C)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.removes.remove(&component_kind) {
+            let mut output_list: Vec<(E, C)> = Vec::new();
+
+            for (entity, boxed_component) in boxed_list {
+                let boxed_any = boxed_component.to_boxed_any();
+                let component = boxed_any.downcast::<C>().unwrap();
+                output_list.push((entity, *component));
+            }
+
+            return IntoIterator::into_iter(output_list);
+        }
+
         return IntoIterator::into_iter(Vec::new());
     }
 }

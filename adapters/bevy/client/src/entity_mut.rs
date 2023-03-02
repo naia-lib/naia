@@ -1,24 +1,22 @@
 use bevy_ecs::entity::Entity;
 
-use naia_server::RoomKey;
-
 use naia_bevy_shared::Replicate;
 
 use super::{
+    client::Client,
     commands::{DespawnEntity, InsertComponent, RemoveComponent},
-    server::Server,
 };
 
 // EntityMut
 
 pub struct EntityMut<'s, 'world, 'state> {
     entity: Entity,
-    server: &'s mut Server<'world, 'state>,
+    client: &'s mut Client<'world, 'state>,
 }
 
 impl<'s, 'world, 'state> EntityMut<'s, 'world, 'state> {
-    pub fn new(entity: Entity, server: &'s mut Server<'world, 'state>) -> Self {
-        EntityMut { entity, server }
+    pub fn new(entity: Entity, client: &'s mut Client<'world, 'state>) -> Self {
+        EntityMut { entity, client }
     }
 
     #[inline]
@@ -29,34 +27,20 @@ impl<'s, 'world, 'state> EntityMut<'s, 'world, 'state> {
     // Despawn
 
     pub fn despawn(&mut self) {
-        self.server.queue_command(DespawnEntity::new(&self.entity))
+        self.client.queue_command(DespawnEntity::new(&self.entity))
     }
 
     // Components
 
     pub fn insert<R: Replicate>(&mut self, component: R) -> &mut Self {
-        self.server
+        self.client
             .queue_command(InsertComponent::new(&self.entity, component));
         self
     }
 
     pub fn remove<R: Replicate>(&mut self) -> &mut Self {
-        self.server
+        self.client
             .queue_command(RemoveComponent::<R>::new(&self.entity));
-        self
-    }
-
-    // Rooms
-
-    pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
-        self.server.room_add_entity(room_key, &self.entity);
-
-        self
-    }
-
-    pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
-        self.server.room_remove_entity(room_key, &self.entity);
-
         self
     }
 }

@@ -105,22 +105,31 @@ pub fn before_receive_events(world: &mut World) {
                 let mut insert_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<bevy_events::InsertComponentEvents>>()
                     .unwrap();
-                insert_component_event_writer
-                    .send(bevy_events::InsertComponentEvents::from(&mut events));
+                if events.has_inserts() {
+                    insert_component_event_writer.send(bevy_events::InsertComponentEvents::new(
+                        events.take_inserts(),
+                    ));
+                }
 
                 // Update Component Event
                 let mut update_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<bevy_events::UpdateComponentEvents>>()
                     .unwrap();
-                update_component_event_writer
-                    .send(bevy_events::UpdateComponentEvents::from(&mut events));
+                if events.has_updates() {
+                    update_component_event_writer.send(bevy_events::UpdateComponentEvents::new(
+                        events.take_updates(),
+                    ));
+                }
 
                 // Remove Component Event
                 let mut remove_component_event_writer = world
                     .get_resource_unchecked_mut::<Events<bevy_events::RemoveComponentEvents>>()
                     .unwrap();
-                remove_component_event_writer
-                    .send(bevy_events::RemoveComponentEvents::from(&mut events));
+                if events.has_removes() {
+                    remove_component_event_writer.send(bevy_events::RemoveComponentEvents::new(
+                        events.take_removes(),
+                    ));
+                }
             }
         }
     });

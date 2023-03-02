@@ -8,7 +8,11 @@ use naia_server::{Server, ServerConfig};
 use naia_bevy_shared::Protocol;
 
 use super::{
-    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents, TickEvent},
+    events::{
+        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        InsertComponentEvents, MessageEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
+        UpdateComponentEvents,
+    },
     stage::{PrivateStage, Stage},
     systems::{before_receive_events, should_receive},
 };
@@ -59,6 +63,11 @@ impl PluginType for Plugin {
             .add_event::<TickEvent>()
             .add_event::<MessageEvents>()
             .add_event::<AuthEvents>()
+            .add_event::<SpawnEntityEvent>()
+            .add_event::<DespawnEntityEvent>()
+            .add_event::<InsertComponentEvents>()
+            .add_event::<UpdateComponentEvents>()
+            .add_event::<RemoveComponentEvents>()
             // STAGES //
             .add_stage_before(
                 CoreStage::PreUpdate,

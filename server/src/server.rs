@@ -128,7 +128,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Events<E> {
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Events<E> {
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
         self.maintain_socket(world);

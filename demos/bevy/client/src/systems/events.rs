@@ -13,7 +13,7 @@ use naia_bevy_client::{
         ClientTickEvent, ConnectEvent, DisconnectEvent, InsertComponentEvents, MessageEvents,
         RejectEvent, SpawnEntityEvent, UpdateComponentEvents,
     },
-    sequence_greater_than, Client, CommandsExt, Tick,
+    sequence_greater_than, Client, CommandsExt, Random, Tick,
 };
 
 use naia_bevy_demo_shared::{
@@ -27,11 +27,48 @@ use crate::resources::{Global, OwnedEntity};
 
 const SQUARE_SIZE: f32 = 32.0;
 
-pub fn connect_events(mut event_reader: EventReader<ConnectEvent>, client: Client) {
+pub fn connect_events(
+    mut event_reader: EventReader<ConnectEvent>,
+    mut global: ResMut<Global>,
+    mut local: Commands,
+    mut client: Client,
+) {
     for _ in event_reader.iter() {
-        if let Ok(server_address) = client.server_address() {
-            info!("Client connected to: {}", server_address);
-        }
+        let Ok(server_address) = client.server_address() else {
+            panic!("Shouldn't happen");
+        };
+        info!("Client connected to: {}", server_address);
+
+        // Create entity for Client-authoritative Square
+
+        // Position component
+        let position = {
+            let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
+            let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
+            Position::new(x, y)
+        };
+
+        // Spawn entity
+        let entity = client
+            // Spawn new Square Entity
+            .spawn()
+            // Insert Position component
+            .insert(position)
+            // return Entity id
+            .id();
+
+        // Insert SpriteBundle locally only
+        local.entity(entity).insert(SpriteBundle {
+            sprite: Sprite {
+                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                color: BevyColor::GREEN,
+                ..Default::default()
+            },
+            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+            ..Default::default()
+        });
+
+        global.client_authoritative_entity = Some(entity);
     }
 }
 
@@ -168,6 +205,7 @@ pub fn update_component_events(
                 let replay_commands = global.command_history.replays(&server_tick);
 
                 // Set to authoritative state
+                // TODO: maybe a general 'mirror()' method on Replicate structs to mirror everything?
                 client_position.x.mirror(&server_position.x);
                 client_position.y.mirror(&server_position.y);
 

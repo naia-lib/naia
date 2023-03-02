@@ -28,6 +28,9 @@ fn main() {
         .add_system(events::disconnect_events)
         .add_system(events::error_events)
         .add_system(events::tick_events)
+        .add_system(events::spawn_entity_events)
+        .add_system(events::insert_component_events)
+        .add_system(events::update_component_events)
         // Run App
         .run();
 }
