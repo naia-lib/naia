@@ -276,9 +276,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                     // check whether all entities are in scope for the connection
                     let all_entities_in_scope = {
-                        entities
-                            .iter()
-                            .all(|entity| connection.host_world_manager.entity_channel_is_open(entity))
+                        entities.iter().all(|entity| {
+                            connection.host_world_manager.entity_channel_is_open(entity)
+                        })
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
@@ -602,8 +602,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Despawns the Entity, if it exists.
     /// This will also remove all of the Entity’s Components.
-    /// Returns true if the Entity is successfully despawned and false if the
-    /// Entity does not exist.
+    /// Panics if the Entity does not exist.
     pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
         if !world.has_entity(entity) {
             panic!("attempted to de-spawn nonexistent entity");
@@ -674,7 +673,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // add component to connections already tracking entity
             for (_, user_connection) in self.user_connections.iter_mut() {
                 // insert component into user's connection
-                if user_connection.host_world_manager.scope_has_entity(entity) {
+                if user_connection.host_world_manager.host_has_entity(entity) {
                     user_connection
                         .host_world_manager
                         .insert_component(entity, &component_kind);
@@ -711,7 +710,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // cleanup all other loose ends
-        self.host_world_manager.remove_component(entity, &component_kind);
+        self.host_world_manager
+            .remove_component(entity, &component_kind);
 
         // remove from world
         world.remove_component::<R>(entity)
@@ -1219,7 +1219,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 self.user_connections.get_mut(&user.address)
                             {
                                 let currently_in_scope =
-                                    user_connection.host_world_manager.scope_has_entity(entity);
+                                    user_connection.host_world_manager.host_has_entity(entity);
 
                                 let should_be_in_scope = if let Some(in_scope) =
                                     self.entity_scope_map.get(user_key, entity)
@@ -1231,16 +1231,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                                 if should_be_in_scope {
                                     if !currently_in_scope {
-                                        // add entity to the connections local scope
-                                        user_connection.host_world_manager.spawn_entity(entity);
-                                        // add components to connections local scope
-                                        for component_kind in
-                                            self.host_world_manager.component_kinds(entity).unwrap()
-                                        {
-                                            user_connection
-                                                .host_world_manager
-                                                .insert_component(entity, &component_kind);
-                                        }
+                                        let component_kinds = self
+                                            .host_world_manager
+                                            .component_kinds(entity)
+                                            .unwrap();
+                                        // add entity & components to the connections local scope
+                                        user_connection
+                                            .host_world_manager
+                                            .init_entity(entity, component_kinds);
                                     }
                                 } else if currently_in_scope {
                                     // remove entity from the connections local scope

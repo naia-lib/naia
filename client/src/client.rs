@@ -7,13 +7,15 @@ use bevy_ecs::prelude::Resource;
 
 use naia_client_socket::Socket;
 
+use naia_shared::ComponentKind;
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GameInstant, Message,
-    MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig,
-    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType, HostGlobalWorldManager
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GameInstant,
+    HostGlobalWorldManager, Message, MessageContainer, PacketType, PingIndex, Protocol, Replicate,
+    Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
+use crate::entity_ref::EntityMut;
 use crate::{
     connection::{
         connection::Connection,
@@ -169,6 +171,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // send outgoing packets
                 connection.send_outgoing_packets(&self.protocol, &mut self.io);
 
+                // insert tick events in total range
                 let mut index_tick = prev_sending_tick.wrapping_add(1);
                 loop {
                     self.incoming_events.push_client_tick(index_tick);
@@ -252,11 +255,48 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     // Entities
 
+    /// Creates a new Entity and returns an EntityMut which can be used for
+    /// further operations on the Entity
+    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
+        let entity = world.spawn_entity();
+        self.spawn_entity_inner(&entity);
+
+        EntityMut::new(self, world, &entity)
+    }
+
+    /// Creates a new Entity with a specific id
+    pub fn spawn_entity_at(&mut self, entity: &E) {
+        self.spawn_entity_inner(entity)
+    }
+
+    fn spawn_entity_inner(&mut self, entity: &E) {
+        self.host_world_manager.spawn_entity(entity);
+        if let Some(connection) = &mut self.server_connection {
+            let component_kinds = self.host_world_manager.component_kinds(entity).unwrap();
+            connection
+                .host_world_manager
+                .init_entity(entity, component_kinds);
+        }
+    }
+
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
     pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
-        EntityRef::new(world, entity)
+        if world.has_entity(entity) {
+            return EntityRef::new(world, entity);
+        }
+        panic!("No Entity exists for given Key!");
+    }
+
+    /// Retrieves an EntityMut that exposes read and write operations for the
+    /// Entity.
+    /// Panics if the Entity does not exist.
+    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
+        if world.has_entity(entity) {
+            return EntityMut::new(self, world, entity);
+        }
+        panic!("No Entity exists for given Key!");
     }
 
     /// Return a list of all Entities
@@ -332,7 +372,95 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.io.incoming_bandwidth()
     }
 
-    // internal functions
+    // Crate-Public methods
+
+    /// Despawns the Entity, if it exists.
+    /// This will also remove all of the Entity’s Components.
+    /// Panics if the Entity does not exist.
+    pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
+        if !world.has_entity(entity) {
+            panic!("attempted to de-spawn nonexistent entity");
+        }
+
+        // Delete from world
+        world.despawn_entity(entity);
+
+        if let Some(connection) = &mut self.server_connection {
+            //remove entity from server connection
+            connection.host_world_manager.despawn_entity(entity);
+        }
+
+        // Remove from ECS Record
+        self.host_world_manager.despawn_entity(entity);
+    }
+
+    /// Adds a Component to an Entity
+    pub(crate) fn insert_component<R: Replicate, W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        mut component_ref: R,
+    ) {
+        if !world.has_entity(entity) {
+            panic!("attempted to add component to non-existent entity");
+        }
+
+        let component_kind = component_ref.kind();
+
+        if world.has_component_of_kind(entity, &component_kind) {
+            // Entity already has this Component type yet, update Component
+
+            let Some(mut component) = world.component_mut::<R>(entity) else {
+                panic!("Should never happen because we checked for this above");
+            };
+            component.mirror(&component_ref);
+        } else {
+            // Entity does not have this Component type yet, initialize Component
+
+            // insert component into server connection
+            if let Some(connection) = &mut self.server_connection {
+                // insert component into server connection
+                if connection.host_world_manager.host_has_entity(entity) {
+                    connection
+                        .host_world_manager
+                        .insert_component(entity, &component_kind);
+                }
+            }
+
+            // update in world manager
+            self.host_world_manager
+                .insert_component(entity, &mut component_ref);
+
+            // actually insert component into world
+            world.insert_component(entity, component_ref);
+        }
+    }
+
+    /// Removes a Component from an Entity
+    pub(crate) fn remove_component<R: Replicate, W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+    ) -> Option<R> {
+        // get component key from type
+        let component_kind = ComponentKind::of::<R>();
+
+        // remove component from server connection
+        if let Some(connection) = &mut self.server_connection {
+            connection
+                .host_world_manager
+                .remove_component(entity, &component_kind);
+        }
+
+        // cleanup all other loose ends
+        self.host_world_manager
+            .remove_component(entity, &component_kind);
+
+        // remove from world
+        world.remove_component::<R>(entity)
+    }
+
+    // Private methods
 
     fn maintain_socket(&mut self) {
         if let Some(server_connection) = self.server_connection.as_mut() {
@@ -481,7 +609,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                         &self.client_config.connection,
                                         &self.protocol.channel_kinds,
                                         time_manager,
-                                        self.host_world_manager.diff_handler()
+                                        &self.host_world_manager,
                                     ));
                                     self.incoming_events.push_connection(&server_addr);
                                 }

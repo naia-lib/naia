@@ -19,6 +19,16 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
         }
     }
 
+    pub fn entities(&self) -> Vec<E> {
+        let mut output = Vec::new();
+
+        for (entity, _) in &self.entity_records {
+            output.push(*entity);
+        }
+
+        output
+    }
+
     // Sync w/ World & Server
 
     pub fn spawn_entity(&mut self, entity: &E) {

@@ -1,8 +1,12 @@
-use std::{hash::Hash, net::SocketAddr, sync::{Arc, RwLock}};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityActionEvent, GlobalDiffHandler, HostLocalWorldManager, HostType, Instant, OwnedBitReader, PacketType, Protocol, RemoteWorldManager, Serde, SerdeErr, StandardHeader, Tick, WorldMutType};
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityActionEvent,
+    HostGlobalWorldManager, HostLocalWorldManager, HostType, Instant, OwnedBitReader, PacketType,
+    Protocol, RemoteWorldManager, Serde, SerdeErr, StandardHeader, Tick, WorldMutType,
+};
 
 use crate::{
     connection::{
@@ -30,18 +34,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         connection_config: &ConnectionConfig,
         channel_kinds: &ChannelKinds,
         time_manager: TimeManager,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
+        host_global_world_manager: &HostGlobalWorldManager<E>,
     ) -> Self {
         let tick_buffer = TickBufferSender::new(channel_kinds);
 
-        Connection {
-            base: BaseConnection::new(address.clone(), HostType::Client, connection_config, channel_kinds),
-            host_world_manager: HostLocalWorldManager::new(address, diff_handler),
+        let mut connection = Connection {
+            base: BaseConnection::new(
+                address.clone(),
+                HostType::Client,
+                connection_config,
+                channel_kinds,
+            ),
+            host_world_manager: HostLocalWorldManager::new(
+                address,
+                host_global_world_manager.diff_handler(),
+            ),
             remote_world_manager: RemoteWorldManager::new(),
             time_manager,
             tick_buffer,
             jitter_buffer: TickQueue::new(),
+        };
+
+        let existing_entities = host_global_world_manager.entities();
+        for entity in existing_entities {
+            let component_kinds = host_global_world_manager.component_kinds(&entity).unwrap();
+            connection
+                .host_world_manager
+                .init_entity(&entity, component_kinds);
         }
+
+        connection
     }
 
     // Incoming data

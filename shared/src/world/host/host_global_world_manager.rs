@@ -31,6 +31,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
         &self.diff_handler
     }
 
+    // Entities
+    pub fn entities(&self) -> Vec<E> {
+        self.world_record.entities()
+    }
+
     // Spawn
     pub fn spawn_entity(&mut self, entity: &E) {
         self.world_record.spawn_entity(entity)

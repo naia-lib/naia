@@ -58,7 +58,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostLocalWorldManager<E> {
         }
     }
 
-    // World Scope
+    // World
+
+    // used for
+    pub fn init_entity(&mut self, entity: &E, component_kinds: Vec<ComponentKind>) {
+        // add entity
+        self.spawn_entity(entity);
+        // add components
+        for component_kind in component_kinds {
+            self.insert_component(entity, &component_kind);
+        }
+    }
 
     pub fn spawn_entity(&mut self, entity: &E) {
         self.world_channel.host_spawn_entity(entity);
@@ -78,7 +88,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostLocalWorldManager<E> {
             .host_remove_component(entity, component_kind);
     }
 
-    pub fn scope_has_entity(&self, entity: &E) -> bool {
+    pub fn host_has_entity(&self, entity: &E) -> bool {
         self.world_channel.host_has_entity(entity)
     }
 
