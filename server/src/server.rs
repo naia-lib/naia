@@ -15,7 +15,7 @@ use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, HostGlobalWorldManager, Instant,
-    Message, MessageContainer, PacketType, PropertyMutator, Protocol, Replicate, Serde,
+    Message, MessageContainer, PacketType, Protocol, Replicate, Serde,
     StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
@@ -192,7 +192,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             user.address,
             user_key,
             &self.protocol.channel_kinds,
-            &self.world_manager.diff_handler,
+            self.world_manager.diff_handler(),
         );
 
         // send connect response
@@ -271,7 +271,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let entities: Vec<E> = message
                         .entities()
                         .iter()
-                        .map(|handle| self.world_manager.world_record.handle_to_entity(handle))
+                        .map(|handle| self.world_manager.handle_to_entity(handle))
                         .collect();
 
                     // check whether all entities are in scope for the connection
@@ -283,7 +283,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
                         let converter = EntityConverter::new(
-                            &self.world_manager.world_record,
+                            self.world_manager.world_record(),
                             &connection.host_world_manager,
                         );
                         connection.base.message_manager.send_message(
@@ -303,7 +303,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     }
                 } else {
                     let converter = EntityConverter::new(
-                        &self.world_manager.world_record,
+                        self.world_manager.world_record(),
                         &connection.host_world_manager,
                     );
                     connection.base.message_manager.send_message(
@@ -393,7 +393,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &now,
                 &mut self.io,
                 &world,
-                &self.world_manager.world_record,
+                self.world_manager.world_record(),
                 &self.time_manager,
                 &rtt,
             );
@@ -406,14 +406,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// further operations on the Entity
     pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
         let entity = world.spawn_entity();
-        self.spawn_entity_init(&entity);
+        self.world_manager.spawn_entity(&entity);
 
         EntityMut::new(self, world, &entity)
     }
 
     /// Creates a new Entity with a specific id
     pub fn spawn_entity_at(&mut self, entity: &E) {
-        self.spawn_entity_init(entity);
+        self.world_manager.spawn_entity(entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -609,25 +609,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("attempted to de-spawn nonexistent entity");
         }
 
+        // Delete from world
+        world.despawn_entity(entity);
+
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
         for (_, user_connection) in self.user_connections.iter_mut() {
             //remove entity from user connection
             user_connection.host_world_manager.despawn_entity(entity);
         }
-
-        // Clean up associated components
-        for component_kind in self
-            .world_manager
-            .world_record
-            .component_kinds(entity)
-            .unwrap()
-        {
-            self.component_cleanup(entity, &component_kind);
-        }
-
-        // Delete from world
-        world.despawn_entity(entity);
 
         // Delete scope
         self.entity_scope_map.remove_entity(entity);
@@ -636,7 +626,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.entity_room_map.remove(entity);
 
         // Remove from ECS Record
-        self.world_manager.world_record.despawn_entity(entity);
+        self.world_manager.despawn_entity(entity);
     }
 
     //// Entity Scopes
@@ -681,11 +671,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         } else {
             // Entity does not have this Component type yet, initialize Component
 
-            self.component_init(entity, &mut component_ref);
-
-            // actually insert component into world
-            world.insert_component(entity, component_ref);
-
             // add component to connections already tracking entity
             for (_, user_connection) in self.user_connections.iter_mut() {
                 // insert component into user's connection
@@ -695,6 +680,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .insert_component(entity, &component_kind);
                 }
             }
+
+            // update in world manager
+            self.world_manager.insert_component(entity, &mut component_ref);
+
+            // actually insert component into world
+            world.insert_component(entity, component_ref);
         }
     }
 
@@ -719,7 +710,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // cleanup all other loose ends
-        self.component_cleanup(entity, &component_kind);
+        self.world_manager.remove_component(entity, &component_kind);
 
         // remove from world
         world.remove_component::<R>(entity)
@@ -1155,7 +1146,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                         server_tick,
                                         client_tick,
                                         &mut reader,
-                                        &self.world_manager.world_record,
+                                        self.world_manager.world_record(),
                                     )
                                     .is_err()
                                 {
@@ -1197,12 +1188,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
             }
         }
-    }
-
-    // Entity Helpers
-
-    fn spawn_entity_init(&mut self, entity: &E) {
-        self.world_manager.world_record.spawn_entity(entity);
     }
 
     // Entity Scopes
@@ -1250,7 +1235,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                         // add components to connections local scope
                                         for component_kind in self
                                             .world_manager
-                                            .world_record
                                             .component_kinds(entity)
                                             .unwrap()
                                         {
@@ -1270,51 +1254,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             }
         }
     }
-
-    // Component Helpers
-
-    fn component_init<R: Replicate>(&mut self, entity: &E, component_ref: &mut R) {
-        let component_kind = component_ref.kind();
-        self.world_manager
-            .world_record
-            .add_component(entity, &component_kind);
-
-        let diff_mask_length: u8 = component_ref.diff_mask_size();
-
-        let mut_sender = self
-            .world_manager
-            .diff_handler
-            .as_ref()
-            .write()
-            .expect("DiffHandler should be initialized")
-            .register_component(entity, &component_kind, diff_mask_length);
-
-        let prop_mutator = PropertyMutator::new(mut_sender);
-
-        component_ref.set_mutator(&prop_mutator);
-    }
-
-    fn component_cleanup(&mut self, entity: &E, component_kind: &ComponentKind) {
-        self.world_manager
-            .world_record
-            .remove_component(entity, component_kind);
-        self.world_manager
-            .diff_handler
-            .as_ref()
-            .write()
-            .expect("Haven't initialized DiffHandler")
-            .deregister_component(entity, component_kind);
-    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        self.world_manager
-            .world_record
-            .handle_to_entity(entity_handle)
+        self.world_manager.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.world_manager.world_record.entity_to_handle(entity)
+        self.world_manager.entity_to_handle(entity)
     }
 }
