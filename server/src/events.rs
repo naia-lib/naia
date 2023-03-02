@@ -1,6 +1,8 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
-use naia_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick};
+use naia_shared::{
+    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick,
+};
 
 use super::user::{User, UserKey};
 
@@ -51,7 +53,7 @@ impl<E: Copy> Events<E> {
         self.empty
     }
 
-    pub fn read<V: Event>(&mut self) -> V::Iter {
+    pub fn read<V: Event<E>>(&mut self) -> V::Iter {
         return V::iter(self);
     }
 
@@ -117,10 +119,48 @@ impl<E: Copy> Events<E> {
         self.errors.push(error);
         self.empty = false;
     }
+
+    pub(crate) fn push_spawn(&mut self, entity: E) {
+        self.spawns.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_despawn(&mut self, entity: E) {
+        self.despawns.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_insert(&mut self, entity: E, component_kind: ComponentKind) {
+        if !self.inserts.contains_key(&component_kind) {
+            self.inserts.insert(component_kind, Vec::new());
+        }
+        let list = self.inserts.get_mut(&component_kind).unwrap();
+        list.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_remove(&mut self, entity: E, component: Box<dyn Replicate>) {
+        let component_kind: ComponentKind = component.kind();
+        if !self.removes.contains_key(&component_kind) {
+            self.removes.insert(component_kind, Vec::new());
+        }
+        let list = self.removes.get_mut(&component_kind).unwrap();
+        list.push((entity, component));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_update(&mut self, tick: Tick, entity: E, component_kind: ComponentKind) {
+        if !self.updates.contains_key(&component_kind) {
+            self.updates.insert(component_kind, Vec::new());
+        }
+        let list = self.updates.get_mut(&component_kind).unwrap();
+        list.push((tick, entity));
+        self.empty = false;
+    }
 }
 
 // Event Trait
-pub trait Event {
+pub trait Event<E: Copy> {
     type Iter;
 
     fn iter(events: &mut Events<E>) -> Self::Iter;
@@ -128,10 +168,10 @@ pub trait Event {
 
 // ConnectEvent
 pub struct ConnectEvent;
-impl Event for ConnectEvent {
+impl<E: Copy> Event<E> for ConnectEvent {
     type Iter = IntoIter<UserKey>;
 
-    fn iter(events: &mut Events) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.connections);
         return IntoIterator::into_iter(list);
     }
@@ -139,10 +179,10 @@ impl Event for ConnectEvent {
 
 // DisconnectEvent
 pub struct DisconnectEvent;
-impl Event for DisconnectEvent {
+impl<E: Copy> Event<E> for DisconnectEvent {
     type Iter = IntoIter<(UserKey, User)>;
 
-    fn iter(events: &mut Events) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.disconnections);
         return IntoIterator::into_iter(list);
     }
@@ -150,10 +190,10 @@ impl Event for DisconnectEvent {
 
 // Tick Event
 pub struct TickEvent;
-impl Event for TickEvent {
+impl<E: Copy> Event<E> for TickEvent {
     type Iter = IntoIter<Tick>;
 
-    fn iter(events: &mut Events) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.ticks);
         return IntoIterator::into_iter(list);
     }
@@ -161,10 +201,10 @@ impl Event for TickEvent {
 
 // Error Event
 pub struct ErrorEvent;
-impl Event for ErrorEvent {
+impl<E: Copy> Event<E> for ErrorEvent {
     type Iter = IntoIter<NaiaServerError>;
 
-    fn iter(events: &mut Events) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.errors);
         return IntoIterator::into_iter(list);
     }
@@ -174,10 +214,10 @@ impl Event for ErrorEvent {
 pub struct AuthEvent<M: Message> {
     phantom_m: PhantomData<M>,
 }
-impl<M: Message> Event for AuthEvent<M> {
+impl<E: Copy, M: Message> Event<E> for AuthEvent<M> {
     type Iter = IntoIter<(UserKey, M)>;
 
-    fn iter(events: &mut Events) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let message_kind: MessageKind = MessageKind::of::<M>();
         if let Some(boxed_list) = events.auths.remove(&message_kind) {
             let mut output_list: Vec<(UserKey, M)> = Vec::new();
@@ -202,10 +242,10 @@ pub struct MessageEvent<C: Channel, M: Message> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<M>,
 }
-impl<C: Channel, M: Message> Event for MessageEvent<C, M> {
+impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
     type Iter = IntoIter<(UserKey, M)>;
 
-    fn iter(events: &mut Events) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
         if let Some(mut channel_map) = events.messages.remove(&channel_kind) {
             let message_kind: MessageKind = MessageKind::of::<M>();

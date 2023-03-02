@@ -128,10 +128,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> Events {
+    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Events<E> {
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
-        self.maintain_socket();
+        self.maintain_socket(world);
 
         // tick event
         if self.time_manager.recv_server_tick() {

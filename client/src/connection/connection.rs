@@ -119,7 +119,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // read entity updates
             {
-                let events = self.remote_world_manager.read_updates(&protocol.component_kinds, world, server_tick, &mut reader)?;
+                let events = self.remote_world_manager.read_updates(
+                    &protocol.component_kinds,
+                    world,
+                    server_tick,
+                    &mut reader,
+                )?;
                 for (tick, entity, component_kind) in events {
                     incoming_events.push_update(tick, entity, component_kind);
                 }
@@ -127,7 +132,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // read entity actions
             {
-                let events = self.remote_world_manager.read_actions(&protocol.component_kinds, world, &mut reader)?;
+                let events = self.remote_world_manager.read_actions(
+                    &protocol.component_kinds,
+                    world,
+                    &mut reader,
+                )?;
                 for event in events {
                     match event {
                         EntityActionEvent::SpawnEntity(entity) => {
@@ -148,13 +157,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
 
         Ok(())
-    }
-
-    pub fn receive_messages(&mut self, incoming_events: &mut Events<E>) {
-        let messages = self.base.message_manager.receive_messages();
-        for (channel_kind, message) in messages {
-            incoming_events.push_message(&channel_kind, message);
-        }
     }
 
     // Outgoing data

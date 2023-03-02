@@ -6,7 +6,12 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityActionEvent, EntityConverter, GlobalDiffHandler, HostLocalWorldManager, HostType, Instant, MessageKinds, PacketType, Protocol, RemoteWorldManager, Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRecord, WorldRefType};
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityActionEvent,
+    EntityConverter, GlobalDiffHandler, HostLocalWorldManager, HostType, Instant, MessageKinds,
+    PacketType, Protocol, RemoteWorldManager, Serde, SerdeErr, StandardHeader, Tick, WorldMutType,
+    WorldRecord, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -85,7 +90,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read messages
         {
-            let messages = self.base
+            let messages = self
+                .base
                 .message_manager
                 .read_messages(protocol, &converter, reader)?;
             for (channel_kind, messages) in messages {
@@ -97,7 +103,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read entity updates
         {
-            let events = self.remote_world_manager.read_updates(&protocol.component_kinds, world, client_tick, reader)?;
+            let events = self.remote_world_manager.read_updates(
+                &protocol.component_kinds,
+                world,
+                client_tick,
+                reader,
+            )?;
             for (tick, entity, component_kind) in events {
                 incoming_events.push_update(tick, entity, component_kind);
             }
@@ -105,7 +116,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read entity actions
         {
-            let events = self.remote_world_manager.read_actions(&protocol.component_kinds, world, reader)?;
+            let events =
+                self.remote_world_manager
+                    .read_actions(&protocol.component_kinds, world, reader)?;
             for event in events {
                 match event {
                     EntityActionEvent::SpawnEntity(entity) => {

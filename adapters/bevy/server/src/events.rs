@@ -20,8 +20,8 @@ pub struct AuthEvents {
     inner: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
 }
 
-impl From<&mut Events> for AuthEvents {
-    fn from(events: &mut Events) -> Self {
+impl<E: Copy> From<&mut Events<E>> for AuthEvents {
+    fn from(events: &mut Events<E>) -> Self {
         Self {
             inner: events.take_auths(),
         }
@@ -54,8 +54,8 @@ pub struct MessageEvents {
     inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
 }
 
-impl From<&mut Events> for MessageEvents {
-    fn from(events: &mut Events) -> Self {
+impl<E: Copy> From<&mut Events<E>> for MessageEvents {
+    fn from(events: &mut Events<E>) -> Self {
         Self {
             inner: events.take_messages(),
         }

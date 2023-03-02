@@ -10,6 +10,8 @@ use bevy_ecs::{
 
 use naia_server::Server;
 
+use naia_bevy_shared::WorldProxyMut;
+
 mod naia_events {
     pub use naia_server::{
         AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvent, TickEvent,
@@ -24,7 +26,7 @@ mod bevy_events {
 
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<Server<Entity>>| {
-        let mut events = server.receive();
+        let mut events = server.receive(world.proxy_mut());
         unsafe {
             // Connect Event
             let mut connect_event_writer = world
