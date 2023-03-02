@@ -63,7 +63,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Entities
     entity_room_map: HashMap<E, RoomKey>,
     entity_scope_map: EntityScopeMap<E>,
-    world_manager: HostGlobalWorldManager<E>,
+    host_world_manager: HostGlobalWorldManager<E>,
     // Events
     incoming_events: Events,
     // Ticks
@@ -105,7 +105,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Entities
             entity_room_map: HashMap::new(),
             entity_scope_map: EntityScopeMap::new(),
-            world_manager: HostGlobalWorldManager::new(),
+            host_world_manager: HostGlobalWorldManager::new(),
             // Events
             incoming_events: Events::new(),
             // Ticks
@@ -192,7 +192,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             user.address,
             user_key,
             &self.protocol.channel_kinds,
-            self.world_manager.diff_handler(),
+            self.host_world_manager.diff_handler(),
         );
 
         // send connect response
@@ -271,20 +271,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let entities: Vec<E> = message
                         .entities()
                         .iter()
-                        .map(|handle| self.world_manager.handle_to_entity(handle))
+                        .map(|handle| self.host_world_manager.handle_to_entity(handle))
                         .collect();
 
                     // check whether all entities are in scope for the connection
                     let all_entities_in_scope = {
                         entities
                             .iter()
-                            .all(|entity| connection.world_manager.entity_channel_is_open(entity))
+                            .all(|entity| connection.host_world_manager.entity_channel_is_open(entity))
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
                         let converter = EntityConverter::new(
-                            self.world_manager.world_record(),
-                            &connection.world_manager,
+                            self.host_world_manager.world_record(),
+                            &connection.host_world_manager,
                         );
                         connection.base.message_manager.send_message(
                             &self.protocol.message_kinds,
@@ -295,7 +295,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
-                        connection.world_manager.queue_entity_message(
+                        connection.host_world_manager.queue_entity_message(
                             entities,
                             channel_kind,
                             message,
@@ -303,8 +303,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     }
                 } else {
                     let converter = EntityConverter::new(
-                        self.world_manager.world_record(),
-                        &connection.world_manager,
+                        self.host_world_manager.world_record(),
+                        &connection.host_world_manager,
                     );
                     connection.base.message_manager.send_message(
                         &self.protocol.message_kinds,
@@ -393,7 +393,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &now,
                 &mut self.io,
                 &world,
-                self.world_manager.world_record(),
+                self.host_world_manager.world_record(),
                 &self.time_manager,
                 &rtt,
             );
@@ -406,14 +406,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// further operations on the Entity
     pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
         let entity = world.spawn_entity();
-        self.world_manager.spawn_entity(&entity);
+        self.host_world_manager.spawn_entity(&entity);
 
         EntityMut::new(self, world, &entity)
     }
 
     /// Creates a new Entity with a specific id
     pub fn spawn_entity_at(&mut self, entity: &E) {
-        self.world_manager.spawn_entity(entity);
+        self.host_world_manager.spawn_entity(entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -616,7 +616,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // are in each User's scope
         for (_, user_connection) in self.user_connections.iter_mut() {
             //remove entity from user connection
-            user_connection.world_manager.despawn_entity(entity);
+            user_connection.host_world_manager.despawn_entity(entity);
         }
 
         // Delete scope
@@ -626,7 +626,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.entity_room_map.remove(entity);
 
         // Remove from ECS Record
-        self.world_manager.despawn_entity(entity);
+        self.host_world_manager.despawn_entity(entity);
     }
 
     //// Entity Scopes
@@ -674,15 +674,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // add component to connections already tracking entity
             for (_, user_connection) in self.user_connections.iter_mut() {
                 // insert component into user's connection
-                if user_connection.world_manager.scope_has_entity(entity) {
+                if user_connection.host_world_manager.scope_has_entity(entity) {
                     user_connection
-                        .world_manager
+                        .host_world_manager
                         .insert_component(entity, &component_kind);
                 }
             }
 
             // update in world manager
-            self.world_manager
+            self.host_world_manager
                 .insert_component(entity, &mut component_ref);
 
             // actually insert component into world
@@ -706,12 +706,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for (_, user_connection) in self.user_connections.iter_mut() {
             // remove component from user connection
             user_connection
-                .world_manager
+                .host_world_manager
                 .remove_component(entity, &component_kind);
         }
 
         // cleanup all other loose ends
-        self.world_manager.remove_component(entity, &component_kind);
+        self.host_world_manager.remove_component(entity, &component_kind);
 
         // remove from world
         world.remove_component::<R>(entity)
@@ -1147,7 +1147,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                         server_tick,
                                         client_tick,
                                         &mut reader,
-                                        self.world_manager.world_record(),
+                                        self.host_world_manager.world_record(),
                                     )
                                     .is_err()
                                 {
@@ -1203,7 +1203,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                         //remove entity from user connection
                         user_connection
-                            .world_manager
+                            .host_world_manager
                             .despawn_entity(&removed_entity);
                     }
                 }
@@ -1219,7 +1219,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 self.user_connections.get_mut(&user.address)
                             {
                                 let currently_in_scope =
-                                    user_connection.world_manager.scope_has_entity(entity);
+                                    user_connection.host_world_manager.scope_has_entity(entity);
 
                                 let should_be_in_scope = if let Some(in_scope) =
                                     self.entity_scope_map.get(user_key, entity)
@@ -1232,19 +1232,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 if should_be_in_scope {
                                     if !currently_in_scope {
                                         // add entity to the connections local scope
-                                        user_connection.world_manager.spawn_entity(entity);
+                                        user_connection.host_world_manager.spawn_entity(entity);
                                         // add components to connections local scope
                                         for component_kind in
-                                            self.world_manager.component_kinds(entity).unwrap()
+                                            self.host_world_manager.component_kinds(entity).unwrap()
                                         {
                                             user_connection
-                                                .world_manager
+                                                .host_world_manager
                                                 .insert_component(entity, &component_kind);
                                         }
                                     }
                                 } else if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    user_connection.world_manager.despawn_entity(entity);
+                                    user_connection.host_world_manager.despawn_entity(entity);
                                 }
                             }
                         }
@@ -1257,10 +1257,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        self.world_manager.handle_to_entity(entity_handle)
+        self.host_world_manager.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.world_manager.entity_to_handle(entity)
+        self.host_world_manager.entity_to_handle(entity)
     }
 }

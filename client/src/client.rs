@@ -11,7 +11,7 @@ pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GameInstant, Message,
     MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig,
-    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType, HostGlobalWorldManager
 };
 
 use crate::{
@@ -28,7 +28,7 @@ use super::{client_config::ClientConfig, error::NaiaClientError, events::Events}
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
 #[cfg_attr(feature = "bevy_support", derive(Resource))]
-pub struct Client<E: Copy + Eq + Hash> {
+pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     client_config: ClientConfig,
     protocol: Protocol,
@@ -36,11 +36,13 @@ pub struct Client<E: Copy + Eq + Hash> {
     io: Io,
     server_connection: Option<Connection<E>>,
     handshake_manager: HandshakeManager,
+    // World
+    host_world_manager: HostGlobalWorldManager<E>,
     // Events
     incoming_events: Events<E>,
 }
 
-impl<E: Copy + Eq + Hash> Client<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Create a new Client
     pub fn new<P: Into<Protocol>>(client_config: ClientConfig, protocol: P) -> Self {
         let mut protocol: Protocol = protocol.into();
@@ -65,6 +67,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
             ),
             server_connection: None,
             handshake_manager,
+            // World
+            host_world_manager: HostGlobalWorldManager::new(),
             // Events
             incoming_events: Events::new(),
         }
@@ -477,6 +481,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
                                         &self.client_config.connection,
                                         &self.protocol.channel_kinds,
                                         time_manager,
+                                        self.host_world_manager.diff_handler()
                                     ));
                                     self.incoming_events.push_connection(&server_addr);
                                 }
@@ -534,7 +539,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for Client<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Client<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
         let connection = self
             .server_connection

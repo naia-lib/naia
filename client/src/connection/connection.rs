@@ -1,12 +1,8 @@
-use std::{hash::Hash, net::SocketAddr};
+use std::{hash::Hash, net::SocketAddr, sync::{Arc, RwLock}};
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityActionEvent,
-    HostType, Instant, OwnedBitReader, PacketType, Protocol, RemoteWorldManager, Serde, SerdeErr,
-    StandardHeader, Tick, WorldMutType,
-};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityActionEvent, GlobalDiffHandler, HostLocalWorldManager, HostType, Instant, OwnedBitReader, PacketType, Protocol, RemoteWorldManager, Serde, SerdeErr, StandardHeader, Tick, WorldMutType};
 
 use crate::{
     connection::{
@@ -17,8 +13,9 @@ use crate::{
 
 use super::io::Io;
 
-pub struct Connection<E: Copy + Eq + Hash> {
+pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub base: BaseConnection,
+    pub host_world_manager: HostLocalWorldManager<E>,
     pub remote_world_manager: RemoteWorldManager<E>,
     pub time_manager: TimeManager,
     pub tick_buffer: TickBufferSender,
@@ -27,17 +24,19 @@ pub struct Connection<E: Copy + Eq + Hash> {
     jitter_buffer: TickQueue<OwnedBitReader>,
 }
 
-impl<E: Copy + Eq + Hash> Connection<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn new(
         address: SocketAddr,
         connection_config: &ConnectionConfig,
         channel_kinds: &ChannelKinds,
         time_manager: TimeManager,
+        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
     ) -> Self {
         let tick_buffer = TickBufferSender::new(channel_kinds);
 
         Connection {
-            base: BaseConnection::new(address, HostType::Client, connection_config, channel_kinds),
+            base: BaseConnection::new(address.clone(), HostType::Client, connection_config, channel_kinds),
+            host_world_manager: HostLocalWorldManager::new(address, diff_handler),
             remote_world_manager: RemoteWorldManager::new(),
             time_manager,
             tick_buffer,
