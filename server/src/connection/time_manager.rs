@@ -42,11 +42,11 @@ impl TimeManager {
         }
     }
 
-    pub(crate) fn duration_until_next_tick(&self) -> Duration {
-        let mut new_instant = self.last_tick_instant.clone();
-        new_instant.add_millis(self.tick_interval_millis as u32);
-        return new_instant.until();
-    }
+    // pub(crate) fn duration_until_next_tick(&self) -> Duration {
+    //     let mut new_instant = self.last_tick_instant.clone();
+    //     new_instant.add_millis(self.tick_interval_millis as u32);
+    //     return new_instant.until();
+    // }
 
     /// Whether or not we should emit a tick event
     pub fn recv_server_tick(&mut self) -> bool {

@@ -103,8 +103,8 @@ pub use messages::{
 };
 pub use world::{
     host::{
-        global_diff_handler::GlobalDiffHandler, host_world_manager::HostWorldManager,
-        world_record::WorldRecord,
+        global_diff_handler::GlobalDiffHandler, host_global_world_manager::HostGlobalWorldManager,
+        host_local_world_manager::HostLocalWorldManager, world_record::WorldRecord,
     },
     remote::{
         entity_action_event::EntityActionEvent, entity_record::EntityRecord,

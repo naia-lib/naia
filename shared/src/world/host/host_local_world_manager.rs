@@ -26,26 +26,26 @@ pub type ActionId = MessageIndex;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct HostWorldManager<E: Copy + Eq + Hash + Send + Sync> {
+pub struct HostLocalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     // World
     world_channel: WorldChannel<E>,
+
+    // Actions
     next_send_actions: VecDeque<(ActionId, EntityActionEvent<E>)>,
-    #[allow(clippy::type_complexity)]
     sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E>)>)>,
 
     // Updates
     next_send_updates: HashMap<E, HashSet<ComponentKind>>,
-    #[allow(clippy::type_complexity)]
     /// Map of component updates and [`DiffMask`] that were written into each packet
     sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, ComponentKind), DiffMask>)>,
     /// Last [`PacketIndex`] where a component update was written by the server
     last_update_packet_index: PacketIndex,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> HostLocalWorldManager<E> {
     /// Create a new HostWorldManager, given the client's address
     pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>) -> Self {
-        HostWorldManager {
+        HostLocalWorldManager {
             // World
             world_channel: WorldChannel::new(address, diff_handler),
             next_send_actions: VecDeque::new(),
@@ -672,7 +672,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 }
 
 // PacketNotifiable
-impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for HostWorldManager<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for HostLocalWorldManager<E> {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         // Updates
         self.sent_updates.remove(&packet_index);
@@ -690,7 +690,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for HostWorldManager<E>
 }
 
 // NetEntityConverter
-impl<E: Copy + Eq + Hash + Send + Sync> NetEntityConverter<E> for HostWorldManager<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> NetEntityConverter<E> for HostLocalWorldManager<E> {
     fn entity_to_net_entity(&self, entity: &E) -> NetEntity {
         return *self
             .world_channel

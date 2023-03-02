@@ -8,8 +8,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    GlobalDiffHandler, HostType, HostWorldManager, Instant, MessageKinds, PacketType, Protocol,
-    Serde, SerdeErr, StandardHeader, Tick, WorldRecord, WorldRefType,
+    GlobalDiffHandler, HostLocalWorldManager, HostType, Instant, MessageKinds, PacketType,
+    Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldRecord, WorldRefType,
 };
 
 use crate::{
@@ -26,7 +26,7 @@ use super::{io::Io, ping_manager::PingManager};
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
     pub base: BaseConnection,
-    pub host_world_manager: HostWorldManager<E>,
+    pub host_world_manager: HostLocalWorldManager<E>,
     tick_buffer: TickBufferReceiver,
     pub ping_manager: PingManager,
 }
@@ -48,7 +48,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 connection_config,
                 channel_kinds,
             ),
-            host_world_manager: HostWorldManager::new(user_address, diff_handler),
+            host_world_manager: HostLocalWorldManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
         }

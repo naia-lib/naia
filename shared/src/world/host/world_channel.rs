@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     entity_action_event::EntityActionEvent, entity_message_waitlist::EntityMessageWaitlist,
-    global_diff_handler::GlobalDiffHandler, host_world_manager::ActionId,
+    global_diff_handler::GlobalDiffHandler, host_local_world_manager::ActionId,
     user_diff_handler::UserDiffHandler,
 };
 

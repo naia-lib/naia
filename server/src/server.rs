@@ -3,7 +3,6 @@ use std::{
     hash::Hash,
     net::SocketAddr,
     panic,
-    sync::{Arc, RwLock},
     time::Duration,
 };
 
@@ -15,9 +14,9 @@ use bevy_ecs::prelude::Resource;
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GlobalDiffHandler, Instant,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, HostGlobalWorldManager, Instant,
     Message, MessageContainer, PacketType, PropertyMutator, Protocol, Replicate, Serde,
-    StandardHeader, Tick, Timer, WorldMutType, WorldRecord, WorldRefType,
+    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -63,10 +62,8 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
     entity_room_map: HashMap<E, RoomKey>,
-    world_record: WorldRecord<E>,
     entity_scope_map: EntityScopeMap<E>,
-    // Components
-    diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
+    world_manager: HostGlobalWorldManager<E>,
     // Events
     incoming_events: Events,
     // Ticks
@@ -107,10 +104,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             rooms: BigMap::new(),
             // Entities
             entity_room_map: HashMap::new(),
-            world_record: WorldRecord::new(),
             entity_scope_map: EntityScopeMap::new(),
-            // Components
-            diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
+            world_manager: HostGlobalWorldManager::new(),
             // Events
             incoming_events: Events::new(),
             // Ticks
@@ -129,10 +124,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// listening for Clients
     pub fn is_listening(&self) -> bool {
         self.io.is_loaded()
-    }
-
-    pub fn duration_until_next_tick(&self) -> Duration {
-        self.time_manager.duration_until_next_tick()
     }
 
     /// Must be called regularly, maintains connection to and receives messages
@@ -201,7 +192,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             user.address,
             user_key,
             &self.protocol.channel_kinds,
-            &self.diff_handler,
+            &self.world_manager.diff_handler,
         );
 
         // send connect response
@@ -280,7 +271,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let entities: Vec<E> = message
                         .entities()
                         .iter()
-                        .map(|handle| self.world_record.handle_to_entity(handle))
+                        .map(|handle| self.world_manager.world_record.handle_to_entity(handle))
                         .collect();
 
                     // check whether all entities are in scope for the connection
@@ -292,7 +283,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
                         let converter = EntityConverter::new(
-                            &self.world_record,
+                            &self.world_manager.world_record,
                             &connection.host_world_manager,
                         );
                         connection.base.message_manager.send_message(
@@ -311,8 +302,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         );
                     }
                 } else {
-                    let converter =
-                        EntityConverter::new(&self.world_record, &connection.host_world_manager);
+                    let converter = EntityConverter::new(
+                        &self.world_manager.world_record,
+                        &connection.host_world_manager,
+                    );
                     connection.base.message_manager.send_message(
                         &self.protocol.message_kinds,
                         &converter,
@@ -386,6 +379,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // loop through all connections, send packet
         let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
+
+        // shuffle order of connections in order to avoid priority among users
         fastrand::shuffle(&mut user_addresses);
 
         for user_address in user_addresses {
@@ -398,7 +393,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &now,
                 &mut self.io,
                 &world,
-                &self.world_record,
+                &self.world_manager.world_record,
                 &self.time_manager,
                 &rtt,
             );
@@ -622,7 +617,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // Clean up associated components
-        for component_kind in self.world_record.component_kinds(entity).unwrap() {
+        for component_kind in self
+            .world_manager
+            .world_record
+            .component_kinds(entity)
+            .unwrap()
+        {
             self.component_cleanup(entity, &component_kind);
         }
 
@@ -636,7 +636,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.entity_room_map.remove(entity);
 
         // Remove from ECS Record
-        self.world_record.despawn_entity(entity);
+        self.world_manager.world_record.despawn_entity(entity);
     }
 
     //// Entity Scopes
@@ -674,11 +674,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if world.has_component_of_kind(entity, &component_kind) {
             // Entity already has this Component type yet, update Component
 
-            if let Some(mut component) = world.component_mut::<R>(entity) {
-                component.mirror(&component_ref);
-            } else {
-                panic!("Should never happen because we checked for this above")
-            }
+            let Some(mut component) = world.component_mut::<R>(entity) else {
+                panic!("Should never happen because we checked for this above");
+            };
+            component.mirror(&component_ref);
         } else {
             // Entity does not have this Component type yet, initialize Component
 
@@ -1156,7 +1155,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                         server_tick,
                                         client_tick,
                                         &mut reader,
-                                        &self.world_record,
+                                        &self.world_manager.world_record,
                                     )
                                     .is_err()
                                 {
@@ -1203,7 +1202,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     // Entity Helpers
 
     fn spawn_entity_init(&mut self, entity: &E) {
-        self.world_record.spawn_entity(entity);
+        self.world_manager.world_record.spawn_entity(entity);
     }
 
     // Entity Scopes
@@ -1249,8 +1248,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                         // add entity to the connections local scope
                                         user_connection.host_world_manager.spawn_entity(entity);
                                         // add components to connections local scope
-                                        for component_kind in
-                                            self.world_record.component_kinds(entity).unwrap()
+                                        for component_kind in self
+                                            .world_manager
+                                            .world_record
+                                            .component_kinds(entity)
+                                            .unwrap()
                                         {
                                             user_connection
                                                 .host_world_manager
@@ -1273,11 +1275,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     fn component_init<R: Replicate>(&mut self, entity: &E, component_ref: &mut R) {
         let component_kind = component_ref.kind();
-        self.world_record.add_component(entity, &component_kind);
+        self.world_manager
+            .world_record
+            .add_component(entity, &component_kind);
 
         let diff_mask_length: u8 = component_ref.diff_mask_size();
 
         let mut_sender = self
+            .world_manager
             .diff_handler
             .as_ref()
             .write()
@@ -1290,8 +1295,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     fn component_cleanup(&mut self, entity: &E, component_kind: &ComponentKind) {
-        self.world_record.remove_component(entity, component_kind);
-        self.diff_handler
+        self.world_manager
+            .world_record
+            .remove_component(entity, component_kind);
+        self.world_manager
+            .diff_handler
             .as_ref()
             .write()
             .expect("Haven't initialized DiffHandler")
@@ -1301,10 +1309,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        self.world_record.handle_to_entity(entity_handle)
+        self.world_manager
+            .world_record
+            .handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.world_record.entity_to_handle(entity)
+        self.world_manager.world_record.entity_to_handle(entity)
     }
 }
