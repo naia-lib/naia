@@ -3,7 +3,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GlobalDiffHandler, WorldRecord, world::host::global_entity_record::GlobalEntityRecord, Replicate, PropertyMutator};
+use crate::{
+    world::host::global_entity_record::GlobalEntityRecord, ComponentKind, EntityDoesNotExistError,
+    EntityHandle, EntityHandleConverter, GlobalDiffHandler, PropertyMutator, Replicate,
+    WorldRecord,
+};
 
 pub struct HostGlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
@@ -35,10 +39,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
     // Despawn
     pub fn despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord> {
         // Clean up associated components
-        for component_kind in self
-            .component_kinds(entity)
-            .unwrap()
-        {
+        for component_kind in self.component_kinds(entity).unwrap() {
             self.remove_component(entity, &component_kind);
         }
 
@@ -58,7 +59,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
 
         self.world_record.add_component(entity, &component_kind);
 
-        let mut_sender = self.diff_handler
+        let mut_sender = self
+            .diff_handler
             .as_ref()
             .write()
             .expect("DiffHandler should be initialized")
