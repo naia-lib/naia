@@ -4,7 +4,6 @@ use bevy_app::{App, CoreStage, Plugin as PluginType};
 use bevy_ecs::{entity::Entity, schedule::SystemStage};
 
 use naia_server::{Server, ServerConfig};
-
 use naia_bevy_shared::Protocol;
 
 use super::{

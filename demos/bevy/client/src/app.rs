@@ -44,7 +44,8 @@ pub fn run() {
         .add_system_to_stage(CoreStage::PreUpdate, events::update_component_events)
         .add_system_to_stage(CoreStage::PreUpdate, events::message_events)
         .add_system_to_stage(CoreStage::PreUpdate, events::tick_events)
-        .add_system_to_stage(CoreStage::Update, input)
+        .add_system_to_stage(CoreStage::Update, input::server_input)
+        .add_system_to_stage(CoreStage::Update, input::client_input)
         .add_system_to_stage(CoreStage::Update, sync)
         // Run App
         .run();

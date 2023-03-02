@@ -1,4 +1,5 @@
-use bevy_app::{App, ScheduleRunnerPlugin};
+use std::time::Duration;
+use bevy_app::{App, ScheduleRunnerPlugin, ScheduleRunnerSettings};
 use bevy_core::CorePlugin;
 use bevy_log::{info, LogPlugin};
 
@@ -17,6 +18,10 @@ fn main() {
     App::default()
         // Plugins
         .add_plugin(CorePlugin::default())
+        .insert_resource(
+            // this is needed to avoid running the server at uncapped FPS
+            ScheduleRunnerSettings::run_loop(Duration::from_secs_f64(1.0 / 60.0))
+        )
         .add_plugin(ScheduleRunnerPlugin::default())
         .add_plugin(LogPlugin::default())
         .add_plugin(ServerPlugin::new(ServerConfig::default(), protocol()))

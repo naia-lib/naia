@@ -123,8 +123,6 @@ pub fn before_receive_events(world: &mut World) {
                     ));
                 }
             }
-
-            sleep(Duration::from_millis(1));
         }
     });
 }
