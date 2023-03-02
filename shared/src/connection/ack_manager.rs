@@ -49,7 +49,7 @@ impl AckManager {
         &mut self,
         header: &StandardHeader,
         message_manager: &mut MessageManager,
-        packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
+        packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         let sender_packet_index = header.sender_packet_index;
         let sender_ack_index = header.sender_ack_index;
@@ -67,7 +67,7 @@ impl AckManager {
         // the current `sender_ack_index` was (clearly) received so we should remove it
         if let Some(sent_packet) = self.sent_packets.get(&sender_ack_index) {
             if sent_packet.packet_type == PacketType::Data {
-                self.notify_packet_delivered(sender_ack_index, message_manager, packet_notifiable);
+                self.notify_packet_delivered(sender_ack_index, message_manager, packet_notifiables);
             }
 
             self.sent_packets.remove(&sender_ack_index);
@@ -84,7 +84,7 @@ impl AckManager {
                         self.notify_packet_delivered(
                             sent_packet_index,
                             message_manager,
-                            packet_notifiable,
+                            packet_notifiables,
                         );
                     }
 
@@ -129,10 +129,10 @@ impl AckManager {
         &self,
         sent_packet_index: PacketIndex,
         message_manager: &mut MessageManager,
-        packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
+        packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         message_manager.notify_packet_delivered(sent_packet_index);
-        if let Some(notifiable) = packet_notifiable {
+        for notifiable in packet_notifiables {
             notifiable.notify_packet_delivered(sent_packet_index);
         }
     }

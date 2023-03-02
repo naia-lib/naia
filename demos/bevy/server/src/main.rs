@@ -20,7 +20,7 @@ fn main() {
         .add_plugin(CorePlugin::default())
         .insert_resource(
             // this is needed to avoid running the server at uncapped FPS
-            ScheduleRunnerSettings::run_loop(Duration::from_secs_f64(1.0 / 60.0))
+            ScheduleRunnerSettings::run_loop(Duration::from_millis(1))
         )
         .add_plugin(ScheduleRunnerPlugin::default())
         .add_plugin(LogPlugin::default())

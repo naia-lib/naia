@@ -75,12 +75,12 @@ impl BaseConnection {
     pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        packet_notifiable: &mut Option<&mut dyn PacketNotifiable>,
+        packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         self.ack_manager.process_incoming_header(
             header,
             &mut self.message_manager,
-            packet_notifiable,
+            packet_notifiables,
         );
     }
 

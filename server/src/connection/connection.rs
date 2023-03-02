@@ -61,7 +61,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         self.base
-            .process_incoming_header(header, &mut Some(&mut self.host_world_manager));
+            .process_incoming_header(header, &mut [&mut self.host_world_manager]);
     }
 
     /// Read packet data received from a client
