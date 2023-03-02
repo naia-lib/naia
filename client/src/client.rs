@@ -16,12 +16,12 @@ pub use naia_shared::{
 };
 
 use crate::{
-    entity_ref::EntityMut,
     connection::{
         connection::Connection,
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
     },
+    entity_ref::EntityMut,
     entity_ref::EntityRef,
 };
 
@@ -168,11 +168,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
 
             if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
-
                 // send outgoing packets
                 let now = Instant::now();
 
-                connection.send_outgoing_packets(&self.protocol, &now, &mut self.io, &world, self.host_world_manager.world_record());
+                connection.send_outgoing_packets(
+                    &self.protocol,
+                    &now,
+                    &mut self.io,
+                    &world,
+                    self.host_world_manager.world_record(),
+                );
 
                 // insert tick events in total range
                 let mut index_tick = prev_sending_tick.wrapping_add(1);
@@ -466,15 +471,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     // Private methods
 
     fn maintain_socket(&mut self) {
-        if let Some(server_connection) = self.server_connection.as_mut() {
+        if let Some(connection) = self.server_connection.as_mut() {
             // connection already established
 
             // send heartbeats
-            if server_connection.base.should_send_heartbeat() {
+            if connection.base.should_send_heartbeat() {
                 let mut writer = BitWriter::new();
 
                 // write header
-                server_connection
+                connection
                     .base
                     .write_outgoing_header(PacketType::Heartbeat, &mut writer);
 
@@ -483,19 +488,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // TODO: pass this on and handle above
                     warn!("Client Error: Cannot send heartbeat packet to Server");
                 }
-                server_connection.base.mark_sent();
+                connection.base.mark_sent();
             }
 
             // send pings
-            if server_connection.time_manager.send_ping(&mut self.io) {
-                server_connection.base.mark_sent();
+            if connection.time_manager.send_ping(&mut self.io) {
+                connection.base.mark_sent();
             }
 
             // receive from socket
             loop {
                 match self.io.recv_reader() {
                     Ok(Some(mut reader)) => {
-                        server_connection.base.mark_heard();
+                        connection.base.mark_heard();
 
                         let header = StandardHeader::de(&mut reader)
                             .expect("unable to parse header from incoming packet");
@@ -516,7 +521,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         }
 
                         // Read incoming header
-                        server_connection.process_incoming_header(&header);
+                        connection.process_incoming_header(&header);
 
                         // read server tick
                         let Ok(server_tick) = Tick::de(&mut reader) else {
@@ -530,14 +535,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             continue;
                         };
 
-                        server_connection
+                        connection
                             .time_manager
                             .recv_tick_instant(&server_tick, &server_tick_instant);
 
                         // Handle based on PacketType
                         match header.packet_type {
                             PacketType::Data => {
-                                if server_connection
+                                if connection
                                     .buffer_data_packet(&server_tick, &mut reader)
                                     .is_err()
                                 {
@@ -557,7 +562,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 let mut writer = BitWriter::new();
 
                                 // write header
-                                server_connection
+                                connection
                                     .base
                                     .write_outgoing_header(PacketType::Pong, &mut writer);
 
@@ -569,14 +574,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                     // TODO: pass this on and handle above
                                     warn!("Client Error: Cannot send pong packet to Server");
                                 }
-                                server_connection.base.mark_sent();
+                                connection.base.mark_sent();
                             }
                             PacketType::Pong => {
-                                if server_connection
-                                    .time_manager
-                                    .read_pong(&mut reader)
-                                    .is_err()
-                                {
+                                if connection.time_manager.read_pong(&mut reader).is_err() {
                                     // TODO: pass this on and handle above
                                     warn!("Client Error: Cannot process pong packet from Server");
                                 }

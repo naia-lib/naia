@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use naia_shared::{
-    wrapping_diff, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex,
-    Serde, SerdeErr, StandardHeader, Tick, UnsignedVariableInteger,
+    BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType, PingIndex, Serde,
+    SerdeErr, StandardHeader, Tick, UnsignedVariableInteger,
 };
 
 /// Manages the current tick for the host
@@ -16,7 +16,6 @@ pub struct TimeManager {
     tick_duration_avg_min: f32,
     tick_duration_avg_max: f32,
     tick_speedup_potential: f32,
-    client_diff_avg: f32,
 }
 
 impl TimeManager {
@@ -37,7 +36,6 @@ impl TimeManager {
             tick_duration_avg,
             tick_duration_avg_min: tick_duration_avg,
             tick_duration_avg_max: tick_duration_avg,
-            client_diff_avg: 0.0,
             tick_speedup_potential: 0.0,
         }
     }
@@ -145,10 +143,5 @@ impl TimeManager {
         self.game_time_now().ser(&mut writer);
 
         Ok(writer)
-    }
-
-    pub(crate) fn record_client_tick(&mut self, client_tick: Tick) {
-        let ticks_client_ahead_by = wrapping_diff(self.current_tick, client_tick) as f32;
-        self.client_diff_avg = (0.9 * self.client_diff_avg) + (0.1 * ticks_client_ahead_by);
     }
 }

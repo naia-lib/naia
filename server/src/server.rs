@@ -575,8 +575,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Gets the average Round Trip Time measured to the given User's Client
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
         if let Some(user) = self.users.get(user_key) {
-            if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.ping_manager.rtt_average);
+            if let Some(connection) = self.user_connections.get(&user.address) {
+                return Some(connection.ping_manager.rtt_average);
             }
         }
         None
@@ -586,8 +586,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Client
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
         if let Some(user) = self.users.get(user_key) {
-            if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.ping_manager.jitter_average);
+            if let Some(connection) = self.user_connections.get(&user.address) {
+                return Some(connection.ping_manager.jitter_average);
             }
         }
         None
@@ -610,9 +610,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
-        for (_, user_connection) in self.user_connections.iter_mut() {
+        for (_, connection) in self.user_connections.iter_mut() {
             //remove entity from user connection
-            user_connection.host_world_manager.despawn_entity(entity);
+            connection.host_world_manager.despawn_entity(entity);
         }
 
         // Delete scope
@@ -668,10 +668,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Entity does not have this Component type yet, initialize Component
 
             // add component to connections already tracking entity
-            for (_, user_connection) in self.user_connections.iter_mut() {
+            for (_, connection) in self.user_connections.iter_mut() {
                 // insert component into user's connection
-                if user_connection.host_world_manager.host_has_entity(entity) {
-                    user_connection
+                if connection.host_world_manager.host_has_entity(entity) {
+                    connection
                         .host_world_manager
                         .insert_component(entity, &component_kind);
                 }
@@ -699,9 +699,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // TODO: should be able to make this more efficient by caching for every Entity
         // which scopes they are part of
-        for (_, user_connection) in self.user_connections.iter_mut() {
+        for (_, connection) in self.user_connections.iter_mut() {
             // remove component from user connection
-            user_connection
+            connection
                 .host_world_manager
                 .remove_component(entity, &component_kind);
         }
@@ -1090,8 +1090,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 // TODO: pass this on and handle above
                                 warn!("Server Error: Cannot send pong packet to {}", &address);
                             };
-                            if let Some(user_connection) = self.user_connections.get_mut(&address) {
-                                user_connection.base.mark_sent();
+                            if let Some(connection) = self.user_connections.get_mut(&address) {
+                                connection.base.mark_sent();
                             }
                             continue;
                         }
@@ -1117,12 +1117,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     }
 
                     // Packets requiring established connection
-                    if let Some(user_connection) = self.user_connections.get_mut(&address) {
+                    if let Some(connection) = self.user_connections.get_mut(&address) {
                         // Mark that we've heard from the client
-                        user_connection.base.mark_heard();
+                        connection.base.mark_heard();
 
                         // Process incoming header
-                        user_connection.process_incoming_header(&header);
+                        connection.process_incoming_header(&header);
 
                         match header.packet_type {
                             PacketType::Data => {
@@ -1133,12 +1133,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                     continue;
                                 };
 
-                                self.time_manager.record_client_tick(client_tick);
-
                                 let server_tick = self.time_manager.current_tick();
 
                                 // process data
-                                if user_connection
+                                if connection
                                     .process_incoming_data(
                                         &self.protocol,
                                         server_tick,
@@ -1157,9 +1155,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             PacketType::Disconnect => {
                                 if self
                                     .handshake_manager
-                                    .verify_disconnect_request(user_connection, &mut reader)
+                                    .verify_disconnect_request(connection, &mut reader)
                                 {
-                                    let user_key = user_connection.user_key;
+                                    let user_key = connection.user_key;
                                     self.user_disconnect(&user_key);
                                 }
                             }
@@ -1168,7 +1166,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             }
                             PacketType::Pong => {
                                 // read client tick
-                                user_connection
+                                connection
                                     .ping_manager
                                     .process_pong(&self.time_manager, &mut reader);
                             }
@@ -1194,12 +1192,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(user) = self.users.get(&removed_user) {
-                    if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
+                    if let Some(connection) = self.user_connections.get_mut(&user.address) {
                         // TODO: evaluate whether the Entity really needs to be despawned!
                         // What if the Entity shares another Room with this User? It shouldn't be despawned!
 
                         //remove entity from user connection
-                        user_connection
+                        connection
                             .host_world_manager
                             .despawn_entity(&removed_entity);
                     }
@@ -1212,11 +1210,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 for entity in room.entities() {
                     if world.has_entity(entity) {
                         if let Some(user) = self.users.get(user_key) {
-                            if let Some(user_connection) =
-                                self.user_connections.get_mut(&user.address)
-                            {
+                            if let Some(connection) = self.user_connections.get_mut(&user.address) {
                                 let currently_in_scope =
-                                    user_connection.host_world_manager.host_has_entity(entity);
+                                    connection.host_world_manager.host_has_entity(entity);
 
                                 let should_be_in_scope = if let Some(in_scope) =
                                     self.entity_scope_map.get(user_key, entity)
@@ -1233,13 +1229,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                             .component_kinds(entity)
                                             .unwrap();
                                         // add entity & components to the connections local scope
-                                        user_connection
+                                        connection
                                             .host_world_manager
                                             .init_entity(entity, component_kinds);
                                     }
                                 } else if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    user_connection.host_world_manager.despawn_entity(entity);
+                                    connection.host_world_manager.despawn_entity(entity);
                                 }
                             }
                         }
