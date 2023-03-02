@@ -3,8 +3,8 @@ use std::{ops::DerefMut, sync::Mutex};
 use bevy_app::{App, CoreStage, Plugin as PluginType};
 use bevy_ecs::{entity::Entity, schedule::SystemStage};
 
-use naia_server::{Server, ServerConfig};
 use naia_bevy_shared::Protocol;
+use naia_server::{Server, ServerConfig};
 
 use super::{
     events::{

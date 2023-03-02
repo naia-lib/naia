@@ -1,6 +1,6 @@
 use bevy_ecs::{
     event::EventReader,
-    system::{Commands, Query, ResMut},
+    system::{Query, ResMut},
 };
 use bevy_log::info;
 
@@ -162,27 +162,69 @@ pub fn tick_events(
 }
 
 pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
-    for SpawnEntityEvent(_entity) in event_reader.iter() {
+    for SpawnEntityEvent(_) in event_reader.iter() {
         info!("spawned client entity");
     }
 }
 
 pub fn insert_component_events(
     mut event_reader: EventReader<InsertComponentEvents>,
-    mut local: Commands,
-    color_query: Query<&Color>,
+    mut global: ResMut<Global>,
+    mut server: Server,
+    position_query: Query<&Position>,
 ) {
     for events in event_reader.iter() {
-        info!("insert component into client entity");
+        for client_entity in events.read::<Position>() {
+            info!("insert component into client entity");
+
+            if let Ok(client_position) = position_query.get(client_entity) {
+                // New Position Component
+                let server_position = Position::new(*client_position.x, *client_position.y);
+
+                // New Color component
+                let color = {
+                    let color_value = match server.users_count() % 3 {
+                        0 => ColorValue::Yellow,
+                        1 => ColorValue::Red,
+                        _ => ColorValue::Blue,
+                    };
+                    Color::new(color_value)
+                };
+
+                // Spawn entity
+                let server_entity = server
+                    // Spawn new Square Entity
+                    .spawn()
+                    // Add Entity to main Room
+                    .enter_room(&global.main_room_key)
+                    // Insert Position component
+                    .insert(server_position)
+                    // Insert Color component
+                    .insert(color)
+                    // return Entity id
+                    .id();
+
+                global.echo_entity_map.insert(client_entity, server_entity);
+            }
+        }
     }
 }
 
 pub fn update_component_events(
     mut event_reader: EventReader<UpdateComponentEvents>,
-    mut global: ResMut<Global>,
+    global: ResMut<Global>,
     mut position_query: Query<&mut Position>,
 ) {
     for events in event_reader.iter() {
-        info!("update component in client entity");
+        for (_, client_entity) in events.read::<Position>() {
+            if let Some(server_entity) = global.echo_entity_map.get(&client_entity) {
+                if let Ok([client_position, mut server_position]) =
+                    position_query.get_many_mut([client_entity, *server_entity])
+                {
+                    server_position.x.mirror(&client_position.x);
+                    server_position.y.mirror(&client_position.y);
+                }
+            }
+        }
     }
 }

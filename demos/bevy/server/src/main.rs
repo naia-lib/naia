@@ -1,7 +1,7 @@
-use std::time::Duration;
 use bevy_app::{App, ScheduleRunnerPlugin, ScheduleRunnerSettings};
 use bevy_core::CorePlugin;
 use bevy_log::{info, LogPlugin};
+use std::time::Duration;
 
 use naia_bevy_demo_shared::protocol;
 use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig};
@@ -20,7 +20,7 @@ fn main() {
         .add_plugin(CorePlugin::default())
         .insert_resource(
             // this is needed to avoid running the server at uncapped FPS
-            ScheduleRunnerSettings::run_loop(Duration::from_millis(1))
+            ScheduleRunnerSettings::run_loop(Duration::from_millis(1)),
         )
         .add_plugin(ScheduleRunnerPlugin::default())
         .add_plugin(LogPlugin::default())

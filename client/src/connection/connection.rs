@@ -70,8 +70,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     // Incoming data
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        self.base
-            .process_incoming_header(header, &mut [&mut self.host_world_manager, &mut self.tick_buffer]);
+        self.base.process_incoming_header(
+            header,
+            &mut [&mut self.host_world_manager, &mut self.tick_buffer],
+        );
     }
 
     pub fn buffer_data_packet(

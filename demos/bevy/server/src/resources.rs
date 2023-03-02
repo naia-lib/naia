@@ -8,4 +8,5 @@ use naia_bevy_server::{RoomKey, UserKey};
 pub struct Global {
     pub main_room_key: RoomKey,
     pub user_to_entity_map: HashMap<UserKey, Entity>,
+    pub echo_entity_map: HashMap<Entity, Entity>,
 }

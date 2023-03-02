@@ -8,7 +8,11 @@ use naia_bevy_demo_shared::messages::KeyCommand;
 
 use crate::resources::Global;
 
-pub fn server_input(mut global: ResMut<Global>, client: Client, keyboard_input: Res<Input<KeyCode>>) {
+pub fn server_input(
+    mut global: ResMut<Global>,
+    client: Client,
+    keyboard_input: Res<Input<KeyCode>>,
+) {
     let w = keyboard_input.pressed(KeyCode::W);
     let s = keyboard_input.pressed(KeyCode::S);
     let a = keyboard_input.pressed(KeyCode::A);
@@ -34,7 +38,11 @@ pub fn server_input(mut global: ResMut<Global>, client: Client, keyboard_input: 
     }
 }
 
-pub fn client_input(global: ResMut<Global>, keyboard_input: Res<Input<KeyCode>>, mut query: Query<&mut Position>) {
+pub fn client_input(
+    global: ResMut<Global>,
+    keyboard_input: Res<Input<KeyCode>>,
+    mut query: Query<&mut Position>,
+) {
     if let Some(entity) = global.client_authoritative_entity {
         let i = keyboard_input.pressed(KeyCode::I);
         let k = keyboard_input.pressed(KeyCode::K);

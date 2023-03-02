@@ -61,7 +61,7 @@ pub fn connect_events(
         local.entity(entity).insert(SpriteBundle {
             sprite: Sprite {
                 custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                color: BevyColor::GREEN,
+                color: BevyColor::BLACK,
                 ..Default::default()
             },
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
