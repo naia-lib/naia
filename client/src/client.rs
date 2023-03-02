@@ -147,14 +147,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // apply updates on tick boundary
-                connection.process_buffered_packets(
+                if connection.process_buffered_packets(
                     &self.protocol,
                     &mut world,
                     &mut self.incoming_events,
-                );
-
-                // receive (process) messages
-                connection.receive_messages(&mut self.incoming_events);
+                ).is_err() {
+                    // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                    warn!("Error reading from buffered packet!");
+                }
 
                 let mut index_tick = prev_receiving_tick.wrapping_add(1);
                 loop {

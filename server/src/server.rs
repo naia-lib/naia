@@ -65,7 +65,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     entity_scope_map: EntityScopeMap<E>,
     host_world_manager: HostGlobalWorldManager<E>,
     // Events
-    incoming_events: Events,
+    incoming_events: Events<E>,
     // Ticks
     time_manager: TimeManager,
 }
@@ -137,17 +137,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if self.time_manager.recv_server_tick() {
             self.incoming_events
                 .push_tick(self.time_manager.current_tick());
-        }
-
-        // loop through all connections, receive Messages
-        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
-        fastrand::shuffle(&mut user_addresses);
-
-        for user_address in &user_addresses {
-            let connection = self.user_connections.get_mut(user_address).unwrap();
-
-            // receive messages from anyone
-            connection.receive_messages(&mut self.incoming_events);
         }
 
         // return all received messages and reset the buffer
@@ -920,7 +909,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     // Private methods
 
     /// Maintain connection with a client and read all incoming packet data
-    fn maintain_socket(&mut self) {
+    fn maintain_socket<W: WorldMutType<E>>(&mut self, mut world: W) {
         // disconnects
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
@@ -1142,7 +1131,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                         server_tick,
                                         client_tick,
                                         &mut reader,
+                                        &mut world,
                                         self.host_world_manager.world_record(),
+                                        &mut self.incoming_events,
                                     )
                                     .is_err()
                                 {

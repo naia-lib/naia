@@ -29,7 +29,7 @@ impl<E: Copy> Default for Events<E> {
 }
 
 impl<E: Copy> Events<E> {
-    pub(crate) fn new() -> Events<E> {
+    pub(crate) fn new() -> Self {
         Self {
             connections: Vec::new(),
             rejections: Vec::new(),

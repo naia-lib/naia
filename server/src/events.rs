@@ -1,29 +1,34 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
-use naia_shared::{Channel, ChannelKind, Message, MessageContainer, MessageKind, Tick};
+use naia_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick};
 
 use super::user::{User, UserKey};
 
 use crate::NaiaServerError;
 
-pub struct Events {
+pub struct Events<E: Copy> {
     connections: Vec<UserKey>,
     disconnections: Vec<(UserKey, User)>,
     ticks: Vec<Tick>,
     errors: Vec<NaiaServerError>,
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
+    spawns: Vec<E>,
+    despawns: Vec<E>,
+    inserts: HashMap<ComponentKind, Vec<E>>,
+    removes: HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>,
+    updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
     empty: bool,
 }
 
-impl Default for Events {
+impl<E: Copy> Default for Events<E> {
     fn default() -> Self {
         Events::new()
     }
 }
 
-impl Events {
-    pub(crate) fn new() -> Events {
+impl<E: Copy> Events<E> {
+    pub(crate) fn new() -> Self {
         Self {
             connections: Vec::new(),
             disconnections: Vec::new(),
@@ -31,6 +36,11 @@ impl Events {
             errors: Vec::new(),
             auths: HashMap::new(),
             messages: HashMap::new(),
+            spawns: Vec::new(),
+            despawns: Vec::new(),
+            inserts: HashMap::new(),
+            removes: HashMap::new(),
+            updates: HashMap::new(),
             empty: true,
         }
     }
@@ -41,8 +51,8 @@ impl Events {
         self.empty
     }
 
-    pub fn read<E: Event>(&mut self) -> E::Iter {
-        return E::iter(self);
+    pub fn read<V: Event>(&mut self) -> V::Iter {
+        return V::iter(self);
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
@@ -113,7 +123,7 @@ impl Events {
 pub trait Event {
     type Iter;
 
-    fn iter(events: &mut Events) -> Self::Iter;
+    fn iter(events: &mut Events<E>) -> Self::Iter;
 }
 
 // ConnectEvent

@@ -97,7 +97,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         protocol: &Protocol,
         world: &mut W,
         incoming_events: &mut Events<E>,
-    ) {
+    ) -> Result<(), SerdeErr> {
         let receiving_tick = self.time_manager.client_receiving_tick;
 
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
@@ -105,25 +105,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // read messages
             {
-                let messages_result = self.base.message_manager.read_messages(
+                let messages = self.base.message_manager.read_messages(
                     protocol,
                     &self.remote_world_manager,
                     &mut reader,
-                );
-                if messages_result.is_err() {
-                    // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
-                    warn!("Error reading incoming messages from packet!");
-                    continue;
+                )?;
+                for (channel_kind, messages) in messages {
+                    for message in messages {
+                        incoming_events.push_message(&channel_kind, message);
+                    }
                 }
             }
 
             // read entity updates
             {
-                let Ok(events) = self.remote_world_manager.read_updates(&protocol.component_kinds, world, server_tick, &mut reader) else {
-                    // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
-                    warn!("Error reading incoming entity updates from packet!");
-                    continue;
-                };
+                let events = self.remote_world_manager.read_updates(&protocol.component_kinds, world, server_tick, &mut reader)?;
                 for (tick, entity, component_kind) in events {
                     incoming_events.push_update(tick, entity, component_kind);
                 }
@@ -131,11 +127,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // read entity actions
             {
-                let Ok(events) = self.remote_world_manager.read_actions(&protocol.component_kinds, world, &mut reader) else {
-                    // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
-                    warn!("Error reading incoming entity actions from packet!");
-                    continue;
-                };
+                let events = self.remote_world_manager.read_actions(&protocol.component_kinds, world, &mut reader)?;
                 for event in events {
                     match event {
                         EntityActionEvent::SpawnEntity(entity) => {
@@ -154,6 +146,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 }
             }
         }
+
+        Ok(())
     }
 
     pub fn receive_messages(&mut self, incoming_events: &mut Events<E>) {

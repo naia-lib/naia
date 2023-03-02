@@ -6,11 +6,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    GlobalDiffHandler, HostLocalWorldManager, HostType, Instant, MessageKinds, PacketType,
-    Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldRecord, WorldRefType,
-};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityActionEvent, EntityConverter, GlobalDiffHandler, HostLocalWorldManager, HostType, Instant, MessageKinds, PacketType, Protocol, RemoteWorldManager, Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRecord, WorldRefType};
 
 use crate::{
     connection::{
@@ -27,6 +23,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
     pub base: BaseConnection,
     pub host_world_manager: HostLocalWorldManager<E>,
+    pub remote_world_manager: RemoteWorldManager<E>,
     tick_buffer: TickBufferReceiver,
     pub ping_manager: PingManager,
 }
@@ -49,6 +46,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 channel_kinds,
             ),
             host_world_manager: HostLocalWorldManager::new(user_address, diff_handler),
+            remote_world_manager: RemoteWorldManager::new(),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
         }
@@ -62,13 +60,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     }
 
     /// Read packet data received from a client
-    pub fn process_incoming_data(
+    pub fn process_incoming_data<W: WorldMutType<E>>(
         &mut self,
         protocol: &Protocol,
         server_tick: Tick,
         client_tick: Tick,
         reader: &mut BitReader,
+        world: &mut W,
         world_record: &WorldRecord<E>,
+        incoming_events: &mut Events<E>,
     ) -> Result<(), SerdeErr> {
         let converter = EntityConverter::new(world_record, &self.host_world_manager);
 
@@ -85,19 +85,46 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read messages
         {
-            self.base
+            let messages = self.base
                 .message_manager
                 .read_messages(protocol, &converter, reader)?;
+            for (channel_kind, messages) in messages {
+                for message in messages {
+                    incoming_events.push_message(&self.user_key, &channel_kind, message);
+                }
+            }
+        }
+
+        // read entity updates
+        {
+            let events = self.remote_world_manager.read_updates(&protocol.component_kinds, world, client_tick, reader)?;
+            for (tick, entity, component_kind) in events {
+                incoming_events.push_update(tick, entity, component_kind);
+            }
+        }
+
+        // read entity actions
+        {
+            let events = self.remote_world_manager.read_actions(&protocol.component_kinds, world, reader)?;
+            for event in events {
+                match event {
+                    EntityActionEvent::SpawnEntity(entity) => {
+                        incoming_events.push_spawn(entity);
+                    }
+                    EntityActionEvent::DespawnEntity(entity) => {
+                        incoming_events.push_despawn(entity);
+                    }
+                    EntityActionEvent::InsertComponent(entity, component_kind) => {
+                        incoming_events.push_insert(entity, component_kind);
+                    }
+                    EntityActionEvent::RemoveComponent(entity, component) => {
+                        incoming_events.push_remove(entity, component);
+                    }
+                }
+            }
         }
 
         Ok(())
-    }
-
-    pub fn receive_messages(&mut self, incoming_events: &mut Events) {
-        let received_messages = self.base.message_manager.receive_messages();
-        for (channel_kind, message) in received_messages {
-            incoming_events.push_message(&self.user_key, &channel_kind, message);
-        }
     }
 
     pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {

@@ -263,7 +263,7 @@ impl MessageManager {
         protocol: &Protocol,
         converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
-    ) -> Result<(), SerdeErr> {
+    ) -> Result<Vec<(ChannelKind, Vec<MessageContainer>)>, SerdeErr> {
         loop {
             let message_continue = bool::de(reader)?;
             if !message_continue {
@@ -278,18 +278,16 @@ impl MessageManager {
             channel.read_messages(&protocol.message_kinds, converter, reader)?;
         }
 
-        Ok(())
+        Ok(self.receive_messages())
     }
 
     /// Retrieve all messages from the channel buffers
-    pub fn receive_messages(&mut self) -> Vec<(ChannelKind, MessageContainer)> {
+    fn receive_messages(&mut self) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
             let messages = channel.receive_messages();
-            for message in messages {
-                output.push((channel_kind.clone(), message));
-            }
+            output.push((channel_kind.clone(), messages));
         }
         output
     }
