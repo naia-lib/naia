@@ -4,8 +4,9 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityActionEvent,
-    HostGlobalWorldManager, HostLocalWorldManager, HostType, Instant, OwnedBitReader, PacketType,
-    Protocol, RemoteWorldManager, Serde, SerdeErr, StandardHeader, Tick, WorldMutType,
+    HostGlobalWorldManager, HostLocalWorldManager, HostType, Instant, MessageKinds, OwnedBitReader,
+    PacketType, Protocol, RemoteWorldManager, Serde, SerdeErr, StandardHeader, Tick, WorldMutType,
+    WorldRecord, WorldRefType,
 };
 
 use crate::{
@@ -165,17 +166,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     // Outgoing data
 
     /// Collect and send any outgoing packets from client to server
-    ///
-    /// Outgoing packets are either:
-    /// * messages
-    /// * acks from reliable channels
-    /// * acks from the `EntityActionReceiver` for all [`EntityAction`]s
-    pub fn send_outgoing_packets(&mut self, protocol: &Protocol, io: &mut Io) {
-        self.collect_outgoing_messages();
+    pub fn send_outgoing_packets<W: WorldRefType<E>>(
+        &mut self,
+        protocol: &Protocol,
+        now: &Instant,
+        io: &mut Io,
+        world: &W,
+        world_record: &WorldRecord<E>,
+    ) {
+        self.collect_outgoing_messages(now, &protocol.message_kinds, world_record);
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, io) {
+            if self.send_outgoing_packet(protocol, now, io, world, world_record) {
                 any_sent = true;
             } else {
                 break;
@@ -186,12 +189,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
     }
 
-    fn collect_outgoing_messages(&mut self) {
-        let now = Instant::now();
+    fn collect_outgoing_messages(
+        &mut self,
+        now: &Instant,
+        message_kinds: &MessageKinds,
+        world_record: &WorldRecord<E>,
+    ) {
+        let rtt_millis = self.time_manager.rtt();
+
+        self.host_world_manager.collect_outgoing_messages(
+            now,
+            &rtt_millis,
+            world_record,
+            message_kinds,
+            &mut self.base.message_manager,
+        );
 
         self.base
             .message_manager
-            .collect_outgoing_messages(&now, &self.time_manager.rtt());
+            .collect_outgoing_messages(&now, &rtt_millis);
 
         self.tick_buffer.collect_outgoing_messages(
             &self.time_manager.client_sending_tick,
@@ -200,10 +216,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     }
 
     // Sends packet and returns whether or not a packet was sent
-    fn send_outgoing_packet(&mut self, protocol: &Protocol, io: &mut Io) -> bool {
+    fn send_outgoing_packet<W: WorldRefType<E>>(
+        &mut self,
+        protocol: &Protocol,
+        now: &Instant,
+        io: &mut Io,
+        world: &W,
+        world_record: &WorldRecord<E>,
+    ) -> bool {
         let tick_buffer_has_outgoing_messages = self.tick_buffer.has_outgoing_messages();
 
-        if self.base.message_manager.has_outgoing_messages() || tick_buffer_has_outgoing_messages {
+        if self.base.message_manager.has_outgoing_messages()
+            || self.host_world_manager.has_outgoing_messages()
+            || tick_buffer_has_outgoing_messages
+        {
             let next_packet_index = self.base.next_packet_index();
 
             let mut writer = BitWriter::new();
@@ -211,31 +237,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             // Reserve bits we know will be required to finish the message:
             // 1. Tick buffer finish bit
             // 2. Messages finish bit
-            writer.reserve_bits(2);
+            // 3. Updates finish bit
+            // 4. Actions finish bit
+            writer.reserve_bits(4);
 
             // write header
             self.base
                 .write_outgoing_header(PacketType::Data, &mut writer);
 
-            let mut has_written = false;
-
-            // write tick
+            // write client tick
             let client_tick: Tick = self.time_manager.client_sending_tick;
             client_tick.ser(&mut writer);
 
-            // write tick buffered messages
-            self.tick_buffer.write_messages(
-                &protocol,
-                &self.remote_world_manager,
-                &mut writer,
-                next_packet_index,
-                &client_tick,
-                &mut has_written,
-            );
+            let mut has_written = false;
 
-            // finish tick buffered messages
-            false.ser(&mut writer);
-            writer.release_bits(1);
+            // write tick buffered messages
+            {
+                self.tick_buffer.write_messages(
+                    &protocol,
+                    &self.remote_world_manager,
+                    &mut writer,
+                    next_packet_index,
+                    &client_tick,
+                    &mut has_written,
+                );
+
+                // finish tick buffered messages
+                false.ser(&mut writer);
+                writer.release_bits(1);
+            }
 
             // write messages
             {
@@ -248,6 +278,40 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 );
 
                 // finish messages
+                false.ser(&mut writer);
+                writer.release_bits(1);
+            }
+
+            // write entity updates
+            {
+                self.host_world_manager.write_updates(
+                    &protocol.component_kinds,
+                    now,
+                    &mut writer,
+                    &next_packet_index,
+                    world,
+                    world_record,
+                    &mut has_written,
+                );
+
+                // finish updates
+                false.ser(&mut writer);
+                writer.release_bits(1);
+            }
+
+            // write entity actions
+            {
+                self.host_world_manager.write_actions(
+                    &protocol.component_kinds,
+                    now,
+                    &mut writer,
+                    &next_packet_index,
+                    world,
+                    world_record,
+                    &mut has_written,
+                );
+
+                // finish actions
                 false.ser(&mut writer);
                 writer.release_bits(1);
             }

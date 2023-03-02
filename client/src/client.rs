@@ -7,16 +7,16 @@ use bevy_ecs::prelude::Resource;
 
 use naia_client_socket::Socket;
 
-use naia_shared::ComponentKind;
 pub use naia_shared::{
-    BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
+    BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GameInstant,
-    HostGlobalWorldManager, Message, MessageContainer, PacketType, PingIndex, Protocol, Replicate,
-    Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    HostGlobalWorldManager, Instant, Message, MessageContainer, PacketType, PingIndex, Protocol,
+    Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
 
-use crate::entity_ref::EntityMut;
 use crate::{
+    entity_ref::EntityMut,
     connection::{
         connection::Connection,
         handshake_manager::{HandshakeManager, HandshakeResult},
@@ -168,8 +168,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
 
             if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
+
                 // send outgoing packets
-                connection.send_outgoing_packets(&self.protocol, &mut self.io);
+                let now = Instant::now();
+
+                connection.send_outgoing_packets(&self.protocol, &now, &mut self.io, &world, self.host_world_manager.world_record());
 
                 // insert tick events in total range
                 let mut index_tick = prev_sending_tick.wrapping_add(1);

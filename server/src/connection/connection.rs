@@ -118,9 +118,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         world: &W,
         world_record: &WorldRecord<E>,
         time_manager: &TimeManager,
-        rtt_millis: &f32,
     ) {
-        self.collect_outgoing_messages(now, rtt_millis, &protocol.message_kinds, world_record);
+        let rtt_millis = self.ping_manager.rtt_average;
+        self.collect_outgoing_messages(now, &rtt_millis, &protocol.message_kinds, world_record);
 
         let mut any_sent = false;
         loop {

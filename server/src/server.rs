@@ -386,8 +386,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
 
-            let rtt = connection.ping_manager.rtt_average;
-
             connection.send_outgoing_packets(
                 &self.protocol,
                 &now,
@@ -395,7 +393,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &world,
                 self.host_world_manager.world_record(),
                 &self.time_manager,
-                &rtt,
             );
         }
     }
