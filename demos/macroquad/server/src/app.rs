@@ -143,7 +143,7 @@ impl App {
 
             // All game logic should happen here, on a tick event
 
-            let messages = self.server.receive_tick_buffer_messages(&server_tick);
+            let mut messages = self.server.receive_tick_buffer_messages(&server_tick);
             for (_user_key, key_command) in messages.read::<PlayerCommandChannel, KeyCommand>() {
                 let Some(entity) = &key_command.entity.get(&self.server) else {
                     continue;

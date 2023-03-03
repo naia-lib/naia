@@ -36,20 +36,20 @@ impl TickBufferMessages {
         self.empty = false;
     }
 
-    pub fn read<C: Channel, M: Message>(&self) -> Vec<(UserKey, M)> {
+    pub fn read<C: Channel, M: Message>(&mut self) -> Vec<(UserKey, M)> {
         let mut output = Vec::new();
 
         let channel_kind = ChannelKind::of::<C>();
-        if let Some(message_map) = self.inner.get(&channel_kind) {
+        if let Some(message_map) = self.inner.get_mut(&channel_kind) {
             let message_kind = MessageKind::of::<M>();
-            if let Some(messages) = message_map.get(&message_kind) {
+            if let Some(messages) = message_map.remove(&message_kind) {
                 for (user_key, boxed_message) in messages {
-                    let boxed_any = boxed_message.clone().to_boxed_any();
+                    let boxed_any = boxed_message.to_boxed_any();
                     let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_any)
                         .ok()
                         .map(|boxed_m| *boxed_m)
                         .unwrap();
-                    output.push((*user_key, message));
+                    output.push((user_key, message));
                 }
             }
         }

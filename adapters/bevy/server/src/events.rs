@@ -34,22 +34,13 @@ impl<E: Copy> From<&mut Events<E>> for AuthEvents {
 
 impl AuthEvents {
     pub fn read<M: Message>(&self) -> Vec<(UserKey, M)> {
-        let mut output = Vec::new();
-
         let message_kind = MessageKind::of::<M>();
 
         if let Some(messages) = self.inner.get(&message_kind) {
-            for (user_key, boxed_message) in messages {
-                let boxed_any = boxed_message.clone().to_boxed_any();
-                let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_any)
-                    .ok()
-                    .map(|boxed_m| *boxed_m)
-                    .unwrap();
-                output.push((*user_key, message));
-            }
+            return convert_messages(messages);
         }
 
-        output
+        Vec::new()
     }
 }
 
@@ -68,25 +59,32 @@ impl<E: Copy> From<&mut Events<E>> for MessageEvents {
 
 impl MessageEvents {
     pub fn read<C: Channel, M: Message>(&self) -> Vec<(UserKey, M)> {
-        let mut output = Vec::new();
-
         let channel_kind = ChannelKind::of::<C>();
         if let Some(message_map) = self.inner.get(&channel_kind) {
             let message_kind = MessageKind::of::<M>();
             if let Some(messages) = message_map.get(&message_kind) {
-                for (user_key, boxed_message) in messages {
-                    let boxed_any = boxed_message.clone().to_boxed_any();
-                    let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_any)
-                        .ok()
-                        .map(|boxed_m| *boxed_m)
-                        .unwrap();
-                    output.push((*user_key, message));
-                }
+                return convert_messages(messages);
             }
         }
 
-        output
+        Vec::new()
     }
+}
+
+fn convert_messages<M: Message>(
+    boxed_list: &Vec<(UserKey, MessageContainer)>,
+) -> Vec<(UserKey, M)> {
+    let mut output_list: Vec<(UserKey, M)> = Vec::new();
+
+    for (user_key, message) in boxed_list {
+        let message: M = Box::<dyn Any + 'static>::downcast::<M>(message.clone().to_boxed_any())
+            .ok()
+            .map(|boxed_m| *boxed_m)
+            .unwrap();
+        output_list.push((*user_key, message));
+    }
+
+    output_list
 }
 
 // SpawnEntityEvent

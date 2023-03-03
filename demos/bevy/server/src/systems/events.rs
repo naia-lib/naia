@@ -130,7 +130,7 @@ pub fn tick_events(
 
         // All game logic should happen here, on a tick event
 
-        let messages = server.receive_tick_buffer_messages(server_tick);
+        let mut messages = server.receive_tick_buffer_messages(server_tick);
         for (_user_key, key_command) in messages.read::<PlayerCommandChannel, KeyCommand>() {
             let Some(entity) = &key_command.entity.get(&server) else {
                 continue;

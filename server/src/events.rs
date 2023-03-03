@@ -210,18 +210,8 @@ impl<E: Copy, M: Message> Event<E> for AuthEvent<M> {
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let message_kind: MessageKind = MessageKind::of::<M>();
-        if let Some(boxed_list) = events.auths.remove(&message_kind) {
-            let mut output_list: Vec<(UserKey, M)> = Vec::new();
-
-            for (user_key, boxed_auth) in boxed_list {
-                let message: M = Box::<dyn Any + 'static>::downcast::<M>(boxed_auth.to_boxed_any())
-                    .ok()
-                    .map(|boxed_m| *boxed_m)
-                    .unwrap();
-                output_list.push((user_key, message));
-            }
-
-            return IntoIterator::into_iter(output_list);
+        if let Some(messages) = events.auths.remove(&message_kind) {
+            return IntoIterator::into_iter(convert_messages(messages));
         } else {
             return IntoIterator::into_iter(Vec::new());
         }
@@ -238,23 +228,26 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
-        if let Some(mut channel_map) = events.messages.remove(&channel_kind) {
+        if let Some(channel_map) = events.messages.get_mut(&channel_kind) {
             let message_kind: MessageKind = MessageKind::of::<M>();
-            if let Some(boxed_list) = channel_map.remove(&message_kind) {
-                let mut output_list: Vec<(UserKey, M)> = Vec::new();
-
-                for (user_key, boxed_message) in boxed_list {
-                    let message: M =
-                        Box::<dyn Any + 'static>::downcast::<M>(boxed_message.to_boxed_any())
-                            .ok()
-                            .map(|boxed_m| *boxed_m)
-                            .unwrap();
-                    output_list.push((user_key, message));
-                }
-
-                return IntoIterator::into_iter(output_list);
+            if let Some(messages) = channel_map.remove(&message_kind) {
+                return IntoIterator::into_iter(convert_messages(messages));
             }
         }
         return IntoIterator::into_iter(Vec::new());
     }
+}
+
+fn convert_messages<M: Message>(boxed_list: Vec<(UserKey, MessageContainer)>) -> Vec<(UserKey, M)> {
+    let mut output_list: Vec<(UserKey, M)> = Vec::new();
+
+    for (user_key, message) in boxed_list {
+        let message: M = Box::<dyn Any + 'static>::downcast::<M>(message.to_boxed_any())
+            .ok()
+            .map(|boxed_m| *boxed_m)
+            .unwrap();
+        output_list.push((user_key, message));
+    }
+
+    output_list
 }

@@ -240,7 +240,7 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
-        if let Some(mut channel_map) = events.messages.remove(&channel_kind) {
+        if let Some(channel_map) = events.messages.get_mut(&channel_kind) {
             let message_kind: MessageKind = MessageKind::of::<M>();
             if let Some(boxed_list) = channel_map.remove(&message_kind) {
                 let mut output_list: Vec<M> = Vec::new();
