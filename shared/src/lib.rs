@@ -49,6 +49,7 @@ pub use component::{
     component_kinds::{ComponentKind, ComponentKinds},
     component_update::ComponentUpdate,
     diff_mask::DiffMask,
+    entity_property::EntityProperty,
     property::Property,
     property_mutate::{PropertyMutate, PropertyMutator},
     replica_ref::{
@@ -77,12 +78,13 @@ pub use entity::{
     entity_action::EntityAction,
     entity_action_receiver::EntityActionReceiver,
     entity_action_type::EntityActionType,
-    entity_handle::EntityHandle,
-    entity_property::{
-        EntityConverter, EntityDoesNotExistError, EntityHandleConverter, EntityProperty,
-        FakeEntityConverter, NetEntityConverter, NetEntityHandleConverter,
+    entity_converters::{
+        EntityConverter, EntityHandleConverter, FakeEntityConverter, NetEntityConverter,
+        NetEntityHandleConverter,
     },
+    entity_handle::EntityHandle,
     entity_ref::EntityRef,
+    error::EntityDoesNotExistError,
     net_entity::NetEntity,
 };
 pub use messages::{

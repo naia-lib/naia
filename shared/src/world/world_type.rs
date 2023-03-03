@@ -7,7 +7,7 @@ use crate::{
         replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
         replicate::Replicate,
     },
-    entity::entity_property::NetEntityHandleConverter,
+    entity::entity_converters::NetEntityHandleConverter,
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded

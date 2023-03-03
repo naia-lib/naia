@@ -10,7 +10,7 @@ use crate::{
         property_mutate::PropertyMutator,
         replica_ref::{ReplicaDynMut, ReplicaDynRef},
     },
-    entity::{entity_handle::EntityHandle, entity_property::NetEntityHandleConverter},
+    entity::{entity_converters::NetEntityHandleConverter, entity_handle::EntityHandle},
     messages::named::Named,
 };
 
