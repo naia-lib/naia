@@ -1,8 +1,8 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use crate::{
     messages::message_manager::MessageManager, types::PacketIndex,
-    wrapping_number::sequence_greater_than,
+    wrapping_number::sequence_greater_than, HostLocalWorldManager,
 };
 
 use super::{
@@ -45,10 +45,11 @@ impl AckManager {
 
     /// Process an incoming packet, handle notifications of delivered / dropped
     /// packets
-    pub fn process_incoming_header(
+    pub fn process_incoming_header<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         header: &StandardHeader,
         message_manager: &mut MessageManager,
+        world_manager: &mut HostLocalWorldManager<E>,
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         let sender_packet_index = header.sender_packet_index;
@@ -67,7 +68,12 @@ impl AckManager {
         // the current `sender_ack_index` was (clearly) received so we should remove it
         if let Some(sent_packet) = self.sent_packets.get(&sender_ack_index) {
             if sent_packet.packet_type == PacketType::Data {
-                self.notify_packet_delivered(sender_ack_index, message_manager, packet_notifiables);
+                self.notify_packet_delivered(
+                    sender_ack_index,
+                    message_manager,
+                    world_manager,
+                    packet_notifiables,
+                );
             }
 
             self.sent_packets.remove(&sender_ack_index);
@@ -84,6 +90,7 @@ impl AckManager {
                         self.notify_packet_delivered(
                             sent_packet_index,
                             message_manager,
+                            world_manager,
                             packet_notifiables,
                         );
                     }
@@ -125,13 +132,15 @@ impl AckManager {
         outgoing
     }
 
-    fn notify_packet_delivered(
+    fn notify_packet_delivered<E: Copy + Eq + Hash + Send + Sync>(
         &self,
         sent_packet_index: PacketIndex,
         message_manager: &mut MessageManager,
+        world_manager: &mut HostLocalWorldManager<E>,
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         message_manager.notify_packet_delivered(sent_packet_index);
+        world_manager.notify_packet_delivered(sent_packet_index);
         for notifiable in packet_notifiables {
             notifiable.notify_packet_delivered(sent_packet_index);
         }

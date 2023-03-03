@@ -221,7 +221,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if let Some(connection) = &mut self.server_connection {
             connection.base.message_manager.send_message(
                 &self.protocol.message_kinds,
-                &connection.remote_world_manager,
+                &connection.base.remote_world_manager,
                 channel_kind,
                 message,
             );
@@ -281,6 +281,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if let Some(connection) = &mut self.server_connection {
             let component_kinds = self.host_world_manager.component_kinds(entity).unwrap();
             connection
+                .base
                 .host_world_manager
                 .init_entity(entity, component_kinds);
         }
@@ -394,7 +395,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if let Some(connection) = &mut self.server_connection {
             //remove entity from server connection
-            connection.host_world_manager.despawn_entity(entity);
+            connection.base.host_world_manager.despawn_entity(entity);
         }
 
         // Remove from ECS Record
@@ -427,8 +428,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // insert component into server connection
             if let Some(connection) = &mut self.server_connection {
                 // insert component into server connection
-                if connection.host_world_manager.host_has_entity(entity) {
+                if connection.base.host_world_manager.host_has_entity(entity) {
                     connection
+                        .base
                         .host_world_manager
                         .insert_component(entity, &component_kind);
                 }
@@ -455,6 +457,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // remove component from server connection
         if let Some(connection) = &mut self.server_connection {
             connection
+                .base
                 .host_world_manager
                 .remove_component(entity, &component_kind);
         }
@@ -677,6 +680,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Client<E> {
             .as_ref()
             .expect("cannot handle entity properties unless connection is established");
         connection
+            .base
             .remote_world_manager
             .handle_to_entity(entity_handle)
     }
@@ -686,6 +690,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Client<E> {
             .server_connection
             .as_ref()
             .expect("cannot handle entity properties unless connection is established");
-        connection.remote_world_manager.entity_to_handle(entity)
+        connection
+            .base
+            .remote_world_manager
+            .entity_to_handle(entity)
     }
 }

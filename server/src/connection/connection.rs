@@ -18,19 +18,17 @@ use crate::{
         ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
         tick_buffer_receiver::TickBufferReceiver, time_manager::TimeManager,
     },
+    events::Events,
     user::UserKey,
-    Events,
 };
 
 use super::{io::Io, ping_manager::PingManager};
 
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
-    pub base: BaseConnection,
-    pub host_world_manager: HostLocalWorldManager<E>,
-    pub remote_world_manager: RemoteWorldManager<E>,
-    tick_buffer: TickBufferReceiver,
+    pub base: BaseConnection<E>,
     pub ping_manager: PingManager,
+    tick_buffer: TickBufferReceiver,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
@@ -49,9 +47,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 HostType::Server,
                 connection_config,
                 channel_kinds,
+                diff_handler,
             ),
-            host_world_manager: HostLocalWorldManager::new(user_address, diff_handler),
-            remote_world_manager: RemoteWorldManager::new(),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
         }
@@ -60,8 +57,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     // Incoming Data
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        self.base
-            .process_incoming_header(header, &mut [&mut self.host_world_manager]);
+        self.base.process_incoming_header(header, &mut []);
     }
 
     /// Read packet data received from a client
@@ -75,7 +71,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         world_record: &WorldRecord<E>,
         incoming_events: &mut Events<E>,
     ) -> Result<(), SerdeErr> {
-        let converter = EntityConverter::new(world_record, &self.host_world_manager);
+        let converter = EntityConverter::new(world_record, &self.base.host_world_manager);
 
         // read tick-buffered messages
         {
@@ -101,41 +97,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
         }
 
-        // read entity updates
-        {
-            let events = self.remote_world_manager.read_updates(
-                &protocol.component_kinds,
-                world,
-                client_tick,
-                reader,
-            )?;
-            for (tick, entity, component_kind) in events {
-                incoming_events.push_update(tick, entity, component_kind);
-            }
-        }
-
-        // read entity actions
-        {
-            let events =
-                self.remote_world_manager
-                    .read_actions(&protocol.component_kinds, world, reader)?;
-            for event in events {
-                match event {
-                    EntityActionEvent::SpawnEntity(entity) => {
-                        incoming_events.push_spawn(entity);
-                    }
-                    EntityActionEvent::DespawnEntity(entity) => {
-                        incoming_events.push_despawn(entity);
-                    }
-                    EntityActionEvent::InsertComponent(entity, component_kind) => {
-                        incoming_events.push_insert(entity, component_kind);
-                    }
-                    EntityActionEvent::RemoveComponent(entity, component) => {
-                        incoming_events.push_remove(entity, component);
-                    }
-                }
-            }
-        }
+        // read world events
+        self.base.remote_world_manager.read_world_events(
+            protocol,
+            world,
+            client_tick,
+            reader,
+            &mut incoming_events.world,
+        )?;
 
         Ok(())
     }
@@ -160,7 +129,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         time_manager: &TimeManager,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
-        self.collect_outgoing_messages(now, &rtt_millis, &protocol.message_kinds, world_record);
+        self.base.collect_outgoing_messages(
+            now,
+            &rtt_millis,
+            world_record,
+            &protocol.message_kinds,
+        );
 
         let mut any_sent = false;
         loop {
@@ -175,25 +149,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
     }
 
-    fn collect_outgoing_messages(
-        &mut self,
-        now: &Instant,
-        rtt_millis: &f32,
-        message_kinds: &MessageKinds,
-        world_record: &WorldRecord<E>,
-    ) {
-        self.host_world_manager.collect_outgoing_messages(
-            now,
-            rtt_millis,
-            world_record,
-            message_kinds,
-            &mut self.base.message_manager,
-        );
-        self.base
-            .message_manager
-            .collect_outgoing_messages(now, rtt_millis);
-    }
-
     /// Send any message, component actions and component updates to the client
     /// Will split the data into multiple packets.
     fn send_outgoing_packet<W: WorldRefType<E>>(
@@ -205,9 +160,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         world_record: &WorldRecord<E>,
         time_manager: &TimeManager,
     ) -> bool {
-        if self.base.message_manager.has_outgoing_messages()
-            || self.host_world_manager.has_outgoing_messages()
-        {
+        if self.base.has_outgoing_messages() {
             let next_packet_index = self.base.next_packet_index();
 
             let mut writer = BitWriter::new();
@@ -228,57 +181,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             // write server tick instant
             time_manager.current_tick_instant().ser(&mut writer);
 
+            // write common data packet
             let mut has_written = false;
 
-            // write messages
-            {
-                let converter = EntityConverter::new(world_record, &self.host_world_manager);
-                self.base.message_manager.write_messages(
-                    &protocol,
-                    &converter,
-                    &mut writer,
-                    next_packet_index,
-                    &mut has_written,
-                );
-
-                // finish messages
-                false.ser(&mut writer);
-                writer.release_bits(1);
-            }
-
-            // write entity updates
-            {
-                self.host_world_manager.write_updates(
-                    &protocol.component_kinds,
-                    now,
-                    &mut writer,
-                    &next_packet_index,
-                    world,
-                    world_record,
-                    &mut has_written,
-                );
-
-                // finish updates
-                false.ser(&mut writer);
-                writer.release_bits(1);
-            }
-
-            // write entity actions
-            {
-                self.host_world_manager.write_actions(
-                    &protocol.component_kinds,
-                    now,
-                    &mut writer,
-                    &next_packet_index,
-                    world,
-                    world_record,
-                    &mut has_written,
-                );
-
-                // finish actions
-                false.ser(&mut writer);
-                writer.release_bits(1);
-            }
+            self.base.write_outgoing_packet(
+                &protocol,
+                now,
+                &mut writer,
+                next_packet_index,
+                world,
+                &world_record,
+                &mut has_written,
+            );
 
             // send packet
             if io

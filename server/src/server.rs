@@ -140,7 +140,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // return all received messages and reset the buffer
-        std::mem::take(&mut self.incoming_events)
+        std::mem::replace(&mut self.incoming_events, Events::<E>::new())
     }
 
     // Connections
@@ -266,14 +266,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     // check whether all entities are in scope for the connection
                     let all_entities_in_scope = {
                         entities.iter().all(|entity| {
-                            connection.host_world_manager.entity_channel_is_open(entity)
+                            connection
+                                .base
+                                .host_world_manager
+                                .entity_channel_is_open(entity)
                         })
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
                         let converter = EntityConverter::new(
                             self.host_world_manager.world_record(),
-                            &connection.host_world_manager,
+                            &connection.base.host_world_manager,
                         );
                         connection.base.message_manager.send_message(
                             &self.protocol.message_kinds,
@@ -284,7 +287,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
-                        connection.host_world_manager.queue_entity_message(
+                        connection.base.host_world_manager.queue_entity_message(
                             entities,
                             channel_kind,
                             message,
@@ -293,7 +296,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 } else {
                     let converter = EntityConverter::new(
                         self.host_world_manager.world_record(),
-                        &connection.host_world_manager,
+                        &connection.base.host_world_manager,
                     );
                     connection.base.message_manager.send_message(
                         &self.protocol.message_kinds,
@@ -601,7 +604,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // are in each User's scope
         for (_, connection) in self.user_connections.iter_mut() {
             //remove entity from user connection
-            connection.host_world_manager.despawn_entity(entity);
+            connection.base.host_world_manager.despawn_entity(entity);
         }
 
         // Delete scope
@@ -659,8 +662,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // add component to connections already tracking entity
             for (_, connection) in self.user_connections.iter_mut() {
                 // insert component into user's connection
-                if connection.host_world_manager.host_has_entity(entity) {
+                if connection.base.host_world_manager.host_has_entity(entity) {
                     connection
+                        .base
                         .host_world_manager
                         .insert_component(entity, &component_kind);
                 }
@@ -691,6 +695,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for (_, connection) in self.user_connections.iter_mut() {
             // remove component from user connection
             connection
+                .base
                 .host_world_manager
                 .remove_component(entity, &component_kind);
         }
@@ -1189,6 +1194,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                         //remove entity from user connection
                         connection
+                            .base
                             .host_world_manager
                             .despawn_entity(&removed_entity);
                     }
@@ -1203,7 +1209,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         if let Some(user) = self.users.get(user_key) {
                             if let Some(connection) = self.user_connections.get_mut(&user.address) {
                                 let currently_in_scope =
-                                    connection.host_world_manager.host_has_entity(entity);
+                                    connection.base.host_world_manager.host_has_entity(entity);
 
                                 let should_be_in_scope = if let Some(in_scope) =
                                     self.entity_scope_map.get(user_key, entity)
@@ -1221,12 +1227,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                             .unwrap();
                                         // add entity & components to the connections local scope
                                         connection
+                                            .base
                                             .host_world_manager
                                             .init_entity(entity, component_kinds);
                                     }
                                 } else if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    connection.host_world_manager.despawn_entity(entity);
+                                    connection.base.host_world_manager.despawn_entity(entity);
                                 }
                             }
                         }

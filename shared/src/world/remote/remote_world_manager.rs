@@ -3,8 +3,8 @@ use std::{collections::HashMap, hash::Hash};
 use crate::{
     BigMap, BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver,
     EntityActionType, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex,
-    NetEntity, NetEntityHandleConverter, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger,
-    WorldMutType,
+    NetEntity, NetEntityHandleConverter, Protocol, Replicate, Serde, SerdeErr, Tick,
+    UnsignedVariableInteger, WorldEvents, WorldMutType,
 };
 
 use super::{entity_action_event::EntityActionEvent, entity_record::EntityRecord};
@@ -27,6 +27,24 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
             received_components: HashMap::default(),
         }
     }
+
+    pub fn read_world_events<W: WorldMutType<E>>(
+        &mut self,
+        protocol: &Protocol,
+        world: &mut W,
+        tick: Tick,
+        reader: &mut BitReader,
+        world_events: &mut WorldEvents<E>,
+    ) -> Result<(), SerdeErr> {
+        // read entity updates
+        self.read_updates(&protocol.component_kinds, world, tick, reader, world_events)?;
+
+        // read entity actions
+        self.read_actions(&protocol.component_kinds, world, reader, world_events)?;
+
+        Ok(())
+    }
+
     // Action Reader
     fn read_message_index(
         reader: &mut BitReader,
@@ -53,7 +71,8 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
         component_kinds: &ComponentKinds,
         world: &mut W,
         reader: &mut BitReader,
-    ) -> Result<Vec<EntityActionEvent<E>>, SerdeErr> {
+        world_events: &mut WorldEvents<E>,
+    ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
 
         loop {
@@ -66,7 +85,9 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
             self.read_action(component_kinds, reader, &mut last_read_id)?;
         }
 
-        return Ok(self.process_incoming_actions(world));
+        self.process_incoming_actions(world, world_events);
+
+        Ok(())
     }
 
     /// Read the bits corresponding to the EntityAction and adds the [`EntityAction`]
@@ -152,8 +173,8 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
     fn process_incoming_actions<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
-    ) -> Vec<EntityActionEvent<E>> {
-        let mut output = Vec::new();
+        world_events: &mut WorldEvents<E>,
+    ) {
         // receive the list of EntityActions that can be executed now
         let incoming_actions = self.receiver.receive_actions();
 
@@ -171,7 +192,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                     let entity_handle = self.handle_entity_map.insert(world_entity);
                     let mut entity_record = EntityRecord::new(net_entity, entity_handle);
 
-                    output.push(EntityActionEvent::SpawnEntity(world_entity));
+                    world_events.push_spawn(world_entity);
 
                     // read component list
                     for component_kind in components {
@@ -184,10 +205,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 
                         world.insert_boxed_component(&world_entity, component);
 
-                        output.push(EntityActionEvent::InsertComponent(
-                            world_entity,
-                            component_kind,
-                        ));
+                        world_events.push_insert(world_entity, component_kind);
                     }
                     //
 
@@ -205,16 +223,13 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                             if let Some(component) =
                                 world.remove_component_of_kind(&world_entity, &component_kind)
                             {
-                                output.push(EntityActionEvent::RemoveComponent(
-                                    world_entity,
-                                    component,
-                                ));
+                                world_events.push_remove(world_entity, component);
                             }
                         }
 
                         world.despawn_entity(&world_entity);
 
-                        output.push(EntityActionEvent::DespawnEntity(world_entity));
+                        world_events.push_despawn(world_entity);
                     } else {
                         panic!("received message attempting to delete nonexistent entity");
                     }
@@ -239,10 +254,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 
                         world.insert_boxed_component(&world_entity, component);
 
-                        output.push(EntityActionEvent::InsertComponent(
-                            *world_entity,
-                            component_kind,
-                        ));
+                        world_events.push_insert(*world_entity, component_kind);
                     }
                 }
                 EntityAction::RemoveComponent(net_entity, component_kind) => {
@@ -261,7 +273,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                             .expect("Component already removed?");
 
                         // Generate event
-                        output.push(EntityActionEvent::RemoveComponent(*world_entity, component));
+                        world_events.push_remove(*world_entity, component);
                     } else {
                         panic!("attempting to delete nonexistent component of entity");
                     }
@@ -271,8 +283,6 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                 }
             }
         }
-
-        return output;
     }
 
     /// Read component updates from raw bits
@@ -282,8 +292,8 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
-    ) -> Result<Vec<(Tick, E, ComponentKind)>, SerdeErr> {
-        let mut output = Vec::new();
+        world_events: &mut WorldEvents<E>,
+    ) -> Result<(), SerdeErr> {
         loop {
             // read update continue bit
             let update_continue = bool::de(reader)?;
@@ -293,12 +303,17 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 
             let net_entity_id = NetEntity::de(reader)?;
 
-            let mut results =
-                self.read_update(component_kinds, world, server_tick, reader, &net_entity_id)?;
-            output.append(&mut results);
+            self.read_update(
+                component_kinds,
+                world,
+                server_tick,
+                reader,
+                &net_entity_id,
+                world_events,
+            )?;
         }
 
-        Ok(output)
+        Ok(())
     }
 
     /// Read component updates from raw bits for a given entity
@@ -309,8 +324,8 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
         server_tick: Tick,
         reader: &mut BitReader,
         net_entity_id: &NetEntity,
-    ) -> Result<Vec<(Tick, E, ComponentKind)>, SerdeErr> {
-        let mut output = Vec::new();
+        world_events: &mut WorldEvents<E>,
+    ) -> Result<(), SerdeErr> {
         loop {
             // read update continue bit
             let component_continue = bool::de(reader)?;
@@ -329,11 +344,11 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                     component_update,
                 )?;
 
-                output.push((server_tick, *world_entity, component_kind));
+                world_events.push_update(server_tick, *world_entity, component_kind);
             }
         }
 
-        Ok(output)
+        Ok(())
     }
 }
 

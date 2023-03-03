@@ -110,6 +110,11 @@ pub use world::{
         entity_action_event::EntityActionEvent, entity_record::EntityRecord,
         remote_world_manager::RemoteWorldManager,
     },
+    world_events::{
+        DespawnEntityEvent, InsertComponentEvent, RemoveComponentEvent, SpawnEntityEvent,
+        UpdateComponentEvent, WorldEvent, WorldEvents,
+    },
+    world_type::{WorldMutType, WorldRefType},
 };
 
 pub use bigmap::{BigMap, BigMapKey};
@@ -117,5 +122,4 @@ pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
-pub use world::world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

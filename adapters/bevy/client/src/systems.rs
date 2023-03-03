@@ -102,33 +102,31 @@ pub fn before_receive_events(world: &mut World) {
                 }
 
                 // Insert Component Event
-                let mut insert_component_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::InsertComponentEvents>>()
-                    .unwrap();
-                if events.has_inserts() {
-                    insert_component_event_writer.send(bevy_events::InsertComponentEvents::new(
-                        events.take_inserts(),
-                    ));
+                if let Some(inserts) = events.world.take_inserts() {
+                    let mut insert_component_event_writer = world
+                        .get_resource_unchecked_mut::<Events<bevy_events::InsertComponentEvents>>()
+                        .unwrap();
+                    insert_component_event_writer
+                        .send(bevy_events::InsertComponentEvents::new(inserts));
                 }
 
                 // Update Component Event
-                let mut update_component_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::UpdateComponentEvents>>()
-                    .unwrap();
-                if events.has_updates() {
-                    update_component_event_writer.send(bevy_events::UpdateComponentEvents::new(
-                        events.take_updates(),
-                    ));
+                if let Some(updates) = events.world.take_updates() {
+                    let mut update_component_event_writer = world
+                        .get_resource_unchecked_mut::<Events<bevy_events::UpdateComponentEvents>>()
+                        .unwrap();
+                    update_component_event_writer
+                        .send(bevy_events::UpdateComponentEvents::new(updates));
                 }
 
                 // Remove Component Event
-                let mut remove_component_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::RemoveComponentEvents>>()
-                    .unwrap();
-                if events.has_removes() {
-                    remove_component_event_writer.send(bevy_events::RemoveComponentEvents::new(
-                        events.take_removes(),
-                    ));
+                if let Some(removes) = events.world.take_removes() {
+                    let mut remove_component_event_writer = world
+                        .get_resource_unchecked_mut::<Events<bevy_events::RemoveComponentEvents>>()
+                        .unwrap();
+
+                    remove_component_event_writer
+                        .send(bevy_events::RemoveComponentEvents::new(removes));
                 }
             }
         }
