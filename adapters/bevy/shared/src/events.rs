@@ -1,8 +1,17 @@
 use std::{any::Any, collections::HashMap};
 
-use bevy_ecs::entity::Entity;
+use bevy_ecs::{entity::Entity, event::Events, world::World};
+
+use naia_shared::WorldEvents;
 
 use crate::{ComponentKind, Replicate};
+
+mod naia_events {
+    pub use naia_shared::{
+        DespawnEntityEvent, InsertComponentEvent, RemoveComponentEvent, SpawnEntityEvent,
+        UpdateComponentEvent,
+    };
+}
 
 // SpawnEntityEvent
 pub struct SpawnEntityEvent(pub Entity);
@@ -55,5 +64,43 @@ impl RemoveComponentEvents {
         }
 
         output
+    }
+}
+
+pub struct BevyWorldEvents;
+impl BevyWorldEvents {
+    pub unsafe fn write_events(world_events: &mut WorldEvents<Entity>, world: &mut World) {
+        // Spawn Entity Event
+        let mut spawn_entity_event_writer = world
+            .get_resource_unchecked_mut::<Events<SpawnEntityEvent>>()
+            .unwrap();
+        for entity in world_events.read::<naia_events::SpawnEntityEvent>() {
+            spawn_entity_event_writer.send(SpawnEntityEvent(entity));
+        }
+
+        // Despawn Entity Event
+        let mut despawn_entity_event_writer = world
+            .get_resource_unchecked_mut::<Events<DespawnEntityEvent>>()
+            .unwrap();
+        for entity in world_events.read::<naia_events::DespawnEntityEvent>() {
+            despawn_entity_event_writer.send(DespawnEntityEvent(entity));
+        }
+
+        // Insert Component Event
+        if let Some(inserts) = world_events.take_inserts() {
+            let mut insert_component_event_writer = world
+                .get_resource_unchecked_mut::<Events<InsertComponentEvents>>()
+                .unwrap();
+            insert_component_event_writer.send(InsertComponentEvents::new(inserts));
+        }
+
+        // Remove Component Event
+        if let Some(removes) = world_events.take_removes() {
+            let mut remove_component_event_writer = world
+                .get_resource_unchecked_mut::<Events<RemoveComponentEvents>>()
+                .unwrap();
+
+            remove_component_event_writer.send(RemoveComponentEvents::new(removes));
+        }
     }
 }

@@ -1,28 +1,24 @@
-use bevy_ecs::event::Events;
 use bevy_ecs::{
     entity::Entity,
+    event::Events,
     schedule::ShouldRun,
     system::Res,
     world::{Mut, World},
 };
 
+use naia_bevy_shared::{events::BevyWorldEvents, WorldProxyMut};
 use naia_client::Client;
-
-use naia_bevy_shared::WorldProxyMut;
 
 mod naia_events {
     pub use naia_client::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvent, MessageEvent, RejectEvent, RemoveComponentEvent, ServerTickEvent,
-        SpawnEntityEvent, UpdateComponentEvent,
+        ClientTickEvent, ConnectEvent, DisconnectEvent, ErrorEvent, RejectEvent, ServerTickEvent,
     };
 }
 
 mod bevy_events {
     pub use crate::events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, MessageEvents, RejectEvent, RemoveComponentEvents, ServerTickEvent,
-        SpawnEntityEvent, UpdateComponentEvents,
+        ClientTickEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents, RejectEvent,
+        ServerTickEvent, UpdateComponentEvents,
     };
 }
 
@@ -85,31 +81,6 @@ pub fn before_receive_events(world: &mut World) {
                     .unwrap();
                 message_event_writer.send(bevy_events::MessageEvents::from(&mut events));
 
-                // Spawn Entity Event
-                let mut spawn_entity_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::SpawnEntityEvent>>()
-                    .unwrap();
-                for entity in events.read::<naia_events::SpawnEntityEvent>() {
-                    spawn_entity_event_writer.send(bevy_events::SpawnEntityEvent(entity));
-                }
-
-                // Despawn Entity Event
-                let mut despawn_entity_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::DespawnEntityEvent>>()
-                    .unwrap();
-                for entity in events.read::<naia_events::DespawnEntityEvent>() {
-                    despawn_entity_event_writer.send(bevy_events::DespawnEntityEvent(entity));
-                }
-
-                // Insert Component Event
-                if let Some(inserts) = events.world.take_inserts() {
-                    let mut insert_component_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::InsertComponentEvents>>()
-                        .unwrap();
-                    insert_component_event_writer
-                        .send(bevy_events::InsertComponentEvents::new(inserts));
-                }
-
                 // Update Component Event
                 if let Some(updates) = events.world.take_updates() {
                     let mut update_component_event_writer = world
@@ -119,15 +90,8 @@ pub fn before_receive_events(world: &mut World) {
                         .send(bevy_events::UpdateComponentEvents::new(updates));
                 }
 
-                // Remove Component Event
-                if let Some(removes) = events.world.take_removes() {
-                    let mut remove_component_event_writer = world
-                        .get_resource_unchecked_mut::<Events<bevy_events::RemoveComponentEvents>>()
-                        .unwrap();
-
-                    remove_component_event_writer
-                        .send(bevy_events::RemoveComponentEvents::new(removes));
-                }
+                // Spawn, Despawn, Insert, Remove Events
+                BevyWorldEvents::write_events(&mut events.world, world);
             }
         }
     });
