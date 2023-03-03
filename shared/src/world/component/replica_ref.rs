@@ -1,6 +1,6 @@
 use std::ops::{Deref, DerefMut};
 
-use crate::component::replicate::Replicate;
+use crate::world::component::replicate::Replicate;
 
 // ReplicaDynRef
 

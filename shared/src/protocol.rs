@@ -3,7 +3,6 @@ use std::time::Duration;
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
 use crate::{
-    component::{component_kinds::ComponentKinds, replicate::Replicate},
     connection::compression_config::CompressionConfig,
     messages::{
         channels::{
@@ -15,6 +14,7 @@ use crate::{
         message::Message,
         message_kinds::MessageKinds,
     },
+    world::component::{component_kinds::ComponentKinds, replicate::Replicate},
 };
 
 // Protocol Plugin

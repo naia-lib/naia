@@ -5,8 +5,9 @@ use std::{
 };
 
 use crate::{
-    component::component_kinds::ComponentKind, entity::action_receiver::ActionReceiver,
-    sequence_less_than, EntityAction, MessageIndex as ActionIndex,
+    sequence_less_than,
+    world::{component::component_kinds::ComponentKind, entity::action_receiver::ActionReceiver},
+    EntityAction, MessageIndex as ActionIndex,
 };
 
 pub struct EntityActionReceiver<E: Copy + Hash + Eq> {

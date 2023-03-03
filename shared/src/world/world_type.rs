@@ -1,6 +1,6 @@
 use naia_serde::SerdeErr;
 
-use crate::{
+use crate::world::{
     component::{
         component_kinds::ComponentKind,
         component_update::ComponentUpdate,

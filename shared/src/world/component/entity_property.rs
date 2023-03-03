@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 
-use crate::{
+use crate::world::{
     component::{property::Property, property_mutate::PropertyMutator},
     entity::{
         entity_converters::{EntityHandleConverter, NetEntityHandleConverter},

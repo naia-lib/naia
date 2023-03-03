@@ -2,7 +2,9 @@ use std::hash::Hash;
 
 use crate::{
     bigmap::BigMapKey,
-    entity::{entity_handle::EntityHandle, error::EntityDoesNotExistError, net_entity::NetEntity},
+    world::entity::{
+        entity_handle::EntityHandle, error::EntityDoesNotExistError, net_entity::NetEntity,
+    },
 };
 
 pub trait EntityHandleConverter<E: Copy + Eq + Hash> {

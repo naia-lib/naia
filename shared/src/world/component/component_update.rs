@@ -1,6 +1,6 @@
 use naia_serde::{BitReader, OwnedBitReader};
 
-use crate::component::component_kinds::ComponentKind;
+use crate::world::component::component_kinds::ComponentKind;
 
 pub struct ComponentUpdate {
     pub kind: ComponentKind,

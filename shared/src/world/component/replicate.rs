@@ -3,15 +3,17 @@ use std::any::Any;
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
 use crate::{
-    component::{
-        component_kinds::{ComponentKind, ComponentKinds},
-        component_update::ComponentUpdate,
-        diff_mask::DiffMask,
-        property_mutate::PropertyMutator,
-        replica_ref::{ReplicaDynMut, ReplicaDynRef},
-    },
-    entity::{entity_converters::NetEntityHandleConverter, entity_handle::EntityHandle},
     messages::named::Named,
+    world::{
+        component::{
+            component_kinds::{ComponentKind, ComponentKinds},
+            component_update::ComponentUpdate,
+            diff_mask::DiffMask,
+            property_mutate::PropertyMutator,
+            replica_ref::{ReplicaDynMut, ReplicaDynRef},
+        },
+        entity::{entity_converters::NetEntityHandleConverter, entity_handle::EntityHandle},
+    },
 };
 
 pub trait ReplicateBuilder: Send + Sync + Named {

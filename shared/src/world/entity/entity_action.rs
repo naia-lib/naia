@@ -1,4 +1,4 @@
-use crate::component::component_kinds::ComponentKind;
+use crate::world::component::component_kinds::ComponentKind;
 
 pub enum EntityAction<E: Copy> {
     SpawnEntity(E, Vec<ComponentKind>),

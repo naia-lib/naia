@@ -30,9 +30,7 @@ pub use naia_serde::{
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
 mod backends;
-mod component;
 mod connection;
-mod entity;
 mod messages;
 mod world;
 
@@ -45,22 +43,6 @@ mod types;
 mod wrapping_number;
 
 pub use backends::{Timer, Timestamp};
-pub use component::{
-    component_kinds::{ComponentKind, ComponentKinds},
-    component_update::ComponentUpdate,
-    diff_mask::DiffMask,
-    entity_property::EntityProperty,
-    property::Property,
-    property_mutate::{PropertyMutate, PropertyMutator},
-    replica_ref::{
-        ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,
-        ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
-        ReplicaRefWrapper,
-    },
-    replicate::{
-        Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
-    },
-};
 pub use connection::{
     ack_manager::AckManager,
     bandwidth_monitor::BandwidthMonitor,
@@ -73,19 +55,6 @@ pub use connection::{
     packet_type::PacketType,
     ping_store::{PingIndex, PingStore},
     standard_header::StandardHeader,
-};
-pub use entity::{
-    entity_action::EntityAction,
-    entity_action_receiver::EntityActionReceiver,
-    entity_action_type::EntityActionType,
-    entity_converters::{
-        EntityConverter, EntityHandleConverter, FakeEntityConverter, NetEntityConverter,
-        NetEntityHandleConverter,
-    },
-    entity_handle::EntityHandle,
-    entity_ref::EntityRef,
-    error::EntityDoesNotExistError,
-    net_entity::NetEntity,
 };
 pub use messages::{
     channels::{
@@ -105,6 +74,35 @@ pub use messages::{
     named::Named,
 };
 pub use world::{
+    component::{
+        component_kinds::{ComponentKind, ComponentKinds},
+        component_update::ComponentUpdate,
+        diff_mask::DiffMask,
+        entity_property::EntityProperty,
+        property::Property,
+        property_mutate::{PropertyMutate, PropertyMutator},
+        replica_ref::{
+            ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef,
+            ReplicaDynRefTrait, ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper,
+            ReplicaRefTrait, ReplicaRefWrapper,
+        },
+        replicate::{
+            Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
+        },
+    },
+    entity::{
+        entity_action::EntityAction,
+        entity_action_receiver::EntityActionReceiver,
+        entity_action_type::EntityActionType,
+        entity_converters::{
+            EntityConverter, EntityHandleConverter, FakeEntityConverter, NetEntityConverter,
+            NetEntityHandleConverter,
+        },
+        entity_handle::EntityHandle,
+        entity_ref::EntityRef,
+        error::EntityDoesNotExistError,
+        net_entity::NetEntity,
+    },
     host::{
         global_diff_handler::GlobalDiffHandler, host_global_world_manager::HostGlobalWorldManager,
         host_local_world_manager::HostLocalWorldManager, world_record::WorldRecord,
