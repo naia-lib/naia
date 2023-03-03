@@ -1,9 +1,9 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, DespawnEntityEvent, InsertComponentEvent, Message,
-    MessageContainer, MessageKind, RemoveComponentEvent, Replicate, SpawnEntityEvent, Tick,
-    UpdateComponentEvent, WorldEvent, WorldEvents,
+    Channel, ChannelKind, DespawnEntityEvent, InsertComponentEvent, Message, MessageContainer,
+    MessageKind, RemoveComponentEvent, Replicate, SpawnEntityEvent, Tick, UpdateComponentEvent,
+    WorldEvent, WorldEvents,
 };
 
 use super::user::{User, UserKey};

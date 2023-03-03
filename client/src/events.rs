@@ -1,9 +1,9 @@
 use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, DespawnEntityEvent, InsertComponentEvent, Message,
-    MessageContainer, MessageKind, RemoveComponentEvent, Replicate, SpawnEntityEvent, Tick,
-    UpdateComponentEvent, WorldEvent, WorldEvents,
+    Channel, ChannelKind, DespawnEntityEvent, InsertComponentEvent, Message, MessageContainer,
+    MessageKind, RemoveComponentEvent, Replicate, SpawnEntityEvent, Tick, UpdateComponentEvent,
+    WorldEvent, WorldEvents,
 };
 
 use crate::NaiaClientError;
@@ -111,6 +111,7 @@ impl<E: Copy> Events<E> {
         self.server_ticks.clear();
         self.errors.clear();
         self.messages.clear();
+        self.world.clear();
         self.empty = true;
     }
 }

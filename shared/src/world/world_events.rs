@@ -1,8 +1,6 @@
-use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
+use std::{collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
-use crate::{
-    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick,
-};
+use crate::{ComponentKind, Replicate, Tick};
 
 pub struct WorldEvents<E: Copy> {
     spawns: Vec<E>,
@@ -98,7 +96,7 @@ impl<E: Copy> WorldEvents<E> {
         self.empty = false;
     }
 
-    pub(crate) fn clear(&mut self) {
+    pub fn clear(&mut self) {
         self.spawns.clear();
         self.despawns.clear();
         self.inserts.clear();

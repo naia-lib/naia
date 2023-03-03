@@ -216,7 +216,7 @@ pub fn update_component_events(
     mut position_query: Query<&mut Position>,
 ) {
     for events in event_reader.iter() {
-        for (_, client_entity) in events.read::<Position>() {
+        for client_entity in events.read::<Position>() {
             if let Some(server_entity) = global.echo_entity_map.get(&client_entity) {
                 if let Ok([client_position, mut server_position]) =
                     position_query.get_many_mut([client_entity, *server_entity])

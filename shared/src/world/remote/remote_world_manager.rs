@@ -7,7 +7,7 @@ use crate::{
     UnsignedVariableInteger, WorldEvents, WorldMutType,
 };
 
-use super::{entity_action_event::EntityActionEvent, entity_record::EntityRecord};
+use super::entity_record::EntityRecord;
 
 pub struct RemoteWorldManager<E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord>,

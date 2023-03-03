@@ -124,10 +124,14 @@ impl UpdateComponentEvents {
         Self { inner }
     }
 
-    pub fn read<C: Replicate>(&self) -> Vec<(Tick, Entity)> {
+    pub fn read<C: Replicate>(&self) -> Vec<Entity> {
         let component_kind = ComponentKind::of::<C>();
         if let Some(components) = self.inner.get(&component_kind) {
-            return components.clone();
+            let mut output = Vec::new();
+            for (_tick, entity) in components {
+                output.push(*entity);
+            }
+            return output;
         }
 
         return Vec::new();
