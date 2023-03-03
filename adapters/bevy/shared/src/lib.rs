@@ -11,6 +11,7 @@ pub use naia_shared::{
 
 mod component_access;
 mod component_ref;
+pub mod events;
 mod protocol;
 mod protocol_plugin;
 mod world_data;
