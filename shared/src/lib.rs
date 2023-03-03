@@ -82,6 +82,7 @@ pub use entity::{
         EntityConverter, EntityDoesNotExistError, EntityHandleConverter, EntityProperty,
         FakeEntityConverter, NetEntityConverter, NetEntityHandleConverter,
     },
+    entity_ref::EntityRef,
     net_entity::NetEntity,
 };
 pub use messages::{

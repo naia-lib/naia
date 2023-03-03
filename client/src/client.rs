@@ -9,7 +9,7 @@ use naia_client_socket::Socket;
 
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GameInstant,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, GameInstant,
     HostGlobalWorldManager, Instant, Message, MessageContainer, PacketType, PingIndex, Protocol,
     Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
     WorldRefType,
@@ -21,8 +21,7 @@ use crate::{
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
     },
-    entity_ref::EntityMut,
-    entity_ref::EntityRef,
+    entity_mut::EntityMut,
 };
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};

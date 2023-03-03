@@ -11,22 +11,22 @@
 )]
 
 pub use naia_shared::{
-    default_channels, DespawnEntityEvent, InsertComponentEvent, Random, RemoveComponentEvent,
-    SpawnEntityEvent, UpdateComponentEvent,
+    default_channels, DespawnEntityEvent, EntityRef, InsertComponentEvent, Random,
+    RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
 
 mod client;
 mod client_config;
 mod command_history;
 mod connection;
-pub mod entity_ref;
+mod entity_mut;
 mod error;
 mod events;
 
 pub use client::Client;
 pub use client_config::ClientConfig;
 pub use command_history::CommandHistory;
-pub use entity_ref::EntityRef;
+pub use entity_mut::EntityMut;
 pub use error::NaiaClientError;
 pub use events::{
     ClientTickEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, RejectEvent,

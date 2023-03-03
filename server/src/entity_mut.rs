@@ -1,46 +1,20 @@
 use std::hash::Hash;
 
-use crate::Client;
-use naia_shared::{ReplicaMutWrapper, ReplicaRefWrapper, Replicate, WorldMutType, WorldRefType};
+use naia_shared::{ReplicaMutWrapper, Replicate, WorldMutType};
 
-// EntityRef
-pub struct EntityRef<E: Copy + Eq + Hash, W: WorldRefType<E>> {
-    world: W,
-    entity: E,
-}
-
-impl<E: Copy + Eq + Hash, W: WorldRefType<E>> EntityRef<E, W> {
-    pub fn new(world: W, entity: &E) -> Self {
-        EntityRef {
-            world,
-            entity: *entity,
-        }
-    }
-
-    pub fn id(&self) -> E {
-        self.entity
-    }
-
-    pub fn has_component<R: Replicate>(&self) -> bool {
-        self.world.has_component::<R>(&self.entity)
-    }
-
-    pub fn component<R: Replicate>(&self) -> Option<ReplicaRefWrapper<R>> {
-        self.world.component::<R>(&self.entity)
-    }
-}
+use crate::{room::RoomKey, server::Server};
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
-    client: &'s mut Client<E>,
+    server: &'s mut Server<E>,
     world: W,
     entity: E,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
-    pub(crate) fn new(server: &'s mut Client<E>, world: W, entity: &E) -> Self {
+    pub(crate) fn new(server: &'s mut Server<E>, world: W, entity: &E) -> Self {
         EntityMut {
-            client: server,
+            server,
             world,
             entity: *entity,
         }
@@ -51,7 +25,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn despawn(&mut self) {
-        self.client.despawn_entity(&mut self.world, &self.entity);
+        self.server.despawn_entity(&mut self.world, &self.entity);
     }
 
     // Components
@@ -65,7 +39,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn insert_component<R: Replicate>(&mut self, component_ref: R) -> &mut Self {
-        self.client
+        self.server
             .insert_component(&mut self.world, &self.entity, component_ref);
 
         self
@@ -80,7 +54,21 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn remove_component<R: Replicate>(&mut self) -> Option<R> {
-        self.client
+        self.server
             .remove_component::<R, W>(&mut self.world, &self.entity)
+    }
+
+    // Rooms
+
+    pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
+        self.server.room_add_entity(room_key, &self.entity);
+
+        self
+    }
+
+    pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
+        self.server.room_remove_entity(room_key, &self.entity);
+
+        self
     }
 }

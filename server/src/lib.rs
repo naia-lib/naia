@@ -13,14 +13,14 @@
 pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared::{
-    default_channels, DespawnEntityEvent, InsertComponentEvent, Random, RemoveComponentEvent,
-    SpawnEntityEvent, UpdateComponentEvent,
+    default_channels, DespawnEntityEvent, EntityRef, InsertComponentEvent, Random,
+    RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
 
 mod cache_map;
 mod connection;
-pub mod entity_ref;
-pub mod entity_scope_map;
+mod entity_mut;
+mod entity_scope_map;
 mod error;
 mod events;
 mod room;
@@ -30,7 +30,7 @@ mod user;
 mod user_scope;
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
-pub use entity_ref::EntityRef;
+pub use entity_mut::EntityMut;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, TickEvent,
