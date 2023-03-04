@@ -5,20 +5,19 @@ use std::{
 };
 
 use crate::{
-    sequence_less_than,
-    world::{component::component_kinds::ComponentKind, entity::action_receiver::ActionReceiver},
-    EntityAction, MessageIndex as ActionIndex,
+    messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than,
+    world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex,
 };
 
 pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
-    receiver: ActionReceiver<E>,
+    receiver: ReliableReceiver<EntityAction<E>>,
     entity_channels: HashMap<E, EntityChannel<E>>,
 }
 
 impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
     pub fn new() -> Self {
         Self {
-            receiver: ActionReceiver::new(),
+            receiver: ReliableReceiver::new(),
             entity_channels: HashMap::default(),
         }
     }

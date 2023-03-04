@@ -6,5 +6,3 @@ pub mod entity_handle;
 pub mod entity_ref;
 pub mod error;
 pub mod net_entity;
-
-mod action_receiver;

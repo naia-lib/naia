@@ -1,11 +1,11 @@
 use crate::{
-    messages::channels::receivers::reliable_receiver::{ReceiverArranger, ReliableReceiver},
+    messages::channels::receivers::reliable_message_receiver::{ReceiverArranger, ReliableMessageReceiver},
     sequence_less_than,
     types::MessageIndex,
     MessageContainer,
 };
 
-pub type SequencedReliableReceiver = ReliableReceiver<SequencedArranger>;
+pub type SequencedReliableReceiver = ReliableMessageReceiver<SequencedArranger>;
 
 impl SequencedReliableReceiver {
     pub fn new() -> Self {

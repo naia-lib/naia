@@ -1,13 +1,13 @@
 use std::collections::VecDeque;
 
 use crate::{
-    messages::channels::receivers::reliable_receiver::{ReceiverArranger, ReliableReceiver},
+    messages::channels::receivers::reliable_message_receiver::{ReceiverArranger, ReliableMessageReceiver},
     types::MessageIndex,
     MessageContainer,
 };
 
 // OrderedReliableReceiver
-pub type OrderedReliableReceiver = ReliableReceiver<OrderedArranger>;
+pub type OrderedReliableReceiver = ReliableMessageReceiver<OrderedArranger>;
 
 impl OrderedReliableReceiver {
     pub fn new() -> Self {
