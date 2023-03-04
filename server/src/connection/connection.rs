@@ -112,7 +112,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         let channel_messages = self.tick_buffer.receive_messages(tick);
         for (channel_kind, received_messages) in channel_messages {
             for message in received_messages {
-                messages.push(&self.user_key, &channel_kind, message);
+                messages.push_message(&self.user_key, &channel_kind, message);
             }
         }
     }

@@ -70,11 +70,11 @@ impl<E: Copy> Events<E> {
     }
 
     pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: MessageContainer) {
-        let auth_message_type_id = auth_message.kind();
-        if !self.auths.contains_key(&auth_message_type_id) {
-            self.auths.insert(auth_message_type_id, Vec::new());
+        let message_type_id = auth_message.kind();
+        if !self.auths.contains_key(&message_type_id) {
+            self.auths.insert(message_type_id, Vec::new());
         }
-        let list = self.auths.get_mut(&auth_message_type_id).unwrap();
+        let list = self.auths.get_mut(&message_type_id).unwrap();
         list.push((*user_key, auth_message));
         self.empty = false;
     }
@@ -85,16 +85,7 @@ impl<E: Copy> Events<E> {
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {
-        if !self.messages.contains_key(&channel_kind) {
-            self.messages.insert(*channel_kind, HashMap::new());
-        }
-        let channel_map = self.messages.get_mut(&channel_kind).unwrap();
-        let message_type_id = message.kind();
-        if !channel_map.contains_key(&message_type_id) {
-            channel_map.insert(message_type_id, Vec::new());
-        }
-        let list = channel_map.get_mut(&message_type_id).unwrap();
-        list.push((*user_key, message));
+        push_message(&mut self.messages, user_key, channel_kind, message);
         self.empty = false;
     }
 
@@ -210,11 +201,11 @@ impl<E: Copy, M: Message> Event<E> for AuthEvent<M> {
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let message_kind: MessageKind = MessageKind::of::<M>();
-        if let Some(messages) = events.auths.remove(&message_kind) {
-            return IntoIterator::into_iter(convert_messages(messages));
+        return if let Some(messages) = events.auths.remove(&message_kind) {
+            IntoIterator::into_iter(read_messages(messages))
         } else {
-            return IntoIterator::into_iter(Vec::new());
-        }
+            IntoIterator::into_iter(Vec::new())
+        };
     }
 }
 
@@ -227,21 +218,31 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
     type Iter = IntoIter<(UserKey, M)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
-        let channel_kind: ChannelKind = ChannelKind::of::<C>();
-        if let Some(channel_map) = events.messages.get_mut(&channel_kind) {
-            let message_kind: MessageKind = MessageKind::of::<M>();
-            if let Some(messages) = channel_map.remove(&message_kind) {
-                return IntoIterator::into_iter(convert_messages(messages));
-            }
-        }
-        return IntoIterator::into_iter(Vec::new());
+        let output = read_channel_messages::<C, M>(&mut events.messages);
+        return IntoIterator::into_iter(output);
     }
 }
 
-fn convert_messages<M: Message>(boxed_list: Vec<(UserKey, MessageContainer)>) -> Vec<(UserKey, M)> {
+pub(crate) fn read_channel_messages<C: Channel, M: Message>(
+    messages: &mut HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
+) -> Vec<(UserKey, M)> {
+    let channel_kind: ChannelKind = ChannelKind::of::<C>();
+    if let Some(channel_map) = messages.get_mut(&channel_kind) {
+        let message_kind: MessageKind = MessageKind::of::<M>();
+        if let Some(messages) = channel_map.remove(&message_kind) {
+            return read_messages(messages);
+        }
+    }
+
+    return Vec::new();
+}
+
+pub(crate) fn read_messages<M: Message>(
+    messages: Vec<(UserKey, MessageContainer)>,
+) -> Vec<(UserKey, M)> {
     let mut output_list: Vec<(UserKey, M)> = Vec::new();
 
-    for (user_key, message) in boxed_list {
+    for (user_key, message) in messages {
         let message: M = Box::<dyn Any + 'static>::downcast::<M>(message.to_boxed_any())
             .ok()
             .map(|boxed_m| *boxed_m)
@@ -250,4 +251,22 @@ fn convert_messages<M: Message>(boxed_list: Vec<(UserKey, MessageContainer)>) ->
     }
 
     output_list
+}
+
+pub(crate) fn push_message(
+    messages: &mut HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
+    user_key: &UserKey,
+    channel_kind: &ChannelKind,
+    message: MessageContainer,
+) {
+    if !messages.contains_key(&channel_kind) {
+        messages.insert(*channel_kind, HashMap::new());
+    }
+    let channel_map = messages.get_mut(&channel_kind).unwrap();
+    let message_type_id = message.kind();
+    if !channel_map.contains_key(&message_type_id) {
+        channel_map.insert(message_type_id, Vec::new());
+    }
+    let list = channel_map.get_mut(&message_type_id).unwrap();
+    list.push((*user_key, message));
 }
