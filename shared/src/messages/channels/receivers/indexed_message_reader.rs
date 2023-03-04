@@ -30,19 +30,27 @@ impl IndexedMessageReader {
         Ok(output)
     }
 
+    pub fn read_message_index(
+        reader: &mut BitReader,
+        last_read_id: &Option<MessageIndex>,
+    ) -> Result<MessageIndex, SerdeErr> {
+        return if let Some(last_id) = last_read_id {
+            let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
+            Ok(last_id.wrapping_add(id_diff))
+        } else {
+            // read message id
+            MessageIndex::de(reader)
+        };
+    }
+
     fn read_message(
         message_kinds: &MessageKinds,
         converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
         last_read_id: &Option<MessageIndex>,
     ) -> Result<(MessageIndex, MessageContainer), SerdeErr> {
-        let message_index: MessageIndex = if let Some(last_id) = last_read_id {
-            let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
-            last_id.wrapping_add(id_diff)
-        } else {
-            // read message id
-            MessageIndex::de(reader)?
-        };
+        // read index
+        let message_index = Self::read_message_index(reader, last_read_id)?;
 
         // read payload
         let new_message = message_kinds.read(reader, converter)?;

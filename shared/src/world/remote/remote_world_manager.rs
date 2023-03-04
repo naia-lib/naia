@@ -1,10 +1,11 @@
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
-    BigMap, BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver,
-    EntityActionType, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex,
-    NetEntity, NetEntityHandleConverter, Protocol, Replicate, Serde, SerdeErr, Tick,
-    UnsignedVariableInteger, WorldEvents, WorldMutType,
+    messages::channels::receivers::indexed_message_reader::IndexedMessageReader, BigMap, BitReader,
+    ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver, EntityActionType,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex, NetEntity,
+    NetEntityHandleConverter, Protocol, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger,
+    WorldEvents, WorldMutType,
 };
 
 use super::entity_record::EntityRecord;
@@ -50,15 +51,11 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
         reader: &mut BitReader,
         last_index_opt: &mut Option<MessageIndex>,
     ) -> Result<MessageIndex, SerdeErr> {
-        let current_index = if let Some(last_index) = last_index_opt {
-            // read diff
-            let index_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
-            last_index.wrapping_add(index_diff)
-        } else {
-            // read message id
-            MessageIndex::de(reader)?
-        };
+        // read index
+        let current_index = IndexedMessageReader::read_message_index(reader, last_index_opt)?;
+
         *last_index_opt = Some(current_index);
+
         Ok(current_index)
     }
 
