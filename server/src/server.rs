@@ -211,15 +211,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if let Some(user) = self.users.get(user_key) {
             // send connect reject response
             let writer = self.handshake_manager.write_reject_response();
-            match self.io.send_packet(&user.address, writer.to_packet()) {
-                Ok(()) => {}
-                Err(_) => {
-                    // TODO: pass this on and handle above
-                    warn!(
-                        "Server Error: Cannot send auth rejection packet to {}",
-                        &user.address
-                    );
-                }
+            if self
+                .io
+                .send_packet(&user.address, writer.to_packet())
+                .is_err()
+            {
+                // TODO: pass this on and handle above
+                warn!(
+                    "Server Error: Cannot send auth rejection packet to {}",
+                    &user.address
+                );
             }
             //
         }
@@ -734,37 +735,59 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return None;
     }
 
-    pub(crate) fn user_disconnect(&mut self, user_key: &UserKey) {
-        if let Some(user) = self.user_delete(user_key) {
-            self.incoming_events.push_disconnection(user_key, user);
-        }
+    pub(crate) fn user_disconnect<W: WorldMutType<E>>(
+        &mut self,
+        user_key: &UserKey,
+        world: &mut W,
+    ) {
+        self.despawn_all_remote_entities(user_key, world);
+        let user = self.user_delete(user_key);
+        self.incoming_events.push_disconnection(user_key, user);
     }
 
     /// All necessary cleanup, when they're actually gone...
-    pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> Option<User> {
-        if let Some(user) = self.users.remove(user_key) {
-            if self.user_connections.remove(&user.address).is_some() {
-                self.validated_users.remove(&user.address);
-                self.entity_scope_map.remove_user(user_key);
-                self.handshake_manager.delete_user(&user.address);
+    pub(crate) fn despawn_all_remote_entities<W: WorldMutType<E>>(
+        &mut self,
+        user_key: &UserKey,
+        world: &mut W,
+    ) {
+        let Some(user) = self.users.get(user_key) else {
+            panic!("Attempting to despawn entities for a nonexistent user");
+        };
+        let Some (connection) = self.user_connections.get_mut(&user.address) else {
+            panic!("Attempting to despawn entities on a nonexistent connection");
+        };
 
-                // Clean up all user data
-                for room_key in user.room_keys() {
-                    self.rooms
-                        .get_mut(room_key)
-                        .unwrap()
-                        .unsubscribe_user(user_key);
-                }
+        connection
+            .base
+            .remote_world_manager
+            .despawn_all_remote_entities(world, &mut self.incoming_events.world)
+    }
 
-                if self.io.bandwidth_monitor_enabled() {
-                    self.io.deregister_client(&user.address);
-                }
+    pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> User {
+        let Some(user) = self.users.remove(user_key) else {
+            panic!("Attempting to delete non-existant user!");
+        };
 
-                return Some(user);
-            }
+        self.user_connections.remove(&user.address);
+        self.validated_users.remove(&user.address);
+        self.entity_scope_map.remove_user(user_key);
+        self.handshake_manager.delete_user(&user.address);
+
+        // Clean up all user data
+        for room_key in user.room_keys() {
+            self.rooms
+                .get_mut(room_key)
+                .unwrap()
+                .unsubscribe_user(user_key);
         }
 
-        None
+        // remove from bandwidth monitor
+        if self.io.bandwidth_monitor_enabled() {
+            self.io.deregister_client(&user.address);
+        }
+
+        return user;
     }
 
     //// Rooms
@@ -915,7 +938,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Maintain connection with a client and read all incoming packet data
     fn maintain_socket<W: WorldMutType<E>>(&mut self, mut world: W) {
-        self.handle_disconnects();
+        self.handle_disconnects(&mut world);
         self.handle_heartbeats();
         self.handle_pings();
 
@@ -1092,7 +1115,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     .verify_disconnect_request(connection, reader)
                 {
                     let user_key = connection.user_key;
-                    self.user_disconnect(&user_key);
+                    self.user_disconnect(&user_key, world);
                 }
             }
             PacketType::Heartbeat => {
@@ -1110,7 +1133,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return Ok(());
     }
 
-    fn handle_disconnects(&mut self) {
+    fn handle_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
         // disconnects
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
@@ -1126,7 +1149,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             }
 
             for user_key in user_disconnects {
-                self.user_disconnect(&user_key);
+                self.user_disconnect(&user_key, world);
             }
         }
     }

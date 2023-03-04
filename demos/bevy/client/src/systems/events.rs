@@ -10,8 +10,8 @@ use bevy_transform::components::Transform;
 
 use naia_bevy_client::{
     events::{
-        ClientTickEvent, ConnectEvent, DisconnectEvent, InsertComponentEvents, MessageEvents,
-        RejectEvent, SpawnEntityEvent, UpdateComponentEvents,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
+        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
     },
     sequence_greater_than, Client, CommandsExt, Random, Tick,
 };
@@ -135,6 +135,12 @@ pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
     }
 }
 
+pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) {
+    for DespawnEntityEvent(_entity) in event_reader.iter() {
+        info!("despawned entity");
+    }
+}
+
 pub fn insert_component_events(
     mut event_reader: EventReader<InsertComponentEvents>,
     mut local: Commands,
@@ -214,6 +220,14 @@ pub fn update_component_events(
                     shared_behavior::process_command(&command, &mut client_position);
                 }
             }
+        }
+    }
+}
+
+pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
+    for events in event_reader.iter() {
+        for (_entity, _component) in events.read::<Position>() {
+            info!("removed Position component from entity");
         }
     }
 }

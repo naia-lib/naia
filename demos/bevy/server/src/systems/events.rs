@@ -6,8 +6,9 @@ use bevy_log::info;
 
 use naia_bevy_server::{
     events::{
-        AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, InsertComponentEvents,
-        SpawnEntityEvent, TickEvent, UpdateComponentEvents,
+        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        InsertComponentEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
+        UpdateComponentEvents,
     },
     Random, Server,
 };
@@ -167,6 +168,12 @@ pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
     }
 }
 
+pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) {
+    for DespawnEntityEvent(_) in event_reader.iter() {
+        info!("despawned client entity");
+    }
+}
+
 pub fn insert_component_events(
     mut event_reader: EventReader<InsertComponentEvents>,
     mut global: ResMut<Global>,
@@ -225,6 +232,14 @@ pub fn update_component_events(
                     server_position.y.mirror(&client_position.y);
                 }
             }
+        }
+    }
+}
+
+pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
+    for events in event_reader.iter() {
+        for (_entity, _component) in events.read::<Position>() {
+            info!("removed Position component from client entity");
         }
     }
 }

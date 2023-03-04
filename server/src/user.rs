@@ -4,7 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use naia_shared::BigMapKey;
+use naia_shared::{BigMapKey, WorldMutType};
 
 use crate::{RoomKey, Server};
 
@@ -104,8 +104,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
         self.server.user_address(&self.key).unwrap()
     }
 
-    pub fn disconnect(&mut self) {
-        self.server.user_disconnect(&self.key);
+    pub fn disconnect<W: WorldMutType<E>>(&mut self, mut world: W) {
+        self.server.user_disconnect(&self.key, &mut world);
     }
 
     // Rooms
