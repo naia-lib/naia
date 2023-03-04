@@ -38,6 +38,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     io: Io,
     server_connection: Option<Connection<E>>,
     handshake_manager: HandshakeManager,
+    manual_disconnect: bool,
     // World
     host_world_manager: HostGlobalWorldManager<E>,
     // Events
@@ -69,6 +70,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             ),
             server_connection: None,
             handshake_manager,
+            manual_disconnect: false,
             // World
             host_world_manager: HostGlobalWorldManager::new(),
             // Events
@@ -122,7 +124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
         }
 
-        self.disconnect_internal();
+        self.manual_disconnect = true;
     }
 
     // Receive Data from Server! Very important!
@@ -137,8 +139,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // all other operations
         if let Some(connection) = self.server_connection.as_mut() {
-            if connection.base.should_drop() {
-                self.disconnect_internal();
+            if connection.base.should_drop() || self.manual_disconnect {
+                self.disconnect_with_events(&mut world);
                 return std::mem::take(&mut self.incoming_events);
             }
 
@@ -508,7 +510,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             let server_addr = self.server_address_unwrapped();
                             self.incoming_events.clear();
                             self.incoming_events.push_rejection(&server_addr);
-                            self.disconnect_cleanup();
+                            self.disconnect_reset_connection();
                             return;
                         }
                         None => {}
@@ -647,24 +649,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    fn disconnect_internal(&mut self) {
+    fn disconnect_with_events<W: WorldMutType<E>>(&mut self, world: &mut W) {
         let server_addr = self.server_address_unwrapped();
-        self.disconnect_cleanup();
 
-        // exit early, we're disconnected, who cares?
         self.incoming_events.clear();
+
+        self.despawn_all_remote_entities(world);
+        self.disconnect_reset_connection();
+
         self.incoming_events.push_disconnection(&server_addr);
     }
 
-    fn disconnect_cleanup(&mut self) {
+    fn despawn_all_remote_entities<W: WorldMutType<E>>(&mut self, world: &mut W) {
         // this is very similar to the newtype method .. can we coalesce and reduce
         // duplication?
+
+        let Some(connection) = self.server_connection.as_mut() else {
+            panic!("Client is already disconnected!");
+        };
+        connection
+            .base
+            .remote_world_manager
+            .despawn_all_remote_entities(world, &mut self.incoming_events.world);
+    }
+
+    fn disconnect_reset_connection(&mut self) {
+        self.server_connection = None;
 
         self.io = Io::new(
             &self.client_config.connection.bandwidth_measure_duration,
             &self.protocol.compression,
         );
-        self.server_connection = None;
+
         self.handshake_manager = HandshakeManager::new(
             self.client_config.send_handshake_interval,
             self.client_config.ping_interval,
@@ -680,22 +696,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Client<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        let connection = self
-            .server_connection
+        self.server_connection
             .as_ref()
-            .expect("cannot handle entity properties unless connection is established");
-        connection
+            .expect("cannot handle entity properties unless connection is established")
             .base
             .remote_world_manager
             .handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        let connection = self
-            .server_connection
+        self.server_connection
             .as_ref()
-            .expect("cannot handle entity properties unless connection is established");
-        connection
+            .expect("cannot handle entity properties unless connection is established")
             .base
             .remote_world_manager
             .entity_to_handle(entity)

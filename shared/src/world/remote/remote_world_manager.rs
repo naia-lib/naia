@@ -347,6 +347,27 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 
         Ok(())
     }
+
+    pub fn despawn_all_remote_entities<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        world_events: &mut WorldEvents<E>,
+    ) {
+        for (entity, _) in self.entity_records.iter() {
+            // Generate remove event for each component, handing references off just in
+            // case
+            for component_kind in world.component_kinds(entity) {
+                if let Some(component) = world.remove_component_of_kind(entity, &component_kind) {
+                    world_events.push_remove(*entity, component);
+                }
+            }
+            // Generate despawn event
+            world_events.push_despawn(*entity);
+
+            // Despawn entity
+            world.despawn_entity(entity);
+        }
+    }
 }
 
 impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for RemoteWorldManager<E> {
