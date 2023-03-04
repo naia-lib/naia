@@ -17,6 +17,7 @@ pub use naia_shared::{
 
 use crate::{
     connection::{
+        base_time_manager::BaseTimeManager,
         connection::Connection,
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
@@ -472,172 +473,177 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     // Private methods
 
     fn maintain_socket(&mut self) {
-        if let Some(connection) = self.server_connection.as_mut() {
-            // connection already established
+        if self.server_connection.is_none() {
+            self.maintain_handshake();
+        } else {
+            self.maintain_connection();
+        }
+    }
 
-            // send heartbeats
-            if connection.base.should_send_heartbeat() {
-                let mut writer = BitWriter::new();
+    fn maintain_handshake(&mut self) {
+        // No connection established yet
 
-                // write header
-                connection
-                    .base
-                    .write_outgoing_header(PacketType::Heartbeat, &mut writer);
+        if !self.io.is_loaded() {
+            return;
+        }
 
-                // send packet
-                if self.io.send_packet(writer.to_packet()).is_err() {
-                    // TODO: pass this on and handle above
-                    warn!("Client Error: Cannot send heartbeat packet to Server");
+        // receive from socket
+        loop {
+            match self.io.recv_reader() {
+                Ok(Some(mut reader)) => {
+                    match self.handshake_manager.recv(&mut reader) {
+                        Some(HandshakeResult::Connected(time_manager)) => {
+                            // new connect!
+                            let server_addr = self.server_address_unwrapped();
+                            self.server_connection = Some(Connection::new(
+                                server_addr,
+                                &self.client_config.connection,
+                                &self.protocol.channel_kinds,
+                                time_manager,
+                                &self.host_world_manager,
+                            ));
+                            self.incoming_events.push_connection(&server_addr);
+                        }
+                        Some(HandshakeResult::Rejected) => {
+                            let server_addr = self.server_address_unwrapped();
+                            self.incoming_events.clear();
+                            self.incoming_events.push_rejection(&server_addr);
+                            self.disconnect_cleanup();
+                            return;
+                        }
+                        None => {}
+                    }
                 }
-                connection.base.mark_sent();
+                Ok(None) => {
+                    break;
+                }
+                Err(error) => {
+                    self.incoming_events
+                        .push_error(NaiaClientError::Wrapped(Box::new(error)));
+                }
             }
+        }
+    }
 
-            // send pings
-            if connection.time_manager.send_ping(&mut self.io) {
-                connection.base.mark_sent();
-            }
+    fn maintain_connection(&mut self) {
+        // connection already established
 
-            // receive from socket
-            loop {
-                match self.io.recv_reader() {
-                    Ok(Some(mut reader)) => {
-                        connection.base.mark_heard();
+        let Some(connection) = self.server_connection.as_mut() else {
+            panic!("Should have checked for this above");
+        };
 
-                        let header = StandardHeader::de(&mut reader)
-                            .expect("unable to parse header from incoming packet");
+        Self::handle_heartbeats(connection, &mut self.io);
+        Self::handle_pings(connection, &mut self.io);
 
-                        match header.packet_type {
-                            PacketType::Data
-                            | PacketType::Heartbeat
-                            | PacketType::Ping
-                            | PacketType::Pong => {
-                                // continue, these packet types are allowed when
-                                // connection is established
-                            }
-                            _ => {
-                                // short-circuit, do not need to handle other packet types at this
-                                // point
+        // receive from socket
+        loop {
+            match self.io.recv_reader() {
+                Ok(Some(mut reader)) => {
+                    connection.base.mark_heard();
+
+                    let header = StandardHeader::de(&mut reader)
+                        .expect("unable to parse header from incoming packet");
+
+                    match header.packet_type {
+                        PacketType::Data
+                        | PacketType::Heartbeat
+                        | PacketType::Ping
+                        | PacketType::Pong => {
+                            // continue, these packet types are allowed when
+                            // connection is established
+                        }
+                        _ => {
+                            // short-circuit, do not need to handle other packet types at this
+                            // point
+                            continue;
+                        }
+                    }
+
+                    // Read incoming header
+                    connection.process_incoming_header(&header);
+
+                    // read server tick
+                    let Ok(server_tick) = Tick::de(&mut reader) else {
+                        warn!("unable to parse server_tick from packet");
+                        continue;
+                    };
+
+                    // read time since last tick
+                    let Ok(server_tick_instant) = GameInstant::de(&mut reader) else {
+                        warn!("unable to parse server_tick_instant from packet");
+                        continue;
+                    };
+
+                    connection
+                        .time_manager
+                        .recv_tick_instant(&server_tick, &server_tick_instant);
+
+                    // Handle based on PacketType
+                    match header.packet_type {
+                        PacketType::Data => {
+                            if connection
+                                .buffer_data_packet(&server_tick, &mut reader)
+                                .is_err()
+                            {
+                                warn!("unable to parse data packet");
                                 continue;
                             }
                         }
-
-                        // Read incoming header
-                        connection.process_incoming_header(&header);
-
-                        // read server tick
-                        let Ok(server_tick) = Tick::de(&mut reader) else {
-                            warn!("unable to parse server_tick from packet");
-                            continue;
-                        };
-
-                        // read time since last tick
-                        let Ok(server_tick_instant) = GameInstant::de(&mut reader) else {
-                            warn!("unable to parse server_tick_instant from packet");
-                            continue;
-                        };
-
-                        connection
-                            .time_manager
-                            .recv_tick_instant(&server_tick, &server_tick_instant);
-
-                        // Handle based on PacketType
-                        match header.packet_type {
-                            PacketType::Data => {
-                                if connection
-                                    .buffer_data_packet(&server_tick, &mut reader)
-                                    .is_err()
-                                {
-                                    warn!("unable to parse data packet");
-                                    continue;
-                                }
-                            }
-                            PacketType::Heartbeat => {
-                                // already marked as heard, job done
-                            }
-                            PacketType::Ping => {
-                                // read incoming ping index
-                                let ping_index = PingIndex::de(&mut reader)
-                                    .expect("unable to parse an index from Ping packet");
-
-                                // write pong payload
-                                let mut writer = BitWriter::new();
-
-                                // write header
-                                connection
-                                    .base
-                                    .write_outgoing_header(PacketType::Pong, &mut writer);
-
-                                // write index
-                                ping_index.ser(&mut writer);
-
-                                // send packet
-                                if self.io.send_packet(writer.to_packet()).is_err() {
-                                    // TODO: pass this on and handle above
-                                    warn!("Client Error: Cannot send pong packet to Server");
-                                }
-                                connection.base.mark_sent();
-                            }
-                            PacketType::Pong => {
-                                if connection.time_manager.read_pong(&mut reader).is_err() {
-                                    // TODO: pass this on and handle above
-                                    warn!("Client Error: Cannot process pong packet from Server");
-                                }
-                            }
-                            _ => {
-                                // no other packet types matter when connection
-                                // is established
+                        PacketType::Heartbeat => {
+                            // already marked as heard, job done
+                        }
+                        PacketType::Ping => {
+                            let Ok(ping_index) = BaseTimeManager::read_ping(&mut reader) else {
+                                panic!("unable to read ping index");
+                            };
+                            BaseTimeManager::send_pong(connection, &mut self.io, ping_index);
+                        }
+                        PacketType::Pong => {
+                            if connection.time_manager.read_pong(&mut reader).is_err() {
+                                // TODO: pass this on and handle above
+                                warn!("Client Error: Cannot process pong packet from Server");
                             }
                         }
-                    }
-                    Ok(None) => {
-                        break;
-                    }
-                    Err(error) => {
-                        self.incoming_events
-                            .push_error(NaiaClientError::Wrapped(Box::new(error)));
-                    }
-                }
-            }
-        } else {
-            // No connection established yet
-            if self.io.is_loaded() {
-                // receive from socket
-                loop {
-                    match self.io.recv_reader() {
-                        Ok(Some(mut reader)) => {
-                            match self.handshake_manager.recv(&mut reader) {
-                                Some(HandshakeResult::Connected(time_manager)) => {
-                                    // new connect!
-                                    let server_addr = self.server_address_unwrapped();
-                                    self.server_connection = Some(Connection::new(
-                                        server_addr,
-                                        &self.client_config.connection,
-                                        &self.protocol.channel_kinds,
-                                        time_manager,
-                                        &self.host_world_manager,
-                                    ));
-                                    self.incoming_events.push_connection(&server_addr);
-                                }
-                                Some(HandshakeResult::Rejected) => {
-                                    let server_addr = self.server_address_unwrapped();
-                                    self.incoming_events.clear();
-                                    self.incoming_events.push_rejection(&server_addr);
-                                    self.disconnect_cleanup();
-                                    return;
-                                }
-                                None => {}
-                            }
-                        }
-                        Ok(None) => {
-                            break;
-                        }
-                        Err(error) => {
-                            self.incoming_events
-                                .push_error(NaiaClientError::Wrapped(Box::new(error)));
+                        _ => {
+                            // no other packet types matter when connection
+                            // is established
                         }
                     }
                 }
+                Ok(None) => {
+                    break;
+                }
+                Err(error) => {
+                    self.incoming_events
+                        .push_error(NaiaClientError::Wrapped(Box::new(error)));
+                }
             }
+        }
+    }
+
+    fn handle_heartbeats(connection: &mut Connection<E>, io: &mut Io) {
+        // send heartbeats
+        if connection.base.should_send_heartbeat() {
+            let mut writer = BitWriter::new();
+
+            // write header
+            connection
+                .base
+                .write_outgoing_header(PacketType::Heartbeat, &mut writer);
+
+            // send packet
+            if io.send_packet(writer.to_packet()).is_err() {
+                // TODO: pass this on and handle above
+                warn!("Client Error: Cannot send heartbeat packet to Server");
+            }
+            connection.base.mark_sent();
+        }
+    }
+
+    fn handle_pings(connection: &mut Connection<E>, io: &mut Io) {
+        // send pings
+        if connection.time_manager.send_ping(io) {
+            connection.base.mark_sent();
         }
     }
 

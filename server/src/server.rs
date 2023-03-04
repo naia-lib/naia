@@ -13,10 +13,10 @@ use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
-    BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
+    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
     HostGlobalWorldManager, Instant, Message, MessageContainer, PacketType, Protocol, Replicate,
-    Serde, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -915,6 +915,202 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Maintain connection with a client and read all incoming packet data
     fn maintain_socket<W: WorldMutType<E>>(&mut self, mut world: W) {
+        self.handle_disconnects();
+        self.handle_heartbeats();
+        self.handle_pings();
+
+        //receive socket events
+        loop {
+            match self.io.recv_reader() {
+                Ok(Some((address, owned_reader))) => {
+                    let mut reader = owned_reader.borrow();
+
+                    // Read header
+                    let Ok(header) = StandardHeader::de(&mut reader) else {
+                        // Received a malformed packet
+                        // TODO: increase suspicion against packet sender
+                        continue;
+                    };
+
+                    let Ok(should_continue) = self.maintain_handshake(&address, &header, &mut reader) else {
+                        warn!("Server Error: cannot read malformed packet");
+                        continue;
+                    };
+                    if should_continue {
+                        continue;
+                    }
+
+                    if self
+                        .maintain_connection(&address, &header, &mut reader, &mut world)
+                        .is_err()
+                    {
+                        warn!("Server Error: cannot read malformed packet");
+                        continue;
+                    }
+                }
+                Ok(None) => {
+                    // No more packets, break loop
+                    break;
+                }
+                Err(error) => {
+                    self.incoming_events
+                        .push_error(NaiaServerError::Wrapped(Box::new(error)));
+                }
+            }
+        }
+    }
+
+    fn maintain_handshake(
+        &mut self,
+        address: &SocketAddr,
+        header: &StandardHeader,
+        reader: &mut BitReader,
+    ) -> Result<bool, SerdeErr> {
+        // Handshake stuff
+        match header.packet_type {
+            PacketType::ClientChallengeRequest => {
+                if let Ok(writer) = self.handshake_manager.recv_challenge_request(reader) {
+                    if self.io.send_packet(&address, writer.to_packet()).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!(
+                            "Server Error: Cannot send challenge response packet to {}",
+                            &address
+                        );
+                    }
+                }
+                return Ok(true);
+            }
+            PacketType::ClientValidateRequest => {
+                match self.handshake_manager.recv_validate_request(
+                    &self.protocol.message_kinds,
+                    address,
+                    reader,
+                ) {
+                    HandshakeResult::Success(auth_message_opt) => {
+                        if self.validated_users.contains_key(address) {
+                            // send validate response
+                            let writer = self.handshake_manager.write_validate_response();
+                            if self.io.send_packet(address, writer.to_packet()).is_err() {
+                                // TODO: pass this on and handle above
+                                warn!("Server Error: Cannot send validate success response packet to {}", &address);
+                            };
+                        } else {
+                            let user = User::new(*address);
+                            let user_key = self.users.insert(user);
+
+                            if let Some(auth_message) = auth_message_opt {
+                                self.incoming_events.push_auth(&user_key, auth_message);
+                            } else {
+                                self.accept_connection(&user_key);
+                            }
+                        }
+                    }
+                    HandshakeResult::Invalid => {
+                        // do nothing
+                    }
+                }
+                return Ok(true);
+            }
+            PacketType::ClientConnectRequest => {
+                if self.user_connections.contains_key(address) {
+                    // send connect response
+                    let writer = self.handshake_manager.write_connect_response();
+                    if self.io.send_packet(address, writer.to_packet()).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!(
+                            "Server Error: Cannot send connect success response packet to {}",
+                            address
+                        );
+                    };
+                    //
+                } else {
+                    let user_key = *self
+                        .validated_users
+                        .get(address)
+                        .expect("should be a user by now, from validation step");
+                    self.finalize_connection(&user_key);
+                }
+                return Ok(true);
+            }
+            PacketType::Ping => {
+                let response = self.time_manager.process_ping(reader).unwrap();
+                // send packet
+                if self.io.send_packet(address, response.to_packet()).is_err() {
+                    // TODO: pass this on and handle above
+                    warn!("Server Error: Cannot send pong packet to {}", address);
+                };
+                if let Some(connection) = self.user_connections.get_mut(address) {
+                    connection.base.mark_sent();
+                }
+                return Ok(true);
+            }
+            _ => {}
+        }
+
+        return Ok(false);
+    }
+
+    fn maintain_connection<W: WorldMutType<E>>(
+        &mut self,
+        address: &SocketAddr,
+        header: &StandardHeader,
+        reader: &mut BitReader,
+        world: &mut W,
+    ) -> Result<(), SerdeErr> {
+        // Packets requiring established connection
+        let Some(connection) = self.user_connections.get_mut(address) else {
+            return Ok(());
+        };
+
+        // Mark that we've heard from the client
+        connection.base.mark_heard();
+
+        // Process incoming header
+        connection.process_incoming_header(header);
+
+        match header.packet_type {
+            PacketType::Data => {
+                // read client tick
+                let client_tick = Tick::de(reader)?;
+
+                let server_tick = self.time_manager.current_tick();
+
+                // process data
+                connection.process_incoming_data(
+                    &self.protocol,
+                    server_tick,
+                    client_tick,
+                    reader,
+                    world,
+                    self.host_world_manager.world_record(),
+                    &mut self.incoming_events,
+                )?;
+            }
+            PacketType::Disconnect => {
+                if self
+                    .handshake_manager
+                    .verify_disconnect_request(connection, reader)
+                {
+                    let user_key = connection.user_key;
+                    self.user_disconnect(&user_key);
+                }
+            }
+            PacketType::Heartbeat => {
+                // already marked heard above
+            }
+            PacketType::Pong => {
+                // read client tick
+                connection
+                    .ping_manager
+                    .process_pong(&self.time_manager, reader);
+            }
+            _ => {}
+        }
+
+        return Ok(());
+    }
+
+    fn handle_disconnects(&mut self) {
         // disconnects
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
@@ -933,7 +1129,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 self.user_disconnect(&user_key);
             }
         }
+    }
 
+    fn handle_heartbeats(&mut self) {
         // heartbeats
         if self.heartbeat_timer.ringing() {
             self.heartbeat_timer.reset();
@@ -972,7 +1170,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
             }
         }
+    }
 
+    fn handle_pings(&mut self) {
         // pings
         if self.ping_timer.ringing() {
             self.ping_timer.reset();
@@ -1008,175 +1208,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         warn!("Server Error: Cannot send ping packet to {}", user_address);
                     }
                     connection.base.mark_sent();
-                }
-            }
-        }
-
-        //receive socket events
-        loop {
-            match self.io.recv_reader() {
-                Ok(Some((address, owned_reader))) => {
-                    let mut reader = owned_reader.borrow();
-
-                    // Read header
-                    let Ok(header) = StandardHeader::de(&mut reader) else {
-                        // Received a malformed packet
-                        // TODO: increase suspicion against packet sender
-                        continue;
-                    };
-
-                    // Handshake stuff
-                    match header.packet_type {
-                        PacketType::ClientChallengeRequest => {
-                            if let Ok(writer) =
-                                self.handshake_manager.recv_challenge_request(&mut reader)
-                            {
-                                if self.io.send_packet(&address, writer.to_packet()).is_err() {
-                                    // TODO: pass this on and handle above
-                                    warn!(
-                                        "Server Error: Cannot send challenge response packet to {}",
-                                        &address
-                                    );
-                                }
-                            }
-                            continue;
-                        }
-                        PacketType::ClientValidateRequest => {
-                            match self.handshake_manager.recv_validate_request(
-                                &self.protocol.message_kinds,
-                                &address,
-                                &mut reader,
-                            ) {
-                                HandshakeResult::Success(auth_message_opt) => {
-                                    if self.validated_users.contains_key(&address) {
-                                        // send validate response
-                                        let writer =
-                                            self.handshake_manager.write_validate_response();
-                                        if self
-                                            .io
-                                            .send_packet(&address, writer.to_packet())
-                                            .is_err()
-                                        {
-                                            // TODO: pass this on and handle above
-                                            warn!("Server Error: Cannot send validate success response packet to {}", &address);
-                                        };
-                                    } else {
-                                        let user = User::new(address);
-                                        let user_key = self.users.insert(user);
-
-                                        if let Some(auth_message) = auth_message_opt {
-                                            self.incoming_events.push_auth(&user_key, auth_message);
-                                        } else {
-                                            self.accept_connection(&user_key);
-                                        }
-                                    }
-                                }
-                                HandshakeResult::Invalid => {
-                                    // do nothing
-                                }
-                            }
-                            continue;
-                        }
-                        PacketType::Ping => {
-                            let response = self.time_manager.process_ping(&mut reader).unwrap();
-                            // send packet
-                            if self.io.send_packet(&address, response.to_packet()).is_err() {
-                                // TODO: pass this on and handle above
-                                warn!("Server Error: Cannot send pong packet to {}", &address);
-                            };
-                            if let Some(connection) = self.user_connections.get_mut(&address) {
-                                connection.base.mark_sent();
-                            }
-                            continue;
-                        }
-                        PacketType::ClientConnectRequest => {
-                            if self.user_connections.contains_key(&address) {
-                                // send connect response
-                                let writer = self.handshake_manager.write_connect_response();
-                                if self.io.send_packet(&address, writer.to_packet()).is_err() {
-                                    // TODO: pass this on and handle above
-                                    warn!("Server Error: Cannot send connect success response packet to {}", &address);
-                                };
-                                //
-                            } else {
-                                let user_key = *self
-                                    .validated_users
-                                    .get(&address)
-                                    .expect("should be a user by now, from validation step");
-                                self.finalize_connection(&user_key);
-                            }
-                            continue;
-                        }
-                        _ => {}
-                    }
-
-                    // Packets requiring established connection
-                    if let Some(connection) = self.user_connections.get_mut(&address) {
-                        // Mark that we've heard from the client
-                        connection.base.mark_heard();
-
-                        // Process incoming header
-                        connection.process_incoming_header(&header);
-
-                        match header.packet_type {
-                            PacketType::Data => {
-                                // read client tick
-                                let Ok(client_tick) = Tick::de(&mut reader) else {
-                                    // Received a malformed packet
-                                    // TODO: increase suspicion against packet sender
-                                    continue;
-                                };
-
-                                let server_tick = self.time_manager.current_tick();
-
-                                // process data
-                                if connection
-                                    .process_incoming_data(
-                                        &self.protocol,
-                                        server_tick,
-                                        client_tick,
-                                        &mut reader,
-                                        &mut world,
-                                        self.host_world_manager.world_record(),
-                                        &mut self.incoming_events,
-                                    )
-                                    .is_err()
-                                {
-                                    // Received a malformed packet
-                                    // TODO: increase suspicion against packet sender
-                                    warn!("Error reading incoming packet!");
-                                    continue;
-                                };
-                            }
-                            PacketType::Disconnect => {
-                                if self
-                                    .handshake_manager
-                                    .verify_disconnect_request(connection, &mut reader)
-                                {
-                                    let user_key = connection.user_key;
-                                    self.user_disconnect(&user_key);
-                                }
-                            }
-                            PacketType::Heartbeat => {
-                                // already marked heard above
-                            }
-                            PacketType::Pong => {
-                                // read client tick
-                                connection
-                                    .ping_manager
-                                    .process_pong(&self.time_manager, &mut reader);
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                Ok(None) => {
-                    // No more packets, break loop
-                    break;
-                }
-                Err(error) => {
-                    self.incoming_events
-                        .push_error(NaiaServerError::Wrapped(Box::new(error)));
                 }
             }
         }

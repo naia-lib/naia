@@ -1,11 +1,13 @@
+use std::hash::Hash;
+
+use log::warn;
+
 use naia_shared::{
     sequence_greater_than, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType,
     PingIndex, PingStore, Serde, SerdeErr, StandardHeader, UnsignedVariableInteger,
 };
 
-use log::warn;
-
-use crate::connection::io::Io;
+use crate::connection::{connection::Connection, io::Io};
 
 /// Responsible for keeping track of internal time, as well as sending and receiving Ping/Pong messages
 pub struct BaseTimeManager {
@@ -45,6 +47,36 @@ impl BaseTimeManager {
             // TODO: pass this on and handle above
             warn!("Client Error: Cannot send ping packet to Server");
         }
+    }
+
+    pub(crate) fn read_ping(reader: &mut BitReader) -> Result<PingIndex, SerdeErr> {
+        // read incoming ping index
+        let ping_index = PingIndex::de(reader)?;
+        Ok(ping_index)
+    }
+
+    pub(crate) fn send_pong<E: Copy + Eq + Hash + Send + Sync>(
+        connection: &mut Connection<E>,
+        io: &mut Io,
+        ping_index: PingIndex,
+    ) {
+        // write pong payload
+        let mut writer = BitWriter::new();
+
+        // write header
+        connection
+            .base
+            .write_outgoing_header(PacketType::Pong, &mut writer);
+
+        // write index
+        ping_index.ser(&mut writer);
+
+        // send packet
+        if io.send_packet(writer.to_packet()).is_err() {
+            // TODO: pass this on and handle above
+            warn!("Client Error: Cannot send pong packet to Server");
+        }
+        connection.base.mark_sent();
     }
 
     pub fn read_pong(
