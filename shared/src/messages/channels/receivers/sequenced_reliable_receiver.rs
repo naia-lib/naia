@@ -1,5 +1,7 @@
 use crate::{
-    messages::channels::receivers::reliable_message_receiver::{ReceiverArranger, ReliableMessageReceiver},
+    messages::channels::receivers::reliable_message_receiver::{
+        ReceiverArranger, ReliableMessageReceiver,
+    },
     sequence_less_than,
     types::MessageIndex,
     MessageContainer,

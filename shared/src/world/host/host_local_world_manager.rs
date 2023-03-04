@@ -8,10 +8,11 @@ use std::{
 };
 
 use crate::{
-    wrapping_diff, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength,
-    DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer,
-    MessageIndex, MessageKinds, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
-    PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType,
+    messages::channels::senders::indexed_message_writer::IndexedMessageWriter, BitWrite, BitWriter,
+    ChannelKind, ComponentKind, ComponentKinds, ConstBitLength, DiffMask, EntityAction,
+    EntityActionType, EntityConverter, Instant, MessageContainer, MessageIndex, MessageKinds,
+    MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Serde,
+    UnsignedVariableInteger, WorldRefType,
 };
 
 use super::{
@@ -229,15 +230,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostLocalWorldManager<E> {
         last_id_opt: &mut Option<ActionId>,
         current_id: &ActionId,
     ) {
-        if let Some(last_id) = last_id_opt {
-            // write diff
-            let id_diff = wrapping_diff(*last_id, *current_id);
-            let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
-            id_diff_encoded.ser(writer);
-        } else {
-            // write message id
-            current_id.ser(writer);
-        }
+        IndexedMessageWriter::write_message_index(writer, last_id_opt, current_id);
         *last_id_opt = Some(*current_id);
     }
 

@@ -3,10 +3,10 @@ use naia_serde::{BitReader, SerdeErr};
 use crate::{
     messages::{
         channels::receivers::{
-            reliable_receiver::ReliableReceiver,
             channel_receiver::{ChannelReceiver, MessageChannelReceiver},
             fragment_receiver::FragmentReceiver,
             indexed_message_reader::IndexedMessageReader,
+            reliable_receiver::ReliableReceiver,
         },
         message_kinds::MessageKinds,
     },
