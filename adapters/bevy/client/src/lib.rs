@@ -7,11 +7,9 @@ mod client;
 mod commands;
 mod entity_mut;
 mod plugin;
-mod stage;
 mod state;
 mod systems;
 
 pub use client::Client;
 pub use commands::CommandsExt;
 pub use plugin::Plugin;
-pub use stage::Stage;

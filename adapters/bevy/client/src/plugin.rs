@@ -69,19 +69,7 @@ impl PluginType for Plugin {
             .add_event::<InsertComponentEvents>()
             .add_event::<UpdateComponentEvents>()
             .add_event::<RemoveComponentEvents>()
-            // STAGES //
-            // events //
-            .add_stage_before(
-                CoreStage::PreUpdate,
-                PrivateStage::BeforeReceiveEvents,
-                SystemStage::single_threaded().with_run_criteria(should_receive),
-            )
-            .add_stage_after(
-                PrivateStage::BeforeReceiveEvents,
-                Stage::ReceiveEvents,
-                SystemStage::single_threaded().with_run_criteria(should_receive),
-            )
             // SYSTEMS //
-            .add_system_to_stage(PrivateStage::BeforeReceiveEvents, before_receive_events);
+            .add_system(before_receive_events.run_if(should_receive));
     }
 }

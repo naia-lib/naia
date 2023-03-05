@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use bevy_ecs::{
     entity::Entity,
-    system::SystemParam,
-    world::{Mut, World},
+    system::{SystemParam, ResMut, Deferred},
+    world::World,
 };
 
 use naia_server::{
@@ -16,32 +16,20 @@ use naia_bevy_shared::{
     WorldProxy, WorldRef, WorldRefType,
 };
 
-use super::{commands::Command, entity_mut::EntityMut, state::State};
+use crate::state::ServerCommandQueue;
+
+use super::{commands::Command, entity_mut::EntityMut};
 
 // Server
-
-pub struct Server<'world, 'state> {
-    state: &'state mut State,
-    world: &'world World,
-    server: Mut<'world, NaiaServer<Entity>>,
+#[derive(SystemParam)]
+pub struct Server<'w, 's> {
+    commands: Deferred<'s, ServerCommandQueue>,
+    world: &'w World,
+    server: ResMut<'w, NaiaServer<Entity>>,
 }
 
 impl<'world, 'state> Server<'world, 'state> {
     // Public Methods //
-
-    pub fn new(state: &'state mut State, world: &'world World) -> Self {
-        unsafe {
-            let server = world
-                .get_resource_unchecked_mut::<NaiaServer<Entity>>()
-                .expect("Naia Server has not been correctly initialized!");
-
-            Self {
-                state,
-                world,
-                server,
-            }
-        }
-    }
 
     //// Connections ////
 
@@ -89,7 +77,7 @@ impl<'world, 'state> Server<'world, 'state> {
         EntityMut::new(entity, self)
     }
 
-    /// Returns true if the server's [`WorldProxy`] has the entity
+    /// Returns true if the server's [`WorldProxy`] has the entitycommands
     pub fn has_entity(&self, entity: &Entity) -> bool {
         self.world.proxy().has_entity(entity)
     }
@@ -171,7 +159,7 @@ impl<'world, 'state> Server<'world, 'state> {
     // Crate-public methods
 
     pub(crate) fn queue_command<COMMAND: Command>(&mut self, command: COMMAND) {
-        self.state.push(command);
+        self.commands.push(command);
     }
 
     // rooms
@@ -183,10 +171,6 @@ impl<'world, 'state> Server<'world, 'state> {
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &Entity) {
         self.server.room_mut(room_key).remove_entity(entity);
     }
-}
-
-impl<'world, 'state> SystemParam for Server<'world, 'state> {
-    type Fetch = State;
 }
 
 impl<'world, 'state> EntityHandleConverter<Entity> for Server<'world, 'state> {

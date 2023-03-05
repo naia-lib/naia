@@ -1,6 +1,6 @@
 use bevy_ecs::{
     entity::Entity,
-    system::{SystemMeta, SystemParamFetch, SystemParamState},
+    system::{SystemMeta, SystemBuffer},
     world::{Mut, World},
 };
 
@@ -8,15 +8,32 @@ use naia_server::Server as NaiaServer;
 
 use naia_bevy_shared::WorldProxyMut;
 
-use super::{commands::Command, server::Server};
+use super::commands::Command;
 
 // State
-
-pub struct State {
-    commands: Vec<Box<dyn Command>>,
+#[derive(Default)]
+pub struct ServerCommandQueue {
+    commands: Vec<Box<dyn Command>>
 }
 
-impl State {
+impl SystemBuffer for ServerCommandQueue {
+    #[inline]
+    fn apply(&mut self, _system_meta: &SystemMeta, world: &mut World) {
+        #[cfg(feature = "trace")]
+            let _system_span =
+            bevy_utils::tracing::info_span!("system_commands", name = _system_meta.name())
+                .entered();
+        self.apply(world);
+    }
+}
+
+impl ServerCommandQueue {
+    pub fn new() -> Self {
+        Self {
+            commands: Vec::new(),
+        }
+    }
+
     pub fn apply(&mut self, world: &mut World) {
         // Have to do this to get around 'world.flush()' only being crate-public
         world.spawn_empty().despawn();
@@ -30,40 +47,11 @@ impl State {
         });
     }
 
-    #[inline]
-    pub fn push_boxed(&mut self, command: Box<dyn Command>) {
+    fn push_boxed(&mut self, command: Box<dyn Command>) {
         self.commands.push(command);
     }
 
-    #[inline]
     pub fn push<T: Command>(&mut self, command: T) {
         self.push_boxed(Box::new(command));
-    }
-}
-
-// SAFE: only local state is accessed
-unsafe impl SystemParamState for State {
-    fn init(_world: &mut World, _system_meta: &mut SystemMeta) -> Self {
-        Self {
-            commands: Vec::new(),
-        }
-    }
-
-    fn apply(&mut self, world: &mut World) {
-        self.apply(world);
-    }
-}
-
-impl<'world, 'state> SystemParamFetch<'world, 'state> for State {
-    type Item = Server<'world, 'state>;
-
-    #[inline]
-    unsafe fn get_param(
-        state: &'state mut Self,
-        _system_state: &SystemMeta,
-        world: &'world World,
-        _change_tick: u32,
-    ) -> Self::Item {
-        Server::new(state, world)
     }
 }

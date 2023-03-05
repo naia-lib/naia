@@ -97,10 +97,6 @@ pub fn before_receive_events(world: &mut World) {
     });
 }
 
-pub fn should_receive(client: Res<Client<Entity>>) -> ShouldRun {
-    if client.is_connecting() {
-        ShouldRun::Yes
-    } else {
-        ShouldRun::No
-    }
+pub fn should_receive(client: Res<Client<Entity>>) -> bool {
+    client.is_connecting()
 }

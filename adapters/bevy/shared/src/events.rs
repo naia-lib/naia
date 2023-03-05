@@ -70,17 +70,18 @@ impl RemoveComponentEvents {
 pub struct BevyWorldEvents;
 impl BevyWorldEvents {
     pub unsafe fn write_events(world_events: &mut WorldEvents<Entity>, world: &mut World) {
+        let world_cell = world.as_unsafe_world_cell();
         // Spawn Entity Event
-        let mut spawn_entity_event_writer = world
-            .get_resource_unchecked_mut::<Events<SpawnEntityEvent>>()
+        let mut spawn_entity_event_writer = world_cell
+            .get_resource_mut::<Events<SpawnEntityEvent>>()
             .unwrap();
         for entity in world_events.read::<naia_events::SpawnEntityEvent>() {
             spawn_entity_event_writer.send(SpawnEntityEvent(entity));
         }
 
         // Despawn Entity Event
-        let mut despawn_entity_event_writer = world
-            .get_resource_unchecked_mut::<Events<DespawnEntityEvent>>()
+        let mut despawn_entity_event_writer = world_cell
+            .get_resource_mut::<Events<DespawnEntityEvent>>()
             .unwrap();
         for entity in world_events.read::<naia_events::DespawnEntityEvent>() {
             despawn_entity_event_writer.send(DespawnEntityEvent(entity));
@@ -88,16 +89,16 @@ impl BevyWorldEvents {
 
         // Insert Component Event
         if let Some(inserts) = world_events.take_inserts() {
-            let mut insert_component_event_writer = world
-                .get_resource_unchecked_mut::<Events<InsertComponentEvents>>()
+            let mut insert_component_event_writer = world_cell
+                .get_resource_mut::<Events<InsertComponentEvents>>()
                 .unwrap();
             insert_component_event_writer.send(InsertComponentEvents::new(inserts));
         }
 
         // Remove Component Event
         if let Some(removes) = world_events.take_removes() {
-            let mut remove_component_event_writer = world
-                .get_resource_unchecked_mut::<Events<RemoveComponentEvents>>()
+            let mut remove_component_event_writer = world_cell
+                .get_resource_mut::<Events<RemoveComponentEvents>>()
                 .unwrap();
 
             remove_component_event_writer.send(RemoveComponentEvents::new(removes));

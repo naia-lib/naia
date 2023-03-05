@@ -246,7 +246,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn remove_component<R: Replicate>(&mut self, entity: &Entity) -> Option<R> {
-        return self.world.entity_mut(*entity).remove::<R>();
+        return self.world.entity_mut(*entity).take::<R>();
     }
 
     fn remove_component_of_kind(
@@ -316,10 +316,10 @@ fn world_data(world: &World) -> &WorldData {
         .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
 }
 
-fn world_data_unchecked_mut(world: &World) -> Mut<WorldData> {
+fn world_data_unchecked_mut(world: &mut World) -> Mut<WorldData> {
     unsafe {
-        return world
-            .get_resource_unchecked_mut::<WorldData>()
+        return world.as_unsafe_world_cell()
+            .get_resource_mut::<WorldData>()
             .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
     }
 }
