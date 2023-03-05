@@ -2,43 +2,23 @@ use std::net::SocketAddr;
 
 use bevy_ecs::{
     entity::Entity,
-    system::SystemParam,
-    world::{Mut, World},
+    system::{SystemParam, ResMut},
 };
 
-use naia_client::{Client as NaiaClient, EntityRef, NaiaClientError};
+use naia_client::{Client as NaiaClient, NaiaClientError};
 
 use naia_bevy_shared::{
     Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
-    WorldProxy, WorldRef, WorldRefType,
 };
 
-use crate::{commands::Command, entity_mut::EntityMut, state::State};
-
 // Client
-
-pub struct Client<'world, 'state> {
-    state: &'state mut State,
-    world: &'world World,
-    client: Mut<'world, NaiaClient<Entity>>,
+#[derive(SystemParam)]
+pub struct Client<'w> {
+    client: ResMut<'w, NaiaClient<Entity>>,
 }
 
-impl<'world, 'state> Client<'world, 'state> {
+impl<'w> Client<'w> {
     // Public Methods //
-
-    pub fn new(state: &'state mut State, world: &'world World) -> Self {
-        unsafe {
-            let client = world
-                .get_resource_unchecked_mut::<NaiaClient<Entity>>()
-                .expect("Naia Client has not been correctly initialized!");
-
-            Self {
-                state,
-                world,
-                client,
-            }
-        }
-    }
 
     //// Connections ////
 
@@ -83,30 +63,6 @@ impl<'world, 'state> Client<'world, 'state> {
         self.client.send_tick_buffer_message::<C, M>(tick, message);
     }
 
-    //// Entities ////
-
-    pub fn spawn<'a>(&'a mut self) -> EntityMut<'a, 'world, 'state> {
-        let entity = self.world.entities().reserve_entity();
-        self.client.spawn_entity_at(&entity);
-        EntityMut::new(entity, self)
-    }
-
-    pub fn has_entity(&self, entity: &Entity) -> bool {
-        self.world.proxy().has_entity(entity)
-    }
-
-    pub fn entity(&self, entity: &Entity) -> EntityRef<Entity, WorldRef> {
-        return self.client.entity(self.world.proxy(), entity);
-    }
-
-    pub fn entity_mut<'a>(&'a mut self, entity: &Entity) -> EntityMut<'a, 'world, 'state> {
-        EntityMut::new(*entity, self)
-    }
-
-    pub fn entities(&self) -> Vec<Entity> {
-        return self.client.entities(&self.world.proxy());
-    }
-
     //// Ticks ////
 
     pub fn client_tick(&self) -> Option<Tick> {
@@ -126,19 +82,9 @@ impl<'world, 'state> Client<'world, 'state> {
     pub fn server_interpolation(&self) -> Option<f32> {
         self.client.server_interpolation()
     }
-
-    // Crate-public methods
-
-    pub(crate) fn queue_command<COMMAND: Command>(&mut self, command: COMMAND) {
-        self.state.push(command);
-    }
 }
 
-impl<'world, 'state> SystemParam for Client<'world, 'state> {
-    type Fetch = State;
-}
-
-impl<'world, 'state> EntityHandleConverter<Entity> for Client<'world, 'state> {
+impl<'w> EntityHandleConverter<Entity> for Client<'w> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
         self.client.handle_to_entity(entity_handle)
     }

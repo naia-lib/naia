@@ -8,13 +8,10 @@ use bevy_render::color::Color as BevyColor;
 use bevy_sprite::{Sprite, SpriteBundle};
 use bevy_transform::components::Transform;
 
-use naia_bevy_client::{
-    events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
-        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
-    },
-    sequence_greater_than, Client, CommandsExt, Random, Tick,
-};
+use naia_bevy_client::{events::{
+    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
+    MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
+}, sequence_greater_than, Client, Random, Tick, CommandsExt, ClientOwned};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -28,10 +25,10 @@ use crate::resources::{Global, OwnedEntity};
 const SQUARE_SIZE: f32 = 32.0;
 
 pub fn connect_events(
-    mut event_reader: EventReader<ConnectEvent>,
+    mut commands: Commands,
+    client: Client,
     mut global: ResMut<Global>,
-    mut local: Commands,
-    mut client: Client,
+    mut event_reader: EventReader<ConnectEvent>,
 ) {
     for _ in event_reader.iter() {
         let Ok(server_address) = client.server_address() else {
@@ -49,16 +46,18 @@ pub fn connect_events(
         };
 
         // Spawn entity
-        let entity = client
+        let entity = commands
             // Spawn new Square Entity
-            .spawn()
+            .spawn_empty()
+            // MUST insert a ClientOwned component here to replicate
+            .insert(ClientOwned)
             // Insert Position component
             .insert(position)
             // return Entity id
             .id();
 
         // Insert SpriteBundle locally only
-        local.entity(entity).insert(SpriteBundle {
+        commands.entity(entity).insert(SpriteBundle {
             sprite: Sprite {
                 custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
                 color: BevyColor::BLACK,

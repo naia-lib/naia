@@ -1,7 +1,7 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy_app::{App, CoreStage, Plugin as PluginType};
-use bevy_ecs::{entity::Entity, schedule::SystemStage};
+use bevy_app::{App, Plugin as PluginType};
+use bevy_ecs::{entity::Entity, schedule::IntoSystemConfig};
 
 use naia_client::{Client, ClientConfig};
 
@@ -13,7 +13,6 @@ use super::{
         InsertComponentEvents, MessageEvents, RejectEvent, RemoveComponentEvents, ServerTickEvent,
         SpawnEntityEvent, UpdateComponentEvents,
     },
-    stage::{PrivateStage, Stage},
     systems::{before_receive_events, should_receive},
 };
 

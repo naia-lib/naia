@@ -12,7 +12,7 @@ use super::{
         InsertComponentEvents, MessageEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
         UpdateComponentEvents,
     },
-    systems::{before_receive_events, should_receive},
+    systems::before_receive_events,
 };
 
 struct PluginConfig {
@@ -67,6 +67,6 @@ impl PluginType for Plugin {
             .add_event::<UpdateComponentEvents>()
             .add_event::<RemoveComponentEvents>()
             // SYSTEMS //
-            .add_system(before_receive_events.run_if(should_receive));
+            .add_system(before_receive_events);
     }
 }

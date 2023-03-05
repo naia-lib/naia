@@ -1,8 +1,9 @@
+use std::marker::PhantomData;
 use std::time::Duration;
 
 use bevy_ecs::{
     entity::Entity,
-    system::{SystemParam, ResMut, Deferred},
+    system::{SystemParam, ReadOnlySystemParam, ResMut, Deferred, Res},
     world::World,
 };
 
@@ -16,19 +17,14 @@ use naia_bevy_shared::{
     WorldProxy, WorldRef, WorldRefType,
 };
 
-use crate::state::ServerCommandQueue;
-
-use super::{commands::Command, entity_mut::EntityMut};
-
 // Server
+
 #[derive(SystemParam)]
-pub struct Server<'w, 's> {
-    commands: Deferred<'s, ServerCommandQueue>,
-    world: &'w World,
+pub struct Server<'w> {
     server: ResMut<'w, NaiaServer<Entity>>,
 }
 
-impl<'world, 'state> Server<'world, 'state> {
+impl<'w> Server<'w> {
     // Public Methods //
 
     //// Connections ////
@@ -36,6 +32,8 @@ impl<'world, 'state> Server<'world, 'state> {
     pub fn listen(&mut self, server_addrs: &ServerAddrs) {
         self.server.listen(server_addrs);
     }
+
+    pub fn is_listening(&self) -> bool { self.server.is_listening() }
 
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         self.server.accept_connection(user_key);
@@ -63,35 +61,6 @@ impl<'world, 'state> Server<'world, 'state> {
 
     pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
         self.server.scope_checks()
-    }
-
-    pub fn send_all_updates(&mut self) {
-        return self.server.send_all_updates(self.world.proxy());
-    }
-
-    //// Entities ////
-
-    pub fn spawn<'a>(&'a mut self) -> EntityMut<'a, 'world, 'state> {
-        let entity = self.world.entities().reserve_entity();
-        self.server.spawn_entity_at(&entity);
-        EntityMut::new(entity, self)
-    }
-
-    /// Returns true if the server's [`WorldProxy`] has the entitycommands
-    pub fn has_entity(&self, entity: &Entity) -> bool {
-        self.world.proxy().has_entity(entity)
-    }
-
-    pub fn entity(&self, entity: &Entity) -> EntityRef<Entity, WorldRef> {
-        return self.server.entity(self.world.proxy(), entity);
-    }
-
-    pub fn entity_mut<'a>(&'a mut self, entity: &Entity) -> EntityMut<'a, 'world, 'state> {
-        EntityMut::new(*entity, self)
-    }
-
-    pub fn entities(&self) -> Vec<Entity> {
-        return self.server.entities(self.world.proxy());
     }
 
     //// Users ////
@@ -158,10 +127,6 @@ impl<'world, 'state> Server<'world, 'state> {
 
     // Crate-public methods
 
-    pub(crate) fn queue_command<COMMAND: Command>(&mut self, command: COMMAND) {
-        self.commands.push(command);
-    }
-
     // rooms
 
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity: &Entity) {
@@ -173,7 +138,7 @@ impl<'world, 'state> Server<'world, 'state> {
     }
 }
 
-impl<'world, 'state> EntityHandleConverter<Entity> for Server<'world, 'state> {
+impl<'w> EntityHandleConverter<Entity> for Server<'w> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
         self.server.handle_to_entity(entity_handle)
     }

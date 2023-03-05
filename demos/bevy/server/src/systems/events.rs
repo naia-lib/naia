@@ -2,16 +2,14 @@ use bevy_ecs::{
     event::EventReader,
     system::{Query, ResMut},
 };
+use bevy_ecs::system::Commands;
 use bevy_log::info;
 
-use naia_bevy_server::{
-    events::{
-        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
-        UpdateComponentEvents,
-    },
-    Random, Server,
-};
+use naia_bevy_server::{events::{
+    AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+    InsertComponentEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
+    UpdateComponentEvents,
+}, Random, Server, ServerOwned};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -37,9 +35,10 @@ pub fn auth_events(mut event_reader: EventReader<AuthEvents>, mut server: Server
 }
 
 pub fn connect_events(
-    mut event_reader: EventReader<ConnectEvent>,
-    mut global: ResMut<Global>,
+    mut commands: Commands,
     mut server: Server,
+    mut global: ResMut<Global>,
+    mut event_reader: EventReader<ConnectEvent>,
 ) {
     for ConnectEvent(user_key) in event_reader.iter() {
         let address = server
@@ -71,17 +70,19 @@ pub fn connect_events(
         };
 
         // Spawn entity
-        let entity = server
-            // Spawn new Square Entity
-            .spawn()
-            // Add Entity to main Room
-            .enter_room(&global.main_room_key)
+        let entity = commands
+            // Spawn new Entity
+            .spawn_empty()
+            // MUST insert a ServerOwned component here to replicate
+            .insert(ServerOwned)
             // Insert Position component
             .insert(position)
             // Insert Color component
             .insert(color)
             // return Entity id
             .id();
+
+        server.room_mut(&global.main_room_key).add_entity(&entity);
 
         global.user_to_entity_map.insert(*user_key, entity);
 
@@ -97,18 +98,21 @@ pub fn connect_events(
 }
 
 pub fn disconnect_events(
-    mut event_reader: EventReader<DisconnectEvent>,
-    mut global: ResMut<Global>,
+    mut commands: Commands,
     mut server: Server,
+    mut global: ResMut<Global>,
+    mut event_reader: EventReader<DisconnectEvent>,
 ) {
     for DisconnectEvent(user_key, user) in event_reader.iter() {
         info!("Naia Server disconnected from: {:?}", user.address);
 
         if let Some(entity) = global.user_to_entity_map.remove(user_key) {
-            server
-                .entity_mut(&entity)
-                .leave_room(&global.main_room_key)
+            commands
+                .entity(entity)
                 .despawn();
+            server
+                .room_mut(&global.main_room_key)
+                .remove_entity(&entity);
         }
     }
 }
@@ -155,10 +159,6 @@ pub fn tick_events(
             // And call this if Entity should NOT be in this scope.
             // server.user_scope(..).exclude(..);
         }
-
-        // This is very important! Need to call this to actually send all update packets
-        // to all connected Clients!
-        server.send_all_updates();
     }
 }
 
@@ -175,9 +175,10 @@ pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) 
 }
 
 pub fn insert_component_events(
-    mut event_reader: EventReader<InsertComponentEvents>,
-    mut global: ResMut<Global>,
+    mut commands: Commands,
     mut server: Server,
+    mut global: ResMut<Global>,
+    mut event_reader: EventReader<InsertComponentEvents>,
     position_query: Query<&Position>,
 ) {
     for events in event_reader.iter() {
@@ -199,17 +200,19 @@ pub fn insert_component_events(
                 };
 
                 // Spawn entity
-                let server_entity = server
+                let server_entity = commands
                     // Spawn new Square Entity
-                    .spawn()
-                    // Add Entity to main Room
-                    .enter_room(&global.main_room_key)
+                    .spawn_empty()
+                    // MUST insert a ServerOwned component here to replicate
+                    .insert(ServerOwned)
                     // Insert Position component
                     .insert(server_position)
                     // Insert Color component
                     .insert(color)
                     // return Entity id
                     .id();
+
+                server.room_mut(&global.main_room_key).add_entity(&server_entity);
 
                 global.echo_entity_map.insert(client_entity, server_entity);
             }

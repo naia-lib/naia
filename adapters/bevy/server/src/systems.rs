@@ -5,7 +5,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{events::BevyWorldEvents, WorldProxyMut};
+use naia_bevy_shared::{events::BevyWorldEvents, WorldProxy, WorldProxyMut};
 use naia_server::Server;
 
 mod naia_events {
@@ -19,12 +19,20 @@ mod bevy_events {
     };
 }
 
+use super::server::Server as BevyServer;
+
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<Server<Entity>>| {
+        if !server.is_listening() {
+            return;
+        }
+
+        let mut did_tick = false;
         let mut events = server.receive(world.proxy_mut());
         if !events.is_empty() {
             unsafe {
                 let world_cell = world.as_unsafe_world_cell();
+
                 // Connect Event
                 let mut connect_event_writer = world_cell
                     .get_resource_mut::<Events<bevy_events::ConnectEvent>>()
@@ -55,6 +63,7 @@ pub fn before_receive_events(world: &mut World) {
                     .unwrap();
                 for tick in events.read::<naia_events::TickEvent>() {
                     tick_event_writer.send(bevy_events::TickEvent(tick));
+                    did_tick = true;
                 }
 
                 // Message Event
@@ -81,10 +90,10 @@ pub fn before_receive_events(world: &mut World) {
                 // Spawn, Despawn, Insert, Remove Events
                 BevyWorldEvents::write_events(&mut events.world, world);
             }
+
+            if did_tick {
+                server.send_all_updates(world.proxy());
+            }
         }
     });
-}
-
-pub fn should_receive(server: Res<Server<Entity>>) -> bool {
-    server.is_listening()
 }

@@ -3,82 +3,8 @@ use bevy_ecs::{
     system::{Command as BevyCommand, Commands, EntityCommands},
     world::World,
 };
-use std::marker::PhantomData;
 
-use naia_client::Client;
-
-use naia_bevy_shared::{Replicate, WorldMut, WorldMutType, WorldProxyMut};
-
-// Naia Client Command Trait
-pub trait Command: Send + Sync + 'static {
-    fn write(self: Box<Self>, server: &mut Client<Entity>, world: WorldMut);
-}
-
-//// Despawn Entity ////
-
-pub(crate) struct DespawnEntity {
-    entity: Entity,
-}
-
-impl DespawnEntity {
-    pub fn new(entity: &Entity) -> Self {
-        DespawnEntity { entity: *entity }
-    }
-}
-
-impl Command for DespawnEntity {
-    fn write(self: Box<Self>, client: &mut Client<Entity>, world: WorldMut) {
-        client.entity_mut(world, &self.entity).despawn();
-    }
-}
-
-//// Insert Component ////
-
-pub(crate) struct InsertComponent<R: Replicate> {
-    entity: Entity,
-    component: R,
-}
-
-impl<R: Replicate> InsertComponent<R> {
-    pub fn new(entity: &Entity, component: R) -> Self {
-        InsertComponent {
-            entity: *entity,
-            component,
-        }
-    }
-}
-
-impl<R: Replicate> Command for InsertComponent<R> {
-    fn write(self: Box<Self>, client: &mut Client<Entity>, world: WorldMut) {
-        client
-            .entity_mut(world, &self.entity)
-            .insert_component(self.component);
-    }
-}
-
-//// Remove Component ////
-
-pub(crate) struct RemoveComponent<R: Replicate> {
-    entity: Entity,
-    phantom_r: PhantomData<R>,
-}
-
-impl<R: Replicate> RemoveComponent<R> {
-    pub fn new(entity: &Entity) -> Self {
-        RemoveComponent {
-            entity: *entity,
-            phantom_r: PhantomData,
-        }
-    }
-}
-
-impl<R: Replicate> Command for RemoveComponent<R> {
-    fn write(self: Box<Self>, client: &mut Client<Entity>, world: WorldMut) {
-        client
-            .entity_mut(world, &self.entity)
-            .remove_component::<R>();
-    }
-}
+use naia_bevy_shared::{WorldMutType, WorldProxyMut};
 
 // Bevy Commands Extension
 pub trait CommandsExt<'w, 's> {
