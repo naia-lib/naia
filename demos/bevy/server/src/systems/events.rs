@@ -9,7 +9,7 @@ use naia_bevy_server::{events::{
     AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
     InsertComponentEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
     UpdateComponentEvents,
-}, Random, Server, ServerOwned};
+}, Random, Server, CommandsExt};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -20,7 +20,7 @@ use naia_bevy_demo_shared::{
 
 use crate::resources::Global;
 
-pub fn auth_events(mut event_reader: EventReader<AuthEvents>, mut server: Server) {
+pub fn auth_events(mut server: Server, mut event_reader: EventReader<AuthEvents>) {
     for events in event_reader.iter() {
         for (user_key, auth) in events.read::<Auth>() {
             if auth.username == "charlie" && auth.password == "12345" {
@@ -73,8 +73,8 @@ pub fn connect_events(
         let entity = commands
             // Spawn new Entity
             .spawn_empty()
-            // MUST insert a ServerOwned component here to replicate
-            .insert(ServerOwned)
+            // MUST call this to begin replication
+            .enable_replication(&mut server)
             // Insert Position component
             .insert(position)
             // Insert Color component
@@ -203,8 +203,8 @@ pub fn insert_component_events(
                 let server_entity = commands
                     // Spawn new Square Entity
                     .spawn_empty()
-                    // MUST insert a ServerOwned component here to replicate
-                    .insert(ServerOwned)
+                    // MUST call this to begin replication
+                    .enable_replication(&mut server)
                     // Insert Position component
                     .insert(server_position)
                     // Insert Color component
@@ -221,8 +221,8 @@ pub fn insert_component_events(
 }
 
 pub fn update_component_events(
-    mut event_reader: EventReader<UpdateComponentEvents>,
     global: ResMut<Global>,
+    mut event_reader: EventReader<UpdateComponentEvents>,
     mut position_query: Query<&mut Position>,
 ) {
     for events in event_reader.iter() {

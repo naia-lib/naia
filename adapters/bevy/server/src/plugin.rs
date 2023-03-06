@@ -1,7 +1,7 @@
 use std::{ops::DerefMut, sync::Mutex};
 
 use bevy_app::{App, Plugin as PluginType};
-use bevy_ecs::{entity::Entity, schedule::IntoSystemConfig};
+use bevy_ecs::entity::Entity;
 
 use naia_bevy_shared::Protocol;
 use naia_server::{Server, ServerConfig};

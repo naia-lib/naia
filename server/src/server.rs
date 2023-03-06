@@ -392,17 +392,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // Entities
 
+    pub fn enable_replication(&mut self, entity: &E) {
+        self.spawn_entity_inner(&entity);
+    }
+
+    pub fn disable_replication(&mut self, entity: &E) {
+        // Despawn from connections and inner tracking
+        self.despawn_entity_inner(entity);
+    }
+
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
     pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
         let entity = world.spawn_entity();
-        self.host_world_manager.spawn_entity(&entity);
+        self.spawn_entity_inner(&entity);
 
         EntityMut::new(self, world, &entity)
     }
 
     /// Creates a new Entity with a specific id
     pub fn spawn_entity_at(&mut self, entity: &E) {
+        self.spawn_entity_inner(entity);
+    }
+
+    fn spawn_entity_inner(&mut self, entity: &E) {
         self.host_world_manager.spawn_entity(entity);
     }
 
@@ -601,6 +614,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // Delete from world
         world.despawn_entity(entity);
 
+        self.despawn_entity_inner(entity);
+    }
+
+    fn despawn_entity_inner(&mut self, entity: &E) {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
         for (_, connection) in self.user_connections.iter_mut() {

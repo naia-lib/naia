@@ -1,7 +1,6 @@
 use bevy_ecs::{
     entity::Entity,
     event::Events,
-    system::Res,
     world::{Mut, World},
 };
 
@@ -18,8 +17,6 @@ mod bevy_events {
         UpdateComponentEvents,
     };
 }
-
-use super::server::Server as BevyServer;
 
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<Server<Entity>>| {

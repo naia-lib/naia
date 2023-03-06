@@ -82,6 +82,16 @@ impl<'w> Client<'w> {
     pub fn server_interpolation(&self) -> Option<f32> {
         self.client.server_interpolation()
     }
+
+    // Entity Registration
+
+    pub fn enable_replication(&mut self, entity: &Entity) {
+        self.client.enable_replication(entity);
+    }
+
+    pub fn disable_replication(&mut self, entity: &Entity) {
+        self.client.disable_replication(entity);
+    }
 }
 
 impl<'w> EntityHandleConverter<Entity> for Client<'w> {

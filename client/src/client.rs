@@ -264,6 +264,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     // Entities
 
+    pub fn enable_replication(&mut self, entity: &E) {
+        self.spawn_entity_inner(&entity);
+    }
+
+    pub fn disable_replication(&mut self, entity: &E) {
+        // Despawn from connections and inner tracking
+        self.despawn_entity_inner(entity);
+    }
+
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
     pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
@@ -392,9 +401,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("attempted to de-spawn nonexistent entity");
         }
 
-        // Delete from world
+        // Actually despawn from world
         world.despawn_entity(entity);
 
+        // Despawn from connections and inner tracking
+        self.despawn_entity_inner(entity);
+    }
+
+    fn despawn_entity_inner(&mut self, entity: &E) {
         if let Some(connection) = &mut self.server_connection {
             //remove entity from server connection
             connection.base.host_world_manager.despawn_entity(entity);

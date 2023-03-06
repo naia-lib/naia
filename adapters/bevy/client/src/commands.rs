@@ -1,22 +1,38 @@
 use bevy_ecs::{
     entity::Entity,
-    system::{Command as BevyCommand, Commands, EntityCommands},
+    system::{Command as BevyCommand, EntityCommands},
     world::World,
 };
 
 use naia_bevy_shared::{WorldMutType, WorldProxyMut};
 
+use crate::Client;
+
 // Bevy Commands Extension
-pub trait CommandsExt<'w, 's> {
-    fn duplicate_entity<'a>(&'a mut self, entity: Entity) -> EntityCommands<'w, 's, 'a>;
+pub trait CommandsExt<'w, 's, 'a> {
+    fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn disable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
 }
 
-impl<'w, 's> CommandsExt<'w, 's> for Commands<'w, 's> {
-    fn duplicate_entity<'a>(&'a mut self, entity: Entity) -> EntityCommands<'w, 's, 'a> {
-        let new_entity = self.spawn_empty().id();
-        let command = DuplicateComponents::new(new_entity, entity);
-        self.add(command);
-        self.entity(new_entity)
+impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
+    fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+        client.enable_replication(&self.id());
+        return self;
+    }
+
+    fn disable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+        client.disable_replication(&self.id());
+        return self;
+    }
+
+    fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {
+        let old_entity = self.id();
+        let commands = self.commands();
+        let new_entity = commands.spawn_empty().id();
+        let command = DuplicateComponents::new(new_entity, old_entity);
+        commands.add(command);
+        commands.entity(new_entity)
     }
 }
 

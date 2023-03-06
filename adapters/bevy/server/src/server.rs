@@ -1,20 +1,18 @@
-use std::marker::PhantomData;
+
 use std::time::Duration;
 
 use bevy_ecs::{
     entity::Entity,
-    system::{SystemParam, ReadOnlySystemParam, ResMut, Deferred, Res},
-    world::World,
+    system::{SystemParam, ResMut},
 };
 
 use naia_server::{
-    EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages,
+    RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages,
     UserKey, UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{
     Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
-    WorldProxy, WorldRef, WorldRefType,
 };
 
 // Server
@@ -125,16 +123,14 @@ impl<'w> Server<'w> {
         self.server.average_tick_duration()
     }
 
-    // Crate-public methods
+    // Entity Registration
 
-    // rooms
-
-    pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity: &Entity) {
-        self.server.room_mut(room_key).add_entity(entity);
+    pub fn enable_replication(&mut self, entity: &Entity) {
+        self.server.enable_replication(entity);
     }
 
-    pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &Entity) {
-        self.server.room_mut(room_key).remove_entity(entity);
+    pub fn disable_replication(&mut self, entity: &Entity) {
+        self.server.disable_replication(entity);
     }
 }
 

@@ -11,7 +11,7 @@ use bevy_transform::components::Transform;
 use naia_bevy_client::{events::{
     ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
     MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
-}, sequence_greater_than, Client, Random, Tick, CommandsExt, ClientOwned};
+}, sequence_greater_than, Client, Random, Tick, CommandsExt};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -26,7 +26,7 @@ const SQUARE_SIZE: f32 = 32.0;
 
 pub fn connect_events(
     mut commands: Commands,
-    client: Client,
+    mut client: Client,
     mut global: ResMut<Global>,
     mut event_reader: EventReader<ConnectEvent>,
 ) {
@@ -49,8 +49,8 @@ pub fn connect_events(
         let entity = commands
             // Spawn new Square Entity
             .spawn_empty()
-            // MUST insert a ClientOwned component here to replicate
-            .insert(ClientOwned)
+            // MUST call this to begin replication
+            .enable_replication(&mut client)
             // Insert Position component
             .insert(position)
             // return Entity id
@@ -84,10 +84,10 @@ pub fn disconnect_events(mut event_reader: EventReader<DisconnectEvent>) {
 }
 
 pub fn message_events(
-    mut event_reader: EventReader<MessageEvents>,
-    mut local: Commands,
-    mut global: ResMut<Global>,
+    mut commands: Commands,
     client: Client,
+    mut global: ResMut<Global>,
+    mut event_reader: EventReader<MessageEvents>,
 ) {
     for events in event_reader.iter() {
         for message in events.read::<EntityAssignmentChannel, EntityAssignment>() {
@@ -98,7 +98,9 @@ pub fn message_events(
                 info!("gave ownership of entity");
 
                 // Here we create a local copy of the Player entity, to use for client-side prediction
-                let prediction_entity = CommandsExt::duplicate_entity(&mut local, entity)
+                let prediction_entity = commands
+                    .entity(entity)
+                    .duplicate()// copies all Replicate components as well
                     .insert(SpriteBundle {
                         sprite: Sprite {
                             custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
@@ -115,7 +117,7 @@ pub fn message_events(
                 let mut disowned: bool = false;
                 if let Some(owned_entity) = &global.owned_entity {
                     if owned_entity.confirmed == entity {
-                        local.entity(owned_entity.predicted).despawn();
+                        commands.entity(owned_entity.predicted).despawn();
                         disowned = true;
                     }
                 }
@@ -141,8 +143,8 @@ pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) 
 }
 
 pub fn insert_component_events(
+    mut commands: Commands,
     mut event_reader: EventReader<InsertComponentEvents>,
-    mut local: Commands,
     color_query: Query<&Color>,
 ) {
     for events in event_reader.iter() {
@@ -160,7 +162,7 @@ pub fn insert_component_events(
                     }
                 };
 
-                local.entity(entity).insert(SpriteBundle {
+                commands.entity(entity).insert(SpriteBundle {
                     sprite: Sprite {
                         custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
                         color,
@@ -175,8 +177,8 @@ pub fn insert_component_events(
 }
 
 pub fn update_component_events(
-    mut event_reader: EventReader<UpdateComponentEvents>,
     mut global: ResMut<Global>,
+    mut event_reader: EventReader<UpdateComponentEvents>,
     mut position_query: Query<&mut Position>,
 ) {
     // When we receive a new Position update for the Player's Entity,
@@ -232,9 +234,9 @@ pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEven
 }
 
 pub fn tick_events(
-    mut tick_reader: EventReader<ClientTickEvent>,
-    mut global: ResMut<Global>,
     mut client: Client,
+    mut global: ResMut<Global>,
+    mut tick_reader: EventReader<ClientTickEvent>,
     mut position_query: Query<&mut Position>,
 ) {
     if !client.is_connected() {
