@@ -70,7 +70,6 @@ impl RemoveComponentEvents {
 pub struct BevyWorldEvents;
 impl BevyWorldEvents {
     pub fn write_events(world_events: &mut WorldEvents<Entity>, world: &mut World) {
-
         // Despawn Entity Event
         if world_events.has::<naia_events::DespawnEntityEvent>() {
             let mut despawn_entity_event_writer = world

@@ -4,12 +4,12 @@ pub use naia_server::{RoomKey, ServerAddrs, ServerConfig, UserKey};
 pub mod events;
 
 mod commands;
+mod components;
 mod plugin;
 mod server;
 mod systems;
-mod components;
 
 pub use commands::CommandsExt;
+pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;
 pub use server::Server;
-pub use components::{ClientOwned, ServerOwned};
