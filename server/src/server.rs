@@ -16,7 +16,7 @@ use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
     HostGlobalWorldManager, Instant, Message, MessageContainer, PacketType, Protocol, Replicate,
-    Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    Serde, SerdeErr, StandardHeader, Tick, Timer, WorldEvents, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -29,6 +29,7 @@ use crate::{
     },
     entity_mut::EntityMut,
     entity_scope_map::EntityScopeMap,
+    EntityOwner,
 };
 
 use super::{
@@ -64,6 +65,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     entity_room_map: HashMap<E, RoomKey>,
     entity_scope_map: EntityScopeMap<E>,
     host_world_manager: HostGlobalWorldManager<E>,
+    client_owned_entities: HashMap<E, UserKey>,
     // Events
     incoming_events: Events<E>,
     // Ticks
@@ -106,6 +108,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             entity_room_map: HashMap::new(),
             entity_scope_map: EntityScopeMap::new(),
             host_world_manager: HostGlobalWorldManager::new(),
+            client_owned_entities: HashMap::new(),
             // Events
             incoming_events: Events::new(),
             // Ticks
@@ -442,6 +445,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Gets a Vec of all Entities in the given World
     pub fn entities<W: WorldRefType<E>>(&self, world: W) -> Vec<E> {
         world.entities()
+    }
+
+    pub fn entity_owner(&self, entity: &E) -> EntityOwner {
+        if self.host_world_manager.has_entity(entity) {
+            return EntityOwner::Server;
+        }
+        if let Some(user_key) = self.client_owned_entities.get(&entity) {
+            return EntityOwner::Client(*user_key);
+        }
+        return EntityOwner::Local;
     }
 
     // Users
@@ -783,10 +796,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
+        let mut world_events = WorldEvents::new();
         connection
             .base
             .remote_world_manager
-            .despawn_all_remote_entities(world, &mut self.incoming_events.world)
+            .despawn_all_remote_entities(world, &mut world_events);
+        self.incoming_events
+            .load_world_events(user_key, world_events)
     }
 
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> User {
@@ -1132,6 +1148,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     world,
                     self.host_world_manager.world_record(),
                     &mut self.incoming_events,
+                    &mut self.client_owned_entities,
                 )?;
             }
             PacketType::Disconnect => {

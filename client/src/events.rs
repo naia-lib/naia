@@ -49,7 +49,14 @@ impl<E: Copy> Events<E> {
         return V::iter(self);
     }
 
+    pub fn has<V: Event<E>>(&self) -> bool {
+        return V::has(self);
+    }
+
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_messages(&self) -> bool {
+        !self.messages.is_empty()
+    }
     pub fn take_messages(
         &mut self,
     ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>> {
@@ -121,6 +128,8 @@ pub trait Event<E: Copy> {
     type Iter;
 
     fn iter(events: &mut Events<E>) -> Self::Iter;
+
+    fn has(events: &Events<E>) -> bool;
 }
 
 // World Events
@@ -130,6 +139,10 @@ impl<E: Copy> Event<E> for SpawnEntityEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         <Self as WorldEvent<E>>::iter(&mut events.world)
     }
+
+    fn has(events: &Events<E>) -> bool {
+        <Self as WorldEvent<E>>::has(&events.world)
+    }
 }
 
 impl<E: Copy> Event<E> for DespawnEntityEvent {
@@ -137,6 +150,10 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         <Self as WorldEvent<E>>::iter(&mut events.world)
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        <Self as WorldEvent<E>>::has(&events.world)
     }
 }
 
@@ -146,6 +163,10 @@ impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         <Self as WorldEvent<E>>::iter(&mut events.world)
     }
+
+    fn has(events: &Events<E>) -> bool {
+        <Self as WorldEvent<E>>::has(&events.world)
+    }
 }
 
 impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
@@ -154,6 +175,10 @@ impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         <Self as WorldEvent<E>>::iter(&mut events.world)
     }
+
+    fn has(events: &Events<E>) -> bool {
+        <Self as WorldEvent<E>>::has(&events.world)
+    }
 }
 
 impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
@@ -161,6 +186,10 @@ impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         <Self as WorldEvent<E>>::iter(&mut events.world)
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        <Self as WorldEvent<E>>::has(&events.world)
     }
 }
 
@@ -173,6 +202,10 @@ impl<E: Copy> Event<E> for ConnectEvent {
         let list = std::mem::take(&mut events.connections);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.connections.is_empty()
+    }
 }
 
 // RejectEvent
@@ -183,6 +216,10 @@ impl<E: Copy> Event<E> for RejectEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.rejections);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.rejections.is_empty()
     }
 }
 
@@ -195,6 +232,10 @@ impl<E: Copy> Event<E> for DisconnectEvent {
         let list = std::mem::take(&mut events.disconnections);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.disconnections.is_empty()
+    }
 }
 
 // Client Tick Event
@@ -205,6 +246,10 @@ impl<E: Copy> Event<E> for ClientTickEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.client_ticks);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.client_ticks.is_empty()
     }
 }
 
@@ -217,6 +262,10 @@ impl<E: Copy> Event<E> for ServerTickEvent {
         let list = std::mem::take(&mut events.server_ticks);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.server_ticks.is_empty()
+    }
 }
 
 // Error Event
@@ -227,6 +276,10 @@ impl<E: Copy> Event<E> for ErrorEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.errors);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.errors.is_empty()
     }
 }
 
@@ -255,5 +308,14 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
             }
         }
         return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let channel_kind: ChannelKind = ChannelKind::of::<C>();
+        if let Some(channel_map) = events.messages.get(&channel_kind) {
+            let message_kind: MessageKind = MessageKind::of::<M>();
+            return channel_map.contains_key(&message_kind);
+        }
+        return false;
     }
 }

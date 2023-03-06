@@ -164,13 +164,13 @@ pub fn tick_events(
 }
 
 pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
-    for SpawnEntityEvent(_) in event_reader.iter() {
+    for SpawnEntityEvent(_, _) in event_reader.iter() {
         info!("spawned client entity");
     }
 }
 
 pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) {
-    for DespawnEntityEvent(_) in event_reader.iter() {
+    for DespawnEntityEvent(_, _) in event_reader.iter() {
         info!("despawned client entity");
     }
 }
@@ -183,7 +183,7 @@ pub fn insert_component_events(
     position_query: Query<&Position>,
 ) {
     for events in event_reader.iter() {
-        for client_entity in events.read::<Position>() {
+        for (_user_key, client_entity) in events.read::<Position>() {
             info!("insert component into client entity");
 
             if let Ok(client_position) = position_query.get(client_entity) {
@@ -229,7 +229,7 @@ pub fn update_component_events(
     mut position_query: Query<&mut Position>,
 ) {
     for events in event_reader.iter() {
-        for client_entity in events.read::<Position>() {
+        for (_user_key, client_entity) in events.read::<Position>() {
             if let Some(server_entity) = global.echo_entity_map.get(&client_entity) {
                 if let Ok([client_position, mut server_position]) =
                     position_query.get_many_mut([client_entity, *server_entity])
@@ -244,7 +244,7 @@ pub fn update_component_events(
 
 pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
     for events in event_reader.iter() {
-        for (_entity, _component) in events.read::<Position>() {
+        for (_user_key, _entity, _component) in events.read::<Position>() {
             info!("removed Position component from client entity");
         }
     }

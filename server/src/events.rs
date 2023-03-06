@@ -1,9 +1,9 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
 use naia_shared::{
-    Channel, ChannelKind, DespawnEntityEvent, InsertComponentEvent, Message, MessageContainer,
-    MessageKind, RemoveComponentEvent, Replicate, SpawnEntityEvent, Tick, UpdateComponentEvent,
-    WorldEvent, WorldEvents,
+    Channel, ChannelKind, ComponentKind, DespawnEntityEvent, InsertComponentEvent, Message,
+    MessageContainer, MessageKind, RemoveComponentEvent, Replicate, SpawnEntityEvent, Tick,
+    UpdateComponentEvent, WorldEvents,
 };
 
 use super::user::{User, UserKey};
@@ -17,7 +17,11 @@ pub struct Events<E: Copy> {
     errors: Vec<NaiaServerError>,
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
-    pub world: WorldEvents<E>,
+    spawns: Vec<(UserKey, E)>,
+    despawns: Vec<(UserKey, E)>,
+    inserts: HashMap<ComponentKind, Vec<(UserKey, E)>>,
+    removes: HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>,
+    updates: HashMap<ComponentKind, Vec<(UserKey, E)>>,
     empty: bool,
 }
 
@@ -30,7 +34,11 @@ impl<E: Copy> Events<E> {
             errors: Vec::new(),
             auths: HashMap::new(),
             messages: HashMap::new(),
-            world: WorldEvents::new(),
+            spawns: Vec::new(),
+            despawns: Vec::new(),
+            inserts: HashMap::new(),
+            removes: HashMap::new(),
+            updates: HashMap::new(),
             empty: true,
         }
     }
@@ -38,14 +46,21 @@ impl<E: Copy> Events<E> {
     // Public
 
     pub fn is_empty(&self) -> bool {
-        self.empty && self.world.is_empty()
+        self.empty
     }
 
     pub fn read<V: Event<E>>(&mut self) -> V::Iter {
         return V::iter(self);
     }
 
+    pub fn has<V: Event<E>>(&self) -> bool {
+        return V::has(self);
+    }
+
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_messages(&self) -> bool {
+        !self.messages.is_empty()
+    }
     pub fn take_messages(
         &mut self,
     ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>> {
@@ -53,8 +68,49 @@ impl<E: Copy> Events<E> {
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_auths(&self) -> bool {
+        !self.auths.is_empty()
+    }
     pub fn take_auths(&mut self) -> HashMap<MessageKind, Vec<(UserKey, MessageContainer)>> {
         mem::take(&mut self.auths)
+    }
+
+    // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_inserts(&self) -> bool {
+        !self.inserts.is_empty()
+    }
+    pub fn take_inserts(&mut self) -> Option<HashMap<ComponentKind, Vec<(UserKey, E)>>> {
+        if self.inserts.is_empty() {
+            return None;
+        } else {
+            return Some(mem::take(&mut self.inserts));
+        }
+    }
+
+    // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_updates(&self) -> bool {
+        !self.updates.is_empty()
+    }
+    pub fn take_updates(&mut self) -> Option<HashMap<ComponentKind, Vec<(UserKey, E)>>> {
+        if self.updates.is_empty() {
+            return None;
+        } else {
+            return Some(mem::take(&mut self.updates));
+        }
+    }
+
+    // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_removes(&self) -> bool {
+        !self.removes.is_empty()
+    }
+    pub fn take_removes(
+        &mut self,
+    ) -> Option<HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>> {
+        if self.removes.is_empty() {
+            return None;
+        } else {
+            return Some(mem::take(&mut self.removes));
+        }
     }
 
     // Crate-public
@@ -98,6 +154,103 @@ impl<E: Copy> Events<E> {
         self.errors.push(error);
         self.empty = false;
     }
+
+    pub(crate) fn push_spawn(&mut self, user_key: &UserKey, entity: &E) {
+        self.spawns.push((*user_key, *entity));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_despawn(&mut self, user_key: &UserKey, entity: &E) {
+        self.spawns.push((*user_key, *entity));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_insert(
+        &mut self,
+        user_key: &UserKey,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) {
+        if !self.inserts.contains_key(component_kind) {
+            self.inserts.insert(*component_kind, Vec::new());
+        }
+        let list = self.inserts.get_mut(&component_kind).unwrap();
+        list.push((*user_key, *entity));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_remove(
+        &mut self,
+        user_key: &UserKey,
+        entity: &E,
+        component_kind: &ComponentKind,
+        component: Box<dyn Replicate>,
+    ) {
+        if !self.removes.contains_key(component_kind) {
+            self.removes.insert(*component_kind, Vec::new());
+        }
+        let list = self.removes.get_mut(component_kind).unwrap();
+        list.push((*user_key, *entity, component));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_update(
+        &mut self,
+        user_key: &UserKey,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) {
+        if !self.updates.contains_key(component_kind) {
+            self.updates.insert(*component_kind, Vec::new());
+        }
+        let list = self.updates.get_mut(component_kind).unwrap();
+        list.push((*user_key, *entity));
+        self.empty = false;
+    }
+
+    pub(crate) fn load_world_events(
+        &mut self,
+        user_key: &UserKey,
+        mut world_events: WorldEvents<E>,
+    ) {
+        if world_events.is_empty() {
+            return;
+        }
+        if world_events.has::<SpawnEntityEvent>() {
+            for entity in world_events.read::<SpawnEntityEvent>() {
+                self.push_spawn(user_key, &entity);
+            }
+        }
+        if world_events.has::<DespawnEntityEvent>() {
+            for entity in world_events.read::<DespawnEntityEvent>() {
+                self.push_despawn(user_key, &entity);
+            }
+        }
+        if world_events.has_inserts() {
+            let inserts = world_events.take_inserts().unwrap();
+            for (component_kind, entities) in inserts {
+                for entity in entities {
+                    self.push_insert(user_key, &entity, &component_kind);
+                }
+            }
+        }
+        if world_events.has_removes() {
+            let inserts = world_events.take_removes().unwrap();
+            for (component_kind, entities) in inserts {
+                for (entity, component) in entities {
+                    self.push_remove(user_key, &entity, &component_kind, component);
+                }
+            }
+        }
+        if world_events.has_updates() {
+            let inserts = world_events.take_updates().unwrap();
+            for (component_kind, entities) in inserts {
+                for (_, entity) in entities {
+                    self.push_update(user_key, &entity, &component_kind);
+                }
+            }
+        }
+    }
 }
 
 // Event Trait
@@ -105,47 +258,8 @@ pub trait Event<E: Copy> {
     type Iter;
 
     fn iter(events: &mut Events<E>) -> Self::Iter;
-}
 
-// World Events
-impl<E: Copy> Event<E> for SpawnEntityEvent {
-    type Iter = <Self as WorldEvent<E>>::Iter;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        <Self as WorldEvent<E>>::iter(&mut events.world)
-    }
-}
-
-impl<E: Copy> Event<E> for DespawnEntityEvent {
-    type Iter = <Self as WorldEvent<E>>::Iter;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        <Self as WorldEvent<E>>::iter(&mut events.world)
-    }
-}
-
-impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
-    type Iter = <Self as WorldEvent<E>>::Iter;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        <Self as WorldEvent<E>>::iter(&mut events.world)
-    }
-}
-
-impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
-    type Iter = <Self as WorldEvent<E>>::Iter;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        <Self as WorldEvent<E>>::iter(&mut events.world)
-    }
-}
-
-impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
-    type Iter = <Self as WorldEvent<E>>::Iter;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        <Self as WorldEvent<E>>::iter(&mut events.world)
-    }
+    fn has(events: &Events<E>) -> bool;
 }
 
 // ConnectEvent
@@ -156,6 +270,10 @@ impl<E: Copy> Event<E> for ConnectEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.connections);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.connections.is_empty()
     }
 }
 
@@ -168,6 +286,10 @@ impl<E: Copy> Event<E> for DisconnectEvent {
         let list = std::mem::take(&mut events.disconnections);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.disconnections.is_empty()
+    }
 }
 
 // Tick Event
@@ -179,6 +301,10 @@ impl<E: Copy> Event<E> for TickEvent {
         let list = std::mem::take(&mut events.ticks);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.ticks.is_empty()
+    }
 }
 
 // Error Event
@@ -189,6 +315,10 @@ impl<E: Copy> Event<E> for ErrorEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.errors);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.errors.is_empty()
     }
 }
 
@@ -207,6 +337,11 @@ impl<E: Copy, M: Message> Event<E> for AuthEvent<M> {
             IntoIterator::into_iter(Vec::new())
         };
     }
+
+    fn has(events: &Events<E>) -> bool {
+        let message_kind: MessageKind = MessageKind::of::<M>();
+        return events.auths.contains_key(&message_kind);
+    }
 }
 
 // Message Event
@@ -220,6 +355,104 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let output = read_channel_messages::<C, M>(&mut events.messages);
         return IntoIterator::into_iter(output);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let channel_kind: ChannelKind = ChannelKind::of::<C>();
+        if let Some(channel_map) = events.messages.get(&channel_kind) {
+            let message_kind: MessageKind = MessageKind::of::<M>();
+            return channel_map.contains_key(&message_kind);
+        }
+        return false;
+    }
+}
+
+// World Events
+impl<E: Copy> Event<E> for SpawnEntityEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.spawns);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.spawns.is_empty()
+    }
+}
+
+impl<E: Copy> Event<E> for DespawnEntityEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.despawns);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.despawns.is_empty()
+    }
+}
+
+impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.inserts.remove(&component_kind) {
+            return IntoIterator::into_iter(boxed_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.inserts.contains_key(&component_kind)
+    }
+}
+
+impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.updates.remove(&component_kind) {
+            return IntoIterator::into_iter(boxed_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.updates.contains_key(&component_kind)
+    }
+}
+
+impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
+    type Iter = IntoIter<(UserKey, E, C)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.removes.remove(&component_kind) {
+            let mut output_list: Vec<(UserKey, E, C)> = Vec::new();
+
+            for (user_key, entity, boxed_component) in boxed_list {
+                let boxed_any = boxed_component.to_boxed_any();
+                let component = boxed_any.downcast::<C>().unwrap();
+                output_list.push((user_key, entity, *component));
+            }
+
+            return IntoIterator::into_iter(output_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.removes.contains_key(&component_kind)
     }
 }
 

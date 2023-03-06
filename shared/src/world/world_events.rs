@@ -3,8 +3,8 @@ use std::{collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 use crate::{ComponentKind, Replicate, Tick};
 
 pub struct WorldEvents<E: Copy> {
-    spawns: Vec<E>,
-    despawns: Vec<E>,
+    pub spawns: Vec<E>,
+    pub despawns: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<E>>,
     removes: HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>,
     updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
@@ -27,11 +27,18 @@ impl<E: Copy> WorldEvents<E> {
         self.empty
     }
 
+    pub fn has<V: WorldEvent<E>>(&mut self) -> bool {
+        return V::has(self);
+    }
+
     pub fn read<V: WorldEvent<E>>(&mut self) -> V::Iter {
         return V::iter(self);
     }
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_inserts(&self) -> bool {
+        !self.inserts.is_empty()
+    }
     pub fn take_inserts(&mut self) -> Option<HashMap<ComponentKind, Vec<E>>> {
         if self.inserts.is_empty() {
             return None;
@@ -41,6 +48,9 @@ impl<E: Copy> WorldEvents<E> {
     }
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_updates(&self) -> bool {
+        !self.updates.is_empty()
+    }
     pub fn take_updates(&mut self) -> Option<HashMap<ComponentKind, Vec<(Tick, E)>>> {
         if self.updates.is_empty() {
             return None;
@@ -50,6 +60,9 @@ impl<E: Copy> WorldEvents<E> {
     }
 
     // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_removes(&self) -> bool {
+        !self.removes.is_empty()
+    }
     pub fn take_removes(&mut self) -> Option<HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>> {
         if self.removes.is_empty() {
             return None;
@@ -111,6 +124,8 @@ pub trait WorldEvent<E: Copy> {
     type Iter;
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter;
+
+    fn has(events: &WorldEvents<E>) -> bool;
 }
 
 // Spawn Event
@@ -122,6 +137,10 @@ impl<E: Copy> WorldEvent<E> for SpawnEntityEvent {
         let list = std::mem::take(&mut events.spawns);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &WorldEvents<E>) -> bool {
+        !events.spawns.is_empty()
+    }
 }
 
 // Despawn Event
@@ -132,6 +151,10 @@ impl<E: Copy> WorldEvent<E> for DespawnEntityEvent {
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.despawns);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &WorldEvents<E>) -> bool {
+        !events.despawns.is_empty()
     }
 }
 
@@ -150,6 +173,11 @@ impl<E: Copy, C: Replicate> WorldEvent<E> for InsertComponentEvent<C> {
 
         return IntoIterator::into_iter(Vec::new());
     }
+
+    fn has(events: &WorldEvents<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.inserts.contains_key(&component_kind)
+    }
 }
 
 // Update Event
@@ -166,6 +194,11 @@ impl<E: Copy, C: Replicate> WorldEvent<E> for UpdateComponentEvent<C> {
         }
 
         return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &WorldEvents<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.updates.contains_key(&component_kind)
     }
 }
 
@@ -191,5 +224,10 @@ impl<E: Copy, C: Replicate> WorldEvent<E> for RemoveComponentEvent<C> {
         }
 
         return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &WorldEvents<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.removes.contains_key(&component_kind)
     }
 }

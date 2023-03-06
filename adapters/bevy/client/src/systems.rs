@@ -6,22 +6,23 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{events::BevyWorldEvents, HostComponentEvent, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{HostComponentEvent, WorldMutType, WorldProxyMut};
 use naia_client::Client;
 
 use crate::ServerOwned;
 
 mod naia_events {
     pub use naia_client::{
-        ClientTickEvent, ConnectEvent, DisconnectEvent, ErrorEvent, RejectEvent, ServerTickEvent,
-        SpawnEntityEvent,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        RejectEvent, ServerTickEvent, SpawnEntityEvent,
     };
 }
 
 mod bevy_events {
     pub use crate::events::{
-        ClientTickEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents, RejectEvent,
-        ServerTickEvent, SpawnEntityEvent, UpdateComponentEvents,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        InsertComponentEvents, MessageEvents, RejectEvent, RemoveComponentEvents, ServerTickEvent,
+        SpawnEntityEvent, UpdateComponentEvents,
     };
 }
 
@@ -110,21 +111,11 @@ pub fn before_receive_events(world: &mut World) {
             }
 
             // Message Event
-            if events.has::<naia_events::MessageEvents>() {
+            if events.has_messages() {
                 let mut message_event_writer = world
                     .get_resource_mut::<Events<bevy_events::MessageEvents>>()
                     .unwrap();
                 message_event_writer.send(bevy_events::MessageEvents::from(&mut events));
-            }
-
-            // Update Component Event
-            if events.has::<naia_events::UpdateEvents>() {
-                let Some(updates) = events.world.take_updates().unwrap();
-                let mut update_component_event_writer = world
-                    .get_resource_mut::<Events<bevy_events::UpdateComponentEvents>>()
-                    .unwrap();
-                update_component_event_writer
-                    .send(bevy_events::UpdateComponentEvents::new(updates));
             }
 
             // Spawn Entity Event
@@ -143,8 +134,44 @@ pub fn before_receive_events(world: &mut World) {
                 }
             }
 
-            // Despawn, Insert, Remove Events
-            BevyWorldEvents::write_events(&mut events.world, world);
+            // Despawn Entity Event
+            if events.world.has::<naia_events::DespawnEntityEvent>() {
+                let mut despawn_entity_event_writer = world
+                    .get_resource_mut::<Events<bevy_events::DespawnEntityEvent>>()
+                    .unwrap();
+                for entity in events.world.read::<naia_events::DespawnEntityEvent>() {
+                    despawn_entity_event_writer.send(bevy_events::DespawnEntityEvent(entity));
+                }
+            }
+
+            // Insert Component Event
+            if events.world.has_inserts() {
+                let inserts = events.world.take_inserts().unwrap();
+                let mut insert_component_event_writer = world
+                    .get_resource_mut::<Events<bevy_events::InsertComponentEvents>>()
+                    .unwrap();
+                insert_component_event_writer.send(bevy_events::InsertComponentEvents::new(inserts));
+            }
+
+            // Update Component Event
+            if events.world.has_updates() {
+                let updates = events.world.take_updates().unwrap();
+                let mut update_component_event_writer = world
+                    .get_resource_mut::<Events<bevy_events::UpdateComponentEvents>>()
+                    .unwrap();
+                update_component_event_writer
+                    .send(bevy_events::UpdateComponentEvents::new(updates));
+            }
+
+            // Remove Component Event
+            if events.world.has_removes() {
+                let removes = events.world.take_removes().unwrap();
+                let mut remove_component_event_writer = world
+                    .get_resource_mut::<Events<bevy_events::RemoveComponentEvents>>()
+                    .unwrap();
+
+                remove_component_event_writer.send(bevy_events::RemoveComponentEvents::new(removes));
+            }
         }
     });
 }

@@ -13,7 +13,6 @@ mod change_detection;
 mod component_access;
 mod component_ref;
 mod components;
-pub mod events;
 mod protocol;
 mod protocol_plugin;
 mod system_set;

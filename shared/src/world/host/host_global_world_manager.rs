@@ -36,6 +36,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
         self.world_record.entities()
     }
 
+    pub fn has_entity(&self, entity: &E) -> bool {
+        self.world_record.has_entity(entity)
+    }
+
     // Spawn
     pub fn spawn_entity(&mut self, entity: &E) {
         self.world_record.spawn_entity(entity)

@@ -1,4 +1,6 @@
+
 use std::{
+    collections::HashMap
     hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock},
@@ -9,7 +11,7 @@ use log::warn;
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
     GlobalDiffHandler, HostType, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader,
-    Tick, WorldMutType, WorldRecord, WorldRefType,
+    Tick, WorldEvents, WorldMutType, WorldRecord, WorldRefType,
 };
 
 use crate::{
@@ -53,6 +55,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
     }
 
+    pub fn user_key(&self) -> UserKey {
+        self.user_key
+    }
+
     // Incoming Data
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
@@ -69,6 +75,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         world: &mut W,
         world_record: &WorldRecord<E>,
         incoming_events: &mut Events<E>,
+        client_owned_entities: &mut HashMap<E, UserKey>,
     ) -> Result<(), SerdeErr> {
         let converter = EntityConverter::new(world_record, &self.base.host_world_manager);
 
@@ -97,15 +104,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
 
         // read world events
-        self.base.remote_world_manager.read_world_events(
-            protocol,
-            world,
-            client_tick,
-            reader,
-            &mut incoming_events.world,
-        )?;
+        {
+            let mut world_events = WorldEvents::new();
+            self.base.remote_world_manager.read_world_events(
+                protocol,
+                world,
+                client_tick,
+                reader,
+                &mut world_events,
+            )?;
 
-        Ok(())
+            for entity in &world_events.spawns {
+                client_owned_entities.insert(*entity, self.user_key);
+            }
+            for entity in &world_events.despawns {
+                client_owned_entities.remove(entity);
+            }
+
+            incoming_events.load_world_events(&self.user_key, world_events);
+        }
+
+        return Ok(());
     }
 
     pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {

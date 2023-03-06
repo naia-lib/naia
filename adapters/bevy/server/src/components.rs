@@ -6,4 +6,4 @@ use naia_server::UserKey;
 pub type ServerOwned = HostOwned;
 
 #[derive(Component)]
-pub struct ClientOwned(UserKey);
+pub struct ClientOwned(pub UserKey);

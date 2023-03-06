@@ -20,6 +20,7 @@ pub use naia_shared::{
 mod cache_map;
 mod connection;
 mod entity_mut;
+mod entity_owner;
 mod entity_scope_map;
 mod error;
 mod events;
@@ -31,6 +32,7 @@ mod user_scope;
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use entity_mut::EntityMut;
+pub use entity_owner::EntityOwner;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, TickEvent,
