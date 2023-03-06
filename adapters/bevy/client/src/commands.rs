@@ -1,10 +1,11 @@
+
 use bevy_ecs::{
     entity::Entity,
     system::{Command as BevyCommand, EntityCommands},
     world::World,
 };
 
-use naia_bevy_shared::{WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{HostOwned, WorldMutType, WorldProxyMut};
 
 use crate::Client;
 
@@ -18,11 +19,13 @@ pub trait CommandsExt<'w, 's, 'a> {
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
     fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.enable_replication(&self.id());
+        self.insert(HostOwned);
         return self;
     }
 
     fn disable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.disable_replication(&self.id());
+        self.remove::<HostOwned>();
         return self;
     }
 

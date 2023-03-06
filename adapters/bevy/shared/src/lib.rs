@@ -22,3 +22,8 @@ pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};
+
+use bevy_ecs::component::Component;
+
+#[derive(Component)]
+pub struct HostOwned;

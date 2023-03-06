@@ -12,7 +12,4 @@ pub use plugin::Plugin;
 pub use server::Server;
 pub use commands::CommandsExt;
 
-use bevy_ecs::component::Component;
-
-#[derive(Component)]
-pub struct ServerOwned;
+pub type ServerOwned = naia_bevy_shared::HostOwned;
