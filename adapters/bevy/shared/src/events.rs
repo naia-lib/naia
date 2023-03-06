@@ -69,35 +69,31 @@ impl RemoveComponentEvents {
 
 pub struct BevyWorldEvents;
 impl BevyWorldEvents {
-    pub unsafe fn write_events(world_events: &mut WorldEvents<Entity>, world: &mut World) {
-        let world_cell = world.as_unsafe_world_cell();
-        // Spawn Entity Event
-        let mut spawn_entity_event_writer = world_cell
-            .get_resource_mut::<Events<SpawnEntityEvent>>()
-            .unwrap();
-        for entity in world_events.read::<naia_events::SpawnEntityEvent>() {
-            spawn_entity_event_writer.send(SpawnEntityEvent(entity));
-        }
+    pub fn write_events(world_events: &mut WorldEvents<Entity>, world: &mut World) {
 
         // Despawn Entity Event
-        let mut despawn_entity_event_writer = world_cell
-            .get_resource_mut::<Events<DespawnEntityEvent>>()
-            .unwrap();
-        for entity in world_events.read::<naia_events::DespawnEntityEvent>() {
-            despawn_entity_event_writer.send(DespawnEntityEvent(entity));
+        if world_events.has::<naia_events::DespawnEntityEvent>() {
+            let mut despawn_entity_event_writer = world
+                .get_resource_mut::<Events<DespawnEntityEvent>>()
+                .unwrap();
+            for entity in world_events.read::<naia_events::DespawnEntityEvent>() {
+                despawn_entity_event_writer.send(DespawnEntityEvent(entity));
+            }
         }
 
         // Insert Component Event
-        if let Some(inserts) = world_events.take_inserts() {
-            let mut insert_component_event_writer = world_cell
+        if world_events.has::<naia_events::InsertComponentEvents>() {
+            let inserts = world_events.take_inserts().unwrap();
+            let mut insert_component_event_writer = world
                 .get_resource_mut::<Events<InsertComponentEvents>>()
                 .unwrap();
             insert_component_event_writer.send(InsertComponentEvents::new(inserts));
         }
 
         // Remove Component Event
-        if let Some(removes) = world_events.take_removes() {
-            let mut remove_component_event_writer = world_cell
+        if world_events.has::<naia_events::RemoveComponentEvents>() {
+            let removes = world_events.take_removes().unwrap();
+            let mut remove_component_event_writer = world
                 .get_resource_mut::<Events<RemoveComponentEvents>>()
                 .unwrap();
 
