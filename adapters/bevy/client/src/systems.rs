@@ -6,7 +6,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{HostComponentEvent, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{HostSyncEvent, WorldMutType, WorldProxyMut};
 use naia_client::Client;
 
 use crate::ServerOwned;
@@ -31,18 +31,24 @@ pub fn before_receive_events(world: &mut World) {
 
         // Host Component Updates
         let mut host_component_event_reader = world
-            .get_resource_mut::<Events<HostComponentEvent>>()
+            .get_resource_mut::<Events<HostSyncEvent>>()
             .unwrap();
-        let host_component_events: Vec<HostComponentEvent> = host_component_event_reader.drain().collect();
-        for HostComponentEvent(added, entity, component_kind) in host_component_events {
-            if added {
-                let mut world_proxy = world.proxy_mut();
-                let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
-                    continue;
-                };
-                client.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
-            } else {
-                client.remove_component_worldless(&entity, &component_kind);
+        let host_component_events: Vec<HostSyncEvent> = host_component_event_reader.drain().collect();
+        for event in host_component_events {
+            match event {
+                HostSyncEvent::Insert(entity, component_kind) => {
+                    let mut world_proxy = world.proxy_mut();
+                    let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
+                        continue;
+                    };
+                    client.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+                }
+                HostSyncEvent::Remove(entity, component_kind) => {
+                    client.remove_component_worldless(&entity, &component_kind);
+                }
+                HostSyncEvent::Despawn(entity) => {
+                    client.despawn_entity_worldless(&entity);
+                }
             }
         }
 

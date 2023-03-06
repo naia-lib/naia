@@ -23,7 +23,7 @@ fn main() {
         .add_plugin(FrameCountPlugin::default())
         .insert_resource(
             // this is needed to avoid running the server at uncapped FPS
-            ScheduleRunnerSettings::run_loop(Duration::from_millis(1)),
+            ScheduleRunnerSettings::run_loop(Duration::from_millis(3)),
         )
         .add_plugin(ScheduleRunnerPlugin::default())
         .add_plugin(LogPlugin::default())

@@ -20,7 +20,7 @@ mod system_set;
 mod world_data;
 mod world_proxy;
 
-pub use change_detection::HostComponentEvent;
+pub use change_detection::HostSyncEvent;
 pub use component_access::{ComponentAccess, ComponentAccessor};
 pub use components::HostOwned;
 pub use plugin::SharedPlugin;

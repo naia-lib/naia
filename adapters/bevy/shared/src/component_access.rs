@@ -8,7 +8,7 @@ use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 use super::{
     change_detection::{on_component_added, on_component_removed},
     component_ref::{ComponentDynMut, ComponentDynRef},
-    system_set::HostOwnedChangeTracking,
+    system_set::HostSyncChangeTracking,
 };
 
 pub trait ComponentAccess: Send + Sync {
@@ -53,7 +53,7 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
         app.add_systems(
             (on_component_added::<R>, on_component_removed::<R>)
                 .chain()
-                .in_set(HostOwnedChangeTracking),
+                .in_set(HostSyncChangeTracking),
         );
     }
 

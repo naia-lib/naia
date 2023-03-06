@@ -401,7 +401,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     pub fn disable_replication(&mut self, entity: &E) {
         // Despawn from connections and inner tracking
-        self.despawn_entity_inner(entity);
+        self.despawn_entity_worldless(entity);
     }
 
     /// Creates a new Entity and returns an EntityMut which can be used for
@@ -627,10 +627,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // Delete from world
         world.despawn_entity(entity);
 
-        self.despawn_entity_inner(entity);
+        self.despawn_entity_worldless(entity);
     }
 
-    fn despawn_entity_inner(&mut self, entity: &E) {
+    pub fn despawn_entity_worldless(&mut self, entity: &E) {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
         for (_, connection) in self.user_connections.iter_mut() {

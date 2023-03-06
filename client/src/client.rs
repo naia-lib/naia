@@ -270,7 +270,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     pub fn disable_replication(&mut self, entity: &E) {
         // Despawn from connections and inner tracking
-        self.despawn_entity_inner(entity);
+        self.despawn_entity_worldless(entity);
     }
 
     /// Creates a new Entity and returns an EntityMut which can be used for
@@ -405,10 +405,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         world.despawn_entity(entity);
 
         // Despawn from connections and inner tracking
-        self.despawn_entity_inner(entity);
+        self.despawn_entity_worldless(entity);
     }
 
-    fn despawn_entity_inner(&mut self, entity: &E) {
+    pub fn despawn_entity_worldless(&mut self, entity: &E) {
         if let Some(connection) = &mut self.server_connection {
             //remove entity from server connection
             connection.base.host_world_manager.despawn_entity(entity);

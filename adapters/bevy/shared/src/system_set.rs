@@ -7,4 +7,4 @@ pub struct ReceiveEvents;
 pub struct BeforeReceiveEvents;
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
-pub struct HostOwnedChangeTracking;
+pub struct HostSyncChangeTracking;

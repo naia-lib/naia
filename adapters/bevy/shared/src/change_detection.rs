@@ -10,25 +10,38 @@ use naia_shared::{ComponentKind, Replicate};
 
 use crate::HostOwned;
 
-pub struct HostComponentEvent(pub bool, pub Entity, pub ComponentKind);
+pub enum HostSyncEvent {
+    Insert(Entity, ComponentKind),
+    Remove(Entity, ComponentKind),
+    Despawn(Entity),
+}
+
+pub fn on_despawn(
+    mut events: EventWriter<HostSyncEvent>,
+    mut removals: RemovedComponents<HostOwned>,
+) {
+    for entity in removals.iter() {
+        events.send(HostSyncEvent::Despawn(entity));
+    }
+}
 
 pub fn on_component_added<R: Replicate>(
-    mut host_components: EventWriter<HostComponentEvent>,
-    mut query: Query<Entity, (Added<R>, With<HostOwned>)>,
+    mut events: EventWriter<HostSyncEvent>,
+    query: Query<Entity, (Added<R>, With<HostOwned>)>,
 ) {
-    for entity in query.iter_mut() {
-        host_components.send(HostComponentEvent(true, entity, ComponentKind::of::<R>()));
+    for entity in query.iter() {
+        events.send(HostSyncEvent::Insert(entity, ComponentKind::of::<R>()));
     }
 }
 
 pub fn on_component_removed<R: Replicate>(
-    mut host_components: EventWriter<HostComponentEvent>,
+    mut events: EventWriter<HostSyncEvent>,
     query: Query<Entity, With<HostOwned>>,
     mut removals: RemovedComponents<R>,
 ) {
     for removal_entity in removals.iter() {
         if let Ok(entity) = query.get(removal_entity) {
-            host_components.send(HostComponentEvent(false, entity, ComponentKind::of::<R>()));
+            events.send(HostSyncEvent::Remove(entity, ComponentKind::of::<R>()));
         }
     }
 }
