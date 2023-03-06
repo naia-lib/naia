@@ -3,7 +3,6 @@ use std::ops::DerefMut;
 use bevy_ecs::{
     entity::Entity,
     event::Events,
-    system::Res,
     world::{Mut, World},
 };
 
@@ -25,28 +24,28 @@ mod bevy_events {
 
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<Entity>>| {
+
+        // Host Component Updates
+        let mut host_component_event_reader = world
+            .get_resource_mut::<Events<HostComponentEvent>>()
+            .unwrap();
+        let host_component_events: Vec<HostComponentEvent> = host_component_event_reader.drain().collect();
+        for HostComponentEvent(added, entity, component_kind) in host_component_events {
+            if added {
+                let mut world_proxy = world.proxy_mut();
+                let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
+                    continue;
+                };
+                client.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+            } else {
+                client.remove_component_worldless(&entity, &component_kind);
+            }
+        }
+
+        // Receive Events
         let mut events = client.receive(world.proxy_mut());
         if !events.is_empty() {
             unsafe {
-
-                // Host Component Updates
-                let mut host_component_event_reader = world
-                    .get_resource_mut::<Events<HostComponentEvent>>()
-                    .unwrap();
-                let host_component_events: Vec<HostComponentEvent> = host_component_event_reader.drain().collect();
-                for HostComponentEvent(added, entity, component_kind) in host_component_events {
-                    if added {
-                        let mut world_proxy = world.proxy_mut();
-                        let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
-                            continue;
-                        };
-                        client.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
-                    } else {
-                        client.remove_component_worldless(&entity, &component_kind);
-                    }
-                }
-
-                // Receive Events
                 let world_cell = world.as_unsafe_world_cell();
 
                 // Connect Event
@@ -117,8 +116,4 @@ pub fn before_receive_events(world: &mut World) {
             }
         }
     });
-}
-
-pub fn should_receive(client: Res<Client<Entity>>) -> bool {
-    client.is_connecting()
 }

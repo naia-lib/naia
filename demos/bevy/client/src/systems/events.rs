@@ -242,9 +242,6 @@ pub fn tick_events(
     mut tick_reader: EventReader<ClientTickEvent>,
     mut position_query: Query<&mut Position>,
 ) {
-    if !client.is_connected() {
-        return;
-    }
     let Some(command) = global.queued_command.take() else {
         return;
     };

@@ -1,10 +1,11 @@
 use bevy_app::{App, ScheduleRunnerPlugin, ScheduleRunnerSettings};
 use bevy_core::{FrameCountPlugin, TaskPoolPlugin, TypeRegistrationPlugin};
+use bevy_ecs::schedule::IntoSystemConfigs;
 use bevy_log::{info, LogPlugin};
 use std::time::Duration;
 
 use naia_bevy_demo_shared::protocol;
-use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig};
+use naia_bevy_server::{Plugin as ServerPlugin, ReceiveEvents, ServerConfig};
 
 mod resources;
 mod systems;
@@ -30,16 +31,22 @@ fn main() {
         // Startup System
         .add_startup_system(init)
         // Receive Server Events
-        .add_system(events::auth_events)
-        .add_system(events::connect_events)
-        .add_system(events::disconnect_events)
-        .add_system(events::error_events)
-        .add_system(events::tick_events)
-        .add_system(events::spawn_entity_events)
-        .add_system(events::despawn_entity_events)
-        .add_system(events::insert_component_events)
-        .add_system(events::update_component_events)
-        .add_system(events::remove_component_events)
+        .add_systems(
+            (
+                events::auth_events,
+                events::connect_events,
+                events::disconnect_events,
+                events::error_events,
+                events::tick_events,
+                events::spawn_entity_events,
+                events::despawn_entity_events,
+                events::insert_component_events,
+                events::update_component_events,
+                events::remove_component_events,
+            )
+                .chain()
+                .in_set(ReceiveEvents),
+        )
         // Run App
         .run();
 }

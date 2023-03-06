@@ -15,6 +15,7 @@ mod component_ref;
 pub mod events;
 mod protocol;
 mod protocol_plugin;
+mod system_set;
 mod world_data;
 mod world_proxy;
 
@@ -22,6 +23,7 @@ pub use change_detection::HostComponentEvent;
 pub use component_access::{ComponentAccess, ComponentAccessor};
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
+pub use system_set::{BeforeReceiveEvents, ReceiveEvents};
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};
 

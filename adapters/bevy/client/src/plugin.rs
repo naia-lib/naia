@@ -1,9 +1,12 @@
 use std::{ops::DerefMut, sync::Mutex};
 
 use bevy_app::{App, Plugin as PluginType};
-use bevy_ecs::{entity::Entity, schedule::IntoSystemConfig};
+use bevy_ecs::{
+    entity::Entity,
+    schedule::{IntoSystemConfig, IntoSystemSetConfig},
+};
 
-use naia_bevy_shared::{HostComponentEvent, Protocol};
+use naia_bevy_shared::{BeforeReceiveEvents, HostComponentEvent, Protocol, ReceiveEvents};
 use naia_client::{Client, ClientConfig};
 
 use super::{
@@ -12,7 +15,7 @@ use super::{
         InsertComponentEvents, MessageEvents, RejectEvent, RemoveComponentEvents, ServerTickEvent,
         SpawnEntityEvent, UpdateComponentEvents,
     },
-    systems::{before_receive_events, should_receive},
+    systems::before_receive_events,
 };
 
 struct PluginConfig {
@@ -69,7 +72,9 @@ impl PluginType for Plugin {
             .add_event::<InsertComponentEvents>()
             .add_event::<UpdateComponentEvents>()
             .add_event::<RemoveComponentEvents>()
+            // SETS //
+            .configure_set(BeforeReceiveEvents.before(ReceiveEvents))
             // SYSTEMS //
-            .add_system(before_receive_events.run_if(should_receive));
+            .add_system(before_receive_events.in_set(BeforeReceiveEvents));
     }
 }
