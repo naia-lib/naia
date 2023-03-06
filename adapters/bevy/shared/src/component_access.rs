@@ -1,13 +1,14 @@
 use std::{any::Any, marker::PhantomData};
 
 use bevy_app::App;
-use bevy_ecs::{entity::Entity, world::World};
+use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs, world::World};
 
 use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::{
     change_detection::{on_component_added, on_component_removed},
     component_ref::{ComponentDynMut, ComponentDynRef},
+    system_set::HostOwnedChangeTracking,
 };
 
 pub trait ComponentAccess: Send + Sync {
@@ -49,8 +50,11 @@ impl<R: Replicate> ComponentAccessor<R> {
 
 impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
     fn add_systems(&self, app: &mut App) {
-        app.add_system(on_component_added::<R>)
-            .add_system(on_component_removed::<R>);
+        app.add_systems(
+            (on_component_added::<R>, on_component_removed::<R>)
+                .chain()
+                .in_set(HostOwnedChangeTracking),
+        );
     }
 
     fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>> {

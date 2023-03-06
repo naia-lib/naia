@@ -5,3 +5,6 @@ pub struct ReceiveEvents;
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub struct BeforeReceiveEvents;
+
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+pub struct HostOwnedChangeTracking;
