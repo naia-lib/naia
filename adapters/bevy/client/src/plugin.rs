@@ -3,9 +3,8 @@ use std::{ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfig};
 
+use naia_bevy_shared::{HostComponentEvent, Protocol};
 use naia_client::{Client, ClientConfig};
-
-use naia_bevy_shared::Protocol;
 
 use super::{
     events::{
@@ -47,7 +46,8 @@ impl PluginType for Plugin {
     fn build(&self, app: &mut App) {
         let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
 
-        let world_data = config.protocol.world_data();
+        let world_data = config.protocol.take_world_data();
+        world_data.add_systems(app);
         app.insert_resource(world_data);
 
         let client = Client::<Entity>::new(config.client_config, config.protocol.into());
@@ -56,6 +56,7 @@ impl PluginType for Plugin {
             // RESOURCES //
             .insert_resource(client)
             // EVENTS //
+            .add_event::<HostComponentEvent>()
             .add_event::<ConnectEvent>()
             .add_event::<DisconnectEvent>()
             .add_event::<RejectEvent>()

@@ -4,6 +4,7 @@ use std::{
     default::Default,
 };
 
+use bevy_app::App;
 use bevy_ecs::{
     entity::Entity,
     prelude::Resource,
@@ -37,6 +38,15 @@ impl WorldData {
         Self {
             entities: HashSet::default(),
             kind_to_accessor_map: HashMap::default(),
+        }
+    }
+
+    pub fn add_systems(&self, app: &mut App) {
+        for (_kind, accessor_any) in &self.kind_to_accessor_map {
+            let accessor = accessor_any
+                .downcast_ref::<Box<dyn ComponentAccess>>()
+                .unwrap();
+            accessor.add_systems(app);
         }
     }
 

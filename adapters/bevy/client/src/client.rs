@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use bevy_ecs::{
     entity::Entity,
-    system::{SystemParam, ResMut},
+    system::{ResMut, SystemParam},
 };
 
 use naia_client::{Client as NaiaClient, NaiaClientError};

@@ -8,10 +8,13 @@ use bevy_render::color::Color as BevyColor;
 use bevy_sprite::{Sprite, SpriteBundle};
 use bevy_transform::components::Transform;
 
-use naia_bevy_client::{events::{
-    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
-    MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
-}, sequence_greater_than, Client, Random, Tick, CommandsExt};
+use naia_bevy_client::{
+    events::{
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
+        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
+    },
+    sequence_greater_than, Client, CommandsExt, Random, Tick,
+};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -100,7 +103,7 @@ pub fn message_events(
                 // Here we create a local copy of the Player entity, to use for client-side prediction
                 let prediction_entity = commands
                     .entity(entity)
-                    .duplicate()// copies all Replicate components as well
+                    .duplicate() // copies all Replicate components as well
                     .insert(SpriteBundle {
                         sprite: Sprite {
                             custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),

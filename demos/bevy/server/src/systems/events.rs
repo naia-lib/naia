@@ -1,15 +1,18 @@
+use bevy_ecs::system::Commands;
 use bevy_ecs::{
     event::EventReader,
     system::{Query, ResMut},
 };
-use bevy_ecs::system::Commands;
 use bevy_log::info;
 
-use naia_bevy_server::{events::{
-    AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-    InsertComponentEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
-    UpdateComponentEvents,
-}, Random, Server, CommandsExt};
+use naia_bevy_server::{
+    events::{
+        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        InsertComponentEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
+        UpdateComponentEvents,
+    },
+    CommandsExt, Random, Server,
+};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -107,9 +110,7 @@ pub fn disconnect_events(
         info!("Naia Server disconnected from: {:?}", user.address);
 
         if let Some(entity) = global.user_to_entity_map.remove(user_key) {
-            commands
-                .entity(entity)
-                .despawn();
+            commands.entity(entity).despawn();
             server
                 .room_mut(&global.main_room_key)
                 .remove_entity(&entity);
@@ -212,7 +213,9 @@ pub fn insert_component_events(
                     // return Entity id
                     .id();
 
-                server.room_mut(&global.main_room_key).add_entity(&server_entity);
+                server
+                    .room_mut(&global.main_room_key)
+                    .add_entity(&server_entity);
 
                 global.echo_entity_map.insert(client_entity, server_entity);
             }

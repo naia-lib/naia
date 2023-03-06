@@ -1,6 +1,6 @@
 use bevy_app::App;
 use bevy_asset::AssetPlugin;
-use bevy_core::{TaskPoolPlugin, TypeRegistrationPlugin, FrameCountPlugin};
+use bevy_core::{FrameCountPlugin, TaskPoolPlugin, TypeRegistrationPlugin};
 use bevy_core_pipeline::CorePipelinePlugin;
 use bevy_input::InputPlugin;
 use bevy_log::LogPlugin;
@@ -39,7 +39,6 @@ pub fn run() {
         // Startup System
         .add_startup_system(init)
         // Realtime Gameplay Loop
-
         // first
         .add_system(events::connect_events)
         .add_system(events::disconnect_events)

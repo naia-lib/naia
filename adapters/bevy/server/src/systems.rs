@@ -1,10 +1,14 @@
+use std::ops::DerefMut;
+
 use bevy_ecs::{
     entity::Entity,
     event::Events,
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{events::BevyWorldEvents, WorldProxy, WorldProxyMut};
+use naia_bevy_shared::{
+    events::BevyWorldEvents, HostComponentEvent, WorldMutType, WorldProxy, WorldProxyMut,
+};
 use naia_server::Server;
 
 mod naia_events {
@@ -24,6 +28,24 @@ pub fn before_receive_events(world: &mut World) {
             return;
         }
 
+        // Host Component Updates
+        let mut host_component_event_reader = world
+            .get_resource_mut::<Events<HostComponentEvent>>()
+            .unwrap();
+        let host_component_events: Vec<HostComponentEvent> = host_component_event_reader.drain().collect();
+        for HostComponentEvent(added, entity, component_kind) in host_component_events {
+            if added {
+                let mut world_proxy = world.proxy_mut();
+                let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
+                    continue;
+                };
+                server.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+            } else {
+                server.remove_component_worldless(&entity, &component_kind);
+            }
+        }
+
+        // Receive Events
         let mut did_tick = false;
         let mut events = server.receive(world.proxy_mut());
         if !events.is_empty() {

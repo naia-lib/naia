@@ -4,7 +4,9 @@ use crate::world::{
     component::{
         component_kinds::ComponentKind,
         component_update::ComponentUpdate,
-        replica_ref::{ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper},
+        replica_ref::{
+            ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+        },
         replicate::Replicate,
     },
     entity::entity_converters::NetEntityHandleConverter,
@@ -57,6 +59,12 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         &'a mut self,
         entity: &E,
     ) -> Option<ReplicaMutWrapper<'a, R>>;
+    /// gets an entity's component, dynamically
+    fn component_mut_of_kind<'a>(
+        &'a mut self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) -> Option<ReplicaDynMutWrapper<'a>>;
     /// reads an incoming stream into a component
     fn component_apply_update(
         &mut self,

@@ -423,42 +423,48 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         &mut self,
         world: &mut W,
         entity: &E,
-        mut component_ref: R,
+        mut component: R,
     ) {
         if !world.has_entity(entity) {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let component_kind = component_ref.kind();
+        let component_kind = component.kind();
 
         if world.has_component_of_kind(entity, &component_kind) {
             // Entity already has this Component type yet, update Component
 
-            let Some(mut component) = world.component_mut::<R>(entity) else {
+            let Some(mut component_mut) = world.component_mut::<R>(entity) else {
                 panic!("Should never happen because we checked for this above");
             };
-            component.mirror(&component_ref);
+            component_mut.mirror(&component);
         } else {
             // Entity does not have this Component type yet, initialize Component
 
-            // insert component into server connection
-            if let Some(connection) = &mut self.server_connection {
-                // insert component into server connection
-                if connection.base.host_world_manager.host_has_entity(entity) {
-                    connection
-                        .base
-                        .host_world_manager
-                        .insert_component(entity, &component_kind);
-                }
-            }
-
-            // update in world manager
-            self.host_world_manager
-                .insert_component(entity, &mut component_ref);
+            self.insert_component_worldless(entity, &mut component);
 
             // actually insert component into world
-            world.insert_component(entity, component_ref);
+            world.insert_component(entity, component);
         }
+    }
+
+    // This intended to be used by adapter crates, do not use this as it will not update the world
+    pub fn insert_component_worldless(&mut self, entity: &E, component: &mut dyn Replicate) {
+        let component_kind = component.kind();
+
+        // insert component into server connection
+        if let Some(connection) = &mut self.server_connection {
+            // insert component into server connection
+            if connection.base.host_world_manager.host_has_entity(entity) {
+                connection
+                    .base
+                    .host_world_manager
+                    .insert_component(entity, &component_kind);
+            }
+        }
+
+        // update in world manager
+        self.host_world_manager.insert_component(entity, component);
     }
 
     /// Removes a Component from an Entity
@@ -470,6 +476,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // get component key from type
         let component_kind = ComponentKind::of::<R>();
 
+        self.remove_component_worldless(entity, &component_kind);
+
+        // remove from world
+        world.remove_component::<R>(entity)
+    }
+
+    // This intended to be used by adapter crates, do not use this as it will not update the world
+    pub fn remove_component_worldless(&mut self, entity: &E, component_kind: &ComponentKind) {
         // remove component from server connection
         if let Some(connection) = &mut self.server_connection {
             connection
@@ -481,9 +495,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // cleanup all other loose ends
         self.host_world_manager
             .remove_component(entity, &component_kind);
-
-        // remove from world
-        world.remove_component::<R>(entity)
     }
 
     // Private methods

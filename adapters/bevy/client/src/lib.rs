@@ -4,12 +4,12 @@ pub use naia_client::{ClientConfig, CommandHistory};
 pub mod events;
 
 mod client;
+mod commands;
 mod plugin;
 mod systems;
-mod commands;
 
 pub use client::Client;
-pub use plugin::Plugin;
 pub use commands::CommandsExt;
+pub use plugin::Plugin;
 
 pub type ClientOwned = naia_bevy_shared::HostOwned;

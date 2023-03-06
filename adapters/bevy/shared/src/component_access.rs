@@ -1,12 +1,18 @@
 use std::{any::Any, marker::PhantomData};
 
+use bevy_app::App;
 use bevy_ecs::{entity::Entity, world::World};
 
 use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
-use super::component_ref::{ComponentDynMut, ComponentDynRef};
+use super::{
+    change_detection::{on_component_added, on_component_removed},
+    component_ref::{ComponentDynMut, ComponentDynRef},
+};
 
 pub trait ComponentAccess: Send + Sync {
+    fn add_systems(&self, app: &mut App);
+    fn box_clone(&self) -> Box<dyn ComponentAccess>;
     fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>>;
     fn component_mut<'w>(
         &self,
@@ -42,6 +48,11 @@ impl<R: Replicate> ComponentAccessor<R> {
 }
 
 impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
+    fn add_systems(&self, app: &mut App) {
+        app.add_system(on_component_added::<R>)
+            .add_system(on_component_removed::<R>);
+    }
+
     fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>> {
         if let Some(component_ref) = world.get::<R>(*entity) {
             let wrapper = ComponentDynRef(component_ref);
@@ -100,5 +111,12 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
         let boxed_any = boxed_component.to_boxed_any();
         let inner: R = *(boxed_any.downcast::<R>().unwrap());
         world.entity_mut(*entity).insert(inner);
+    }
+
+    fn box_clone(&self) -> Box<dyn ComponentAccess> {
+        let new_me = ComponentAccessor::<R> {
+            phantom_r: PhantomData,
+        };
+        Box::new(new_me)
     }
 }

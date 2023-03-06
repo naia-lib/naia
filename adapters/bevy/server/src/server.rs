@@ -1,14 +1,13 @@
-
 use std::time::Duration;
 
 use bevy_ecs::{
     entity::Entity,
-    system::{SystemParam, ResMut},
+    system::{ResMut, SystemParam},
 };
 
 use naia_server::{
-    RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages,
-    UserKey, UserMut, UserRef, UserScopeMut,
+    RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages, UserKey,
+    UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{
@@ -31,7 +30,9 @@ impl<'w> Server<'w> {
         self.server.listen(server_addrs);
     }
 
-    pub fn is_listening(&self) -> bool { self.server.is_listening() }
+    pub fn is_listening(&self) -> bool {
+        self.server.is_listening()
+    }
 
     pub fn accept_connection(&mut self, user_key: &UserKey) {
         self.server.accept_connection(user_key);

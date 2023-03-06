@@ -58,9 +58,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
     }
 
     // Insert Component
-    pub fn insert_component<R: Replicate>(&mut self, entity: &E, component_ref: &mut R) {
-        let component_kind = component_ref.kind();
-        let diff_mask_length: u8 = component_ref.diff_mask_size();
+    pub fn insert_component(&mut self, entity: &E, component: &mut dyn Replicate) {
+        let component_kind = component.kind();
+        let diff_mask_length: u8 = component.diff_mask_size();
 
         self.world_record.add_component(entity, &component_kind);
 
@@ -73,7 +73,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
 
         let prop_mutator = PropertyMutator::new(mut_sender);
 
-        component_ref.set_mutator(&prop_mutator);
+        component.set_mutator(&prop_mutator);
     }
 
     // Remove Component

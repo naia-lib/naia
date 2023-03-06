@@ -5,8 +5,9 @@ use bevy_ecs::{
 use std::any::TypeId;
 
 use naia_shared::{
-    ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
+    ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
+    WorldRefType,
 };
 
 use super::{
@@ -187,6 +188,19 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         None
     }
 
+    fn component_mut_of_kind(
+        &mut self,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) -> Option<ReplicaDynMutWrapper> {
+        let world_data = world_data(&self.world);
+        let Some(component_access) = world_data.component_access(component_kind) else {
+            return None;
+        };
+        let new_component_access = component_access.box_clone();
+        return new_component_access.component_mut(self.world, entity);
+    }
+
     fn component_apply_update(
         &mut self,
         converter: &dyn NetEntityHandleConverter,
@@ -318,7 +332,8 @@ fn world_data(world: &World) -> &WorldData {
 
 fn world_data_unchecked_mut(world: &mut World) -> Mut<WorldData> {
     unsafe {
-        return world.as_unsafe_world_cell()
+        return world
+            .as_unsafe_world_cell()
             .get_resource_mut::<WorldData>()
             .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
     }

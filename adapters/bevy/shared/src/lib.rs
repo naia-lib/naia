@@ -9,6 +9,7 @@ pub use naia_shared::{
     TickBufferSettings, UnsignedInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
+mod change_detection;
 mod component_access;
 mod component_ref;
 pub mod events;
@@ -17,6 +18,7 @@ mod protocol_plugin;
 mod world_data;
 mod world_proxy;
 
+pub use change_detection::HostComponentEvent;
 pub use component_access::{ComponentAccess, ComponentAccessor};
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;

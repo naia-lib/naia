@@ -1,4 +1,3 @@
-
 use bevy_ecs::{
     entity::Entity,
     system::{Command as BevyCommand, EntityCommands},
@@ -12,7 +11,8 @@ use crate::Client;
 // Bevy Commands Extension
 pub trait CommandsExt<'w, 's, 'a> {
     fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn disable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn disable_replication(&'a mut self, client: &mut Client)
+        -> &'a mut EntityCommands<'w, 's, 'a>;
     fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
 }
 
@@ -23,7 +23,10 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         return self;
     }
 
-    fn disable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+    fn disable_replication(
+        &'a mut self,
+        client: &mut Client,
+    ) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.disable_replication(&self.id());
         self.remove::<HostOwned>();
         return self;

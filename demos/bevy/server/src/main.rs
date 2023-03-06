@@ -1,5 +1,5 @@
 use bevy_app::{App, ScheduleRunnerPlugin, ScheduleRunnerSettings};
-use bevy_core::{TaskPoolPlugin, TypeRegistrationPlugin, FrameCountPlugin};
+use bevy_core::{FrameCountPlugin, TaskPoolPlugin, TypeRegistrationPlugin};
 use bevy_log::{info, LogPlugin};
 use std::time::Duration;
 

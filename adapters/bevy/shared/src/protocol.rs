@@ -26,7 +26,7 @@ impl Protocol {
         Self::default()
     }
 
-    pub fn world_data(&mut self) -> WorldData {
+    pub fn take_world_data(&mut self) -> WorldData {
         self.world_data.take().expect("should only call this once")
     }
 
