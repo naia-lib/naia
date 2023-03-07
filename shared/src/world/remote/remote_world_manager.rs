@@ -5,10 +5,9 @@ use crate::{
     ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver, EntityActionType,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex, NetEntity,
     NetEntityHandleConverter, Protocol, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger,
-    WorldEvents, WorldMutType,
+    WorldMutType,
+    world::remote::{entity_event::EntityEvent, entity_record::EntityRecord},
 };
-
-use super::entity_record::EntityRecord;
 
 pub struct RemoteWorldManager<E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord>,
@@ -35,15 +34,16 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
         world: &mut W,
         tick: Tick,
         reader: &mut BitReader,
-        world_events: &mut WorldEvents<E>,
-    ) -> Result<(), SerdeErr> {
+    ) -> Result<Vec<EntityEvent<E>>, SerdeErr> {
+        let mut events = Vec::new();
+
         // read entity updates
-        self.read_updates(&protocol.component_kinds, world, tick, reader, world_events)?;
+        self.read_updates(&protocol.component_kinds, world, tick, reader, &mut events)?;
 
         // read entity actions
-        self.read_actions(&protocol.component_kinds, world, reader, world_events)?;
+        self.read_actions(&protocol.component_kinds, world, reader, &mut events)?;
 
-        Ok(())
+        Ok(events)
     }
 
     // Action Reader
@@ -68,7 +68,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
         component_kinds: &ComponentKinds,
         world: &mut W,
         reader: &mut BitReader,
-        world_events: &mut WorldEvents<E>,
+        events: &mut Vec<EntityEvent<E>>,
     ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
 
@@ -82,7 +82,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
             self.read_action(component_kinds, reader, &mut last_read_id)?;
         }
 
-        self.process_incoming_actions(world, world_events);
+        self.process_incoming_actions(world, events);
 
         Ok(())
     }
@@ -170,7 +170,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
     fn process_incoming_actions<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
-        world_events: &mut WorldEvents<E>,
+        events: &mut Vec<EntityEvent<E>>,
     ) {
         // receive the list of EntityActions that can be executed now
         let incoming_actions = self.receiver.receive_actions();
@@ -189,7 +189,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                     let entity_handle = self.handle_entity_map.insert(world_entity);
                     let mut entity_record = EntityRecord::new(net_entity, entity_handle);
 
-                    world_events.push_spawn(world_entity);
+                    events.push(EntityEvent::<E>::SpawnEntity(world_entity));
 
                     // read component list
                     for component_kind in components {
@@ -202,7 +202,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 
                         world.insert_boxed_component(&world_entity, component);
 
-                        world_events.push_insert(world_entity, component_kind);
+                        events.push(EntityEvent::<E>::InsertComponent(world_entity, component_kind));
                     }
                     //
 
@@ -220,13 +220,13 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                             if let Some(component) =
                                 world.remove_component_of_kind(&world_entity, &component_kind)
                             {
-                                world_events.push_remove(world_entity, component);
+                                events.push(EntityEvent::<E>::RemoveComponent(world_entity, component));
                             }
                         }
 
                         world.despawn_entity(&world_entity);
 
-                        world_events.push_despawn(world_entity);
+                        events.push(EntityEvent::<E>::DespawnEntity(world_entity));
                     } else {
                         panic!("received message attempting to delete nonexistent entity");
                     }
@@ -251,7 +251,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 
                         world.insert_boxed_component(&world_entity, component);
 
-                        world_events.push_insert(*world_entity, component_kind);
+                        events.push(EntityEvent::<E>::InsertComponent(*world_entity, component_kind));
                     }
                 }
                 EntityAction::RemoveComponent(net_entity, component_kind) => {
@@ -270,7 +270,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                             .expect("Component already removed?");
 
                         // Generate event
-                        world_events.push_remove(*world_entity, component);
+                        events.push(EntityEvent::<E>::RemoveComponent(*world_entity, component));
                     } else {
                         panic!("attempting to delete nonexistent component of entity");
                     }
@@ -289,7 +289,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
-        world_events: &mut WorldEvents<E>,
+        events: &mut Vec<EntityEvent<E>>,
     ) -> Result<(), SerdeErr> {
         loop {
             // read update continue bit
@@ -306,7 +306,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                 server_tick,
                 reader,
                 &net_entity_id,
-                world_events,
+                events,
             )?;
         }
 
@@ -321,7 +321,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
         server_tick: Tick,
         reader: &mut BitReader,
         net_entity_id: &NetEntity,
-        world_events: &mut WorldEvents<E>,
+        events: &mut Vec<EntityEvent<E>>,
     ) -> Result<(), SerdeErr> {
         loop {
             // read update continue bit
@@ -341,7 +341,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                     component_update,
                 )?;
 
-                world_events.push_update(server_tick, *world_entity, component_kind);
+                events.push(EntityEvent::UpdateComponent(server_tick, *world_entity, component_kind));
             }
         }
 
@@ -351,22 +351,25 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
     pub fn despawn_all_remote_entities<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
-        world_events: &mut WorldEvents<E>,
-    ) {
+    ) -> Vec<EntityEvent<E>> {
+        let mut output = Vec::new();
+
         for (entity, _) in self.entity_records.iter() {
             // Generate remove event for each component, handing references off just in
             // case
             for component_kind in world.component_kinds(entity) {
                 if let Some(component) = world.remove_component_of_kind(entity, &component_kind) {
-                    world_events.push_remove(*entity, component);
+                    output.push(EntityEvent::<E>::RemoveComponent(*entity, component));
                 }
             }
             // Generate despawn event
-            world_events.push_despawn(*entity);
+            output.push(EntityEvent::DespawnEntity(*entity));
 
             // Despawn entity
             world.despawn_entity(entity);
         }
+
+        output
     }
 }
 

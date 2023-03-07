@@ -141,18 +141,18 @@ pub fn before_receive_events(world: &mut World) {
             }
 
             // Despawn Entity Event
-            if events.world.has::<naia_events::DespawnEntityEvent>() {
+            if events.has::<naia_events::DespawnEntityEvent>() {
                 let mut despawn_entity_event_writer = world
                     .get_resource_mut::<Events<bevy_events::DespawnEntityEvent>>()
                     .unwrap();
-                for entity in events.world.read::<naia_events::DespawnEntityEvent>() {
+                for entity in events.read::<naia_events::DespawnEntityEvent>() {
                     despawn_entity_event_writer.send(bevy_events::DespawnEntityEvent(entity));
                 }
             }
 
             // Insert Component Event
-            if events.world.has_inserts() {
-                let inserts = events.world.take_inserts().unwrap();
+            if events.has_inserts() {
+                let inserts = events.take_inserts().unwrap();
                 let mut insert_component_event_writer = world
                     .get_resource_mut::<Events<bevy_events::InsertComponentEvents>>()
                     .unwrap();
@@ -160,8 +160,8 @@ pub fn before_receive_events(world: &mut World) {
             }
 
             // Update Component Event
-            if events.world.has_updates() {
-                let updates = events.world.take_updates().unwrap();
+            if events.has_updates() {
+                let updates = events.take_updates().unwrap();
                 let mut update_component_event_writer = world
                     .get_resource_mut::<Events<bevy_events::UpdateComponentEvents>>()
                     .unwrap();
@@ -170,8 +170,8 @@ pub fn before_receive_events(world: &mut World) {
             }
 
             // Remove Component Event
-            if events.world.has_removes() {
-                let removes = events.world.take_removes().unwrap();
+            if events.has_removes() {
+                let removes = events.take_removes().unwrap();
                 let mut remove_component_event_writer = world
                     .get_resource_mut::<Events<bevy_events::RemoveComponentEvents>>()
                     .unwrap();

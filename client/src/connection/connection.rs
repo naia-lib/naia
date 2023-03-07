@@ -112,13 +112,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
 
             // read world events
-            self.base.remote_world_manager.read_world_events(
+            let events = self.base.remote_world_manager.read_world_events(
                 protocol,
                 world,
                 server_tick,
                 &mut reader,
-                &mut incoming_events.world,
             )?;
+            incoming_events.receive_entity_events(events);
         }
 
         Ok(())

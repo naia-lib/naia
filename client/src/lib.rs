@@ -11,8 +11,7 @@
 )]
 
 pub use naia_shared::{
-    default_channels, DespawnEntityEvent, EntityRef, InsertComponentEvent, Random,
-    RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
+    default_channels, EntityRef, Random,
 };
 
 mod client;
@@ -30,7 +29,7 @@ pub use entity_mut::EntityMut;
 pub use error::NaiaClientError;
 pub use events::{
     ClientTickEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, RejectEvent,
-    ServerTickEvent,
+    ServerTickEvent, DespawnEntityEvent, InsertComponentEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
 
 pub mod internal {

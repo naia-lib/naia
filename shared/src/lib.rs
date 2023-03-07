@@ -110,10 +110,7 @@ pub use world::{
     remote::{
         entity_action_event::EntityActionEvent, entity_record::EntityRecord,
         remote_world_manager::RemoteWorldManager,
-    },
-    world_events::{
-        DespawnEntityEvent, InsertComponentEvent, RemoveComponentEvent, SpawnEntityEvent,
-        UpdateComponentEvent, WorldEvent, WorldEvents,
+        entity_event::EntityEvent,
     },
     world_type::{WorldMutType, WorldRefType},
 };

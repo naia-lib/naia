@@ -692,10 +692,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let Some(connection) = self.server_connection.as_mut() else {
             panic!("Client is already disconnected!");
         };
-        connection
+
+        let events = connection
             .base
             .remote_world_manager
-            .despawn_all_remote_entities(world, &mut self.incoming_events.world);
+            .despawn_all_remote_entities(world);
+
+        self.incoming_events.receive_entity_events(events);
     }
 
     fn disconnect_reset_connection(&mut self) {
