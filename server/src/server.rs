@@ -14,22 +14,20 @@ use bevy_ecs::prelude::Resource;
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
-    HostGlobalWorldManager, Instant, Message, MessageContainer, PacketType, Protocol, Replicate,
-    Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, Instant, Message,
+    MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr, StandardHeader, Tick,
+    Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
-    connection::{
-        connection::Connection,
-        handshake_manager::{HandshakeManager, HandshakeResult},
-        io::Io,
-        tick_buffer_messages::TickBufferMessages,
-        time_manager::TimeManager,
+    connection::{connection::Connection, tick_buffer_messages::TickBufferMessages},
+    handshake_manager::{HandshakeManager, HandshakeResult},
+    io::Io,
+    time_manager::TimeManager,
+    world::{
+        entity_mut::EntityMut, entity_owner::EntityOwner, entity_scope_map::EntityScopeMap,
+        global_world_manager::GlobalWorldManager,
     },
-    entity_mut::EntityMut,
-    entity_scope_map::EntityScopeMap,
-    EntityOwner,
 };
 
 use super::{
@@ -64,7 +62,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Entities
     entity_room_map: HashMap<E, RoomKey>,
     entity_scope_map: EntityScopeMap<E>,
-    host_world_manager: HostGlobalWorldManager<E>,
+    global_world_manager: GlobalWorldManager<E>,
     client_owned_entities: HashMap<E, UserKey>,
     // Events
     incoming_events: Events<E>,
@@ -107,7 +105,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Entities
             entity_room_map: HashMap::new(),
             entity_scope_map: EntityScopeMap::new(),
-            host_world_manager: HostGlobalWorldManager::new(),
+            global_world_manager: GlobalWorldManager::new(),
             client_owned_entities: HashMap::new(),
             // Events
             incoming_events: Events::new(),
@@ -181,10 +179,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let new_connection = Connection::new(
             &self.server_config.connection,
             &self.server_config.ping,
-            user.address,
+            &user.address,
             user_key,
             &self.protocol.channel_kinds,
-            self.host_world_manager.diff_handler(),
+            self.global_world_manager.diff_handler(),
         );
 
         // send connect response
@@ -264,7 +262,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let entities: Vec<E> = message
                         .entities()
                         .iter()
-                        .map(|handle| self.host_world_manager.handle_to_entity(handle).unwrap())
+                        .map(|handle| self.global_world_manager.handle_to_entity(handle).unwrap())
                         .collect();
 
                     // check whether all entities are in scope for the connection
@@ -279,7 +277,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
                         let converter = EntityConverter::new(
-                            self.host_world_manager.world_record(),
+                            self.global_world_manager.world_record(),
                             &connection.base.host_world_manager,
                         );
                         connection.base.message_manager.send_message(
@@ -299,7 +297,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     }
                 } else {
                     let converter = EntityConverter::new(
-                        self.host_world_manager.world_record(),
+                        self.global_world_manager.world_record(),
                         &connection.base.host_world_manager,
                     );
                     connection.base.message_manager.send_message(
@@ -387,7 +385,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 &now,
                 &mut self.io,
                 &world,
-                self.host_world_manager.world_record(),
+                &self.global_world_manager,
                 &self.time_manager,
             );
         }
@@ -419,7 +417,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     fn spawn_entity_inner(&mut self, entity: &E) {
-        self.host_world_manager.spawn_entity(entity);
+        self.global_world_manager.spawn_entity(entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -448,7 +446,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn entity_owner(&self, entity: &E) -> EntityOwner {
-        if self.host_world_manager.has_entity(entity) {
+        if self.global_world_manager.has_entity(entity) {
             return EntityOwner::Server;
         }
         if let Some(user_key) = self.client_owned_entities.get(&entity) {
@@ -645,7 +643,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.entity_room_map.remove(entity);
 
         // Remove from ECS Record
-        self.host_world_manager.despawn_entity(entity);
+        self.global_world_manager.despawn_entity(entity);
     }
 
     //// Entity Scopes
@@ -713,7 +711,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // update in world manager
-        self.host_world_manager.insert_component(entity, component);
+        self.global_world_manager
+            .insert_component(entity, component);
     }
 
     /// Removes a Component from an Entity
@@ -743,7 +742,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // cleanup all other loose ends
-        self.host_world_manager
+        self.global_world_manager
             .remove_component(entity, &component_kind);
     }
 
@@ -1145,7 +1144,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     client_tick,
                     reader,
                     world,
-                    self.host_world_manager.world_record(),
+                    &self.global_world_manager,
                     &mut self.incoming_events,
                     &mut self.client_owned_entities,
                 )?;
@@ -1317,7 +1316,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 if should_be_in_scope {
                                     if !currently_in_scope {
                                         let component_kinds = self
-                                            .host_world_manager
+                                            .global_world_manager
                                             .component_kinds(entity)
                                             .unwrap();
                                         // add entity & components to the connections local scope
@@ -1341,10 +1340,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
-        self.host_world_manager.handle_to_entity(entity_handle)
+        self.global_world_manager.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.host_world_manager.entity_to_handle(entity)
+        self.global_world_manager.entity_to_handle(entity)
     }
 }

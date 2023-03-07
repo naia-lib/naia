@@ -1,7 +1,6 @@
 use naia_shared::{BitReader, BitWriter, PingIndex, PingStore, Serde, Timer};
 
-use crate::connection::ping_config::PingConfig;
-use crate::connection::time_manager::TimeManager;
+use crate::{connection::ping_config::PingConfig, time_manager::TimeManager};
 
 /// Is responsible for sending regular ping messages between client/servers
 /// and to estimate rtt/jitter

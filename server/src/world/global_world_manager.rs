@@ -3,18 +3,20 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{
-    world::host::global_entity_record::GlobalEntityRecord, ComponentKind, EntityDoesNotExistError,
-    EntityHandle, EntityHandleConverter, GlobalDiffHandler, PropertyMutator, Replicate,
-    WorldRecord,
+use naia_shared::{
+    ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GlobalDiffHandler,
+    GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate,
 };
 
-pub struct HostGlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
+use super::{global_entity_record::GlobalEntityRecord, world_record::WorldRecord};
+use crate::world::mut_channel::MutChannelData;
+
+pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
     world_record: WorldRecord<E>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     pub fn new() -> Self {
         Self {
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
@@ -73,7 +75,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
             .as_ref()
             .write()
             .expect("DiffHandler should be initialized")
-            .register_component(entity, &component_kind, diff_mask_length);
+            .register_component(self, entity, &component_kind, diff_mask_length);
 
         let prop_mutator = PropertyMutator::new(mut_sender);
 
@@ -91,7 +93,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for HostGlobalWorldManager<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorldManager<E> {
+    fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>> {
+        self.component_kinds(entity)
+    }
+
+    fn to_handle_converter(&self) -> &dyn EntityHandleConverter<E> {
+        self
+    }
+
+    fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
+        let mut_channel = MutChannelData::new(diff_mask_length);
+        return Arc::new(RwLock::new(mut_channel));
+    }
+}
+
+impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for GlobalWorldManager<E> {
     // Conversions
     fn handle_to_entity(&self, handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
         self.world_record.handle_to_entity(handle)

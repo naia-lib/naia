@@ -2,7 +2,7 @@ use std::{collections::HashMap, hash::Hash};
 
 use crate::{
     messages::message_manager::MessageManager, types::PacketIndex,
-    wrapping_number::sequence_greater_than, HostLocalWorldManager,
+    wrapping_number::sequence_greater_than, HostWorldManager,
 };
 
 use super::{
@@ -49,7 +49,7 @@ impl AckManager {
         &mut self,
         header: &StandardHeader,
         message_manager: &mut MessageManager,
-        world_manager: &mut HostLocalWorldManager<E>,
+        world_manager: &mut HostWorldManager<E>,
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         let sender_packet_index = header.sender_packet_index;
@@ -136,7 +136,7 @@ impl AckManager {
         &self,
         sent_packet_index: PacketIndex,
         message_manager: &mut MessageManager,
-        world_manager: &mut HostLocalWorldManager<E>,
+        world_manager: &mut HostWorldManager<E>,
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         message_manager.notify_packet_delivered(sent_packet_index);

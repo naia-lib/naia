@@ -14,7 +14,7 @@ use crate::{
 
 use super::{
     entity_action_event::EntityActionEvent, entity_message_waitlist::EntityMessageWaitlist,
-    global_diff_handler::GlobalDiffHandler, host_local_world_manager::ActionId,
+    global_diff_handler::GlobalDiffHandler, host_world_manager::ActionId,
     user_diff_handler::UserDiffHandler,
 };
 
@@ -52,7 +52,7 @@ pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
     outgoing_actions: ReliableSender<EntityActionEvent<E>>,
     delivered_actions: EntityActionReceiver<E>,
 
-    address: SocketAddr,
+    address: Option<SocketAddr>,
     pub diff_handler: UserDiffHandler<E>,
     net_entity_generator: KeyGenerator<NetEntity>,
     entity_to_net_entity_map: HashMap<E, NetEntity>,
@@ -61,7 +61,10 @@ pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
-    pub fn new(address: SocketAddr, diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>) -> Self {
+    pub fn new(
+        address: &Option<SocketAddr>,
+        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
+    ) -> Self {
         Self {
             host_world: CheckedMap::new(),
             remote_world: CheckedMap::new(),
@@ -69,7 +72,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             outgoing_actions: ReliableSender::new(RESEND_ACTION_RTT_FACTOR),
             delivered_actions: EntityActionReceiver::new(),
 
-            address,
+            address: *address,
             diff_handler: UserDiffHandler::new(diff_handler),
             net_entity_generator: KeyGenerator::new(),
             net_entity_to_entity_map: HashMap::new(),

@@ -39,6 +39,7 @@ mod constants;
 mod game_time;
 mod key_generator;
 mod protocol;
+mod sequence_list;
 mod types;
 mod wrapping_number;
 
@@ -95,8 +96,8 @@ pub use world::{
         entity_action_receiver::EntityActionReceiver,
         entity_action_type::EntityActionType,
         entity_converters::{
-            EntityConverter, EntityHandleConverter, FakeEntityConverter, NetEntityConverter,
-            NetEntityHandleConverter,
+            EntityConverter, EntityHandleConverter, FakeEntityConverter, GlobalWorldManagerType,
+            NetEntityConverter, NetEntityHandleConverter,
         },
         entity_handle::EntityHandle,
         entity_ref::EntityRef,
@@ -104,8 +105,9 @@ pub use world::{
         net_entity::NetEntity,
     },
     host::{
-        global_diff_handler::GlobalDiffHandler, host_global_world_manager::HostGlobalWorldManager,
-        host_local_world_manager::HostLocalWorldManager, world_record::WorldRecord,
+        global_diff_handler::GlobalDiffHandler,
+        host_world_manager::HostWorldManager,
+        mut_channel::{MutChannelType, MutReceiver},
     },
     remote::{
         entity_action_event::EntityActionEvent, entity_event::EntityEvent,

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::{ComponentKind, EntityHandle};
+use naia_shared::{ComponentKind, EntityHandle};
 
 pub struct GlobalEntityRecord {
     pub entity_handle: EntityHandle,

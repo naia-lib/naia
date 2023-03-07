@@ -26,13 +26,13 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
     // Component Registration
     pub fn register_component(
         &mut self,
-        addr: &SocketAddr,
+        address: &Option<SocketAddr>,
         entity: &E,
         component_kind: &ComponentKind,
     ) {
         if let Ok(global_handler) = self.global_diff_handler.as_ref().read() {
             let receiver = global_handler
-                .receiver(addr, entity, component_kind)
+                .receiver(address, entity, component_kind)
                 .expect("GlobalDiffHandler has not yet registered this Component");
             self.receivers.insert((*entity, *component_kind), receiver);
         }

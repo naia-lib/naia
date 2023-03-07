@@ -11,8 +11,9 @@ use crate::{
     backends::Timer,
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
-    EntityConverter, GlobalDiffHandler, HostLocalWorldManager, MessageKinds, Protocol,
-    RemoteWorldManager, WorldRecord, WorldRefType,
+    world::entity::entity_converters::GlobalWorldManagerType,
+    EntityConverter, EntityHandleConverter, GlobalDiffHandler, HostWorldManager, MessageKinds,
+    Protocol, RemoteWorldManager, WorldRefType,
 };
 
 use super::{
@@ -23,9 +24,8 @@ use super::{
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
 pub struct BaseConnection<E: Copy + Eq + Hash + Send + Sync> {
-    pub address: SocketAddr,
     pub message_manager: MessageManager,
-    pub host_world_manager: HostLocalWorldManager<E>,
+    pub host_world_manager: HostWorldManager<E>,
     pub remote_world_manager: RemoteWorldManager<E>,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
@@ -35,19 +35,18 @@ pub struct BaseConnection<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     /// Create a new BaseConnection, given the appropriate underlying managers
     pub fn new(
-        address: SocketAddr,
+        address: &Option<SocketAddr>,
         host_type: HostType,
         connection_config: &ConnectionConfig,
         channel_kinds: &ChannelKinds,
         diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
     ) -> Self {
         BaseConnection {
-            address,
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
             message_manager: MessageManager::new(host_type, channel_kinds),
-            host_world_manager: HostLocalWorldManager::new(address, diff_handler),
+            host_world_manager: HostWorldManager::new(address, diff_handler),
             remote_world_manager: RemoteWorldManager::new(),
         }
     }
@@ -121,13 +120,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        world_record: &WorldRecord<E>,
+        handle_converter: &dyn EntityHandleConverter<E>,
         message_kinds: &MessageKinds,
     ) {
         self.host_world_manager.collect_outgoing_messages(
             now,
             rtt_millis,
-            world_record,
+            handle_converter,
             message_kinds,
             &mut self.message_manager,
         );
@@ -138,12 +137,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     fn write_messages(
         &mut self,
         protocol: &Protocol,
-        world_record: &WorldRecord<E>,
+        handle_converter: &dyn EntityHandleConverter<E>,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        let converter = EntityConverter::new(world_record, &self.host_world_manager);
+        let converter = EntityConverter::new(handle_converter, &self.host_world_manager);
         self.message_manager.write_messages(
             protocol,
             &converter,
@@ -160,12 +159,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         world: &W,
-        world_record: &WorldRecord<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         has_written: &mut bool,
     ) {
         // write messages
         {
-            self.write_messages(&protocol, world_record, writer, packet_index, has_written);
+            self.write_messages(
+                &protocol,
+                global_world_manager.to_handle_converter(),
+                writer,
+                packet_index,
+                has_written,
+            );
 
             // finish messages
             false.ser(writer);
@@ -180,7 +185,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
                 writer,
                 &packet_index,
                 world,
-                world_record,
+                global_world_manager,
                 has_written,
             );
 
@@ -197,7 +202,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
                 writer,
                 &packet_index,
                 world,
-                world_record,
+                global_world_manager,
                 has_written,
             );
 

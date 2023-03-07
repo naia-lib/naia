@@ -10,21 +10,25 @@ use log::warn;
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
     EntityEvent, GlobalDiffHandler, HostType, Instant, PacketType, Protocol, Serde, SerdeErr,
-    StandardHeader, Tick, WorldMutType, WorldRecord, WorldRefType,
+    StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
     connection::{
         ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
-        tick_buffer_receiver::TickBufferReceiver, time_manager::TimeManager,
+        tick_buffer_receiver::TickBufferReceiver,
     },
     events::Events,
+    io::Io,
+    time_manager::TimeManager,
     user::UserKey,
+    world::global_world_manager::GlobalWorldManager,
 };
 
-use super::{io::Io, ping_manager::PingManager};
+use super::ping_manager::PingManager;
 
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
+    pub address: SocketAddr,
     pub user_key: UserKey,
     pub base: BaseConnection<E>,
     pub ping_manager: PingManager,
@@ -35,15 +39,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn new(
         connection_config: &ConnectionConfig,
         ping_config: &PingConfig,
-        user_address: SocketAddr,
+        user_address: &SocketAddr,
         user_key: &UserKey,
         channel_kinds: &ChannelKinds,
         diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
     ) -> Self {
         Connection {
+            address: *user_address,
             user_key: *user_key,
             base: BaseConnection::new(
-                user_address,
+                &Some(*user_address),
                 HostType::Server,
                 connection_config,
                 channel_kinds,
@@ -72,11 +77,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         client_tick: Tick,
         reader: &mut BitReader,
         world: &mut W,
-        world_record: &WorldRecord<E>,
+        global_world_manager: &GlobalWorldManager<E>,
         incoming_events: &mut Events<E>,
         client_owned_entities: &mut HashMap<E, UserKey>,
     ) -> Result<(), SerdeErr> {
-        let converter = EntityConverter::new(world_record, &self.base.host_world_manager);
+        let converter = EntityConverter::new(global_world_manager, &self.base.host_world_manager);
 
         // read tick-buffered messages
         {
@@ -145,20 +150,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E>,
+        global_world_manager: &GlobalWorldManager<E>,
         time_manager: &TimeManager,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
         self.base.collect_outgoing_messages(
             now,
             &rtt_millis,
-            world_record,
+            global_world_manager,
             &protocol.message_kinds,
         );
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, now, io, world, world_record, time_manager) {
+            if self.send_outgoing_packet(
+                protocol,
+                now,
+                io,
+                world,
+                global_world_manager,
+                time_manager,
+            ) {
                 any_sent = true;
             } else {
                 break;
@@ -177,7 +189,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E>,
+        global_world_manager: &GlobalWorldManager<E>,
         time_manager: &TimeManager,
     ) -> bool {
         if self.base.has_outgoing_messages() {
@@ -210,20 +222,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 &mut writer,
                 next_packet_index,
                 world,
-                &world_record,
+                global_world_manager,
                 &mut has_written,
             );
 
             // send packet
-            if io
-                .send_packet(&self.base.address, writer.to_packet())
-                .is_err()
-            {
+            if io.send_packet(&self.address, writer.to_packet()).is_err() {
                 // TODO: pass this on and handle above
-                warn!(
-                    "Server Error: Cannot send data packet to {}",
-                    &self.base.address
-                );
+                warn!("Server Error: Cannot send data packet to {}", &self.address);
             }
 
             return true;

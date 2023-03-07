@@ -1,20 +1,30 @@
 use std::{
-    collections::HashMap,
+    hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
-use crate::{DiffMask, PropertyMutate};
+use crate::{DiffMask, GlobalWorldManagerType, PropertyMutate};
+
+pub trait MutChannelType: Send + Sync {
+    fn new_receiver(&mut self, address: &Option<SocketAddr>) -> Option<MutReceiver>;
+    fn send(&self, diff: u8);
+}
 
 // MutChannel
 #[derive(Clone)]
 pub struct MutChannel {
-    data: Arc<RwLock<MutChannelData>>,
+    data: Arc<RwLock<dyn MutChannelType>>,
 }
 
 impl MutChannel {
-    pub fn new_channel(diff_mask_length: u8) -> (MutSender, MutReceiverBuilder) {
-        let channel = MutChannel::new(diff_mask_length);
+    pub fn new_channel<E: Copy + Eq + Hash>(
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        diff_mask_length: u8,
+    ) -> (MutSender, MutReceiverBuilder) {
+        let channel = Self {
+            data: global_world_manager.new_mut_channel(diff_mask_length),
+        };
 
         let sender = channel.new_sender();
 
@@ -23,19 +33,13 @@ impl MutChannel {
         (sender, builder)
     }
 
-    fn new(diff_mask_length: u8) -> Self {
-        Self {
-            data: Arc::new(RwLock::new(MutChannelData::new(diff_mask_length))),
-        }
-    }
-
     pub fn new_sender(&self) -> MutSender {
         MutSender::new(self)
     }
 
-    pub fn new_receiver(&self, addr: &SocketAddr) -> Option<MutReceiver> {
+    pub fn new_receiver(&self, address: &Option<SocketAddr>) -> Option<MutReceiver> {
         if let Ok(mut data) = self.data.as_ref().write() {
-            return data.new_receiver(addr);
+            return data.new_receiver(address);
         }
         None
     }
@@ -46,37 +50,6 @@ impl MutChannel {
             return true;
         }
         false
-    }
-}
-
-struct MutChannelData {
-    receiver_map: HashMap<SocketAddr, MutReceiver>,
-    diff_mask_length: u8,
-}
-
-impl MutChannelData {
-    pub fn new(diff_mask_length: u8) -> Self {
-        Self {
-            receiver_map: HashMap::new(),
-            diff_mask_length,
-        }
-    }
-
-    pub fn new_receiver(&mut self, addr: &SocketAddr) -> Option<MutReceiver> {
-        if let Some(receiver) = self.receiver_map.get(addr) {
-            Some(receiver.clone())
-        } else {
-            let receiver = MutReceiver::new(self.diff_mask_length);
-            self.receiver_map.insert(*addr, receiver.clone());
-
-            Some(receiver)
-        }
-    }
-
-    pub fn send(&self, diff: u8) {
-        for (_, receiver) in self.receiver_map.iter() {
-            receiver.mutate(diff);
-        }
     }
 }
 
@@ -155,7 +128,7 @@ impl MutReceiverBuilder {
         }
     }
 
-    pub fn build(&self, addr: &SocketAddr) -> Option<MutReceiver> {
-        self.channel.new_receiver(addr)
+    pub fn build(&self, address: &Option<SocketAddr>) -> Option<MutReceiver> {
+        self.channel.new_receiver(address)
     }
 }

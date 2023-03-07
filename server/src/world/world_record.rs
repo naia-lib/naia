@@ -1,6 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{BigMap, ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter};
+use naia_shared::{
+    BigMap, ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
+};
 
 use super::global_entity_record::GlobalEntityRecord;
 
