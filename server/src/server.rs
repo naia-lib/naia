@@ -264,7 +264,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let entities: Vec<E> = message
                         .entities()
                         .iter()
-                        .map(|handle| self.host_world_manager.handle_to_entity(handle))
+                        .map(|handle| self.host_world_manager.handle_to_entity(handle).unwrap())
                         .collect();
 
                     // check whether all entities are in scope for the connection

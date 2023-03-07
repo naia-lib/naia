@@ -13,7 +13,10 @@ pub trait EntityHandleConverter<E: Copy + Eq + Hash> {
 }
 
 pub trait NetEntityHandleConverter {
-    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Result<NetEntity, EntityDoesNotExistError>;
+    fn handle_to_net_entity(
+        &self,
+        entity_handle: &EntityHandle,
+    ) -> Result<NetEntity, EntityDoesNotExistError>;
     fn net_entity_to_handle(
         &self,
         net_entity: &NetEntity,
@@ -55,7 +58,10 @@ impl<'a, 'b, E: Eq + Copy + Hash> EntityConverter<'a, 'b, E> {
 }
 
 impl<'a, 'b, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityConverter<'a, 'b, E> {
-    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Result<NetEntity, EntityDoesNotExistError> {
+    fn handle_to_net_entity(
+        &self,
+        entity_handle: &EntityHandle,
+    ) -> Result<NetEntity, EntityDoesNotExistError> {
         if let Ok(entity) = self.handle_converter.handle_to_entity(entity_handle) {
             return self.net_entity_converter.entity_to_net_entity(&entity);
         }

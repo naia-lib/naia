@@ -7,7 +7,13 @@ use std::{
     time::Duration,
 };
 
-use crate::{messages::channels::senders::indexed_message_writer::IndexedMessageWriter, BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength, DiffMask, EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer, MessageIndex, MessageKinds, MessageManager, NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType, EntityDoesNotExistError};
+use crate::{
+    messages::channels::senders::indexed_message_writer::IndexedMessageWriter, BitWrite, BitWriter,
+    ChannelKind, ComponentKind, ComponentKinds, ConstBitLength, DiffMask, EntityAction,
+    EntityActionType, EntityConverter, EntityDoesNotExistError, Instant, MessageContainer,
+    MessageIndex, MessageKinds, MessageManager, NetEntity, NetEntityConverter, PacketIndex,
+    PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType,
+};
 
 use super::{
     entity_action_event::EntityActionEvent, global_diff_handler::GlobalDiffHandler,
@@ -689,18 +695,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for HostLocalWorldManag
 // NetEntityConverter
 impl<E: Copy + Eq + Hash + Send + Sync> NetEntityConverter<E> for HostLocalWorldManager<E> {
     fn entity_to_net_entity(&self, entity: &E) -> Result<NetEntity, EntityDoesNotExistError> {
-        if let Some(net_entity) = self
-            .world_channel
-            .entity_to_net_entity(entity) {
+        if let Some(net_entity) = self.world_channel.entity_to_net_entity(entity) {
             return Ok(*net_entity);
         }
         return Err(EntityDoesNotExistError);
     }
 
     fn net_entity_to_entity(&self, net_entity: &NetEntity) -> Result<E, EntityDoesNotExistError> {
-        if let Some(entity) = self
-            .world_channel
-            .net_entity_to_entity(net_entity) {
+        if let Some(entity) = self.world_channel.net_entity_to_entity(net_entity) {
             return Ok(*entity);
         }
         return Err(EntityDoesNotExistError);

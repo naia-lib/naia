@@ -1,7 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
 
-use bevy_ecs::entity::Entity;
-
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader, BigMap, BitReader,
     ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver, EntityActionType,
@@ -374,9 +372,7 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 
 impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for RemoteWorldManager<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
-        if let Some(entity) = self
-            .handle_entity_map
-            .get(entity_handle) {
+        if let Some(entity) = self.handle_entity_map.get(entity_handle) {
             return Ok(*entity);
         }
         return Err(EntityDoesNotExistError);
@@ -392,10 +388,11 @@ impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for RemoteWorldManager<E> {
 }
 
 impl<E: Copy + Eq + Hash> NetEntityHandleConverter for RemoteWorldManager<E> {
-    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Result<NetEntity, EntityDoesNotExistError> {
-        if let Some(entity) = self
-            .handle_entity_map
-            .get(entity_handle) {
+    fn handle_to_net_entity(
+        &self,
+        entity_handle: &EntityHandle,
+    ) -> Result<NetEntity, EntityDoesNotExistError> {
+        if let Some(entity) = self.handle_entity_map.get(entity_handle) {
             if let Some(entity_record) = self.entity_records.get(entity) {
                 return Ok(entity_record.net_entity);
             }

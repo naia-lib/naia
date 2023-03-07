@@ -720,7 +720,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Client<E> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
         self.server_connection
             .as_ref()
             .expect("cannot handle entity properties unless connection is established")

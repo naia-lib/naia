@@ -116,7 +116,7 @@ impl EntityProperty {
     }
 
     pub fn get<E: Copy + Eq + Hash>(&self, handler: &dyn EntityHandleConverter<E>) -> Option<E> {
-        if let Some(handle) = (*self.handle_prop) {
+        if let Some(handle) = *self.handle_prop {
             if let Ok(entity) = handler.handle_to_entity(&handle) {
                 return Some(entity);
             }

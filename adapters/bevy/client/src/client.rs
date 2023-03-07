@@ -95,7 +95,10 @@ impl<'w> Client<'w> {
 }
 
 impl<'w> EntityHandleConverter<Entity> for Client<'w> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
+    fn handle_to_entity(
+        &self,
+        entity_handle: &EntityHandle,
+    ) -> Result<Entity, EntityDoesNotExistError> {
         self.client.handle_to_entity(entity_handle)
     }
 

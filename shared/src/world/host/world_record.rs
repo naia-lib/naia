@@ -84,9 +84,7 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
 
 impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for WorldRecord<E> {
     fn handle_to_entity(&self, handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
-        if let Some(entity) = self
-            .handle_entity_map
-            .get(handle) {
+        if let Some(entity) = self.handle_entity_map.get(handle) {
             Ok(*entity)
         } else {
             Err(EntityDoesNotExistError)

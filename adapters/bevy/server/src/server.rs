@@ -136,7 +136,10 @@ impl<'w> Server<'w> {
 }
 
 impl<'w> EntityHandleConverter<Entity> for Server<'w> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
+    fn handle_to_entity(
+        &self,
+        entity_handle: &EntityHandle,
+    ) -> Result<Entity, EntityDoesNotExistError> {
         self.server.handle_to_entity(entity_handle)
     }
 
