@@ -15,11 +15,10 @@ use naia_shared::{
 
 use crate::{
     connection::{
-        ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
+        io::Io, ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
         tick_buffer_receiver::TickBufferReceiver,
     },
     events::Events,
-    io::Io,
     time_manager::TimeManager,
     user::UserKey,
     world::global_world_manager::GlobalWorldManager,

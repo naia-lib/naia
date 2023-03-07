@@ -20,9 +20,12 @@ use naia_shared::{
 };
 
 use crate::{
-    connection::{connection::Connection, tick_buffer_messages::TickBufferMessages},
-    handshake_manager::{HandshakeManager, HandshakeResult},
-    io::Io,
+    connection::{
+        connection::Connection,
+        handshake_manager::{HandshakeManager, HandshakeResult},
+        io::Io,
+        tick_buffer_messages::TickBufferMessages,
+    },
     time_manager::TimeManager,
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_scope_map::EntityScopeMap,

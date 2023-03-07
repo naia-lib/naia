@@ -14,13 +14,10 @@ pub use naia_server_socket::ServerAddrs;
 
 pub use naia_shared::{default_channels, EntityRef, Random};
 
-mod bandwidth_monitor;
 mod cache_map;
 mod connection;
 mod error;
 mod events;
-mod handshake_manager;
-mod io;
 mod room;
 mod server;
 mod server_config;
@@ -45,5 +42,5 @@ pub use world::entity_mut::EntityMut;
 pub use world::entity_owner::EntityOwner;
 
 pub mod internal {
-    pub use crate::handshake_manager::{HandshakeManager, HandshakeResult};
+    pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};
 }
