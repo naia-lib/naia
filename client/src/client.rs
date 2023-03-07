@@ -9,9 +9,9 @@ use naia_client_socket::Socket;
 
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, GameInstant, Instant,
-    Message, MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig,
-    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    EntityConverter, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
+    GameInstant, Instant, Message, MessageContainer, PacketType, PingIndex, Protocol, Replicate,
+    Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -227,9 +227,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some(connection) = &mut self.server_connection {
+            let converter = EntityConverter::new(
+                &self.global_world_manager,
+                &connection.base.local_world_manager,
+            );
             connection.base.message_manager.send_message(
                 &self.protocol.message_kinds,
-                &connection.base.remote_world_manager,
+                &converter,
                 channel_kind,
                 message,
             );
@@ -297,10 +301,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.global_world_manager.host_spawn_entity(entity);
         if let Some(connection) = &mut self.server_connection {
             let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
-            connection
-                .base
-                .host_world_manager
-                .init_entity(entity, component_kinds);
+            connection.base.host_world_manager.init_entity(
+                &mut connection.base.local_world_manager,
+                entity,
+                component_kinds,
+            );
         }
     }
 
@@ -660,6 +665,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
         }
+
+        connection.finish_receiving();
     }
 
     fn handle_heartbeats(connection: &mut Connection<E>, io: &mut Io) {
@@ -709,8 +716,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let events = connection
             .base
-            .remote_world_manager
-            .despawn_all_remote_entities(world);
+            .despawn_all_remote_entities(&mut self.global_world_manager, world);
 
         self.incoming_events.receive_entity_events(events);
     }
@@ -738,20 +744,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Client<E> {
     fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
-        self.server_connection
-            .as_ref()
-            .expect("cannot handle entity properties unless connection is established")
-            .base
-            .remote_world_manager
-            .handle_to_entity(entity_handle)
+        self.global_world_manager.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.server_connection
-            .as_ref()
-            .expect("cannot handle entity properties unless connection is established")
-            .base
-            .remote_world_manager
-            .entity_to_handle(entity)
+        self.global_world_manager.entity_to_handle(entity)
     }
 }

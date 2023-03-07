@@ -793,10 +793,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
-        let entity_events = connection
-            .base
-            .remote_world_manager
-            .despawn_all_remote_entities(world);
+        let entity_events = connection.base.despawn_all_remote_entities(world);
         self.incoming_events
             .receive_entity_events(user_key, entity_events);
     }

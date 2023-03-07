@@ -102,7 +102,7 @@ pub use world::{
         entity_handle::EntityHandle,
         entity_ref::EntityRef,
         error::EntityDoesNotExistError,
-        net_entity::NetEntity,
+        net_entity::{NetEntity, OwnedNetEntity},
     },
     host::{
         global_diff_handler::GlobalDiffHandler,
@@ -111,7 +111,7 @@ pub use world::{
     },
     remote::{
         entity_action_event::EntityActionEvent, entity_event::EntityEvent,
-        entity_record::EntityRecord, remote_world_manager::RemoteWorldManager,
+        remote_world_manager::RemoteWorldManager,
     },
     world_type::{WorldMutType, WorldRefType},
 };

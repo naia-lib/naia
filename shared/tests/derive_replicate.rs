@@ -74,7 +74,7 @@ mod some_nonreplicated_replica {
 
 use naia_shared::{
     BigMapKey, BitReader, BitWriter, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
-    FakeEntityConverter, NetEntity, NetEntityHandleConverter, Protocol, Replicate,
+    FakeEntityConverter, NetEntityHandleConverter, OwnedNetEntity, Protocol, Replicate,
 };
 
 use some_entity_replica::EntityPropertyHolder;
@@ -192,12 +192,12 @@ fn read_write_entity_replica() {
         }
     }
     impl NetEntityHandleConverter for TestEntityConverter {
-        fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
-            NetEntity::from(entity_handle.to_u64() as u16)
+        fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> OwnedNetEntity {
+            OwnedNetEntity::from(entity_handle.to_u64() as u16)
         }
         fn net_entity_to_handle(
             &self,
-            net_entity: &NetEntity,
+            net_entity: &OwnedNetEntity,
         ) -> Result<EntityHandle, EntityDoesNotExistError> {
             let net_entity_u16: u16 = (*net_entity).into();
             Ok(EntityHandle::from_u64(net_entity_u16 as u64))

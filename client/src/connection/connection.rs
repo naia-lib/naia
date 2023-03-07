@@ -3,9 +3,9 @@ use std::{hash::Hash, net::SocketAddr};
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityEvent,
-    GlobalWorldManagerType, HostType, Instant, OwnedBitReader, PacketType, Protocol, Serde,
-    SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
+    EntityEvent, GlobalWorldManagerType, HostType, Instant, OwnedBitReader, PacketType, Protocol,
+    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use super::io::Io;
@@ -52,10 +52,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         let existing_entities = global_world_manager.entities();
         for entity in existing_entities {
             let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
-            connection
-                .base
-                .host_world_manager
-                .init_entity(&entity, component_kinds);
+            connection.base.host_world_manager.init_entity(
+                &mut connection.base.local_world_manager,
+                &entity,
+                component_kinds,
+            );
         }
 
         connection
@@ -102,7 +103,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             {
                 let messages = self.base.message_manager.read_messages(
                     protocol,
-                    &self.base.remote_world_manager,
+                    global_world_manager,
+                    &self.base.local_world_manager,
                     &mut reader,
                 )?;
                 for (channel_kind, messages) in messages {
@@ -114,6 +116,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // read world events
             let entity_events = self.base.remote_world_manager.read_world_events(
+                global_world_manager,
+                &mut self.base.local_world_manager,
                 protocol,
                 world,
                 server_tick,
@@ -208,9 +212,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // write tick buffered messages
             {
+                let converter =
+                    EntityConverter::new(global_world_manager, &self.base.local_world_manager);
                 self.tick_buffer.write_messages(
                     &protocol,
-                    &self.base.remote_world_manager,
+                    &converter,
                     &mut writer,
                     next_packet_index,
                     &client_tick,
@@ -242,5 +248,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
 
         false
+    }
+
+    pub(crate) fn finish_receiving(&mut self) {
+        self.base
+            .host_world_manager
+            .finish_receiving(&mut self.base.local_world_manager);
     }
 }

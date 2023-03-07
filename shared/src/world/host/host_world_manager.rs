@@ -6,14 +6,14 @@ use std::{
     time::Duration,
 };
 
+use crate::world::local_world_manager::LocalWorldManager;
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     sequence_list::SequenceList, world::entity::entity_converters::GlobalWorldManagerType,
     BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength, DiffMask,
-    EntityAction, EntityActionType, EntityConverter, EntityDoesNotExistError,
-    EntityHandleConverter, Instant, MessageContainer, MessageIndex, MessageKinds, MessageManager,
-    NetEntity, NetEntityConverter, PacketIndex, PacketNotifiable, Serde, UnsignedVariableInteger,
-    WorldRefType,
+    EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer, MessageIndex,
+    MessageKinds, MessageManager, NetEntityConverter, NetEntityHandleConverter, PacketIndex,
+    PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType,
 };
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
@@ -63,17 +63,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
     // World
 
     // used for
-    pub fn init_entity(&mut self, entity: &E, component_kinds: Vec<ComponentKind>) {
+    pub fn init_entity(
+        &mut self,
+        world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+        component_kinds: Vec<ComponentKind>,
+    ) {
         // add entity
-        self.spawn_entity(entity);
+        self.spawn_entity(world_manager, entity);
         // add components
         for component_kind in component_kinds {
             self.insert_component(entity, &component_kind);
         }
     }
 
-    pub fn spawn_entity(&mut self, entity: &E) {
-        self.world_channel.host_spawn_entity(entity);
+    pub fn spawn_entity(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E) {
+        self.world_channel.host_spawn_entity(world_manager, entity);
     }
 
     pub fn despawn_entity(&mut self, entity: &E) {
@@ -117,7 +122,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        handle_converter: &dyn EntityHandleConverter<E>,
+        handle_converter: &dyn NetEntityHandleConverter,
         message_kinds: &MessageKinds,
         message_manager: &mut MessageManager,
     ) {
@@ -125,9 +130,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             .world_channel
             .delayed_entity_messages
             .collect_ready_messages();
-        let converter = EntityConverter::new(handle_converter, self);
         for (channel_kind, message) in messages {
-            message_manager.send_message(message_kinds, &converter, &channel_kind, message);
+            message_manager.send_message(message_kinds, handle_converter, &channel_kind, message);
         }
 
         self.collect_dropped_update_packets(rtt_millis);
@@ -243,6 +247,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         packet_index: &PacketIndex,
         world: &W,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
+        local_world_manager: &LocalWorldManager<E>,
         has_written: &mut bool,
     ) {
         let mut last_counted_id: Option<MessageIndex> = None;
@@ -259,6 +264,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                 component_kinds,
                 world,
                 global_world_manager,
+                local_world_manager,
                 packet_index,
                 &mut counter,
                 &mut last_counted_id,
@@ -298,6 +304,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                 component_kinds,
                 world,
                 global_world_manager,
+                local_world_manager,
                 packet_index,
                 writer,
                 &mut last_written_id,
@@ -315,6 +322,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         component_kinds: &ComponentKinds,
         world: &W,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
+        local_world_manager: &LocalWorldManager<E>,
         packet_index: &PacketIndex,
         writer: &mut dyn BitWrite,
         last_written_id: &mut Option<ActionId>,
@@ -330,9 +338,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                 EntityActionType::SpawnEntity.ser(writer);
 
                 // write net entity
-                self.world_channel
+                local_world_manager
                     .entity_to_net_entity(entity)
                     .unwrap()
+                    .to_unowned()
                     .ser(writer);
 
                 // get component list
@@ -347,8 +356,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                 components_num.ser(writer);
 
                 for component_kind in &component_kind_list {
-                    let converter =
-                        EntityConverter::new(global_world_manager.to_handle_converter(), self);
+                    let converter = EntityConverter::new(
+                        global_world_manager.to_handle_converter(),
+                        local_world_manager,
+                    );
 
                     // write component payload
                     world
@@ -371,9 +382,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                 EntityActionType::DespawnEntity.ser(writer);
 
                 // write net entity
-                self.world_channel
+                local_world_manager
                     .entity_to_net_entity(entity)
                     .unwrap()
+                    .to_unowned()
                     .ser(writer);
 
                 // if we are writing to this packet, add it to record
@@ -406,13 +418,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                     EntityActionType::InsertComponent.ser(writer);
 
                     // write net entity
-                    self.world_channel
+                    local_world_manager
                         .entity_to_net_entity(entity)
                         .unwrap()
+                        .to_unowned()
                         .ser(writer);
 
-                    let converter =
-                        EntityConverter::new(global_world_manager.to_handle_converter(), self);
+                    let converter = EntityConverter::new(
+                        global_world_manager.to_handle_converter(),
+                        local_world_manager,
+                    );
 
                     // write component payload
                     world
@@ -450,9 +465,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                     EntityActionType::RemoveComponent.ser(writer);
 
                     // write net entity
-                    self.world_channel
+                    local_world_manager
                         .entity_to_net_entity(entity)
                         .unwrap()
+                        .to_unowned()
                         .ser(writer);
 
                     // write component kind
@@ -537,6 +553,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         packet_index: &PacketIndex,
         world: &W,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
+        local_world_manager: &LocalWorldManager<E>,
         has_written: &mut bool,
     ) {
         let all_update_entities: Vec<E> = self.next_send_updates.keys().copied().collect();
@@ -545,7 +562,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             // check that we can at least write a NetEntityId and a ComponentContinue bit
             let mut counter = writer.counter();
 
-            counter.write_bits(<NetEntity as ConstBitLength>::const_bit_length());
+            // get net entity id
+            let net_entity_id = local_world_manager
+                .entity_to_net_entity(&entity)
+                .unwrap()
+                .to_unowned();
+
+            net_entity_id.ser(&mut counter);
             counter.write_bit(false);
 
             if counter.overflowed() {
@@ -559,7 +582,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             writer.reserve_bits(1);
 
             // write NetEntityId
-            let net_entity_id = self.world_channel.entity_to_net_entity(&entity).unwrap();
             net_entity_id.ser(writer);
 
             // write Components
@@ -568,6 +590,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                 now,
                 world,
                 global_world_manager,
+                local_world_manager,
                 packet_index,
                 writer,
                 &entity,
@@ -588,6 +611,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         now: &Instant,
         world: &W,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
+        local_world_manager: &LocalWorldManager<E>,
         packet_index: &PacketIndex,
         writer: &mut BitWriter,
         entity: &E,
@@ -604,7 +628,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                 .expect("DiffHandler does not have registered Component!")
                 .clone();
 
-            let converter = EntityConverter::new(global_world_manager.to_handle_converter(), self);
+            let converter = EntityConverter::new(
+                global_world_manager.to_handle_converter(),
+                local_world_manager,
+            );
 
             // check that we can write the next component update
             let mut counter = writer.counter();
@@ -675,6 +702,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"
         )
     }
+
+    pub fn finish_receiving(&mut self, world_manager: &mut LocalWorldManager<E>) {
+        self.world_channel.finish_receiving(world_manager);
+    }
 }
 
 // PacketNotifiable
@@ -692,22 +723,5 @@ impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for HostWorldManager<E>
                 self.world_channel.action_delivered(action_id, action);
             }
         }
-    }
-}
-
-// NetEntityConverter
-impl<E: Copy + Eq + Hash + Send + Sync> NetEntityConverter<E> for HostWorldManager<E> {
-    fn entity_to_net_entity(&self, entity: &E) -> Result<NetEntity, EntityDoesNotExistError> {
-        if let Some(net_entity) = self.world_channel.entity_to_net_entity(entity) {
-            return Ok(*net_entity);
-        }
-        return Err(EntityDoesNotExistError);
-    }
-
-    fn net_entity_to_entity(&self, net_entity: &NetEntity) -> Result<E, EntityDoesNotExistError> {
-        if let Some(entity) = self.world_channel.net_entity_to_entity(net_entity) {
-            return Ok(*entity);
-        }
-        return Err(EntityDoesNotExistError);
     }
 }

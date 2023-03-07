@@ -3,13 +3,14 @@ use std::{hash::Hash, net::SocketAddr};
 use naia_serde::{BitWriter, Serde};
 use naia_socket_shared::Instant;
 
+use crate::world::local_world_manager::LocalWorldManager;
 use crate::{
     backends::Timer,
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
     world::entity::entity_converters::GlobalWorldManagerType,
-    EntityConverter, EntityHandleConverter, HostWorldManager, MessageKinds, Protocol,
-    RemoteWorldManager, WorldRefType,
+    EntityConverter, EntityEvent, EntityHandleConverter, HostWorldManager, MessageKinds, Protocol,
+    RemoteWorldManager, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -22,7 +23,8 @@ use super::{
 pub struct BaseConnection<E: Copy + Eq + Hash + Send + Sync> {
     pub message_manager: MessageManager,
     pub host_world_manager: HostWorldManager<E>,
-    pub remote_world_manager: RemoteWorldManager<E>,
+    pub remote_world_manager: RemoteWorldManager,
+    pub local_world_manager: LocalWorldManager<E>,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ack_manager: AckManager,
@@ -44,6 +46,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
             message_manager: MessageManager::new(host_type, channel_kinds),
             host_world_manager: HostWorldManager::new(address, global_world_manager),
             remote_world_manager: RemoteWorldManager::new(),
+            local_world_manager: LocalWorldManager::new(),
         }
     }
 
@@ -119,10 +122,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         handle_converter: &dyn EntityHandleConverter<E>,
         message_kinds: &MessageKinds,
     ) {
+        let converter = EntityConverter::new(handle_converter, &self.local_world_manager);
         self.host_world_manager.collect_outgoing_messages(
             now,
             rtt_millis,
-            handle_converter,
+            &converter,
             message_kinds,
             &mut self.message_manager,
         );
@@ -138,7 +142,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        let converter = EntityConverter::new(handle_converter, &self.host_world_manager);
+        let converter = EntityConverter::new(handle_converter, &self.local_world_manager);
         self.message_manager.write_messages(
             protocol,
             &converter,
@@ -182,6 +186,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
                 &packet_index,
                 world,
                 global_world_manager,
+                &self.local_world_manager,
                 has_written,
             );
 
@@ -199,6 +204,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
                 &packet_index,
                 world,
                 global_world_manager,
+                &self.local_world_manager,
                 has_written,
             );
 
@@ -206,5 +212,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
             false.ser(writer);
             writer.release_bits(1);
         }
+    }
+
+    pub fn despawn_all_remote_entities<W: WorldMutType<E>>(
+        &mut self,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        world: &mut W,
+    ) -> Vec<EntityEvent<E>> {
+        let mut output = Vec::new();
+
+        let remote_entities = self.local_world_manager.remote_entities();
+
+        for entity in remote_entities {
+            // Generate remove event for each component, handing references off just in
+            // case
+            for component_kind in world.component_kinds(&entity) {
+                if let Some(component) = world.remove_component_of_kind(&entity, &component_kind) {
+                    output.push(EntityEvent::<E>::RemoveComponent(entity, component));
+                }
+            }
+
+            // Despawn from global world manager
+            global_world_manager.despawn(&entity);
+
+            // Generate despawn event
+            output.push(EntityEvent::DespawnEntity(entity));
+
+            // Despawn entity
+            world.despawn_entity(&entity);
+        }
+
+        output
     }
 }

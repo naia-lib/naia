@@ -1,13 +1,13 @@
 use std::hash::Hash;
 
-use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::world::{
     component::{property::Property, property_mutate::PropertyMutator},
     entity::{
         entity_converters::{EntityHandleConverter, NetEntityHandleConverter},
         entity_handle::EntityHandle,
-        net_entity::NetEntity,
+        net_entity::OwnedNetEntity,
     },
 };
 
@@ -39,10 +39,6 @@ impl EntityProperty {
 
     // Serialization / deserialization
 
-    pub fn bit_length(&self) -> u32 {
-        return <Option<NetEntity> as ConstBitLength>::const_bit_length();
-    }
-
     pub fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
         if let Some(handle) = *self.handle_prop {
             if let Ok(net_entity) = converter.handle_to_net_entity(&handle) {
@@ -51,7 +47,7 @@ impl EntityProperty {
                 return;
             }
         }
-        let opt: Option<NetEntity> = None;
+        let opt: Option<OwnedNetEntity> = None;
         opt.ser(writer);
     }
 
@@ -60,7 +56,7 @@ impl EntityProperty {
         mutator_index: u8,
         converter: &dyn NetEntityHandleConverter,
     ) -> Result<Self, SerdeErr> {
-        if let Some(net_entity) = Option::<NetEntity>::de(reader)? {
+        if let Some(net_entity) = Option::<OwnedNetEntity>::de(reader)? {
             if let Ok(handle) = converter.net_entity_to_handle(&net_entity) {
                 let mut new_prop = Self::new(mutator_index);
                 *new_prop.handle_prop = Some(handle);
@@ -76,7 +72,7 @@ impl EntityProperty {
     }
 
     pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
-        Option::<NetEntity>::de(reader)?.ser(writer);
+        Option::<OwnedNetEntity>::de(reader)?.ser(writer);
         Ok(())
     }
 
@@ -85,7 +81,7 @@ impl EntityProperty {
         reader: &mut BitReader,
         converter: &dyn NetEntityHandleConverter,
     ) -> Result<(), SerdeErr> {
-        if let Some(net_entity) = Option::<NetEntity>::de(reader)? {
+        if let Some(net_entity) = Option::<OwnedNetEntity>::de(reader)? {
             if let Ok(handle) = converter.net_entity_to_handle(&net_entity) {
                 *self.handle_prop = Some(handle);
             } else {
@@ -130,5 +126,9 @@ impl EntityProperty {
         } else {
             panic!("Could not find Entity, in order to set the EntityProperty value!")
         }
+    }
+
+    pub fn bit_length(&self) -> u32 {
+        return self.handle_prop.bit_length();
     }
 }

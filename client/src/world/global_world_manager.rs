@@ -166,6 +166,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>> {
         self.diff_handler.clone()
     }
+
+    fn despawn(&mut self, entity: &E) {
+        let record = self
+            .entity_records
+            .remove(entity)
+            .expect("Cannot despawn non-existant entity!");
+        let handle = record.entity_handle;
+        self.handle_entity_map.remove(&handle);
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for GlobalWorldManager<E> {
