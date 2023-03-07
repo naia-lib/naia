@@ -11,11 +11,14 @@ pub struct GlobalEntityRecord {
 }
 
 impl GlobalEntityRecord {
-    pub fn new(entity_handle: EntityHandle, entity_owner: EntityOwner) -> Self {
+    pub fn new(entity_handle: EntityHandle, owner: EntityOwner) -> Self {
+        if owner == EntityOwner::Local {
+            panic!("Should not insert Local entity in this record");
+        }
         Self {
             entity_handle,
             component_kinds: HashSet::new(),
-            owner: entity_owner,
+            owner,
         }
     }
 }

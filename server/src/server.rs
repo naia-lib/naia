@@ -66,7 +66,6 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     entity_room_map: HashMap<E, RoomKey>,
     entity_scope_map: EntityScopeMap<E>,
     global_world_manager: GlobalWorldManager<E>,
-    client_owned_entities: HashMap<E, UserKey>,
     // Events
     incoming_events: Events<E>,
     // Ticks
@@ -109,7 +108,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             entity_room_map: HashMap::new(),
             entity_scope_map: EntityScopeMap::new(),
             global_world_manager: GlobalWorldManager::new(),
-            client_owned_entities: HashMap::new(),
             // Events
             incoming_events: Events::new(),
             // Ticks
@@ -185,7 +183,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             &user.address,
             user_key,
             &self.protocol.channel_kinds,
-            self.global_world_manager.diff_handler(),
+            &self.global_world_manager,
         );
 
         // send connect response
@@ -280,7 +278,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
                         let converter = EntityConverter::new(
-                            self.global_world_manager.world_record(),
+                            &self.global_world_manager,
                             &connection.base.host_world_manager,
                         );
                         connection.base.message_manager.send_message(
@@ -300,7 +298,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     }
                 } else {
                     let converter = EntityConverter::new(
-                        self.global_world_manager.world_record(),
+                        &self.global_world_manager,
                         &connection.base.host_world_manager,
                     );
                     connection.base.message_manager.send_message(
@@ -420,7 +418,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     fn spawn_entity_inner(&mut self, entity: &E) {
-        self.global_world_manager.spawn_entity(entity);
+        self.global_world_manager.host_spawn_entity(entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -449,11 +447,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn entity_owner(&self, entity: &E) -> EntityOwner {
-        if self.global_world_manager.has_entity(entity) {
-            return EntityOwner::Server;
-        }
-        if let Some(user_key) = self.client_owned_entities.get(&entity) {
-            return EntityOwner::Client(*user_key);
+        if let Some(owner) = self.global_world_manager.entity_owner(entity) {
+            return owner;
         }
         return EntityOwner::Local;
     }
@@ -646,7 +641,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.entity_room_map.remove(entity);
 
         // Remove from ECS Record
-        self.global_world_manager.despawn_entity(entity);
+        self.global_world_manager.host_despawn_entity(entity);
     }
 
     //// Entity Scopes
@@ -715,7 +710,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // update in world manager
         self.global_world_manager
-            .insert_component(entity, component);
+            .host_insert_component(entity, component);
     }
 
     /// Removes a Component from an Entity
@@ -746,7 +741,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // cleanup all other loose ends
         self.global_world_manager
-            .remove_component(entity, &component_kind);
+            .host_remove_component(entity, &component_kind);
     }
 
     //// Users
@@ -1147,9 +1142,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     client_tick,
                     reader,
                     world,
-                    &self.global_world_manager,
+                    &mut self.global_world_manager,
                     &mut self.incoming_events,
-                    &mut self.client_owned_entities,
                 )?;
             }
             PacketType::Disconnect => {

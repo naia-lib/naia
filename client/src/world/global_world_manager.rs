@@ -44,6 +44,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         self.entity_records.contains_key(entity)
     }
 
+    pub fn entity_owner(&self, entity: &E) -> Option<EntityOwner> {
+        if let Some(record) = self.entity_records.get(entity) {
+            return Some(record.owner);
+        }
+        return None;
+    }
+
     // Spawn
     pub fn host_spawn_entity(&mut self, entity: &E) {
         if self.entity_records.contains_key(entity) {
@@ -53,6 +60,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         self.entity_records.insert(
             *entity,
             GlobalEntityRecord::new(entity_handle, EntityOwner::Client),
+        );
+    }
+
+    pub fn remote_spawn_entity(&mut self, entity: &E) {
+        if self.entity_records.contains_key(entity) {
+            panic!("entity already initialized!");
+        }
+        let entity_handle = self.handle_entity_map.insert(*entity);
+        self.entity_records.insert(
+            *entity,
+            GlobalEntityRecord::new(entity_handle, EntityOwner::Server),
         );
     }
 
@@ -69,6 +87,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
 
         self.entity_records.remove(entity)
+    }
+
+    pub fn remote_despawn_entity(&mut self, entity: &E) {
+        // Despawn from World Record
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+
+        self.entity_records.remove(entity);
     }
 
     // Component Kinds

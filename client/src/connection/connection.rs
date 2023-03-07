@@ -3,9 +3,9 @@ use std::{hash::Hash, net::SocketAddr};
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, GlobalWorldManagerType,
-    HostType, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick,
-    WorldMutType, WorldRefType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityEvent,
+    GlobalWorldManagerType, HostType, Instant, OwnedBitReader, PacketType, Protocol, Serde,
+    SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use super::io::Io;
@@ -90,6 +90,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         &mut self,
         protocol: &Protocol,
         world: &mut W,
+        global_world_manager: &mut GlobalWorldManager<E>,
         incoming_events: &mut Events<E>,
     ) -> Result<(), SerdeErr> {
         let receiving_tick = self.time_manager.client_receiving_tick;
@@ -112,13 +113,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
 
             // read world events
-            let events = self.base.remote_world_manager.read_world_events(
+            let entity_events = self.base.remote_world_manager.read_world_events(
                 protocol,
                 world,
                 server_tick,
                 &mut reader,
             )?;
-            incoming_events.receive_entity_events(events);
+
+            for event in &entity_events {
+                match event {
+                    EntityEvent::SpawnEntity(entity) => {
+                        global_world_manager.remote_spawn_entity(entity);
+                    }
+                    EntityEvent::DespawnEntity(entity) => {
+                        global_world_manager.remote_despawn_entity(entity);
+                    }
+                    _ => {}
+                }
+            }
+
+            incoming_events.receive_entity_events(entity_events);
         }
 
         Ok(())

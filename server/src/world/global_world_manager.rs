@@ -1,74 +1,123 @@
 use std::{
+    collections::HashMap,
     hash::Hash,
     sync::{Arc, RwLock},
 };
 
 use naia_shared::{
-    ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GlobalDiffHandler,
-    GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate,
+    BigMap, ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
+    GlobalDiffHandler, GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate,
 };
 
-use super::{global_entity_record::GlobalEntityRecord, world_record::WorldRecord};
-use crate::world::mut_channel::MutChannelData;
+use super::global_entity_record::GlobalEntityRecord;
+use crate::{world::mut_channel::MutChannelData, EntityOwner, UserKey};
 
 pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
-    world_record: WorldRecord<E>,
+    /// Information about entities in the internal ECS World
+    entity_records: HashMap<E, GlobalEntityRecord>,
+    /// Map from the internal [`EntityHandle`] to the external (e.g. Bevy's) entity id
+    handle_entity_map: BigMap<EntityHandle, E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     pub fn new() -> Self {
         Self {
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
-            world_record: WorldRecord::new(),
+            entity_records: HashMap::default(),
+            handle_entity_map: BigMap::new(),
         }
-    }
-
-    // Accessors
-    pub fn world_record(&self) -> &WorldRecord<E> {
-        &self.world_record
-    }
-
-    pub fn diff_handler(&self) -> &Arc<RwLock<GlobalDiffHandler<E>>> {
-        &self.diff_handler
     }
 
     // Entities
     pub fn entities(&self) -> Vec<E> {
-        self.world_record.entities()
+        let mut output = Vec::new();
+
+        for (entity, _) in &self.entity_records {
+            output.push(*entity);
+        }
+
+        output
     }
 
     pub fn has_entity(&self, entity: &E) -> bool {
-        self.world_record.has_entity(entity)
+        self.entity_records.contains_key(entity)
+    }
+
+    pub fn entity_owner(&self, entity: &E) -> Option<EntityOwner> {
+        if let Some(record) = self.entity_records.get(entity) {
+            return Some(record.owner);
+        }
+        return None;
     }
 
     // Spawn
-    pub fn spawn_entity(&mut self, entity: &E) {
-        self.world_record.spawn_entity(entity)
+    pub fn host_spawn_entity(&mut self, entity: &E) {
+        if self.entity_records.contains_key(entity) {
+            panic!("entity already initialized!");
+        }
+        let entity_handle = self.handle_entity_map.insert(*entity);
+        self.entity_records.insert(
+            *entity,
+            GlobalEntityRecord::new(entity_handle, EntityOwner::Server),
+        );
+    }
+
+    pub fn remote_spawn_entity(&mut self, entity: &E, user_key: &UserKey) {
+        if self.entity_records.contains_key(entity) {
+            panic!("entity already initialized!");
+        }
+        let entity_handle = self.handle_entity_map.insert(*entity);
+        self.entity_records.insert(
+            *entity,
+            GlobalEntityRecord::new(entity_handle, EntityOwner::Client(*user_key)),
+        );
     }
 
     // Despawn
-    pub fn despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord> {
+    pub fn host_despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord> {
         // Clean up associated components
         for component_kind in self.component_kinds(entity).unwrap() {
-            self.remove_component(entity, &component_kind);
+            self.host_remove_component(entity, &component_kind);
         }
 
         // Despawn from World Record
-        self.world_record.despawn_entity(entity)
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+
+        self.entity_records.remove(entity)
+    }
+
+    pub fn remote_despawn_entity(&mut self, entity: &E) {
+        // Despawn from World Record
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+
+        self.entity_records.remove(entity);
     }
 
     // Component Kinds
     pub fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>> {
-        self.world_record.component_kinds(entity)
+        if !self.entity_records.contains_key(entity) {
+            return None;
+        }
+
+        let component_kind_set = &self.entity_records.get(entity).unwrap().component_kinds;
+        return Some(component_kind_set.iter().copied().collect());
     }
 
     // Insert Component
-    pub fn insert_component(&mut self, entity: &E, component: &mut dyn Replicate) {
+    pub fn host_insert_component(&mut self, entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
 
-        self.world_record.add_component(entity, &component_kind);
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
+        component_kind_set.insert(component_kind);
 
         let mut_sender = self
             .diff_handler
@@ -83,8 +132,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     // Remove Component
-    pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
-        self.world_record.remove_component(entity, component_kind);
+    pub fn host_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
+        if !component_kind_set.remove(component_kind) {
+            panic!("component does not exist!");
+        }
+
         self.diff_handler
             .as_ref()
             .write()
@@ -106,15 +162,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         let mut_channel = MutChannelData::new(diff_mask_length);
         return Arc::new(RwLock::new(mut_channel));
     }
+
+    fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>> {
+        self.diff_handler.clone()
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for GlobalWorldManager<E> {
-    // Conversions
     fn handle_to_entity(&self, handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
-        self.world_record.handle_to_entity(handle)
+        if let Some(entity) = self.handle_entity_map.get(handle) {
+            Ok(*entity)
+        } else {
+            Err(EntityDoesNotExistError)
+        }
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.world_record.entity_to_handle(entity)
+        if let Some(record) = self.entity_records.get(entity) {
+            Ok(record.entity_handle)
+        } else {
+            Err(EntityDoesNotExistError)
+        }
     }
 }

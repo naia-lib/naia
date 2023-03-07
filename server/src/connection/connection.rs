@@ -1,16 +1,11 @@
-use std::{
-    collections::HashMap,
-    hash::Hash,
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    EntityEvent, GlobalDiffHandler, HostType, Instant, PacketType, Protocol, Serde, SerdeErr,
-    StandardHeader, Tick, WorldMutType, WorldRefType,
+    EntityEvent, HostType, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -41,7 +36,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         user_address: &SocketAddr,
         user_key: &UserKey,
         channel_kinds: &ChannelKinds,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
+        global_world_manager: &GlobalWorldManager<E>,
     ) -> Self {
         Connection {
             address: *user_address,
@@ -51,7 +46,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 HostType::Server,
                 connection_config,
                 channel_kinds,
-                diff_handler,
+                global_world_manager,
             ),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
@@ -76,9 +71,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         client_tick: Tick,
         reader: &mut BitReader,
         world: &mut W,
-        global_world_manager: &GlobalWorldManager<E>,
+        global_world_manager: &mut GlobalWorldManager<E>,
         incoming_events: &mut Events<E>,
-        client_owned_entities: &mut HashMap<E, UserKey>,
     ) -> Result<(), SerdeErr> {
         let converter = EntityConverter::new(global_world_manager, &self.base.host_world_manager);
 
@@ -118,10 +112,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             for event in &entity_events {
                 match event {
                     EntityEvent::SpawnEntity(entity) => {
-                        client_owned_entities.insert(*entity, self.user_key);
+                        global_world_manager.remote_spawn_entity(entity, &self.user_key);
                     }
                     EntityEvent::DespawnEntity(entity) => {
-                        client_owned_entities.remove(entity);
+                        global_world_manager.remote_despawn_entity(entity);
                     }
                     _ => {}
                 }

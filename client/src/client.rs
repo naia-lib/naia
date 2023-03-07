@@ -21,7 +21,9 @@ use crate::{
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
     },
-    world::{entity_mut::EntityMut, global_world_manager::GlobalWorldManager},
+    world::{
+        entity_mut::EntityMut, entity_owner::EntityOwner, global_world_manager::GlobalWorldManager,
+    },
 };
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
@@ -39,7 +41,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     handshake_manager: HandshakeManager,
     manual_disconnect: bool,
     // World
-    host_world_manager: GlobalWorldManager<E>,
+    global_world_manager: GlobalWorldManager<E>,
     // Events
     incoming_events: Events<E>,
 }
@@ -71,7 +73,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             handshake_manager,
             manual_disconnect: false,
             // World
-            host_world_manager: GlobalWorldManager::new(),
+            global_world_manager: GlobalWorldManager::new(),
             // Events
             incoming_events: Events::new(),
         }
@@ -149,7 +151,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // apply updates on tick boundary
                 if connection
-                    .process_buffered_packets(&self.protocol, &mut world, &mut self.incoming_events)
+                    .process_buffered_packets(
+                        &self.protocol,
+                        &mut world,
+                        &mut self.global_world_manager,
+                        &mut self.incoming_events,
+                    )
                     .is_err()
                 {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
@@ -176,7 +183,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     &now,
                     &mut self.io,
                     &world,
-                    &self.host_world_manager,
+                    &self.global_world_manager,
                 );
 
                 // insert tick events in total range
@@ -287,9 +294,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     fn spawn_entity_inner(&mut self, entity: &E) {
-        self.host_world_manager.host_spawn_entity(entity);
+        self.global_world_manager.host_spawn_entity(entity);
         if let Some(connection) = &mut self.server_connection {
-            let component_kinds = self.host_world_manager.component_kinds(entity).unwrap();
+            let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
             connection
                 .base
                 .host_world_manager
@@ -320,6 +327,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Return a list of all Entities
     pub fn entities<W: WorldRefType<E>>(&self, world: &W) -> Vec<E> {
         world.entities()
+    }
+
+    pub fn entity_owner(&self, entity: &E) -> EntityOwner {
+        if let Some(owner) = self.global_world_manager.entity_owner(entity) {
+            return owner;
+        }
+        return EntityOwner::Local;
     }
 
     // Connection
@@ -414,7 +428,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         // Remove from ECS Record
-        self.host_world_manager.host_despawn_entity(entity);
+        self.global_world_manager.host_despawn_entity(entity);
     }
 
     /// Adds a Component to an Entity
@@ -463,7 +477,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         // update in world manager
-        self.host_world_manager
+        self.global_world_manager
             .host_insert_component(entity, component);
     }
 
@@ -493,7 +507,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         // cleanup all other loose ends
-        self.host_world_manager
+        self.global_world_manager
             .host_remove_component(entity, &component_kind);
     }
 
@@ -527,7 +541,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 &self.client_config.connection,
                                 &self.protocol.channel_kinds,
                                 time_manager,
-                                &self.host_world_manager,
+                                &self.global_world_manager,
                             ));
                             self.incoming_events.push_connection(&server_addr);
                         }
