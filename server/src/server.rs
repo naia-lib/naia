@@ -16,7 +16,7 @@ use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
     HostGlobalWorldManager, Instant, Message, MessageContainer, PacketType, Protocol, Replicate,
-    Serde, SerdeErr, StandardHeader, Tick, Timer, WorldEvents, WorldMutType, WorldRefType,
+    Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -796,13 +796,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
-        let mut world_events = WorldEvents::new();
-        connection
+        let entity_events = connection
             .base
             .remote_world_manager
-            .despawn_all_remote_entities(world, &mut world_events);
+            .despawn_all_remote_entities(world);
         self.incoming_events
-            .load_world_events(user_key, world_events)
+            .receive_entity_events(user_key, entity_events);
     }
 
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> User {

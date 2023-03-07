@@ -9,8 +9,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    GlobalDiffHandler, HostType, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader,
-    Tick, WorldEvents, WorldMutType, WorldRecord, WorldRefType,
+    EntityEvent, GlobalDiffHandler, HostType, Instant, PacketType, Protocol, Serde, SerdeErr,
+    StandardHeader, Tick, WorldMutType, WorldRecord, WorldRefType,
 };
 
 use crate::{
@@ -104,23 +104,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read world events
         {
-            let mut world_events = WorldEvents::new();
-            self.base.remote_world_manager.read_world_events(
+            let entity_events = self.base.remote_world_manager.read_world_events(
                 protocol,
                 world,
                 client_tick,
                 reader,
-                &mut world_events,
             )?;
 
-            for entity in &world_events.spawns {
-                client_owned_entities.insert(*entity, self.user_key);
-            }
-            for entity in &world_events.despawns {
-                client_owned_entities.remove(entity);
+            for event in &entity_events {
+                match event {
+                    EntityEvent::SpawnEntity(entity) => {
+                        client_owned_entities.insert(*entity, self.user_key);
+                    }
+                    EntityEvent::DespawnEntity(entity) => {
+                        client_owned_entities.remove(entity);
+                    }
+                    _ => {}
+                }
             }
 
-            incoming_events.load_world_events(&self.user_key, world_events);
+            incoming_events.receive_entity_events(&self.user_key, entity_events);
         }
 
         return Ok(());

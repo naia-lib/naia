@@ -1,9 +1,8 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, DespawnEntityEvent, InsertComponentEvent, Message,
-    MessageContainer, MessageKind, RemoveComponentEvent, Replicate, SpawnEntityEvent, Tick,
-    UpdateComponentEvent, WorldEvents,
+    Channel, ChannelKind, ComponentKind, EntityEvent, Message, MessageContainer, MessageKind,
+    Replicate, Tick,
 };
 
 use super::user::{User, UserKey};
@@ -183,13 +182,14 @@ impl<E: Copy> Events<E> {
         &mut self,
         user_key: &UserKey,
         entity: &E,
-        component_kind: &ComponentKind,
         component: Box<dyn Replicate>,
     ) {
-        if !self.removes.contains_key(component_kind) {
-            self.removes.insert(*component_kind, Vec::new());
+        let component_kind = component.kind();
+
+        if !self.removes.contains_key(&component_kind) {
+            self.removes.insert(component_kind, Vec::new());
         }
-        let list = self.removes.get_mut(component_kind).unwrap();
+        let list = self.removes.get_mut(&component_kind).unwrap();
         list.push((*user_key, *entity, component));
         self.empty = false;
     }
@@ -208,44 +208,26 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn load_world_events(
+    pub(crate) fn receive_entity_events(
         &mut self,
         user_key: &UserKey,
-        mut world_events: WorldEvents<E>,
+        entity_events: Vec<EntityEvent<E>>,
     ) {
-        if world_events.is_empty() {
-            return;
-        }
-        if world_events.has::<SpawnEntityEvent>() {
-            for entity in world_events.read::<SpawnEntityEvent>() {
-                self.push_spawn(user_key, &entity);
-            }
-        }
-        if world_events.has::<DespawnEntityEvent>() {
-            for entity in world_events.read::<DespawnEntityEvent>() {
-                self.push_despawn(user_key, &entity);
-            }
-        }
-        if world_events.has_inserts() {
-            let inserts = world_events.take_inserts().unwrap();
-            for (component_kind, entities) in inserts {
-                for entity in entities {
+        for event in entity_events {
+            match event {
+                EntityEvent::SpawnEntity(entity) => {
+                    self.push_spawn(user_key, &entity);
+                }
+                EntityEvent::DespawnEntity(entity) => {
+                    self.push_despawn(user_key, &entity);
+                }
+                EntityEvent::InsertComponent(entity, component_kind) => {
                     self.push_insert(user_key, &entity, &component_kind);
                 }
-            }
-        }
-        if world_events.has_removes() {
-            let inserts = world_events.take_removes().unwrap();
-            for (component_kind, entities) in inserts {
-                for (entity, component) in entities {
-                    self.push_remove(user_key, &entity, &component_kind, component);
+                EntityEvent::RemoveComponent(entity, component_box) => {
+                    self.push_remove(user_key, &entity, component_box);
                 }
-            }
-        }
-        if world_events.has_updates() {
-            let inserts = world_events.take_updates().unwrap();
-            for (component_kind, entities) in inserts {
-                for (_, entity) in entities {
+                EntityEvent::UpdateComponent(_tick, entity, component_kind) => {
                     self.push_update(user_key, &entity, &component_kind);
                 }
             }
@@ -367,95 +349,6 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
     }
 }
 
-// World Events
-impl<E: Copy> Event<E> for SpawnEntityEvent {
-    type Iter = IntoIter<(UserKey, E)>;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        let list = std::mem::take(&mut events.spawns);
-        return IntoIterator::into_iter(list);
-    }
-
-    fn has(events: &Events<E>) -> bool {
-        !events.spawns.is_empty()
-    }
-}
-
-impl<E: Copy> Event<E> for DespawnEntityEvent {
-    type Iter = IntoIter<(UserKey, E)>;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        let list = std::mem::take(&mut events.despawns);
-        return IntoIterator::into_iter(list);
-    }
-
-    fn has(events: &Events<E>) -> bool {
-        !events.despawns.is_empty()
-    }
-}
-
-impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
-    type Iter = IntoIter<(UserKey, E)>;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        let component_kind: ComponentKind = ComponentKind::of::<C>();
-        if let Some(boxed_list) = events.inserts.remove(&component_kind) {
-            return IntoIterator::into_iter(boxed_list);
-        }
-
-        return IntoIterator::into_iter(Vec::new());
-    }
-
-    fn has(events: &Events<E>) -> bool {
-        let component_kind: ComponentKind = ComponentKind::of::<C>();
-        events.inserts.contains_key(&component_kind)
-    }
-}
-
-impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
-    type Iter = IntoIter<(UserKey, E)>;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        let component_kind: ComponentKind = ComponentKind::of::<C>();
-        if let Some(boxed_list) = events.updates.remove(&component_kind) {
-            return IntoIterator::into_iter(boxed_list);
-        }
-
-        return IntoIterator::into_iter(Vec::new());
-    }
-
-    fn has(events: &Events<E>) -> bool {
-        let component_kind: ComponentKind = ComponentKind::of::<C>();
-        events.updates.contains_key(&component_kind)
-    }
-}
-
-impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
-    type Iter = IntoIter<(UserKey, E, C)>;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        let component_kind: ComponentKind = ComponentKind::of::<C>();
-        if let Some(boxed_list) = events.removes.remove(&component_kind) {
-            let mut output_list: Vec<(UserKey, E, C)> = Vec::new();
-
-            for (user_key, entity, boxed_component) in boxed_list {
-                let boxed_any = boxed_component.to_boxed_any();
-                let component = boxed_any.downcast::<C>().unwrap();
-                output_list.push((user_key, entity, *component));
-            }
-
-            return IntoIterator::into_iter(output_list);
-        }
-
-        return IntoIterator::into_iter(Vec::new());
-    }
-
-    fn has(events: &Events<E>) -> bool {
-        let component_kind: ComponentKind = ComponentKind::of::<C>();
-        events.removes.contains_key(&component_kind)
-    }
-}
-
 pub(crate) fn read_channel_messages<C: Channel, M: Message>(
     messages: &mut HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
 ) -> Vec<(UserKey, M)> {
@@ -502,4 +395,108 @@ pub(crate) fn push_message(
     }
     let list = channel_map.get_mut(&message_type_id).unwrap();
     list.push((*user_key, message));
+}
+
+// Spawn Event
+pub struct SpawnEntityEvent;
+impl<E: Copy> Event<E> for SpawnEntityEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.spawns);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.spawns.is_empty()
+    }
+}
+
+// Despawn Event
+pub struct DespawnEntityEvent;
+impl<E: Copy> Event<E> for DespawnEntityEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.despawns);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.despawns.is_empty()
+    }
+}
+
+// Insert Event
+pub struct InsertComponentEvent<C: Replicate> {
+    phantom_c: PhantomData<C>,
+}
+impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.inserts.remove(&component_kind) {
+            return IntoIterator::into_iter(boxed_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.inserts.contains_key(&component_kind)
+    }
+}
+
+// Update Event
+pub struct UpdateComponentEvent<C: Replicate> {
+    phantom_c: PhantomData<C>,
+}
+impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.updates.remove(&component_kind) {
+            return IntoIterator::into_iter(boxed_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.updates.contains_key(&component_kind)
+    }
+}
+
+// Remove Event
+pub struct RemoveComponentEvent<C: Replicate> {
+    phantom_c: PhantomData<C>,
+}
+impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
+    type Iter = IntoIter<(UserKey, E, C)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        if let Some(boxed_list) = events.removes.remove(&component_kind) {
+            let mut output_list: Vec<(UserKey, E, C)> = Vec::new();
+
+            for (user_key, entity, boxed_component) in boxed_list {
+                let boxed_any = boxed_component.to_boxed_any();
+                let component = boxed_any.downcast::<C>().unwrap();
+                output_list.push((user_key, entity, *component));
+            }
+
+            return IntoIterator::into_iter(output_list);
+        }
+
+        return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.removes.contains_key(&component_kind)
+    }
 }

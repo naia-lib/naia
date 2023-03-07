@@ -13,7 +13,8 @@ use crate::ClientOwned;
 
 mod naia_events {
     pub use naia_server::{
-        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, SpawnEntityEvent, TickEvent,
+        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
+        RemoveComponentEvent, SpawnEntityEvent, TickEvent, UpdateComponentEvent,
     };
 }
 

@@ -1,6 +1,9 @@
 use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
-use naia_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick, EntityEvent};
+use naia_shared::{
+    Channel, ChannelKind, ComponentKind, EntityEvent, Message, MessageContainer, MessageKind,
+    Replicate, Tick,
+};
 
 use crate::NaiaClientError;
 

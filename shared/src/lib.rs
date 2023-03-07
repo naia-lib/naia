@@ -108,9 +108,8 @@ pub use world::{
         host_local_world_manager::HostLocalWorldManager, world_record::WorldRecord,
     },
     remote::{
-        entity_action_event::EntityActionEvent, entity_record::EntityRecord,
-        remote_world_manager::RemoteWorldManager,
-        entity_event::EntityEvent,
+        entity_action_event::EntityActionEvent, entity_event::EntityEvent,
+        entity_record::EntityRecord, remote_world_manager::RemoteWorldManager,
     },
     world_type::{WorldMutType, WorldRefType},
 };

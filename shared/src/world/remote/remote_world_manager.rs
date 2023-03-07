@@ -1,12 +1,12 @@
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
-    messages::channels::receivers::indexed_message_reader::IndexedMessageReader, BigMap, BitReader,
-    ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver, EntityActionType,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex, NetEntity,
-    NetEntityHandleConverter, Protocol, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger,
-    WorldMutType,
+    messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
     world::remote::{entity_event::EntityEvent, entity_record::EntityRecord},
+    BigMap, BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver,
+    EntityActionType, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, MessageIndex,
+    NetEntity, NetEntityHandleConverter, Protocol, Replicate, Serde, SerdeErr, Tick,
+    UnsignedVariableInteger, WorldMutType,
 };
 
 pub struct RemoteWorldManager<E: Copy + Eq + Hash> {
@@ -202,7 +202,10 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 
                         world.insert_boxed_component(&world_entity, component);
 
-                        events.push(EntityEvent::<E>::InsertComponent(world_entity, component_kind));
+                        events.push(EntityEvent::<E>::InsertComponent(
+                            world_entity,
+                            component_kind,
+                        ));
                     }
                     //
 
@@ -220,7 +223,10 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                             if let Some(component) =
                                 world.remove_component_of_kind(&world_entity, &component_kind)
                             {
-                                events.push(EntityEvent::<E>::RemoveComponent(world_entity, component));
+                                events.push(EntityEvent::<E>::RemoveComponent(
+                                    world_entity,
+                                    component,
+                                ));
                             }
                         }
 
@@ -251,7 +257,10 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 
                         world.insert_boxed_component(&world_entity, component);
 
-                        events.push(EntityEvent::<E>::InsertComponent(*world_entity, component_kind));
+                        events.push(EntityEvent::<E>::InsertComponent(
+                            *world_entity,
+                            component_kind,
+                        ));
                     }
                 }
                 EntityAction::RemoveComponent(net_entity, component_kind) => {
@@ -341,7 +350,11 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
                     component_update,
                 )?;
 
-                events.push(EntityEvent::UpdateComponent(server_tick, *world_entity, component_kind));
+                events.push(EntityEvent::UpdateComponent(
+                    server_tick,
+                    *world_entity,
+                    component_kind,
+                ));
             }
         }
 
