@@ -1341,7 +1341,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
         self.host_world_manager.handle_to_entity(entity_handle)
     }
 

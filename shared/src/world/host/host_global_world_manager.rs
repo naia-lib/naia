@@ -93,7 +93,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostGlobalWorldManager<E> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for HostGlobalWorldManager<E> {
     // Conversions
-    fn handle_to_entity(&self, handle: &EntityHandle) -> E {
+    fn handle_to_entity(&self, handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
         self.world_record.handle_to_entity(handle)
     }
 

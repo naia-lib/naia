@@ -44,9 +44,15 @@ impl EntityProperty {
     }
 
     pub fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-        (*self.handle_prop)
-            .map(|handle| converter.handle_to_net_entity(&handle))
-            .ser(writer);
+        if let Some(handle) = *self.handle_prop {
+            if let Ok(net_entity) = converter.handle_to_net_entity(&handle) {
+                let opt = Some(net_entity);
+                opt.ser(writer);
+                return;
+            }
+        }
+        let opt: Option<NetEntity> = None;
+        opt.ser(writer);
     }
 
     pub fn new_read(
@@ -110,7 +116,12 @@ impl EntityProperty {
     }
 
     pub fn get<E: Copy + Eq + Hash>(&self, handler: &dyn EntityHandleConverter<E>) -> Option<E> {
-        (*self.handle_prop).map(|handle| handler.handle_to_entity(&handle))
+        if let Some(handle) = (*self.handle_prop) {
+            if let Ok(entity) = handler.handle_to_entity(&handle) {
+                return Some(entity);
+            }
+        }
+        return None;
     }
 
     pub fn set<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entity: &E) {

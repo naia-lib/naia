@@ -83,11 +83,14 @@ impl<E: Copy + Eq + Hash> WorldRecord<E> {
 }
 
 impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for WorldRecord<E> {
-    fn handle_to_entity(&self, handle: &EntityHandle) -> E {
-        return *self
+    fn handle_to_entity(&self, handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
+        if let Some(entity) = self
             .handle_entity_map
-            .get(handle)
-            .expect("should always be an entity for a given handle");
+            .get(handle) {
+            Ok(*entity)
+        } else {
+            Err(EntityDoesNotExistError)
+        }
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {

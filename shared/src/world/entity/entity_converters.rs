@@ -8,12 +8,12 @@ use crate::{
 };
 
 pub trait EntityHandleConverter<E: Copy + Eq + Hash> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E;
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError>;
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError>;
 }
 
 pub trait NetEntityHandleConverter {
-    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity;
+    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Result<NetEntity, EntityDoesNotExistError>;
     fn net_entity_to_handle(
         &self,
         net_entity: &NetEntity,
@@ -21,15 +21,15 @@ pub trait NetEntityHandleConverter {
 }
 
 pub trait NetEntityConverter<E: Copy + Eq + Hash> {
-    fn entity_to_net_entity(&self, entity: &E) -> NetEntity;
-    fn net_entity_to_entity(&self, net_entity: &NetEntity) -> E;
+    fn entity_to_net_entity(&self, entity: &E) -> Result<NetEntity, EntityDoesNotExistError>;
+    fn net_entity_to_entity(&self, net_entity: &NetEntity) -> Result<E, EntityDoesNotExistError>;
 }
 
 pub struct FakeEntityConverter;
 
 impl NetEntityHandleConverter for FakeEntityConverter {
-    fn handle_to_net_entity(&self, _: &EntityHandle) -> NetEntity {
-        NetEntity::from(0)
+    fn handle_to_net_entity(&self, _: &EntityHandle) -> Result<NetEntity, EntityDoesNotExistError> {
+        Ok(NetEntity::from(0))
     }
 
     fn net_entity_to_handle(&self, _: &NetEntity) -> Result<EntityHandle, EntityDoesNotExistError> {
@@ -55,16 +55,20 @@ impl<'a, 'b, E: Eq + Copy + Hash> EntityConverter<'a, 'b, E> {
 }
 
 impl<'a, 'b, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityConverter<'a, 'b, E> {
-    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
-        let entity = self.handle_converter.handle_to_entity(entity_handle);
-        self.net_entity_converter.entity_to_net_entity(&entity)
+    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Result<NetEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self.handle_converter.handle_to_entity(entity_handle) {
+            return self.net_entity_converter.entity_to_net_entity(&entity);
+        }
+        return Err(EntityDoesNotExistError);
     }
 
     fn net_entity_to_handle(
         &self,
         net_entity: &NetEntity,
     ) -> Result<EntityHandle, EntityDoesNotExistError> {
-        let entity = self.net_entity_converter.net_entity_to_entity(net_entity);
-        self.handle_converter.entity_to_handle(&entity)
+        if let Ok(entity) = self.net_entity_converter.net_entity_to_entity(net_entity) {
+            return self.handle_converter.entity_to_handle(&entity);
+        }
+        return Err(EntityDoesNotExistError);
     }
 }

@@ -1,5 +1,7 @@
 use std::{collections::HashMap, hash::Hash};
 
+use bevy_ecs::entity::Entity;
+
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader, BigMap, BitReader,
     ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver, EntityActionType,
@@ -13,7 +15,7 @@ use super::entity_record::EntityRecord;
 pub struct RemoteWorldManager<E: Copy + Eq + Hash> {
     entity_records: HashMap<E, EntityRecord>,
     local_to_world_entity: HashMap<NetEntity, E>,
-    pub handle_entity_map: BigMap<EntityHandle, E>,
+    handle_entity_map: BigMap<EntityHandle, E>,
     receiver: EntityActionReceiver<NetEntity>,
     received_components: HashMap<(NetEntity, ComponentKind), Box<dyn Replicate>>,
 }
@@ -371,11 +373,13 @@ impl<E: Copy + Eq + Hash> RemoteWorldManager<E> {
 }
 
 impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for RemoteWorldManager<E> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        *self
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
+        if let Some(entity) = self
             .handle_entity_map
-            .get(entity_handle)
-            .expect("entity does not exist for given handle!")
+            .get(entity_handle) {
+            return Ok(*entity);
+        }
+        return Err(EntityDoesNotExistError);
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
@@ -388,13 +392,15 @@ impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for RemoteWorldManager<E> {
 }
 
 impl<E: Copy + Eq + Hash> NetEntityHandleConverter for RemoteWorldManager<E> {
-    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> NetEntity {
-        let entity = self
+    fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Result<NetEntity, EntityDoesNotExistError> {
+        if let Some(entity) = self
             .handle_entity_map
-            .get(entity_handle)
-            .expect("no entity exists for the given handle!");
-        let entity_record = self.entity_records.get(entity).unwrap();
-        entity_record.net_entity
+            .get(entity_handle) {
+            if let Some(entity_record) = self.entity_records.get(entity) {
+                return Ok(entity_record.net_entity);
+            }
+        }
+        return Err(EntityDoesNotExistError);
     }
 
     fn net_entity_to_handle(
