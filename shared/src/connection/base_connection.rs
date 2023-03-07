@@ -1,8 +1,4 @@
-use std::{
-    hash::Hash,
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
+use std::{hash::Hash, net::SocketAddr};
 
 use naia_serde::{BitWriter, Serde};
 use naia_socket_shared::Instant;
@@ -12,8 +8,8 @@ use crate::{
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
     world::entity::entity_converters::GlobalWorldManagerType,
-    EntityConverter, EntityHandleConverter, GlobalDiffHandler, HostWorldManager, MessageKinds,
-    Protocol, RemoteWorldManager, WorldRefType,
+    EntityConverter, EntityHandleConverter, HostWorldManager, MessageKinds, Protocol,
+    RemoteWorldManager, WorldRefType,
 };
 
 use super::{
@@ -39,14 +35,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         host_type: HostType,
         connection_config: &ConnectionConfig,
         channel_kinds: &ChannelKinds,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
     ) -> Self {
         BaseConnection {
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
             message_manager: MessageManager::new(host_type, channel_kinds),
-            host_world_manager: HostWorldManager::new(address, diff_handler),
+            host_world_manager: HostWorldManager::new(address, global_world_manager),
             remote_world_manager: RemoteWorldManager::new(),
         }
     }

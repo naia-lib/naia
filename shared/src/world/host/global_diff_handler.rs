@@ -15,7 +15,6 @@ impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
         }
     }
 
-    // For Server
     pub fn register_component(
         &mut self,
         global_world_manager: &dyn GlobalWorldManagerType<E>,

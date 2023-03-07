@@ -11,13 +11,14 @@ use crate::{
         },
         host::mut_channel::MutChannelType,
     },
-    ComponentKind,
+    ComponentKind, GlobalDiffHandler,
 };
 
 pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityHandleConverter<E> {
     fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>>;
     fn to_handle_converter(&self) -> &dyn EntityHandleConverter<E>;
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
+    fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
 }
 
 pub trait EntityHandleConverter<E: Copy + Eq + Hash> {

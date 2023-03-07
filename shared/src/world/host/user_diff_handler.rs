@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
-use crate::{ComponentKind, DiffMask};
+use crate::{ComponentKind, DiffMask, GlobalWorldManagerType};
 
 use super::{global_diff_handler::GlobalDiffHandler, mut_channel::MutReceiver};
 
@@ -16,10 +16,10 @@ pub struct UserDiffHandler<E: Copy + Eq + Hash> {
 }
 
 impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
-    pub fn new(global_diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>) -> Self {
+    pub fn new(global_world_manager: &dyn GlobalWorldManagerType<E>) -> Self {
         UserDiffHandler {
             receivers: HashMap::new(),
-            global_diff_handler: global_diff_handler.clone(),
+            global_diff_handler: global_world_manager.diff_handler(),
         }
     }
 

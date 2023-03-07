@@ -2,20 +2,17 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
-    sync::{Arc, RwLock},
 };
 
 use log::warn;
 
-use crate::{
-    ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, Instant, KeyGenerator,
-    NetEntity, ReliableSender,
-};
-
 use super::{
     entity_action_event::EntityActionEvent, entity_message_waitlist::EntityMessageWaitlist,
-    global_diff_handler::GlobalDiffHandler, host_world_manager::ActionId,
-    user_diff_handler::UserDiffHandler,
+    host_world_manager::ActionId, user_diff_handler::UserDiffHandler,
+};
+use crate::{
+    ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, GlobalWorldManagerType,
+    Instant, KeyGenerator, NetEntity, ReliableSender,
 };
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
@@ -63,7 +60,7 @@ pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
     pub fn new(
         address: &Option<SocketAddr>,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
     ) -> Self {
         Self {
             host_world: CheckedMap::new(),
@@ -73,7 +70,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             delivered_actions: EntityActionReceiver::new(),
 
             address: *address,
-            diff_handler: UserDiffHandler::new(diff_handler),
+            diff_handler: UserDiffHandler::new(global_world_manager),
             net_entity_generator: KeyGenerator::new(),
             net_entity_to_entity_map: HashMap::new(),
             entity_to_net_entity_map: HashMap::new(),

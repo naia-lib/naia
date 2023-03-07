@@ -3,19 +3,19 @@ use std::{hash::Hash, net::SocketAddr};
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, HostGlobalWorldManager,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, GlobalWorldManagerType,
     HostType, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick,
-    WorldMutType, WorldRecord, WorldRefType,
+    WorldMutType, WorldRefType,
 };
 
+use super::io::Io;
 use crate::{
     connection::{
         tick_buffer_sender::TickBufferSender, tick_queue::TickQueue, time_manager::TimeManager,
     },
     events::Events,
+    world::global_world_manager::GlobalWorldManager,
 };
-
-use super::io::Io;
 
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub base: BaseConnection<E>,
@@ -32,26 +32,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         connection_config: &ConnectionConfig,
         channel_kinds: &ChannelKinds,
         time_manager: TimeManager,
-        host_global_world_manager: &HostGlobalWorldManager<E>,
+        global_world_manager: &GlobalWorldManager<E>,
     ) -> Self {
         let tick_buffer = TickBufferSender::new(channel_kinds);
 
         let mut connection = Connection {
             base: BaseConnection::new(
-                address.clone(),
+                &Some(address.clone()),
                 HostType::Client,
                 connection_config,
                 channel_kinds,
-                host_global_world_manager.diff_handler(),
+                global_world_manager,
             ),
             time_manager,
             tick_buffer,
             jitter_buffer: TickQueue::new(),
         };
 
-        let existing_entities = host_global_world_manager.entities();
+        let existing_entities = global_world_manager.entities();
         for entity in existing_entities {
-            let component_kinds = host_global_world_manager.component_kinds(&entity).unwrap();
+            let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
             connection
                 .base
                 .host_world_manager
@@ -133,13 +133,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E>,
+        global_world_manager: &GlobalWorldManager<E>,
     ) {
         let rtt_millis = self.time_manager.rtt();
         self.base.collect_outgoing_messages(
             now,
             &rtt_millis,
-            world_record,
+            global_world_manager.to_handle_converter(),
             &protocol.message_kinds,
         );
 
@@ -150,7 +150,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, now, io, world, world_record) {
+            if self.send_outgoing_packet(protocol, now, io, world, global_world_manager) {
                 any_sent = true;
             } else {
                 break;
@@ -168,7 +168,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E>,
+        global_world_manager: &GlobalWorldManager<E>,
     ) -> bool {
         if self.base.has_outgoing_messages() || self.tick_buffer.has_outgoing_messages() {
             let next_packet_index = self.base.next_packet_index();
@@ -214,7 +214,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 &mut writer,
                 next_packet_index,
                 world,
-                &world_record,
+                global_world_manager,
                 &mut has_written,
             );
 

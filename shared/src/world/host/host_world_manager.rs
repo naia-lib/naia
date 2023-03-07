@@ -3,7 +3,6 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
-    sync::{Arc, RwLock},
     time::Duration,
 };
 
@@ -17,10 +16,7 @@ use crate::{
     WorldRefType,
 };
 
-use super::{
-    entity_action_event::EntityActionEvent, global_diff_handler::GlobalDiffHandler,
-    world_channel::WorldChannel,
-};
+use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 const ACTION_RECORD_TTL: Duration = Duration::from_secs(60);
@@ -49,11 +45,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
     /// Create a new HostWorldManager, given the client's address
     pub fn new(
         address: &Option<SocketAddr>,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
     ) -> Self {
         HostWorldManager {
             // World
-            world_channel: WorldChannel::new(address, diff_handler),
+            world_channel: WorldChannel::new(address, global_world_manager),
             next_send_actions: VecDeque::new(),
             sent_action_packets: SequenceList::new(),
 

@@ -9,10 +9,9 @@ use naia_client_socket::Socket;
 
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, GameInstant,
-    HostGlobalWorldManager, Instant, Message, MessageContainer, PacketType, PingIndex, Protocol,
-    Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, GameInstant, Instant,
+    Message, MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig,
+    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -22,7 +21,7 @@ use crate::{
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
     },
-    entity_mut::EntityMut,
+    world::{entity_mut::EntityMut, global_world_manager::GlobalWorldManager},
 };
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
@@ -40,7 +39,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     handshake_manager: HandshakeManager,
     manual_disconnect: bool,
     // World
-    host_world_manager: HostGlobalWorldManager<E>,
+    host_world_manager: GlobalWorldManager<E>,
     // Events
     incoming_events: Events<E>,
 }
@@ -72,7 +71,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             handshake_manager,
             manual_disconnect: false,
             // World
-            host_world_manager: HostGlobalWorldManager::new(),
+            host_world_manager: GlobalWorldManager::new(),
             // Events
             incoming_events: Events::new(),
         }
@@ -177,7 +176,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     &now,
                     &mut self.io,
                     &world,
-                    self.host_world_manager.world_record(),
+                    &self.host_world_manager,
                 );
 
                 // insert tick events in total range
@@ -288,7 +287,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     fn spawn_entity_inner(&mut self, entity: &E) {
-        self.host_world_manager.spawn_entity(entity);
+        self.host_world_manager.host_spawn_entity(entity);
         if let Some(connection) = &mut self.server_connection {
             let component_kinds = self.host_world_manager.component_kinds(entity).unwrap();
             connection
@@ -415,7 +414,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         // Remove from ECS Record
-        self.host_world_manager.despawn_entity(entity);
+        self.host_world_manager.host_despawn_entity(entity);
     }
 
     /// Adds a Component to an Entity
@@ -464,7 +463,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         // update in world manager
-        self.host_world_manager.insert_component(entity, component);
+        self.host_world_manager
+            .host_insert_component(entity, component);
     }
 
     /// Removes a Component from an Entity
@@ -494,7 +494,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // cleanup all other loose ends
         self.host_world_manager
-            .remove_component(entity, &component_kind);
+            .host_remove_component(entity, &component_kind);
     }
 
     // Private methods
