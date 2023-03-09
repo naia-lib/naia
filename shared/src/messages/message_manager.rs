@@ -1,10 +1,8 @@
 use std::collections::HashMap;
-use std::hash::Hash;
 
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::world::local_world_manager::LocalWorldManager;
 use crate::{
     connection::packet_notifiable::PacketNotifiable,
     constants::FRAGMENTATION_LIMIT_BITS,
@@ -31,7 +29,7 @@ use crate::{
         message_container::MessageContainer,
     },
     types::{HostType, MessageIndex, PacketIndex},
-    EntityConverter, EntityHandleConverter, MessageKinds, NetEntityHandleConverter, Protocol,
+    MessageKinds, NetEntityHandleConverter, Protocol,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -260,14 +258,12 @@ impl MessageManager {
 
     // Incoming Messages
 
-    pub fn read_messages<E: Copy + Eq + Hash>(
+    pub fn read_messages(
         &mut self,
         protocol: &Protocol,
-        global_world_manager: &dyn EntityHandleConverter<E>,
-        local_world_manager: &LocalWorldManager<E>,
+        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<Vec<(ChannelKind, Vec<MessageContainer>)>, SerdeErr> {
-        let entity_converter = EntityConverter::new(global_world_manager, local_world_manager);
         loop {
             let message_continue = bool::de(reader)?;
             if !message_continue {
@@ -279,7 +275,7 @@ impl MessageManager {
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(&protocol.message_kinds, &entity_converter, reader)?;
+            channel.read_messages(&protocol.message_kinds, converter, reader)?;
         }
 
         Ok(self.receive_messages())

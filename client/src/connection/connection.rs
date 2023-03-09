@@ -101,10 +101,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // read messages
             {
+                let entity_converter =
+                    EntityConverter::new(global_world_manager, &self.base.local_world_manager);
                 let messages = self.base.message_manager.read_messages(
                     protocol,
-                    global_world_manager,
-                    &self.base.local_world_manager,
+                    &entity_converter,
                     &mut reader,
                 )?;
                 for (channel_kind, messages) in messages {

@@ -27,10 +27,10 @@ impl ChannelTickBufferReceiver {
     /// them in a buffer to be returned to the application
     pub fn read_messages(
         &mut self,
+        converter: &dyn NetEntityHandleConverter,
         message_kinds: &MessageKinds,
         host_tick: &Tick,
         remote_tick: &Tick,
-        converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_tick = *remote_tick;
@@ -60,7 +60,7 @@ impl ChannelTickBufferReceiver {
         message_kinds: &MessageKinds,
         host_tick: &Tick,
         last_read_tick: &mut Tick,
-        converter: &dyn NetEntityHandleConverter,
+        entity_converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read remote tick
@@ -79,7 +79,7 @@ impl ChannelTickBufferReceiver {
             last_read_message_index = message_index;
 
             // read payload
-            let new_message = message_kinds.read(reader, converter)?;
+            let new_message = message_kinds.read(reader, entity_converter)?;
 
             if !self
                 .incoming_messages

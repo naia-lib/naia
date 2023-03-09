@@ -279,7 +279,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         // All necessary entities are in scope, so send message
                         let converter = EntityConverter::new(
                             &self.global_world_manager,
-                            &connection.base.host_world_manager,
+                            &connection.base.local_world_manager,
                         );
                         connection.base.message_manager.send_message(
                             &self.protocol.message_kinds,
@@ -299,7 +299,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 } else {
                     let converter = EntityConverter::new(
                         &self.global_world_manager,
-                        &connection.base.host_world_manager,
+                        &connection.base.local_world_manager,
                     );
                     connection.base.message_manager.send_message(
                         &self.protocol.message_kinds,
@@ -793,7 +793,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
-        let entity_events = connection.base.despawn_all_remote_entities(world);
+        let entity_events = connection
+            .base
+            .despawn_all_remote_entities(&mut self.global_world_manager, world);
         self.incoming_events
             .receive_entity_events(user_key, entity_events);
     }
@@ -1314,10 +1316,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                             .component_kinds(entity)
                                             .unwrap();
                                         // add entity & components to the connections local scope
-                                        connection
-                                            .base
-                                            .host_world_manager
-                                            .init_entity(entity, component_kinds);
+                                        connection.base.host_world_manager.init_entity(
+                                            &mut connection.base.local_world_manager,
+                                            entity,
+                                            component_kinds,
+                                        );
                                     }
                                 } else if currently_in_scope {
                                     // remove entity from the connections local scope

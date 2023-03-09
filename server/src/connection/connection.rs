@@ -74,25 +74,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         global_world_manager: &mut GlobalWorldManager<E>,
         incoming_events: &mut Events<E>,
     ) -> Result<(), SerdeErr> {
-        let converter = EntityConverter::new(global_world_manager, &self.base.host_world_manager);
-
-        // read tick-buffered messages
         {
+            let entity_converter =
+                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
+
+            // read tick-buffered messages
             self.tick_buffer.read_messages(
                 protocol,
                 &server_tick,
                 &client_tick,
-                &converter,
+                &entity_converter,
                 reader,
             )?;
-        }
 
-        // read messages
-        {
-            let messages = self
-                .base
-                .message_manager
-                .read_messages(protocol, &converter, reader)?;
+            // read messages
+            let messages =
+                self.base
+                    .message_manager
+                    .read_messages(protocol, &entity_converter, reader)?;
             for (channel_kind, messages) in messages {
                 for message in messages {
                     incoming_events.push_message(&self.user_key, &channel_kind, message);
@@ -103,6 +102,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         // read world events
         {
             let entity_events = self.base.remote_world_manager.read_world_events(
+                global_world_manager,
+                &mut self.base.local_world_manager,
                 protocol,
                 world,
                 client_tick,
