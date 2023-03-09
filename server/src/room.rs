@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{BigMapKey, Channel, ChannelKind, Message, MessageContainer};
+use naia_shared::{BigMapKey, Channel, ChannelKind, Message};
 
 use super::user::UserKey;
 

@@ -665,8 +665,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
         }
-
-        connection.finish_receiving();
     }
 
     fn handle_heartbeats(connection: &mut Connection<E>, io: &mut Io) {

@@ -52,7 +52,6 @@ pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
     address: Option<SocketAddr>,
     pub diff_handler: UserDiffHandler<E>,
     pub delayed_entity_messages: EntityMessageWaitlist<E>,
-    delayed_remote_despawns: Vec<E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
@@ -70,7 +69,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             address: *address,
             diff_handler: UserDiffHandler::new(global_world_manager),
             delayed_entity_messages: EntityMessageWaitlist::new(),
-            delayed_remote_despawns: Vec::new(),
         }
     }
 
@@ -257,11 +255,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
-    fn queue_remote_despawn_entity(&mut self, entity: &E) {
-        self.delayed_remote_despawns.push(*entity);
-    }
-
-    pub fn remote_despawn_entity(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E) {
+    pub fn remote_despawn_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+    ) {
         if !self.remote_world.contains_key(entity) {
             panic!(
                 "World Channel: should not be able to despawn non-existent entity in remote world"
@@ -270,7 +268,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         if let Some(EntityChannel::Despawning) = self.entity_channels.get(entity) {
             self.entity_channels.remove(entity);
-            self.on_entity_channel_closed(world_manager, entity);
+            self.on_entity_channel_closed(local_world_manager, entity);
 
             // if entity is spawned in host, respawn entity channel
             if self.host_world.contains_key(entity) {
@@ -279,7 +277,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                     .insert(*entity, EntityChannel::Spawning);
                 self.outgoing_actions
                     .send_message(EntityActionEvent::SpawnEntity(*entity));
-                self.on_entity_channel_opening(world_manager, entity);
+                self.on_entity_channel_opening(local_world_manager, entity);
             }
         } else {
             panic!("World Channel: should only receive this event if entity channel is despawning");
@@ -400,14 +398,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     // Action Delivery
 
-    pub fn action_delivered(&mut self, action_id: ActionId, action: EntityAction<E>) {
+    pub fn action_delivered(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        action_id: ActionId,
+        action: EntityAction<E>,
+    ) {
         if self.outgoing_actions.deliver_message(&action_id).is_some() {
             self.delivered_actions.buffer_action(action_id, action);
-            self.process_delivered_actions();
+            self.process_delivered_actions(local_world_manager);
         }
     }
 
-    fn process_delivered_actions(&mut self) {
+    fn process_delivered_actions(&mut self, local_world_manager: &mut LocalWorldManager<E>) {
         let delivered_actions = self.delivered_actions.receive_actions();
         for action in delivered_actions {
             match action {
@@ -417,7 +420,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                     self.remote_spawn_entity(&entity, &component_set);
                 }
                 EntityAction::DespawnEntity(entity) => {
-                    self.queue_remote_despawn_entity(&entity);
+                    self.remote_despawn_entity(local_world_manager, &entity);
                 }
                 EntityAction::InsertComponent(entity, component) => {
                     self.remote_insert_component(&entity, &component);
@@ -469,17 +472,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
 
         output
-    }
-
-    pub(crate) fn finish_receiving(&mut self, world_manager: &mut LocalWorldManager<E>) {
-        if self.delayed_remote_despawns.is_empty() {
-            return;
-        }
-
-        let despawns = std::mem::replace(&mut self.delayed_remote_despawns, Vec::new());
-        for entity in despawns {
-            self.remote_despawn_entity(world_manager, &entity);
-        }
     }
 }
 

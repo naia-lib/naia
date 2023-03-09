@@ -4,7 +4,6 @@ use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr
 use naia_socket_shared::Instant;
 
 use crate::{
-    connection::packet_notifiable::PacketNotifiable,
     constants::FRAGMENTATION_LIMIT_BITS,
     messages::{
         channels::{
@@ -293,10 +292,10 @@ impl MessageManager {
     }
 }
 
-impl PacketNotifiable for MessageManager {
+impl MessageManager {
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
-    fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
+    pub fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
             for (channel_kind, message_indices) in channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_kind) {

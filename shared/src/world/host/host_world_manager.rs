@@ -6,14 +6,16 @@ use std::{
     time::Duration,
 };
 
-use crate::world::local_world_manager::LocalWorldManager;
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
-    sequence_list::SequenceList, world::entity::entity_converters::GlobalWorldManagerType,
+    sequence_list::SequenceList,
+    world::{
+        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+    },
     BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength, DiffMask,
     EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer, MessageIndex,
-    MessageKinds, MessageManager, NetEntityConverter, NetEntityHandleConverter, PacketIndex,
-    PacketNotifiable, Serde, UnsignedVariableInteger, WorldRefType,
+    MessageKinds, MessageManager, NetEntityConverter, NetEntityHandleConverter, PacketIndex, Serde,
+    UnsignedVariableInteger, WorldRefType,
 };
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
@@ -702,15 +704,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             "Packet Write Error: Blocking overflow detected! Data update of Component `{component_name}` requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommended to slim down this Component"
         )
     }
-
-    pub fn finish_receiving(&mut self, world_manager: &mut LocalWorldManager<E>) {
-        self.world_channel.finish_receiving(world_manager);
-    }
 }
 
-// PacketNotifiable
-impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for HostWorldManager<E> {
-    fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
+impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
+    pub fn notify_packet_delivered(
+        &mut self,
+        packet_index: PacketIndex,
+        local_world_manager: &mut LocalWorldManager<E>,
+    ) {
         // Updates
         self.sent_updates.remove(&packet_index);
 
@@ -720,7 +721,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> PacketNotifiable for HostWorldManager<E>
             .remove_scan_from_front(&packet_index)
         {
             for (action_id, action) in action_list {
-                self.world_channel.action_delivered(action_id, action);
+                self.world_channel
+                    .action_delivered(local_world_manager, action_id, action);
             }
         }
     }

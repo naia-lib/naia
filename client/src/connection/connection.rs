@@ -249,10 +249,4 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         false
     }
-
-    pub(crate) fn finish_receiving(&mut self) {
-        self.base
-            .host_world_manager
-            .finish_receiving(&mut self.base.local_world_manager);
-    }
 }

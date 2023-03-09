@@ -91,6 +91,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
             header,
             &mut self.message_manager,
             &mut self.host_world_manager,
+            &mut self.local_world_manager,
             packet_notifiables,
         );
     }
