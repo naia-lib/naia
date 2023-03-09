@@ -2,15 +2,14 @@ use std::time::Duration;
 
 use naia_client::internal::{HandshakeManager as ClientHandshakeManager, HandshakeState};
 use naia_server::internal::{HandshakeManager as ServerHandshakeManager, HandshakeResult};
-use naia_shared::{BitReader, BitWriter, PacketType, Protocol, Serde, StandardHeader};
+use naia_shared::{BitReader, BitWriter, FakeEntityConverter, MessageContainer, PacketType, Protocol, Serde, StandardHeader};
 use naia_test::Auth;
 
 #[test]
 fn end_to_end_handshake_w_auth() {
-    let mut client = ClientHandshakeManager::new(Duration::new(0, 0));
+    let mut client = ClientHandshakeManager::new(Duration::new(0, 0), Duration::new(0, 0), 1);
     let mut server = ServerHandshakeManager::new(true);
-    let mut message_length: usize;
-    let mut message_buffer: [u8; 508];
+    let mut bytes: Box<[u8]>;
     let mut writer: BitWriter;
     let mut reader: BitReader;
 
@@ -21,52 +20,45 @@ fn end_to_end_handshake_w_auth() {
     // 0. set Client auth object
     let username = "charlie";
     let password = "1234567";
-    client.set_auth_message(Box::new(Auth::new(username, password)));
+    client.set_auth_message(MessageContainer::from(Box::new(Auth::new(username, password)), &FakeEntityConverter));
 
     // 1. Client send challenge request
     {
         writer = client.write_challenge_request();
-        let (length, buffer) = writer.to_bytes();
-        message_length = length;
-        message_buffer = buffer;
+        bytes = writer.to_bytes();
     }
 
     // 2. Server receive challenge request
     {
-        reader = BitReader::new(&message_buffer[..message_length]);
+        reader = BitReader::new(&bytes);
         StandardHeader::de(&mut reader).expect("unable to read standard header from stream");
         writer = server.recv_challenge_request(&mut reader).unwrap();
     }
 
     // 3. Server send challenge response
     {
-        let (length, buffer) = writer.to_bytes();
-        message_length = length;
-        message_buffer = buffer;
+        bytes = writer.to_bytes();
     }
 
     // 4. Client receive challenge response
     {
-        reader = BitReader::new(&message_buffer[..message_length]);
+        reader = BitReader::new(&bytes);
         StandardHeader::de(&mut reader).expect("unable to read standard header from stream");
         client.recv_challenge_response(&mut reader);
-        assert_eq!(
-            client.connection_state,
-            HandshakeState::AwaitingValidateResponse
+        assert!(
+            client.connection_state.eq(&HandshakeState::AwaitingValidateResponse)
         );
     }
 
     // 5. Client send connect request
     {
         writer = client.write_validate_request(&message_kinds);
-        let (length, buffer) = writer.to_bytes();
-        message_length = length;
-        message_buffer = buffer;
+        bytes = writer.to_bytes();
     }
 
     // 6. Server receive connect request
     {
-        reader = BitReader::new(&message_buffer[..message_length]);
+        reader = BitReader::new(&bytes);
         StandardHeader::de(&mut reader).expect("unable to read standard header from stream");
         let address = "127.0.0.1:4000".parse().unwrap();
         let result = server.recv_validate_request(&message_kinds, &address, &mut reader);
@@ -95,14 +87,12 @@ fn end_to_end_handshake_w_auth() {
         let header = StandardHeader::new(PacketType::ServerValidateResponse, 0, 0, 0);
         writer = BitWriter::new();
         header.ser(&mut writer);
-        let (length, buffer) = writer.to_bytes();
-        message_length = length;
-        message_buffer = buffer;
+        bytes = writer.to_bytes();
     }
 
     // 8. Client receive connect response
     {
-        reader = BitReader::new(&message_buffer[..message_length]);
+        reader = BitReader::new(&bytes);
         StandardHeader::de(&mut reader).expect("unable to read standard header from stream");
         client.recv_validate_response();
     }

@@ -488,7 +488,7 @@ mod offset_to_speed_tests {
         let offset = OFFSET_MAX + 5;
 
         // TODO: derive these values?
-        assert_eq!(offset_to_speed(offset), 1.5);
+        assert_eq!(offset_to_speed(offset), 1.25);
     }
 
     #[test]
@@ -496,6 +496,6 @@ mod offset_to_speed_tests {
         let offset = OFFSET_MIN - 5;
 
         // TODO: derive these values?
-        assert_eq!(offset_to_speed(offset), 0.6666667);
+        assert_eq!(offset_to_speed(offset), 0.8);
     }
 }

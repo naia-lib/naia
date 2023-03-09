@@ -19,11 +19,11 @@ fn read_write_tuple_struct() {
     in_1.ser(&mut writer);
     in_2.ser(&mut writer);
 
-    let (buffer_length, buffer) = writer.to_bytes();
+    let bytes = writer.to_bytes();
 
     // Read
 
-    let mut reader = BitReader::new(&buffer[..buffer_length]);
+    let mut reader = BitReader::new(&bytes);
 
     let out_1 = Serde::de(&mut reader).unwrap();
     let out_2 = Serde::de(&mut reader).unwrap();

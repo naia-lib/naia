@@ -51,7 +51,7 @@ fn convert_single_fragment() {
     let initial_message = StringMessage::new("hello");
     let outgoing_message = initial_message.clone();
 
-    let container = MessageContainer::from(Box::new(outgoing_message));
+    let container = MessageContainer::from(Box::new(outgoing_message), &FakeEntityConverter);
 
     // Fragment Message
     let fragments = fragmenter.fragment_message(&message_kinds, &converter, container);
@@ -95,7 +95,7 @@ fn convert_multiple_fragments() {
             Donec ut purus venenatis, mollis est ut, sollicitudin egestas.");
     let outgoing_message = initial_message.clone();
 
-    let container = MessageContainer::from(Box::new(outgoing_message));
+    let container = MessageContainer::from(Box::new(outgoing_message), &FakeEntityConverter);
 
     // Fragment Message
     let fragments = fragmenter.fragment_message(&message_kinds, &converter, container);

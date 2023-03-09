@@ -96,11 +96,11 @@ fn read_write_unit_replica() {
 
     in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
-    let (buffer_length, buffer) = writer.to_bytes();
+    let bytes = writer.to_bytes();
 
     // Read
 
-    let mut reader = BitReader::new(&buffer[..buffer_length]);
+    let mut reader = BitReader::new(&bytes);
 
     let out_1 = component_kinds
         .read(&mut reader, &FakeEntityConverter)
@@ -124,11 +124,11 @@ fn read_write_named_replica() {
 
     in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
-    let (buffer_length, buffer) = writer.to_bytes();
+    let bytes = writer.to_bytes();
 
     // Read
 
-    let mut reader = BitReader::new(&buffer[..buffer_length]);
+    let mut reader = BitReader::new(&bytes);
 
     let out_1 = component_kinds
         .read(&mut reader, &FakeEntityConverter)
@@ -159,11 +159,11 @@ fn read_write_tuple_replica() {
 
     in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
-    let (buffer_length, buffer) = writer.to_bytes();
+    let bytes = writer.to_bytes();
 
     // Read
 
-    let mut reader = BitReader::new(&buffer[..buffer_length]);
+    let mut reader = BitReader::new(&bytes);
 
     let out_1 = component_kinds
         .read(&mut reader, &FakeEntityConverter)
@@ -184,22 +184,22 @@ fn read_write_entity_replica() {
     pub struct TestEntityConverter;
 
     impl EntityHandleConverter<u64> for TestEntityConverter {
-        fn handle_to_entity(&self, entity_handle: &EntityHandle) -> u64 {
-            entity_handle.to_u64()
+        fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<u64, EntityDoesNotExistError> {
+            Ok(entity_handle.to_u64())
         }
         fn entity_to_handle(&self, entity: &u64) -> Result<EntityHandle, EntityDoesNotExistError> {
             Ok(EntityHandle::from_u64(*entity))
         }
     }
     impl NetEntityHandleConverter for TestEntityConverter {
-        fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> OwnedNetEntity {
-            OwnedNetEntity::from(entity_handle.to_u64() as u16)
+        fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Result<OwnedNetEntity, EntityDoesNotExistError> {
+            Ok(OwnedNetEntity::new_host(entity_handle.to_u64() as u16))
         }
         fn net_entity_to_handle(
             &self,
             net_entity: &OwnedNetEntity,
         ) -> Result<EntityHandle, EntityDoesNotExistError> {
-            let net_entity_u16: u16 = (*net_entity).into();
+            let net_entity_u16 = (*net_entity).value();
             Ok(EntityHandle::from_u64(net_entity_u16 as u64))
         }
     }
@@ -215,10 +215,10 @@ fn read_write_entity_replica() {
     let mut in_1 = EntityPropertyHolder::new();
     in_1.entity_1.set(&TestEntityConverter, &1);
     in_1.write(&component_kinds, &mut writer, &TestEntityConverter);
-    let (buffer_length, buffer) = writer.to_bytes();
+    let bytes = writer.to_bytes();
 
     // Read
-    let mut reader = BitReader::new(&buffer[..buffer_length]);
+    let mut reader = BitReader::new(&bytes);
     let out_1 = component_kinds
         .read(&mut reader, &TestEntityConverter)
         .expect("should deserialize correctly")
@@ -250,11 +250,11 @@ fn read_write_nonreplicated_replica() {
 
     in_1.write(&component_kinds, &mut writer, &FakeEntityConverter);
 
-    let (buffer_length, buffer) = writer.to_bytes();
+    let bytes = writer.to_bytes();
 
     // Read
 
-    let mut reader = BitReader::new(&buffer[..buffer_length]);
+    let mut reader = BitReader::new(&bytes);
 
     let out_1 = component_kinds
         .read(&mut reader, &FakeEntityConverter)
