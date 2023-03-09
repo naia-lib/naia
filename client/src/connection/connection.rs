@@ -1,4 +1,4 @@
-use std::{hash::Hash, net::SocketAddr};
+use std::hash::Hash;
 
 use log::warn;
 
@@ -8,10 +8,10 @@ use naia_shared::{
     Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
-use super::io::Io;
 use crate::{
     connection::{
-        tick_buffer_sender::TickBufferSender, tick_queue::TickQueue, time_manager::TimeManager,
+        io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
+        time_manager::TimeManager,
     },
     events::Events,
     world::global_world_manager::GlobalWorldManager,
@@ -28,7 +28,6 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn new(
-        address: SocketAddr,
         connection_config: &ConnectionConfig,
         channel_kinds: &ChannelKinds,
         time_manager: TimeManager,
@@ -38,7 +37,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         let mut connection = Connection {
             base: BaseConnection::new(
-                &Some(address.clone()),
+                &None,
                 HostType::Client,
                 connection_config,
                 channel_kinds,

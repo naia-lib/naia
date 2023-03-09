@@ -241,7 +241,7 @@ pub fn get_read_method(
         fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<MessageContainer, SerdeErr> {
             #field_reads
 
-            return Ok(MessageContainer::from(Box::new(#struct_build)));
+            return Ok(MessageContainer::from(Box::new(#struct_build), converter));
         }
     }
 }
@@ -292,7 +292,7 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
             }
             Field::EntityProperty(_) => {
                 quote! {
-                    output += self.#field_name.bit_length();
+                    output += self.#field_name.bit_length(converter);
                 }
             }
         };
@@ -305,7 +305,7 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
     }
 
     quote! {
-        fn bit_length(&self) -> u32 {
+        fn bit_length(&self, converter: &dyn NetEntityHandleConverter) -> u32 {
             let mut output = 0;
             output += <MessageKind as ConstBitLength>::const_bit_length();
             #field_bit_lengths

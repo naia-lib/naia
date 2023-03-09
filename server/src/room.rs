@@ -210,10 +210,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
 
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = message.clone_box();
-        self.server.room_broadcast_message(
-            &ChannelKind::of::<C>(),
-            MessageContainer::from(cloned_message),
-            &self.key,
-        );
+        self.server
+            .room_broadcast_message(&ChannelKind::of::<C>(), &self.key, cloned_message);
     }
 }

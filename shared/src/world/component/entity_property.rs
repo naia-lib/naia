@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::world::{
     component::{property::Property, property_mutate::PropertyMutator},
@@ -42,13 +42,23 @@ impl EntityProperty {
     pub fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
         if let Some(handle) = *self.handle_prop {
             if let Ok(net_entity) = converter.handle_to_net_entity(&handle) {
-                let opt = Some(net_entity);
+                // Must reverse the OwnedNetEntity because the Host<->Remote
+                // relationship inverts after this data goes over the wire
+                let reversed_net_entity = net_entity.to_reversed();
+
+                let opt = Some(reversed_net_entity);
                 opt.ser(writer);
                 return;
             }
         }
         let opt: Option<OwnedNetEntity> = None;
         opt.ser(writer);
+    }
+
+    pub fn bit_length(&self, converter: &dyn NetEntityHandleConverter) -> u32 {
+        let mut bit_counter = BitCounter::new(0, 0, u32::MAX);
+        self.write(&mut bit_counter, converter);
+        return bit_counter.bits_needed();
     }
 
     pub fn new_read(
@@ -126,9 +136,5 @@ impl EntityProperty {
         } else {
             panic!("Could not find Entity, in order to set the EntityProperty value!")
         }
-    }
-
-    pub fn bit_length(&self) -> u32 {
-        return self.handle_prop.bit_length();
     }
 }

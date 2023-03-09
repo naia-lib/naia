@@ -235,11 +235,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// UserKey
     pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(
-            user_key,
-            &ChannelKind::of::<C>(),
-            MessageContainer::from(cloned_message),
-        );
+        self.send_message_inner(user_key, &ChannelKind::of::<C>(), cloned_message);
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -248,7 +244,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         user_key: &UserKey,
         channel_kind: &ChannelKind,
-        message: MessageContainer,
+        message_box: Box<dyn Message>,
     ) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
@@ -258,6 +254,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
+                let converter = EntityConverter::new(
+                    &self.global_world_manager,
+                    &connection.base.local_world_manager,
+                );
+                let message = MessageContainer::from(message_box, &converter);
+
                 if message.has_entity_properties() {
                     // collect all entities in the message
                     let entities: Vec<E> = message
@@ -297,10 +299,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         );
                     }
                 } else {
-                    let converter = EntityConverter::new(
-                        &self.global_world_manager,
-                        &connection.base.local_world_manager,
-                    );
                     connection.base.message_manager.send_message(
                         &self.protocol.message_kinds,
                         &converter,
@@ -315,16 +313,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Sends a message to all connected users using a given channel
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.broadcast_message_inner(
-            &ChannelKind::of::<C>(),
-            MessageContainer::from(cloned_message),
-        );
+        self.broadcast_message_inner(&ChannelKind::of::<C>(), cloned_message);
     }
 
-    fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
-        self.user_keys()
-            .iter()
-            .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
+    fn broadcast_message_inner(
+        &mut self,
+        channel_kind: &ChannelKind,
+        message_box: Box<dyn Message>,
+    ) {
+        self.user_keys().iter().for_each(|user_key| {
+            self.send_message_inner(user_key, channel_kind, message_box.clone())
+        })
     }
 
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
@@ -903,13 +902,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub(crate) fn room_broadcast_message(
         &mut self,
         channel_kind: &ChannelKind,
-        message: MessageContainer,
         room_key: &RoomKey,
+        message_box: Box<dyn Message>,
     ) {
         if let Some(room) = self.rooms.get(room_key) {
             let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
             for user_key in &user_keys {
-                self.send_message_inner(user_key, channel_kind, message.clone())
+                self.send_message_inner(user_key, channel_kind, message_box.clone())
             }
         }
     }

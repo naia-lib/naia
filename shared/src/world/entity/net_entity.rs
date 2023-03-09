@@ -35,6 +35,13 @@ impl OwnedNetEntity {
     pub fn to_unowned(self) -> NetEntity {
         NetEntity(self.value())
     }
+
+    pub fn to_reversed(self) -> Self {
+        match self {
+            OwnedNetEntity::Host(value) => OwnedNetEntity::Remote(value),
+            OwnedNetEntity::Remote(value) => OwnedNetEntity::Host(value),
+        }
+    }
 }
 
 impl Serde for OwnedNetEntity {

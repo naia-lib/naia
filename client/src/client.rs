@@ -10,8 +10,9 @@ use naia_client_socket::Socket;
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
     EntityConverter, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
-    GameInstant, Instant, Message, MessageContainer, PacketType, PingIndex, Protocol, Replicate,
-    Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    FakeEntityConverter, GameInstant, Instant, Message, MessageContainer, PacketType, PingIndex,
+    Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{
@@ -82,7 +83,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
         self.handshake_manager
-            .set_auth_message(MessageContainer::from(Box::new(auth)));
+            .set_auth_message(MessageContainer::from(Box::new(auth), &FakeEntityConverter));
     }
 
     /// Connect to the given server address
@@ -210,13 +211,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Queues up an Message to be sent to the Server
     pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(
-            &ChannelKind::of::<C>(),
-            MessageContainer::from(cloned_message),
-        );
+        self.send_message_inner(&ChannelKind::of::<C>(), cloned_message);
     }
 
-    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
+    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message_box: Box<dyn Message>) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
         if !channel_settings.can_send_to_server() {
             panic!("Cannot send message to Server on this Channel");
@@ -231,6 +229,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 &self.global_world_manager,
                 &connection.base.local_world_manager,
             );
+            let message = MessageContainer::from(message_box, &converter);
             connection.base.message_manager.send_message(
                 &self.protocol.message_kinds,
                 &converter,
@@ -242,18 +241,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_tick_buffer_message_inner(
-            tick,
-            &ChannelKind::of::<C>(),
-            MessageContainer::from(cloned_message),
-        );
+        self.send_tick_buffer_message_inner(tick, &ChannelKind::of::<C>(), cloned_message);
     }
 
     fn send_tick_buffer_message_inner(
         &mut self,
         tick: &Tick,
         channel_kind: &ChannelKind,
-        message: MessageContainer,
+        message_box: Box<dyn Message>,
     ) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
@@ -266,6 +261,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some(connection) = self.server_connection.as_mut() {
+            let converter = EntityConverter::new(
+                &self.global_world_manager,
+                &connection.base.local_world_manager,
+            );
+            let message = MessageContainer::from(message_box, &converter);
             connection
                 .tick_buffer
                 .send_message(tick, channel_kind, message);
@@ -540,14 +540,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     match self.handshake_manager.recv(&mut reader) {
                         Some(HandshakeResult::Connected(time_manager)) => {
                             // new connect!
-                            let server_addr = self.server_address_unwrapped();
                             self.server_connection = Some(Connection::new(
-                                server_addr,
                                 &self.client_config.connection,
                                 &self.protocol.channel_kinds,
                                 time_manager,
                                 &self.global_world_manager,
                             ));
+
+                            let server_addr = self.server_address_unwrapped();
                             self.incoming_events.push_connection(&server_addr);
                         }
                         Some(HandshakeResult::Rejected) => {
