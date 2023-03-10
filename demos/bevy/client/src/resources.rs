@@ -1,9 +1,11 @@
 use std::default::Default;
 
+use bevy_asset::Handle;
 use bevy_ecs::{entity::Entity, prelude::Resource};
+use bevy_render::mesh::Mesh;
+use bevy_sprite::ColorMaterial;
 
 use naia_bevy_client::{CommandHistory, Tick};
-
 use naia_bevy_demo_shared::messages::KeyCommand;
 
 pub struct OwnedEntity {
@@ -20,11 +22,33 @@ impl OwnedEntity {
     }
 }
 
-#[derive(Default, Resource)]
+#[derive(Resource)]
 pub struct Global {
     pub owned_entity: Option<OwnedEntity>,
-    pub client_authoritative_entity: Option<Entity>,
+    pub cursor_entity: Option<Entity>,
     pub queued_command: Option<KeyCommand>,
     pub command_history: CommandHistory<KeyCommand>,
     pub last_client_tick: Tick,
+    pub red: Handle<ColorMaterial>,
+    pub blue: Handle<ColorMaterial>,
+    pub yellow: Handle<ColorMaterial>,
+    pub white: Handle<ColorMaterial>,
+    pub circle: Handle<Mesh>,
+}
+
+impl Default for Global {
+    fn default() -> Self {
+        Self {
+            owned_entity: None,
+            cursor_entity: None,
+            queued_command: None,
+            command_history: CommandHistory::default(),
+            last_client_tick: Tick::default(),
+            white: Handle::default(),
+            red: Handle::default(),
+            blue: Handle::default(),
+            yellow: Handle::default(),
+            circle: Handle::default(),
+        }
+    }
 }

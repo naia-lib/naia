@@ -32,7 +32,7 @@ pub fn init(mut commands: Commands, mut server: Server) {
     // Resources
     commands.insert_resource(Global {
         main_room_key,
-        user_to_entity_map: HashMap::new(),
-        echo_entity_map: HashMap::new(),
+        user_to_square_map: HashMap::new(),
+        cursor_entity_map: HashMap::new(),
     })
 }

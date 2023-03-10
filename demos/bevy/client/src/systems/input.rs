@@ -43,7 +43,7 @@ pub fn client_input(
     keyboard_input: Res<Input<KeyCode>>,
     mut query: Query<&mut Position>,
 ) {
-    if let Some(entity) = global.client_authoritative_entity {
+    if let Some(entity) = global.cursor_entity {
         let i = keyboard_input.pressed(KeyCode::I);
         let k = keyboard_input.pressed(KeyCode::K);
         let j = keyboard_input.pressed(KeyCode::J);

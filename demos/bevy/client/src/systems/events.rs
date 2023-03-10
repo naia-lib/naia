@@ -1,11 +1,11 @@
 use bevy_ecs::{
     event::EventReader,
-    system::{Commands, Query, ResMut},
+    system::{Commands, Query, Res, ResMut},
 };
 use bevy_log::info;
 use bevy_math::Vec2;
 use bevy_render::color::Color as BevyColor;
-use bevy_sprite::{Sprite, SpriteBundle};
+use bevy_sprite::{MaterialMesh2dBundle, Sprite, SpriteBundle};
 use bevy_transform::components::Transform;
 
 use naia_bevy_client::{
@@ -19,7 +19,7 @@ use naia_bevy_client::{
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, ColorValue, Position},
+    components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{EntityAssignment, KeyCommand},
 };
 
@@ -48,7 +48,7 @@ pub fn connect_events(
             Position::new(x, y)
         };
 
-        // Spawn entity
+        // Spawn Cursor Entity
         let entity = commands
             // Spawn new Square Entity
             .spawn_empty()
@@ -60,17 +60,14 @@ pub fn connect_events(
             .id();
 
         // Insert SpriteBundle locally only
-        commands.entity(entity).insert(SpriteBundle {
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                color: BevyColor::BLACK,
-                ..Default::default()
-            },
-            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+        commands.entity(entity).insert(MaterialMesh2dBundle {
+            mesh: global.circle.clone().into(),
+            material: global.white.clone(),
+            transform: Transform::from_xyz(0.0, 0.0, 1.0),
             ..Default::default()
         });
 
-        global.client_authoritative_entity = Some(entity);
+        global.cursor_entity = Some(entity);
     }
 }
 
@@ -110,7 +107,7 @@ pub fn message_events(
                             color: BevyColor::WHITE,
                             ..Default::default()
                         },
-                        transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                        transform: Transform::from_xyz(0.0, 0.0, 1.0),
                         ..Default::default()
                     })
                     .id();
@@ -148,32 +145,54 @@ pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) 
 pub fn insert_component_events(
     mut commands: Commands,
     mut event_reader: EventReader<InsertComponentEvents>,
-    color_query: Query<&Color>,
+    global: Res<Global>,
+    sprite_query: Query<(&Shape, &Color)>,
 ) {
     for events in event_reader.iter() {
         for entity in events.read::<Color>() {
-            if let Ok(color) = color_query.get(entity) {
-                // When we receive a replicated Color component for a given Entity,
-                // use that value to also insert a local-only SpriteBundle component into this entity
-                info!("add Color Component to entity");
+            // When we receive a replicated Color component for a given Entity,
+            // use that value to also insert a local-only SpriteBundle component into this entity
+            info!("add Color Component to entity");
 
-                let color = {
-                    match *color.value {
-                        ColorValue::Red => BevyColor::RED,
-                        ColorValue::Blue => BevyColor::BLUE,
-                        ColorValue::Yellow => BevyColor::YELLOW,
+            if let Ok((shape, color)) = sprite_query.get(entity) {
+                match *shape.value {
+                    // Square
+                    ShapeValue::Square => {
+                        let color = {
+                            match *color.value {
+                                ColorValue::Red => BevyColor::RED,
+                                ColorValue::Blue => BevyColor::BLUE,
+                                ColorValue::Yellow => BevyColor::YELLOW,
+                            }
+                        };
+
+                        commands.entity(entity).insert(SpriteBundle {
+                            sprite: Sprite {
+                                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                                color,
+                                ..Default::default()
+                            },
+                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                            ..Default::default()
+                        });
                     }
-                };
-
-                commands.entity(entity).insert(SpriteBundle {
-                    sprite: Sprite {
-                        custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                        color,
-                        ..Default::default()
-                    },
-                    transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                    ..Default::default()
-                });
+                    // Circle
+                    ShapeValue::Circle => {
+                        let handle = {
+                            match *color.value {
+                                ColorValue::Red => &global.red,
+                                ColorValue::Blue => &global.blue,
+                                ColorValue::Yellow => &global.yellow,
+                            }
+                        };
+                        commands.entity(entity).insert(MaterialMesh2dBundle {
+                            mesh: global.circle.clone().into(),
+                            material: handle.clone(),
+                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                            ..Default::default()
+                        });
+                    }
+                }
             }
         }
     }

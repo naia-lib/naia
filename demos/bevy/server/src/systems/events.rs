@@ -1,7 +1,6 @@
-use bevy_ecs::system::Commands;
 use bevy_ecs::{
     event::EventReader,
-    system::{Query, ResMut},
+    system::{Commands, Query, ResMut},
 };
 use bevy_log::info;
 
@@ -17,7 +16,7 @@ use naia_bevy_server::{
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, ColorValue, Position},
+    components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
 };
 
@@ -72,6 +71,9 @@ pub fn connect_events(
             Color::new(color_value)
         };
 
+        // Shape component
+        let shape = Shape::new(ShapeValue::Square);
+
         // Spawn entity
         let entity = commands
             // Spawn new Entity
@@ -82,12 +84,14 @@ pub fn connect_events(
             .insert(position)
             // Insert Color component
             .insert(color)
+            // Insert Shape component
+            .insert(shape)
             // return Entity id
             .id();
 
         server.room_mut(&global.main_room_key).add_entity(&entity);
 
-        global.user_to_entity_map.insert(*user_key, entity);
+        global.user_to_square_map.insert(*user_key, entity);
 
         // Send an Entity Assignment message to the User that owns the Square
         let mut assignment_message = EntityAssignment::new(true);
@@ -109,7 +113,7 @@ pub fn disconnect_events(
     for DisconnectEvent(user_key, user) in event_reader.iter() {
         info!("Naia Server disconnected from: {:?}", user.address);
 
-        if let Some(entity) = global.user_to_entity_map.remove(user_key) {
+        if let Some(entity) = global.user_to_square_map.remove(user_key) {
             commands.entity(entity).despawn();
             server
                 .room_mut(&global.main_room_key)
@@ -200,6 +204,9 @@ pub fn insert_component_events(
                     Color::new(color_value)
                 };
 
+                // New Shape component
+                let shape = Shape::new(ShapeValue::Circle);
+
                 // Spawn entity
                 let server_entity = commands
                     // Spawn new Square Entity
@@ -210,6 +217,8 @@ pub fn insert_component_events(
                     .insert(server_position)
                     // Insert Color component
                     .insert(color)
+                    // Insert Shape component
+                    .insert(shape)
                     // return Entity id
                     .id();
 
@@ -217,7 +226,9 @@ pub fn insert_component_events(
                     .room_mut(&global.main_room_key)
                     .add_entity(&server_entity);
 
-                global.echo_entity_map.insert(client_entity, server_entity);
+                global
+                    .cursor_entity_map
+                    .insert(client_entity, server_entity);
             }
         }
     }
@@ -230,7 +241,7 @@ pub fn update_component_events(
 ) {
     for events in event_reader.iter() {
         for (_user_key, client_entity) in events.read::<Position>() {
-            if let Some(server_entity) = global.echo_entity_map.get(&client_entity) {
+            if let Some(server_entity) = global.cursor_entity_map.get(&client_entity) {
                 if let Ok([client_position, mut server_position]) =
                     position_query.get_many_mut([client_entity, *server_entity])
                 {
