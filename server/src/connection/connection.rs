@@ -218,7 +218,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 world,
                 global_world_manager,
                 &mut has_written,
-                true
+                true,
             );
 
             // send packet

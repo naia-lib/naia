@@ -36,7 +36,6 @@ pub struct Protocol {
     /// Whether or not Client Authoritative Entities will be allowed
     pub client_authoritative_entities: bool,
     locked: bool,
-
 }
 
 impl Default for Protocol {
