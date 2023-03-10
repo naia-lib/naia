@@ -22,7 +22,7 @@ Any help is very welcome, please get in touch! I am open to any criticism / feed
 
 Currently guaranteed to work on Web & Linux, although Windows & MacOS have been reported working as well. Please file issues if you find inconsistencies and I'll do what I can.
 
-For more detailed information, please look at the [FAQ](https://github.com/naia-lib/naia/faq/).
+For more detailed information, please look at the [FAQ](https://github.com/naia-lib/naia/tree/main/faq).
 
 ## Demos
 
