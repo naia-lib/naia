@@ -1,14 +1,14 @@
 use bevy_ecs::system::{Query, Res, ResMut};
 use bevy_input::{keyboard::KeyCode, Input};
+use bevy_math::Vec2;
+use bevy_window::Window;
 
 use naia_bevy_client::Client;
-use naia_bevy_demo_shared::components::Position;
-
-use naia_bevy_demo_shared::messages::KeyCommand;
+use naia_bevy_demo_shared::{components::Position, messages::KeyCommand};
 
 use crate::resources::Global;
 
-pub fn server_input(
+pub fn square_input(
     mut global: ResMut<Global>,
     client: Client,
     keyboard_input: Res<Input<KeyCode>>,
@@ -38,32 +38,32 @@ pub fn server_input(
     }
 }
 
-pub fn client_input(
+pub fn cursor_input(
     global: ResMut<Global>,
-    keyboard_input: Res<Input<KeyCode>>,
-    mut query: Query<&mut Position>,
+    window_query: Query<&Window>,
+    mut position_query: Query<&mut Position>,
 ) {
     if let Some(entity) = global.cursor_entity {
-        let i = keyboard_input.pressed(KeyCode::I);
-        let k = keyboard_input.pressed(KeyCode::K);
-        let j = keyboard_input.pressed(KeyCode::J);
-        let l = keyboard_input.pressed(KeyCode::L);
-
-        if let Ok(mut position) = query.get_mut(entity) {
-            if i {
-                *position.y = position.y.wrapping_sub(2);
-            }
-            if k {
-                *position.y = position.y.wrapping_add(2);
-            }
-            if j {
-                *position.x = position.x.wrapping_sub(2);
-            }
-            if l {
-                *position.x = position.x.wrapping_add(2);
+        if let Ok(window) = window_query.get_single() {
+            if let Ok(mut cursor_position) = position_query.get_mut(entity) {
+                if let Some(mouse_position) = window_relative_mouse_position(window) {
+                    *cursor_position.x = mouse_position.x as i16;
+                    *cursor_position.y = mouse_position.y as i16 * -1;
+                }
             }
         }
     }
+}
+
+fn window_relative_mouse_position(window: &Window) -> Option<Vec2> {
+    let Some(cursor_pos) = window.cursor_position() else {return None};
+
+    let window_size = Vec2 {
+        x: window.width(),
+        y: window.height(),
+    };
+
+    Some(cursor_pos - window_size / 2.0)
 }
 
 //pub fn sync(mut query: Query<(&Position, &mut Transform)>) {
