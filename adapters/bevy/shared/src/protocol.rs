@@ -41,6 +41,11 @@ impl Protocol {
         self
     }
 
+    pub fn enable_client_authoritative_entities(&mut self) -> &mut Self {
+        self.inner.enable_client_authoritative_entities();
+        self
+    }
+
     pub fn rtc_endpoint(&mut self, path: String) -> &mut Self {
         self.inner.rtc_endpoint(path);
         self

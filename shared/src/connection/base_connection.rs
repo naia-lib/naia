@@ -162,6 +162,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         world: &W,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         has_written: &mut bool,
+        write_world_events: bool,
     ) {
         // write messages
         {
@@ -178,40 +179,42 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
             writer.release_bits(1);
         }
 
-        // write entity updates
-        {
-            self.host_world_manager.write_updates(
-                &protocol.component_kinds,
-                now,
-                writer,
-                &packet_index,
-                world,
-                global_world_manager,
-                &self.local_world_manager,
-                has_written,
-            );
+        if write_world_events {
+            // write entity updates
+            {
+                self.host_world_manager.write_updates(
+                    &protocol.component_kinds,
+                    now,
+                    writer,
+                    &packet_index,
+                    world,
+                    global_world_manager,
+                    &self.local_world_manager,
+                    has_written,
+                );
 
-            // finish updates
-            false.ser(writer);
-            writer.release_bits(1);
-        }
+                // finish updates
+                false.ser(writer);
+                writer.release_bits(1);
+            }
 
-        // write entity actions
-        {
-            self.host_world_manager.write_actions(
-                &protocol.component_kinds,
-                now,
-                writer,
-                &packet_index,
-                world,
-                global_world_manager,
-                &self.local_world_manager,
-                has_written,
-            );
+            // write entity actions
+            {
+                self.host_world_manager.write_actions(
+                    &protocol.component_kinds,
+                    now,
+                    writer,
+                    &packet_index,
+                    world,
+                    global_world_manager,
+                    &self.local_world_manager,
+                    has_written,
+                );
 
-            // finish actions
-            false.ser(writer);
-            writer.release_bits(1);
+                // finish actions
+                false.ser(writer);
+                writer.release_bits(1);
+            }
         }
     }
 

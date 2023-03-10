@@ -229,13 +229,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
 
             self.base.write_outgoing_packet(
-                &protocol,
+                protocol,
                 now,
                 &mut writer,
                 next_packet_index,
                 world,
                 global_world_manager,
                 &mut has_written,
+                protocol.client_authoritative_entities,
             );
 
             // send packet

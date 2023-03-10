@@ -774,7 +774,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         user_key: &UserKey,
         world: &mut W,
     ) {
-        self.despawn_all_remote_entities(user_key, world);
+        if self.protocol.client_authoritative_entities {
+            self.despawn_all_remote_entities(user_key, world);
+        }
         let user = self.user_delete(user_key);
         self.incoming_events.push_disconnection(user_key, user);
     }

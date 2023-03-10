@@ -312,6 +312,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     // Entities
 
     pub fn enable_replication(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
         self.spawn_entity_inner(&entity);
     }
 
@@ -323,6 +324,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
     pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
+        self.check_client_authoritative_allowed();
+
         let entity = world.spawn_entity();
         self.spawn_entity_inner(&entity);
 
@@ -331,6 +334,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Creates a new Entity with a specific id
     pub fn spawn_entity_at(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
         self.spawn_entity_inner(entity)
     }
 
@@ -360,6 +364,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Entity.
     /// Panics if the Entity does not exist.
     pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
+        self.check_client_authoritative_allowed();
         if world.has_entity(entity) {
             return EntityMut::new(self, world, entity);
         }
@@ -554,6 +559,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     // Private methods
+
+    fn check_client_authoritative_allowed(&self) {
+        if !self.protocol.client_authoritative_entities {
+            panic!("Cannot perform this operation: Client Authoritative Entities are not enabled! Enable them in the Protocol, with the `enable_client_authoritative_entities() method, and note that if you do enable them, to make sure you handle all Spawn/Insert/Update events in the Server, as this may be an attack vector.")
+        }
+    }
 
     fn maintain_socket(&mut self) {
         if self.server_connection.is_none() {

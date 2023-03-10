@@ -33,7 +33,10 @@ pub struct Protocol {
     pub tick_interval: Duration,
     /// Configuration used to control compression parameters
     pub compression: Option<CompressionConfig>,
+    /// Whether or not Client Authoritative Entities will be allowed
+    pub client_authoritative_entities: bool,
     locked: bool,
+
 }
 
 impl Default for Protocol {
@@ -47,6 +50,7 @@ impl Default for Protocol {
             socket: SocketConfig::new(None, None),
             tick_interval: Duration::from_millis(50),
             compression: None,
+            client_authoritative_entities: false,
             locked: false,
         }
     }
@@ -84,6 +88,12 @@ impl Protocol {
     pub fn compression(&mut self, config: CompressionConfig) -> &mut Self {
         self.check_lock();
         self.compression = Some(config);
+        self
+    }
+
+    pub fn enable_client_authoritative_entities(&mut self) -> &mut Self {
+        self.check_lock();
+        self.client_authoritative_entities = true;
         self
     }
 

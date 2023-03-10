@@ -100,7 +100,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
 
         // read world events
-        {
+        if protocol.client_authoritative_entities {
             let entity_events = self.base.remote_world_manager.read_world_events(
                 global_world_manager,
                 &mut self.base.local_world_manager,
@@ -218,6 +218,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 world,
                 global_world_manager,
                 &mut has_written,
+                true
             );
 
             // send packet
