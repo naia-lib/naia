@@ -119,6 +119,14 @@ pub fn disconnect_events(
                 .room_mut(&global.main_room_key)
                 .remove_entity(&entity);
         }
+        if let Some(client_entity) = global.user_to_cursor_map.remove(user_key) {
+            if let Some(server_entity) = global.client_to_server_cursor_map.remove(&client_entity) {
+                commands.entity(server_entity).despawn();
+                server
+                    .room_mut(&global.main_room_key)
+                    .remove_entity(&server_entity);
+            }
+        }
     }
 }
 
@@ -187,7 +195,7 @@ pub fn insert_component_events(
     position_query: Query<&Position>,
 ) {
     for events in event_reader.iter() {
-        for (_user_key, client_entity) in events.read::<Position>() {
+        for (user_key, client_entity) in events.read::<Position>() {
             info!("insert component into client entity");
 
             if let Ok(client_position) = position_query.get(client_entity) {
@@ -226,8 +234,9 @@ pub fn insert_component_events(
                     .room_mut(&global.main_room_key)
                     .add_entity(&server_entity);
 
+                global.user_to_cursor_map.insert(user_key, client_entity);
                 global
-                    .cursor_entity_map
+                    .client_to_server_cursor_map
                     .insert(client_entity, server_entity);
             }
         }
@@ -241,7 +250,7 @@ pub fn update_component_events(
 ) {
     for events in event_reader.iter() {
         for (_user_key, client_entity) in events.read::<Position>() {
-            if let Some(server_entity) = global.cursor_entity_map.get(&client_entity) {
+            if let Some(server_entity) = global.client_to_server_cursor_map.get(&client_entity) {
                 if let Ok([client_position, mut server_position]) =
                     position_query.get_many_mut([client_entity, *server_entity])
                 {
