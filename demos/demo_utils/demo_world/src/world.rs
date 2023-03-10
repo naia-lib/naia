@@ -24,7 +24,7 @@ pub struct World {
 impl Default for World {
     fn default() -> Self {
         Self {
-            entities: BigMap::default(),
+            entities: BigMap::new(),
         }
     }
 }
@@ -179,6 +179,20 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                     let wrapped_ref = ReplicaMutWrapper::new(wrapper);
                     return Some(wrapped_ref);
                 }
+            }
+        }
+
+        None
+    }
+
+    fn component_mut_of_kind<'a>(
+        &'a mut self,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) -> Option<ReplicaDynMutWrapper<'a>> {
+        if let Some(component_map) = self.world.entities.get_mut(entity) {
+            if let Some(boxed_component) = component_map.get_mut(&component_kind) {
+                return Some(ReplicaDynMutWrapper::new(boxed_component.dyn_mut()));
             }
         }
 
