@@ -25,7 +25,7 @@ pub fn process_events(app: &mut App) {
         info!("Client disconnected from: {}", server_address);
     }
 
-    // Spawn Events
+    // Spawn Entity Events
     for entity in events.read::<SpawnEntityEvent>() {
         let new_id = app.next_id;
         app.next_id = app.next_id.wrapping_add(1);

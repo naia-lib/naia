@@ -1,5 +1,7 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
+use log::warn;
+
 use naia_shared::{
     Channel, ChannelKind, ComponentKind, EntityEvent, Message, MessageContainer, MessageKind,
     Replicate, Tick,
@@ -231,6 +233,20 @@ impl<E: Copy> Events<E> {
                     self.push_update(user_key, &entity, &component_kind);
                 }
             }
+        }
+    }
+}
+
+impl<E: Copy> Drop for Events<E> {
+    fn drop(&mut self) {
+        if !self.spawns.is_empty() {
+            warn!("Dropped Server Spawn Event(s)! Make sure to handle these through `events.read::<SpawnEntityEvent>()`, and note that this may be an attack vector.");
+        }
+        if !self.inserts.is_empty() {
+            warn!("Dropped Server Insert Event(s)! Make sure to handle these through `events.read::<InsertComponentEvent<Component>>()`, and note that this may be an attack vector.");
+        }
+        if !self.updates.is_empty() {
+            warn!("Dropped Server Update Event(s)! Make sure to handle these through `events.read::<UpdateComponentEvent<Component>>()`, and note that this may be an attack vector.");
         }
     }
 }

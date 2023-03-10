@@ -184,7 +184,10 @@ fn read_write_entity_replica() {
     pub struct TestEntityConverter;
 
     impl EntityHandleConverter<u64> for TestEntityConverter {
-        fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<u64, EntityDoesNotExistError> {
+        fn handle_to_entity(
+            &self,
+            entity_handle: &EntityHandle,
+        ) -> Result<u64, EntityDoesNotExistError> {
             Ok(entity_handle.to_u64())
         }
         fn entity_to_handle(&self, entity: &u64) -> Result<EntityHandle, EntityDoesNotExistError> {
@@ -192,7 +195,10 @@ fn read_write_entity_replica() {
         }
     }
     impl NetEntityHandleConverter for TestEntityConverter {
-        fn handle_to_net_entity(&self, entity_handle: &EntityHandle) -> Result<OwnedNetEntity, EntityDoesNotExistError> {
+        fn handle_to_net_entity(
+            &self,
+            entity_handle: &EntityHandle,
+        ) -> Result<OwnedNetEntity, EntityDoesNotExistError> {
             Ok(OwnedNetEntity::new_host(entity_handle.to_u64() as u16))
         }
         fn net_entity_to_handle(

@@ -2,7 +2,10 @@ use std::time::Duration;
 
 use naia_client::internal::{HandshakeManager as ClientHandshakeManager, HandshakeState};
 use naia_server::internal::{HandshakeManager as ServerHandshakeManager, HandshakeResult};
-use naia_shared::{BitReader, BitWriter, FakeEntityConverter, MessageContainer, PacketType, Protocol, Serde, StandardHeader};
+use naia_shared::{
+    BitReader, BitWriter, FakeEntityConverter, MessageContainer, PacketType, Protocol, Serde,
+    StandardHeader,
+};
 use naia_test::Auth;
 
 #[test]
@@ -20,7 +23,10 @@ fn end_to_end_handshake_w_auth() {
     // 0. set Client auth object
     let username = "charlie";
     let password = "1234567";
-    client.set_auth_message(MessageContainer::from(Box::new(Auth::new(username, password)), &FakeEntityConverter));
+    client.set_auth_message(MessageContainer::from(
+        Box::new(Auth::new(username, password)),
+        &FakeEntityConverter,
+    ));
 
     // 1. Client send challenge request
     {
@@ -45,9 +51,9 @@ fn end_to_end_handshake_w_auth() {
         reader = BitReader::new(&bytes);
         StandardHeader::de(&mut reader).expect("unable to read standard header from stream");
         client.recv_challenge_response(&mut reader);
-        assert!(
-            client.connection_state.eq(&HandshakeState::AwaitingValidateResponse)
-        );
+        assert!(client
+            .connection_state
+            .eq(&HandshakeState::AwaitingValidateResponse));
     }
 
     // 5. Client send connect request

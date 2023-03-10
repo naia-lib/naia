@@ -40,10 +40,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         output
     }
 
-    pub fn has_entity(&self, entity: &E) -> bool {
-        self.entity_records.contains_key(entity)
-    }
-
     pub fn entity_owner(&self, entity: &E) -> Option<EntityOwner> {
         if let Some(record) = self.entity_records.get(entity) {
             return Some(record.owner);
