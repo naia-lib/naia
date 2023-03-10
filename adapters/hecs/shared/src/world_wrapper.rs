@@ -6,8 +6,9 @@ use std::{
 use hecs::{Entity, World};
 
 use naia_shared::{
-    ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
+    ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{
@@ -161,6 +162,19 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
             return Some(component_mut);
         }
         None
+    }
+
+    fn component_mut_of_kind<'a>(
+        &'a mut self,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) -> Option<ReplicaDynMutWrapper<'a>> {
+        if let Some(access) = self.data.component_access(component_kind) {
+            if let Some(component) = access.component_mut(&mut self.inner, entity) {
+                return Some(component);
+            }
+        }
+        return None;
     }
 
     fn component_apply_update(

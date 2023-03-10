@@ -1,8 +1,9 @@
 use hecs::{Entity, World};
 
 use naia_shared::{
-    ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
+    ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
+    WorldRefType,
 };
 
 use super::{
@@ -174,6 +175,19 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
             let wrapper = ComponentMut(hecs_mut);
             let component_mut = ReplicaMutWrapper::new(wrapper);
             return Some(component_mut);
+        }
+        None
+    }
+
+    fn component_mut_of_kind<'a>(
+        &'a mut self,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) -> Option<ReplicaDynMutWrapper<'a>> {
+        if let Some(access) = self.world_data.component_access(component_kind) {
+            if let Some(component) = access.component_mut(self.world, entity) {
+                return Some(component);
+            }
         }
         None
     }
