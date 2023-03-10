@@ -10,7 +10,7 @@
     unused_import_braces
 )]
 
-pub use naia_shared::{default_channels, Random};
+pub use naia_shared::{default_channels, EntityRef, Random};
 
 mod client;
 mod client_config;
@@ -18,7 +18,7 @@ mod command_history;
 mod connection;
 mod error;
 mod events;
-mod protocol;
+mod world;
 
 pub use client::Client;
 pub use client_config::ClientConfig;
@@ -29,7 +29,7 @@ pub use events::{
     InsertComponentEvent, MessageEvent, RejectEvent, RemoveComponentEvent, ServerTickEvent,
     SpawnEntityEvent, UpdateComponentEvent,
 };
-pub use protocol::entity_ref::EntityRef;
+pub use world::entity_mut::EntityMut;
 
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};

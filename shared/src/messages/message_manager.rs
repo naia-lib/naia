@@ -4,7 +4,6 @@ use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr
 use naia_socket_shared::Instant;
 
 use crate::{
-    connection::packet_notifiable::PacketNotifiable,
     constants::FRAGMENTATION_LIMIT_BITS,
     messages::{
         channels::{
@@ -263,7 +262,7 @@ impl MessageManager {
         protocol: &Protocol,
         converter: &dyn NetEntityHandleConverter,
         reader: &mut BitReader,
-    ) -> Result<(), SerdeErr> {
+    ) -> Result<Vec<(ChannelKind, Vec<MessageContainer>)>, SerdeErr> {
         loop {
             let message_continue = bool::de(reader)?;
             if !message_continue {
@@ -278,27 +277,25 @@ impl MessageManager {
             channel.read_messages(&protocol.message_kinds, converter, reader)?;
         }
 
-        Ok(())
+        Ok(self.receive_messages())
     }
 
     /// Retrieve all messages from the channel buffers
-    pub fn receive_messages(&mut self) -> Vec<(ChannelKind, MessageContainer)> {
+    fn receive_messages(&mut self) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
             let messages = channel.receive_messages();
-            for message in messages {
-                output.push((channel_kind.clone(), message));
-            }
+            output.push((channel_kind.clone(), messages));
         }
         output
     }
 }
 
-impl PacketNotifiable for MessageManager {
+impl MessageManager {
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
-    fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
+    pub fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
             for (channel_kind, message_indices) in channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_kind) {

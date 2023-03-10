@@ -1,12 +1,19 @@
 use std::{any::Any, marker::PhantomData};
 
-use bevy_ecs::{entity::Entity, world::World};
+use bevy_app::App;
+use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs, world::World};
 
 use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
-use super::component_ref::{ComponentDynMut, ComponentDynRef};
+use super::{
+    change_detection::{on_component_added, on_component_removed},
+    component_ref::{ComponentDynMut, ComponentDynRef},
+    system_set::HostSyncChangeTracking,
+};
 
 pub trait ComponentAccess: Send + Sync {
+    fn add_systems(&self, app: &mut App);
+    fn box_clone(&self) -> Box<dyn ComponentAccess>;
     fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>>;
     fn component_mut<'w>(
         &self,
@@ -42,6 +49,14 @@ impl<R: Replicate> ComponentAccessor<R> {
 }
 
 impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
+    fn add_systems(&self, app: &mut App) {
+        app.add_systems(
+            (on_component_added::<R>, on_component_removed::<R>)
+                .chain()
+                .in_set(HostSyncChangeTracking),
+        );
+    }
+
     fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>> {
         if let Some(component_ref) = world.get::<R>(*entity) {
             let wrapper = ComponentDynRef(component_ref);
@@ -65,7 +80,7 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
     }
 
     fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<Box<dyn Replicate>> {
-        let result: Option<R> = world.entity_mut(*entity).remove::<R>();
+        let result: Option<R> = world.entity_mut(*entity).take::<R>();
         let casted: Option<Box<dyn Replicate>> = result.map(|inner: R| {
             let boxed_r: Box<R> = Box::new(inner);
             let boxed_dyn: Box<dyn Replicate> = boxed_r;
@@ -100,5 +115,12 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
         let boxed_any = boxed_component.to_boxed_any();
         let inner: R = *(boxed_any.downcast::<R>().unwrap());
         world.entity_mut(*entity).insert(inner);
+    }
+
+    fn box_clone(&self) -> Box<dyn ComponentAccess> {
+        let new_me = ComponentAccessor::<R> {
+            phantom_r: PhantomData,
+        };
+        Box::new(new_me)
     }
 }

@@ -7,4 +7,5 @@ pub mod sequenced_unreliable_receiver;
 pub mod unordered_reliable_receiver;
 pub mod unordered_unreliable_receiver;
 
-mod reliable_receiver;
+mod reliable_message_receiver;
+pub mod reliable_receiver;

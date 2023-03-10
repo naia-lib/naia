@@ -8,19 +8,23 @@ use bevy_ecs::prelude::Resource;
 use naia_client_socket::Socket;
 
 pub use naia_shared::{
-    BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, GameInstant, Message,
-    MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig,
-    StandardHeader, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
+    EntityConverter, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
+    FakeEntityConverter, GameInstant, Instant, Message, MessageContainer, PacketType, PingIndex,
+    Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{
     connection::{
+        base_time_manager::BaseTimeManager,
         connection::Connection,
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
     },
-    protocol::entity_ref::EntityRef,
+    world::{
+        entity_mut::EntityMut, entity_owner::EntityOwner, global_world_manager::GlobalWorldManager,
+    },
 };
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
@@ -28,7 +32,7 @@ use super::{client_config::ClientConfig, error::NaiaClientError, events::Events}
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
 #[cfg_attr(feature = "bevy_support", derive(Resource))]
-pub struct Client<E: Copy + Eq + Hash> {
+pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     client_config: ClientConfig,
     protocol: Protocol,
@@ -36,11 +40,14 @@ pub struct Client<E: Copy + Eq + Hash> {
     io: Io,
     server_connection: Option<Connection<E>>,
     handshake_manager: HandshakeManager,
+    manual_disconnect: bool,
+    // World
+    global_world_manager: GlobalWorldManager<E>,
     // Events
     incoming_events: Events<E>,
 }
 
-impl<E: Copy + Eq + Hash> Client<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Create a new Client
     pub fn new<P: Into<Protocol>>(client_config: ClientConfig, protocol: P) -> Self {
         let mut protocol: Protocol = protocol.into();
@@ -65,6 +72,9 @@ impl<E: Copy + Eq + Hash> Client<E> {
             ),
             server_connection: None,
             handshake_manager,
+            manual_disconnect: false,
+            // World
+            global_world_manager: GlobalWorldManager::new(),
             // Events
             incoming_events: Events::new(),
         }
@@ -73,7 +83,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
         self.handshake_manager
-            .set_auth_message(MessageContainer::from(Box::new(auth)));
+            .set_auth_message(MessageContainer::from(Box::new(auth), &FakeEntityConverter));
     }
 
     /// Connect to the given server address
@@ -116,7 +126,7 @@ impl<E: Copy + Eq + Hash> Client<E> {
             }
         }
 
-        self.disconnect_internal();
+        self.manual_disconnect = true;
     }
 
     // Receive Data from Server! Very important!
@@ -131,8 +141,8 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
         // all other operations
         if let Some(connection) = self.server_connection.as_mut() {
-            if connection.base.should_drop() {
-                self.disconnect_internal();
+            if connection.base.should_drop() || self.manual_disconnect {
+                self.disconnect_with_events(&mut world);
                 return std::mem::take(&mut self.incoming_events);
             }
 
@@ -141,14 +151,18 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // apply updates on tick boundary
-                connection.process_buffered_packets(
-                    &self.protocol,
-                    &mut world,
-                    &mut self.incoming_events,
-                );
-
-                // receive (process) messages
-                connection.receive_messages(&mut self.incoming_events);
+                if connection
+                    .process_buffered_packets(
+                        &self.protocol,
+                        &mut world,
+                        &mut self.global_world_manager,
+                        &mut self.incoming_events,
+                    )
+                    .is_err()
+                {
+                    // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
+                    warn!("Error reading from buffered packet!");
+                }
 
                 let mut index_tick = prev_receiving_tick.wrapping_add(1);
                 loop {
@@ -163,8 +177,17 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
             if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
                 // send outgoing packets
-                connection.send_outgoing_packets(&self.protocol, &mut self.io);
+                let now = Instant::now();
 
+                connection.send_outgoing_packets(
+                    &self.protocol,
+                    &now,
+                    &mut self.io,
+                    &world,
+                    &self.global_world_manager,
+                );
+
+                // insert tick events in total range
                 let mut index_tick = prev_sending_tick.wrapping_add(1);
                 loop {
                     self.incoming_events.push_client_tick(index_tick);
@@ -188,13 +211,10 @@ impl<E: Copy + Eq + Hash> Client<E> {
     /// Queues up an Message to be sent to the Server
     pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(
-            &ChannelKind::of::<C>(),
-            MessageContainer::from(cloned_message),
-        );
+        self.send_message_inner(&ChannelKind::of::<C>(), cloned_message);
     }
 
-    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
+    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message_box: Box<dyn Message>) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
         if !channel_settings.can_send_to_server() {
             panic!("Cannot send message to Server on this Channel");
@@ -205,29 +225,67 @@ impl<E: Copy + Eq + Hash> Client<E> {
         }
 
         if let Some(connection) = &mut self.server_connection {
-            connection.base.message_manager.send_message(
-                &self.protocol.message_kinds,
-                &connection.entity_manager,
-                channel_kind,
-                message,
+            let converter = EntityConverter::new(
+                &self.global_world_manager,
+                &connection.base.local_world_manager,
             );
+            let message = MessageContainer::from(message_box, &converter);
+
+            if message.has_entity_properties() {
+                // collect all entities in the message
+                let entities: Vec<E> = message
+                    .entities()
+                    .iter()
+                    .map(|handle| self.global_world_manager.handle_to_entity(handle).unwrap())
+                    .collect();
+
+                // check whether all entities are in scope for the connection
+                let all_entities_in_scope = {
+                    entities.iter().all(|entity| {
+                        connection
+                            .base
+                            .host_world_manager
+                            .entity_channel_is_open(entity)
+                    })
+                };
+                if all_entities_in_scope {
+                    // All necessary entities are in scope, so send message
+                    connection.base.message_manager.send_message(
+                        &self.protocol.message_kinds,
+                        &converter,
+                        channel_kind,
+                        message,
+                    );
+                } else {
+                    // Entity hasn't been added to the User Scope yet, or replicated to Client
+                    // yet
+                    connection.base.host_world_manager.queue_entity_message(
+                        entities,
+                        channel_kind,
+                        message,
+                    );
+                }
+            } else {
+                connection.base.message_manager.send_message(
+                    &self.protocol.message_kinds,
+                    &converter,
+                    channel_kind,
+                    message,
+                );
+            }
         }
     }
 
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_tick_buffer_message_inner(
-            tick,
-            &ChannelKind::of::<C>(),
-            MessageContainer::from(cloned_message),
-        );
+        self.send_tick_buffer_message_inner(tick, &ChannelKind::of::<C>(), cloned_message);
     }
 
     fn send_tick_buffer_message_inner(
         &mut self,
         tick: &Tick,
         channel_kind: &ChannelKind,
-        message: MessageContainer,
+        message_box: Box<dyn Message>,
     ) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
@@ -240,6 +298,11 @@ impl<E: Copy + Eq + Hash> Client<E> {
         }
 
         if let Some(connection) = self.server_connection.as_mut() {
+            let converter = EntityConverter::new(
+                &self.global_world_manager,
+                &connection.base.local_world_manager,
+            );
+            let message = MessageContainer::from(message_box, &converter);
             connection
                 .tick_buffer
                 .send_message(tick, channel_kind, message);
@@ -248,16 +311,76 @@ impl<E: Copy + Eq + Hash> Client<E> {
 
     // Entities
 
+    pub fn enable_replication(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
+        self.spawn_entity_inner(&entity);
+    }
+
+    pub fn disable_replication(&mut self, entity: &E) {
+        // Despawn from connections and inner tracking
+        self.despawn_entity_worldless(entity);
+    }
+
+    /// Creates a new Entity and returns an EntityMut which can be used for
+    /// further operations on the Entity
+    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
+        self.check_client_authoritative_allowed();
+
+        let entity = world.spawn_entity();
+        self.spawn_entity_inner(&entity);
+
+        EntityMut::new(self, world, &entity)
+    }
+
+    /// Creates a new Entity with a specific id
+    pub fn spawn_entity_at(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
+        self.spawn_entity_inner(entity)
+    }
+
+    fn spawn_entity_inner(&mut self, entity: &E) {
+        self.global_world_manager.host_spawn_entity(entity);
+        if let Some(connection) = &mut self.server_connection {
+            let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
+            connection.base.host_world_manager.init_entity(
+                &mut connection.base.local_world_manager,
+                entity,
+                component_kinds,
+            );
+        }
+    }
+
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
     pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
-        EntityRef::new(world, entity)
+        if world.has_entity(entity) {
+            return EntityRef::new(world, entity);
+        }
+        panic!("No Entity exists for given Key!");
+    }
+
+    /// Retrieves an EntityMut that exposes read and write operations for the
+    /// Entity.
+    /// Panics if the Entity does not exist.
+    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<E, W> {
+        self.check_client_authoritative_allowed();
+        if world.has_entity(entity) {
+            return EntityMut::new(self, world, entity);
+        }
+        panic!("No Entity exists for given Key!");
     }
 
     /// Return a list of all Entities
     pub fn entities<W: WorldRefType<E>>(&self, world: &W) -> Vec<E> {
         world.entities()
+    }
+
+    pub fn entity_owner(&self, entity: &E) -> EntityOwner {
+        if let Some(owner) = self.global_world_manager.entity_owner(entity) {
+            return owner;
+        }
+        return EntityOwner::Local;
     }
 
     // Connection
@@ -328,199 +451,330 @@ impl<E: Copy + Eq + Hash> Client<E> {
         self.io.incoming_bandwidth()
     }
 
-    // internal functions
+    // Crate-Public methods
+
+    /// Despawns the Entity, if it exists.
+    /// This will also remove all of the Entity’s Components.
+    /// Panics if the Entity does not exist.
+    pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
+        if !world.has_entity(entity) {
+            panic!("attempted to de-spawn nonexistent entity");
+        }
+
+        // Actually despawn from world
+        world.despawn_entity(entity);
+
+        // Despawn from connections and inner tracking
+        self.despawn_entity_worldless(entity);
+    }
+
+    pub fn despawn_entity_worldless(&mut self, entity: &E) {
+        if let Some(connection) = &mut self.server_connection {
+            //remove entity from server connection
+            connection.base.host_world_manager.despawn_entity(entity);
+        }
+
+        // Remove from ECS Record
+        self.global_world_manager.host_despawn_entity(entity);
+    }
+
+    /// Adds a Component to an Entity
+    pub(crate) fn insert_component<R: Replicate, W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        mut component: R,
+    ) {
+        if !world.has_entity(entity) {
+            panic!("attempted to add component to non-existent entity");
+        }
+
+        let component_kind = component.kind();
+
+        if world.has_component_of_kind(entity, &component_kind) {
+            // Entity already has this Component type yet, update Component
+
+            let Some(mut component_mut) = world.component_mut::<R>(entity) else {
+                panic!("Should never happen because we checked for this above");
+            };
+            component_mut.mirror(&component);
+        } else {
+            // Entity does not have this Component type yet, initialize Component
+
+            self.insert_component_worldless(entity, &mut component);
+
+            // actually insert component into world
+            world.insert_component(entity, component);
+        }
+    }
+
+    // This intended to be used by adapter crates, do not use this as it will not update the world
+    pub fn insert_component_worldless(&mut self, entity: &E, component: &mut dyn Replicate) {
+        let component_kind = component.kind();
+
+        // insert component into server connection
+        if let Some(connection) = &mut self.server_connection {
+            // insert component into server connection
+            if connection.base.host_world_manager.host_has_entity(entity) {
+                connection
+                    .base
+                    .host_world_manager
+                    .insert_component(entity, &component_kind);
+            }
+        }
+
+        // update in world manager
+        self.global_world_manager
+            .host_insert_component(entity, component);
+    }
+
+    /// Removes a Component from an Entity
+    pub(crate) fn remove_component<R: Replicate, W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+    ) -> Option<R> {
+        // get component key from type
+        let component_kind = ComponentKind::of::<R>();
+
+        self.remove_component_worldless(entity, &component_kind);
+
+        // remove from world
+        world.remove_component::<R>(entity)
+    }
+
+    // This intended to be used by adapter crates, do not use this as it will not update the world
+    pub fn remove_component_worldless(&mut self, entity: &E, component_kind: &ComponentKind) {
+        // remove component from server connection
+        if let Some(connection) = &mut self.server_connection {
+            connection
+                .base
+                .host_world_manager
+                .remove_component(entity, &component_kind);
+        }
+
+        // cleanup all other loose ends
+        self.global_world_manager
+            .host_remove_component(entity, &component_kind);
+    }
+
+    // Private methods
+
+    fn check_client_authoritative_allowed(&self) {
+        if !self.protocol.client_authoritative_entities {
+            panic!("Cannot perform this operation: Client Authoritative Entities are not enabled! Enable them in the Protocol, with the `enable_client_authoritative_entities() method, and note that if you do enable them, to make sure you handle all Spawn/Insert/Update events in the Server, as this may be an attack vector.")
+        }
+    }
 
     fn maintain_socket(&mut self) {
-        if let Some(server_connection) = self.server_connection.as_mut() {
-            // connection already established
-
-            // send heartbeats
-            if server_connection.base.should_send_heartbeat() {
-                let mut writer = BitWriter::new();
-
-                // write header
-                server_connection
-                    .base
-                    .write_outgoing_header(PacketType::Heartbeat, &mut writer);
-
-                // send packet
-                if self.io.send_packet(writer.to_packet()).is_err() {
-                    // TODO: pass this on and handle above
-                    warn!("Client Error: Cannot send heartbeat packet to Server");
-                }
-                server_connection.base.mark_sent();
-            }
-
-            // send pings
-            if server_connection.time_manager.send_ping(&mut self.io) {
-                server_connection.base.mark_sent();
-            }
-
-            // receive from socket
-            loop {
-                match self.io.recv_reader() {
-                    Ok(Some(mut reader)) => {
-                        server_connection.base.mark_heard();
-
-                        let header = StandardHeader::de(&mut reader)
-                            .expect("unable to parse header from incoming packet");
-
-                        match header.packet_type {
-                            PacketType::Data
-                            | PacketType::Heartbeat
-                            | PacketType::Ping
-                            | PacketType::Pong => {
-                                // continue, these packet types are allowed when
-                                // connection is established
-                            }
-                            _ => {
-                                // short-circuit, do not need to handle other packet types at this
-                                // point
-                                continue;
-                            }
-                        }
-
-                        // Read incoming header
-                        server_connection.process_incoming_header(&header);
-
-                        // read server tick
-                        let Ok(server_tick) = Tick::de(&mut reader) else {
-                            warn!("unable to parse server_tick from packet");
-                            continue;
-                        };
-
-                        // read time since last tick
-                        let Ok(server_tick_instant) = GameInstant::de(&mut reader) else {
-                            warn!("unable to parse server_tick_instant from packet");
-                            continue;
-                        };
-
-                        server_connection
-                            .time_manager
-                            .recv_tick_instant(&server_tick, &server_tick_instant);
-
-                        // Handle based on PacketType
-                        match header.packet_type {
-                            PacketType::Data => {
-                                if server_connection
-                                    .buffer_data_packet(&server_tick, &mut reader)
-                                    .is_err()
-                                {
-                                    warn!("unable to parse data packet");
-                                    continue;
-                                }
-                            }
-                            PacketType::Heartbeat => {
-                                // already marked as heard, job done
-                            }
-                            PacketType::Ping => {
-                                // read incoming ping index
-                                let ping_index = PingIndex::de(&mut reader)
-                                    .expect("unable to parse an index from Ping packet");
-
-                                // write pong payload
-                                let mut writer = BitWriter::new();
-
-                                // write header
-                                server_connection
-                                    .base
-                                    .write_outgoing_header(PacketType::Pong, &mut writer);
-
-                                // write index
-                                ping_index.ser(&mut writer);
-
-                                // send packet
-                                if self.io.send_packet(writer.to_packet()).is_err() {
-                                    // TODO: pass this on and handle above
-                                    warn!("Client Error: Cannot send pong packet to Server");
-                                }
-                                server_connection.base.mark_sent();
-                            }
-                            PacketType::Pong => {
-                                if server_connection
-                                    .time_manager
-                                    .read_pong(&mut reader)
-                                    .is_err()
-                                {
-                                    // TODO: pass this on and handle above
-                                    warn!("Client Error: Cannot process pong packet from Server");
-                                }
-                            }
-                            _ => {
-                                // no other packet types matter when connection
-                                // is established
-                            }
-                        }
-                    }
-                    Ok(None) => {
-                        break;
-                    }
-                    Err(error) => {
-                        self.incoming_events
-                            .push_error(NaiaClientError::Wrapped(Box::new(error)));
-                    }
-                }
-            }
+        if self.server_connection.is_none() {
+            self.maintain_handshake();
         } else {
-            // No connection established yet
-            if self.io.is_loaded() {
-                // receive from socket
-                loop {
-                    match self.io.recv_reader() {
-                        Ok(Some(mut reader)) => {
-                            match self.handshake_manager.recv(&mut reader) {
-                                Some(HandshakeResult::Connected(time_manager)) => {
-                                    // new connect!
-                                    let server_addr = self.server_address_unwrapped();
-                                    self.server_connection = Some(Connection::new(
-                                        server_addr,
-                                        &self.client_config.connection,
-                                        &self.protocol.channel_kinds,
-                                        time_manager,
-                                    ));
-                                    self.incoming_events.push_connection(&server_addr);
-                                }
-                                Some(HandshakeResult::Rejected) => {
-                                    let server_addr = self.server_address_unwrapped();
-                                    self.incoming_events.clear();
-                                    self.incoming_events.push_rejection(&server_addr);
-                                    self.disconnect_cleanup();
-                                    return;
-                                }
-                                None => {}
-                            }
+            self.maintain_connection();
+        }
+    }
+
+    fn maintain_handshake(&mut self) {
+        // No connection established yet
+
+        if !self.io.is_loaded() {
+            return;
+        }
+
+        // receive from socket
+        loop {
+            match self.io.recv_reader() {
+                Ok(Some(mut reader)) => {
+                    match self.handshake_manager.recv(&mut reader) {
+                        Some(HandshakeResult::Connected(time_manager)) => {
+                            // new connect!
+                            self.server_connection = Some(Connection::new(
+                                &self.client_config.connection,
+                                &self.protocol.channel_kinds,
+                                time_manager,
+                                &self.global_world_manager,
+                            ));
+
+                            let server_addr = self.server_address_unwrapped();
+                            self.incoming_events.push_connection(&server_addr);
                         }
-                        Ok(None) => {
-                            break;
+                        Some(HandshakeResult::Rejected) => {
+                            let server_addr = self.server_address_unwrapped();
+                            self.incoming_events.clear();
+                            self.incoming_events.push_rejection(&server_addr);
+                            self.disconnect_reset_connection();
+                            return;
                         }
-                        Err(error) => {
-                            self.incoming_events
-                                .push_error(NaiaClientError::Wrapped(Box::new(error)));
-                        }
+                        None => {}
                     }
+                }
+                Ok(None) => {
+                    break;
+                }
+                Err(error) => {
+                    self.incoming_events
+                        .push_error(NaiaClientError::Wrapped(Box::new(error)));
                 }
             }
         }
     }
 
-    fn disconnect_internal(&mut self) {
-        let server_addr = self.server_address_unwrapped();
-        self.disconnect_cleanup();
+    fn maintain_connection(&mut self) {
+        // connection already established
 
-        // exit early, we're disconnected, who cares?
+        let Some(connection) = self.server_connection.as_mut() else {
+            panic!("Should have checked for this above");
+        };
+
+        Self::handle_heartbeats(connection, &mut self.io);
+        Self::handle_pings(connection, &mut self.io);
+
+        // receive from socket
+        loop {
+            match self.io.recv_reader() {
+                Ok(Some(mut reader)) => {
+                    connection.base.mark_heard();
+
+                    let header = StandardHeader::de(&mut reader)
+                        .expect("unable to parse header from incoming packet");
+
+                    match header.packet_type {
+                        PacketType::Data
+                        | PacketType::Heartbeat
+                        | PacketType::Ping
+                        | PacketType::Pong => {
+                            // continue, these packet types are allowed when
+                            // connection is established
+                        }
+                        _ => {
+                            // short-circuit, do not need to handle other packet types at this
+                            // point
+                            continue;
+                        }
+                    }
+
+                    // Read incoming header
+                    connection.process_incoming_header(&header);
+
+                    // read server tick
+                    let Ok(server_tick) = Tick::de(&mut reader) else {
+                        warn!("unable to parse server_tick from packet");
+                        continue;
+                    };
+
+                    // read time since last tick
+                    let Ok(server_tick_instant) = GameInstant::de(&mut reader) else {
+                        warn!("unable to parse server_tick_instant from packet");
+                        continue;
+                    };
+
+                    connection
+                        .time_manager
+                        .recv_tick_instant(&server_tick, &server_tick_instant);
+
+                    // Handle based on PacketType
+                    match header.packet_type {
+                        PacketType::Data => {
+                            if connection
+                                .buffer_data_packet(&server_tick, &mut reader)
+                                .is_err()
+                            {
+                                warn!("unable to parse data packet");
+                                continue;
+                            }
+                        }
+                        PacketType::Heartbeat => {
+                            // already marked as heard, job done
+                        }
+                        PacketType::Ping => {
+                            let Ok(ping_index) = BaseTimeManager::read_ping(&mut reader) else {
+                                panic!("unable to read ping index");
+                            };
+                            BaseTimeManager::send_pong(connection, &mut self.io, ping_index);
+                        }
+                        PacketType::Pong => {
+                            if connection.time_manager.read_pong(&mut reader).is_err() {
+                                // TODO: pass this on and handle above
+                                warn!("Client Error: Cannot process pong packet from Server");
+                            }
+                        }
+                        _ => {
+                            // no other packet types matter when connection
+                            // is established
+                        }
+                    }
+                }
+                Ok(None) => {
+                    break;
+                }
+                Err(error) => {
+                    self.incoming_events
+                        .push_error(NaiaClientError::Wrapped(Box::new(error)));
+                }
+            }
+        }
+    }
+
+    fn handle_heartbeats(connection: &mut Connection<E>, io: &mut Io) {
+        // send heartbeats
+        if connection.base.should_send_heartbeat() {
+            let mut writer = BitWriter::new();
+
+            // write header
+            connection
+                .base
+                .write_outgoing_header(PacketType::Heartbeat, &mut writer);
+
+            // send packet
+            if io.send_packet(writer.to_packet()).is_err() {
+                // TODO: pass this on and handle above
+                warn!("Client Error: Cannot send heartbeat packet to Server");
+            }
+            connection.base.mark_sent();
+        }
+    }
+
+    fn handle_pings(connection: &mut Connection<E>, io: &mut Io) {
+        // send pings
+        if connection.time_manager.send_ping(io) {
+            connection.base.mark_sent();
+        }
+    }
+
+    fn disconnect_with_events<W: WorldMutType<E>>(&mut self, world: &mut W) {
+        let server_addr = self.server_address_unwrapped();
+
         self.incoming_events.clear();
+
+        self.despawn_all_remote_entities(world);
+        self.disconnect_reset_connection();
+
         self.incoming_events.push_disconnection(&server_addr);
     }
 
-    fn disconnect_cleanup(&mut self) {
+    fn despawn_all_remote_entities<W: WorldMutType<E>>(&mut self, world: &mut W) {
         // this is very similar to the newtype method .. can we coalesce and reduce
         // duplication?
+
+        let Some(connection) = self.server_connection.as_mut() else {
+            panic!("Client is already disconnected!");
+        };
+
+        let events = connection
+            .base
+            .despawn_all_remote_entities(&mut self.global_world_manager, world);
+
+        self.incoming_events.receive_entity_events(events);
+    }
+
+    fn disconnect_reset_connection(&mut self) {
+        self.server_connection = None;
 
         self.io = Io::new(
             &self.client_config.connection.bandwidth_measure_duration,
             &self.protocol.compression,
         );
-        self.server_connection = None;
+
         self.handshake_manager = HandshakeManager::new(
             self.client_config.send_handshake_interval,
             self.client_config.ping_interval,
@@ -534,20 +788,12 @@ impl<E: Copy + Eq + Hash> Client<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash> EntityHandleConverter<E> for Client<E> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        let connection = self
-            .server_connection
-            .as_ref()
-            .expect("cannot handle entity properties unless connection is established");
-        connection.entity_manager.handle_to_entity(entity_handle)
+impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Client<E> {
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
+        self.global_world_manager.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        let connection = self
-            .server_connection
-            .as_ref()
-            .expect("cannot handle entity properties unless connection is established");
-        connection.entity_manager.entity_to_handle(entity)
+        self.global_world_manager.entity_to_handle(entity)
     }
 }

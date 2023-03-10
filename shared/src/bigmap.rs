@@ -19,17 +19,15 @@ pub struct BigMap<K: BigMapKey, V> {
     phantom_k: PhantomData<K>,
 }
 
-impl<K: BigMapKey, V> Default for BigMap<K, V> {
-    fn default() -> Self {
+impl<K: BigMapKey, V> BigMap<K, V> {
+    pub fn new() -> Self {
         Self {
-            inner: HashMap::default(),
+            inner: HashMap::new(),
             current_index: 0,
             phantom_k: PhantomData,
         }
     }
-}
 
-impl<K: BigMapKey, V> BigMap<K, V> {
     pub fn get(&self, key: &K) -> Option<&V> {
         self.inner.get(&key.to_u64())
     }

@@ -1,10 +1,12 @@
 use crate::{
-    messages::channels::receivers::reliable_receiver::{ReceiverArranger, ReliableReceiver},
+    messages::channels::receivers::reliable_message_receiver::{
+        ReceiverArranger, ReliableMessageReceiver,
+    },
     types::MessageIndex,
     MessageContainer,
 };
 
-pub type UnorderedReliableReceiver = ReliableReceiver<UnorderedArranger>;
+pub type UnorderedReliableReceiver = ReliableMessageReceiver<UnorderedArranger>;
 
 impl UnorderedReliableReceiver {
     pub fn new() -> Self {

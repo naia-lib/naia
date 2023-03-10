@@ -1,79 +1,29 @@
-use std::marker::PhantomData;
+use bevy_ecs::system::EntityCommands;
 
-use bevy_ecs::entity::Entity;
+use naia_bevy_shared::HostOwned;
 
-use naia_server::Server;
+use crate::Server;
 
-use naia_bevy_shared::{Replicate, WorldMut};
-
-// Command Trait
-
-pub trait Command: Send + Sync + 'static {
-    fn write(self: Box<Self>, server: &mut Server<Entity>, world: WorldMut);
+// Bevy Commands Extension
+pub trait CommandsExt<'w, 's, 'a> {
+    fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn disable_replication(&'a mut self, server: &mut Server)
+        -> &'a mut EntityCommands<'w, 's, 'a>;
 }
 
-//// Despawn Entity ////
-
-pub(crate) struct DespawnEntity {
-    entity: Entity,
-}
-
-impl DespawnEntity {
-    pub fn new(entity: &Entity) -> Self {
-        DespawnEntity { entity: *entity }
+impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
+    fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a> {
+        server.enable_replication(&self.id());
+        self.insert(HostOwned);
+        return self;
     }
-}
 
-impl Command for DespawnEntity {
-    fn write(self: Box<Self>, server: &mut Server<Entity>, world: WorldMut) {
-        server.entity_mut(world, &self.entity).despawn();
-    }
-}
-
-//// Insert Component ////
-
-pub(crate) struct InsertComponent<R: Replicate> {
-    entity: Entity,
-    component: R,
-}
-
-impl<R: Replicate> InsertComponent<R> {
-    pub fn new(entity: &Entity, component: R) -> Self {
-        InsertComponent {
-            entity: *entity,
-            component,
-        }
-    }
-}
-
-impl<R: Replicate> Command for InsertComponent<R> {
-    fn write(self: Box<Self>, server: &mut Server<Entity>, world: WorldMut) {
-        server
-            .entity_mut(world, &self.entity)
-            .insert_component(self.component);
-    }
-}
-
-//// Remove Component ////
-
-pub(crate) struct RemoveComponent<R: Replicate> {
-    entity: Entity,
-    phantom_r: PhantomData<R>,
-}
-
-impl<R: Replicate> RemoveComponent<R> {
-    pub fn new(entity: &Entity) -> Self {
-        RemoveComponent {
-            entity: *entity,
-            phantom_r: PhantomData,
-        }
-    }
-}
-
-impl<R: Replicate> Command for RemoveComponent<R> {
-    fn write(self: Box<Self>, server: &mut Server<Entity>, world: WorldMut) {
-        server
-            .entity_mut(world, &self.entity)
-            .remove_component::<R>();
+    fn disable_replication(
+        &'a mut self,
+        server: &mut Server,
+    ) -> &'a mut EntityCommands<'w, 's, 'a> {
+        server.disable_replication(&self.id());
+        self.remove::<HostOwned>();
+        return self;
     }
 }

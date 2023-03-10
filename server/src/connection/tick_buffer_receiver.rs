@@ -50,10 +50,10 @@ impl TickBufferReceiver {
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
             channel.read_messages(
+                converter,
                 &protocol.message_kinds,
                 host_tick,
                 remote_tick,
-                converter,
                 reader,
             )?;
         }

@@ -26,7 +26,7 @@ impl Protocol {
         Self::default()
     }
 
-    pub fn world_data(&mut self) -> WorldData {
+    pub fn take_world_data(&mut self) -> WorldData {
         self.world_data.take().expect("should only call this once")
     }
 
@@ -38,6 +38,11 @@ impl Protocol {
 
     pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
         self.inner.link_condition(config);
+        self
+    }
+
+    pub fn enable_client_authoritative_entities(&mut self) -> &mut Self {
+        self.inner.enable_client_authoritative_entities();
         self
     }
 

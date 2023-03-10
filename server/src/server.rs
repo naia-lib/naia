@@ -3,7 +3,6 @@ use std::{
     hash::Hash,
     net::SocketAddr,
     panic,
-    sync::{Arc, RwLock},
     time::Duration,
 };
 
@@ -14,10 +13,10 @@ use bevy_ecs::prelude::Resource;
 
 use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
-    BigMap, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Instant, Message,
-    MessageContainer, PacketType, PropertyMutator, Protocol, Replicate, Serde, StandardHeader,
-    Tick, Timer, WorldMutType, WorldRefType,
+    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
+    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, Instant, Message,
+    MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr, StandardHeader, Tick,
+    Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -26,13 +25,11 @@ use crate::{
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
         tick_buffer_messages::TickBufferMessages,
-        time_manager::TimeManager,
     },
-    protocol::{
-        entity_ref::{EntityMut, EntityRef},
-        entity_scope_map::EntityScopeMap,
-        global_diff_handler::GlobalDiffHandler,
-        world_record::WorldRecord,
+    time_manager::TimeManager,
+    world::{
+        entity_mut::EntityMut, entity_owner::EntityOwner, entity_scope_map::EntityScopeMap,
+        global_world_manager::GlobalWorldManager,
     },
 };
 
@@ -66,12 +63,11 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
-    world_record: WorldRecord<E>,
+    entity_room_map: HashMap<E, RoomKey>,
     entity_scope_map: EntityScopeMap<E>,
-    // Components
-    diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
+    global_world_manager: GlobalWorldManager<E>,
     // Events
-    incoming_events: Events,
+    incoming_events: Events<E>,
     // Ticks
     time_manager: TimeManager,
 }
@@ -103,16 +99,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             ping_timer: Timer::new(server_config.ping.ping_interval),
             handshake_manager: HandshakeManager::new(server_config.require_auth),
             // Users
-            users: BigMap::default(),
+            users: BigMap::new(),
             user_connections: HashMap::new(),
             validated_users: HashMap::new(),
             // Rooms
-            rooms: BigMap::default(),
+            rooms: BigMap::new(),
             // Entities
-            world_record: WorldRecord::default(),
+            entity_room_map: HashMap::new(),
             entity_scope_map: EntityScopeMap::new(),
-            // Components
-            diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::default())),
+            global_world_manager: GlobalWorldManager::new(),
             // Events
             incoming_events: Events::new(),
             // Ticks
@@ -133,16 +128,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.io.is_loaded()
     }
 
-    pub fn duration_until_next_tick(&self) -> Duration {
-        self.time_manager.duration_until_next_tick()
-    }
-
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
-    pub fn receive(&mut self) -> Events {
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Events<E> {
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
-        self.maintain_socket();
+        self.maintain_socket(world);
 
         // tick event
         if self.time_manager.recv_server_tick() {
@@ -150,19 +141,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 .push_tick(self.time_manager.current_tick());
         }
 
-        // loop through all connections, receive Messages
-        let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
-        fastrand::shuffle(&mut user_addresses);
-
-        for user_address in &user_addresses {
-            let connection = self.user_connections.get_mut(user_address).unwrap();
-
-            // receive messages from anyone
-            connection.receive_messages(&mut self.incoming_events);
-        }
-
         // return all received messages and reset the buffer
-        std::mem::take(&mut self.incoming_events)
+        std::mem::replace(&mut self.incoming_events, Events::<E>::new())
     }
 
     // Connections
@@ -200,10 +180,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let new_connection = Connection::new(
             &self.server_config.connection,
             &self.server_config.ping,
-            user.address,
+            &user.address,
             user_key,
             &self.protocol.channel_kinds,
-            &self.diff_handler,
+            &self.global_world_manager,
         );
 
         // send connect response
@@ -233,15 +213,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if let Some(user) = self.users.get(user_key) {
             // send connect reject response
             let writer = self.handshake_manager.write_reject_response();
-            match self.io.send_packet(&user.address, writer.to_packet()) {
-                Ok(()) => {}
-                Err(_) => {
-                    // TODO: pass this on and handle above
-                    warn!(
-                        "Server Error: Cannot send auth rejection packet to {}",
-                        &user.address
-                    );
-                }
+            if self
+                .io
+                .send_packet(&user.address, writer.to_packet())
+                .is_err()
+            {
+                // TODO: pass this on and handle above
+                warn!(
+                    "Server Error: Cannot send auth rejection packet to {}",
+                    &user.address
+                );
             }
             //
         }
@@ -254,11 +235,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// UserKey
     pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(
-            user_key,
-            &ChannelKind::of::<C>(),
-            MessageContainer::from(cloned_message),
-        );
+        self.send_message_inner(user_key, &ChannelKind::of::<C>(), cloned_message);
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -267,7 +244,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         user_key: &UserKey,
         channel_kind: &ChannelKind,
-        message: MessageContainer,
+        message_box: Box<dyn Message>,
     ) {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
@@ -277,24 +254,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
+                let converter = EntityConverter::new(
+                    &self.global_world_manager,
+                    &connection.base.local_world_manager,
+                );
+                let message = MessageContainer::from(message_box, &converter);
+
                 if message.has_entity_properties() {
                     // collect all entities in the message
                     let entities: Vec<E> = message
                         .entities()
                         .iter()
-                        .map(|handle| self.world_record.handle_to_entity(handle))
+                        .map(|handle| self.global_world_manager.handle_to_entity(handle).unwrap())
                         .collect();
 
                     // check whether all entities are in scope for the connection
                     let all_entities_in_scope = {
-                        entities
-                            .iter()
-                            .all(|entity| connection.entity_manager.entity_channel_is_open(entity))
+                        entities.iter().all(|entity| {
+                            connection
+                                .base
+                                .host_world_manager
+                                .entity_channel_is_open(entity)
+                        })
                     };
                     if all_entities_in_scope {
                         // All necessary entities are in scope, so send message
-                        let converter =
-                            EntityConverter::new(&self.world_record, &connection.entity_manager);
+                        let converter = EntityConverter::new(
+                            &self.global_world_manager,
+                            &connection.base.local_world_manager,
+                        );
                         connection.base.message_manager.send_message(
                             &self.protocol.message_kinds,
                             &converter,
@@ -304,15 +292,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     } else {
                         // Entity hasn't been added to the User Scope yet, or replicated to Client
                         // yet
-                        connection.entity_manager.queue_entity_message(
+                        connection.base.host_world_manager.queue_entity_message(
                             entities,
                             channel_kind,
                             message,
                         );
                     }
                 } else {
-                    let converter =
-                        EntityConverter::new(&self.world_record, &connection.entity_manager);
                     connection.base.message_manager.send_message(
                         &self.protocol.message_kinds,
                         &converter,
@@ -327,16 +313,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Sends a message to all connected users using a given channel
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
-        self.broadcast_message_inner(
-            &ChannelKind::of::<C>(),
-            MessageContainer::from(cloned_message),
-        );
+        self.broadcast_message_inner(&ChannelKind::of::<C>(), cloned_message);
     }
 
-    fn broadcast_message_inner(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
-        self.user_keys()
-            .iter()
-            .for_each(|user_key| self.send_message_inner(user_key, channel_kind, message.clone()))
+    fn broadcast_message_inner(
+        &mut self,
+        channel_kind: &ChannelKind,
+        message_box: Box<dyn Message>,
+    ) {
+        self.user_keys().iter().for_each(|user_key| {
+            self.send_message_inner(user_key, channel_kind, message_box.clone())
+        })
     }
 
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
@@ -386,39 +373,51 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // loop through all connections, send packet
         let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
+
+        // shuffle order of connections in order to avoid priority among users
         fastrand::shuffle(&mut user_addresses);
 
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
-
-            let rtt = connection.ping_manager.rtt_average;
 
             connection.send_outgoing_packets(
                 &self.protocol,
                 &now,
                 &mut self.io,
                 &world,
-                &self.world_record,
+                &self.global_world_manager,
                 &self.time_manager,
-                &rtt,
             );
         }
     }
 
     // Entities
 
+    pub fn enable_replication(&mut self, entity: &E) {
+        self.spawn_entity_inner(&entity);
+    }
+
+    pub fn disable_replication(&mut self, entity: &E) {
+        // Despawn from connections and inner tracking
+        self.despawn_entity_worldless(entity);
+    }
+
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
     pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
         let entity = world.spawn_entity();
-        self.spawn_entity_init(&entity);
+        self.spawn_entity_inner(&entity);
 
         EntityMut::new(self, world, &entity)
     }
 
     /// Creates a new Entity with a specific id
     pub fn spawn_entity_at(&mut self, entity: &E) {
-        self.spawn_entity_init(entity);
+        self.spawn_entity_inner(entity);
+    }
+
+    fn spawn_entity_inner(&mut self, entity: &E) {
+        self.global_world_manager.host_spawn_entity(entity);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -444,6 +443,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Gets a Vec of all Entities in the given World
     pub fn entities<W: WorldRefType<E>>(&self, world: W) -> Vec<E> {
         world.entities()
+    }
+
+    pub fn entity_owner(&self, entity: &E) -> EntityOwner {
+        if let Some(owner) = self.global_world_manager.entity_owner(entity) {
+            return owner;
+        }
+        return EntityOwner::Local;
     }
 
     // Users
@@ -583,8 +589,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Gets the average Round Trip Time measured to the given User's Client
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
         if let Some(user) = self.users.get(user_key) {
-            if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.ping_manager.rtt_average);
+            if let Some(connection) = self.user_connections.get(&user.address) {
+                return Some(connection.ping_manager.rtt_average);
             }
         }
         None
@@ -594,8 +600,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Client
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
         if let Some(user) = self.users.get(user_key) {
-            if let Some(user_connection) = self.user_connections.get(&user.address) {
-                return Some(user_connection.ping_manager.jitter_average);
+            if let Some(connection) = self.user_connections.get(&user.address) {
+                return Some(connection.ping_manager.jitter_average);
             }
         }
         None
@@ -607,33 +613,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Despawns the Entity, if it exists.
     /// This will also remove all of the Entity’s Components.
-    /// Returns true if the Entity is successfully despawned and false if the
-    /// Entity does not exist.
+    /// Panics if the Entity does not exist.
     pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
         if !world.has_entity(entity) {
             panic!("attempted to de-spawn nonexistent entity");
         }
 
-        // TODO: we can make this more efficient in the future by caching which Entities
-        // are in each User's scope
-        for (_, user_connection) in self.user_connections.iter_mut() {
-            //remove entity from user connection
-            user_connection.entity_manager.despawn_entity(entity);
-        }
-
-        // Clean up associated components
-        for component_kind in self.world_record.component_kinds(entity).unwrap() {
-            self.component_cleanup(entity, &component_kind);
-        }
-
         // Delete from world
         world.despawn_entity(entity);
+
+        self.despawn_entity_worldless(entity);
+    }
+
+    pub fn despawn_entity_worldless(&mut self, entity: &E) {
+        // TODO: we can make this more efficient in the future by caching which Entities
+        // are in each User's scope
+        for (_, connection) in self.user_connections.iter_mut() {
+            //remove entity from user connection
+            connection.base.host_world_manager.despawn_entity(entity);
+        }
 
         // Delete scope
         self.entity_scope_map.remove_entity(entity);
 
+        // Delete room cache entry
+        self.entity_room_map.remove(entity);
+
         // Remove from ECS Record
-        self.world_record.despawn_entity(entity);
+        self.global_world_manager.host_despawn_entity(entity);
     }
 
     //// Entity Scopes
@@ -660,40 +667,49 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         world: &mut W,
         entity: &E,
-        mut component_ref: R,
+        mut component: R,
     ) {
         if !world.has_entity(entity) {
             panic!("attempted to add component to non-existent entity");
         }
 
-        let component_kind = component_ref.kind();
+        let component_kind = component.kind();
 
         if world.has_component_of_kind(entity, &component_kind) {
             // Entity already has this Component type yet, update Component
 
-            if let Some(mut component) = world.component_mut::<R>(entity) {
-                component.mirror(&component_ref);
-            } else {
-                panic!("Should never happen because we checked for this above")
-            }
+            let Some(mut component_mut) = world.component_mut::<R>(entity) else {
+                panic!("Should never happen because we checked for this above");
+            };
+            component_mut.mirror(&component);
         } else {
             // Entity does not have this Component type yet, initialize Component
 
-            self.component_init(entity, &mut component_ref);
+            self.insert_component_worldless(entity, &mut component);
 
             // actually insert component into world
-            world.insert_component(entity, component_ref);
+            world.insert_component(entity, component);
+        }
+    }
 
-            // add component to connections already tracking entity
-            for (_, user_connection) in self.user_connections.iter_mut() {
-                // insert component into user's connection
-                if user_connection.entity_manager.scope_has_entity(entity) {
-                    user_connection
-                        .entity_manager
-                        .insert_component(entity, &component_kind);
-                }
+    // This intended to be used by adapter crates, do not use this as it will not update the world
+    pub fn insert_component_worldless(&mut self, entity: &E, component: &mut dyn Replicate) {
+        let component_kind = component.kind();
+
+        // add component to connections already tracking entity
+        for (_, connection) in self.user_connections.iter_mut() {
+            // insert component into user's connection
+            if connection.base.host_world_manager.host_has_entity(entity) {
+                connection
+                    .base
+                    .host_world_manager
+                    .insert_component(entity, &component_kind);
             }
         }
+
+        // update in world manager
+        self.global_world_manager
+            .host_insert_component(entity, component);
     }
 
     /// Removes a Component from an Entity
@@ -702,25 +718,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world: &mut W,
         entity: &E,
     ) -> Option<R> {
-        // get component key from type
-        let component_kind = ComponentKind::of::<R>();
+        self.remove_component_worldless(entity, &ComponentKind::of::<R>());
 
+        // remove from world
+        world.remove_component::<R>(entity)
+    }
+
+    // This intended to be used by adapter crates, do not use this as it will not update the world
+    pub fn remove_component_worldless(&mut self, entity: &E, component_kind: &ComponentKind) {
         // clean up component on all connections
 
         // TODO: should be able to make this more efficient by caching for every Entity
         // which scopes they are part of
-        for (_, user_connection) in self.user_connections.iter_mut() {
+        for (_, connection) in self.user_connections.iter_mut() {
             // remove component from user connection
-            user_connection
-                .entity_manager
+            connection
+                .base
+                .host_world_manager
                 .remove_component(entity, &component_kind);
         }
 
         // cleanup all other loose ends
-        self.component_cleanup(entity, &component_kind);
-
-        // remove from world
-        world.remove_component::<R>(entity)
+        self.global_world_manager
+            .host_remove_component(entity, &component_kind);
     }
 
     //// Users
@@ -749,37 +769,62 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return None;
     }
 
-    pub(crate) fn user_disconnect(&mut self, user_key: &UserKey) {
-        if let Some(user) = self.user_delete(user_key) {
-            self.incoming_events.push_disconnection(user_key, user);
+    pub(crate) fn user_disconnect<W: WorldMutType<E>>(
+        &mut self,
+        user_key: &UserKey,
+        world: &mut W,
+    ) {
+        if self.protocol.client_authoritative_entities {
+            self.despawn_all_remote_entities(user_key, world);
         }
+        let user = self.user_delete(user_key);
+        self.incoming_events.push_disconnection(user_key, user);
     }
 
     /// All necessary cleanup, when they're actually gone...
-    pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> Option<User> {
-        if let Some(user) = self.users.remove(user_key) {
-            if self.user_connections.remove(&user.address).is_some() {
-                self.validated_users.remove(&user.address);
-                self.entity_scope_map.remove_user(user_key);
-                self.handshake_manager.delete_user(&user.address);
+    pub(crate) fn despawn_all_remote_entities<W: WorldMutType<E>>(
+        &mut self,
+        user_key: &UserKey,
+        world: &mut W,
+    ) {
+        let Some(user) = self.users.get(user_key) else {
+            panic!("Attempting to despawn entities for a nonexistent user");
+        };
+        let Some (connection) = self.user_connections.get_mut(&user.address) else {
+            panic!("Attempting to despawn entities on a nonexistent connection");
+        };
 
-                // Clean up all user data
-                for room_key in user.room_keys() {
-                    self.rooms
-                        .get_mut(room_key)
-                        .unwrap()
-                        .unsubscribe_user(user_key);
-                }
+        let entity_events = connection
+            .base
+            .despawn_all_remote_entities(&mut self.global_world_manager, world);
+        self.incoming_events
+            .receive_entity_events(user_key, entity_events);
+    }
 
-                if self.io.bandwidth_monitor_enabled() {
-                    self.io.deregister_client(&user.address);
-                }
+    pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> User {
+        let Some(user) = self.users.remove(user_key) else {
+            panic!("Attempting to delete non-existant user!");
+        };
 
-                return Some(user);
-            }
+        self.user_connections.remove(&user.address);
+        self.validated_users.remove(&user.address);
+        self.entity_scope_map.remove_user(user_key);
+        self.handshake_manager.delete_user(&user.address);
+
+        // Clean up all user data
+        for room_key in user.room_keys() {
+            self.rooms
+                .get_mut(room_key)
+                .unwrap()
+                .unsubscribe_user(user_key);
         }
 
-        None
+        // remove from bandwidth monitor
+        if self.io.bandwidth_monitor_enabled() {
+            self.io.deregister_client(&user.address);
+        }
+
+        return user;
     }
 
     //// Rooms
@@ -859,13 +904,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub(crate) fn room_broadcast_message(
         &mut self,
         channel_kind: &ChannelKind,
-        message: MessageContainer,
         room_key: &RoomKey,
+        message_box: Box<dyn Message>,
     ) {
         if let Some(room) = self.rooms.get(room_key) {
             let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
             for user_key in &user_keys {
-                self.send_message_inner(user_key, channel_kind, message.clone())
+                self.send_message_inner(user_key, channel_kind, message_box.clone())
             }
         }
     }
@@ -875,7 +920,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &E) -> bool {
-        self.world_record.entity_is_in_room(entity, room_key)
+        let Some(actual_room_key) = self.entity_room_map.get(entity) else {
+            return false;
+        };
+        return *room_key == *actual_room_key;
     }
 
     /// Add an Entity to a Room associated with the given RoomKey.
@@ -887,16 +935,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             room.add_entity(entity);
             is_some = true;
         }
-        if is_some {
-            self.world_record.entity_enter_room(entity, room_key);
+        if !is_some {
+            return;
         }
+        if self.entity_room_map.contains_key(entity) {
+            panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
+        }
+        self.entity_room_map.insert(*entity, *room_key);
     }
 
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &E) {
         if let Some(room) = self.rooms.get_mut(room_key) {
             room.remove_entity(entity);
-            self.world_record.entity_leave_rooms(entity);
+            self.entity_room_map.remove(entity);
         }
     }
 
@@ -906,7 +958,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let entities: Vec<E> = room.entities().copied().collect();
             for entity in entities {
                 room.remove_entity(&entity);
-                self.world_record.entity_leave_rooms(&entity);
+                self.entity_room_map.remove(&entity);
             }
         }
     }
@@ -922,7 +974,203 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     // Private methods
 
     /// Maintain connection with a client and read all incoming packet data
-    fn maintain_socket(&mut self) {
+    fn maintain_socket<W: WorldMutType<E>>(&mut self, mut world: W) {
+        self.handle_disconnects(&mut world);
+        self.handle_heartbeats();
+        self.handle_pings();
+
+        //receive socket events
+        loop {
+            match self.io.recv_reader() {
+                Ok(Some((address, owned_reader))) => {
+                    let mut reader = owned_reader.borrow();
+
+                    // Read header
+                    let Ok(header) = StandardHeader::de(&mut reader) else {
+                        // Received a malformed packet
+                        // TODO: increase suspicion against packet sender
+                        continue;
+                    };
+
+                    let Ok(should_continue) = self.maintain_handshake(&address, &header, &mut reader) else {
+                        warn!("Server Error: cannot read malformed packet");
+                        continue;
+                    };
+                    if should_continue {
+                        continue;
+                    }
+
+                    if self
+                        .maintain_connection(&address, &header, &mut reader, &mut world)
+                        .is_err()
+                    {
+                        warn!("Server Error: cannot read malformed packet");
+                        continue;
+                    }
+                }
+                Ok(None) => {
+                    // No more packets, break loop
+                    break;
+                }
+                Err(error) => {
+                    self.incoming_events
+                        .push_error(NaiaServerError::Wrapped(Box::new(error)));
+                }
+            }
+        }
+    }
+
+    fn maintain_handshake(
+        &mut self,
+        address: &SocketAddr,
+        header: &StandardHeader,
+        reader: &mut BitReader,
+    ) -> Result<bool, SerdeErr> {
+        // Handshake stuff
+        match header.packet_type {
+            PacketType::ClientChallengeRequest => {
+                if let Ok(writer) = self.handshake_manager.recv_challenge_request(reader) {
+                    if self.io.send_packet(&address, writer.to_packet()).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!(
+                            "Server Error: Cannot send challenge response packet to {}",
+                            &address
+                        );
+                    }
+                }
+                return Ok(true);
+            }
+            PacketType::ClientValidateRequest => {
+                match self.handshake_manager.recv_validate_request(
+                    &self.protocol.message_kinds,
+                    address,
+                    reader,
+                ) {
+                    HandshakeResult::Success(auth_message_opt) => {
+                        if self.validated_users.contains_key(address) {
+                            // send validate response
+                            let writer = self.handshake_manager.write_validate_response();
+                            if self.io.send_packet(address, writer.to_packet()).is_err() {
+                                // TODO: pass this on and handle above
+                                warn!("Server Error: Cannot send validate success response packet to {}", &address);
+                            };
+                        } else {
+                            let user = User::new(*address);
+                            let user_key = self.users.insert(user);
+
+                            if let Some(auth_message) = auth_message_opt {
+                                self.incoming_events.push_auth(&user_key, auth_message);
+                            } else {
+                                self.accept_connection(&user_key);
+                            }
+                        }
+                    }
+                    HandshakeResult::Invalid => {
+                        // do nothing
+                    }
+                }
+                return Ok(true);
+            }
+            PacketType::ClientConnectRequest => {
+                if self.user_connections.contains_key(address) {
+                    // send connect response
+                    let writer = self.handshake_manager.write_connect_response();
+                    if self.io.send_packet(address, writer.to_packet()).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!(
+                            "Server Error: Cannot send connect success response packet to {}",
+                            address
+                        );
+                    };
+                    //
+                } else {
+                    let user_key = *self
+                        .validated_users
+                        .get(address)
+                        .expect("should be a user by now, from validation step");
+                    self.finalize_connection(&user_key);
+                }
+                return Ok(true);
+            }
+            PacketType::Ping => {
+                let response = self.time_manager.process_ping(reader).unwrap();
+                // send packet
+                if self.io.send_packet(address, response.to_packet()).is_err() {
+                    // TODO: pass this on and handle above
+                    warn!("Server Error: Cannot send pong packet to {}", address);
+                };
+                if let Some(connection) = self.user_connections.get_mut(address) {
+                    connection.base.mark_sent();
+                }
+                return Ok(true);
+            }
+            _ => {}
+        }
+
+        return Ok(false);
+    }
+
+    fn maintain_connection<W: WorldMutType<E>>(
+        &mut self,
+        address: &SocketAddr,
+        header: &StandardHeader,
+        reader: &mut BitReader,
+        world: &mut W,
+    ) -> Result<(), SerdeErr> {
+        // Packets requiring established connection
+        let Some(connection) = self.user_connections.get_mut(address) else {
+            return Ok(());
+        };
+
+        // Mark that we've heard from the client
+        connection.base.mark_heard();
+
+        // Process incoming header
+        connection.process_incoming_header(header);
+
+        match header.packet_type {
+            PacketType::Data => {
+                // read client tick
+                let client_tick = Tick::de(reader)?;
+
+                let server_tick = self.time_manager.current_tick();
+
+                // process data
+                connection.process_incoming_data(
+                    &self.protocol,
+                    server_tick,
+                    client_tick,
+                    reader,
+                    world,
+                    &mut self.global_world_manager,
+                    &mut self.incoming_events,
+                )?;
+            }
+            PacketType::Disconnect => {
+                if self
+                    .handshake_manager
+                    .verify_disconnect_request(connection, reader)
+                {
+                    let user_key = connection.user_key;
+                    self.user_disconnect(&user_key, world);
+                }
+            }
+            PacketType::Heartbeat => {
+                // already marked heard above
+            }
+            PacketType::Pong => {
+                // read client tick
+                connection
+                    .ping_manager
+                    .process_pong(&self.time_manager, reader);
+            }
+            _ => {}
+        }
+
+        return Ok(());
+    }
+
+    fn handle_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
         // disconnects
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
@@ -938,10 +1186,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             }
 
             for user_key in user_disconnects {
-                self.user_disconnect(&user_key);
+                self.user_disconnect(&user_key, world);
             }
         }
+    }
 
+    fn handle_heartbeats(&mut self) {
         // heartbeats
         if self.heartbeat_timer.ringing() {
             self.heartbeat_timer.reset();
@@ -980,7 +1230,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
             }
         }
+    }
 
+    fn handle_pings(&mut self) {
         // pings
         if self.ping_timer.ringing() {
             self.ping_timer.reset();
@@ -1019,181 +1271,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
             }
         }
-
-        //receive socket events
-        loop {
-            match self.io.recv_reader() {
-                Ok(Some((address, owned_reader))) => {
-                    let mut reader = owned_reader.borrow();
-
-                    // Read header
-                    let Ok(header) = StandardHeader::de(&mut reader) else {
-                        // Received a malformed packet
-                        // TODO: increase suspicion against packet sender
-                        continue;
-                    };
-
-                    // Handshake stuff
-                    match header.packet_type {
-                        PacketType::ClientChallengeRequest => {
-                            if let Ok(writer) =
-                                self.handshake_manager.recv_challenge_request(&mut reader)
-                            {
-                                if self.io.send_packet(&address, writer.to_packet()).is_err() {
-                                    // TODO: pass this on and handle above
-                                    warn!(
-                                        "Server Error: Cannot send challenge response packet to {}",
-                                        &address
-                                    );
-                                }
-                            }
-                            continue;
-                        }
-                        PacketType::ClientValidateRequest => {
-                            match self.handshake_manager.recv_validate_request(
-                                &self.protocol.message_kinds,
-                                &address,
-                                &mut reader,
-                            ) {
-                                HandshakeResult::Success(auth_message_opt) => {
-                                    if self.validated_users.contains_key(&address) {
-                                        // send validate response
-                                        let writer =
-                                            self.handshake_manager.write_validate_response();
-                                        if self
-                                            .io
-                                            .send_packet(&address, writer.to_packet())
-                                            .is_err()
-                                        {
-                                            // TODO: pass this on and handle above
-                                            warn!("Server Error: Cannot send validate success response packet to {}", &address);
-                                        };
-                                    } else {
-                                        let user = User::new(address);
-                                        let user_key = self.users.insert(user);
-
-                                        if let Some(auth_message) = auth_message_opt {
-                                            self.incoming_events.push_auth(&user_key, auth_message);
-                                        } else {
-                                            self.accept_connection(&user_key);
-                                        }
-                                    }
-                                }
-                                HandshakeResult::Invalid => {
-                                    // do nothing
-                                }
-                            }
-                            continue;
-                        }
-                        PacketType::Ping => {
-                            let response = self.time_manager.process_ping(&mut reader).unwrap();
-                            // send packet
-                            if self.io.send_packet(&address, response.to_packet()).is_err() {
-                                // TODO: pass this on and handle above
-                                warn!("Server Error: Cannot send pong packet to {}", &address);
-                            };
-                            if let Some(user_connection) = self.user_connections.get_mut(&address) {
-                                user_connection.base.mark_sent();
-                            }
-                            continue;
-                        }
-                        PacketType::ClientConnectRequest => {
-                            if self.user_connections.contains_key(&address) {
-                                // send connect response
-                                let writer = self.handshake_manager.write_connect_response();
-                                if self.io.send_packet(&address, writer.to_packet()).is_err() {
-                                    // TODO: pass this on and handle above
-                                    warn!("Server Error: Cannot send connect success response packet to {}", &address);
-                                };
-                                //
-                            } else {
-                                let user_key = *self
-                                    .validated_users
-                                    .get(&address)
-                                    .expect("should be a user by now, from validation step");
-                                self.finalize_connection(&user_key);
-                            }
-                            continue;
-                        }
-                        _ => {}
-                    }
-
-                    // Packets requiring established connection
-                    if let Some(user_connection) = self.user_connections.get_mut(&address) {
-                        // Mark that we've heard from the client
-                        user_connection.base.mark_heard();
-
-                        // Process incoming header
-                        user_connection.process_incoming_header(&header);
-
-                        match header.packet_type {
-                            PacketType::Data => {
-                                // read client tick
-                                let Ok(client_tick) = Tick::de(&mut reader) else {
-                                    // Received a malformed packet
-                                    // TODO: increase suspicion against packet sender
-                                    continue;
-                                };
-
-                                self.time_manager.record_client_tick(client_tick);
-
-                                let server_tick = self.time_manager.current_tick();
-
-                                // process data
-                                if user_connection
-                                    .process_incoming_data(
-                                        &self.protocol,
-                                        server_tick,
-                                        client_tick,
-                                        &mut reader,
-                                        &self.world_record,
-                                    )
-                                    .is_err()
-                                {
-                                    // Received a malformed packet
-                                    // TODO: increase suspicion against packet sender
-                                    warn!("Error reading incoming packet!");
-                                    continue;
-                                };
-                            }
-                            PacketType::Disconnect => {
-                                if self
-                                    .handshake_manager
-                                    .verify_disconnect_request(user_connection, &mut reader)
-                                {
-                                    let user_key = user_connection.user_key;
-                                    self.user_disconnect(&user_key);
-                                }
-                            }
-                            PacketType::Heartbeat => {
-                                // already marked heard above
-                            }
-                            PacketType::Pong => {
-                                // read client tick
-                                user_connection
-                                    .ping_manager
-                                    .process_pong(&self.time_manager, &mut reader);
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-                Ok(None) => {
-                    // No more packets, break loop
-                    break;
-                }
-                Err(error) => {
-                    self.incoming_events
-                        .push_error(NaiaServerError::Wrapped(Box::new(error)));
-                }
-            }
-        }
-    }
-
-    // Entity Helpers
-
-    fn spawn_entity_init(&mut self, entity: &E) {
-        self.world_record.spawn_entity(entity);
     }
 
     // Entity Scopes
@@ -1202,13 +1279,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
                 if let Some(user) = self.users.get(&removed_user) {
-                    if let Some(user_connection) = self.user_connections.get_mut(&user.address) {
+                    if let Some(connection) = self.user_connections.get_mut(&user.address) {
                         // TODO: evaluate whether the Entity really needs to be despawned!
                         // What if the Entity shares another Room with this User? It shouldn't be despawned!
 
                         //remove entity from user connection
-                        user_connection
-                            .entity_manager
+                        connection
+                            .base
+                            .host_world_manager
                             .despawn_entity(&removed_entity);
                     }
                 }
@@ -1220,11 +1298,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 for entity in room.entities() {
                     if world.has_entity(entity) {
                         if let Some(user) = self.users.get(user_key) {
-                            if let Some(user_connection) =
-                                self.user_connections.get_mut(&user.address)
-                            {
+                            if let Some(connection) = self.user_connections.get_mut(&user.address) {
                                 let currently_in_scope =
-                                    user_connection.entity_manager.scope_has_entity(entity);
+                                    connection.base.host_world_manager.host_has_entity(entity);
 
                                 let should_be_in_scope = if let Some(in_scope) =
                                     self.entity_scope_map.get(user_key, entity)
@@ -1236,20 +1312,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                                 if should_be_in_scope {
                                     if !currently_in_scope {
-                                        // add entity to the connections local scope
-                                        user_connection.entity_manager.spawn_entity(entity);
-                                        // add components to connections local scope
-                                        for component_kind in
-                                            self.world_record.component_kinds(entity).unwrap()
-                                        {
-                                            user_connection
-                                                .entity_manager
-                                                .insert_component(entity, &component_kind);
-                                        }
+                                        let component_kinds = self
+                                            .global_world_manager
+                                            .component_kinds(entity)
+                                            .unwrap();
+                                        // add entity & components to the connections local scope
+                                        connection.base.host_world_manager.init_entity(
+                                            &mut connection.base.local_world_manager,
+                                            entity,
+                                            component_kinds,
+                                        );
                                     }
                                 } else if currently_in_scope {
                                     // remove entity from the connections local scope
-                                    user_connection.entity_manager.despawn_entity(entity);
+                                    connection.base.host_world_manager.despawn_entity(entity);
                                 }
                             }
                         }
@@ -1258,43 +1334,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             }
         }
     }
-
-    // Component Helpers
-
-    fn component_init<R: Replicate>(&mut self, entity: &E, component_ref: &mut R) {
-        let component_kind = component_ref.kind();
-        self.world_record.add_component(entity, &component_kind);
-
-        let diff_mask_length: u8 = component_ref.diff_mask_size();
-
-        let mut_sender = self
-            .diff_handler
-            .as_ref()
-            .write()
-            .expect("DiffHandler should be initialized")
-            .register_component(entity, &component_kind, diff_mask_length);
-
-        let prop_mutator = PropertyMutator::new(mut_sender);
-
-        component_ref.set_mutator(&prop_mutator);
-    }
-
-    fn component_cleanup(&mut self, entity: &E, component_kind: &ComponentKind) {
-        self.world_record.remove_component(entity, component_kind);
-        self.diff_handler
-            .as_ref()
-            .write()
-            .expect("Haven't initialized DiffHandler")
-            .deregister_component(entity, component_kind);
-    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> E {
-        self.world_record.handle_to_entity(entity_handle)
+    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
+        self.global_world_manager.handle_to_entity(entity_handle)
     }
 
     fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.world_record.entity_to_handle(entity)
+        self.global_world_manager.entity_to_handle(entity)
     }
 }

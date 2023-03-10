@@ -1,20 +1,20 @@
-use bevy_ecs::event::Events;
+use std::ops::DerefMut;
+
 use bevy_ecs::{
     entity::Entity,
-    schedule::ShouldRun,
-    system::Res,
+    event::Events,
     world::{Mut, World},
 };
 
+use naia_bevy_shared::{HostSyncEvent, WorldMutType, WorldProxyMut};
 use naia_client::Client;
 
-use naia_bevy_shared::WorldProxyMut;
+use crate::ServerOwned;
 
 mod naia_events {
     pub use naia_client::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvent, MessageEvent, RejectEvent, RemoveComponentEvent, ServerTickEvent,
-        SpawnEntityEvent, UpdateComponentEvent,
+        RejectEvent, ServerTickEvent, SpawnEntityEvent,
     };
 }
 
@@ -28,108 +28,156 @@ mod bevy_events {
 
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<Client<Entity>>| {
+
+        // Host Component Updates
+        let mut host_component_event_reader = world
+            .get_resource_mut::<Events<HostSyncEvent>>()
+            .unwrap();
+        let host_component_events: Vec<HostSyncEvent> = host_component_event_reader.drain().collect();
+        for event in host_component_events {
+            match event {
+                HostSyncEvent::Insert(entity, component_kind) => {
+                    let mut world_proxy = world.proxy_mut();
+                    let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
+                        continue;
+                    };
+                    client.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+                }
+                HostSyncEvent::Remove(entity, component_kind) => {
+                    client.remove_component_worldless(&entity, &component_kind);
+                }
+                HostSyncEvent::Despawn(entity) => {
+                    client.despawn_entity_worldless(&entity);
+                }
+            }
+        }
+
+        // Receive Events
         let mut events = client.receive(world.proxy_mut());
         if !events.is_empty() {
-            unsafe {
+
+            if events.has::<naia_events::ConnectEvent>() {
                 // Connect Event
                 let mut connect_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::ConnectEvent>>()
+                    .get_resource_mut::<Events<bevy_events::ConnectEvent>>()
                     .unwrap();
                 for _ in events.read::<naia_events::ConnectEvent>() {
                     connect_event_writer.send(bevy_events::ConnectEvent);
                 }
+            }
 
-                // Disconnect Event
+            // Disconnect Event
+            if events.has::<naia_events::DisconnectEvent>() {
                 let mut disconnect_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::DisconnectEvent>>()
+                    .get_resource_mut::<Events<bevy_events::DisconnectEvent>>()
                     .unwrap();
                 for _ in events.read::<naia_events::DisconnectEvent>() {
                     disconnect_event_writer.send(bevy_events::DisconnectEvent);
                 }
+            }
 
-                // Reject Event
+            // Reject Event
+            if events.has::<naia_events::RejectEvent>() {
                 let mut reject_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::RejectEvent>>()
+                    .get_resource_mut::<Events<bevy_events::RejectEvent>>()
                     .unwrap();
                 for _ in events.read::<naia_events::RejectEvent>() {
                     reject_event_writer.send(bevy_events::RejectEvent);
                 }
+            }
 
-                // Error Event
+            // Error Event
+            if events.has::<naia_events::ErrorEvent>() {
                 let mut error_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::ErrorEvent>>()
+                    .get_resource_mut::<Events<bevy_events::ErrorEvent>>()
                     .unwrap();
                 for error in events.read::<naia_events::ErrorEvent>() {
                     error_event_writer.send(bevy_events::ErrorEvent(error));
                 }
+            }
 
-                // Client Tick Event
+            // Client Tick Event
+            if events.has::<naia_events::ClientTickEvent>() {
                 let mut client_tick_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::ClientTickEvent>>()
+                    .get_resource_mut::<Events<bevy_events::ClientTickEvent>>()
                     .unwrap();
                 for tick in events.read::<naia_events::ClientTickEvent>() {
                     client_tick_event_writer.send(bevy_events::ClientTickEvent(tick));
                 }
+            }
 
-                // Server Tick Event
+            // Server Tick Event
+            if events.has::<naia_events::ServerTickEvent>() {
                 let mut server_tick_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::ServerTickEvent>>()
+                    .get_resource_mut::<Events<bevy_events::ServerTickEvent>>()
                     .unwrap();
                 for tick in events.read::<naia_events::ServerTickEvent>() {
                     server_tick_event_writer.send(bevy_events::ServerTickEvent(tick));
                 }
+            }
 
-                // Message Event
+            // Message Event
+            if events.has_messages() {
                 let mut message_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::MessageEvents>>()
+                    .get_resource_mut::<Events<bevy_events::MessageEvents>>()
                     .unwrap();
                 message_event_writer.send(bevy_events::MessageEvents::from(&mut events));
+            }
 
-                // Spawn Entity Event
+            // Spawn Entity Event
+            if events.has::<naia_events::SpawnEntityEvent>() {
                 let mut spawn_entity_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::SpawnEntityEvent>>()
+                    .get_resource_mut::<Events<bevy_events::SpawnEntityEvent>>()
                     .unwrap();
+
+                let mut spawned_entities = Vec::new();
                 for entity in events.read::<naia_events::SpawnEntityEvent>() {
+                    spawned_entities.push(entity);
                     spawn_entity_event_writer.send(bevy_events::SpawnEntityEvent(entity));
                 }
+                for entity in spawned_entities {
+                    world.entity_mut(entity).insert(ServerOwned);
+                }
+            }
 
-                // Despawn Entity Event
+            // Despawn Entity Event
+            if events.has::<naia_events::DespawnEntityEvent>() {
                 let mut despawn_entity_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::DespawnEntityEvent>>()
+                    .get_resource_mut::<Events<bevy_events::DespawnEntityEvent>>()
                     .unwrap();
                 for entity in events.read::<naia_events::DespawnEntityEvent>() {
                     despawn_entity_event_writer.send(bevy_events::DespawnEntityEvent(entity));
                 }
+            }
 
-                // Insert Component Event
+            // Insert Component Event
+            if events.has_inserts() {
+                let inserts = events.take_inserts().unwrap();
                 let mut insert_component_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::InsertComponentEvents>>()
+                    .get_resource_mut::<Events<bevy_events::InsertComponentEvents>>()
                     .unwrap();
-                insert_component_event_writer
-                    .send(bevy_events::InsertComponentEvents::from(&mut events));
+                insert_component_event_writer.send(bevy_events::InsertComponentEvents::new(inserts));
+            }
 
-                // Update Component Event
+            // Update Component Event
+            if events.has_updates() {
+                let updates = events.take_updates().unwrap();
                 let mut update_component_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::UpdateComponentEvents>>()
+                    .get_resource_mut::<Events<bevy_events::UpdateComponentEvents>>()
                     .unwrap();
                 update_component_event_writer
-                    .send(bevy_events::UpdateComponentEvents::from(&mut events));
+                    .send(bevy_events::UpdateComponentEvents::new(updates));
+            }
 
-                // Remove Component Event
+            // Remove Component Event
+            if events.has_removes() {
+                let removes = events.take_removes().unwrap();
                 let mut remove_component_event_writer = world
-                    .get_resource_unchecked_mut::<Events<bevy_events::RemoveComponentEvents>>()
+                    .get_resource_mut::<Events<bevy_events::RemoveComponentEvents>>()
                     .unwrap();
-                remove_component_event_writer
-                    .send(bevy_events::RemoveComponentEvents::from(&mut events));
+
+                remove_component_event_writer.send(bevy_events::RemoveComponentEvents::new(removes));
             }
         }
     });
-}
-
-pub fn should_receive(client: Res<Client<Entity>>) -> ShouldRun {
-    if client.is_connecting() {
-        ShouldRun::Yes
-    } else {
-        ShouldRun::No
-    }
 }

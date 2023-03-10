@@ -1,7 +1,8 @@
 use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick,
+    Channel, ChannelKind, ComponentKind, EntityEvent, Message, MessageContainer, MessageKind,
+    Replicate, Tick,
 };
 
 use crate::NaiaClientError;
@@ -29,7 +30,7 @@ impl<E: Copy> Default for Events<E> {
 }
 
 impl<E: Copy> Events<E> {
-    pub(crate) fn new() -> Events<E> {
+    pub(crate) fn new() -> Self {
         Self {
             connections: Vec::new(),
             rejections: Vec::new(),
@@ -55,26 +56,54 @@ impl<E: Copy> Events<E> {
         return V::iter(self);
     }
 
+    pub fn has<V: Event<E>>(&self) -> bool {
+        return V::has(self);
+    }
+
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_messages(&self) -> bool {
+        !self.messages.is_empty()
+    }
     pub fn take_messages(
         &mut self,
     ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>> {
         mem::take(&mut self.messages)
     }
 
-    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
-    pub fn take_inserts(&mut self) -> HashMap<ComponentKind, Vec<E>> {
-        mem::take(&mut self.inserts)
+    // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_inserts(&self) -> bool {
+        !self.inserts.is_empty()
+    }
+    pub fn take_inserts(&mut self) -> Option<HashMap<ComponentKind, Vec<E>>> {
+        if self.inserts.is_empty() {
+            return None;
+        } else {
+            return Some(mem::take(&mut self.inserts));
+        }
     }
 
-    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
-    pub fn take_updates(&mut self) -> HashMap<ComponentKind, Vec<(Tick, E)>> {
-        mem::take(&mut self.updates)
+    // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_updates(&self) -> bool {
+        !self.updates.is_empty()
+    }
+    pub fn take_updates(&mut self) -> Option<HashMap<ComponentKind, Vec<(Tick, E)>>> {
+        if self.updates.is_empty() {
+            return None;
+        } else {
+            return Some(mem::take(&mut self.updates));
+        }
     }
 
-    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
-    pub fn take_removes(&mut self) -> HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>> {
-        mem::take(&mut self.removes)
+    // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_removes(&self) -> bool {
+        !self.removes.is_empty()
+    }
+    pub fn take_removes(&mut self) -> Option<HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>> {
+        if self.removes.is_empty() {
+            return None;
+        } else {
+            return Some(mem::take(&mut self.removes));
+        }
     }
 
     // Crate-public
@@ -143,6 +172,15 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
+    pub(crate) fn push_update(&mut self, tick: Tick, entity: E, component_kind: ComponentKind) {
+        if !self.updates.contains_key(&component_kind) {
+            self.updates.insert(component_kind, Vec::new());
+        }
+        let list = self.updates.get_mut(&component_kind).unwrap();
+        list.push((tick, entity));
+        self.empty = false;
+    }
+
     pub(crate) fn push_remove(&mut self, entity: E, component: Box<dyn Replicate>) {
         let component_kind: ComponentKind = component.kind();
         if !self.removes.contains_key(&component_kind) {
@@ -153,13 +191,26 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_update(&mut self, tick: Tick, entity: E, component_kind: ComponentKind) {
-        if !self.updates.contains_key(&component_kind) {
-            self.updates.insert(component_kind, Vec::new());
+    pub(crate) fn receive_entity_events(&mut self, entity_events: Vec<EntityEvent<E>>) {
+        for event in entity_events {
+            match event {
+                EntityEvent::SpawnEntity(entity) => {
+                    self.push_spawn(entity);
+                }
+                EntityEvent::DespawnEntity(entity) => {
+                    self.push_despawn(entity);
+                }
+                EntityEvent::InsertComponent(entity, component_kind) => {
+                    self.push_insert(entity, component_kind);
+                }
+                EntityEvent::RemoveComponent(entity, component_box) => {
+                    self.push_remove(entity, component_box);
+                }
+                EntityEvent::UpdateComponent(tick, entity, component_kind) => {
+                    self.push_update(tick, entity, component_kind);
+                }
+            }
         }
-        let list = self.updates.get_mut(&component_kind).unwrap();
-        list.push((tick, entity));
-        self.empty = false;
     }
 
     pub(crate) fn clear(&mut self) {
@@ -184,6 +235,8 @@ pub trait Event<E: Copy> {
     type Iter;
 
     fn iter(events: &mut Events<E>) -> Self::Iter;
+
+    fn has(events: &Events<E>) -> bool;
 }
 
 // ConnectEvent
@@ -194,6 +247,10 @@ impl<E: Copy> Event<E> for ConnectEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.connections);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.connections.is_empty()
     }
 }
 
@@ -206,6 +263,10 @@ impl<E: Copy> Event<E> for RejectEvent {
         let list = std::mem::take(&mut events.rejections);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.rejections.is_empty()
+    }
 }
 
 // DisconnectEvent
@@ -216,6 +277,10 @@ impl<E: Copy> Event<E> for DisconnectEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.disconnections);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.disconnections.is_empty()
     }
 }
 
@@ -228,6 +293,10 @@ impl<E: Copy> Event<E> for ClientTickEvent {
         let list = std::mem::take(&mut events.client_ticks);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.client_ticks.is_empty()
+    }
 }
 
 // Server Tick Event
@@ -239,6 +308,10 @@ impl<E: Copy> Event<E> for ServerTickEvent {
         let list = std::mem::take(&mut events.server_ticks);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.server_ticks.is_empty()
+    }
 }
 
 // Error Event
@@ -249,6 +322,10 @@ impl<E: Copy> Event<E> for ErrorEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.errors);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.errors.is_empty()
     }
 }
 
@@ -262,7 +339,7 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
-        if let Some(mut channel_map) = events.messages.remove(&channel_kind) {
+        if let Some(channel_map) = events.messages.get_mut(&channel_kind) {
             let message_kind: MessageKind = MessageKind::of::<M>();
             if let Some(boxed_list) = channel_map.remove(&message_kind) {
                 let mut output_list: Vec<M> = Vec::new();
@@ -278,6 +355,15 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
         }
         return IntoIterator::into_iter(Vec::new());
     }
+
+    fn has(events: &Events<E>) -> bool {
+        let channel_kind: ChannelKind = ChannelKind::of::<C>();
+        if let Some(channel_map) = events.messages.get(&channel_kind) {
+            let message_kind: MessageKind = MessageKind::of::<M>();
+            return channel_map.contains_key(&message_kind);
+        }
+        return false;
+    }
 }
 
 // Spawn Event
@@ -289,6 +375,10 @@ impl<E: Copy> Event<E> for SpawnEntityEvent {
         let list = std::mem::take(&mut events.spawns);
         return IntoIterator::into_iter(list);
     }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.spawns.is_empty()
+    }
 }
 
 // Despawn Event
@@ -299,6 +389,10 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.despawns);
         return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.despawns.is_empty()
     }
 }
 
@@ -317,6 +411,11 @@ impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
 
         return IntoIterator::into_iter(Vec::new());
     }
+
+    fn has(events: &Events<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.inserts.contains_key(&component_kind)
+    }
 }
 
 // Update Event
@@ -333,6 +432,11 @@ impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
         }
 
         return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.updates.contains_key(&component_kind)
     }
 }
 
@@ -358,5 +462,10 @@ impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
         }
 
         return IntoIterator::into_iter(Vec::new());
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let component_kind: ComponentKind = ComponentKind::of::<C>();
+        events.removes.contains_key(&component_kind)
     }
 }

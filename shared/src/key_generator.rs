@@ -9,17 +9,14 @@ pub struct KeyGenerator<K: From<u16> + Into<u16> + Copy> {
     phantom: PhantomData<K>,
 }
 
-impl<K: From<u16> + Into<u16> + Copy> Default for KeyGenerator<K> {
-    fn default() -> Self {
+impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
+    pub fn new() -> Self {
         Self {
-            recycled_local_keys: VecDeque::default(),
+            recycled_local_keys: VecDeque::new(),
             next_new_local_key: 0,
             phantom: PhantomData,
         }
     }
-}
-
-impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
     /// Get a new, unused key
     pub fn generate(&mut self) -> K {
         if let Some(local_key) = self.recycled_local_keys.pop_front() {

@@ -1,15 +1,15 @@
-use naia_hecs_demo_shared::Auth;
 use std::{thread::sleep, time::Duration};
 
+use naia_hecs_demo_shared::Auth;
 use naia_hecs_server::{AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, TickEvent};
 
 use crate::app::App;
 
 pub fn process_events(app: &mut App) {
-    let mut events = app.server.receive();
+    let mut events = app.server.receive(&mut app.world);
     if events.is_empty() {
         // If we don't sleep here, app will loop at 100% CPU until a new message comes in
-        sleep(Duration::from_millis(1));
+        sleep(Duration::from_millis(3));
         return;
     } else {
         for (user_key, auth) in events.read::<AuthEvent<Auth>>() {

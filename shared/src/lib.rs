@@ -30,36 +30,20 @@ pub use naia_serde::{
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
 mod backends;
-mod component;
 mod connection;
-mod entity;
 mod messages;
+mod world;
 
 mod bigmap;
 mod constants;
 mod game_time;
 mod key_generator;
 mod protocol;
+mod sequence_list;
 mod types;
-mod world_type;
 mod wrapping_number;
 
 pub use backends::{Timer, Timestamp};
-pub use component::{
-    component_kinds::{ComponentKind, ComponentKinds},
-    component_update::ComponentUpdate,
-    diff_mask::DiffMask,
-    property::Property,
-    property_mutate::{PropertyMutate, PropertyMutator},
-    replica_ref::{
-        ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef, ReplicaDynRefTrait,
-        ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait,
-        ReplicaRefWrapper,
-    },
-    replicate::{
-        Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
-    },
-};
 pub use connection::{
     ack_manager::AckManager,
     bandwidth_monitor::BandwidthMonitor,
@@ -72,17 +56,6 @@ pub use connection::{
     packet_type::PacketType,
     ping_store::{PingIndex, PingStore},
     standard_header::StandardHeader,
-};
-pub use entity::{
-    entity_action::EntityAction,
-    entity_action_receiver::EntityActionReceiver,
-    entity_action_type::EntityActionType,
-    entity_handle::EntityHandle,
-    entity_property::{
-        EntityConverter, EntityDoesNotExistError, EntityHandleConverter, EntityProperty,
-        FakeEntityConverter, NetEntityConverter, NetEntityHandleConverter,
-    },
-    net_entity::NetEntity,
 };
 pub use messages::{
     channels::{
@@ -101,11 +74,52 @@ pub use messages::{
     message_manager::MessageManager,
     named::Named,
 };
+pub use world::{
+    component::{
+        component_kinds::{ComponentKind, ComponentKinds},
+        component_update::ComponentUpdate,
+        diff_mask::DiffMask,
+        entity_property::EntityProperty,
+        property::Property,
+        property_mutate::{PropertyMutate, PropertyMutator},
+        replica_ref::{
+            ReplicaDynMut, ReplicaDynMutTrait, ReplicaDynMutWrapper, ReplicaDynRef,
+            ReplicaDynRefTrait, ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper,
+            ReplicaRefTrait, ReplicaRefWrapper,
+        },
+        replicate::{
+            Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
+        },
+    },
+    entity::{
+        entity_action::EntityAction,
+        entity_action_receiver::EntityActionReceiver,
+        entity_action_type::EntityActionType,
+        entity_converters::{
+            EntityConverter, EntityHandleConverter, FakeEntityConverter, GlobalWorldManagerType,
+            NetEntityConverter, NetEntityHandleConverter,
+        },
+        entity_handle::EntityHandle,
+        entity_ref::EntityRef,
+        error::EntityDoesNotExistError,
+        net_entity::{NetEntity, OwnedNetEntity},
+    },
+    host::{
+        global_diff_handler::GlobalDiffHandler,
+        host_world_manager::HostWorldManager,
+        mut_channel::{MutChannelType, MutReceiver},
+    },
+    local_world_manager::LocalWorldManager,
+    remote::{
+        entity_action_event::EntityActionEvent, entity_event::EntityEvent,
+        remote_world_manager::RemoteWorldManager,
+    },
+    world_type::{WorldMutType, WorldRefType},
+};
 
 pub use bigmap::{BigMap, BigMapKey};
 pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
-pub use world_type::{WorldMutType, WorldRefType};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

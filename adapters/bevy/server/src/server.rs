@@ -1,51 +1,37 @@
-use bevy_ecs::{
-    entity::Entity,
-    system::SystemParam,
-    world::{Mut, World},
-};
 use std::time::Duration;
 
+use bevy_ecs::{
+    entity::Entity,
+    system::{ResMut, SystemParam},
+};
+
 use naia_server::{
-    EntityRef, RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages,
-    UserKey, UserMut, UserRef, UserScopeMut,
+    RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages, UserKey,
+    UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{
     Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
-    WorldProxy, WorldRef, WorldRefType,
 };
-
-use super::{commands::Command, entity_mut::EntityMut, state::State};
 
 // Server
 
-pub struct Server<'world, 'state> {
-    state: &'state mut State,
-    world: &'world World,
-    server: Mut<'world, NaiaServer<Entity>>,
+#[derive(SystemParam)]
+pub struct Server<'w> {
+    server: ResMut<'w, NaiaServer<Entity>>,
 }
 
-impl<'world, 'state> Server<'world, 'state> {
+impl<'w> Server<'w> {
     // Public Methods //
-
-    pub fn new(state: &'state mut State, world: &'world World) -> Self {
-        unsafe {
-            let server = world
-                .get_resource_unchecked_mut::<NaiaServer<Entity>>()
-                .expect("Naia Server has not been correctly initialized!");
-
-            Self {
-                state,
-                world,
-                server,
-            }
-        }
-    }
 
     //// Connections ////
 
     pub fn listen(&mut self, server_addrs: &ServerAddrs) {
         self.server.listen(server_addrs);
+    }
+
+    pub fn is_listening(&self) -> bool {
+        self.server.is_listening()
     }
 
     pub fn accept_connection(&mut self, user_key: &UserKey) {
@@ -74,35 +60,6 @@ impl<'world, 'state> Server<'world, 'state> {
 
     pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
         self.server.scope_checks()
-    }
-
-    pub fn send_all_updates(&mut self) {
-        return self.server.send_all_updates(self.world.proxy());
-    }
-
-    //// Entities ////
-
-    pub fn spawn<'a>(&'a mut self) -> EntityMut<'a, 'world, 'state> {
-        let entity = self.world.entities().reserve_entity();
-        self.server.spawn_entity_at(&entity);
-        EntityMut::new(entity, self)
-    }
-
-    /// Returns true if the server's [`WorldProxy`] has the entity
-    pub fn has_entity(&self, entity: &Entity) -> bool {
-        self.world.proxy().has_entity(entity)
-    }
-
-    pub fn entity(&self, entity: &Entity) -> EntityRef<Entity, WorldRef> {
-        return self.server.entity(self.world.proxy(), entity);
-    }
-
-    pub fn entity_mut<'a>(&'a mut self, entity: &Entity) -> EntityMut<'a, 'world, 'state> {
-        EntityMut::new(*entity, self)
-    }
-
-    pub fn entities(&self) -> Vec<Entity> {
-        return self.server.entities(self.world.proxy());
     }
 
     //// Users ////
@@ -167,29 +124,22 @@ impl<'world, 'state> Server<'world, 'state> {
         self.server.average_tick_duration()
     }
 
-    // Crate-public methods
+    // Entity Registration
 
-    pub(crate) fn queue_command<COMMAND: Command>(&mut self, command: COMMAND) {
-        self.state.push(command);
+    pub fn enable_replication(&mut self, entity: &Entity) {
+        self.server.enable_replication(entity);
     }
 
-    // rooms
-
-    pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, entity: &Entity) {
-        self.server.room_mut(room_key).add_entity(entity);
-    }
-
-    pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &Entity) {
-        self.server.room_mut(room_key).remove_entity(entity);
+    pub fn disable_replication(&mut self, entity: &Entity) {
+        self.server.disable_replication(entity);
     }
 }
 
-impl<'world, 'state> SystemParam for Server<'world, 'state> {
-    type Fetch = State;
-}
-
-impl<'world, 'state> EntityHandleConverter<Entity> for Server<'world, 'state> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
+impl<'w> EntityHandleConverter<Entity> for Server<'w> {
+    fn handle_to_entity(
+        &self,
+        entity_handle: &EntityHandle,
+    ) -> Result<Entity, EntityDoesNotExistError> {
         self.server.handle_to_entity(entity_handle)
     }
 

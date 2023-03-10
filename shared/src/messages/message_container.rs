@@ -11,8 +11,8 @@ pub struct MessageContainer {
 }
 
 impl MessageContainer {
-    pub fn from(message: Box<dyn Message>) -> Self {
-        let bit_length = message.bit_length();
+    pub fn from(message: Box<dyn Message>, converter: &dyn NetEntityHandleConverter) -> Self {
+        let bit_length = message.bit_length(converter);
         Self {
             inner: message,
             bit_length,

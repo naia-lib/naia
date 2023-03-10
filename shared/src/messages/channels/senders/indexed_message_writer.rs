@@ -73,13 +73,10 @@ impl IndexedMessageWriter {
         Some(message_indices)
     }
 
-    fn write_message(
-        message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+    pub fn write_message_index(
         writer: &mut dyn BitWrite,
         last_written_id: &Option<MessageIndex>,
         message_index: &MessageIndex,
-        message: &MessageContainer,
     ) {
         if let Some(last_id) = last_written_id {
             // write message id diff
@@ -90,6 +87,17 @@ impl IndexedMessageWriter {
             // write message id
             message_index.ser(writer);
         }
+    }
+
+    fn write_message(
+        message_kinds: &MessageKinds,
+        converter: &dyn NetEntityHandleConverter,
+        writer: &mut dyn BitWrite,
+        last_written_id: &Option<MessageIndex>,
+        message_index: &MessageIndex,
+        message: &MessageContainer,
+    ) {
+        Self::write_message_index(writer, last_written_id, message_index);
 
         message.write(message_kinds, writer, converter);
     }

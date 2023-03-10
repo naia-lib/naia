@@ -2,38 +2,23 @@ use std::net::SocketAddr;
 
 use bevy_ecs::{
     entity::Entity,
-    system::SystemParam,
-    world::{Mut, World},
+    system::{ResMut, SystemParam},
 };
 
-use naia_client::{Client as NaiaClient, EntityRef, NaiaClientError};
+use naia_client::{Client as NaiaClient, NaiaClientError};
 
 use naia_bevy_shared::{
     Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
-    WorldProxy, WorldRef,
 };
 
-use super::state::State;
-
 // Client
-
-pub struct Client<'a> {
-    world: &'a World,
-    client: Mut<'a, NaiaClient<Entity>>,
+#[derive(SystemParam)]
+pub struct Client<'w> {
+    client: ResMut<'w, NaiaClient<Entity>>,
 }
 
-impl<'a> Client<'a> {
+impl<'w> Client<'w> {
     // Public Methods //
-
-    pub fn new(world: &'a World) -> Self {
-        unsafe {
-            let client = world
-                .get_resource_unchecked_mut::<NaiaClient<Entity>>()
-                .expect("Naia Client has not been correctly initialized!");
-
-            Self { world, client }
-        }
-    }
 
     //// Connections ////
 
@@ -78,16 +63,6 @@ impl<'a> Client<'a> {
         self.client.send_tick_buffer_message::<C, M>(tick, message);
     }
 
-    //// Entities ////
-
-    pub fn entity(&self, entity: &Entity) -> EntityRef<Entity, WorldRef> {
-        return self.client.entity(self.world.proxy(), entity);
-    }
-
-    pub fn entities(&self) -> Vec<Entity> {
-        return self.client.entities(&self.world.proxy());
-    }
-
     //// Ticks ////
 
     pub fn client_tick(&self) -> Option<Tick> {
@@ -107,14 +82,23 @@ impl<'a> Client<'a> {
     pub fn server_interpolation(&self) -> Option<f32> {
         self.client.server_interpolation()
     }
+
+    // Entity Registration
+
+    pub fn enable_replication(&mut self, entity: &Entity) {
+        self.client.enable_replication(entity);
+    }
+
+    pub fn disable_replication(&mut self, entity: &Entity) {
+        self.client.disable_replication(entity);
+    }
 }
 
-impl<'a> SystemParam for Client<'a> {
-    type Fetch = State;
-}
-
-impl<'a> EntityHandleConverter<Entity> for Client<'a> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Entity {
+impl<'w> EntityHandleConverter<Entity> for Client<'w> {
+    fn handle_to_entity(
+        &self,
+        entity_handle: &EntityHandle,
+    ) -> Result<Entity, EntityDoesNotExistError> {
         self.client.handle_to_entity(entity_handle)
     }
 

@@ -8,9 +8,7 @@ pub use naia_shared::{
     PropertyMutator, Replicate, Serde, SerdeErr, StandardHeader, Timer, WorldMutType, WorldRefType,
 };
 
-use crate::cache_map::CacheMap;
-
-use super::connection::Connection;
+use crate::{cache_map::CacheMap, connection::connection::Connection};
 
 pub type Timestamp = u64;
 
@@ -124,8 +122,7 @@ impl HandshakeManager {
         // Verify that timestamp hash has been written by this
         // server instance
         if let Some(new_timestamp) = self.timestamp_validate(reader) {
-            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.base.address)
-            {
+            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.address) {
                 if *old_timestamp == new_timestamp {
                     return true;
                 }

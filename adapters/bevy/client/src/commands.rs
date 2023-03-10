@@ -1,26 +1,44 @@
 use bevy_ecs::{
     entity::Entity,
-    system::{Command, Commands, EntityCommands},
+    system::{Command as BevyCommand, EntityCommands},
     world::World,
 };
 
-use naia_bevy_shared::{WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{HostOwned, WorldMutType, WorldProxyMut};
 
-pub trait CommandsExt<'w, 's> {
-    fn duplicate_entity<'a>(&'a mut self, entity: Entity) -> EntityCommands<'w, 's, 'a>;
-    fn mirror_entities(&mut self, mutable_entity: Entity, immutable_entity: Entity);
+use crate::Client;
+
+// Bevy Commands Extension
+pub trait CommandsExt<'w, 's, 'a> {
+    fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn disable_replication(&'a mut self, client: &mut Client)
+        -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
 }
 
-impl<'w, 's> CommandsExt<'w, 's> for Commands<'w, 's> {
-    fn duplicate_entity<'a>(&'a mut self, entity: Entity) -> EntityCommands<'w, 's, 'a> {
-        let new_entity = self.spawn_empty().id();
-        let command = DuplicateComponents::new(new_entity, entity);
-        self.add(command);
-        self.entity(new_entity)
+impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
+    fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+        client.enable_replication(&self.id());
+        self.insert(HostOwned);
+        return self;
     }
 
-    fn mirror_entities(&mut self, mutable_entity: Entity, immutable_entity: Entity) {
-        self.add(MirrorEntities::new(mutable_entity, immutable_entity));
+    fn disable_replication(
+        &'a mut self,
+        client: &mut Client,
+    ) -> &'a mut EntityCommands<'w, 's, 'a> {
+        client.disable_replication(&self.id());
+        self.remove::<HostOwned>();
+        return self;
+    }
+
+    fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {
+        let old_entity = self.id();
+        let commands = self.commands();
+        let new_entity = commands.spawn_empty().id();
+        let command = DuplicateComponents::new(new_entity, old_entity);
+        commands.add(command);
+        commands.entity(new_entity)
     }
 }
 
@@ -40,35 +58,9 @@ impl DuplicateComponents {
     }
 }
 
-impl Command for DuplicateComponents {
+impl BevyCommand for DuplicateComponents {
     fn write(self, world: &mut World) {
         WorldMutType::<Entity>::duplicate_components(
-            &mut world.proxy_mut(),
-            &self.mutable_entity,
-            &self.immutable_entity,
-        );
-    }
-}
-
-//// MirrorEntities Command ////
-
-pub(crate) struct MirrorEntities {
-    mutable_entity: Entity,
-    immutable_entity: Entity,
-}
-
-impl MirrorEntities {
-    pub fn new(new_entity: Entity, old_entity: Entity) -> Self {
-        Self {
-            mutable_entity: new_entity,
-            immutable_entity: old_entity,
-        }
-    }
-}
-
-impl Command for MirrorEntities {
-    fn write(self, world: &mut World) {
-        WorldMutType::<Entity>::mirror_entities(
             &mut world.proxy_mut(),
             &self.mutable_entity,
             &self.immutable_entity,

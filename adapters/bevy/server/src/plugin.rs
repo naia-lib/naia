@@ -1,16 +1,18 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy_app::{App, CoreStage, Plugin as PluginType};
-use bevy_ecs::{entity::Entity, schedule::SystemStage};
+use bevy_app::{App, Plugin as PluginType};
+use bevy_ecs::{entity::Entity, schedule::IntoSystemConfig};
 
+use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin};
 use naia_server::{Server, ServerConfig};
 
-use naia_bevy_shared::Protocol;
-
 use super::{
-    events::{AuthEvents, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvents, TickEvent},
-    stage::{PrivateStage, Stage},
-    systems::{before_receive_events, should_receive},
+    events::{
+        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        InsertComponentEvents, MessageEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
+        UpdateComponentEvents,
+    },
+    systems::before_receive_events,
 };
 
 struct PluginConfig {
@@ -44,12 +46,15 @@ impl PluginType for Plugin {
     fn build(&self, app: &mut App) {
         let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
 
-        let world_data = config.protocol.world_data();
+        let world_data = config.protocol.take_world_data();
+        world_data.add_systems(app);
         app.insert_resource(world_data);
 
         let server = Server::<Entity>::new(config.server_config, config.protocol.into());
 
         app
+            // SHARED PLUGIN //
+            .add_plugin(SharedPlugin)
             // RESOURCES //
             .insert_resource(server)
             // EVENTS //
@@ -59,18 +64,12 @@ impl PluginType for Plugin {
             .add_event::<TickEvent>()
             .add_event::<MessageEvents>()
             .add_event::<AuthEvents>()
-            // STAGES //
-            .add_stage_before(
-                CoreStage::PreUpdate,
-                PrivateStage::BeforeReceiveEvents,
-                SystemStage::single_threaded().with_run_criteria(should_receive),
-            )
-            .add_stage_after(
-                PrivateStage::BeforeReceiveEvents,
-                Stage::ReceiveEvents,
-                SystemStage::single_threaded().with_run_criteria(should_receive),
-            )
+            .add_event::<SpawnEntityEvent>()
+            .add_event::<DespawnEntityEvent>()
+            .add_event::<InsertComponentEvents>()
+            .add_event::<UpdateComponentEvents>()
+            .add_event::<RemoveComponentEvents>()
             // SYSTEMS //
-            .add_system_to_stage(PrivateStage::BeforeReceiveEvents, before_receive_events);
+            .add_system(before_receive_events.in_set(BeforeReceiveEvents));
     }
 }

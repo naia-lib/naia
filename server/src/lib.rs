@@ -12,31 +12,34 @@
 
 pub use naia_server_socket::ServerAddrs;
 
-pub use naia_shared::{default_channels, Random};
+pub use naia_shared::{default_channels, EntityRef, Random};
 
 mod cache_map;
 mod connection;
 mod error;
 mod events;
-mod protocol;
 mod room;
-mod sequence_list;
 mod server;
 mod server_config;
+mod time_manager;
 mod user;
 mod user_scope;
+mod world;
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;
 pub use events::{
-    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Events, MessageEvent, TickEvent,
+    AuthEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events,
+    InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
+    UpdateComponentEvent,
 };
-pub use protocol::entity_ref::EntityRef;
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::{User, UserKey, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
+pub use world::entity_mut::EntityMut;
+pub use world::entity_owner::EntityOwner;
 
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};

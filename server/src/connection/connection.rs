@@ -1,114 +1,138 @@
-use std::{
-    hash::Hash,
-    net::SocketAddr,
-    sync::{Arc, RwLock},
-};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    HostType, Instant, MessageKinds, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick,
-    WorldRefType,
+    EntityEvent, HostType, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
     connection::{
-        ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
-        tick_buffer_receiver::TickBufferReceiver, time_manager::TimeManager,
+        io::Io, ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
+        tick_buffer_receiver::TickBufferReceiver,
     },
-    protocol::{
-        entity_manager::EntityManager, global_diff_handler::GlobalDiffHandler,
-        world_record::WorldRecord,
-    },
+    events::Events,
+    time_manager::TimeManager,
     user::UserKey,
-    Events,
+    world::global_world_manager::GlobalWorldManager,
 };
 
-use super::{io::Io, ping_manager::PingManager};
+use super::ping_manager::PingManager;
 
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
+    pub address: SocketAddr,
     pub user_key: UserKey,
-    pub base: BaseConnection,
-    pub entity_manager: EntityManager<E>,
-    tick_buffer: TickBufferReceiver,
+    pub base: BaseConnection<E>,
     pub ping_manager: PingManager,
+    tick_buffer: TickBufferReceiver,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn new(
         connection_config: &ConnectionConfig,
         ping_config: &PingConfig,
-        user_address: SocketAddr,
+        user_address: &SocketAddr,
         user_key: &UserKey,
         channel_kinds: &ChannelKinds,
-        diff_handler: &Arc<RwLock<GlobalDiffHandler<E>>>,
+        global_world_manager: &GlobalWorldManager<E>,
     ) -> Self {
         Connection {
+            address: *user_address,
             user_key: *user_key,
             base: BaseConnection::new(
-                user_address,
+                &Some(*user_address),
                 HostType::Server,
                 connection_config,
                 channel_kinds,
+                global_world_manager,
             ),
-            entity_manager: EntityManager::new(user_address, diff_handler),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
         }
     }
 
+    pub fn user_key(&self) -> UserKey {
+        self.user_key
+    }
+
     // Incoming Data
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        self.base
-            .process_incoming_header(header, &mut Some(&mut self.entity_manager));
+        self.base.process_incoming_header(header, &mut []);
     }
 
     /// Read packet data received from a client
-    pub fn process_incoming_data(
+    pub fn process_incoming_data<W: WorldMutType<E>>(
         &mut self,
         protocol: &Protocol,
         server_tick: Tick,
         client_tick: Tick,
         reader: &mut BitReader,
-        world_record: &WorldRecord<E>,
+        world: &mut W,
+        global_world_manager: &mut GlobalWorldManager<E>,
+        incoming_events: &mut Events<E>,
     ) -> Result<(), SerdeErr> {
-        let converter = EntityConverter::new(world_record, &self.entity_manager);
-
-        // read tick-buffered messages
         {
+            let entity_converter =
+                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
+
+            // read tick-buffered messages
             self.tick_buffer.read_messages(
                 protocol,
                 &server_tick,
                 &client_tick,
-                &converter,
+                &entity_converter,
                 reader,
             )?;
+
+            // read messages
+            let messages =
+                self.base
+                    .message_manager
+                    .read_messages(protocol, &entity_converter, reader)?;
+            for (channel_kind, messages) in messages {
+                for message in messages {
+                    incoming_events.push_message(&self.user_key, &channel_kind, message);
+                }
+            }
         }
 
-        // read messages
-        {
-            self.base
-                .message_manager
-                .read_messages(protocol, &converter, reader)?;
+        // read world events
+        if protocol.client_authoritative_entities {
+            let entity_events = self.base.remote_world_manager.read_world_events(
+                global_world_manager,
+                &mut self.base.local_world_manager,
+                protocol,
+                world,
+                client_tick,
+                reader,
+            )?;
+
+            for event in &entity_events {
+                match event {
+                    EntityEvent::SpawnEntity(entity) => {
+                        global_world_manager.remote_spawn_entity(entity, &self.user_key);
+                    }
+                    EntityEvent::DespawnEntity(entity) => {
+                        global_world_manager.remote_despawn_entity(entity);
+                    }
+                    _ => {}
+                }
+            }
+
+            incoming_events.receive_entity_events(&self.user_key, entity_events);
         }
 
-        Ok(())
-    }
-
-    pub fn receive_messages(&mut self, incoming_events: &mut Events) {
-        let received_messages = self.base.message_manager.receive_messages();
-        for (channel_kind, message) in received_messages {
-            incoming_events.push_message(&self.user_key, &channel_kind, message);
-        }
+        return Ok(());
     }
 
     pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {
         let channel_messages = self.tick_buffer.receive_messages(tick);
         for (channel_kind, received_messages) in channel_messages {
             for message in received_messages {
-                messages.push(&self.user_key, &channel_kind, message);
+                messages.push_message(&self.user_key, &channel_kind, message);
             }
         }
     }
@@ -120,15 +144,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E>,
+        global_world_manager: &GlobalWorldManager<E>,
         time_manager: &TimeManager,
-        rtt_millis: &f32,
     ) {
-        self.collect_outgoing_messages(now, rtt_millis, &protocol.message_kinds, world_record);
+        let rtt_millis = self.ping_manager.rtt_average;
+        self.base.collect_outgoing_messages(
+            now,
+            &rtt_millis,
+            global_world_manager,
+            &protocol.message_kinds,
+        );
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, now, io, world, world_record, time_manager) {
+            if self.send_outgoing_packet(
+                protocol,
+                now,
+                io,
+                world,
+                global_world_manager,
+                time_manager,
+            ) {
                 any_sent = true;
             } else {
                 break;
@@ -139,25 +175,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
     }
 
-    fn collect_outgoing_messages(
-        &mut self,
-        now: &Instant,
-        rtt_millis: &f32,
-        message_kinds: &MessageKinds,
-        world_record: &WorldRecord<E>,
-    ) {
-        self.entity_manager.collect_outgoing_messages(
-            now,
-            rtt_millis,
-            world_record,
-            message_kinds,
-            &mut self.base.message_manager,
-        );
-        self.base
-            .message_manager
-            .collect_outgoing_messages(now, rtt_millis);
-    }
-
     /// Send any message, component actions and component updates to the client
     /// Will split the data into multiple packets.
     fn send_outgoing_packet<W: WorldRefType<E>>(
@@ -166,12 +183,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         now: &Instant,
         io: &mut Io,
         world: &W,
-        world_record: &WorldRecord<E>,
+        global_world_manager: &GlobalWorldManager<E>,
         time_manager: &TimeManager,
     ) -> bool {
-        if self.base.message_manager.has_outgoing_messages()
-            || self.entity_manager.has_outgoing_messages()
-        {
+        if self.base.has_outgoing_messages() {
             let next_packet_index = self.base.next_packet_index();
 
             let mut writer = BitWriter::new();
@@ -192,68 +207,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             // write server tick instant
             time_manager.current_tick_instant().ser(&mut writer);
 
+            // write common data packet
             let mut has_written = false;
 
-            // write messages
-            {
-                let converter = EntityConverter::new(world_record, &self.entity_manager);
-                self.base.message_manager.write_messages(
-                    &protocol,
-                    &converter,
-                    &mut writer,
-                    next_packet_index,
-                    &mut has_written,
-                );
-
-                // finish messages
-                false.ser(&mut writer);
-                writer.release_bits(1);
-            }
-
-            // write entity updates
-            {
-                self.entity_manager.write_updates(
-                    &protocol.component_kinds,
-                    now,
-                    &mut writer,
-                    &next_packet_index,
-                    world,
-                    world_record,
-                    &mut has_written,
-                );
-
-                // finish updates
-                false.ser(&mut writer);
-                writer.release_bits(1);
-            }
-
-            // write entity actions
-            {
-                self.entity_manager.write_actions(
-                    &protocol.component_kinds,
-                    now,
-                    &mut writer,
-                    &next_packet_index,
-                    world,
-                    world_record,
-                    &mut has_written,
-                );
-
-                // finish actions
-                false.ser(&mut writer);
-                writer.release_bits(1);
-            }
+            self.base.write_outgoing_packet(
+                &protocol,
+                now,
+                &mut writer,
+                next_packet_index,
+                world,
+                global_world_manager,
+                &mut has_written,
+                true,
+            );
 
             // send packet
-            if io
-                .send_packet(&self.base.address, writer.to_packet())
-                .is_err()
-            {
+            if io.send_packet(&self.address, writer.to_packet()).is_err() {
                 // TODO: pass this on and handle above
-                warn!(
-                    "Server Error: Cannot send data packet to {}",
-                    &self.base.address
-                );
+                warn!("Server Error: Cannot send data packet to {}", &self.address);
             }
 
             return true;

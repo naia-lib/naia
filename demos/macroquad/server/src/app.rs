@@ -58,10 +58,10 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        let mut events = self.server.receive();
+        let mut events = self.server.receive(self.world.proxy_mut());
         if events.is_empty() {
             // If we don't sleep here, app will loop at 100% CPU until a new message comes in
-            sleep(Duration::from_millis(1));
+            sleep(Duration::from_millis(3));
             return;
         }
         for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
@@ -143,7 +143,7 @@ impl App {
 
             // All game logic should happen here, on a tick event
 
-            let messages = self.server.receive_tick_buffer_messages(&server_tick);
+            let mut messages = self.server.receive_tick_buffer_messages(&server_tick);
             for (_user_key, key_command) in messages.read::<PlayerCommandChannel, KeyCommand>() {
                 let Some(entity) = &key_command.entity.get(&self.server) else {
                     continue;

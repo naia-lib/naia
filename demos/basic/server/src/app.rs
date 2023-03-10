@@ -77,10 +77,10 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        let mut events = self.server.receive();
+        let mut events = self.server.receive(self.world.proxy_mut());
         if events.is_empty() {
             // If we don't sleep here, app will loop at 100% CPU until a new message comes in
-            sleep(Duration::from_millis(1));
+            sleep(Duration::from_millis(3));
             return;
         } else {
             for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
