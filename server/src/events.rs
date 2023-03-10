@@ -162,7 +162,7 @@ impl<E: Copy> Events<E> {
     }
 
     pub(crate) fn push_despawn(&mut self, user_key: &UserKey, entity: &E) {
-        self.spawns.push((*user_key, *entity));
+        self.despawns.push((*user_key, *entity));
         self.empty = false;
     }
 
