@@ -18,4 +18,4 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 naia-server = { version = "0.19", path = "../../../server" }
 naia-hecs-shared = { version = "0.19", path = "../shared" }
-hecs = { version = "0.9" }
+hecs = { version = "0.10" }
