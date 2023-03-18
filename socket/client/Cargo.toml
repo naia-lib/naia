@@ -23,7 +23,7 @@ mquad = [ "naia-socket-shared/mquad", "miniquad" ]
 naia-socket-shared = { version = "0.15", path = "../shared" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
-wasm-bindgen = { version = "0.2", optional = true  }
+wasm-bindgen = { version = "0.2.84", optional = true  }
 js-sys = { version = "0.3", optional = true  }
 web_sys = { version = "0.3", package = "web-sys", features = [
     "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType", "MessageChannel", "MessagePort",
