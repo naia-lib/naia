@@ -14,8 +14,8 @@ use bevy_ecs::prelude::Resource;
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, Instant, Message,
-    MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr, StandardHeader, Tick,
-    Timer, WorldMutType, WorldRefType,
+    MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr, SocketConfig,
+    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -122,6 +122,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// listening for Clients
     pub fn is_listening(&self) -> bool {
         self.io.is_loaded()
+    }
+
+    /// Returns socket config
+    pub fn socket_config(&self) -> &SocketConfig {
+        &self.protocol.socket
     }
 
     /// Must be called regularly, maintains connection to and receives messages

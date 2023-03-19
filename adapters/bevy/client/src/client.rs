@@ -5,11 +5,10 @@ use bevy_ecs::{
     system::{ResMut, SystemParam},
 };
 
-use naia_client::{Client as NaiaClient, NaiaClientError};
-
 use naia_bevy_shared::{
     Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
 };
+use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError};
 
 // Client
 #[derive(SystemParam)]
@@ -26,8 +25,8 @@ impl<'w> Client<'w> {
         self.client.auth(auth);
     }
 
-    pub fn connect(&mut self, server_address: &str) {
-        self.client.connect(server_address);
+    pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
+        self.client.connect(socket);
     }
 
     pub fn disconnect(&mut self) {
@@ -52,6 +51,11 @@ impl<'w> Client<'w> {
 
     pub fn jitter(&self) -> f32 {
         self.client.jitter()
+    }
+
+    // Config
+    pub fn socket_config(&self) -> &SocketConfig {
+        self.client.socket_config()
     }
 
     //// Messages ////

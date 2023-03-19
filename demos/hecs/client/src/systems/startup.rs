@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use hecs::World;
 
-use naia_hecs_client::{ClientConfig, Protocol, transport::webrtc};
+use naia_hecs_client::{transport::webrtc, ClientConfig, Protocol};
 
 use naia_hecs_demo_shared::Auth;
 

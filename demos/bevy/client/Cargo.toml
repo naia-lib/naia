@@ -19,7 +19,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 
 [dependencies]
-naia-bevy-client = { path = "../../../adapters/bevy/client" }
+naia-bevy-client = { path = "../../../adapters/bevy/client", features = ["transport_webrtc"] }
 naia-bevy-demo-shared = { path = "../shared" }
 
 bevy_a11y = { version = "0.10", default-features=false }

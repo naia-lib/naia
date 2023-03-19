@@ -6,8 +6,8 @@ use bevy_ecs::{
 };
 
 use naia_server::{
-    RoomKey, RoomMut, RoomRef, Server as NaiaServer, ServerAddrs, TickBufferMessages, UserKey,
-    UserMut, UserRef, UserScopeMut,
+    shared::SocketConfig, transport::Socket, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
+    TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{
@@ -26,8 +26,8 @@ impl<'w> Server<'w> {
 
     //// Connections ////
 
-    pub fn listen(&mut self, server_addrs: &ServerAddrs) {
-        self.server.listen(server_addrs);
+    pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
+        self.server.listen(socket);
     }
 
     pub fn is_listening(&self) -> bool {
@@ -40,6 +40,11 @@ impl<'w> Server<'w> {
 
     pub fn reject_connection(&mut self, user_key: &UserKey) {
         self.server.reject_connection(user_key);
+    }
+
+    // Config
+    pub fn socket_config(&self) -> &SocketConfig {
+        self.server.socket_config()
     }
 
     //// Messages ////
@@ -124,7 +129,7 @@ impl<'w> Server<'w> {
         self.server.average_tick_duration()
     }
 
-    // Entity Registration
+    // Entity Replication
 
     pub fn enable_replication(&mut self, entity: &Entity) {
         self.server.enable_replication(entity);

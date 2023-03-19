@@ -127,6 +127,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.manual_disconnect = true;
     }
 
+    /// Returns socket config
+    pub fn socket_config(&self) -> &SocketConfig {
+        &self.protocol.socket
+    }
+
     // Receive Data from Server! Very important!
 
     /// Must call this regularly (preferably at the beginning of every draw

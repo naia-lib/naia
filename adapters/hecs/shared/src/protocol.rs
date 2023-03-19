@@ -2,7 +2,11 @@ use std::time::Duration;
 
 use hecs::World;
 
-use naia_shared::{Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig, LinkConditionerConfig, Message, Protocol as InnerProtocol, ProtocolPlugin, Replicate, SocketConfig};
+use naia_shared::{
+    Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig,
+    LinkConditionerConfig, Message, Protocol as InnerProtocol, ProtocolPlugin, Replicate,
+    SocketConfig,
+};
 
 use crate::{WorldData, WorldWrapper};
 

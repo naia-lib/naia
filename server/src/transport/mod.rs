@@ -23,12 +23,12 @@ mod inner {
         fn listen(self: Box<Self>) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>);
     }
 
-    pub trait PacketSender {
+    pub trait PacketSender: Send + Sync {
         /// Sends a packet to the Server Socket
         fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError>;
     }
 
-    pub trait PacketReceiver {
+    pub trait PacketReceiver: Send + Sync {
         /// Receives a packet from the Server Socket
         fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;
     }

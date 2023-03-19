@@ -1,8 +1,8 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
-    transport::webrtc, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Random, RoomKey,
-    Server as NaiaServer, ServerConfig, TickEvent, UserKey,
+    shared::Random, transport::webrtc, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent,
+    RoomKey, Server as NaiaServer, ServerConfig, TickEvent, UserKey,
 };
 
 use naia_demo_world::{Entity, World};

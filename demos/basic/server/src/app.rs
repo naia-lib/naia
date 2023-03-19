@@ -1,9 +1,9 @@
 use std::{thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::{default_channels::UnorderedReliableChannel},
-    AuthEvent, ConnectEvent, DisconnectEvent,
-    ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, transport::webrtc, ServerConfig, TickEvent,
+    shared::default_channels::UnorderedReliableChannel, transport::webrtc, AuthEvent, ConnectEvent,
+    DisconnectEvent, ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerConfig,
+    TickEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldRefType};

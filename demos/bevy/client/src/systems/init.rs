@@ -8,8 +8,7 @@ use bevy_render::{
 };
 use bevy_sprite::ColorMaterial;
 
-use naia_bevy_client::Client;
-
+use naia_bevy_client::{transport::webrtc, Client};
 use naia_bevy_demo_shared::messages::Auth;
 
 use crate::resources::Global;
@@ -23,7 +22,8 @@ pub fn init(
     info!("Naia Bevy Client Demo started");
 
     client.auth(Auth::new("charlie", "12345"));
-    client.connect("http://127.0.0.1:14191");
+    let socket = webrtc::Socket::new("http://127.0.0.1:14191", client.socket_config());
+    client.connect(socket);
 
     // Setup Camera
     commands.spawn(Camera2dBundle::default());

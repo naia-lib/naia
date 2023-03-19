@@ -42,6 +42,9 @@
       <sourceFolder url="file://$MODULE_DIR$/socket/shared/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/test/tests" isTestSource="true" />
+      <sourceFolder url="file://$MODULE_DIR$/client/transport/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/client/transport/webrtc/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/server/transport/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/demos/basic/client/wasm_bindgen/target" />
       <excludeFolder url="file://$MODULE_DIR$/demos/basic/client/miniquad/target" />

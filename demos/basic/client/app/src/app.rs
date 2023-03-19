@@ -8,9 +8,10 @@ cfg_if! {
 
 use naia_client::{
     shared::{default_channels::UnorderedReliableChannel, SocketConfig},
-    Client as NaiaClient, ClientConfig,
-    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent,
-    RejectEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent, transport::webrtc,
+    transport::webrtc,
+    Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent, DespawnEntityEvent,
+    DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent,
+    UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World};

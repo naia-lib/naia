@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use hecs::Entity;
 
 use naia_hecs_server::{
-    RoomKey, Server as NaiaServer, transport::webrtc, ServerConfig, WorldWrapper as World,
+    transport::webrtc, RoomKey, Server as NaiaServer, ServerConfig, WorldWrapper as World,
 };
 
 use naia_hecs_demo_shared::protocol;

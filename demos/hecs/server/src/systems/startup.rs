@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use hecs::World;
 
-use naia_hecs_server::{Protocol, transport::webrtc, ServerConfig};
+use naia_hecs_server::{transport::webrtc, Protocol, ServerConfig};
 
 use naia_hecs_demo_shared::{Name, Position};
 
