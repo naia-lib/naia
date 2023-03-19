@@ -12,7 +12,7 @@ mquad = [ "naia-client/mquad", "naia-basic-demo-shared/mquad", "miniquad" ]
 wbindgen = [ "naia-client/wbindgen", "naia-basic-demo-shared/wbindgen", "log" ]
 
 [dependencies]
-naia-client = { path = "../../../../client" }
+naia-client = { path = "../../../../client", features = [ "transport_webrtc" ] }
 naia-demo-world = { path = "../../../demo_utils/demo_world" }
 naia-basic-demo-shared = { path = "../../shared" }
 cfg-if = { version = "1.0" }

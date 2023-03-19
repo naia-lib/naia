@@ -53,9 +53,7 @@ impl App {
         info!("Naia Macroquad Client Demo started");
 
         let protocol = protocol();
-
         let socket = webrtc::Socket::new("http://127.0.0.1:14191", &protocol.socket);
-
         let mut client = Client::new(ClientConfig::default(), protocol);
         client.auth(Auth::new("charlie", "12345"));
         client.connect(socket);

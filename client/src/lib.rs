@@ -13,7 +13,13 @@
 #[macro_use]
 extern crate cfg_if;
 
-pub use naia_shared::{default_channels, EntityRef, Random};
+pub mod transport;
+pub mod shared {
+    pub use naia_shared::{default_channels, EntityRef, Random, SocketConfig};
+}
+pub mod internal {
+    pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};
+}
 
 mod client;
 mod client_config;
@@ -21,7 +27,6 @@ mod command_history;
 mod connection;
 mod error;
 mod events;
-pub mod transport;
 mod world;
 
 pub use client::Client;
@@ -34,7 +39,3 @@ pub use events::{
     SpawnEntityEvent, UpdateComponentEvent,
 };
 pub use world::entity_mut::EntityMut;
-
-pub mod internal {
-    pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};
-}
