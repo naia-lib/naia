@@ -4,8 +4,8 @@ use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
-    packet_sender::{PacketSender, PacketSenderTrait},
     packet_receiver::{PacketReceiver, PacketReceiverTrait},
+    packet_sender::{PacketSender, PacketSenderTrait},
     socket::SocketTrait,
 };
 
@@ -21,7 +21,10 @@ pub struct Socket;
 
 impl Socket {
     /// Connects to the given server address
-    pub fn connect(server_session_url: &str, config: &SocketConfig) -> (PacketSender, PacketReceiver) {
+    pub fn connect(
+        server_session_url: &str,
+        config: &SocketConfig,
+    ) -> (PacketSender, PacketReceiver) {
         let server_url = parse_server_url(server_session_url);
 
         unsafe {
@@ -48,12 +51,14 @@ impl Socket {
             }
         };
 
-        return (PacketSender::new(packet_sender), PacketReceiver::new(packet_receiver));
+        return (
+            PacketSender::new(packet_sender),
+            PacketReceiver::new(packet_receiver),
+        );
     }
 }
 
 impl SocketTrait for Socket {
-
     /// Connects to the given server address
     fn connect(server_session_url: &str, config: &SocketConfig) -> (PacketSender, PacketReceiver) {
         return Socket::connect(server_session_url, config);

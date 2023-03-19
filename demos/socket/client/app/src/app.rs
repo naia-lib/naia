@@ -26,7 +26,8 @@ impl App {
     pub fn new() -> App {
         info!("Naia Client Socket Demo started");
 
-        let (packet_sender, packet_receiver) = Socket::connect("http://127.0.0.1:14191", &shared_config());
+        let (packet_sender, packet_receiver) =
+            Socket::connect("http://127.0.0.1:14191", &shared_config());
 
         App {
             packet_sender,
@@ -38,7 +39,6 @@ impl App {
     }
 
     pub fn update(&mut self) {
-
         if self.server_addr_str.is_none() {
             if let ServerAddr::Found(addr) = self.packet_receiver.server_addr() {
                 self.server_addr_str = Some(addr.to_string());

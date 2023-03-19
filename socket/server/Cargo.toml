@@ -16,6 +16,7 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [dependencies]
+naia-server-transport = { path = "../../server/transport" }
 naia-socket-shared = { version = "0.15", path = "../shared" }
 log = { version = "0.4" }
 futures-channel = { version = "0.3", features = ["sink"] }

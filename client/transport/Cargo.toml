@@ -1,0 +1,14 @@
+[package]
+name = "naia-client-transport"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../.."
+documentation = "https://docs.rs/naia-client"
+homepage = "https://github.com/naia-lib/naia"
+repository = "https://github.com/naia-lib/naia"
+license = "MIT OR Apache-2.0"
+edition = "2021"
+
+[features]
+
+[dependencies]

@@ -1,4 +1,3 @@
-
 use super::{error::NaiaClientSocketError, server_addr::ServerAddr};
 
 // Impl
@@ -33,4 +32,3 @@ pub trait PacketSenderTrait: Send + Sync {
     /// Get the Server's Socket address
     fn server_addr(&self) -> ServerAddr;
 }
-

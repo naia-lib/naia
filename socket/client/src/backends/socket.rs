@@ -1,6 +1,6 @@
 use naia_socket_shared::SocketConfig;
 
-use crate::{packet_sender::PacketSender, packet_receiver::PacketReceiver};
+use crate::{packet_receiver::PacketReceiver, packet_sender::PacketSender};
 
 /// Used to send packets from the Client Socket
 pub trait SocketTrait {

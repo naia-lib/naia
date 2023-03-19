@@ -30,17 +30,16 @@ pub use naia_serde::{
 pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
 
 mod backends;
-mod connection;
-mod messages;
-mod world;
-
 mod bigmap;
+mod connection;
 mod constants;
 mod game_time;
 mod key_generator;
+mod messages;
 mod protocol;
 mod sequence_list;
 mod types;
+mod world;
 mod wrapping_number;
 
 pub use backends::{Timer, Timestamp};

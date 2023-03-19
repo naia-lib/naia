@@ -3,7 +3,11 @@ use smol::channel;
 
 use naia_socket_shared::SocketConfig;
 
-use crate::{async_socket::Socket as AsyncSocket, executor, packet_sender::{PacketSender, PacketSenderTrait}};
+use crate::{
+    async_socket::Socket as AsyncSocket,
+    executor,
+    packet_sender::{PacketSender, PacketSenderTrait},
+};
 
 use super::{
     conditioned_packet_receiver::ConditionedPacketReceiverImpl,
@@ -21,10 +25,11 @@ pub trait SocketTrait {
 pub struct Socket;
 
 impl Socket {
-
     /// Listens on the Socket for incoming communication from Clients
-    pub fn listen(config: &SocketConfig, server_addrs: &ServerAddrs) -> (PacketSender, PacketReceiver) {
-
+    pub fn listen(
+        config: &SocketConfig,
+        server_addrs: &ServerAddrs,
+    ) -> (PacketSender, PacketReceiver) {
         // Set up receiver loop
         let (from_client_sender, from_client_receiver) = channel::unbounded();
         let (sender_sender, sender_receiver) = channel::bounded(1);
@@ -79,8 +84,10 @@ impl Socket {
             None => Box::new(PacketReceiverImpl::new(from_client_receiver)),
         };
 
-
-        return (PacketSender::new(packet_sender), PacketReceiver::new(packet_receiver));
+        return (
+            PacketSender::new(packet_sender),
+            PacketReceiver::new(packet_receiver),
+        );
     }
 }
 

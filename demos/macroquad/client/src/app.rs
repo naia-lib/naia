@@ -10,6 +10,7 @@ use naia_client::{
     DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
     RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
+use naia_client_socket::WebRTCSocket;
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 
@@ -52,9 +53,13 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Client Demo started");
 
-        let mut client = Client::new(ClientConfig::default(), protocol());
+        let protocol = protocol();
+
+        let socket = WebRTCSocket::new("http://127.0.0.1:14191", &protocol.socket);
+
+        let mut client = Client::new(ClientConfig::default(), protocol);
         client.auth(Auth::new("charlie", "12345"));
-        client.connect("http://127.0.0.1:14191");
+        client.connect(socket);
 
         App {
             client,

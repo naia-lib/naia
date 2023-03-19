@@ -21,7 +21,7 @@ bevy_support = ["naia-shared/bevy_support","bevy_ecs"]
 zstd_support = ["naia-shared/zstd_support"]
 
 [dependencies]
-naia-server-socket = { version = "0.15", path = "../socket/server" }
+naia-server-transport = { path = "transport" }
 naia-shared = { version = "0.19", path = "../shared" }
 bevy_ecs = { version = "0.10", default_features = false, optional = true }
 log = { version = "0.4" }

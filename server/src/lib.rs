@@ -10,8 +10,6 @@
     unused_import_braces
 )]
 
-pub use naia_server_socket::ServerAddrs;
-
 pub use naia_shared::{default_channels, EntityRef, Random};
 
 mod cache_map;

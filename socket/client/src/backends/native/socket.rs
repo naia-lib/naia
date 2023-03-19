@@ -3,14 +3,13 @@ use naia_socket_shared::{parse_server_url, SocketConfig};
 use webrtc_unreliable_client::Socket as RTCSocket;
 
 use crate::{
-    backends::native::runtime::get_runtime,
+    backends::{native::runtime::get_runtime, socket::SocketTrait},
     conditioned_packet_receiver::ConditionedPacketReceiver,
     packet_receiver::{PacketReceiver, PacketReceiverTrait},
     packet_sender::{PacketSender, PacketSenderTrait},
-    socket::SocketTrait,
 };
 
-use super::{packet_sender::PacketSenderImpl, packet_receiver::PacketReceiverImpl};
+use super::{packet_receiver::PacketReceiverImpl, packet_sender::PacketSenderImpl};
 
 /// A client-side socket which communicates with an underlying unordered &
 /// unreliable protocol
@@ -18,8 +17,10 @@ pub struct Socket;
 
 impl Socket {
     /// Connects to the given server address
-    pub fn connect(server_session_url: &str, config: &SocketConfig) -> (PacketSender, PacketReceiver) {
-
+    pub fn connect(
+        server_session_url: &str,
+        config: &SocketConfig,
+    ) -> (PacketSender, PacketReceiver) {
         let server_session_string = format!(
             "{}{}",
             parse_server_url(server_session_url),
@@ -45,12 +46,14 @@ impl Socket {
             }
         };
 
-        return (PacketSender::new(packet_sender), PacketReceiver::new(packet_receiver));
+        return (
+            PacketSender::new(packet_sender),
+            PacketReceiver::new(packet_receiver),
+        );
     }
 }
 
 impl SocketTrait for Socket {
-
     /// Connects to the given server address
     fn connect(server_session_url: &str, config: &SocketConfig) -> (PacketSender, PacketReceiver) {
         return Socket::connect(server_session_url, config);

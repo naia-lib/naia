@@ -2,7 +2,9 @@
 resolver = "2"
 members = [
     "client",
+    "client/transport",
     "server",
+    "server/transport",
     "shared",
     "shared/derive",
     "shared/serde",
@@ -42,7 +44,9 @@ members = [
 # Do not put demos in the default-members, since they may use conflicting dependencies / feature flags
 default-members = [
     "client",
+    "client/transport",
     "server",
+    "server/transport",
     "shared",
     "shared/derive",
     "shared/serde",

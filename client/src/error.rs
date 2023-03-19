@@ -4,6 +4,8 @@ use std::{error::Error, fmt};
 pub enum NaiaClientError {
     Message(String),
     Wrapped(Box<dyn Error + Send>),
+    SendError,
+    RecvError,
 }
 
 impl NaiaClientError {
@@ -17,6 +19,8 @@ impl fmt::Display for NaiaClientError {
         match self {
             NaiaClientError::Message(msg) => write!(f, "Naia Client Error: {}", msg),
             NaiaClientError::Wrapped(boxed_err) => fmt::Display::fmt(boxed_err.as_ref(), f),
+            NaiaClientError::SendError => write!(f, "Naia Client Error: Send Error"),
+            NaiaClientError::RecvError => write!(f, "Naia Client Error: Recv Error"),
         }
     }
 }

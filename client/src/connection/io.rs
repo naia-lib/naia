@@ -1,17 +1,15 @@
 use std::{net::SocketAddr, time::Duration};
 
-use naia_client_socket::{NaiaClientSocketError, PacketReceiver, PacketSender, ServerAddr};
-pub use naia_shared::{
-    BandwidthMonitor, BitReader, BitWriter, CompressionConfig, ConnectionConfig, Decoder, Encoder,
-    OutgoingPacket, PacketType, Replicate, StandardHeader, Timer, Timestamp, WorldMutType,
-    WorldRefType, MTU_SIZE_BYTES,
+use naia_client_transport::{PacketReceiver, PacketSender, ServerAddr};
+use naia_shared::{
+    BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, OutgoingPacket,
 };
 
 use crate::NaiaClientError;
 
 pub struct Io {
-    packet_sender: Option<PacketSender>,
-    packet_receiver: Option<PacketReceiver>,
+    packet_sender: Option<Box<dyn PacketSender>>,
+    packet_receiver: Option<Box<dyn PacketReceiver>>,
     outgoing_bandwidth_monitor: Option<BandwidthMonitor>,
     incoming_bandwidth_monitor: Option<BandwidthMonitor>,
     outgoing_encoder: Option<Encoder>,
@@ -49,7 +47,11 @@ impl Io {
         }
     }
 
-    pub fn load(&mut self, packet_sender: PacketSender, packet_receiver: PacketReceiver) {
+    pub fn load(
+        &mut self,
+        packet_sender: Box<dyn PacketSender>,
+        packet_receiver: Box<dyn PacketReceiver>,
+    ) {
         if self.packet_sender.is_some() {
             panic!("Packet sender/receiver already loaded! Cannot do this twice!");
         }
@@ -62,7 +64,7 @@ impl Io {
         self.packet_sender.is_some()
     }
 
-    pub fn send_packet(&mut self, packet: OutgoingPacket) -> Result<(), NaiaClientSocketError> {
+    pub fn send_packet(&mut self, packet: OutgoingPacket) -> Result<(), NaiaClientError> {
         // get payload
         let mut payload = packet.slice();
 
@@ -80,10 +82,10 @@ impl Io {
             .as_mut()
             .expect("Cannot call Client.send_packet() until you call Client.connect()!")
             .send(payload)
-            .map_err(|_| NaiaClientSocketError::SendError)
+            .map_err(|_| NaiaClientError::SendError)
     }
 
-    pub fn recv_reader(&mut self) -> Result<Option<BitReader>, NaiaClientSocketError> {
+    pub fn recv_reader(&mut self) -> Result<Option<BitReader>, NaiaClientError> {
         let receive_result = self
             .packet_receiver
             .as_mut()
@@ -103,7 +105,9 @@ impl Io {
 
             Ok(Some(BitReader::new(payload)))
         } else {
-            receive_result.map(|payload_opt| payload_opt.map(BitReader::new))
+            receive_result
+                .map(|payload_opt| payload_opt.map(BitReader::new))
+                .map_err(|_| NaiaClientError::RecvError)
         }
     }
 

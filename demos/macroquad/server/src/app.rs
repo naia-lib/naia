@@ -2,8 +2,9 @@ use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
     AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Random, RoomKey, Server as NaiaServer,
-    ServerAddrs, ServerConfig, TickEvent, UserKey,
+    ServerConfig, TickEvent, UserKey,
 };
+use naia_server_socket::{ServerAddrs, WebRTCSocket};
 
 use naia_demo_world::{Entity, World};
 
@@ -29,6 +30,8 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Macroquad Server Demo started");
 
+        let protocol = protocol();
+
         let server_addresses = ServerAddrs::new(
             "127.0.0.1:14191"
                 .parse()
@@ -41,8 +44,10 @@ impl App {
             "http://127.0.0.1:14192",
         );
 
-        let mut server = Server::new(ServerConfig::default(), protocol());
-        server.listen(&server_addresses);
+        let socket = WebRTCSocket::new(&server_addresses, &protocol.socket);
+
+        let mut server = Server::new(ServerConfig::default(), protocol);
+        server.listen(socket);
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
