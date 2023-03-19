@@ -2,52 +2,41 @@ use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use webrtc_unreliable_client::Socket as RTCSocket;
 
-use crate::backends::native::runtime::get_runtime;
 use crate::{
+    backends::native::runtime::get_runtime,
     conditioned_packet_receiver::ConditionedPacketReceiver,
-    io::Io,
     packet_receiver::{PacketReceiver, PacketReceiverTrait},
+    packet_sender::{PacketSender, PacketSenderTrait},
+    socket::SocketTrait,
 };
 
-use super::{packet_receiver::PacketReceiverImpl, packet_sender::PacketSender};
+use super::{packet_sender::PacketSenderImpl, packet_receiver::PacketReceiverImpl};
 
 /// A client-side socket which communicates with an underlying unordered &
 /// unreliable protocol
-pub struct Socket {
-    config: SocketConfig,
-    io: Option<Io>,
-}
+pub struct Socket;
 
 impl Socket {
-    /// Create a new Socket
-    pub fn new(config: &SocketConfig) -> Self {
-        Socket {
-            config: config.clone(),
-            io: None,
-        }
-    }
-
     /// Connects to the given server address
-    pub fn connect(&mut self, server_session_url: &str) {
-        if self.io.is_some() {
-            panic!("Socket already connected!");
-        }
+    pub fn connect(server_session_url: &str, config: &SocketConfig) -> (PacketSender, PacketReceiver) {
 
         let server_session_string = format!(
             "{}{}",
             parse_server_url(server_session_url),
-            self.config.rtc_endpoint_path.clone()
+            config.rtc_endpoint_path.clone()
         );
-        let conditioner_config = self.config.link_condition.clone();
+        let conditioner_config = config.link_condition.clone();
 
         let (socket, io) = RTCSocket::new();
         get_runtime().spawn(async move { socket.connect(&server_session_string).await });
 
-        // Setup Packet Sender & Receiver
-        let packet_sender = PacketSender::new(io.addr_cell.clone(), io.to_server_sender);
-        let packet_receiver_impl = PacketReceiverImpl::new(io.addr_cell, io.to_client_receiver);
+        // Setup Packet Sender
+        let packet_sender_impl = PacketSenderImpl::new(io.addr_cell.clone(), io.to_server_sender);
+        let packet_sender: Box<dyn PacketSenderTrait> = Box::new(packet_sender_impl);
 
-        let receiver: Box<dyn PacketReceiverTrait> = {
+        // Setup Packet Receiver
+        let packet_receiver_impl = PacketReceiverImpl::new(io.addr_cell, io.to_client_receiver);
+        let packet_receiver: Box<dyn PacketReceiverTrait> = {
             let inner_receiver = Box::new(packet_receiver_impl);
             if let Some(config) = &conditioner_config {
                 Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
@@ -56,33 +45,14 @@ impl Socket {
             }
         };
 
-        self.io = Some(Io::new(packet_sender, PacketReceiver::new(receiver)));
+        return (PacketSender::new(packet_sender), PacketReceiver::new(packet_receiver));
     }
+}
 
-    /// Returns whether or not the connect method was called (doesn't necessarily indicate that the
-    /// connection is fully established).
-    pub fn is_connected(&self) -> bool {
-        self.io.is_some()
-    }
+impl SocketTrait for Socket {
 
-    /// Gets a PacketSender which can be used to send packets through the Socket
-    pub fn packet_sender(&self) -> PacketSender {
-        return self
-            .io
-            .as_ref()
-            .expect("Socket is not connected yet! Call Socket.connect() before this.")
-            .packet_sender
-            .clone();
-    }
-
-    /// Gets a PacketReceiver which can be used to receive packets from the Socket
-    pub fn packet_receiver(&mut self) -> PacketReceiver {
-        return self
-            .io
-            .as_mut()
-            .expect("Socket is not connected yet! Call Socket.connect() before this.")
-            .packet_receiver
-            .take()
-            .expect("Can only call Socket.packet_receiver() once.");
+    /// Connects to the given server address
+    fn connect(server_session_url: &str, config: &SocketConfig) -> (PacketSender, PacketReceiver) {
+        return Socket::connect(server_session_url, config);
     }
 }

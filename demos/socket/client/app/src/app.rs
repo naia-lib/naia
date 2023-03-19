@@ -15,7 +15,6 @@ use naia_shared::Timer;
 use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
 
 pub struct App {
-    socket: Socket,
     packet_sender: PacketSender,
     packet_receiver: PacketReceiver,
     message_count: u8,
@@ -27,14 +26,9 @@ impl App {
     pub fn new() -> App {
         info!("Naia Client Socket Demo started");
 
-        let mut socket = Socket::new(&shared_config());
-        socket.connect("http://127.0.0.1:14191");
-
-        let packet_sender = socket.packet_sender();
-        let packet_receiver = socket.packet_receiver();
+        let (packet_sender, packet_receiver) = Socket::connect("http://127.0.0.1:14191", &shared_config());
 
         App {
-            socket,
             packet_sender,
             packet_receiver,
             message_count: 0,
@@ -44,9 +38,6 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        if !self.socket.is_connected() {
-            return;
-        }
 
         if self.server_addr_str.is_none() {
             if let ServerAddr::Found(addr) = self.packet_receiver.server_addr() {
