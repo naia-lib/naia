@@ -1,10 +1,11 @@
-use naia_client_transport::{
+use naia_shared::SocketConfig;
+
+use naia_client_socket::{PacketReceiver, PacketSender, ServerAddr, Socket};
+
+use super::{
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     ServerAddr as TransportAddr, Socket as TransportSocket,
 };
-use naia_socket_shared::SocketConfig;
-
-use crate::{PacketReceiver, PacketSender, ServerAddr, Socket};
 
 pub struct WebRTCSocket {
     server_session_url: String,

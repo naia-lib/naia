@@ -21,7 +21,6 @@ mod error;
 mod packet_receiver;
 mod packet_sender;
 mod server_addr;
-mod transport;
 
 pub use naia_socket_shared as shared;
 
@@ -30,7 +29,6 @@ pub use error::NaiaClientSocketError;
 pub use packet_receiver::PacketReceiver;
 pub use packet_sender::PacketSender;
 pub use server_addr::ServerAddr;
-pub use transport::WebRTCSocket;
 
 cfg_if! {
     if #[cfg(all(target_arch = "wasm32", feature = "wbindgen", feature = "mquad"))]

@@ -11,7 +11,6 @@ use log::warn;
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_server_transport::Socket;
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, Instant, Message,
@@ -27,6 +26,7 @@ use crate::{
         tick_buffer_messages::TickBufferMessages,
     },
     time_manager::TimeManager,
+    transport::Socket,
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_scope_map::EntityScopeMap,
         global_world_manager::GlobalWorldManager,

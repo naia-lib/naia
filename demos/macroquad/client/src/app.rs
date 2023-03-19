@@ -6,11 +6,10 @@ use macroquad::prelude::{
 };
 
 use naia_client::{
-    Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent,
-    DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
-    RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
+    transport::WebRTCSocket, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory,
+    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
+    MessageEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
-use naia_client_socket::WebRTCSocket;
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 

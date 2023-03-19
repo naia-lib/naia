@@ -21,7 +21,6 @@ mod packet_sender;
 mod server_addrs;
 mod session;
 mod socket;
-mod transport;
 
 /// Executor for Server
 pub mod executor;
@@ -32,4 +31,3 @@ pub use packet_receiver::PacketReceiver;
 pub use packet_sender::PacketSender;
 pub use server_addrs::ServerAddrs;
 pub use socket::Socket;
-pub use transport::WebRTCSocket;

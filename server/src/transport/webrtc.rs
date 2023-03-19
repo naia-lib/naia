@@ -1,20 +1,23 @@
 use std::net::SocketAddr;
 
-use naia_server_transport::{
+use naia_shared::SocketConfig;
+
+use naia_server_socket::{PacketReceiver, PacketSender, Socket};
+
+pub use naia_server_socket::ServerAddrs as WebRTCServerAddrs;
+
+use super::{
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     Socket as TransportSocket,
 };
-use naia_socket_shared::SocketConfig;
-
-use crate::{PacketReceiver, PacketSender, ServerAddrs, Socket};
 
 pub struct WebRTCSocket {
-    server_addrs: ServerAddrs,
+    server_addrs: WebRTCServerAddrs,
     config: SocketConfig,
 }
 
 impl WebRTCSocket {
-    pub fn new(server_addrs: &ServerAddrs, config: &SocketConfig) -> Self {
+    pub fn new(server_addrs: &WebRTCServerAddrs, config: &SocketConfig) -> Self {
         return Self {
             server_addrs: server_addrs.clone(),
             config: config.clone(),

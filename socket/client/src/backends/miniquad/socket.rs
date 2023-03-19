@@ -3,10 +3,10 @@ use std::collections::VecDeque;
 use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use crate::{
+    backends::socket::SocketTrait,
     conditioned_packet_receiver::ConditionedPacketReceiver,
     packet_receiver::{PacketReceiver, PacketReceiverTrait},
     packet_sender::{PacketSender, PacketSenderTrait},
-    backends::socket::SocketTrait,
 };
 
 use super::{

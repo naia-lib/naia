@@ -20,7 +20,6 @@ wbindgen = [ "naia-socket-shared/wbindgen", "wasm-bindgen", "js-sys", "web_sys",
 mquad = [ "naia-socket-shared/mquad", "miniquad" ]
 
 [dependencies]
-naia-client-transport = { path = "../../client/transport" }
 naia-socket-shared = { version = "0.15", path = "../shared" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }

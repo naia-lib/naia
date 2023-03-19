@@ -1,10 +1,10 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
+    transport::{WebRTCServerAddrs, WebRTCSocket},
     AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, Random, RoomKey, Server as NaiaServer,
     ServerConfig, TickEvent, UserKey,
 };
-use naia_server_socket::{ServerAddrs, WebRTCSocket};
 
 use naia_demo_world::{Entity, World};
 
@@ -32,7 +32,7 @@ impl App {
 
         let protocol = protocol();
 
-        let server_addresses = ServerAddrs::new(
+        let server_addresses = WebRTCServerAddrs::new(
             "127.0.0.1:14191"
                 .parse()
                 .expect("could not parse Signaling address/port"),

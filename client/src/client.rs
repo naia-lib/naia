@@ -5,7 +5,6 @@ use log::warn;
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_client_transport::Socket;
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
     EntityConverter, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
@@ -21,6 +20,7 @@ use crate::{
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
     },
+    transport::Socket,
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, global_world_manager::GlobalWorldManager,
     },

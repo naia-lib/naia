@@ -10,6 +10,9 @@
     unused_import_braces
 )]
 
+#[macro_use]
+extern crate cfg_if;
+
 pub use naia_shared::{default_channels, EntityRef, Random};
 
 mod client;
@@ -18,6 +21,7 @@ mod command_history;
 mod connection;
 mod error;
 mod events;
+pub mod transport;
 mod world;
 
 pub use client::Client;

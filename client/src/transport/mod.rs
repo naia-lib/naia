@@ -1,6 +1,19 @@
+cfg_if! {
+    if #[cfg(feature = "transport_webrtc")] {
+        mod webrtc;
+        pub use webrtc::WebRTCSocket;
+    } else {}
+}
+cfg_if! {
+    if #[cfg(feature = "transport_udp")] {
+        mod udp;
+    } else {}
+}
+
 mod server_addr;
-pub use inner::{PacketReceiver, PacketSender, RecvError, SendError, Socket};
 pub use server_addr::ServerAddr;
+
+pub use inner::{PacketReceiver, PacketSender, RecvError, SendError, Socket};
 
 mod inner {
 

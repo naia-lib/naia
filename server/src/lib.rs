@@ -10,6 +10,9 @@
     unused_import_braces
 )]
 
+#[macro_use]
+extern crate cfg_if;
+
 pub use naia_shared::{default_channels, EntityRef, Random};
 
 mod cache_map;
@@ -20,6 +23,7 @@ mod room;
 mod server;
 mod server_config;
 mod time_manager;
+pub mod transport;
 mod user;
 mod user_scope;
 mod world;

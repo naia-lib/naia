@@ -1,10 +1,12 @@
 use std::{net::SocketAddr, panic, time::Duration};
 
-use naia_server_transport::{PacketReceiver, PacketSender};
 use naia_shared::{CompressionConfig, Decoder, Encoder, OutgoingPacket, OwnedBitReader};
 
 use super::bandwidth_monitor::BandwidthMonitor;
-use crate::NaiaServerError;
+use crate::{
+    error::NaiaServerError,
+    transport::{PacketReceiver, PacketSender},
+};
 
 pub struct Io {
     packet_sender: Option<Box<dyn PacketSender>>,
