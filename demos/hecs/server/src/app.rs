@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use hecs::Entity;
 
 use naia_hecs_server::{
-    RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, WorldWrapper as World,
+    RoomKey, Server as NaiaServer, transport::webrtc, ServerConfig, WorldWrapper as World,
 };
 
 use naia_hecs_demo_shared::protocol;
@@ -29,7 +29,7 @@ impl App {
     pub fn new() -> Self {
         info!("Naia Hecs Server Demo started");
 
-        let server_addresses = ServerAddrs::new(
+        let server_addresses = webrtc::ServerAddrs::new(
             "127.0.0.1:14191"
                 .parse()
                 .expect("could not parse Signaling address/port"),

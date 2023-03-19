@@ -2,10 +2,7 @@ use std::time::Duration;
 
 use hecs::World;
 
-use naia_shared::{
-    Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig,
-    LinkConditionerConfig, Message, Protocol as InnerProtocol, ProtocolPlugin, Replicate,
-};
+use naia_shared::{Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig, LinkConditionerConfig, Message, Protocol as InnerProtocol, ProtocolPlugin, Replicate, SocketConfig};
 
 use crate::{WorldData, WorldWrapper};
 
@@ -101,5 +98,9 @@ impl Protocol {
 
     pub fn build(&mut self) -> Self {
         std::mem::take(self)
+    }
+
+    pub fn socket_config(&self) -> &SocketConfig {
+        &self.inner.socket
     }
 }

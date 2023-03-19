@@ -18,6 +18,8 @@ maintenance = { status = "actively-developed" }
 [features]
 wbindgen = [ "naia-client/wbindgen", "naia-hecs-shared/wbindgen" ]
 mquad = [ "naia-client/mquad", "naia-hecs-shared/mquad" ]
+transport_webrtc = [ "naia-client/transport_webrtc" ]
+transport_udp = [ "naia-client/transport_udp" ]
 
 [dependencies]
 naia-client = { version = "0.19", path = "../../../client" }
