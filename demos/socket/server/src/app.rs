@@ -26,7 +26,7 @@ impl App {
         );
         let shared_config = shared_config();
 
-        let (packet_sender, packet_receiver) = Socket::listen(&shared_config, &server_address);
+        let (packet_sender, packet_receiver) = Socket::listen(&server_address, &shared_config);
 
         App {
             packet_sender,

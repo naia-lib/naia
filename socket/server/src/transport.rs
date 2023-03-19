@@ -44,7 +44,7 @@ impl Into<Box<dyn TransportSocket>> for WebRTCSocket {
 
 impl TransportSocket for WebRTCSocket {
     fn listen(self: Box<Self>) -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
-        let (inner_sender, inner_receiver) = Socket::listen(&self.config, &self.server_addrs);
+        let (inner_sender, inner_receiver) = Socket::listen(&self.server_addrs, &self.config);
         return (Box::new(inner_sender), Box::new(inner_receiver));
     }
 }

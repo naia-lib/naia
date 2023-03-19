@@ -6,7 +6,7 @@ use crate::{
     conditioned_packet_receiver::ConditionedPacketReceiver,
     packet_receiver::{PacketReceiver, PacketReceiverTrait},
     packet_sender::{PacketSender, PacketSenderTrait},
-    socket::SocketTrait,
+    backends::socket::SocketTrait,
 };
 
 use super::{

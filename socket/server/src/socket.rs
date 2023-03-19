@@ -18,7 +18,7 @@ use super::{
 
 /// Used to send packets from the Server Socket
 pub trait SocketTrait {
-    fn listen(config: &SocketConfig, server_addrs: &ServerAddrs) -> (PacketSender, PacketReceiver);
+    fn listen(server_addrs: &ServerAddrs, config: &SocketConfig) -> (PacketSender, PacketReceiver);
 }
 
 /// Socket is able to send and receive messages from remote Clients
@@ -27,8 +27,8 @@ pub struct Socket;
 impl Socket {
     /// Listens on the Socket for incoming communication from Clients
     pub fn listen(
-        config: &SocketConfig,
         server_addrs: &ServerAddrs,
+        config: &SocketConfig,
     ) -> (PacketSender, PacketReceiver) {
         // Set up receiver loop
         let (from_client_sender, from_client_receiver) = channel::unbounded();
@@ -92,7 +92,7 @@ impl Socket {
 }
 
 impl SocketTrait for Socket {
-    fn listen(config: &SocketConfig, server_addrs: &ServerAddrs) -> (PacketSender, PacketReceiver) {
-        return Socket::listen(config, server_addrs);
+    fn listen(server_addrs: &ServerAddrs, config: &SocketConfig) -> (PacketSender, PacketReceiver) {
+        return Socket::listen(server_addrs, config);
     }
 }
