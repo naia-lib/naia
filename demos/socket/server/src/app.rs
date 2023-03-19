@@ -26,12 +26,11 @@ impl App {
         );
         let shared_config = shared_config();
 
-        let mut socket = Socket::new(&shared_config);
-        socket.listen(&server_address);
+        let (packet_sender, packet_receiver) = Socket::listen(&shared_config, &server_address);
 
         App {
-            packet_sender: socket.packet_sender(),
-            packet_receiver: socket.packet_receiver(),
+            packet_sender,
+            packet_receiver,
         }
     }
 
