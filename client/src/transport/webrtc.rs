@@ -1,18 +1,18 @@
 use naia_shared::SocketConfig;
 
-use naia_client_socket::{PacketReceiver, PacketSender, ServerAddr, Socket};
+use naia_client_socket::{PacketReceiver, PacketSender, ServerAddr, Socket as ClientSocket};
 
 use super::{
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     ServerAddr as TransportAddr, Socket as TransportSocket,
 };
 
-pub struct WebRTCSocket {
+pub struct Socket {
     server_session_url: String,
     config: SocketConfig,
 }
 
-impl WebRTCSocket {
+impl Socket {
     pub fn new(server_session_url: &str, config: &SocketConfig) -> Self {
         return Self {
             server_session_url: server_session_url.to_string(),
@@ -49,16 +49,16 @@ impl TransportReceiver for PacketReceiver {
     }
 }
 
-impl Into<Box<dyn TransportSocket>> for WebRTCSocket {
+impl Into<Box<dyn TransportSocket>> for Socket {
     fn into(self) -> Box<dyn TransportSocket> {
         Box::new(self)
     }
 }
 
-impl TransportSocket for WebRTCSocket {
+impl TransportSocket for Socket {
     fn connect(self: Box<Self>) -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
         let (inner_sender, inner_receiver) =
-            Socket::connect(&self.server_session_url, &self.config);
+            ClientSocket::connect(&self.server_session_url, &self.config);
         return (Box::new(inner_sender), Box::new(inner_receiver));
     }
 }

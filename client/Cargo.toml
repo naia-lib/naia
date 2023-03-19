@@ -17,8 +17,8 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [features]
-wbindgen = [ "naia-shared/wbindgen" ]
-mquad = [ "naia-shared/mquad" ]
+wbindgen = [ "naia-shared/wbindgen", "naia-client-socket/wbindgen" ]
+mquad = [ "naia-shared/mquad", "naia-client-socket/mquad" ]
 bevy_support = ["naia-shared/bevy_support", "bevy_ecs"]
 zstd_support = ["naia-shared/zstd_support"]
 transport_webrtc = [ "naia-client-socket" ]

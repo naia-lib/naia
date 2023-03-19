@@ -2,22 +2,22 @@ use std::net::SocketAddr;
 
 use naia_shared::SocketConfig;
 
-use naia_server_socket::{PacketReceiver, PacketSender, Socket};
+use naia_server_socket::{PacketReceiver, PacketSender, Socket as ServerSocket};
 
-pub use naia_server_socket::ServerAddrs as WebRTCServerAddrs;
+pub use naia_server_socket::ServerAddrs;
 
 use super::{
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     Socket as TransportSocket,
 };
 
-pub struct WebRTCSocket {
-    server_addrs: WebRTCServerAddrs,
+pub struct Socket {
+    server_addrs: ServerAddrs,
     config: SocketConfig,
 }
 
-impl WebRTCSocket {
-    pub fn new(server_addrs: &WebRTCServerAddrs, config: &SocketConfig) -> Self {
+impl Socket {
+    pub fn new(server_addrs: &ServerAddrs, config: &SocketConfig) -> Self {
         return Self {
             server_addrs: server_addrs.clone(),
             config: config.clone(),
@@ -39,15 +39,15 @@ impl TransportReceiver for PacketReceiver {
     }
 }
 
-impl Into<Box<dyn TransportSocket>> for WebRTCSocket {
+impl Into<Box<dyn TransportSocket>> for Socket {
     fn into(self) -> Box<dyn TransportSocket> {
         Box::new(self)
     }
 }
 
-impl TransportSocket for WebRTCSocket {
+impl TransportSocket for Socket {
     fn listen(self: Box<Self>) -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
-        let (inner_sender, inner_receiver) = Socket::listen(&self.server_addrs, &self.config);
+        let (inner_sender, inner_receiver) = ServerSocket::listen(&self.server_addrs, &self.config);
         return (Box::new(inner_sender), Box::new(inner_receiver));
     }
 }

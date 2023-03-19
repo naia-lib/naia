@@ -1,12 +1,11 @@
 cfg_if! {
     if #[cfg(feature = "transport_webrtc")] {
-        mod webrtc;
-        pub use webrtc::WebRTCSocket;
+        pub mod webrtc;
     } else {}
 }
 cfg_if! {
     if #[cfg(feature = "transport_udp")] {
-        mod udp;
+        pub mod udp;
     } else {}
 }
 

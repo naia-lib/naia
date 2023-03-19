@@ -6,7 +6,7 @@ use macroquad::prelude::{
 };
 
 use naia_client::{
-    transport::WebRTCSocket, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory,
+    transport::webrtc, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory,
     ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
     MessageEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
@@ -54,7 +54,7 @@ impl App {
 
         let protocol = protocol();
 
-        let socket = WebRTCSocket::new("http://127.0.0.1:14191", &protocol.socket);
+        let socket = webrtc::Socket::new("http://127.0.0.1:14191", &protocol.socket);
 
         let mut client = Client::new(ClientConfig::default(), protocol);
         client.auth(Auth::new("charlie", "12345"));
