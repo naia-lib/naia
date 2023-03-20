@@ -1,9 +1,7 @@
 use js_sys::Uint8Array;
 use web_sys::MessagePort;
 
-use crate::{
-    error::NaiaClientSocketError, packet_sender::PacketSender, server_addr::ServerAddr,
-};
+use crate::{error::NaiaClientSocketError, packet_sender::PacketSender, server_addr::ServerAddr};
 
 use super::{addr_cell::AddrCell, data_port::DataPort};
 

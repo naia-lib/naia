@@ -5,17 +5,20 @@ use naia_socket_shared::SocketConfig;
 
 use super::{
     async_socket::Socket as AsyncSocket,
-    executor,
     conditioned_packet_receiver::ConditionedPacketReceiverImpl,
-    packet_receiver::{PacketReceiverImpl, PacketReceiver},
+    executor,
+    packet_receiver::{PacketReceiver, PacketReceiverImpl},
+    packet_sender::PacketSender,
     packet_sender::PacketSenderImpl,
     server_addrs::ServerAddrs,
-    packet_sender::PacketSender,
 };
 
 /// Used to send packets from the Server Socket
 pub trait SocketTrait {
-    fn listen(server_addrs: &ServerAddrs, config: &SocketConfig) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>);
+    fn listen(
+        server_addrs: &ServerAddrs,
+        config: &SocketConfig,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>);
 }
 
 /// Socket is able to send and receive messages from remote Clients
@@ -81,15 +84,15 @@ impl Socket {
             None => Box::new(PacketReceiverImpl::new(from_client_receiver)),
         };
 
-        return (
-            packet_sender,
-            packet_receiver,
-        );
+        return (packet_sender, packet_receiver);
     }
 }
 
 impl SocketTrait for Socket {
-    fn listen(server_addrs: &ServerAddrs, config: &SocketConfig) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    fn listen(
+        server_addrs: &ServerAddrs,
+        config: &SocketConfig,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         return Socket::listen(server_addrs, config);
     }
 }

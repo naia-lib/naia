@@ -46,16 +46,16 @@ impl Socket {
             }
         };
 
-        return (
-            packet_sender,
-            packet_receiver,
-        );
+        return (packet_sender, packet_receiver);
     }
 }
 
 impl SocketTrait for Socket {
     /// Connects to the given server address
-    fn connect(server_session_url: &str, config: &SocketConfig) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    fn connect(
+        server_session_url: &str,
+        config: &SocketConfig,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         return Socket::connect(server_session_url, config);
     }
 }

@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 use tokio::sync::mpsc::UnboundedReceiver;
+use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
 use crate::{
     error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,

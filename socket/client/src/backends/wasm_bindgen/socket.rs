@@ -1,10 +1,8 @@
 use naia_socket_shared::SocketConfig;
 
 use crate::{
-    backends::socket::SocketTrait,
-    conditioned_packet_receiver::ConditionedPacketReceiver,
-    packet_receiver::PacketReceiver,
-    packet_sender::PacketSender,
+    backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver,
+    packet_receiver::PacketReceiver, packet_sender::PacketSender,
 };
 
 use super::{
@@ -65,16 +63,16 @@ impl Socket {
             }
         };
 
-        return (
-            packet_sender,
-            packet_receiver,
-        );
+        return (packet_sender, packet_receiver);
     }
 }
 
 impl SocketTrait for Socket {
     /// Connects to the given server address
-    fn connect(server_session_url: &str, config: &SocketConfig) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    fn connect(
+        server_session_url: &str,
+        config: &SocketConfig,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         return Socket::connect(server_session_url, config);
     }
 }
