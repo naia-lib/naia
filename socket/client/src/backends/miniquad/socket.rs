@@ -3,35 +3,26 @@ use std::collections::VecDeque;
 use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use crate::{
-    conditioned_packet_receiver::ConditionedPacketReceiver,
-    io::Io,
-    packet_receiver::{PacketReceiver, PacketReceiverTrait},
+    backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver,
+    packet_receiver::PacketReceiver, packet_sender::PacketSender,
 };
 
 use super::{
     packet_receiver::PacketReceiverImpl,
-    packet_sender::PacketSender,
+    packet_sender::PacketSenderImpl,
     shared::{naia_connect, JsObject, ERROR_QUEUE, MESSAGE_QUEUE},
 };
 
 /// A client-side socket which communicates with an underlying unordered &
 /// unreliable protocol
-pub struct Socket {
-    config: SocketConfig,
-    io: Option<Io>,
-}
+pub struct Socket;
 
 impl Socket {
-    /// Create a new Socket
-    pub fn new(config: &SocketConfig) -> Self {
-        Socket {
-            config: config.clone(),
-            io: None,
-        }
-    }
-
     /// Connects to the given server address
-    pub fn connect(&mut self, server_session_url: &str) {
+    pub fn connect(
+        server_session_url: &str,
+        config: &SocketConfig,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         let server_url = parse_server_url(server_session_url);
 
         unsafe {
@@ -39,14 +30,17 @@ impl Socket {
             ERROR_QUEUE = Some(VecDeque::new());
             naia_connect(
                 JsObject::string(server_url.to_string().as_str()),
-                JsObject::string(self.config.rtc_endpoint_path.as_str()),
+                JsObject::string(config.rtc_endpoint_path.as_str()),
             );
         }
 
-        let conditioner_config = self.config.link_condition.clone();
+        let conditioner_config = config.link_condition.clone();
 
-        let sender = PacketSender::default();
-        let receiver: Box<dyn PacketReceiverTrait> = {
+        // setup sender
+        let packet_sender: Box<dyn PacketSender> = Box::new(PacketSenderImpl);
+
+        // setup receiver
+        let packet_receiver: Box<dyn PacketReceiver> = {
             let inner_receiver = Box::new(PacketReceiverImpl::new());
             if let Some(config) = &conditioner_config {
                 Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
@@ -55,33 +49,16 @@ impl Socket {
             }
         };
 
-        self.io = Some(Io::new(sender, PacketReceiver::new(receiver)));
+        return (packet_sender, packet_receiver);
     }
+}
 
-    /// Returns whether or not the Socket is currently connected to the server
-    pub fn is_connected(&self) -> bool {
-        self.io.is_some()
-    }
-
-    /// Gets a PacketSender which can be used to send packets through the Socket
-    pub fn packet_sender(&self) -> PacketSender {
-        return self
-            .io
-            .as_ref()
-            .expect("Socket is not connected yet! Call Socket.connect() before this.")
-            .packet_sender
-            .clone();
-    }
-
-    /// Gets a PacketReceiver which can be used to receive packets from the
-    /// Socket
-    pub fn packet_receiver(&mut self) -> PacketReceiver {
-        return self
-            .io
-            .as_mut()
-            .expect("Socket is not connected yet! Call Socket.connect() before this.")
-            .packet_receiver
-            .take()
-            .expect("Can only call Socket.packet_receiver() once.");
+impl SocketTrait for Socket {
+    /// Connects to the given server address
+    fn connect(
+        server_session_url: &str,
+        config: &SocketConfig,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+        return Socket::connect(server_session_url, config);
     }
 }

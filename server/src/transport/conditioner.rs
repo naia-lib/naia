@@ -1,15 +1,15 @@
-use naia_socket_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
+use std::net::SocketAddr;
 
-use super::{
-    error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,
-};
+use naia_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
+
+use super::{PacketReceiver, RecvError};
 
 /// Used to receive packets from the Client Socket
 #[derive(Clone)]
 pub struct ConditionedPacketReceiver {
     inner_receiver: Box<dyn PacketReceiver>,
     link_conditioner_config: LinkConditionerConfig,
-    time_queue: TimeQueue<Box<[u8]>>,
+    time_queue: TimeQueue<(SocketAddr, Box<[u8]>)>,
     last_payload: Option<Box<[u8]>>,
 }
 
@@ -29,18 +29,18 @@ impl ConditionedPacketReceiver {
 }
 
 impl PacketReceiver for ConditionedPacketReceiver {
-    fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
         loop {
             match self.inner_receiver.receive() {
                 Ok(option) => match option {
                     None => {
                         break;
                     }
-                    Some(payload) => {
+                    Some((addr, buffer)) => {
                         link_condition_logic::process_packet(
                             &self.link_conditioner_config,
                             &mut self.time_queue,
-                            payload.into(),
+                            (addr, buffer.into()),
                         );
                     }
                 },
@@ -51,15 +51,11 @@ impl PacketReceiver for ConditionedPacketReceiver {
         }
 
         if self.time_queue.has_item() {
-            self.last_payload = Some(self.time_queue.pop_item().unwrap());
-            return Ok(Some(self.last_payload.as_ref().unwrap()));
+            let (address, payload) = self.time_queue.pop_item().unwrap();
+            self.last_payload = Some(payload);
+            return Ok(Some((address, self.last_payload.as_ref().unwrap())));
         } else {
             Ok(None)
         }
-    }
-
-    /// Get the Server's Socket address
-    fn server_addr(&self) -> ServerAddr {
-        self.inner_receiver.server_addr()
     }
 }

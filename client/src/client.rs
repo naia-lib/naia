@@ -5,8 +5,6 @@ use log::warn;
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_client_socket::Socket;
-
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
     EntityConverter, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
@@ -22,6 +20,7 @@ use crate::{
         handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
     },
+    transport::Socket,
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, global_world_manager::GlobalWorldManager,
     },
@@ -87,14 +86,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// Connect to the given server address
-    pub fn connect(&mut self, server_session_url: &str) {
+    pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
-        let mut socket = Socket::new(&self.protocol.socket);
-        socket.connect(server_session_url);
-        self.io
-            .load(socket.packet_sender(), socket.packet_receiver());
+        let boxed_socket: Box<dyn Socket> = socket.into();
+        let (packet_sender, packet_receiver) = boxed_socket.connect();
+        self.io.load(packet_sender, packet_receiver);
     }
 
     /// Returns whether or not the client is disconnected
@@ -127,6 +125,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         self.manual_disconnect = true;
+    }
+
+    /// Returns socket config
+    pub fn socket_config(&self) -> &SocketConfig {
+        &self.protocol.socket
     }
 
     // Receive Data from Server! Very important!

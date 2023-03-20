@@ -1,8 +1,9 @@
 use std::{thread::sleep, time::Duration};
 
 use naia_server::{
-    default_channels::UnorderedReliableChannel, AuthEvent, ConnectEvent, DisconnectEvent,
-    ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerAddrs, ServerConfig, TickEvent,
+    shared::default_channels::UnorderedReliableChannel, transport::webrtc, AuthEvent, ConnectEvent,
+    DisconnectEvent, ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerConfig,
+    TickEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldRefType};
@@ -22,7 +23,9 @@ impl App {
     pub fn new() -> Self {
         info!("Basic Naia Server Demo started");
 
-        let server_addresses = ServerAddrs::new(
+        let mut world = World::default();
+
+        let server_addresses = webrtc::ServerAddrs::new(
             "127.0.0.1:14191"
                 .parse()
                 .expect("could not parse Signaling address/port"),
@@ -33,11 +36,10 @@ impl App {
             // The public WebRTC IP address to advertise
             "http://127.0.0.1:14192",
         );
-
-        let mut server = Server::new(ServerConfig::default(), protocol());
-        server.listen(&server_addresses);
-
-        let mut world = World::default();
+        let protocol = protocol();
+        let socket = webrtc::Socket::new(&server_addresses, &protocol.socket);
+        let mut server = Server::new(ServerConfig::default(), protocol);
+        server.listen(socket);
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from

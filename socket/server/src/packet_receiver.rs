@@ -5,25 +5,7 @@ use smol::channel::Receiver;
 use super::error::NaiaServerSocketError;
 
 /// Used to receive packets from the Server Socket
-#[derive(Clone)]
-pub struct PacketReceiver {
-    inner: Box<dyn PacketReceiverTrait>,
-}
-
-impl PacketReceiver {
-    /// Create a new PacketReceiver
-    pub fn new(inner: Box<dyn PacketReceiverTrait>) -> Self {
-        PacketReceiver { inner }
-    }
-
-    /// Receives a packet from the Server Socket
-    pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
-        self.inner.receive()
-    }
-}
-
-/// Used to receive packets from the Server Socket
-pub trait PacketReceiverTrait: PacketReceiverClone + Send + Sync {
+pub trait PacketReceiver: PacketReceiverClone + Send + Sync {
     /// Receives a packet from the Server Socket
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError>;
 }
@@ -49,7 +31,7 @@ impl PacketReceiverImpl {
     }
 }
 
-impl PacketReceiverTrait for PacketReceiverImpl {
+impl PacketReceiver for PacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
         match self.channel_receiver.try_recv() {
             Ok(result) => match result {
@@ -64,20 +46,20 @@ impl PacketReceiverTrait for PacketReceiverImpl {
     }
 }
 
-/// Used to clone Box<dyn PacketReceiverTrait>
+/// Used to clone Box<dyn PacketReceiver>
 pub trait PacketReceiverClone {
     /// Clone the boxed PacketReceiver
-    fn clone_box(&self) -> Box<dyn PacketReceiverTrait>;
+    fn clone_box(&self) -> Box<dyn PacketReceiver>;
 }
 
-impl<T: 'static + PacketReceiverTrait + Clone> PacketReceiverClone for T {
-    fn clone_box(&self) -> Box<dyn PacketReceiverTrait> {
+impl<T: 'static + PacketReceiver + Clone> PacketReceiverClone for T {
+    fn clone_box(&self) -> Box<dyn PacketReceiver> {
         Box::new(self.clone())
     }
 }
 
-impl Clone for Box<dyn PacketReceiverTrait> {
-    fn clone(&self) -> Box<dyn PacketReceiverTrait> {
+impl Clone for Box<dyn PacketReceiver> {
+    fn clone(&self) -> Box<dyn PacketReceiver> {
         PacketReceiverClone::clone_box(self.as_ref())
     }
 }

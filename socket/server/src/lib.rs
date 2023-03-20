@@ -16,7 +16,6 @@ extern crate log;
 mod async_socket;
 mod conditioned_packet_receiver;
 mod error;
-mod io;
 mod packet_receiver;
 mod packet_sender;
 mod server_addrs;

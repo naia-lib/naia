@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use hecs::World;
 
-use naia_hecs_client::{ClientConfig, Protocol};
+use naia_hecs_client::{transport::webrtc, ClientConfig, Protocol};
 
 use naia_hecs_demo_shared::Auth;
 
@@ -15,9 +15,11 @@ pub fn app_init(
     auth: Auth,
 ) -> App {
     let world = protocol.wrap_world(World::new());
+
+    let socket = webrtc::Socket::new(server_addr, protocol.socket_config());
     let mut client = Client::new(client_config, protocol);
     client.auth(auth);
-    client.connect(server_addr);
+    client.connect(socket);
 
     App {
         client,

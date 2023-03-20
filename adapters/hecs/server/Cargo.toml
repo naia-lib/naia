@@ -15,7 +15,11 @@ edition = "2021"
 [badges]
 maintenance = { status = "actively-developed" }
 
+[features]
+transport_webrtc = [ "naia-server/transport_webrtc" ]
+transport_udp = [ "naia-server/transport_udp" ]
+
 [dependencies]
 naia-server = { version = "0.19", path = "../../../server" }
 naia-hecs-shared = { version = "0.19", path = "../shared" }
-hecs = { version = "0.9" }
+hecs = { version = "0.10" }

@@ -1,8 +1,6 @@
-use naia_socket_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
+use naia_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
 
-use super::{
-    error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,
-};
+use super::{server_addr::ServerAddr, PacketReceiver, RecvError};
 
 /// Used to receive packets from the Client Socket
 #[derive(Clone)]
@@ -29,7 +27,7 @@ impl ConditionedPacketReceiver {
 }
 
 impl PacketReceiver for ConditionedPacketReceiver {
-    fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
+    fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
         loop {
             match self.inner_receiver.receive() {
                 Ok(option) => match option {

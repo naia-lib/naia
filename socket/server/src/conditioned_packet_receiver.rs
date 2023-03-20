@@ -4,7 +4,7 @@ use smol::channel::Receiver;
 
 use naia_socket_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
 
-use super::{error::NaiaServerSocketError, packet_receiver::PacketReceiverTrait};
+use super::{error::NaiaServerSocketError, packet_receiver::PacketReceiver};
 
 /// Used to receive packets from the Server Socket
 #[derive(Clone)]
@@ -32,7 +32,7 @@ impl ConditionedPacketReceiverImpl {
     }
 }
 
-impl PacketReceiverTrait for ConditionedPacketReceiverImpl {
+impl PacketReceiver for ConditionedPacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
         while let Ok(result) = self.channel_receiver.try_recv() {
             match result {

@@ -17,14 +17,17 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [features]
-wbindgen = [ "naia-client-socket/wbindgen", "naia-shared/wbindgen" ]
-mquad = [ "naia-client-socket/mquad", "naia-shared/mquad" ]
+wbindgen = [ "naia-shared/wbindgen", "naia-client-socket?/wbindgen" ]
+mquad = [ "naia-shared/mquad", "naia-client-socket?/mquad" ]
 bevy_support = ["naia-shared/bevy_support", "bevy_ecs"]
 zstd_support = ["naia-shared/zstd_support"]
+transport_webrtc = [ "naia-client-socket" ]
+transport_udp = [ "local_ipaddress" ]
 
 [dependencies]
-naia-client-socket = { version = "0.15", path = "../socket/client" }
 naia-shared = { version = "0.19", path = "../shared" }
+naia-client-socket = { version = "0.15", path = "../socket/client", optional = true }
+bevy_ecs = { version = "0.10", default_features = false, optional = true }
+local_ipaddress = { version = "0.1", optional = true }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
-bevy_ecs = { version = "0.10", default_features = false, optional = true }

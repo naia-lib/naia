@@ -4,12 +4,13 @@ use std::{
 };
 
 use crate::{
-    error::NaiaClientSocketError, packet_receiver::PacketReceiverTrait, server_addr::ServerAddr,
+    error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,
 };
 
 use super::{addr_cell::AddrCell, data_port::DataPort};
 
 /// Handles receiving messages from the Server through a given Client Socket
+#[derive(Clone)]
 pub struct PacketReceiverImpl {
     message_queue: Arc<Mutex<VecDeque<Box<[u8]>>>>,
     server_addr: AddrCell,
@@ -28,7 +29,7 @@ impl PacketReceiverImpl {
     }
 }
 
-impl PacketReceiverTrait for PacketReceiverImpl {
+impl PacketReceiver for PacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         match self
             .message_queue

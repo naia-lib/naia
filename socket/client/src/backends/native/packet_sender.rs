@@ -1,36 +1,36 @@
 use tokio::sync::mpsc::{error::SendError, UnboundedSender};
 use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
-use naia_socket_shared::ChannelClosedError;
-
-use crate::server_addr::ServerAddr;
+use crate::{error::NaiaClientSocketError, packet_sender::PacketSender, server_addr::ServerAddr};
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone)]
-pub struct PacketSender {
+pub struct PacketSenderImpl {
     server_addr: AddrCell,
     sender_channel: UnboundedSender<Box<[u8]>>,
 }
 
-impl PacketSender {
+impl PacketSenderImpl {
     /// Create a new PacketSender, if supplied with the Server's address & a
     /// reference back to the parent Socket
     pub fn new(server_addr: AddrCell, sender_channel: UnboundedSender<Box<[u8]>>) -> Self {
-        PacketSender {
+        PacketSenderImpl {
             server_addr,
             sender_channel,
         }
     }
+}
 
+impl PacketSender for PacketSenderImpl {
     /// Send a Packet to the Server
-    pub fn send(&self, payload: &[u8]) -> Result<(), ChannelClosedError<()>> {
+    fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
         self.sender_channel
             .send(payload.into())
-            .map_err(|_err: SendError<_>| ChannelClosedError(()))
+            .map_err(|_err: SendError<_>| NaiaClientSocketError::SendError)
     }
 
     /// Get the Server's Socket address
-    pub fn server_addr(&self) -> ServerAddr {
+    fn server_addr(&self) -> ServerAddr {
         match self.server_addr.get() {
             RTCServerAddr::Finding => ServerAddr::Finding,
             RTCServerAddr::Found(addr) => ServerAddr::Found(addr),

@@ -57,3 +57,7 @@ default-members = [
     "adapters/bevy/server",
     "adapters/bevy/shared",
 ]
+
+[profile.release]
+opt-level = 's'
+lto = true

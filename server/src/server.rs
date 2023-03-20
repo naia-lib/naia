@@ -11,12 +11,11 @@ use log::warn;
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_server_socket::{ServerAddrs, Socket};
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
     EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, Instant, Message,
-    MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr, StandardHeader, Tick,
-    Timer, WorldMutType, WorldRefType,
+    MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr, SocketConfig,
+    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -27,6 +26,7 @@ use crate::{
         tick_buffer_messages::TickBufferMessages,
     },
     time_manager::TimeManager,
+    transport::Socket,
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_scope_map::EntityScopeMap,
         global_world_manager::GlobalWorldManager,
@@ -50,7 +50,6 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     server_config: ServerConfig,
     protocol: Protocol,
-    socket: Socket,
     io: Io,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
@@ -78,8 +77,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let mut protocol: Protocol = protocol.into();
         protocol.lock();
 
-        let socket = Socket::new(&protocol.socket);
-
         let time_manager = TimeManager::new(protocol.tick_interval);
 
         let io = Io::new(
@@ -92,7 +89,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             server_config: server_config.clone(),
             protocol,
             // Connection
-            socket,
             io,
             heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
             timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
@@ -116,16 +112,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Listen at the given addresses
-    pub fn listen(&mut self, server_addrs: &ServerAddrs) {
-        self.socket.listen(server_addrs);
-        self.io
-            .load(self.socket.packet_sender(), self.socket.packet_receiver());
+    pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
+        let boxed_socket: Box<dyn Socket> = socket.into();
+        let (packet_sender, packet_receiver) = boxed_socket.listen();
+        self.io.load(packet_sender, packet_receiver);
     }
 
     /// Returns whether or not the Server has initialized correctly and is
     /// listening for Clients
     pub fn is_listening(&self) -> bool {
         self.io.is_loaded()
+    }
+
+    /// Returns socket config
+    pub fn socket_config(&self) -> &SocketConfig {
+        &self.protocol.socket
     }
 
     /// Must be called regularly, maintains connection to and receives messages

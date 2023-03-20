@@ -2,7 +2,7 @@ use std::collections::HashSet;
 
 use hecs::World;
 
-use naia_hecs_server::{Protocol, ServerAddrs, ServerConfig};
+use naia_hecs_server::{transport::webrtc, Protocol, ServerConfig};
 
 use naia_hecs_demo_shared::{Name, Position};
 
@@ -11,11 +11,13 @@ use crate::app::{App, Server};
 pub fn app_init(
     server_config: ServerConfig,
     mut protocol: Protocol,
-    server_addrs: ServerAddrs,
+    server_addrs: webrtc::ServerAddrs,
 ) -> App {
     let mut world = protocol.wrap_world(World::new());
+
+    let socket = webrtc::Socket::new(&server_addrs, protocol.socket_config());
     let mut server = Server::new(server_config, protocol);
-    server.listen(&server_addrs);
+    server.listen(socket);
 
     // Create a new, singular room, which will contain Users and Entities that they
     // can receive updates from

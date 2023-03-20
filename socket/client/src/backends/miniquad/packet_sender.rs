@@ -1,13 +1,14 @@
+use crate::{error::NaiaClientSocketError, packet_sender::PacketSender, ServerAddr};
+
 use super::shared::{naia_create_u8_array, naia_send, SERVER_ADDR};
-use crate::ServerAddr;
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone, Default)]
-pub struct PacketSender;
+pub struct PacketSenderImpl;
 
-impl PacketSender {
+impl PacketSender for PacketSenderImpl {
     /// Send a Packet to the Server
-    pub fn send(&self, payload: &[u8]) -> Result<(), naia_socket_shared::ChannelClosedError<()>> {
+    fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
         unsafe {
             let ptr = payload.as_ptr();
             let len = payload.len();
@@ -15,13 +16,13 @@ impl PacketSender {
             return if naia_send(js_obj) {
                 Ok(())
             } else {
-                Err(naia_socket_shared::ChannelClosedError(()))
+                Err(NaiaClientSocketError::SendError)
             };
         }
     }
 
     /// Get the Server's Socket address
-    pub fn server_addr(&self) -> ServerAddr {
+    fn server_addr(&self) -> ServerAddr {
         unsafe { SERVER_ADDR }
     }
 }

@@ -7,9 +7,11 @@ cfg_if! {
 }
 
 use naia_client::{
-    default_channels::UnorderedReliableChannel, Client as NaiaClient, ClientConfig,
-    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent,
-    RejectEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
+    shared::{default_channels::UnorderedReliableChannel, SocketConfig},
+    transport::webrtc,
+    Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent, DespawnEntityEvent,
+    DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent,
+    UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World};
@@ -22,23 +24,29 @@ pub struct App {
     client: Client,
     world: World,
     message_count: u32,
+    socket_config: SocketConfig,
 }
 
 impl App {
     pub fn default() -> Self {
         info!("Basic Naia Client Demo started");
 
+        let protocol = protocol();
+        let socket_config = protocol.socket.clone();
+        let socket = webrtc::Socket::new("http://127.0.0.1:14191", &socket_config);
+        let mut client = Client::new(ClientConfig::default(), protocol);
+
         // Incorrect auth here to force a rejection
         let auth = Auth::new("ronald", "12345");
-
-        let mut client = Client::new(ClientConfig::default(), protocol());
         client.auth(auth);
-        client.connect("http://127.0.0.1:14191");
+
+        client.connect(socket);
 
         App {
             client,
             world: World::default(),
             message_count: 0,
+            socket_config,
         }
     }
 
@@ -57,10 +65,13 @@ impl App {
                 "Client received unauthorized response from: {}",
                 server_address
             );
+
             // Now give the correct username / password
             let auth = Auth::new("charlie", "12345");
             self.client.auth(auth);
-            self.client.connect("http://127.0.0.1:14191");
+
+            let socket = webrtc::Socket::new("http://127.0.0.1:14191", &self.socket_config);
+            self.client.connect(socket);
         }
         for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);

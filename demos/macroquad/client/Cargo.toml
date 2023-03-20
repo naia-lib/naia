@@ -12,7 +12,7 @@ name = "app"
 path = "src/main.rs"
 
 [dependencies]
-naia-client = { path = "../../../client", features = [ "mquad" ] }
+naia-client = { path = "../../../client", features = [ "mquad", "transport_webrtc" ] }
 naia-macroquad-demo-shared = { path = "../shared" }
 naia-demo-world = { path = "../../demo_utils/demo_world" }
 macroquad = { version = "0.3.24" }

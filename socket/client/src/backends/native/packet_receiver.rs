@@ -1,13 +1,14 @@
 use std::sync::{Arc, Mutex};
-use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
 use tokio::sync::mpsc::UnboundedReceiver;
+use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
 use crate::{
-    error::NaiaClientSocketError, packet_receiver::PacketReceiverTrait, server_addr::ServerAddr,
+    error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,
 };
 
 /// Handles receiving messages from the Server through a given Client Socket
+#[derive(Clone)]
 pub struct PacketReceiverImpl {
     server_addr: AddrCell,
     receiver_channel: Arc<Mutex<UnboundedReceiver<Box<[u8]>>>>,
@@ -26,7 +27,7 @@ impl PacketReceiverImpl {
     }
 }
 
-impl PacketReceiverTrait for PacketReceiverImpl {
+impl PacketReceiver for PacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         if let Ok(mut receiver) = self.receiver_channel.lock() {
             if let Ok(bytes) = receiver.try_recv() {

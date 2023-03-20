@@ -19,11 +19,14 @@ maintenance = { status = "actively-developed" }
 [features]
 bevy_support = ["naia-shared/bevy_support","bevy_ecs"]
 zstd_support = ["naia-shared/zstd_support"]
+transport_webrtc = [ "naia-server-socket" ]
+transport_udp = []
 
 [dependencies]
-naia-server-socket = { version = "0.15", path = "../socket/server" }
 naia-shared = { version = "0.19", path = "../shared" }
+naia-server-socket = { version = "0.15", path = "../socket/server", optional = true }
 bevy_ecs = { version = "0.10", default_features = false, optional = true }
+cfg-if = { version = "1.0" }
 log = { version = "0.4" }
 ring = { version = "0.16.15" }
 fastrand = { version = "1.7.0" }

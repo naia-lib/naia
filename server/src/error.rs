@@ -1,9 +1,11 @@
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, net::SocketAddr};
 
 #[derive(Debug)]
 pub enum NaiaServerError {
     Message(String),
     Wrapped(Box<dyn Error>),
+    SendError(SocketAddr),
+    RecvError,
 }
 
 impl NaiaServerError {
@@ -17,6 +19,12 @@ impl fmt::Display for NaiaServerError {
         match self {
             NaiaServerError::Message(msg) => write!(f, "Naia Server Error: {}", msg),
             NaiaServerError::Wrapped(boxed_err) => fmt::Display::fmt(boxed_err.as_ref(), f),
+            NaiaServerError::SendError(address) => {
+                write!(f, "Naia Server Error: SendError: {}", address)
+            }
+            NaiaServerError::RecvError => {
+                write!(f, "Naia Server Error: RecvError")
+            }
         }
     }
 }
