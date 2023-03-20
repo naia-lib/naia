@@ -21,7 +21,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 naia-hecs-client = { path = "../../../adapters/hecs/client", features = [ "wbindgen", "transport_webrtc" ] }
 naia-hecs-demo-shared = { path = "../shared" }
-hecs = { version = "0.9" }
+hecs = { version = "0.10" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }
 
