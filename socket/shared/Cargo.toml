@@ -1,6 +1,6 @@
 [package]
 name = "naia-socket-shared"
-version = "0.15.0"
+version = "0.20.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 description = "Common data types shared between naia-server-socket & naia-client-socket crates"

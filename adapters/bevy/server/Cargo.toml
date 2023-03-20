@@ -1,6 +1,6 @@
 [package]
 name = "naia-bevy-server"
-version = "0.19.0"
+version = "0.20.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia_server & Bevy interop"
@@ -17,7 +17,7 @@ transport_webrtc = [ "naia-server/transport_webrtc" ]
 transport_udp = [ "naia-server/transport_udp" ]
 
 [dependencies]
-naia-server = { version = "0.19", path = "../../../server", features = ["bevy_support"] }
-naia-bevy-shared = { version = "0.19", path = "../shared" }
+naia-server = { version = "0.20", path = "../../../server", features = ["bevy_support"] }
+naia-bevy-shared = { version = "0.20", path = "../shared" }
 bevy_app = { version = "0.10", default-features=false }
 bevy_ecs = { version = "0.10", default-features=false }
