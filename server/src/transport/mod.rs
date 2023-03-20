@@ -6,10 +6,10 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "transport_udp")] {
         pub mod udp;
+        mod conditioner;
     } else {}
 }
 
-mod conditioner;
 pub use inner::{PacketReceiver, PacketSender, RecvError, SendError, Socket};
 
 mod inner {

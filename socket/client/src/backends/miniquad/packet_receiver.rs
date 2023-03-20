@@ -1,10 +1,11 @@
 use crate::{
-    error::NaiaClientSocketError, packet_receiver::PacketReceiverTrait, server_addr::ServerAddr,
+    error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,
 };
 
 use super::shared::{ERROR_QUEUE, MESSAGE_QUEUE, SERVER_ADDR};
 
 /// Handles receiving messages from the Server through a given Client Socket
+#[derive(Clone)]
 pub struct PacketReceiverImpl {
     last_payload: Option<Box<[u8]>>,
 }
@@ -17,7 +18,7 @@ impl PacketReceiverImpl {
     }
 }
 
-impl PacketReceiverTrait for PacketReceiverImpl {
+impl PacketReceiver for PacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         unsafe {
             if let Some(msg_queue) = &mut MESSAGE_QUEUE {

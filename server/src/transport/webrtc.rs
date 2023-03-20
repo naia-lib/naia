@@ -1,3 +1,4 @@
+
 use std::net::SocketAddr;
 
 use naia_shared::SocketConfig;
@@ -25,17 +26,17 @@ impl Socket {
     }
 }
 
-impl TransportSender for PacketSender {
+impl TransportSender for Box<dyn PacketSender> {
     /// Sends a packet from the Server Socket
     fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError> {
-        self.send(address, payload).map_err(|_| SendError)
+        self.as_ref().send(address, payload).map_err(|_| SendError)
     }
 }
 
-impl TransportReceiver for PacketReceiver {
+impl TransportReceiver for Box<dyn PacketReceiver> {
     /// Receives a packet from the Server Socket
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
-        self.receive().map_err(|_| RecvError)
+        self.as_mut().receive().map_err(|_| RecvError)
     }
 }
 

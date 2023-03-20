@@ -2,7 +2,7 @@ use js_sys::Uint8Array;
 use web_sys::MessagePort;
 
 use crate::{
-    error::NaiaClientSocketError, packet_sender::PacketSenderTrait, server_addr::ServerAddr,
+    error::NaiaClientSocketError, packet_sender::PacketSender, server_addr::ServerAddr,
 };
 
 use super::{addr_cell::AddrCell, data_port::DataPort};
@@ -24,7 +24,7 @@ impl PacketSenderImpl {
     }
 }
 
-impl PacketSenderTrait for PacketSenderImpl {
+impl PacketSender for PacketSenderImpl {
     /// Send a Packet to the Server
     fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
         let uarray: Uint8Array = payload.into();

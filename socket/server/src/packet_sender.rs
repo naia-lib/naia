@@ -4,26 +4,8 @@ use smol::channel::{Sender, TrySendError};
 
 use crate::NaiaServerSocketError;
 
-/// Used to send packets from the Server Socket
-#[derive(Clone)]
-pub struct PacketSender {
-    inner: Box<dyn PacketSenderTrait>,
-}
-
-impl PacketSender {
-    /// Create a new PacketSender
-    pub fn new(inner: Box<dyn PacketSenderTrait>) -> Self {
-        Self { inner }
-    }
-
-    /// Sends a packet from the Server Socket
-    pub fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), NaiaServerSocketError> {
-        self.inner.send(address, payload)
-    }
-}
-
 // Trait
-pub trait PacketSenderTrait: PacketSenderClone + Send + Sync {
+pub trait PacketSender: PacketSenderClone + Send + Sync {
     /// Sends a packet to the Server Socket
     fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), NaiaServerSocketError>;
 }
@@ -42,7 +24,7 @@ impl PacketSenderImpl {
     }
 }
 
-impl PacketSenderTrait for PacketSenderImpl {
+impl PacketSender for PacketSenderImpl {
     /// Sends a packet to the Server Socket
     fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), NaiaServerSocketError> {
         self.channel_sender
@@ -54,20 +36,20 @@ impl PacketSenderTrait for PacketSenderImpl {
     }
 }
 
-/// Used to clone Box<dyn PacketSenderTrait>
+/// Used to clone Box<dyn PacketSender>
 pub trait PacketSenderClone {
     /// Clone the boxed PacketSender
-    fn clone_box(&self) -> Box<dyn PacketSenderTrait>;
+    fn clone_box(&self) -> Box<dyn PacketSender>;
 }
 
-impl<T: 'static + PacketSenderTrait + Clone> PacketSenderClone for T {
-    fn clone_box(&self) -> Box<dyn PacketSenderTrait> {
+impl<T: 'static + PacketSender + Clone> PacketSenderClone for T {
+    fn clone_box(&self) -> Box<dyn PacketSender> {
         Box::new(self.clone())
     }
 }
 
-impl Clone for Box<dyn PacketSenderTrait> {
-    fn clone(&self) -> Box<dyn PacketSenderTrait> {
+impl Clone for Box<dyn PacketSender> {
+    fn clone(&self) -> Box<dyn PacketSender> {
         PacketSenderClone::clone_box(self.as_ref())
     }
 }

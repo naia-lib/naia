@@ -1,4 +1,4 @@
-use crate::{error::NaiaClientSocketError, packet_sender::PacketSenderTrait, ServerAddr};
+use crate::{error::NaiaClientSocketError, packet_sender::PacketSender, ServerAddr};
 
 use super::shared::{naia_create_u8_array, naia_send, SERVER_ADDR};
 
@@ -6,7 +6,7 @@ use super::shared::{naia_create_u8_array, naia_send, SERVER_ADDR};
 #[derive(Clone, Default)]
 pub struct PacketSenderImpl;
 
-impl PacketSenderTrait for PacketSenderImpl {
+impl PacketSender for PacketSenderImpl {
     /// Send a Packet to the Server
     fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
         unsafe {

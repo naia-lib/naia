@@ -3,8 +3,8 @@ use naia_socket_shared::SocketConfig;
 use crate::{
     backends::socket::SocketTrait,
     conditioned_packet_receiver::ConditionedPacketReceiver,
-    packet_receiver::{PacketReceiver, PacketReceiverTrait},
-    packet_sender::{PacketSender, PacketSenderTrait},
+    packet_receiver::PacketReceiver,
+    packet_sender::PacketSender,
 };
 
 use super::{
@@ -21,7 +21,7 @@ impl Socket {
     pub fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (PacketSender, PacketReceiver) {
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         let data_channel = DataChannel::new(config, server_session_url);
 
         let data_port = data_channel.data_port();
@@ -38,7 +38,7 @@ impl Socket {
     pub fn connect_with_data_port(
         config: &SocketConfig,
         data_port: &DataPort,
-    ) -> (PacketSender, PacketReceiver) {
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         let addr_cell = AddrCell::new();
         return Socket::setup_io(config, &addr_cell, data_port);
     }
@@ -47,16 +47,16 @@ impl Socket {
         config: &SocketConfig,
         addr_cell: &AddrCell,
         data_port: &DataPort,
-    ) -> (PacketSender, PacketReceiver) {
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         // Setup Packet Sender
         let packet_sender_impl = PacketSenderImpl::new(&data_port, addr_cell);
 
-        let packet_sender: Box<dyn PacketSenderTrait> = Box::new(packet_sender_impl);
+        let packet_sender: Box<dyn PacketSender> = Box::new(packet_sender_impl);
 
         // Setup Packet Receiver
         let packet_receiver_impl = PacketReceiverImpl::new(&data_port, addr_cell);
 
-        let packet_receiver: Box<dyn PacketReceiverTrait> = {
+        let packet_receiver: Box<dyn PacketReceiver> = {
             let inner_receiver = Box::new(packet_receiver_impl);
             if let Some(config) = &config.link_condition {
                 Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
@@ -66,15 +66,15 @@ impl Socket {
         };
 
         return (
-            PacketSender::new(packet_sender),
-            PacketReceiver::new(packet_receiver),
+            packet_sender,
+            packet_receiver,
         );
     }
 }
 
 impl SocketTrait for Socket {
     /// Connects to the given server address
-    fn connect(server_session_url: &str, config: &SocketConfig) -> (PacketSender, PacketReceiver) {
+    fn connect(server_session_url: &str, config: &SocketConfig) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         return Socket::connect(server_session_url, config);
     }
 }

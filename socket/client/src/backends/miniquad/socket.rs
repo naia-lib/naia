@@ -5,8 +5,8 @@ use naia_socket_shared::{parse_server_url, SocketConfig};
 use crate::{
     backends::socket::SocketTrait,
     conditioned_packet_receiver::ConditionedPacketReceiver,
-    packet_receiver::{PacketReceiver, PacketReceiverTrait},
-    packet_sender::{PacketSender, PacketSenderTrait},
+    packet_receiver::PacketReceiver,
+    packet_sender::PacketSender,
 };
 
 use super::{
@@ -24,7 +24,7 @@ impl Socket {
     pub fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (PacketSender, PacketReceiver) {
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         let server_url = parse_server_url(server_session_url);
 
         unsafe {
@@ -39,10 +39,10 @@ impl Socket {
         let conditioner_config = config.link_condition.clone();
 
         // setup sender
-        let packet_sender: Box<dyn PacketSenderTrait> = Box::new(PacketSenderImpl);
+        let packet_sender: Box<dyn PacketSender> = Box::new(PacketSenderImpl);
 
         // setup receiver
-        let packet_receiver: Box<dyn PacketReceiverTrait> = {
+        let packet_receiver: Box<dyn PacketReceiver> = {
             let inner_receiver = Box::new(PacketReceiverImpl::new());
             if let Some(config) = &conditioner_config {
                 Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
@@ -52,15 +52,15 @@ impl Socket {
         };
 
         return (
-            PacketSender::new(packet_sender),
-            PacketReceiver::new(packet_receiver),
+            packet_sender,
+            packet_receiver,
         );
     }
 }
 
 impl SocketTrait for Socket {
     /// Connects to the given server address
-    fn connect(server_session_url: &str, config: &SocketConfig) -> (PacketSender, PacketReceiver) {
+    fn connect(server_session_url: &str, config: &SocketConfig) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         return Socket::connect(server_session_url, config);
     }
 }

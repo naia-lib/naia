@@ -5,8 +5,8 @@ use naia_server_socket::{PacketReceiver, PacketSender, ServerAddrs, Socket};
 use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
 
 pub struct App {
-    packet_sender: PacketSender,
-    packet_receiver: PacketReceiver,
+    packet_sender: Box<dyn PacketSender>,
+    packet_receiver: Box<dyn PacketReceiver>,
 }
 
 impl App {

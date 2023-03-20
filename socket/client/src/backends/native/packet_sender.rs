@@ -2,7 +2,7 @@ use tokio::sync::mpsc::{error::SendError, UnboundedSender};
 use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
 use crate::{
-    error::NaiaClientSocketError, packet_sender::PacketSenderTrait, server_addr::ServerAddr,
+    error::NaiaClientSocketError, packet_sender::PacketSender, server_addr::ServerAddr,
 };
 
 /// Handles sending messages to the Server for a given Client Socket
@@ -23,7 +23,7 @@ impl PacketSenderImpl {
     }
 }
 
-impl PacketSenderTrait for PacketSenderImpl {
+impl PacketSender for PacketSenderImpl {
     /// Send a Packet to the Server
     fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
         self.sender_channel

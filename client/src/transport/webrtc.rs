@@ -21,28 +21,28 @@ impl Socket {
     }
 }
 
-impl TransportSender for PacketSender {
+impl TransportSender for Box<dyn PacketSender> {
     /// Sends a packet from the Client Socket
     fn send(&self, payload: &[u8]) -> Result<(), SendError> {
-        self.send(payload).map_err(|_| SendError)
+        self.as_ref().send(payload).map_err(|_| SendError)
     }
     /// Get the Server's Socket address
     fn server_addr(&self) -> TransportAddr {
-        match self.server_addr() {
+        match self.as_ref().server_addr() {
             ServerAddr::Found(addr) => TransportAddr::Found(addr),
             ServerAddr::Finding => TransportAddr::Finding,
         }
     }
 }
 
-impl TransportReceiver for PacketReceiver {
+impl TransportReceiver for Box<dyn PacketReceiver> {
     /// Receives a packet from the Client Socket
     fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
-        self.receive().map_err(|_| RecvError)
+        self.as_mut().receive().map_err(|_| RecvError)
     }
     /// Get the Server's Socket address
     fn server_addr(&self) -> TransportAddr {
-        match self.server_addr() {
+        match self.as_ref().server_addr() {
             ServerAddr::Found(addr) => TransportAddr::Found(addr),
             ServerAddr::Finding => TransportAddr::Finding,
         }
