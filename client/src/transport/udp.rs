@@ -1,23 +1,26 @@
+use std::{
+    io::ErrorKind,
+    net::{SocketAddr, UdpSocket},
+    sync::{Arc, Mutex},
+};
 
-use std::{io::ErrorKind, net::{UdpSocket, SocketAddr}, sync::{Arc, Mutex}};
-
-use naia_shared::SocketConfig;
+use naia_shared::LinkConditionerConfig;
 
 use super::{
-    PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
-    ServerAddr as TransportAddr, Socket as TransportSocket,
+    conditioner::ConditionedPacketReceiver, PacketReceiver as TransportReceiver,
+    PacketSender as TransportSender, RecvError, SendError, ServerAddr as TransportAddr,
+    Socket as TransportSocket,
 };
 
 // Socket
 pub struct Socket {
     server_addr: SocketAddr,
     socket: Arc<Mutex<UdpSocket>>,
-    config: SocketConfig,
+    config: Option<LinkConditionerConfig>,
 }
 
 impl Socket {
-    pub fn new(server_addr: &SocketAddr, config: &SocketConfig) -> Self {
-
+    pub fn new(server_addr: &SocketAddr, config: Option<LinkConditionerConfig>) -> Self {
         let client_ip_address =
             find_my_ip_address().expect("cannot find host's current IP address");
 
@@ -32,7 +35,7 @@ impl Socket {
         return Self {
             server_addr: *server_addr,
             socket,
-            config: config.clone(),
+            config,
         };
     }
 }
@@ -45,9 +48,19 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 
 impl TransportSocket for Socket {
     fn connect(self: Box<Self>) -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
-        let inner_sender = PacketSender::new(self.socket.clone(), self.server_addr);
-        let inner_receiver = PacketReceiver::new(self.socket.clone(), self.server_addr);
-        return (Box::new(inner_sender), Box::new(inner_receiver));
+        let sender = Box::new(PacketSender::new(self.socket.clone(), self.server_addr));
+
+        let receiver: Box<dyn TransportReceiver> = {
+            let inner_receiver =
+                Box::new(PacketReceiver::new(self.socket.clone(), self.server_addr));
+            if let Some(config) = &self.config {
+                Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
+            } else {
+                inner_receiver
+            }
+        };
+
+        return (sender, receiver);
     }
 }
 
@@ -88,6 +101,7 @@ impl TransportSender for PacketSender {
 }
 
 // Packet Receiver
+#[derive(Clone)]
 struct PacketReceiver {
     socket: Arc<Mutex<UdpSocket>>,
     server_addr: SocketAddr,
@@ -107,15 +121,17 @@ impl PacketReceiver {
 impl TransportReceiver for PacketReceiver {
     /// Receives a packet from the Client Socket
     fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
-        match self.socket.as_ref().lock().unwrap().recv_from(&mut self.buffer) {
+        match self
+            .socket
+            .as_ref()
+            .lock()
+            .unwrap()
+            .recv_from(&mut self.buffer)
+        {
             Ok((recv_len, address)) => {
                 if address == self.server_addr {
                     Ok(Some(&self.buffer[..recv_len]))
                 } else {
-                    let err_message = format!(
-                        "Received packet from unknown sender with a socket address of: {}",
-                        address
-                    );
                     Err(RecvError)
                 }
             }

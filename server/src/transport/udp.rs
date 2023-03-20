@@ -1,23 +1,24 @@
+use std::{
+    io::ErrorKind,
+    net::{SocketAddr, UdpSocket},
+    sync::{Arc, Mutex},
+};
 
-
-use std::{io::ErrorKind, net::{UdpSocket, SocketAddr}, sync::{Arc, Mutex}};
-
-use naia_shared::SocketConfig;
+use naia_shared::LinkConditionerConfig;
 
 use super::{
-    PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
-    Socket as TransportSocket,
+    conditioner::ConditionedPacketReceiver, PacketReceiver as TransportReceiver,
+    PacketSender as TransportSender, RecvError, SendError, Socket as TransportSocket,
 };
 
 // Socket
 pub struct Socket {
     socket: Arc<Mutex<UdpSocket>>,
-    config: SocketConfig,
+    config: Option<LinkConditionerConfig>,
 }
 
 impl Socket {
-    pub fn new(server_addr: &SocketAddr, config: &SocketConfig) -> Self {
-
+    pub fn new(server_addr: &SocketAddr, config: Option<LinkConditionerConfig>) -> Self {
         let socket = Arc::new(Mutex::new(UdpSocket::bind(*server_addr).unwrap()));
         socket
             .as_ref()
@@ -26,10 +27,7 @@ impl Socket {
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
 
-        return Self {
-            socket,
-            config: config.clone(),
-        };
+        return Self { socket, config };
     }
 }
 
@@ -41,9 +39,18 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 
 impl TransportSocket for Socket {
     fn listen(self: Box<Self>) -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
-        let inner_sender = PacketSender::new(self.socket.clone());
-        let inner_receiver = PacketReceiver::new(self.socket.clone());
-        return (Box::new(inner_sender), Box::new(inner_receiver));
+        let sender = Box::new(PacketSender::new(self.socket.clone()));
+
+        let receiver: Box<dyn TransportReceiver> = {
+            let inner_receiver = Box::new(PacketReceiver::new(self.socket.clone()));
+            if let Some(config) = &self.config {
+                Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
+            } else {
+                inner_receiver
+            }
+        };
+
+        return (sender, receiver);
     }
 }
 
@@ -54,9 +61,7 @@ struct PacketSender {
 
 impl PacketSender {
     pub fn new(socket: Arc<Mutex<UdpSocket>>) -> Self {
-        return Self {
-            socket,
-        };
+        return Self { socket };
     }
 }
 
@@ -78,6 +83,7 @@ impl TransportSender for PacketSender {
 }
 
 // Packet Receiver
+#[derive(Clone)]
 struct PacketReceiver {
     socket: Arc<Mutex<UdpSocket>>,
     buffer: [u8; 1472],
@@ -95,10 +101,14 @@ impl PacketReceiver {
 impl TransportReceiver for PacketReceiver {
     /// Receives a packet from the Client Socket
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
-        match self.socket.as_ref().lock().unwrap().recv_from(&mut self.buffer) {
-            Ok((recv_len, address)) => {
-                Ok(Some((address, &self.buffer[..recv_len])))
-            }
+        match self
+            .socket
+            .as_ref()
+            .lock()
+            .unwrap()
+            .recv_from(&mut self.buffer)
+        {
+            Ok((recv_len, address)) => Ok(Some((address, &self.buffer[..recv_len]))),
             Err(ref e) => {
                 let kind = e.kind();
                 match kind {
@@ -109,7 +119,6 @@ impl TransportReceiver for PacketReceiver {
                         return Err(RecvError);
                     }
                 }
-
             }
         }
     }

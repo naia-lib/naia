@@ -27,7 +27,9 @@ pub use naia_serde::{
     SerdeBevy, SerdeErr, SerdeHecs, SerdeInternal, UnsignedInteger, UnsignedVariableInteger,
     MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
-pub use naia_socket_shared::{Instant, LinkConditionerConfig, Random, SocketConfig};
+pub use naia_socket_shared::{
+    link_condition_logic, Instant, LinkConditionerConfig, Random, SocketConfig, TimeQueue,
+};
 
 mod backends;
 mod bigmap;

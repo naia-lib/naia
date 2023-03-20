@@ -9,6 +9,7 @@ cfg_if! {
     } else {}
 }
 
+mod conditioner;
 pub use inner::{PacketReceiver, PacketSender, RecvError, SendError, Socket};
 
 mod inner {
@@ -28,8 +29,26 @@ mod inner {
         fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError>;
     }
 
-    pub trait PacketReceiver: Send + Sync {
+    pub trait PacketReceiver: PacketReceiverClone + Send + Sync {
         /// Receives a packet from the Server Socket
         fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;
+    }
+
+    /// Used to clone Box<dyn PacketReceiver>
+    pub trait PacketReceiverClone {
+        /// Clone the boxed PacketReceiver
+        fn clone_box(&self) -> Box<dyn PacketReceiver>;
+    }
+
+    impl<T: 'static + PacketReceiver + Clone> PacketReceiverClone for T {
+        fn clone_box(&self) -> Box<dyn PacketReceiver> {
+            Box::new(self.clone())
+        }
+    }
+
+    impl Clone for Box<dyn PacketReceiver> {
+        fn clone(&self) -> Box<dyn PacketReceiver> {
+            PacketReceiverClone::clone_box(self.as_ref())
+        }
     }
 }
