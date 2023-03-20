@@ -1,14 +1,14 @@
 use std::collections::HashSet;
 
 use macroquad::prelude::{
-    clear_background, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN, RED, WHITE,
-    YELLOW,
+    clear_background, draw_circle, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN,
+    RED, WHITE, YELLOW,
 };
 
 use naia_client::{
     transport::webrtc, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory,
-    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-    MessageEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
+    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, SpawnEntityEvent,
+    UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
@@ -16,7 +16,7 @@ use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, Marker, Square},
+    components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
     protocol,
 };
@@ -24,6 +24,7 @@ use naia_macroquad_demo_shared::{
 type Client = NaiaClient<Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;
+const CIRCLE_RADIUS: f32 = 6.0;
 
 struct OwnedEntity {
     pub confirmed: Entity,
@@ -167,12 +168,12 @@ impl App {
                     .send_tick_buffer_message::<PlayerCommandChannel, _>(&client_tick, &command);
 
                 // Apply command
-                if let Some(mut square_ref) = self
+                if let Some(mut position) = self
                     .world
                     .proxy_mut()
-                    .component_mut::<Square>(&owned_entity.predicted)
+                    .component_mut::<Position>(&owned_entity.predicted)
                 {
-                    shared_behavior::process_command(&command, &mut square_ref);
+                    shared_behavior::process_command(&command, &mut position);
                 }
             }
         }
@@ -185,11 +186,7 @@ impl App {
             info!("despawned entity");
             // TODO: Sync up Predicted & Confirmed entities
         }
-        for _entity in events.read::<InsertComponentEvent<Marker>>() {
-            info!("inserted component");
-            // TODO: Sync up Predicted & Confirmed entities
-        }
-        for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Square>>() {
+        for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Position>>() {
             if let Some(owned_entity) = &self.owned_entity {
                 let server_entity = owned_entity.confirmed;
 
@@ -204,20 +201,16 @@ impl App {
 
                     let replay_commands = self.command_history.replays(&server_tick);
                     for (_, command) in replay_commands {
-                        if let Some(mut square_ref) = self
+                        if let Some(mut position) = self
                             .world
                             .proxy_mut()
-                            .component_mut::<Square>(&client_entity)
+                            .component_mut::<Position>(&client_entity)
                         {
-                            shared_behavior::process_command(&command, &mut square_ref);
+                            shared_behavior::process_command(&command, &mut position);
                         }
                     }
                 }
             }
-        }
-        for (_entity, _component) in events.read::<RemoveComponentEvent<Square>>() {
-            info!("removed component");
-            // TODO: Sync up Predicted & Confirmed entities
         }
         for error in events.read::<ErrorEvent>() {
             info!("Client Error: {}", error);
@@ -230,29 +223,56 @@ impl App {
         if self.client.is_connected() {
             // draw unowned squares
             for entity in &self.squares {
-                if let Some(square) = self.world.proxy().component::<Square>(entity) {
-                    let color = match *square.color {
-                        Color::Red => RED,
-                        Color::Blue => BLUE,
-                        Color::Yellow => YELLOW,
-                        Color::Green => GREEN,
+                let shape_value = {
+                    if let Some(shape) = self.world.proxy().component::<Shape>(entity) {
+                        (*shape.value).clone()
+                    } else {
+                        continue;
+                    }
+                };
+                let color_value = {
+                    if let Some(color) = self.world.proxy().component::<Color>(entity) {
+                        (*color.value).clone()
+                    } else {
+                        continue;
+                    }
+                };
+                if let Some(position) = self.world.proxy().component::<Position>(entity) {
+                    let color_actual = match color_value {
+                        ColorValue::Red => RED,
+                        ColorValue::Blue => BLUE,
+                        ColorValue::Yellow => YELLOW,
+                        ColorValue::Green => GREEN,
                     };
-                    draw_rectangle(
-                        f32::from(*square.x),
-                        f32::from(*square.y),
-                        SQUARE_SIZE,
-                        SQUARE_SIZE,
-                        color,
-                    );
+                    match shape_value {
+                        ShapeValue::Square => {
+                            draw_rectangle(
+                                f32::from(*position.x),
+                                f32::from(*position.y),
+                                SQUARE_SIZE,
+                                SQUARE_SIZE,
+                                color_actual,
+                            );
+                        }
+                        ShapeValue::Circle => {
+                            draw_circle(
+                                f32::from(*position.x),
+                                f32::from(*position.y),
+                                CIRCLE_RADIUS,
+                                color_actual,
+                            );
+                        }
+                    }
                 }
             }
 
-            // draw own square
+            // draw own (predicted) square
             if let Some(entity) = &self.owned_entity {
-                if let Some(square) = self.world.proxy().component::<Square>(&entity.predicted) {
+                if let Some(position) = self.world.proxy().component::<Position>(&entity.predicted)
+                {
                     draw_rectangle(
-                        f32::from(*square.x),
-                        f32::from(*square.y),
+                        f32::from(*position.x),
+                        f32::from(*position.y),
                         SQUARE_SIZE,
                         SQUARE_SIZE,
                         WHITE,

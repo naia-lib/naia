@@ -10,7 +10,7 @@ use naia_demo_world::{Entity, World};
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, Marker, Square},
+    components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
     protocol,
 };
@@ -93,25 +93,30 @@ impl App {
             // Spawn new Entity
             let mut entity = self.server.spawn_entity(self.world.proxy_mut());
 
-            // Create "Square" Component
-            let x = Random::gen_range_u32(0, 50) * 16;
-            let y = Random::gen_range_u32(0, 37) * 16;
+            // Create Position Component
+            let x = (Random::gen_range_u32(0, 50) * 16) as i16;
+            let y = (Random::gen_range_u32(0, 37) * 16) as i16;
+            let position_component = Position::new(x, y);
 
-            let square_color = match total_user_count % 4 {
-                0 => Color::Yellow,
-                1 => Color::Red,
-                2 => Color::Blue,
-                _ => Color::Green,
+            // Create Color Component
+            let color_value = match total_user_count % 4 {
+                0 => ColorValue::Yellow,
+                1 => ColorValue::Red,
+                2 => ColorValue::Blue,
+                _ => ColorValue::Green,
             };
+            let color_component = Color::new(color_value);
 
             // Get Entity ID
             let entity_id = entity
                 // Entity enters Room
                 .enter_room(&self.main_room_key)
-                // Add Square component to Entity
-                .insert_component(Square::new(x as u16, y as u16, square_color))
-                // Add Marker component to Entity
-                .insert_component(Marker::new())
+                // Add Position component to Entity
+                .insert_component(position_component)
+                // Add Color component to Entity
+                .insert_component(color_component)
+                // Add Shape component to Entity
+                .insert_component(Shape::new(ShapeValue::Square))
                 .id();
 
             // Associate new Entity with User that spawned it
@@ -152,12 +157,12 @@ impl App {
                 let Some(entity) = &key_command.entity.get(&self.server) else {
                     continue;
                 };
-                if let Some(mut square) = self
+                if let Some(mut position) = self
                     .server
                     .entity_mut(self.world.proxy_mut(), &entity)
-                    .component::<Square>()
+                    .component::<Position>()
                 {
-                    shared_behavior::process_command(&key_command, &mut square);
+                    shared_behavior::process_command(&key_command, &mut position);
                 }
             }
         }

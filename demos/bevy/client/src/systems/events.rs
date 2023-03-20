@@ -39,7 +39,7 @@ pub fn connect_events(
         };
         info!("Client connected to: {}", server_address);
 
-        // Create entity for Client-authoritative Square
+        // Create entity for Client-authoritative Cursor
 
         // Position component
         let position = {
