@@ -354,11 +354,27 @@ impl TimeManager {
     // Stats
 
     pub(crate) fn client_interpolation(&self) -> f32 {
-        self.get_interp(self.client_sending_tick, &self.client_sending_instant)
+        let mut output = self.get_interp(self.client_sending_tick, &self.client_sending_instant);
+        output = {
+            if output >= 0.0 {
+                output
+            } else {
+                1.0 + output
+            }
+        };
+        output.min(1.0).max(0.0)
     }
 
     pub(crate) fn server_interpolation(&self) -> f32 {
-        self.get_interp(self.client_receiving_tick, &self.client_receiving_instant)
+        let mut output = self.get_interp(self.client_receiving_tick, &self.client_receiving_instant);
+        output = {
+            if output >= 0.0 {
+                output
+            } else {
+                1.0 + output
+            }
+        };
+        output.min(1.0).max(0.0)
     }
 
     pub(crate) fn rtt(&self) -> f32 {

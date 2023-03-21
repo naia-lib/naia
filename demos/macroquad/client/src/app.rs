@@ -1,15 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use macroquad::prelude::{
     clear_background, draw_circle, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN,
-    RED, WHITE, YELLOW,
+    RED, WHITE, YELLOW, GRAY, ORANGE, draw_circle_lines, draw_rectangle_lines
 };
 
-use naia_client::{
-    transport::webrtc, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory,
-    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, SpawnEntityEvent,
-    UpdateComponentEvent,
-};
+use naia_client::{transport::webrtc, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, SpawnEntityEvent, UpdateComponentEvent, InsertComponentEvent};
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 
@@ -20,6 +16,8 @@ use naia_macroquad_demo_shared::{
     messages::{Auth, EntityAssignment, KeyCommand},
     protocol,
 };
+
+use crate::interp::Interp;
 
 type Client = NaiaClient<Entity>;
 
@@ -45,6 +43,7 @@ pub struct App {
     world: World,
     owned_entity: Option<OwnedEntity>,
     cursor_entity: Option<Entity>,
+    interp_entities: HashMap<Entity, Interp>,
     squares: HashSet<Entity>,
     queued_command: Option<KeyCommand>,
     command_history: CommandHistory<KeyCommand>,
@@ -65,6 +64,7 @@ impl App {
             world: World::default(),
             owned_entity: None,
             cursor_entity: None,
+            interp_entities: HashMap::new(),
             squares: HashSet::new(),
             queued_command: None,
             command_history: CommandHistory::default(),
@@ -133,21 +133,16 @@ impl App {
         for server_address in events.read::<ConnectEvent>() {
             info!("Client connected to: {}", server_address);
 
-            // Create Position Component
-            let x = 0;
-            let y = 0;
-            let position_component = Position::new(x, y);
-
             // Spawn new Client-authoritative Cursor entity
-            let entity_id = self
+            let entity = self
                 .client
                 .spawn_entity(self.world.proxy_mut())
                 // Add Position component to Entity
-                .insert_component(position_component)
+                .insert_component(Position::new(0, 0))
                 // Get Entity ID
                 .id();
 
-            self.cursor_entity = Some(entity_id);
+            self.cursor_entity = Some(entity);
         }
 
         // Disconnect Events
@@ -170,8 +165,13 @@ impl App {
             let entity = entity_assignment.entity.get(&self.client).unwrap();
             if assign {
                 info!("gave ownership of entity");
+
+                // create prediction
                 let prediction_entity = self.world.proxy_mut().duplicate_entity(&entity);
                 self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+
+                // create interpolation
+                self.interp_entities.insert(prediction_entity, Interp::new());
             } else {
                 let mut disowned: bool = false;
                 if let Some(owned_entity) = &self.owned_entity {
@@ -185,6 +185,70 @@ impl App {
                 if disowned {
                     info!("removed ownership of entity");
                     self.owned_entity = None;
+                }
+            }
+        }
+
+        // Spawn Entity Events
+        for entity in events.read::<SpawnEntityEvent>() {
+            self.squares.insert(entity);
+            info!("spawned entity");
+        }
+
+        // Despawn Entity Events
+        for entity in events.read::<DespawnEntityEvent>() {
+            self.squares.remove(&entity);
+            self.interp_entities.remove(&entity);
+            info!("despawned entity");
+            // TODO: Sync up Predicted & Confirmed entities
+        }
+
+        // Insert Component Events
+        for entity in events.read::<InsertComponentEvent<Position>>() {
+            self.interp_entities.insert(entity, Interp::new());
+        }
+
+        // Update Component Events
+        for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Position>>() {
+            if let Some(owned_entity) = &self.owned_entity {
+                let server_entity = owned_entity.confirmed;
+
+                // If entity is owned
+                if updated_entity == server_entity {
+                    let client_entity = owned_entity.predicted;
+
+                    // Set state of all components on Predicted & Confirmed entities to the authoritative Server state
+                    self.world
+                        .proxy_mut()
+                        .mirror_entities(&client_entity, &server_entity);
+
+                    let replay_commands = self.command_history.replays(&server_tick);
+                    for (_, command) in replay_commands {
+                        if let Some(mut position) = self
+                            .world
+                            .proxy_mut()
+                            .component_mut::<Position>(&client_entity)
+                        {
+                            shared_behavior::process_command(&command, &mut position);
+                        }
+                    }
+
+                    // Update interpolation
+                    if let Some(position) = self
+                        .world
+                        .proxy()
+                        .component::<Position>(&client_entity)
+                    {
+                        if let Some(interp) = self.interp_entities.get_mut(&client_entity) {
+                            interp.update_position(*position.x, *position.y);
+                        }
+                    }
+                }
+            }
+
+            if let Some(interp) = self.interp_entities.get_mut(&updated_entity) {
+                if let Some(position) = self.world.proxy().component::<Position>(&updated_entity) {
+                    interp.update_position(*position.x, *position.y);
                 }
             }
         }
@@ -212,46 +276,10 @@ impl App {
                     .component_mut::<Position>(&owned_entity.predicted)
                 {
                     shared_behavior::process_command(&command, &mut position);
-                }
-            }
-        }
 
-        // Spawn Entity Events
-        for entity in events.read::<SpawnEntityEvent>() {
-            self.squares.insert(entity);
-            info!("spawned entity");
-        }
-
-        // Despawn Entity Events
-        for entity in events.read::<DespawnEntityEvent>() {
-            self.squares.remove(&entity);
-            info!("despawned entity");
-            // TODO: Sync up Predicted & Confirmed entities
-        }
-
-        // Update Component Events
-        for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Position>>() {
-            if let Some(owned_entity) = &self.owned_entity {
-                let server_entity = owned_entity.confirmed;
-
-                // If entity is owned
-                if updated_entity == server_entity {
-                    let client_entity = owned_entity.predicted;
-
-                    // Set state of all components on Predicted & Confirmed entities to the authoritative Server state
-                    self.world
-                        .proxy_mut()
-                        .mirror_entities(&client_entity, &server_entity);
-
-                    let replay_commands = self.command_history.replays(&server_tick);
-                    for (_, command) in replay_commands {
-                        if let Some(mut position) = self
-                            .world
-                            .proxy_mut()
-                            .component_mut::<Position>(&client_entity)
-                        {
-                            shared_behavior::process_command(&command, &mut position);
-                        }
+                    // Update interpolation
+                    if let Some(interp) = self.interp_entities.get_mut(&owned_entity.predicted) {
+                        interp.update_position(*position.x, *position.y);
                     }
                 }
             }
@@ -286,18 +314,24 @@ impl App {
                     continue;
                 }
             };
-            if let Some(position) = self.world.proxy().component::<Position>(entity) {
-                let color_actual = match color_value {
-                    ColorValue::Red => RED,
-                    ColorValue::Blue => BLUE,
-                    ColorValue::Yellow => YELLOW,
-                    ColorValue::Green => GREEN,
-                };
+
+            let color_actual = match color_value {
+                ColorValue::Red => RED,
+                ColorValue::Blue => BLUE,
+                ColorValue::Yellow => YELLOW,
+                ColorValue::Green => GREEN,
+            };
+
+            if let Some(interp) = self.interp_entities.get_mut(entity) {
+
+                let interp_amount = self.client.server_interpolation().unwrap();
+                interp.interpolate(interp_amount);
+
                 match shape_value {
                     ShapeValue::Square => {
                         draw_rectangle(
-                            f32::from(*position.x),
-                            f32::from(*position.y),
+                            interp.interp_x,
+                            interp.interp_y,
                             SQUARE_SIZE,
                             SQUARE_SIZE,
                             color_actual,
@@ -305,8 +339,8 @@ impl App {
                     }
                     ShapeValue::Circle => {
                         draw_circle(
-                            f32::from(*position.x),
-                            f32::from(*position.y),
+                            interp.interp_x,
+                            interp.interp_y,
                             CIRCLE_RADIUS,
                             color_actual,
                         );
@@ -317,10 +351,14 @@ impl App {
 
         // draw own (predicted) square
         if let Some(entity) = &self.owned_entity {
-            if let Some(position) = self.world.proxy().component::<Position>(&entity.predicted) {
+            if let Some(interp) = self.interp_entities.get_mut(&entity.predicted) {
+
+                let interp_amount = self.client.client_interpolation().unwrap();
+                interp.interpolate(interp_amount);
+
                 draw_rectangle(
-                    f32::from(*position.x),
-                    f32::from(*position.y),
+                    interp.interp_x,
+                    interp.interp_y,
                     SQUARE_SIZE,
                     SQUARE_SIZE,
                     WHITE,
