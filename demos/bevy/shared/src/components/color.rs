@@ -17,6 +17,6 @@ pub struct Color {
 
 impl Color {
     pub fn new(value: ColorValue) -> Self {
-        Color::new_complete(value)
+        Self::new_complete(value)
     }
 }

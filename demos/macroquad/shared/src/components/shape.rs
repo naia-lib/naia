@@ -13,6 +13,6 @@ pub struct Shape {
 
 impl Shape {
     pub fn new(value: ShapeValue) -> Self {
-        Shape::new_complete(value)
+        Self::new_complete(value)
     }
 }

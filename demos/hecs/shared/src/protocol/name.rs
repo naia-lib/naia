@@ -14,7 +14,7 @@ pub struct Name {
 
 impl Name {
     pub fn new(first: &str, last: &str) -> Self {
-        Name::new_complete(Fullname {
+        Self::new_complete(Fullname {
             first: first.to_string(),
             last: last.to_string(),
         })
