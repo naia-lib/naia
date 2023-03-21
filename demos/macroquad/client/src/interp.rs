@@ -1,4 +1,3 @@
-
 pub struct Interp {
     next_x: f32,
     next_y: f32,
@@ -31,7 +30,7 @@ impl Interp {
     }
 
     pub(crate) fn interpolate(&mut self, interpolation: f32) {
-        if self.interp < interpolation  {
+        if self.interp < interpolation {
             self.interp = interpolation;
             self.interp_x = self.last_x + (self.next_x - self.last_x) * self.interp;
             self.interp_y = self.last_y + (self.next_y - self.last_y) * self.interp;

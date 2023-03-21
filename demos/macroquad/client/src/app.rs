@@ -1,11 +1,15 @@
 use std::collections::{HashMap, HashSet};
 
 use macroquad::prelude::{
-    clear_background, draw_circle, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN,
-    RED, WHITE, YELLOW, GRAY, ORANGE, draw_circle_lines, draw_rectangle_lines
+    clear_background, draw_circle, draw_circle_lines, draw_rectangle, draw_rectangle_lines, info,
+    is_key_down, KeyCode, BLACK, BLUE, GRAY, GREEN, ORANGE, RED, WHITE, YELLOW,
 };
 
-use naia_client::{transport::webrtc, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, SpawnEntityEvent, UpdateComponentEvent, InsertComponentEvent};
+use naia_client::{
+    transport::webrtc, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory,
+    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
+    MessageEvent, SpawnEntityEvent, UpdateComponentEvent,
+};
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 
@@ -171,7 +175,8 @@ impl App {
                 self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
 
                 // create interpolation
-                self.interp_entities.insert(prediction_entity, Interp::new());
+                self.interp_entities
+                    .insert(prediction_entity, Interp::new());
             } else {
                 let mut disowned: bool = false;
                 if let Some(owned_entity) = &self.owned_entity {
@@ -234,10 +239,7 @@ impl App {
                     }
 
                     // Update interpolation
-                    if let Some(position) = self
-                        .world
-                        .proxy()
-                        .component::<Position>(&client_entity)
+                    if let Some(position) = self.world.proxy().component::<Position>(&client_entity)
                     {
                         if let Some(interp) = self.interp_entities.get_mut(&client_entity) {
                             interp.update_position(*position.x, *position.y);
@@ -323,7 +325,6 @@ impl App {
             };
 
             if let Some(interp) = self.interp_entities.get_mut(entity) {
-
                 let interp_amount = self.client.server_interpolation().unwrap();
                 interp.interpolate(interp_amount);
 
@@ -352,7 +353,6 @@ impl App {
         // draw own (predicted) square
         if let Some(entity) = &self.owned_entity {
             if let Some(interp) = self.interp_entities.get_mut(&entity.predicted) {
-
                 let interp_amount = self.client.client_interpolation().unwrap();
                 interp.interpolate(interp_amount);
 

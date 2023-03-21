@@ -366,7 +366,8 @@ impl TimeManager {
     }
 
     pub(crate) fn server_interpolation(&self) -> f32 {
-        let mut output = self.get_interp(self.client_receiving_tick, &self.client_receiving_instant);
+        let mut output =
+            self.get_interp(self.client_receiving_tick, &self.client_receiving_instant);
         output = {
             if output >= 0.0 {
                 output
