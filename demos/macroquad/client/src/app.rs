@@ -129,6 +129,7 @@ impl App {
 
         let mut events = self.client.receive(self.world.proxy_mut());
 
+        // Connect Events
         for server_address in events.read::<ConnectEvent>() {
             info!("Client connected to: {}", server_address);
 
@@ -148,6 +149,8 @@ impl App {
 
             self.cursor_entity = Some(entity_id);
         }
+
+        // Disconnect Events
         for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
 
@@ -157,6 +160,8 @@ impl App {
             self.queued_command = None;
             self.command_history = CommandHistory::default();
         }
+
+        // Message Events
         for entity_assignment in
             events.read::<MessageEvent<EntityAssignmentChannel, EntityAssignment>>()
         {
@@ -183,6 +188,8 @@ impl App {
                 }
             }
         }
+
+        // Client Tick Events
         for client_tick in events.read::<ClientTickEvent>() {
             let Some(owned_entity) = &self.owned_entity else {
                 continue;
@@ -208,15 +215,21 @@ impl App {
                 }
             }
         }
+
+        // Spawn Entity Events
         for entity in events.read::<SpawnEntityEvent>() {
             self.squares.insert(entity);
             info!("spawned entity");
         }
+
+        // Despawn Entity Events
         for entity in events.read::<DespawnEntityEvent>() {
             self.squares.remove(&entity);
             info!("despawned entity");
             // TODO: Sync up Predicted & Confirmed entities
         }
+
+        // Update Component Events
         for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Position>>() {
             if let Some(owned_entity) = &self.owned_entity {
                 let server_entity = owned_entity.confirmed;
@@ -243,6 +256,8 @@ impl App {
                 }
             }
         }
+
+        // Error Events
         for error in events.read::<ErrorEvent>() {
             info!("Client Error: {}", error);
         }
