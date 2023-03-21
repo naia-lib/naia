@@ -10,6 +10,7 @@ pub fn protocol() -> Protocol {
         // Config
         .tick_interval(Duration::from_millis(16))
         .link_condition(LinkConditionerConfig::good_condition())
+        .enable_client_authoritative_entities()
         // Channels
         .add_plugin(ChannelsPlugin)
         // Messages

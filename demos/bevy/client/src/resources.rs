@@ -32,6 +32,7 @@ pub struct Global {
     pub red: Handle<ColorMaterial>,
     pub blue: Handle<ColorMaterial>,
     pub yellow: Handle<ColorMaterial>,
+    pub green: Handle<ColorMaterial>,
     pub white: Handle<ColorMaterial>,
     pub circle: Handle<Mesh>,
 }
@@ -48,6 +49,7 @@ impl Default for Global {
             red: Handle::default(),
             blue: Handle::default(),
             yellow: Handle::default(),
+            green: Handle::default(),
             circle: Handle::default(),
         }
     }

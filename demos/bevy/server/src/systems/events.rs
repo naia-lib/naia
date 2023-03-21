@@ -208,7 +208,8 @@ pub fn insert_component_events(
                     let color_value = match server.users_count() % 3 {
                         0 => ColorValue::Yellow,
                         1 => ColorValue::Red,
-                        _ => ColorValue::Blue,
+                        2 => ColorValue::Blue,
+                        _ => ColorValue::Green,
                     };
                     Color::new(color_value)
                 };

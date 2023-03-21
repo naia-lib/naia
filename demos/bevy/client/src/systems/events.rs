@@ -163,6 +163,7 @@ pub fn insert_component_events(
                                 ColorValue::Red => BevyColor::RED,
                                 ColorValue::Blue => BevyColor::BLUE,
                                 ColorValue::Yellow => BevyColor::YELLOW,
+                                ColorValue::Green => BevyColor::GREEN,
                             }
                         };
 
@@ -183,6 +184,7 @@ pub fn insert_component_events(
                                 ColorValue::Red => &global.red,
                                 ColorValue::Blue => &global.blue,
                                 ColorValue::Yellow => &global.yellow,
+                                ColorValue::Green => &global.green,
                             }
                         };
                         commands.entity(entity).insert(MaterialMesh2dBundle {

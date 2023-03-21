@@ -44,6 +44,7 @@ pub struct App {
     client: Client,
     world: World,
     owned_entity: Option<OwnedEntity>,
+    cursor_entity: Option<Entity>,
     squares: HashSet<Entity>,
     queued_command: Option<KeyCommand>,
     command_history: CommandHistory<KeyCommand>,
@@ -63,6 +64,7 @@ impl App {
             client,
             world: World::default(),
             owned_entity: None,
+            cursor_entity: None,
             squares: HashSet::new(),
             queued_command: None,
             command_history: CommandHistory::default(),
@@ -76,6 +78,7 @@ impl App {
     }
 
     fn input(&mut self) {
+        // Keyboard events
         if let Some(owned_entity) = &self.owned_entity {
             let w = is_key_down(KeyCode::W);
             let s = is_key_down(KeyCode::S);
@@ -105,6 +108,18 @@ impl App {
                 }
             }
         }
+
+        // Cursor events
+        if let Some(cursor_entity) = &self.cursor_entity {
+            if let Some(mut cursor_position) = self
+                .world
+                .proxy_mut()
+                .component_mut::<Position>(cursor_entity)
+            {
+                *cursor_position.x = macroquad::input::mouse_position().0 as i16;
+                *cursor_position.y = macroquad::input::mouse_position().1 as i16;
+            }
+        }
     }
 
     fn receive_events(&mut self) {
@@ -116,6 +131,22 @@ impl App {
 
         for server_address in events.read::<ConnectEvent>() {
             info!("Client connected to: {}", server_address);
+
+            // Create Position Component
+            let x = 0;
+            let y = 0;
+            let position_component = Position::new(x, y);
+
+            // Spawn new Client-authoritative Cursor entity
+            let entity_id = self
+                .client
+                .spawn_entity(self.world.proxy_mut())
+                // Add Position component to Entity
+                .insert_component(position_component)
+                // Get Entity ID
+                .id();
+
+            self.cursor_entity = Some(entity_id);
         }
         for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
@@ -220,64 +251,77 @@ impl App {
     fn draw(&mut self) {
         clear_background(BLACK);
 
-        if self.client.is_connected() {
-            // draw unowned squares
-            for entity in &self.squares {
-                let shape_value = {
-                    if let Some(shape) = self.world.proxy().component::<Shape>(entity) {
-                        (*shape.value).clone()
-                    } else {
-                        continue;
-                    }
+        if !self.client.is_connected() {
+            return;
+        }
+
+        // draw unowned squares
+        for entity in &self.squares {
+            let shape_value = {
+                if let Some(shape) = self.world.proxy().component::<Shape>(entity) {
+                    (*shape.value).clone()
+                } else {
+                    continue;
+                }
+            };
+            let color_value = {
+                if let Some(color) = self.world.proxy().component::<Color>(entity) {
+                    (*color.value).clone()
+                } else {
+                    continue;
+                }
+            };
+            if let Some(position) = self.world.proxy().component::<Position>(entity) {
+                let color_actual = match color_value {
+                    ColorValue::Red => RED,
+                    ColorValue::Blue => BLUE,
+                    ColorValue::Yellow => YELLOW,
+                    ColorValue::Green => GREEN,
                 };
-                let color_value = {
-                    if let Some(color) = self.world.proxy().component::<Color>(entity) {
-                        (*color.value).clone()
-                    } else {
-                        continue;
+                match shape_value {
+                    ShapeValue::Square => {
+                        draw_rectangle(
+                            f32::from(*position.x),
+                            f32::from(*position.y),
+                            SQUARE_SIZE,
+                            SQUARE_SIZE,
+                            color_actual,
+                        );
                     }
-                };
-                if let Some(position) = self.world.proxy().component::<Position>(entity) {
-                    let color_actual = match color_value {
-                        ColorValue::Red => RED,
-                        ColorValue::Blue => BLUE,
-                        ColorValue::Yellow => YELLOW,
-                        ColorValue::Green => GREEN,
-                    };
-                    match shape_value {
-                        ShapeValue::Square => {
-                            draw_rectangle(
-                                f32::from(*position.x),
-                                f32::from(*position.y),
-                                SQUARE_SIZE,
-                                SQUARE_SIZE,
-                                color_actual,
-                            );
-                        }
-                        ShapeValue::Circle => {
-                            draw_circle(
-                                f32::from(*position.x),
-                                f32::from(*position.y),
-                                CIRCLE_RADIUS,
-                                color_actual,
-                            );
-                        }
+                    ShapeValue::Circle => {
+                        draw_circle(
+                            f32::from(*position.x),
+                            f32::from(*position.y),
+                            CIRCLE_RADIUS,
+                            color_actual,
+                        );
                     }
                 }
             }
+        }
 
-            // draw own (predicted) square
-            if let Some(entity) = &self.owned_entity {
-                if let Some(position) = self.world.proxy().component::<Position>(&entity.predicted)
-                {
-                    draw_rectangle(
-                        f32::from(*position.x),
-                        f32::from(*position.y),
-                        SQUARE_SIZE,
-                        SQUARE_SIZE,
-                        WHITE,
-                    );
-                }
+        // draw own (predicted) square
+        if let Some(entity) = &self.owned_entity {
+            if let Some(position) = self.world.proxy().component::<Position>(&entity.predicted) {
+                draw_rectangle(
+                    f32::from(*position.x),
+                    f32::from(*position.y),
+                    SQUARE_SIZE,
+                    SQUARE_SIZE,
+                    WHITE,
+                );
+            }
+        }
+
+        // draw own client-authoritative cursor
+        if let Some(entity) = &self.cursor_entity {
+            if let Some(position) = self.world.proxy().component::<Position>(entity) {
+                draw_circle(
+                    f32::from(*position.x),
+                    f32::from(*position.y),
+                    CIRCLE_RADIUS,
+                    WHITE,
+                );
             }
         }
     }
