@@ -150,7 +150,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
 
             let (receiving_tick_happened, sending_tick_happened) =
-                connection.time_manager.check_ticks();
+                connection.time_manager.collect_ticks();
 
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // apply updates on tick boundary

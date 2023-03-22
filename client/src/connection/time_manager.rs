@@ -215,7 +215,7 @@ impl TimeManager {
             self.instant_from_interp(self.server_receivable_tick, server_receivable_interp);
     }
 
-    pub(crate) fn check_ticks(&mut self) -> (Option<(Tick, Tick)>, Option<(Tick, Tick)>) {
+    pub(crate) fn collect_ticks(&mut self) -> (Option<(Tick, Tick)>, Option<(Tick, Tick)>) {
         // updates client_receiving_tick
         // returns (Some(start_tick, end_tick), None) if a client_receiving_tick has incremented
         // returns (None, Some(start_tick, end_tick)) if a client_sending_tick or server_receivable_tick has incremented
@@ -231,111 +231,65 @@ impl TimeManager {
             }
         }
         let millis_elapsed = self.accumulator.round() as u32;
-        let millis_elapsed_f32 = millis_elapsed as f32;
-        self.accumulator -= millis_elapsed_f32;
+        self.accumulator -= millis_elapsed as f32;
 
         // Target Instants
         let now: GameInstant = self.game_time_now();
         let latency_ms: u32 = self.latency().round() as u32;
         let major_jitter_ms: u32 = (self.jitter() * 3.0).round() as u32;
-
         let tick_duration_ms: u32 = self.server_tick_duration_avg.round() as u32;
 
-        // find targets
-        let client_receiving_target =
-            get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
-
-        let client_sending_target = get_client_sending_target(
-            &now,
-            latency_ms,
-            major_jitter_ms,
-            tick_duration_ms,
-            self.server_speedup_potential,
-        );
-        let server_receivable_target =
-            get_server_receivable_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
-
-        // set default next instant
-        let client_receiving_default_next =
-            self.client_receiving_instant.add_millis(millis_elapsed);
-        let client_sending_default_next = self.client_sending_instant.add_millis(millis_elapsed);
-        let server_receivable_default_next =
-            self.server_receivable_instant.add_millis(millis_elapsed);
-
-        // find speeds
-        let client_receiving_speed =
-            offset_to_speed(client_receiving_default_next.offset_from(&client_receiving_target));
-        let client_sending_speed =
-            offset_to_speed(client_sending_default_next.offset_from(&client_sending_target));
-        let server_receivable_speed =
-            offset_to_speed(server_receivable_default_next.offset_from(&server_receivable_target));
-
-        // apply speeds
-        self.client_receiving_instant = self
-            .client_receiving_instant
-            .add_millis((millis_elapsed_f32 * client_receiving_speed) as u32);
-        if self
-            .client_receiving_instant
-            .is_more_than(&client_receiving_target)
+        // Client Receiving
         {
-            self.client_receiving_instant = client_receiving_target;
+            let client_receiving_target =
+                get_client_receiving_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+            adjust_time(
+                &self.server_tick,
+                &self.server_tick_instant,
+                self.server_tick_duration_avg,
+                &mut self.client_receiving_tick,
+                &mut self.client_receiving_instant,
+                &client_receiving_target,
+                millis_elapsed,
+            );
         }
-        self.client_sending_instant = self
-            .client_sending_instant
-            .add_millis((millis_elapsed_f32 * client_sending_speed) as u32);
-        if self
-            .client_sending_instant
-            .is_more_than(&client_sending_target)
+
+        // Client Sending
         {
-            self.client_sending_instant = client_sending_target;
+            let client_sending_target = get_client_sending_target(
+                &now,
+                latency_ms,
+                major_jitter_ms,
+                tick_duration_ms,
+                self.server_speedup_potential,
+            );
+            adjust_time(
+                &self.server_tick,
+                &self.server_tick_instant,
+                self.server_tick_duration_avg,
+                &mut self.client_sending_tick,
+                &mut self.client_sending_instant,
+                &client_sending_target,
+                millis_elapsed,
+            );
         }
-        self.server_receivable_instant = self
-            .server_receivable_instant
-            .add_millis((millis_elapsed_f32 * server_receivable_speed) as u32);
-        if self
-            .server_receivable_instant
-            .is_more_than(&server_receivable_target)
+
+        // Server Receivable
         {
-            self.server_receivable_instant = server_receivable_target;
+            let server_receivable_target =
+                get_server_receivable_target(&now, latency_ms, major_jitter_ms, tick_duration_ms);
+            adjust_time(
+                &self.server_tick,
+                &self.server_tick_instant,
+                self.server_tick_duration_avg,
+                &mut self.server_receivable_tick,
+                &mut self.server_receivable_instant,
+                &server_receivable_target,
+                millis_elapsed,
+            );
         }
 
-        // convert current instants into ticks
-        let new_client_receiving_tick = instant_to_tick(
-            &self.server_tick,
-            &self.server_tick_instant,
-            self.server_tick_duration_avg,
-            &self.client_receiving_instant,
-        );
-        let new_client_sending_tick = instant_to_tick(
-            &self.server_tick,
-            &self.server_tick_instant,
-            self.server_tick_duration_avg,
-            &self.client_sending_instant,
-        );
-        let new_server_receivable_tick = instant_to_tick(
-            &self.server_tick,
-            &self.server_tick_instant,
-            self.server_tick_duration_avg,
-            &self.server_receivable_instant,
-        );
-
-        // make sure nothing ticks backwards
-        if sequence_less_than(new_client_receiving_tick, self.client_receiving_tick) {
-            warn!("Client Receiving Tick attempted to Tick Backwards");
-        } else {
-            self.client_receiving_tick = new_client_receiving_tick;
-        }
-        if sequence_less_than(new_client_sending_tick, self.client_sending_tick) {
-            warn!("Client Sending Tick attempted to Tick Backwards");
-        } else {
-            self.client_sending_tick = new_client_sending_tick;
-        }
-        if sequence_less_than(new_server_receivable_tick, self.server_receivable_tick) {
-            warn!("Server Receivable Tick attempted to Tick Backwards");
-        } else {
-            self.server_receivable_tick = new_server_receivable_tick;
-        }
-
+        // Output
         let receiving_incremented = self.client_receiving_tick != prev_client_receiving_tick;
         let sending_incremented = self.client_sending_tick != prev_client_sending_tick;
 
@@ -410,6 +364,34 @@ impl TimeManager {
         return self
             .tick_to_instant(tick)
             .add_signed_millis(tick_length_interped);
+    }
+}
+
+fn adjust_time(
+    server_tick: &Tick,
+    server_tick_instant: &GameInstant,
+    server_tick_duration_avg: f32,
+    tick: &mut Tick,
+    tick_instant: &mut GameInstant,
+    target_instant: &GameInstant,
+    millis_elapsed: u32,
+) {
+    let default_next_instant = tick_instant.add_millis(millis_elapsed);
+    let speed = offset_to_speed(default_next_instant.offset_from(target_instant));
+    *tick_instant = tick_instant.add_millis(((millis_elapsed as f32) * speed).round() as u32);
+    if tick_instant.is_more_than(target_instant) {
+        *tick_instant = target_instant.clone();
+    }
+    let new_tick = instant_to_tick(
+        server_tick,
+        server_tick_instant,
+        server_tick_duration_avg,
+        tick_instant,
+    );
+    if sequence_less_than(new_tick, *tick) {
+        warn!("Attempted to Tick Backwards");
+    } else {
+        *tick = new_tick;
     }
 }
 
