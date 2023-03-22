@@ -23,13 +23,18 @@ impl Interp {
 
     pub(crate) fn update_position(&mut self, next_x: i16, next_y: i16) {
         self.interp = 0.0;
-        self.last_x = self.interp_x;
-        self.last_y = self.interp_y;
+        self.last_x = self.next_x;
+        self.last_y = self.next_y;
+        self.interp_x = self.next_x;
+        self.interp_y = self.next_y;
         self.next_x = next_x as f32;
         self.next_y = next_y as f32;
     }
 
     pub(crate) fn interpolate(&mut self, interpolation: f32) {
+        if self.interp >= 1.0 || interpolation == 0.0 {
+            return;
+        }
         if self.interp < interpolation {
             self.interp = interpolation;
             self.interp_x = self.last_x + (self.next_x - self.last_x) * self.interp;

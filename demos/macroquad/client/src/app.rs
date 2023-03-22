@@ -1,8 +1,8 @@
 use std::collections::{HashMap, HashSet};
 
 use macroquad::prelude::{
-    clear_background, draw_circle, draw_circle_lines, draw_rectangle, draw_rectangle_lines, info,
-    is_key_down, KeyCode, BLACK, BLUE, GRAY, GREEN, ORANGE, RED, WHITE, YELLOW,
+    clear_background, draw_circle, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN,
+    RED, WHITE, YELLOW,
 };
 
 use naia_client::{
@@ -239,9 +239,10 @@ impl App {
                     }
 
                     // Update interpolation
-                    if let Some(position) = self.world.proxy().component::<Position>(&client_entity)
-                    {
-                        if let Some(interp) = self.interp_entities.get_mut(&client_entity) {
+                    if let Some(interp) = self.interp_entities.get_mut(&client_entity) {
+                        if let Some(position) =
+                            self.world.proxy().component::<Position>(&client_entity)
+                        {
                             interp.update_position(*position.x, *position.y);
                         }
                     }
