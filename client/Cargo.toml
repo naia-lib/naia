@@ -1,6 +1,6 @@
 [package]
 name = "naia-client"
-version = "0.20.0"
+version = "0.20.1"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "Provides a cross-platform client that can send/receive messages to/from a server, and has a pool of in-scope entities/components that is synced with the server."
