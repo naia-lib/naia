@@ -3,7 +3,7 @@ use bevy_app::App;
 use bevy_asset::AssetPlugin;
 use bevy_core::{FrameCountPlugin, TaskPoolPlugin, TypeRegistrationPlugin};
 use bevy_core_pipeline::{clear_color::ClearColor, CorePipelinePlugin};
-use bevy_ecs::schedule::{IntoSystemConfigs, IntoSystemSetConfig, SystemSet};
+use bevy_ecs::schedule::{IntoSystemConfig, IntoSystemConfigs, IntoSystemSetConfig, SystemSet};
 use bevy_input::InputPlugin;
 use bevy_log::LogPlugin;
 use bevy_render::{color::Color, texture::ImagePlugin, RenderPlugin};
@@ -20,6 +20,9 @@ use crate::systems::{events, init, input, sync};
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 struct MainLoop;
+
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+struct Tick;
 
 pub fn run() {
     App::default()
@@ -57,13 +60,15 @@ pub fn run() {
                 events::update_component_events,
                 events::remove_component_events,
                 events::message_events,
-                events::tick_events,
             )
                 .chain()
                 .in_set(ReceiveEvents),
         )
+        // Tick Event
+        .configure_set(Tick.after(ReceiveEvents))
+        .add_system(events::tick_events.in_set(Tick))
         // Realtime Gameplay Loop
-        .configure_set(MainLoop.after(ReceiveEvents))
+        .configure_set(MainLoop.after(Tick))
         .add_systems(
             (
                 input::key_input,

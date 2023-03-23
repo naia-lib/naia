@@ -8,8 +8,8 @@ pub struct Interp {
 
     last_x: f32,
     last_y: f32,
-    next_x: f32,
-    next_y: f32,
+    pub next_x: f32,
+    pub next_y: f32,
 }
 
 impl Interp {
@@ -28,7 +28,7 @@ impl Interp {
         }
     }
 
-    pub(crate) fn update_position(&mut self, next_x: i16, next_y: i16) {
+    pub(crate) fn next_position(&mut self, next_x: i16, next_y: i16) {
         self.interp = 0.0;
         self.last_x = self.next_x;
         self.last_y = self.next_y;
@@ -46,10 +46,6 @@ impl Interp {
             self.interp = interpolation;
             self.interp_x = self.last_x + (self.next_x - self.last_x) * self.interp;
             self.interp_y = self.last_y + (self.next_y - self.last_y) * self.interp;
-        } else {
-            self.interp = 1.0;
-            self.interp_x = self.next_x;
-            self.interp_y = self.next_y;
         }
     }
 }

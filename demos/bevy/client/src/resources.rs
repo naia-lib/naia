@@ -5,7 +5,7 @@ use bevy_ecs::{entity::Entity, prelude::Resource};
 use bevy_render::mesh::Mesh;
 use bevy_sprite::ColorMaterial;
 
-use naia_bevy_client::{CommandHistory, Tick};
+use naia_bevy_client::CommandHistory;
 use naia_bevy_demo_shared::messages::KeyCommand;
 
 pub struct OwnedEntity {
@@ -28,7 +28,6 @@ pub struct Global {
     pub cursor_entity: Option<Entity>,
     pub queued_command: Option<KeyCommand>,
     pub command_history: CommandHistory<KeyCommand>,
-    pub last_client_tick: Tick,
     pub red: Handle<ColorMaterial>,
     pub blue: Handle<ColorMaterial>,
     pub yellow: Handle<ColorMaterial>,
@@ -44,7 +43,6 @@ impl Default for Global {
             cursor_entity: None,
             queued_command: None,
             command_history: CommandHistory::default(),
-            last_client_tick: Tick::default(),
             white: Handle::default(),
             red: Handle::default(),
             blue: Handle::default(),

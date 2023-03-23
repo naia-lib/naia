@@ -232,7 +232,7 @@ pub fn insert_component_events(
 pub fn update_component_events(
     mut global: ResMut<Global>,
     mut event_reader: EventReader<UpdateComponentEvents>,
-    mut position_query: Query<(&mut Position, &mut Interp)>,
+    mut position_query: Query<&mut Position>,
 ) {
     // When we receive a new Position update for the Player's Entity,
     // we must ensure the Client-side Prediction also remains in-sync
@@ -254,35 +254,28 @@ pub fn update_component_events(
                     } else {
                         latest_tick = Some(server_tick);
                     }
-                } else {
-                    // If entity is not owned, update interpolation now
-                    if let Ok((position, mut interp)) = position_query.get_mut(updated_entity) {
-                        interp.update_position(*position.x, *position.y);
-                    }
                 }
             }
         }
 
         if let Some(server_tick) = latest_tick {
-            if let Ok(
-                [(server_position, mut server_interp), (mut client_position, mut client_interp)],
-            ) = position_query.get_many_mut([server_entity, client_entity])
+            if let Ok([server_position, mut client_position]) =
+                position_query.get_many_mut([server_entity, client_entity])
             {
-                let replay_commands = global.command_history.replays(&server_tick);
-
                 // Set to authoritative state
                 // TODO: maybe a general 'mirror()' method on Replicate structs to mirror everything?
                 client_position.x.mirror(&server_position.x);
                 client_position.y.mirror(&server_position.y);
 
                 // Replay all stored commands
+
+                // TODO: why is it necessary to subtract 1 Tick here?
+                let modified_server_tick = server_tick.wrapping_sub(1);
+
+                let replay_commands = global.command_history.replays(&modified_server_tick);
                 for (_command_tick, command) in replay_commands {
                     shared_behavior::process_command(&command, &mut client_position);
                 }
-
-                // update interpolation now, after reconciliation
-                server_interp.update_position(*server_position.x, *server_position.y);
-                client_interp.update_position(*client_position.x, *client_position.y);
             }
         }
     }
@@ -300,12 +293,8 @@ pub fn tick_events(
     mut client: Client,
     mut global: ResMut<Global>,
     mut tick_reader: EventReader<ClientTickEvent>,
-    mut position_query: Query<(&mut Position, &mut Interp)>,
+    mut position_query: Query<&mut Position>,
 ) {
-    let Some(command) = global.queued_command.take() else {
-        return;
-    };
-
     let Some(predicted_entity) = global
         .owned_entity
         .as_ref()
@@ -314,27 +303,25 @@ pub fn tick_events(
         return;
     };
 
-    for ClientTickEvent(tick) in tick_reader.iter() {
-        global.last_client_tick = *tick;
+    let Some(command) = global.queued_command.take() else {
+        return;
+    };
 
-        //All game logic should happen here, on a tick event
-        if !global.command_history.can_insert(tick) {
+    for ClientTickEvent(client_tick) in tick_reader.iter() {
+        if !global.command_history.can_insert(client_tick) {
             // History is full
             continue;
         }
 
         // Record command
-        global.command_history.insert(*tick, command.clone());
+        global.command_history.insert(*client_tick, command.clone());
 
         // Send command
-        client.send_tick_buffer_message::<PlayerCommandChannel, KeyCommand>(tick, &command);
+        client.send_tick_buffer_message::<PlayerCommandChannel, KeyCommand>(client_tick, &command);
 
-        if let Ok((mut position, mut interp)) = position_query.get_mut(predicted_entity) {
+        if let Ok(mut position) = position_query.get_mut(predicted_entity) {
             // Apply command
             shared_behavior::process_command(&command, &mut position);
-
-            // Update client-side interpolation
-            interp.update_position(*position.x, *position.y);
         }
     }
 }

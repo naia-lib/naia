@@ -8,9 +8,13 @@ use crate::components::{Confirmed, Interp, LocalCursor, Predicted};
 
 pub fn sync_clientside_sprites(
     client: Client,
-    mut query: Query<(&mut Interp, &mut Transform), With<Predicted>>,
+    mut query: Query<(&Position, &mut Interp, &mut Transform), With<Predicted>>,
 ) {
-    for (mut interp, mut transform) in query.iter_mut() {
+    for (position, mut interp, mut transform) in query.iter_mut() {
+        if *position.x != interp.next_x as i16 || *position.y != interp.next_y as i16 {
+            interp.next_position(*position.x, *position.y);
+        }
+
         let interp_amount = client.client_interpolation().unwrap();
         interp.interpolate(interp_amount);
         transform.translation.x = interp.interp_x;
@@ -20,9 +24,13 @@ pub fn sync_clientside_sprites(
 
 pub fn sync_serverside_sprites(
     client: Client,
-    mut query: Query<(&mut Interp, &mut Transform), With<Confirmed>>,
+    mut query: Query<(&Position, &mut Interp, &mut Transform), With<Confirmed>>,
 ) {
-    for (mut interp, mut transform) in query.iter_mut() {
+    for (position, mut interp, mut transform) in query.iter_mut() {
+        if *position.x != interp.next_x as i16 || *position.y != interp.next_y as i16 {
+            interp.next_position(*position.x, *position.y);
+        }
+
         let interp_amount = client.server_interpolation().unwrap();
         interp.interpolate(interp_amount);
         transform.translation.x = interp.interp_x;
