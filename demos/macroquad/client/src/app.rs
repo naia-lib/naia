@@ -6,9 +6,11 @@ use macroquad::prelude::{
 };
 
 use naia_client::{
-    transport::webrtc, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory,
-    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-    MessageEvent, SpawnEntityEvent, UpdateComponentEvent,
+    shared::{sequence_greater_than, Tick},
+    transport::webrtc,
+    Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent,
+    DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
+    SpawnEntityEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
@@ -220,44 +222,40 @@ impl App {
         }
 
         // Update Component Events
-        for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Position>>() {
-            if let Some(owned_entity) = &self.owned_entity {
-                let server_entity = owned_entity.confirmed;
+        if let Some(owned_entity) = &self.owned_entity {
+            let mut latest_tick: Option<Tick> = None;
+            let server_entity = owned_entity.confirmed;
+            let client_entity = owned_entity.predicted;
 
+            for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Position>>() {
                 // If entity is owned
                 if updated_entity == server_entity {
-                    let client_entity = owned_entity.predicted;
-
-                    // Set state of all components on Predicted & Confirmed entities to the authoritative Server state
-                    self.world
-                        .proxy_mut()
-                        .mirror_entities(&client_entity, &server_entity);
-
-                    let replay_commands = self.command_history.replays(&server_tick);
-                    for (_, command) in replay_commands {
-                        if let Some(mut position) = self
-                            .world
-                            .proxy_mut()
-                            .component_mut::<Position>(&client_entity)
-                        {
-                            shared_behavior::process_command(&command, &mut position);
+                    if let Some(last_tick) = &mut latest_tick {
+                        if sequence_greater_than(server_tick, *last_tick) {
+                            *last_tick = server_tick;
                         }
-                    }
-
-                    // Update interpolation
-                    if let Some(interp) = self.interp_entities.get_mut(&client_entity) {
-                        if let Some(position) =
-                            self.world.proxy().component::<Position>(&client_entity)
-                        {
-                            interp.update_position(*position.x, *position.y);
-                        }
+                    } else {
+                        latest_tick = Some(server_tick);
                     }
                 }
             }
 
-            if let Some(interp) = self.interp_entities.get_mut(&updated_entity) {
-                if let Some(position) = self.world.proxy().component::<Position>(&updated_entity) {
-                    interp.update_position(*position.x, *position.y);
+            if let Some(server_tick) = latest_tick {
+                // Set state of all components on Predicted entities to the authoritative Server state
+                self.world
+                    .proxy_mut()
+                    .mirror_entities(&client_entity, &server_entity);
+
+                // Replay all stored commands
+                let replay_commands = self.command_history.replays(&server_tick);
+                for (_, command) in replay_commands {
+                    if let Some(mut client_position) = self
+                        .world
+                        .proxy_mut()
+                        .component_mut::<Position>(&client_entity)
+                    {
+                        shared_behavior::process_command(&command, &mut client_position);
+                    }
                 }
             }
         }
@@ -270,27 +268,24 @@ impl App {
             let Some(command) = self.queued_command.take() else {
                 continue;
             };
-            if self.command_history.can_insert(&client_tick) {
-                // Record command
-                self.command_history.insert(client_tick, command.clone());
+            if !self.command_history.can_insert(&client_tick) {
+                // history is full
+                continue;
+            }
+            // Record command
+            self.command_history.insert(client_tick, command.clone());
 
-                // Send command
-                self.client
-                    .send_tick_buffer_message::<PlayerCommandChannel, _>(&client_tick, &command);
+            // Send command
+            self.client
+                .send_tick_buffer_message::<PlayerCommandChannel, _>(&client_tick, &command);
 
-                // Apply command
-                if let Some(mut position) = self
-                    .world
-                    .proxy_mut()
-                    .component_mut::<Position>(&owned_entity.predicted)
-                {
-                    shared_behavior::process_command(&command, &mut position);
-
-                    // Update interpolation
-                    if let Some(interp) = self.interp_entities.get_mut(&owned_entity.predicted) {
-                        interp.update_position(*position.x, *position.y);
-                    }
-                }
+            // Apply command
+            if let Some(mut position) = self
+                .world
+                .proxy_mut()
+                .component_mut::<Position>(&owned_entity.predicted)
+            {
+                shared_behavior::process_command(&command, &mut position);
             }
         }
 
@@ -332,6 +327,12 @@ impl App {
             };
 
             if let Some(interp) = self.interp_entities.get_mut(entity) {
+                if let Some(position) = self.world.proxy().component::<Position>(entity) {
+                    if *position.x != interp.next_x as i16 || *position.y != interp.next_y as i16 {
+                        interp.next_position(*position.x, *position.y);
+                    }
+                }
+
                 let interp_amount = self.client.server_interpolation().unwrap();
                 interp.interpolate(interp_amount);
 
@@ -360,6 +361,13 @@ impl App {
         // draw own (predicted) square
         if let Some(entity) = &self.owned_entity {
             if let Some(interp) = self.interp_entities.get_mut(&entity.predicted) {
+                if let Some(position) = self.world.proxy().component::<Position>(&entity.predicted)
+                {
+                    if *position.x != interp.next_x as i16 || *position.y != interp.next_y as i16 {
+                        interp.next_position(*position.x, *position.y);
+                    }
+                }
+
                 let interp_amount = self.client.client_interpolation().unwrap();
                 interp.interpolate(interp_amount);
 
