@@ -1,23 +1,27 @@
 pub struct Interp {
-    next_x: f32,
-    next_y: f32,
-    last_x: f32,
-    last_y: f32,
     interp: f32,
     pub interp_x: f32,
     pub interp_y: f32,
+
+    last_x: f32,
+    last_y: f32,
+    next_x: f32,
+    next_y: f32,
 }
 
 impl Interp {
-    pub fn new() -> Self {
+    pub fn new(x: i16, y: i16) -> Self {
+        let x = x as f32;
+        let y = y as f32;
         Self {
-            next_x: 0.0,
-            next_y: 0.0,
-            last_x: 0.0,
-            last_y: 0.0,
             interp: 0.0,
-            interp_x: 0.0,
-            interp_y: 0.0,
+            interp_x: x,
+            interp_y: y,
+
+            last_x: x,
+            last_y: y,
+            next_x: x,
+            next_y: y,
         }
     }
 

@@ -175,8 +175,13 @@ impl App {
                 self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
 
                 // create interpolation
-                self.interp_entities
-                    .insert(prediction_entity, Interp::new());
+                if let Some(position) = self
+                    .world
+                    .proxy()
+                    .component::<Position>(&prediction_entity)
+                {
+                    self.interp_entities.insert(prediction_entity, Interp::new(*position.x, *position.y));
+                }
             } else {
                 let mut disowned: bool = false;
                 if let Some(owned_entity) = &self.owned_entity {
@@ -210,7 +215,13 @@ impl App {
 
         // Insert Component Events
         for entity in events.read::<InsertComponentEvent<Position>>() {
-            self.interp_entities.insert(entity, Interp::new());
+            if let Some(position) = self
+                .world
+                .proxy()
+                .component::<Position>(&entity)
+            {
+                self.interp_entities.insert(entity, Interp::new(*position.x, *position.y));
+            }
         }
 
         // Update Component Events
