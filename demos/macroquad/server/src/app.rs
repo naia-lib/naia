@@ -2,15 +2,16 @@ use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
     shared::Random, transport::webrtc, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent,
-    RoomKey, Server as NaiaServer, ServerConfig, TickEvent, UserKey,
+    InsertComponentEvent, RoomKey, Server as NaiaServer, ServerConfig, TickEvent,
+    UpdateComponentEvent, UserKey,
 };
 
-use naia_demo_world::{Entity, World};
+use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, Marker, Square},
+    components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
     protocol,
 };
@@ -21,7 +22,8 @@ pub struct App {
     server: Server,
     world: World,
     main_room_key: RoomKey,
-    user_squares: HashMap<UserKey, Entity>,
+    user_to_square_map: HashMap<UserKey, Entity>,
+    user_to_cursor_map: HashMap<UserKey, Entity>,
     square_last_command: HashMap<Entity, KeyCommand>,
 }
 
@@ -56,7 +58,8 @@ impl App {
             server,
             world: World::default(),
             main_room_key,
-            user_squares: HashMap::new(),
+            user_to_square_map: HashMap::new(),
+            user_to_cursor_map: HashMap::new(),
             square_last_command: HashMap::new(),
         }
     }
@@ -68,6 +71,8 @@ impl App {
             sleep(Duration::from_millis(3));
             return;
         }
+
+        // Auth Events
         for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
             if auth.username == "charlie" && auth.password == "12345" {
                 // Accept incoming connection
@@ -77,6 +82,8 @@ impl App {
                 self.server.reject_connection(&user_key);
             }
         }
+
+        // Connect Events
         for user_key in events.read::<ConnectEvent>() {
             // New User has joined the Server
             let user_address = self
@@ -88,34 +95,37 @@ impl App {
 
             info!("Naia Server connected to: {}", user_address);
 
-            let total_user_count = self.server.users_count();
+            // Create Position Component
+            let x = (Random::gen_range_u32(0, 50) * 16) as i16;
+            let y = (Random::gen_range_u32(0, 37) * 16) as i16;
+            let position_component = Position::new(x, y);
 
-            // Spawn new Entity
-            let mut entity = self.server.spawn_entity(self.world.proxy_mut());
-
-            // Create "Square" Component
-            let x = Random::gen_range_u32(0, 50) * 16;
-            let y = Random::gen_range_u32(0, 37) * 16;
-
-            let square_color = match total_user_count % 4 {
-                0 => Color::Yellow,
-                1 => Color::Red,
-                2 => Color::Blue,
-                _ => Color::Green,
+            // Create Color Component
+            let color_value = match self.server.users_count() % 4 {
+                0 => ColorValue::Yellow,
+                1 => ColorValue::Red,
+                2 => ColorValue::Blue,
+                _ => ColorValue::Green,
             };
+            let color_component = Color::new(color_value);
 
-            // Get Entity ID
-            let entity_id = entity
+            // Spawn new Square Entity
+            let entity_id = self
+                .server
+                .spawn_entity(self.world.proxy_mut())
                 // Entity enters Room
                 .enter_room(&self.main_room_key)
-                // Add Square component to Entity
-                .insert_component(Square::new(x as u16, y as u16, square_color))
-                // Add Marker component to Entity
-                .insert_component(Marker::new())
+                // Add Position component to Entity
+                .insert_component(position_component)
+                // Add Color component to Entity
+                .insert_component(color_component)
+                // Add Shape component to Entity
+                .insert_component(Shape::new(ShapeValue::Square))
+                // Get Entity ID
                 .id();
 
             // Associate new Entity with User that spawned it
-            self.user_squares.insert(user_key, entity_id);
+            self.user_to_square_map.insert(user_key, entity_id);
             self.square_last_command
                 .insert(entity_id, KeyCommand::new(false, false, false, false));
 
@@ -129,17 +139,99 @@ impl App {
             self.server
                 .send_message::<EntityAssignmentChannel, _>(&user_key, &assignment_message);
         }
+
+        // Disconnect Events
         for (user_key, user) in events.read::<DisconnectEvent>() {
             info!("Naia Server disconnected from: {}", user.address);
-            if let Some(entity) = self.user_squares.remove(&user_key) {
+            if let Some(entity) = self.user_to_square_map.remove(&user_key) {
                 self.server
                     .entity_mut(self.world.proxy_mut(), &entity)
                     .leave_room(&self.main_room_key)
                     .despawn();
                 self.square_last_command.remove(&entity);
             }
+            if let Some(entity) = self.user_to_cursor_map.remove(&user_key) {
+                self.server
+                    .entity_mut(self.world.proxy_mut(), &entity)
+                    .leave_room(&self.main_room_key)
+                    .despawn();
+            }
         }
 
+        // Insert Component Events for Client Cursors
+        for (user_key, client_cursor_entity) in events.read::<InsertComponentEvent<Position>>() {
+            info!("insert component into client entity");
+            let (client_cursor_position_x, client_cursor_position_y) = {
+                if let Some(client_cursor_position) = self
+                    .world
+                    .proxy()
+                    .component::<Position>(&client_cursor_entity)
+                {
+                    (*client_cursor_position.x, *client_cursor_position.y)
+                } else {
+                    continue;
+                }
+            };
+
+            // Create Position Component
+            let server_cursor_position =
+                Position::new(client_cursor_position_x, client_cursor_position_y);
+
+            // Create Color Component
+            let color_value = match self.server.users_count() % 4 {
+                0 => ColorValue::Yellow,
+                1 => ColorValue::Red,
+                2 => ColorValue::Blue,
+                _ => ColorValue::Green,
+            };
+            let server_cursor_color = Color::new(color_value);
+
+            // Spawn new Cursor Entity
+            let server_cursor_entity = self
+                .server
+                .spawn_entity(self.world.proxy_mut())
+                // Entity enters Room
+                .enter_room(&self.main_room_key)
+                // Add Position component to Entity
+                .insert_component(server_cursor_position)
+                // Add Color component to Entity
+                .insert_component(server_cursor_color)
+                // Add Shape component to Entity
+                .insert_component(Shape::new(ShapeValue::Circle))
+                // Get Entity ID
+                .id();
+
+            self.user_to_cursor_map
+                .insert(user_key, server_cursor_entity);
+        }
+
+        // Update Component Events for Client Cursors
+        for (user_key, client_cursor_entity) in events.read::<UpdateComponentEvent<Position>>() {
+            let (client_cursor_position_x, client_cursor_position_y) = {
+                if let Some(client_cursor_position) = self
+                    .world
+                    .proxy()
+                    .component::<Position>(&client_cursor_entity)
+                {
+                    (*client_cursor_position.x, *client_cursor_position.y)
+                } else {
+                    continue;
+                }
+            };
+
+            if let Some(server_cursor_entity) = self.user_to_cursor_map.get(&user_key) {
+                if let Some(mut server_cursor_position) = self
+                    .world
+                    .proxy_mut()
+                    .component_mut::<Position>(server_cursor_entity)
+                {
+                    *server_cursor_position.x = client_cursor_position_x;
+                    *server_cursor_position.y = client_cursor_position_y;
+                }
+            }
+        }
+
+        // Tick Events
         let mut has_ticked = false;
 
         for server_tick in events.read::<TickEvent>() {
@@ -152,12 +244,12 @@ impl App {
                 let Some(entity) = &key_command.entity.get(&self.server) else {
                     continue;
                 };
-                if let Some(mut square) = self
+                if let Some(mut position) = self
                     .server
                     .entity_mut(self.world.proxy_mut(), &entity)
-                    .component::<Square>()
+                    .component::<Position>()
                 {
-                    shared_behavior::process_command(&key_command, &mut square);
+                    shared_behavior::process_command(&key_command, &mut position);
                 }
             }
         }
@@ -181,6 +273,7 @@ impl App {
             self.server.send_all_updates(self.world.proxy());
         }
 
+        // Error Events
         for error in events.read::<ErrorEvent>() {
             info!("Naia Server error: {}", error);
         }

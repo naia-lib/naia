@@ -1,6 +1,4 @@
-use bevy_ecs::prelude::Component;
-
-use naia_bevy_shared::{Property, Replicate, Serde};
+use naia_shared::{Property, Replicate, Serde};
 
 #[derive(Serde, PartialEq, Clone)]
 pub enum ShapeValue {
@@ -8,7 +6,7 @@ pub enum ShapeValue {
     Circle,
 }
 
-#[derive(Component, Replicate)]
+#[derive(Replicate)]
 pub struct Shape {
     pub value: Property<ShapeValue>,
 }

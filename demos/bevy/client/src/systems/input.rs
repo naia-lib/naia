@@ -8,11 +8,7 @@ use naia_bevy_demo_shared::{components::Position, messages::KeyCommand};
 
 use crate::resources::Global;
 
-pub fn square_input(
-    mut global: ResMut<Global>,
-    client: Client,
-    keyboard_input: Res<Input<KeyCode>>,
-) {
+pub fn key_input(mut global: ResMut<Global>, client: Client, keyboard_input: Res<Input<KeyCode>>) {
     let w = keyboard_input.pressed(KeyCode::W);
     let s = keyboard_input.pressed(KeyCode::S);
     let a = keyboard_input.pressed(KeyCode::A);
@@ -48,7 +44,7 @@ pub fn cursor_input(
             if let Ok(mut cursor_position) = position_query.get_mut(entity) {
                 if let Some(mouse_position) = window_relative_mouse_position(window) {
                     *cursor_position.x = mouse_position.x as i16;
-                    *cursor_position.y = mouse_position.y as i16 * -1;
+                    *cursor_position.y = mouse_position.y as i16;
                 }
             }
         }
@@ -65,10 +61,3 @@ fn window_relative_mouse_position(window: &Window) -> Option<Vec2> {
 
     Some(cursor_pos - window_size / 2.0)
 }
-
-//pub fn sync(mut query: Query<(&Position, &mut Transform)>) {
-//     for (pos, mut transform) in query.iter_mut() {
-//         transform.translation.x = f32::from(*pos.x);
-//         transform.translation.y = f32::from(*pos.y) * -1.0;
-//     }
-// }

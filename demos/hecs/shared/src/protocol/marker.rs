@@ -5,6 +5,6 @@ pub struct Marker;
 
 impl Marker {
     pub fn new() -> Self {
-        Marker::new_complete()
+        Self::new_complete()
     }
 }

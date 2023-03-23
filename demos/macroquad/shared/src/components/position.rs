@@ -1,8 +1,6 @@
-use bevy_ecs::prelude::Component;
+use naia_shared::{Property, Replicate};
 
-use naia_bevy_shared::{Property, Replicate};
-
-#[derive(Component, Replicate)]
+#[derive(Replicate)]
 pub struct Position {
     pub x: Property<i16>,
     pub y: Property<i16>,

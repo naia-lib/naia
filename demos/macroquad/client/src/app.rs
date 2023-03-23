@@ -1,14 +1,16 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use macroquad::prelude::{
-    clear_background, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN, RED, WHITE,
-    YELLOW,
+    clear_background, draw_circle, draw_rectangle, info, is_key_down, KeyCode, BLACK, BLUE, GREEN,
+    RED, WHITE, YELLOW,
 };
 
 use naia_client::{
-    transport::webrtc, Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory,
-    ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-    MessageEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
+    shared::{sequence_greater_than, Tick},
+    transport::webrtc,
+    Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent,
+    DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
+    SpawnEntityEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
@@ -16,14 +18,17 @@ use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, Marker, Square},
+    components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
     protocol,
 };
 
+use crate::interp::Interp;
+
 type Client = NaiaClient<Entity>;
 
 const SQUARE_SIZE: f32 = 32.0;
+const CIRCLE_RADIUS: f32 = 6.0;
 
 struct OwnedEntity {
     pub confirmed: Entity,
@@ -43,6 +48,8 @@ pub struct App {
     client: Client,
     world: World,
     owned_entity: Option<OwnedEntity>,
+    cursor_entity: Option<Entity>,
+    interp_entities: HashMap<Entity, Interp>,
     squares: HashSet<Entity>,
     queued_command: Option<KeyCommand>,
     command_history: CommandHistory<KeyCommand>,
@@ -62,6 +69,8 @@ impl App {
             client,
             world: World::default(),
             owned_entity: None,
+            cursor_entity: None,
+            interp_entities: HashMap::new(),
             squares: HashSet::new(),
             queued_command: None,
             command_history: CommandHistory::default(),
@@ -75,6 +84,7 @@ impl App {
     }
 
     fn input(&mut self) {
+        // Keyboard events
         if let Some(owned_entity) = &self.owned_entity {
             let w = is_key_down(KeyCode::W);
             let s = is_key_down(KeyCode::S);
@@ -104,6 +114,18 @@ impl App {
                 }
             }
         }
+
+        // Cursor events
+        if let Some(cursor_entity) = &self.cursor_entity {
+            if let Some(mut cursor_position) = self
+                .world
+                .proxy_mut()
+                .component_mut::<Position>(cursor_entity)
+            {
+                *cursor_position.x = macroquad::input::mouse_position().0 as i16;
+                *cursor_position.y = macroquad::input::mouse_position().1 as i16;
+            }
+        }
     }
 
     fn receive_events(&mut self) {
@@ -113,9 +135,23 @@ impl App {
 
         let mut events = self.client.receive(self.world.proxy_mut());
 
+        // Connect Events
         for server_address in events.read::<ConnectEvent>() {
             info!("Client connected to: {}", server_address);
+
+            // Spawn new Client-authoritative Cursor entity
+            let entity = self
+                .client
+                .spawn_entity(self.world.proxy_mut())
+                // Add Position component to Entity
+                .insert_component(Position::new(0, 0))
+                // Get Entity ID
+                .id();
+
+            self.cursor_entity = Some(entity);
         }
+
+        // Disconnect Events
         for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
 
@@ -125,6 +161,8 @@ impl App {
             self.queued_command = None;
             self.command_history = CommandHistory::default();
         }
+
+        // Message Events
         for entity_assignment in
             events.read::<MessageEvent<EntityAssignmentChannel, EntityAssignment>>()
         {
@@ -133,8 +171,17 @@ impl App {
             let entity = entity_assignment.entity.get(&self.client).unwrap();
             if assign {
                 info!("gave ownership of entity");
+
+                // create prediction
                 let prediction_entity = self.world.proxy_mut().duplicate_entity(&entity);
                 self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+
+                // create interpolation
+                if let Some(position) = self.world.proxy().component::<Position>(&prediction_entity)
+                {
+                    self.interp_entities
+                        .insert(prediction_entity, Interp::new(*position.x, *position.y));
+                }
             } else {
                 let mut disowned: bool = false;
                 if let Some(owned_entity) = &self.owned_entity {
@@ -151,6 +198,69 @@ impl App {
                 }
             }
         }
+
+        // Spawn Entity Events
+        for entity in events.read::<SpawnEntityEvent>() {
+            self.squares.insert(entity);
+            info!("spawned entity");
+        }
+
+        // Despawn Entity Events
+        for entity in events.read::<DespawnEntityEvent>() {
+            self.squares.remove(&entity);
+            self.interp_entities.remove(&entity);
+            info!("despawned entity");
+            // TODO: Sync up Predicted & Confirmed entities
+        }
+
+        // Insert Component Events
+        for entity in events.read::<InsertComponentEvent<Position>>() {
+            if let Some(position) = self.world.proxy().component::<Position>(&entity) {
+                self.interp_entities
+                    .insert(entity, Interp::new(*position.x, *position.y));
+            }
+        }
+
+        // Update Component Events
+        if let Some(owned_entity) = &self.owned_entity {
+            let mut latest_tick: Option<Tick> = None;
+            let server_entity = owned_entity.confirmed;
+            let client_entity = owned_entity.predicted;
+
+            for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Position>>() {
+                // If entity is owned
+                if updated_entity == server_entity {
+                    if let Some(last_tick) = &mut latest_tick {
+                        if sequence_greater_than(server_tick, *last_tick) {
+                            *last_tick = server_tick;
+                        }
+                    } else {
+                        latest_tick = Some(server_tick);
+                    }
+                }
+            }
+
+            if let Some(server_tick) = latest_tick {
+                // Set state of all components on Predicted entities to the authoritative Server state
+                self.world
+                    .proxy_mut()
+                    .mirror_entities(&client_entity, &server_entity);
+
+                // Replay all stored commands
+                let replay_commands = self.command_history.replays(&server_tick);
+                for (_, command) in replay_commands {
+                    if let Some(mut client_position) = self
+                        .world
+                        .proxy_mut()
+                        .component_mut::<Position>(&client_entity)
+                    {
+                        shared_behavior::process_command(&command, &mut client_position);
+                    }
+                }
+            }
+        }
+
+        // Client Tick Events
         for client_tick in events.read::<ClientTickEvent>() {
             let Some(owned_entity) = &self.owned_entity else {
                 continue;
@@ -158,67 +268,28 @@ impl App {
             let Some(command) = self.queued_command.take() else {
                 continue;
             };
-            if self.command_history.can_insert(&client_tick) {
-                // Record command
-                self.command_history.insert(client_tick, command.clone());
+            if !self.command_history.can_insert(&client_tick) {
+                // history is full
+                continue;
+            }
+            // Record command
+            self.command_history.insert(client_tick, command.clone());
 
-                // Send command
-                self.client
-                    .send_tick_buffer_message::<PlayerCommandChannel, _>(&client_tick, &command);
+            // Send command
+            self.client
+                .send_tick_buffer_message::<PlayerCommandChannel, _>(&client_tick, &command);
 
-                // Apply command
-                if let Some(mut square_ref) = self
-                    .world
-                    .proxy_mut()
-                    .component_mut::<Square>(&owned_entity.predicted)
-                {
-                    shared_behavior::process_command(&command, &mut square_ref);
-                }
+            // Apply command
+            if let Some(mut position) = self
+                .world
+                .proxy_mut()
+                .component_mut::<Position>(&owned_entity.predicted)
+            {
+                shared_behavior::process_command(&command, &mut position);
             }
         }
-        for entity in events.read::<SpawnEntityEvent>() {
-            self.squares.insert(entity);
-            info!("spawned entity");
-        }
-        for entity in events.read::<DespawnEntityEvent>() {
-            self.squares.remove(&entity);
-            info!("despawned entity");
-            // TODO: Sync up Predicted & Confirmed entities
-        }
-        for _entity in events.read::<InsertComponentEvent<Marker>>() {
-            info!("inserted component");
-            // TODO: Sync up Predicted & Confirmed entities
-        }
-        for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Square>>() {
-            if let Some(owned_entity) = &self.owned_entity {
-                let server_entity = owned_entity.confirmed;
 
-                // If entity is owned
-                if updated_entity == server_entity {
-                    let client_entity = owned_entity.predicted;
-
-                    // Set state of all components on Predicted & Confirmed entities to the authoritative Server state
-                    self.world
-                        .proxy_mut()
-                        .mirror_entities(&client_entity, &server_entity);
-
-                    let replay_commands = self.command_history.replays(&server_tick);
-                    for (_, command) in replay_commands {
-                        if let Some(mut square_ref) = self
-                            .world
-                            .proxy_mut()
-                            .component_mut::<Square>(&client_entity)
-                        {
-                            shared_behavior::process_command(&command, &mut square_ref);
-                        }
-                    }
-                }
-            }
-        }
-        for (_entity, _component) in events.read::<RemoveComponentEvent<Square>>() {
-            info!("removed component");
-            // TODO: Sync up Predicted & Confirmed entities
-        }
+        // Error Events
         for error in events.read::<ErrorEvent>() {
             info!("Client Error: {}", error);
         }
@@ -227,37 +298,98 @@ impl App {
     fn draw(&mut self) {
         clear_background(BLACK);
 
-        if self.client.is_connected() {
-            // draw unowned squares
-            for entity in &self.squares {
-                if let Some(square) = self.world.proxy().component::<Square>(entity) {
-                    let color = match *square.color {
-                        Color::Red => RED,
-                        Color::Blue => BLUE,
-                        Color::Yellow => YELLOW,
-                        Color::Green => GREEN,
-                    };
-                    draw_rectangle(
-                        f32::from(*square.x),
-                        f32::from(*square.y),
-                        SQUARE_SIZE,
-                        SQUARE_SIZE,
-                        color,
-                    );
+        if !self.client.is_connected() {
+            return;
+        }
+
+        // draw unowned squares
+        for entity in &self.squares {
+            let shape_value = {
+                if let Some(shape) = self.world.proxy().component::<Shape>(entity) {
+                    (*shape.value).clone()
+                } else {
+                    continue;
+                }
+            };
+            let color_value = {
+                if let Some(color) = self.world.proxy().component::<Color>(entity) {
+                    (*color.value).clone()
+                } else {
+                    continue;
+                }
+            };
+
+            let color_actual = match color_value {
+                ColorValue::Red => RED,
+                ColorValue::Blue => BLUE,
+                ColorValue::Yellow => YELLOW,
+                ColorValue::Green => GREEN,
+            };
+
+            if let Some(interp) = self.interp_entities.get_mut(entity) {
+                if let Some(position) = self.world.proxy().component::<Position>(entity) {
+                    if *position.x != interp.next_x as i16 || *position.y != interp.next_y as i16 {
+                        interp.next_position(*position.x, *position.y);
+                    }
+                }
+
+                let interp_amount = self.client.server_interpolation().unwrap();
+                interp.interpolate(interp_amount);
+
+                match shape_value {
+                    ShapeValue::Square => {
+                        draw_rectangle(
+                            interp.interp_x,
+                            interp.interp_y,
+                            SQUARE_SIZE,
+                            SQUARE_SIZE,
+                            color_actual,
+                        );
+                    }
+                    ShapeValue::Circle => {
+                        draw_circle(
+                            interp.interp_x,
+                            interp.interp_y,
+                            CIRCLE_RADIUS,
+                            color_actual,
+                        );
+                    }
                 }
             }
+        }
 
-            // draw own square
-            if let Some(entity) = &self.owned_entity {
-                if let Some(square) = self.world.proxy().component::<Square>(&entity.predicted) {
-                    draw_rectangle(
-                        f32::from(*square.x),
-                        f32::from(*square.y),
-                        SQUARE_SIZE,
-                        SQUARE_SIZE,
-                        WHITE,
-                    );
+        // draw own (predicted) square
+        if let Some(entity) = &self.owned_entity {
+            if let Some(interp) = self.interp_entities.get_mut(&entity.predicted) {
+                if let Some(position) = self.world.proxy().component::<Position>(&entity.predicted)
+                {
+                    if *position.x != interp.next_x as i16 || *position.y != interp.next_y as i16 {
+                        interp.next_position(*position.x, *position.y);
+                    }
                 }
+
+                let interp_amount = self.client.client_interpolation().unwrap();
+                interp.interpolate(interp_amount);
+
+                draw_rectangle(
+                    interp.interp_x,
+                    interp.interp_y,
+                    SQUARE_SIZE,
+                    SQUARE_SIZE,
+                    WHITE,
+                );
+            }
+        }
+
+        // draw own client-authoritative cursor
+        if let Some(entity) = &self.cursor_entity {
+            if let Some(position) = self.world.proxy().component::<Position>(entity) {
+                draw_circle(
+                    f32::from(*position.x),
+                    f32::from(*position.y),
+                    CIRCLE_RADIUS,
+                    WHITE,
+                );
             }
         }
     }

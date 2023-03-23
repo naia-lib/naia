@@ -1,6 +1,8 @@
 use macroquad::prelude::*;
 
 mod app;
+mod interp;
+
 use app::App;
 
 #[macroquad::main("NaiaMacroquadDemo")]

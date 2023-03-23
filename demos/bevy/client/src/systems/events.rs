@@ -13,7 +13,7 @@ use naia_bevy_client::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
         MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
     },
-    sequence_greater_than, Client, CommandsExt, Random, Tick,
+    sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
 };
 
 use naia_bevy_demo_shared::{
@@ -23,7 +23,10 @@ use naia_bevy_demo_shared::{
     messages::{EntityAssignment, KeyCommand},
 };
 
-use crate::resources::{Global, OwnedEntity};
+use crate::{
+    components::{Confirmed, Interp, LocalCursor, Predicted},
+    resources::{Global, OwnedEntity},
+};
 
 const SQUARE_SIZE: f32 = 32.0;
 
@@ -39,7 +42,7 @@ pub fn connect_events(
         };
         info!("Client connected to: {}", server_address);
 
-        // Create entity for Client-authoritative Square
+        // Create entity for Client-authoritative Cursor
 
         // Position component
         let position = {
@@ -56,6 +59,8 @@ pub fn connect_events(
             .enable_replication(&mut client)
             // Insert Position component
             .insert(position)
+            // Insert Cursor marker component
+            .insert(LocalCursor)
             // return Entity id
             .id();
 
@@ -88,6 +93,7 @@ pub fn message_events(
     client: Client,
     mut global: ResMut<Global>,
     mut event_reader: EventReader<MessageEvents>,
+    position_query: Query<&Position>,
 ) {
     for events in event_reader.iter() {
         for message in events.read::<EntityAssignmentChannel, EntityAssignment>() {
@@ -98,21 +104,27 @@ pub fn message_events(
                 info!("gave ownership of entity");
 
                 // Here we create a local copy of the Player entity, to use for client-side prediction
-                let prediction_entity = commands
-                    .entity(entity)
-                    .duplicate() // copies all Replicate components as well
-                    .insert(SpriteBundle {
-                        sprite: Sprite {
-                            custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                            color: BevyColor::WHITE,
+                if let Ok(position) = position_query.get(entity) {
+                    let prediction_entity = commands
+                        .entity(entity)
+                        .duplicate() // copies all Replicate components as well
+                        .insert(SpriteBundle {
+                            sprite: Sprite {
+                                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                                color: BevyColor::WHITE,
+                                ..Default::default()
+                            },
+                            transform: Transform::from_xyz(0.0, 0.0, 1.0),
                             ..Default::default()
-                        },
-                        transform: Transform::from_xyz(0.0, 0.0, 1.0),
-                        ..Default::default()
-                    })
-                    .id();
+                        })
+                        // insert interpolation component
+                        .insert(Interp::new(*position.x, *position.y))
+                        // mark as predicted
+                        .insert(Predicted)
+                        .id();
 
-                global.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+                    global.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+                }
             } else {
                 let mut disowned: bool = false;
                 if let Some(owned_entity) = &global.owned_entity {
@@ -147,6 +159,7 @@ pub fn insert_component_events(
     mut event_reader: EventReader<InsertComponentEvents>,
     global: Res<Global>,
     sprite_query: Query<(&Shape, &Color)>,
+    position_query: Query<&Position>,
 ) {
     for events in event_reader.iter() {
         for entity in events.read::<Color>() {
@@ -163,18 +176,23 @@ pub fn insert_component_events(
                                 ColorValue::Red => BevyColor::RED,
                                 ColorValue::Blue => BevyColor::BLUE,
                                 ColorValue::Yellow => BevyColor::YELLOW,
+                                ColorValue::Green => BevyColor::GREEN,
                             }
                         };
 
-                        commands.entity(entity).insert(SpriteBundle {
-                            sprite: Sprite {
-                                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                                color,
+                        commands
+                            .entity(entity)
+                            .insert(SpriteBundle {
+                                sprite: Sprite {
+                                    custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                                    color,
+                                    ..Default::default()
+                                },
+                                transform: Transform::from_xyz(0.0, 0.0, 0.0),
                                 ..Default::default()
-                            },
-                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                            ..Default::default()
-                        });
+                            })
+                            // mark as confirmed
+                            .insert(Confirmed);
                     }
                     // Circle
                     ShapeValue::Circle => {
@@ -183,16 +201,29 @@ pub fn insert_component_events(
                                 ColorValue::Red => &global.red,
                                 ColorValue::Blue => &global.blue,
                                 ColorValue::Yellow => &global.yellow,
+                                ColorValue::Green => &global.green,
                             }
                         };
-                        commands.entity(entity).insert(MaterialMesh2dBundle {
-                            mesh: global.circle.clone().into(),
-                            material: handle.clone(),
-                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                            ..Default::default()
-                        });
+                        commands
+                            .entity(entity)
+                            .insert(MaterialMesh2dBundle {
+                                mesh: global.circle.clone().into(),
+                                material: handle.clone(),
+                                transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                                ..Default::default()
+                            })
+                            // mark as confirmed
+                            .insert(Confirmed);
                     }
                 }
+            }
+        }
+        for entity in events.read::<Position>() {
+            if let Ok(position) = position_query.get(entity) {
+                // initialize interpolation
+                commands
+                    .entity(entity)
+                    .insert(Interp::new(*position.x, *position.y));
             }
         }
     }
@@ -231,14 +262,16 @@ pub fn update_component_events(
             if let Ok([server_position, mut client_position]) =
                 position_query.get_many_mut([server_entity, client_entity])
             {
-                let replay_commands = global.command_history.replays(&server_tick);
-
                 // Set to authoritative state
-                // TODO: maybe a general 'mirror()' method on Replicate structs to mirror everything?
-                client_position.x.mirror(&server_position.x);
-                client_position.y.mirror(&server_position.y);
+                client_position.mirror(&*server_position);
 
                 // Replay all stored commands
+
+                // TODO: why is it necessary to subtract 1 Tick here?
+                // it's not like this in the Macroquad demo
+                let modified_server_tick = server_tick.wrapping_sub(1);
+
+                let replay_commands = global.command_history.replays(&modified_server_tick);
                 for (_command_tick, command) in replay_commands {
                     shared_behavior::process_command(&command, &mut client_position);
                 }
@@ -261,10 +294,6 @@ pub fn tick_events(
     mut tick_reader: EventReader<ClientTickEvent>,
     mut position_query: Query<&mut Position>,
 ) {
-    let Some(command) = global.queued_command.take() else {
-        return;
-    };
-
     let Some(predicted_entity) = global
         .owned_entity
         .as_ref()
@@ -273,23 +302,24 @@ pub fn tick_events(
         return;
     };
 
-    for ClientTickEvent(tick) in tick_reader.iter() {
-        global.last_client_tick = *tick;
+    let Some(command) = global.queued_command.take() else {
+        return;
+    };
 
-        //All game logic should happen here, on a tick event
-        if !global.command_history.can_insert(tick) {
+    for ClientTickEvent(client_tick) in tick_reader.iter() {
+        if !global.command_history.can_insert(client_tick) {
             // History is full
             continue;
         }
 
         // Record command
-        global.command_history.insert(*tick, command.clone());
+        global.command_history.insert(*client_tick, command.clone());
 
         // Send command
-        client.send_tick_buffer_message::<PlayerCommandChannel, KeyCommand>(tick, &command);
+        client.send_tick_buffer_message::<PlayerCommandChannel, KeyCommand>(client_tick, &command);
 
-        // Apply command
         if let Ok(mut position) = position_query.get_mut(predicted_entity) {
+            // Apply command
             shared_behavior::process_command(&command, &mut position);
         }
     }

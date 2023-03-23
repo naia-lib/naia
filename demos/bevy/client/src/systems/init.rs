@@ -36,6 +36,7 @@ pub fn init(
     global.red = materials.add(ColorMaterial::from(Color::RED));
     global.blue = materials.add(ColorMaterial::from(Color::BLUE));
     global.yellow = materials.add(ColorMaterial::from(Color::YELLOW));
+    global.green = materials.add(ColorMaterial::from(Color::GREEN));
 
     // Load shapes
     global.circle = meshes.add(shape::Circle::new(6.).into());

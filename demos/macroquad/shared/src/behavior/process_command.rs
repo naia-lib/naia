@@ -1,18 +1,18 @@
-use crate::{components::Square, messages::KeyCommand};
+use crate::{components::Position, messages::KeyCommand};
 
-const SQUARE_SPEED: u16 = 2;
+const SQUARE_SPEED: i16 = 4;
 
-pub fn process_command(key_command: &KeyCommand, square: &mut Square) {
+pub fn process_command(key_command: &KeyCommand, position: &mut Position) {
     if key_command.w {
-        *square.y = square.y.wrapping_sub(SQUARE_SPEED);
+        *position.y = position.y.wrapping_sub(SQUARE_SPEED);
     }
     if key_command.s {
-        *square.y = square.y.wrapping_add(SQUARE_SPEED);
+        *position.y = position.y.wrapping_add(SQUARE_SPEED);
     }
     if key_command.a {
-        *square.x = square.x.wrapping_sub(SQUARE_SPEED);
+        *position.x = position.x.wrapping_sub(SQUARE_SPEED);
     }
     if key_command.d {
-        *square.x = square.x.wrapping_add(SQUARE_SPEED);
+        *position.x = position.x.wrapping_add(SQUARE_SPEED);
     }
 }
