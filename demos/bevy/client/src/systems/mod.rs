@@ -1,8 +1,6 @@
 pub mod events;
 pub mod input;
+pub mod sync;
 
 mod init;
-mod sync;
-
 pub use init::init;
-pub use sync::sync;

@@ -44,7 +44,7 @@ pub fn cursor_input(
             if let Ok(mut cursor_position) = position_query.get_mut(entity) {
                 if let Some(mouse_position) = window_relative_mouse_position(window) {
                     *cursor_position.x = mouse_position.x as i16;
-                    *cursor_position.y = mouse_position.y as i16 * -1;
+                    *cursor_position.y = mouse_position.y as i16;
                 }
             }
         }

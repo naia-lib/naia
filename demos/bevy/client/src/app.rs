@@ -65,7 +65,13 @@ pub fn run() {
         // Realtime Gameplay Loop
         .configure_set(MainLoop.after(ReceiveEvents))
         .add_systems(
-            (input::key_input, input::cursor_input, sync)
+            (
+                input::key_input,
+                input::cursor_input,
+                sync::sync_clientside_sprites,
+                sync::sync_serverside_sprites,
+                sync::sync_cursor_sprite,
+            )
                 .chain()
                 .in_set(MainLoop),
         )
