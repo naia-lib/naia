@@ -13,7 +13,7 @@ use naia_bevy_client::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
         MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
     },
-    sequence_greater_than, Client, CommandsExt, Random, Tick,
+    sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
 };
 
 use naia_bevy_demo_shared::{
@@ -263,13 +263,12 @@ pub fn update_component_events(
                 position_query.get_many_mut([server_entity, client_entity])
             {
                 // Set to authoritative state
-                // TODO: maybe a general 'mirror()' method on Replicate structs to mirror everything?
-                client_position.x.mirror(&server_position.x);
-                client_position.y.mirror(&server_position.y);
+                client_position.mirror(&*server_position);
 
                 // Replay all stored commands
 
                 // TODO: why is it necessary to subtract 1 Tick here?
+                // it's not like this in the Macroquad demo
                 let modified_server_tick = server_tick.wrapping_sub(1);
 
                 let replay_commands = global.command_history.replays(&modified_server_tick);
