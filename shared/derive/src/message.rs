@@ -26,7 +26,7 @@ pub fn message_impl(
     let builder_name = format_ident!("{}Builder", struct_name);
 
     // Methods
-    let clone_method = get_clone_method(&struct_name, &fields, &struct_type);
+    let clone_method = get_clone_method(&fields, &struct_type);
     let has_entity_properties_method = get_has_entity_properties_method(&fields);
     let entities_method = get_entities_method(&fields, &struct_type);
     let bit_length_method = get_bit_length_method(&fields, &struct_type);
@@ -94,7 +94,6 @@ fn get_is_fragment_method(is_fragment: bool) -> TokenStream {
 }
 
 fn get_clone_method(
-    replica_name: &Ident,
     fields: &[Field],
     struct_type: &StructType,
 ) -> TokenStream {
@@ -117,8 +116,8 @@ fn get_clone_method(
     }
 
     quote! {
-        fn clone(&self) -> #replica_name {
-            let mut new_clone = #replica_name {
+        fn clone(&self) -> Self {
+            let mut new_clone = Self {
                 #output
             };
             return new_clone;
@@ -330,20 +329,28 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
             Fields::Named(fields_named) => {
                 for field in fields_named.named.iter() {
                     if let Some(variable_name) = &field.ident {
-                        if let Type::Path(type_path) = &field.ty {
-                            if let Some(property_seg) = type_path.path.segments.first() {
-                                let property_type = property_seg.ident.clone();
-                                // EntityProperty
-                                if property_type == "EntityProperty" {
-                                    fields.push(Field::entity_property(variable_name.clone()));
-                                    continue;
-                                    // Property
-                                } else {
-                                    fields.push(Field::normal(
-                                        variable_name.clone(),
-                                        field.ty.clone(),
-                                    ));
+                        match &field.ty {
+                            Type::Path(type_path) => {
+                                if let Some(property_seg) = type_path.path.segments.first() {
+                                    let property_type = property_seg.ident.clone();
+                                    // EntityProperty
+                                    if property_type == "EntityProperty" {
+                                        fields.push(Field::entity_property(variable_name.clone()));
+                                        continue;
+                                        // Property
+                                    } else {
+                                        fields.push(Field::normal(
+                                            variable_name.clone(),
+                                            field.ty.clone(),
+                                        ));
+                                    }
                                 }
+                            }
+                            _ => {
+                                fields.push(Field::normal(
+                                    variable_name.clone(),
+                                    field.ty.clone(),
+                                ));
                             }
                         }
                     }
