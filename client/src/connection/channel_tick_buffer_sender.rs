@@ -4,7 +4,7 @@ use log::warn;
 
 use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, BitWrite, BitWriter,
-    MessageContainer, MessageKinds, NetEntityAndGlobalEntityConverter, Serde, ShortMessageIndex,
+    LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKinds, Serde, ShortMessageIndex,
     Tick, TickBufferSettings, UnsignedVariableInteger,
 };
 
@@ -64,7 +64,7 @@ impl ChannelTickBufferSender {
     pub fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         writer: &mut BitWriter,
         host_tick: &Tick,
         has_written: &mut bool,
@@ -130,7 +130,7 @@ impl ChannelTickBufferSender {
     fn write_message(
         &self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         writer: &mut dyn BitWrite,
         last_written_tick: &Tick,
         message_tick: &Tick,

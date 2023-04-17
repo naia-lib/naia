@@ -5,7 +5,7 @@ use bevy_ecs::{
 use std::any::TypeId;
 
 use naia_shared::{
-    ComponentKind, ComponentUpdate, NetEntityAndGlobalEntityConverter, ReplicaDynMutWrapper,
+    ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper,
     ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
     WorldRefType,
 };
@@ -203,7 +203,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_apply_update(
         &mut self,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &Entity,
         component_kind: &ComponentKind,
         update: ComponentUpdate,

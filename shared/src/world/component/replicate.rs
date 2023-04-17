@@ -13,7 +13,7 @@ use crate::{
             replica_ref::{ReplicaDynMut, ReplicaDynRef},
         },
         entity::{
-            entity_converters::NetEntityAndGlobalEntityConverter, global_entity::GlobalEntity,
+            entity_converters::LocalEntityAndGlobalEntityConverter, global_entity::GlobalEntity,
         },
     },
 };
@@ -23,7 +23,7 @@ pub trait ReplicateBuilder: Send + Sync + Named {
     fn read(
         &self,
         reader: &mut BitReader,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr>;
     /// Create new Component Update from incoming bit stream
     fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr>;
@@ -61,7 +61,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
         &self,
         component_kinds: &ComponentKinds,
         writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     );
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Component on the client
@@ -69,13 +69,13 @@ pub trait Replicate: ReplicateInner + Named + Any {
         &self,
         diff_mask: &DiffMask,
         writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     );
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
     fn read_apply_update(
         &mut self,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentUpdate,
     ) -> Result<(), SerdeErr>;
     /// Returns whether has any EntityProperties

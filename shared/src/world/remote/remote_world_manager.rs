@@ -5,13 +5,13 @@ use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
     world::remote::entity_event::EntityEvent, BitReader, ComponentKind, ComponentKinds,
     EntityAction, EntityActionReceiver, EntityActionType, EntityAndGlobalEntityConverter,
-    EntityConverter, MessageIndex, NetEntity, NetEntityAndGlobalEntityConverter, Protocol,
+    EntityConverter, LocalEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol,
     Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger, WorldMutType,
 };
 
 pub struct RemoteWorldManager {
-    receiver: EntityActionReceiver<NetEntity>,
-    received_components: HashMap<(NetEntity, ComponentKind), Box<dyn Replicate>>,
+    receiver: EntityActionReceiver<LocalEntity>,
+    received_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
 }
 
 impl RemoteWorldManager {
@@ -110,7 +110,7 @@ impl RemoteWorldManager {
     /// ordered by the client's jitter buffer
     fn read_action(
         &mut self,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
@@ -123,7 +123,7 @@ impl RemoteWorldManager {
             // Entity Creation
             EntityActionType::SpawnEntity => {
                 // read entity
-                let net_entity = NetEntity::de(reader)?;
+                let local_entity = LocalEntity::de(reader)?;
 
                 // read components
                 let components_num = UnsignedVariableInteger::<3>::de(reader)?.get();
@@ -132,46 +132,46 @@ impl RemoteWorldManager {
                     let new_component = component_kinds.read(reader, converter)?;
                     let new_component_kind = new_component.kind();
                     self.received_components
-                        .insert((net_entity, new_component_kind), new_component);
+                        .insert((local_entity, new_component_kind), new_component);
                     component_kind_list.push(new_component_kind);
                 }
 
                 self.receiver.buffer_action(
                     action_id,
-                    EntityAction::SpawnEntity(net_entity, component_kind_list),
+                    EntityAction::SpawnEntity(local_entity, component_kind_list),
                 );
             }
             // Entity Deletion
             EntityActionType::DespawnEntity => {
                 // read all data
-                let net_entity = NetEntity::de(reader)?;
+                let local_entity = LocalEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_action(action_id, EntityAction::DespawnEntity(net_entity));
+                    .buffer_action(action_id, EntityAction::DespawnEntity(local_entity));
             }
             // Add Component to Entity
             EntityActionType::InsertComponent => {
                 // read all data
-                let net_entity = NetEntity::de(reader)?;
+                let local_entity = LocalEntity::de(reader)?;
                 let new_component = component_kinds.read(reader, converter)?;
                 let new_component_kind = new_component.kind();
 
                 self.receiver.buffer_action(
                     action_id,
-                    EntityAction::InsertComponent(net_entity, new_component_kind),
+                    EntityAction::InsertComponent(local_entity, new_component_kind),
                 );
                 self.received_components
-                    .insert((net_entity, new_component_kind), new_component);
+                    .insert((local_entity, new_component_kind), new_component);
             }
             // Component Removal
             EntityActionType::RemoveComponent => {
                 // read all data
-                let net_entity = NetEntity::de(reader)?;
+                let local_entity = LocalEntity::de(reader)?;
                 let component_kind = ComponentKind::de(component_kinds, reader)?;
 
                 self.receiver.buffer_action(
                     action_id,
-                    EntityAction::RemoveComponent(net_entity, component_kind),
+                    EntityAction::RemoveComponent(local_entity, component_kind),
                 );
             }
             EntityActionType::Noop => {
@@ -196,10 +196,10 @@ impl RemoteWorldManager {
         // execute the action and emit an event
         for action in incoming_actions {
             match action {
-                EntityAction::SpawnEntity(net_entity, components) => {
+                EntityAction::SpawnEntity(local_entity, components) => {
                     // set up entity
                     let world_entity = world.spawn_entity();
-                    local_world_manager.remote_spawn_entity(&world_entity, &net_entity);
+                    local_world_manager.remote_spawn_entity(&world_entity, &local_entity);
 
                     events.push(EntityEvent::<E>::SpawnEntity(world_entity));
 
@@ -207,7 +207,7 @@ impl RemoteWorldManager {
                     for component_kind in components {
                         let component = self
                             .received_components
-                            .remove(&(net_entity, component_kind))
+                            .remove(&(local_entity, component_kind))
                             .unwrap();
 
                         world.insert_boxed_component(&world_entity, component);
@@ -219,8 +219,8 @@ impl RemoteWorldManager {
                     }
                     //
                 }
-                EntityAction::DespawnEntity(net_entity) => {
-                    let world_entity = local_world_manager.remote_despawn_entity(&net_entity);
+                EntityAction::DespawnEntity(local_entity) => {
+                    let world_entity = local_world_manager.remote_despawn_entity(&local_entity);
 
                     // Generate event for each component, handing references off just in
                     // case
@@ -236,13 +236,13 @@ impl RemoteWorldManager {
 
                     events.push(EntityEvent::<E>::DespawnEntity(world_entity));
                 }
-                EntityAction::InsertComponent(net_entity, component_kind) => {
+                EntityAction::InsertComponent(local_entity, component_kind) => {
                     let component = self
                         .received_components
-                        .remove(&(net_entity, component_kind))
+                        .remove(&(local_entity, component_kind))
                         .unwrap();
 
-                    let world_entity = local_world_manager.get_remote_entity(&net_entity);
+                    let world_entity = local_world_manager.get_remote_entity(&local_entity);
 
                     world.insert_boxed_component(&world_entity, component);
 
@@ -251,8 +251,8 @@ impl RemoteWorldManager {
                         component_kind,
                     ));
                 }
-                EntityAction::RemoveComponent(net_entity, component_kind) => {
-                    let world_entity = local_world_manager.get_remote_entity(&net_entity);
+                EntityAction::RemoveComponent(local_entity, component_kind) => {
+                    let world_entity = local_world_manager.get_remote_entity(&local_entity);
 
                     // Get component for last change
                     let component = world
@@ -287,7 +287,7 @@ impl RemoteWorldManager {
                 break;
             }
 
-            let net_entity_id = NetEntity::de(reader)?;
+            let local_entity = LocalEntity::de(reader)?;
 
             self.read_update(
                 converter,
@@ -296,7 +296,7 @@ impl RemoteWorldManager {
                 world,
                 server_tick,
                 reader,
-                &net_entity_id,
+                &local_entity,
                 events,
             )?;
         }
@@ -313,7 +313,7 @@ impl RemoteWorldManager {
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
-        net_entity_id: &NetEntity,
+        local_entity: &LocalEntity,
         events: &mut Vec<EntityEvent<E>>,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -326,7 +326,7 @@ impl RemoteWorldManager {
             let component_update = component_kinds.read_create_update(reader)?;
             let component_kind = component_update.kind;
 
-            let world_entity = local_world_manager.get_remote_entity(net_entity_id);
+            let world_entity = local_world_manager.get_remote_entity(local_entity);
             let converter = EntityConverter::new(global_entity_converter, local_world_manager);
             world.component_apply_update(
                 &converter,

@@ -2,7 +2,9 @@ use std::any::Any;
 
 use naia_serde::BitWrite;
 
-use crate::{GlobalEntity, Message, MessageKind, MessageKinds, NetEntityAndGlobalEntityConverter};
+use crate::{
+    GlobalEntity, LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds,
+};
 
 #[derive(Clone)]
 pub struct MessageContainer {
@@ -13,7 +15,7 @@ pub struct MessageContainer {
 impl MessageContainer {
     pub fn from(
         message: Box<dyn Message>,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Self {
         let bit_length = message.bit_length(converter);
         Self {
@@ -34,7 +36,7 @@ impl MessageContainer {
         &self,
         message_kinds: &MessageKinds,
         writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) {
         if writer.is_counter() {
             writer.write_bits(self.bit_length);

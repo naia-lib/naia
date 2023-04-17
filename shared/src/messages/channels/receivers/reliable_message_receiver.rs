@@ -11,7 +11,7 @@ use crate::{
         message_kinds::MessageKinds,
     },
     types::MessageIndex,
-    MessageContainer, NetEntityAndGlobalEntityConverter,
+    LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
 
 // Receiver Arranger Trait
@@ -45,7 +45,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
     fn push_message(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         message: MessageContainer,
     ) {
         if let Some((first_index, full_message)) =
@@ -60,7 +60,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
     pub fn buffer_message(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         message_index: MessageIndex,
         message: MessageContainer,
     ) {
@@ -91,7 +91,7 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;

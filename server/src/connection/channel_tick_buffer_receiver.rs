@@ -1,9 +1,9 @@
 use std::collections::{HashMap, VecDeque};
 
 use naia_shared::{
-    sequence_greater_than, BitReader, MessageContainer, MessageKinds,
-    NetEntityAndGlobalEntityConverter, Serde, SerdeErr, ShortMessageIndex, Tick,
-    TickBufferSettings, UnsignedVariableInteger,
+    sequence_greater_than, BitReader, LocalEntityAndGlobalEntityConverter, MessageContainer,
+    MessageKinds, Serde, SerdeErr, ShortMessageIndex, Tick, TickBufferSettings,
+    UnsignedVariableInteger,
 };
 
 /// Receive updates from the client and store them in a buffer along with the corresponding
@@ -28,7 +28,7 @@ impl ChannelTickBufferReceiver {
     /// them in a buffer to be returned to the application
     pub fn read_messages(
         &mut self,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         message_kinds: &MessageKinds,
         host_tick: &Tick,
         remote_tick: &Tick,
@@ -61,7 +61,7 @@ impl ChannelTickBufferReceiver {
         message_kinds: &MessageKinds,
         host_tick: &Tick,
         last_read_tick: &mut Tick,
-        entity_converter: &dyn NetEntityAndGlobalEntityConverter,
+        entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read remote tick

@@ -1,15 +1,15 @@
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedVariableInteger};
 
-use crate::NetEntity;
+use crate::LocalEntity;
 
-// OwnedNetEntity
+// OwnedEntity
 #[derive(Copy, Eq, Hash, Clone, PartialEq)]
-pub enum OwnedNetEntity {
+pub enum OwnedEntity {
     Host(u16),
     Remote(u16),
 }
 
-impl OwnedNetEntity {
+impl OwnedEntity {
     pub fn new_host(id: u16) -> Self {
         Self::Host(id)
     }
@@ -20,31 +20,31 @@ impl OwnedNetEntity {
 
     pub fn is_host(&self) -> bool {
         match self {
-            OwnedNetEntity::Host(_) => true,
-            OwnedNetEntity::Remote(_) => false,
+            OwnedEntity::Host(_) => true,
+            OwnedEntity::Remote(_) => false,
         }
     }
 
     pub fn value(&self) -> u16 {
         match self {
-            OwnedNetEntity::Host(value) => *value,
-            OwnedNetEntity::Remote(value) => *value,
+            OwnedEntity::Host(value) => *value,
+            OwnedEntity::Remote(value) => *value,
         }
     }
 
-    pub fn to_unowned(self) -> NetEntity {
-        NetEntity(self.value())
+    pub fn to_unowned(self) -> LocalEntity {
+        LocalEntity(self.value())
     }
 
     pub fn to_reversed(self) -> Self {
         match self {
-            OwnedNetEntity::Host(value) => OwnedNetEntity::Remote(value),
-            OwnedNetEntity::Remote(value) => OwnedNetEntity::Host(value),
+            OwnedEntity::Host(value) => OwnedEntity::Remote(value),
+            OwnedEntity::Remote(value) => OwnedEntity::Host(value),
         }
     }
 }
 
-impl Serde for OwnedNetEntity {
+impl Serde for OwnedEntity {
     fn ser(&self, writer: &mut dyn BitWrite) {
         self.is_host().ser(writer);
         UnsignedVariableInteger::<7>::new(self.value()).ser(writer);

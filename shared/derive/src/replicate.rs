@@ -88,7 +88,7 @@ pub fn replicate_impl(
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any};
             use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
-                ReplicaDynRef, ReplicaDynMut, NetEntityAndGlobalEntityConverter, ComponentKind, Named,
+                ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder
             };
@@ -681,7 +681,7 @@ pub fn get_read_method(
     };
 
     quote! {
-        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityAndGlobalEntityConverter) -> Result<Box<dyn Replicate>, SerdeErr> {
+        fn read(&self, reader: &mut BitReader, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<Box<dyn Replicate>, SerdeErr> {
             #prop_reads
 
             return Ok(Box::new(#replica_build));
@@ -775,7 +775,7 @@ fn get_read_apply_update_method(properties: &[Property], struct_type: &StructTyp
     }
 
     quote! {
-        fn read_apply_update(&mut self, converter: &dyn NetEntityAndGlobalEntityConverter, mut update: ComponentUpdate) -> Result<(), SerdeErr> {
+        fn read_apply_update(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter, mut update: ComponentUpdate) -> Result<(), SerdeErr> {
             let reader = &mut update.reader();
             #output
             Ok(())
@@ -812,7 +812,7 @@ fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenS
     }
 
     quote! {
-        fn write(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityAndGlobalEntityConverter) {
+        fn write(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite, converter: &dyn LocalEntityAndGlobalEntityConverter) {
             self.kind().ser(component_kinds, writer);
             #property_writes
         }
@@ -864,7 +864,7 @@ fn get_write_update_method(
     }
 
     quote! {
-        fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &dyn NetEntityAndGlobalEntityConverter) {
+        fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &dyn LocalEntityAndGlobalEntityConverter) {
             #output
         }
     }

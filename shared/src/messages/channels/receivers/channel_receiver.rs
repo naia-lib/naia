@@ -2,7 +2,7 @@ use naia_serde::{BitReader, SerdeErr};
 
 use crate::{
     messages::{message_container::MessageContainer, message_kinds::MessageKinds},
-    NetEntityAndGlobalEntityConverter,
+    LocalEntityAndGlobalEntityConverter,
 };
 
 pub trait ChannelReceiver<P>: Send + Sync {
@@ -15,7 +15,7 @@ pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr>;
 }

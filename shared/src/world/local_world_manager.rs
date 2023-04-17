@@ -1,12 +1,12 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{EntityDoesNotExistError, KeyGenerator, NetEntity, NetEntityConverter};
-use crate::world::entity::owned_net_entity::OwnedNetEntity;
+use crate::world::entity::owned_entity::OwnedEntity;
+use crate::{EntityDoesNotExistError, KeyGenerator, LocalEntity, LocalEntityConverter};
 
 pub struct LocalWorldManager<E: Copy + Eq + Hash> {
-    host_entity_generator: KeyGenerator<NetEntity>,
-    world_to_local_entity: HashMap<E, OwnedNetEntity>,
-    local_to_world_entity: HashMap<OwnedNetEntity, E>,
+    host_entity_generator: KeyGenerator<LocalEntity>,
+    world_to_local_entity: HashMap<E, OwnedEntity>,
+    local_to_world_entity: HashMap<OwnedEntity, E>,
 }
 
 impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
@@ -21,38 +21,40 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     // Host entities
 
     pub(crate) fn host_spawn_entity(&mut self, entity: &E) {
-        let net_entity = self.host_entity_generator.generate().to_host_owned();
+        let host_owned_entity = self.host_entity_generator.generate().to_host_owned();
 
         if self.world_to_local_entity.contains_key(entity) {
             panic!("Entity already exists!");
         }
-        if self.local_to_world_entity.contains_key(&net_entity) {
+        if self.local_to_world_entity.contains_key(&host_owned_entity) {
             panic!("Net Entity already exists!");
         }
 
-        self.world_to_local_entity.insert(*entity, net_entity);
-        self.local_to_world_entity.insert(net_entity, *entity);
+        self.world_to_local_entity
+            .insert(*entity, host_owned_entity);
+        self.local_to_world_entity
+            .insert(host_owned_entity, *entity);
     }
 
     pub(crate) fn host_despawn_entity(&mut self, entity: &E) {
-        let net_entity = self
+        let owned_entity = self
             .world_to_local_entity
             .remove(entity)
             .expect("Entity does not exist!");
-        if !self.local_to_world_entity.contains_key(&net_entity) {
+        if !self.local_to_world_entity.contains_key(&owned_entity) {
             panic!("Net Entity does not exist!");
         }
-        self.local_to_world_entity.remove(&net_entity);
+        self.local_to_world_entity.remove(&owned_entity);
         self.host_entity_generator
-            .recycle_key(&net_entity.to_unowned());
+            .recycle_key(&owned_entity.to_unowned());
     }
 
     // Remote entities
 
-    pub(crate) fn get_remote_entity(&self, net_entity: &NetEntity) -> E {
-        let owned_net_entity = net_entity.to_remote_owned();
+    pub(crate) fn get_remote_entity(&self, local_entity: &LocalEntity) -> E {
+        let remote_owned_entity = local_entity.to_remote_owned();
 
-        if let Some(world_entity) = self.local_to_world_entity.get(&owned_net_entity) {
+        if let Some(world_entity) = self.local_to_world_entity.get(&remote_owned_entity) {
             return *world_entity;
         }
         panic!("Attempting to access remote entity which does not exist!")
@@ -60,8 +62,8 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     pub(crate) fn remote_entities(&self) -> Vec<E> {
         let mut output = Vec::new();
-        for (owned_net_entity, entity) in &self.local_to_world_entity {
-            if owned_net_entity.is_host() {
+        for (owned_entity, entity) in &self.local_to_world_entity {
+            if owned_entity.is_host() {
                 continue;
             }
             output.push(*entity);
@@ -69,24 +71,29 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         return output;
     }
 
-    pub(crate) fn remote_spawn_entity(&mut self, entity: &E, net_entity: &NetEntity) {
-        let owned_net_entity = net_entity.to_remote_owned();
+    pub(crate) fn remote_spawn_entity(&mut self, entity: &E, local_entity: &LocalEntity) {
+        let remote_owned_entity = local_entity.to_remote_owned();
 
         if self.world_to_local_entity.contains_key(entity) {
             panic!("Entity already exists!");
         }
-        if self.local_to_world_entity.contains_key(&owned_net_entity) {
+        if self
+            .local_to_world_entity
+            .contains_key(&remote_owned_entity)
+        {
             panic!("Net Entity already exists!");
         }
 
-        self.world_to_local_entity.insert(*entity, owned_net_entity);
-        self.local_to_world_entity.insert(owned_net_entity, *entity);
+        self.world_to_local_entity
+            .insert(*entity, remote_owned_entity);
+        self.local_to_world_entity
+            .insert(remote_owned_entity, *entity);
     }
 
-    pub(crate) fn remote_despawn_entity(&mut self, net_entity: &NetEntity) -> E {
-        let owned_net_entity = net_entity.to_remote_owned();
+    pub(crate) fn remote_despawn_entity(&mut self, local_entity: &LocalEntity) -> E {
+        let remote_owned_entity = local_entity.to_remote_owned();
 
-        if let Some(world_entity) = self.local_to_world_entity.remove(&owned_net_entity) {
+        if let Some(world_entity) = self.local_to_world_entity.remove(&remote_owned_entity) {
             if self.world_to_local_entity.remove(&world_entity).is_none() {
                 panic!("Entity already exists!");
             } else {
@@ -98,20 +105,20 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash> NetEntityConverter<E> for LocalWorldManager<E> {
-    fn entity_to_net_entity(&self, entity: &E) -> Result<OwnedNetEntity, EntityDoesNotExistError> {
-        if let Some(net_entity) = self.world_to_local_entity.get(entity) {
-            return Ok(*net_entity);
+impl<E: Copy + Eq + Hash> LocalEntityConverter<E> for LocalWorldManager<E> {
+    fn entity_to_local_entity(&self, entity: &E) -> Result<OwnedEntity, EntityDoesNotExistError> {
+        if let Some(owned_entity) = self.world_to_local_entity.get(entity) {
+            return Ok(*owned_entity);
         } else {
             return Err(EntityDoesNotExistError);
         }
     }
 
-    fn net_entity_to_entity(
+    fn local_entity_to_entity(
         &self,
-        net_entity: &OwnedNetEntity,
+        owned_entity: &OwnedEntity,
     ) -> Result<E, EntityDoesNotExistError> {
-        if let Some(entity) = self.local_to_world_entity.get(net_entity) {
+        if let Some(entity) = self.local_to_world_entity.get(owned_entity) {
             return Ok(*entity);
         } else {
             return Err(EntityDoesNotExistError);

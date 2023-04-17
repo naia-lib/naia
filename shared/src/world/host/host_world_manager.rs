@@ -13,8 +13,8 @@ use crate::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
     },
     BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength, DiffMask,
-    EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer, MessageIndex,
-    MessageKinds, MessageManager, NetEntityAndGlobalEntityConverter, NetEntityConverter,
+    EntityAction, EntityActionType, EntityConverter, Instant, LocalEntityAndGlobalEntityConverter,
+    LocalEntityConverter, MessageContainer, MessageIndex, MessageKinds, MessageManager,
     PacketIndex, Serde, UnsignedVariableInteger, WorldRefType,
 };
 
@@ -124,7 +124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        global_entity_converter: &dyn NetEntityAndGlobalEntityConverter,
+        global_entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
         message_kinds: &MessageKinds,
         message_manager: &mut MessageManager,
     ) {
@@ -346,7 +346,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
                 // write net entity
                 local_world_manager
-                    .entity_to_net_entity(entity)
+                    .entity_to_local_entity(entity)
                     .unwrap()
                     .to_unowned()
                     .ser(writer);
@@ -390,7 +390,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
                 // write net entity
                 local_world_manager
-                    .entity_to_net_entity(entity)
+                    .entity_to_local_entity(entity)
                     .unwrap()
                     .to_unowned()
                     .ser(writer);
@@ -426,7 +426,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
                     // write net entity
                     local_world_manager
-                        .entity_to_net_entity(entity)
+                        .entity_to_local_entity(entity)
                         .unwrap()
                         .to_unowned()
                         .ser(writer);
@@ -473,7 +473,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
                     // write net entity
                     local_world_manager
-                        .entity_to_net_entity(entity)
+                        .entity_to_local_entity(entity)
                         .unwrap()
                         .to_unowned()
                         .ser(writer);
@@ -566,16 +566,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         let all_update_entities: Vec<E> = self.next_send_updates.keys().copied().collect();
 
         for entity in all_update_entities {
-            // check that we can at least write a NetEntityId and a ComponentContinue bit
+            // check that we can at least write a LocalEntity and a ComponentContinue bit
             let mut counter = writer.counter();
 
             // get net entity id
-            let net_entity_id = local_world_manager
-                .entity_to_net_entity(&entity)
+            let local_entity = local_world_manager
+                .entity_to_local_entity(&entity)
                 .unwrap()
                 .to_unowned();
 
-            net_entity_id.ser(&mut counter);
+            local_entity.ser(&mut counter);
             counter.write_bit(false);
 
             if counter.overflowed() {
@@ -588,8 +588,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             // reserve ComponentContinue bit
             writer.reserve_bits(1);
 
-            // write NetEntityId
-            net_entity_id.ser(writer);
+            // write LocalEntity
+            local_entity.ser(writer);
 
             // write Components
             self.write_update(

@@ -98,13 +98,13 @@ pub use world::{
         entity_action_type::EntityActionType,
         entity_converters::{
             EntityAndGlobalEntityConverter, EntityConverter, FakeEntityConverter,
-            GlobalWorldManagerType, NetEntityAndGlobalEntityConverter, NetEntityConverter,
+            GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, LocalEntityConverter,
         },
         entity_ref::EntityRef,
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
-        net_entity::NetEntity,
-        owned_net_entity::OwnedNetEntity,
+        local_entity::LocalEntity,
+        owned_entity::OwnedEntity,
     },
     host::{
         global_diff_handler::GlobalDiffHandler,

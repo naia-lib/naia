@@ -6,7 +6,7 @@ use std::{
 use hecs::{Entity, World};
 
 use naia_shared::{
-    ComponentKind, ComponentUpdate, NetEntityAndGlobalEntityConverter, ReplicaDynMutWrapper,
+    ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper,
     ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
     WorldRefType,
 };
@@ -179,7 +179,7 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
 
     fn component_apply_update(
         &mut self,
-        converter: &dyn NetEntityAndGlobalEntityConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &Entity,
         component_kind: &ComponentKind,
         update: ComponentUpdate,
