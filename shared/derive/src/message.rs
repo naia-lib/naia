@@ -93,10 +93,7 @@ fn get_is_fragment_method(is_fragment: bool) -> TokenStream {
     }
 }
 
-fn get_clone_method(
-    fields: &[Field],
-    struct_type: &StructType,
-) -> TokenStream {
+fn get_clone_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
@@ -347,10 +344,7 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
                                 }
                             }
                             _ => {
-                                fields.push(Field::normal(
-                                    variable_name.clone(),
-                                    field.ty.clone(),
-                                ));
+                                fields.push(Field::normal(variable_name.clone(), field.ty.clone()));
                             }
                         }
                     }

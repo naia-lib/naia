@@ -9,7 +9,7 @@ type MessageHandle = u16;
 
 pub struct EntityMessageWaitlist<E: Copy + Eq + Hash> {
     message_handle_store: KeyGenerator<MessageHandle>,
-    messages: HashMap<MessageHandle, (Vec<E>, ChannelKind, MessageContainer)>,
+    messages: HashMap<MessageHandle, (HashSet<E>, ChannelKind, MessageContainer)>,
     waiting_entities: HashMap<E, HashSet<MessageHandle>>,
     in_scope_entities: HashSet<E>,
     ready_messages: Vec<(ChannelKind, MessageContainer)>,
@@ -43,8 +43,9 @@ impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
             }
         }
 
+        let entity_set: HashSet<E> = entities.into_iter().collect();
         self.messages
-            .insert(new_handle, (entities, *channel, message));
+            .insert(new_handle, (entity_set, *channel, message));
     }
 
     pub fn add_entity(&mut self, entity: &E) {
@@ -57,10 +58,7 @@ impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
         if let Some(message_set) = self.waiting_entities.get_mut(entity) {
             for message_handle in message_set.iter() {
                 if let Some((entities, _, _)) = self.messages.get(message_handle) {
-                    if entities
-                        .iter()
-                        .all(|entity| self.in_scope_entities.contains(entity))
-                    {
+                    if entities.is_subset(&self.in_scope_entities) {
                         outgoing_message_handles.push(*message_handle);
                     }
                 }

@@ -24,7 +24,7 @@ impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
         }
 
         let output = self.next_new_local_key;
-        self.next_new_local_key += 1;
+        self.next_new_local_key = self.next_new_local_key.wrapping_add(1);
         K::from(output)
     }
 
