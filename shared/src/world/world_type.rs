@@ -9,7 +9,7 @@ use crate::world::{
         },
         replicate::Replicate,
     },
-    entity::entity_converters::NetEntityHandleConverter,
+    entity::entity_converters::NetEntityAndGlobalEntityConverter,
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -68,7 +68,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// reads an incoming stream into a component
     fn component_apply_update(
         &mut self,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         entity: &E,
         component_kind: &ComponentKind,
         update: ComponentUpdate,

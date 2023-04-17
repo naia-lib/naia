@@ -1,10 +1,11 @@
 pub use naia_shared::{
     BitReader, BitWrite, BitWriter, Channel, ChannelDirection, ChannelMode, ComponentKind,
-    ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask, EntityHandle, EntityProperty,
+    ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask, EntityProperty, GlobalEntity,
     LinkConditionerConfig, MessageBuilder, MessageContainer, MessageHecs as Message, MessageKind,
-    MessageKinds, Named, NetEntityHandleConverter, OwnedBitReader, Property, PropertyMutate,
-    PropertyMutator, Random, ReliableSettings, ReplicaDynMut, ReplicaDynRef, ReplicateBuilder,
-    ReplicateHecs as Replicate, SerdeErr, SerdeHecs as Serde, TickBufferSettings, UnsignedInteger,
+    MessageKinds, Named, NetEntityAndGlobalEntityConverter, OwnedBitReader, Property,
+    PropertyMutate, PropertyMutator, Random, ReliableSettings, ReplicaDynMut, ReplicaDynRef,
+    ReplicateBuilder, ReplicateHecs as Replicate, SerdeErr, SerdeHecs as Serde, TickBufferSettings,
+    UnsignedInteger,
 };
 
 mod component_access;

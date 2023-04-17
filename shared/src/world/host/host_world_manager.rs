@@ -14,8 +14,8 @@ use crate::{
     },
     BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength, DiffMask,
     EntityAction, EntityActionType, EntityConverter, Instant, MessageContainer, MessageIndex,
-    MessageKinds, MessageManager, NetEntityConverter, NetEntityHandleConverter, PacketIndex, Serde,
-    UnsignedVariableInteger, WorldRefType,
+    MessageKinds, MessageManager, NetEntityAndGlobalEntityConverter, NetEntityConverter,
+    PacketIndex, Serde, UnsignedVariableInteger, WorldRefType,
 };
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
@@ -124,7 +124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        handle_converter: &dyn NetEntityHandleConverter,
+        global_entity_converter: &dyn NetEntityAndGlobalEntityConverter,
         message_kinds: &MessageKinds,
         message_manager: &mut MessageManager,
     ) {
@@ -133,7 +133,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             .delayed_entity_messages
             .collect_ready_messages();
         for (channel_kind, message) in messages {
-            message_manager.send_message(message_kinds, handle_converter, &channel_kind, message);
+            message_manager.send_message(
+                message_kinds,
+                global_entity_converter,
+                &channel_kind,
+                message,
+            );
         }
 
         self.collect_dropped_update_packets(rtt_millis);
@@ -359,7 +364,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
                 for component_kind in &component_kind_list {
                     let converter = EntityConverter::new(
-                        global_world_manager.to_handle_converter(),
+                        global_world_manager.to_global_entity_converter(),
                         local_world_manager,
                     );
 
@@ -427,7 +432,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                         .ser(writer);
 
                     let converter = EntityConverter::new(
-                        global_world_manager.to_handle_converter(),
+                        global_world_manager.to_global_entity_converter(),
                         local_world_manager,
                     );
 
@@ -631,7 +636,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                 .clone();
 
             let converter = EntityConverter::new(
-                global_world_manager.to_handle_converter(),
+                global_world_manager.to_global_entity_converter(),
                 local_world_manager,
             );
 

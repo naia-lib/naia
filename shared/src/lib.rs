@@ -97,12 +97,12 @@ pub use world::{
         entity_action_receiver::EntityActionReceiver,
         entity_action_type::EntityActionType,
         entity_converters::{
-            EntityConverter, EntityHandleConverter, FakeEntityConverter, GlobalWorldManagerType,
-            NetEntityConverter, NetEntityHandleConverter,
+            EntityAndGlobalEntityConverter, EntityConverter, FakeEntityConverter,
+            GlobalWorldManagerType, NetEntityAndGlobalEntityConverter, NetEntityConverter,
         },
-        entity_handle::EntityHandle,
         entity_ref::EntityRef,
         error::EntityDoesNotExistError,
+        global_entity::GlobalEntity,
         net_entity::{NetEntity, OwnedNetEntity},
     },
     host::{

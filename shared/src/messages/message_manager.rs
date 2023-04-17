@@ -28,7 +28,7 @@ use crate::{
         message_container::MessageContainer,
     },
     types::{HostType, MessageIndex, PacketIndex},
-    MessageKinds, NetEntityHandleConverter, Protocol,
+    MessageKinds, NetEntityAndGlobalEntityConverter, Protocol,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -161,7 +161,7 @@ impl MessageManager {
     pub fn send_message(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {
@@ -210,7 +210,7 @@ impl MessageManager {
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         has_written: &mut bool,
@@ -260,7 +260,7 @@ impl MessageManager {
     pub fn read_messages(
         &mut self,
         protocol: &Protocol,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<Vec<(ChannelKind, Vec<MessageContainer>)>, SerdeErr> {
         loop {

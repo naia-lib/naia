@@ -157,7 +157,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         self.base.collect_outgoing_messages(
             now,
             &rtt_millis,
-            global_world_manager.to_handle_converter(),
+            global_world_manager.to_global_entity_converter(),
             &protocol.message_kinds,
         );
 

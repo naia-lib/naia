@@ -40,7 +40,7 @@ pub fn message_impl(
 
             pub use std::any::Any;
             pub use #shared_crate_name::{
-                Named, EntityHandle, Message, BitWrite, NetEntityHandleConverter,
+                Named, GlobalEntity, Message, BitWrite, NetEntityAndGlobalEntityConverter,
                 EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer
             };
             use super::*;
@@ -147,8 +147,8 @@ fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStrea
         if let Field::EntityProperty(_) = field {
             let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
-                if let Some(handle) = self.#field_name.handle() {
-                    output.push(handle);
+                if let Some(global_entity) = self.#field_name.global_entity() {
+                    output.push(global_entity);
                 }
             };
             let new_body = quote! {
@@ -160,7 +160,7 @@ fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStrea
     }
 
     quote! {
-        fn entities(&self) -> Vec<EntityHandle> {
+        fn entities(&self) -> Vec<GlobalEntity> {
             let mut output = Vec::new();
             #body
             return output;
@@ -234,7 +234,7 @@ pub fn get_read_method(
     };
 
     quote! {
-        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<MessageContainer, SerdeErr> {
+        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityAndGlobalEntityConverter) -> Result<MessageContainer, SerdeErr> {
             #field_reads
 
             return Ok(MessageContainer::from(Box::new(#struct_build), converter));
@@ -268,7 +268,7 @@ fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 
     quote! {
-        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityAndGlobalEntityConverter) {
             self.kind().ser(message_kinds, writer);
             #field_writes
         }
@@ -301,7 +301,7 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
     }
 
     quote! {
-        fn bit_length(&self, converter: &dyn NetEntityHandleConverter) -> u32 {
+        fn bit_length(&self, converter: &dyn NetEntityAndGlobalEntityConverter) -> u32 {
             let mut output = 0;
             output += <MessageKind as ConstBitLength>::const_bit_length();
             #field_bit_lengths

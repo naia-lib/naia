@@ -12,10 +12,10 @@ use log::warn;
 use bevy_ecs::prelude::Resource;
 
 use naia_shared::{
-    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityConverter,
-    EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef, Instant, Message,
-    MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr, SocketConfig,
-    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
+    EntityAndGlobalEntityConverter, EntityConverter, EntityDoesNotExistError, EntityRef,
+    GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde,
+    SerdeErr, SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -266,7 +266,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let entities: Vec<E> = message
                         .entities()
                         .iter()
-                        .map(|handle| self.global_world_manager.handle_to_entity(handle).unwrap())
+                        .map(|global_entity| {
+                            self.global_world_manager
+                                .global_entity_to_entity(global_entity)
+                                .unwrap()
+                        })
                         .collect();
 
                     // check whether all entities are in scope for the connection
@@ -1337,12 +1341,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Server<E> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
-        self.global_world_manager.handle_to_entity(entity_handle)
+impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Server<E> {
+    fn global_entity_to_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<E, EntityDoesNotExistError> {
+        self.global_world_manager
+            .global_entity_to_entity(global_entity)
     }
 
-    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.global_world_manager.entity_to_handle(entity)
+    fn entity_to_global_entity(&self, entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.global_world_manager.entity_to_global_entity(entity)
     }
 }

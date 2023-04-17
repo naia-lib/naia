@@ -4,9 +4,9 @@ use crate::world::local_world_manager::LocalWorldManager;
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
     world::remote::entity_event::EntityEvent, BitReader, ComponentKind, ComponentKinds,
-    EntityAction, EntityActionReceiver, EntityActionType, EntityConverter, EntityHandleConverter,
-    MessageIndex, NetEntity, NetEntityHandleConverter, Protocol, Replicate, Serde, SerdeErr, Tick,
-    UnsignedVariableInteger, WorldMutType,
+    EntityAction, EntityActionReceiver, EntityActionType, EntityAndGlobalEntityConverter,
+    EntityConverter, MessageIndex, NetEntity, NetEntityAndGlobalEntityConverter, Protocol,
+    Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger, WorldMutType,
 };
 
 pub struct RemoteWorldManager {
@@ -24,7 +24,7 @@ impl RemoteWorldManager {
 
     pub fn read_world_events<E: Copy + Eq + Hash, W: WorldMutType<E>>(
         &mut self,
-        converter: &dyn EntityHandleConverter<E>,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         protocol: &Protocol,
         world: &mut W,
@@ -76,7 +76,7 @@ impl RemoteWorldManager {
     /// Store
     pub fn read_actions<E: Copy + Eq + Hash, W: WorldMutType<E>>(
         &mut self,
-        handle_converter: &dyn EntityHandleConverter<E>,
+        global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
@@ -86,7 +86,7 @@ impl RemoteWorldManager {
         let mut last_read_id: Option<MessageIndex> = None;
 
         {
-            let converter = EntityConverter::new(handle_converter, local_world_manager);
+            let converter = EntityConverter::new(global_entity_converter, local_world_manager);
             loop {
                 // read action continue bit
                 let action_continue = bool::de(reader)?;
@@ -110,7 +110,7 @@ impl RemoteWorldManager {
     /// ordered by the client's jitter buffer
     fn read_action(
         &mut self,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
         reader: &mut BitReader,
         last_read_id: &mut Option<MessageIndex>,
@@ -272,7 +272,7 @@ impl RemoteWorldManager {
     /// Read component updates from raw bits
     pub fn read_updates<E: Copy + Eq + Hash, W: WorldMutType<E>>(
         &mut self,
-        converter: &dyn EntityHandleConverter<E>,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
         local_world_manager: &LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
@@ -307,7 +307,7 @@ impl RemoteWorldManager {
     /// Read component updates from raw bits for a given entity
     fn read_update<E: Copy + Eq + Hash, W: WorldMutType<E>>(
         &mut self,
-        handle_converter: &dyn EntityHandleConverter<E>,
+        global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         local_world_manager: &LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
@@ -327,7 +327,7 @@ impl RemoteWorldManager {
             let component_kind = component_update.kind;
 
             let world_entity = local_world_manager.get_remote_entity(net_entity_id);
-            let converter = EntityConverter::new(handle_converter, local_world_manager);
+            let converter = EntityConverter::new(global_entity_converter, local_world_manager);
             world.component_apply_update(
                 &converter,
                 &world_entity,

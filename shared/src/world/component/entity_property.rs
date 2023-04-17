@@ -5,43 +5,47 @@ use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use crate::world::{
     component::{property::Property, property_mutate::PropertyMutator},
     entity::{
-        entity_converters::{EntityHandleConverter, NetEntityHandleConverter},
-        entity_handle::EntityHandle,
+        entity_converters::{EntityAndGlobalEntityConverter, NetEntityAndGlobalEntityConverter},
+        global_entity::GlobalEntity,
         net_entity::OwnedNetEntity,
     },
 };
 
 #[derive(Clone)]
 pub struct EntityProperty {
-    handle_prop: Property<Option<EntityHandle>>,
+    global_entity_prop: Property<Option<GlobalEntity>>,
 }
 
 impl EntityProperty {
     pub fn new(mutator_index: u8) -> Self {
         Self {
-            handle_prop: Property::<Option<EntityHandle>>::new(None, mutator_index),
+            global_entity_prop: Property::<Option<GlobalEntity>>::new(None, mutator_index),
         }
     }
 
     pub fn new_empty() -> Self {
         Self {
-            handle_prop: Property::<Option<EntityHandle>>::new(None, 0),
+            global_entity_prop: Property::<Option<GlobalEntity>>::new(None, 0),
         }
     }
 
     pub fn mirror(&mut self, other: &EntityProperty) {
-        *self.handle_prop = other.handle();
+        *self.global_entity_prop = other.global_entity();
     }
 
-    pub fn handle(&self) -> Option<EntityHandle> {
-        *self.handle_prop
+    pub fn global_entity(&self) -> Option<GlobalEntity> {
+        *self.global_entity_prop
     }
 
     // Serialization / deserialization
 
-    pub fn write(&self, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
-        if let Some(handle) = *self.handle_prop {
-            if let Ok(net_entity) = converter.handle_to_net_entity(&handle) {
+    pub fn write(
+        &self,
+        writer: &mut dyn BitWrite,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
+    ) {
+        if let Some(global_entity) = *self.global_entity_prop {
+            if let Ok(net_entity) = converter.global_entity_to_net_entity(&global_entity) {
                 // Must reverse the OwnedNetEntity because the Host<->Remote
                 // relationship inverts after this data goes over the wire
                 let reversed_net_entity = net_entity.to_reversed();
@@ -55,7 +59,7 @@ impl EntityProperty {
         opt.ser(writer);
     }
 
-    pub fn bit_length(&self, converter: &dyn NetEntityHandleConverter) -> u32 {
+    pub fn bit_length(&self, converter: &dyn NetEntityAndGlobalEntityConverter) -> u32 {
         let mut bit_counter = BitCounter::new(0, 0, u32::MAX);
         self.write(&mut bit_counter, converter);
         return bit_counter.bits_needed();
@@ -64,19 +68,19 @@ impl EntityProperty {
     pub fn new_read(
         reader: &mut BitReader,
         mutator_index: u8,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
     ) -> Result<Self, SerdeErr> {
         if let Some(net_entity) = Option::<OwnedNetEntity>::de(reader)? {
-            if let Ok(handle) = converter.net_entity_to_handle(&net_entity) {
+            if let Ok(global_entity) = converter.net_entity_to_global_entity(&net_entity) {
                 let mut new_prop = Self::new(mutator_index);
-                *new_prop.handle_prop = Some(handle);
+                *new_prop.global_entity_prop = Some(global_entity);
                 Ok(new_prop)
             } else {
                 panic!("Could not find Entity to associate with incoming EntityProperty value!");
             }
         } else {
             let mut new_prop = Self::new(mutator_index);
-            *new_prop.handle_prop = None;
+            *new_prop.global_entity_prop = None;
             Ok(new_prop)
         }
     }
@@ -89,16 +93,16 @@ impl EntityProperty {
     pub fn read(
         &mut self,
         reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
     ) -> Result<(), SerdeErr> {
         if let Some(net_entity) = Option::<OwnedNetEntity>::de(reader)? {
-            if let Ok(handle) = converter.net_entity_to_handle(&net_entity) {
-                *self.handle_prop = Some(handle);
+            if let Ok(global_entity) = converter.net_entity_to_global_entity(&net_entity) {
+                *self.global_entity_prop = Some(global_entity);
             } else {
                 panic!("Could not find Entity to associate with incoming EntityProperty value!");
             }
         } else {
-            *self.handle_prop = None;
+            *self.global_entity_prop = None;
         }
         Ok(())
     }
@@ -106,33 +110,40 @@ impl EntityProperty {
     // Comparison
 
     pub fn equals(&self, other: &EntityProperty) -> bool {
-        if let Some(handle) = *self.handle_prop {
-            if let Some(other_handle) = *other.handle_prop {
-                return handle == other_handle;
+        if let Some(global_entity) = *self.global_entity_prop {
+            if let Some(other_global_entity) = *other.global_entity_prop {
+                return global_entity == other_global_entity;
             }
             return false;
         }
-        other.handle_prop.is_none()
+        other.global_entity_prop.is_none()
     }
 
     // Internal
 
     pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
-        self.handle_prop.set_mutator(mutator);
+        self.global_entity_prop.set_mutator(mutator);
     }
 
-    pub fn get<E: Copy + Eq + Hash>(&self, handler: &dyn EntityHandleConverter<E>) -> Option<E> {
-        if let Some(handle) = *self.handle_prop {
-            if let Ok(entity) = handler.handle_to_entity(&handle) {
+    pub fn get<E: Copy + Eq + Hash>(
+        &self,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+    ) -> Option<E> {
+        if let Some(global_entity) = *self.global_entity_prop {
+            if let Ok(entity) = converter.global_entity_to_entity(&global_entity) {
                 return Some(entity);
             }
         }
         return None;
     }
 
-    pub fn set<E: Copy + Eq + Hash>(&mut self, handler: &dyn EntityHandleConverter<E>, entity: &E) {
-        if let Ok(new_handle) = handler.entity_to_handle(entity) {
-            *self.handle_prop = Some(new_handle);
+    pub fn set<E: Copy + Eq + Hash>(
+        &mut self,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        entity: &E,
+    ) {
+        if let Ok(new_global_entity) = converter.entity_to_global_entity(entity) {
+            *self.global_entity_prop = Some(new_global_entity);
         } else {
             panic!("Could not find Entity, in order to set the EntityProperty value!")
         }

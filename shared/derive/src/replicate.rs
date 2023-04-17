@@ -88,9 +88,9 @@ pub fn replicate_impl(
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any};
             use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
-                ReplicaDynRef, ReplicaDynMut, NetEntityHandleConverter, ComponentKind, Named,
+                ReplicaDynRef, ReplicaDynMut, NetEntityAndGlobalEntityConverter, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,
-                EntityProperty, EntityHandle, Replicate, Property, ComponentKinds, ReplicateBuilder
+                EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder
             };
             use super::*;
 
@@ -681,7 +681,7 @@ pub fn get_read_method(
     };
 
     quote! {
-        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<Box<dyn Replicate>, SerdeErr> {
+        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityAndGlobalEntityConverter) -> Result<Box<dyn Replicate>, SerdeErr> {
             #prop_reads
 
             return Ok(Box::new(#replica_build));
@@ -775,7 +775,7 @@ fn get_read_apply_update_method(properties: &[Property], struct_type: &StructTyp
     }
 
     quote! {
-        fn read_apply_update(&mut self, converter: &dyn NetEntityHandleConverter, mut update: ComponentUpdate) -> Result<(), SerdeErr> {
+        fn read_apply_update(&mut self, converter: &dyn NetEntityAndGlobalEntityConverter, mut update: ComponentUpdate) -> Result<(), SerdeErr> {
             let reader = &mut update.reader();
             #output
             Ok(())
@@ -812,7 +812,7 @@ fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenS
     }
 
     quote! {
-        fn write(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+        fn write(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityAndGlobalEntityConverter) {
             self.kind().ser(component_kinds, writer);
             #property_writes
         }
@@ -864,7 +864,7 @@ fn get_write_update_method(
     }
 
     quote! {
-        fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+        fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &dyn NetEntityAndGlobalEntityConverter) {
             #output
         }
     }
@@ -895,8 +895,8 @@ fn get_entities_method(properties: &[Property], struct_type: &StructType) -> Tok
         if let Property::Entity(_) = property {
             let field_name = get_field_name(property, index, struct_type);
             let body_add_right = quote! {
-                if let Some(handle) = self.#field_name.handle() {
-                    output.push(handle);
+                if let Some(global_entity) = self.#field_name.global_entity() {
+                    output.push(global_entity);
                 }
             };
             let new_body = quote! {
@@ -908,7 +908,7 @@ fn get_entities_method(properties: &[Property], struct_type: &StructType) -> Tok
     }
 
     quote! {
-        fn entities(&self) -> Vec<EntityHandle> {
+        fn entities(&self) -> Vec<GlobalEntity> {
             let mut output = Vec::new();
             #body
             return output;

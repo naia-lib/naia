@@ -1,22 +1,22 @@
 use std::collections::HashSet;
 
-use naia_shared::{ComponentKind, EntityHandle};
+use naia_shared::{ComponentKind, GlobalEntity};
 
 use crate::EntityOwner;
 
 pub struct GlobalEntityRecord {
-    pub entity_handle: EntityHandle,
+    pub global_entity: GlobalEntity,
     pub component_kinds: HashSet<ComponentKind>,
     pub owner: EntityOwner,
 }
 
 impl GlobalEntityRecord {
-    pub fn new(entity_handle: EntityHandle, owner: EntityOwner) -> Self {
+    pub fn new(global_entity: GlobalEntity, owner: EntityOwner) -> Self {
         if owner == EntityOwner::Local {
             panic!("Should not insert Local entity in this record");
         }
         Self {
-            entity_handle,
+            global_entity,
             component_kinds: HashSet::new(),
             owner,
         }

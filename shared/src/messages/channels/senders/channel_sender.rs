@@ -4,7 +4,7 @@ use naia_socket_shared::Instant;
 use crate::{
     messages::{message_container::MessageContainer, message_kinds::MessageKinds},
     types::MessageIndex,
-    NetEntityHandleConverter,
+    NetEntityAndGlobalEntityConverter,
 };
 
 pub trait ChannelSender<P>: Send + Sync {
@@ -23,7 +23,7 @@ pub trait MessageChannelSender: ChannelSender<MessageContainer> {
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>>;

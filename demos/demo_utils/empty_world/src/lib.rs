@@ -4,9 +4,9 @@ mod inner {
     use std::marker::PhantomData;
 
     use naia_shared::{
-        serde::SerdeErr, ComponentUpdate, NetEntityHandleConverter, ProtocolInserter, Protocolize,
-        ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, WorldMutType,
-        WorldRefType,
+        serde::SerdeErr, ComponentUpdate, NetEntityAndGlobalEntityConverter, ProtocolInserter,
+        Protocolize, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+        WorldMutType, WorldRefType,
     };
 
     pub type EmptyEntity = u8;
@@ -141,7 +141,7 @@ mod inner {
 
         fn component_apply_update(
             &mut self,
-            _converter: &dyn NetEntityHandleConverter,
+            _converter: &dyn NetEntityAndGlobalEntityConverter,
             _entity: &EmptyEntity,
             _component_kind: &P::Kind,
             _update: ComponentUpdate<P::Kind>,

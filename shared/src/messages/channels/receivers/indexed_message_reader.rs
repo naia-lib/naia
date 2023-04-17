@@ -2,7 +2,7 @@ use naia_serde::{BitReader, Serde, SerdeErr, UnsignedVariableInteger};
 
 use crate::{
     messages::message_kinds::MessageKinds, types::MessageIndex, MessageContainer,
-    NetEntityHandleConverter,
+    NetEntityAndGlobalEntityConverter,
 };
 
 pub struct IndexedMessageReader;
@@ -10,7 +10,7 @@ pub struct IndexedMessageReader;
 impl IndexedMessageReader {
     pub fn read_messages(
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<Vec<(MessageIndex, MessageContainer)>, SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
@@ -45,7 +45,7 @@ impl IndexedMessageReader {
 
     fn read_message(
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
         last_read_id: &Option<MessageIndex>,
     ) -> Result<(MessageIndex, MessageContainer), SerdeErr> {

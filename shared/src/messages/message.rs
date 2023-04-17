@@ -7,7 +7,7 @@ use crate::{
         message_kinds::{MessageKind, MessageKinds},
         named::Named,
     },
-    EntityHandle, MessageContainer, NetEntityHandleConverter,
+    GlobalEntity, MessageContainer, NetEntityAndGlobalEntityConverter,
 };
 
 // MessageBuilder
@@ -16,7 +16,7 @@ pub trait MessageBuilder: Send + Sync {
     fn read(
         &self,
         reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
     ) -> Result<MessageContainer, SerdeErr>;
 }
 
@@ -28,7 +28,7 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
     fn create_builder() -> Box<dyn MessageBuilder>
     where
         Self: Sized;
-    fn bit_length(&self, converter: &dyn NetEntityHandleConverter) -> u32;
+    fn bit_length(&self, converter: &dyn NetEntityAndGlobalEntityConverter) -> u32;
     fn is_fragment(&self) -> bool;
     /// Writes data into an outgoing byte stream, sufficient to completely
     /// recreate the Component on the client
@@ -36,12 +36,12 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
         &self,
         message_kinds: &MessageKinds,
         writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
     );
     /// Returns whether has any EntityProperties
     fn has_entity_properties(&self) -> bool;
     /// Returns a list of Entities contained within the Message's EntityProperty fields
-    fn entities(&self) -> Vec<EntityHandle>;
+    fn entities(&self) -> Vec<GlobalEntity>;
 }
 
 // Named

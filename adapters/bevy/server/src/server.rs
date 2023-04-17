@@ -11,7 +11,7 @@ use naia_server::{
 };
 
 use naia_bevy_shared::{
-    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
+    Channel, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, Message, Tick,
 };
 
 // Server
@@ -140,15 +140,18 @@ impl<'w> Server<'w> {
     }
 }
 
-impl<'w> EntityHandleConverter<Entity> for Server<'w> {
-    fn handle_to_entity(
+impl<'w> EntityAndGlobalEntityConverter<Entity> for Server<'w> {
+    fn global_entity_to_entity(
         &self,
-        entity_handle: &EntityHandle,
+        global_entity: &GlobalEntity,
     ) -> Result<Entity, EntityDoesNotExistError> {
-        self.server.handle_to_entity(entity_handle)
+        self.server.global_entity_to_entity(global_entity)
     }
 
-    fn entity_to_handle(&self, entity: &Entity) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.server.entity_to_handle(entity)
+    fn entity_to_global_entity(
+        &self,
+        entity: &Entity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.server.entity_to_global_entity(entity)
     }
 }

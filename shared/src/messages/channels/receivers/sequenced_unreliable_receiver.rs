@@ -12,7 +12,7 @@ use crate::{
     },
     sequence_greater_than,
     types::MessageIndex,
-    MessageContainer, NetEntityHandleConverter,
+    MessageContainer, NetEntityAndGlobalEntityConverter,
 };
 
 pub struct SequencedUnreliableReceiver {
@@ -53,7 +53,7 @@ impl MessageChannelReceiver for SequencedUnreliableReceiver {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;

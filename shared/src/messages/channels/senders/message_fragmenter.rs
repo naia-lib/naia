@@ -3,7 +3,7 @@ use naia_serde::{BitWrite, BitWriter};
 use crate::{
     constants::FRAGMENTATION_LIMIT_BITS,
     messages::fragment::{FragmentId, FragmentIndex, FragmentedMessage},
-    MessageContainer, MessageKinds, NetEntityHandleConverter,
+    MessageContainer, MessageKinds, NetEntityAndGlobalEntityConverter,
 };
 
 // MessageFragmenter
@@ -21,7 +21,7 @@ impl MessageFragmenter {
     pub fn fragment_message(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         message: MessageContainer,
     ) -> Vec<MessageContainer> {
         let mut fragmenter = FragmentWriter::new(self.current_fragment_id);
@@ -61,7 +61,10 @@ impl FragmentWriter {
         self.fragments.push(fragmented_message);
     }
 
-    fn to_messages(mut self, converter: &dyn NetEntityHandleConverter) -> Vec<MessageContainer> {
+    fn to_messages(
+        mut self,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
+    ) -> Vec<MessageContainer> {
         self.flush_current();
 
         let mut output = Vec::with_capacity(self.fragments.len());

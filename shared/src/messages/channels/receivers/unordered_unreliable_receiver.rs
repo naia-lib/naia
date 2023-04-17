@@ -7,7 +7,7 @@ use crate::{
         channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
         message_kinds::MessageKinds,
     },
-    MessageContainer, NetEntityHandleConverter,
+    MessageContainer, NetEntityAndGlobalEntityConverter,
 };
 
 pub struct UnorderedUnreliableReceiver {
@@ -24,7 +24,7 @@ impl UnorderedUnreliableReceiver {
     fn read_message(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<MessageContainer, SerdeErr> {
         // read payload
@@ -46,7 +46,7 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {

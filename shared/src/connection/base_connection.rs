@@ -9,8 +9,8 @@ use crate::{
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
     world::entity::entity_converters::GlobalWorldManagerType,
-    EntityConverter, EntityEvent, EntityHandleConverter, HostWorldManager, MessageKinds, Protocol,
-    RemoteWorldManager, WorldMutType, WorldRefType,
+    EntityAndGlobalEntityConverter, EntityConverter, EntityEvent, HostWorldManager, MessageKinds,
+    Protocol, RemoteWorldManager, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -120,10 +120,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        handle_converter: &dyn EntityHandleConverter<E>,
+        global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         message_kinds: &MessageKinds,
     ) {
-        let converter = EntityConverter::new(handle_converter, &self.local_world_manager);
+        let converter = EntityConverter::new(global_entity_converter, &self.local_world_manager);
         self.host_world_manager.collect_outgoing_messages(
             now,
             rtt_millis,
@@ -138,12 +138,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     fn write_messages(
         &mut self,
         protocol: &Protocol,
-        handle_converter: &dyn EntityHandleConverter<E>,
+        global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        let converter = EntityConverter::new(handle_converter, &self.local_world_manager);
+        let converter = EntityConverter::new(global_entity_converter, &self.local_world_manager);
         self.message_manager.write_messages(
             protocol,
             &converter,
@@ -168,7 +168,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         {
             self.write_messages(
                 &protocol,
-                global_world_manager.to_handle_converter(),
+                global_world_manager.to_global_entity_converter(),
                 writer,
                 packet_index,
                 has_written,

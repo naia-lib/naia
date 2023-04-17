@@ -73,8 +73,9 @@ mod some_nonreplicated_replica {
 }
 
 use naia_shared::{
-    BigMapKey, BitReader, BitWriter, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
-    FakeEntityConverter, NetEntityHandleConverter, OwnedNetEntity, Protocol, Replicate,
+    BigMapKey, BitReader, BitWriter, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
+    FakeEntityConverter, GlobalEntity, NetEntityAndGlobalEntityConverter, OwnedNetEntity, Protocol,
+    Replicate,
 };
 
 use some_entity_replica::EntityPropertyHolder;
@@ -183,30 +184,33 @@ fn read_write_tuple_replica() {
 fn read_write_entity_replica() {
     pub struct TestEntityConverter;
 
-    impl EntityHandleConverter<u64> for TestEntityConverter {
-        fn handle_to_entity(
+    impl EntityAndGlobalEntityConverter<u64> for TestEntityConverter {
+        fn global_entity_to_entity(
             &self,
-            entity_handle: &EntityHandle,
+            global_entity: &GlobalEntity,
         ) -> Result<u64, EntityDoesNotExistError> {
-            Ok(entity_handle.to_u64())
+            Ok(global_entity.to_u64())
         }
-        fn entity_to_handle(&self, entity: &u64) -> Result<EntityHandle, EntityDoesNotExistError> {
-            Ok(EntityHandle::from_u64(*entity))
+        fn entity_to_global_entity(
+            &self,
+            entity: &u64,
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+            Ok(GlobalEntity::from_u64(*entity))
         }
     }
-    impl NetEntityHandleConverter for TestEntityConverter {
-        fn handle_to_net_entity(
+    impl NetEntityAndGlobalEntityConverter for TestEntityConverter {
+        fn global_entity_to_net_entity(
             &self,
-            entity_handle: &EntityHandle,
+            global_entity: &GlobalEntity,
         ) -> Result<OwnedNetEntity, EntityDoesNotExistError> {
-            Ok(OwnedNetEntity::new_host(entity_handle.to_u64() as u16))
+            Ok(OwnedNetEntity::new_host(global_entity.to_u64() as u16))
         }
-        fn net_entity_to_handle(
+        fn net_entity_to_global_entity(
             &self,
             net_entity: &OwnedNetEntity,
-        ) -> Result<EntityHandle, EntityDoesNotExistError> {
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
             let net_entity_u16 = (*net_entity).value();
-            Ok(EntityHandle::from_u64(net_entity_u16 as u64))
+            Ok(GlobalEntity::from_u64(net_entity_u16 as u64))
         }
     }
 
@@ -232,13 +236,13 @@ fn read_write_entity_replica() {
 
     let typed_out_1 = out_1.downcast_ref::<EntityPropertyHolder>().unwrap();
     assert!(in_1.entity_1.equals(&typed_out_1.entity_1));
-    let entity_handles = Vec::<EntityHandle>::from([EntityHandle::from_u64(1)]);
-    assert_eq!(in_1.entities(), entity_handles);
-    assert_eq!(typed_out_1.entities(), entity_handles);
+    let global_entitys = Vec::<GlobalEntity>::from([GlobalEntity::from_u64(1)]);
+    assert_eq!(in_1.entities(), global_entitys);
+    assert_eq!(typed_out_1.entities(), global_entitys);
     assert_eq!(in_1.entity_1.get(&TestEntityConverter).unwrap(), 1);
-    assert_eq!(in_1.entity_1.handle().unwrap().to_u64(), 1);
+    assert_eq!(in_1.entity_1.global_entity().unwrap().to_u64(), 1);
     assert_eq!(typed_out_1.entity_1.get(&TestEntityConverter).unwrap(), 1);
-    assert_eq!(typed_out_1.entity_1.handle().unwrap().to_u64(), 1);
+    assert_eq!(typed_out_1.entity_1.global_entity().unwrap().to_u64(), 1);
 }
 
 #[test]

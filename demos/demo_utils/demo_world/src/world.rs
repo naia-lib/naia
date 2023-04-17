@@ -1,9 +1,9 @@
 use std::{any::Any, collections::HashMap};
 
 use naia_shared::{
-    BigMap, ComponentKind, ComponentUpdate, NetEntityHandleConverter, ReplicaDynMutWrapper,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
-    WorldRefType,
+    BigMap, ComponentKind, ComponentUpdate, NetEntityAndGlobalEntityConverter,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    SerdeErr, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -201,7 +201,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_apply_update(
         &mut self,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn NetEntityAndGlobalEntityConverter,
         entity: &Entity,
         component_kind: &ComponentKind,
         update: ComponentUpdate,
