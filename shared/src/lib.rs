@@ -103,7 +103,8 @@ pub use world::{
         entity_ref::EntityRef,
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
-        net_entity::{NetEntity, OwnedNetEntity},
+        net_entity::NetEntity,
+        owned_net_entity::OwnedNetEntity,
     },
     host::{
         global_diff_handler::GlobalDiffHandler,

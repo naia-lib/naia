@@ -7,7 +7,7 @@ use crate::{
     bigmap::BigMapKey,
     world::{
         entity::{
-            error::EntityDoesNotExistError, global_entity::GlobalEntity, net_entity::OwnedNetEntity,
+            error::EntityDoesNotExistError, global_entity::GlobalEntity, owned_net_entity::OwnedNetEntity,
         },
         host::mut_channel::MutChannelType,
     },

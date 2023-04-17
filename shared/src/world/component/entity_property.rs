@@ -7,7 +7,7 @@ use crate::world::{
     entity::{
         entity_converters::{EntityAndGlobalEntityConverter, NetEntityAndGlobalEntityConverter},
         global_entity::GlobalEntity,
-        net_entity::OwnedNetEntity,
+        owned_net_entity::OwnedNetEntity,
     },
 };
 

@@ -1,6 +1,7 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{EntityDoesNotExistError, KeyGenerator, NetEntity, NetEntityConverter, OwnedNetEntity};
+use crate::{EntityDoesNotExistError, KeyGenerator, NetEntity, NetEntityConverter};
+use crate::world::entity::owned_net_entity::OwnedNetEntity;
 
 pub struct LocalWorldManager<E: Copy + Eq + Hash> {
     host_entity_generator: KeyGenerator<NetEntity>,
