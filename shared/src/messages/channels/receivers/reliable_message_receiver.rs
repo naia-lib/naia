@@ -1,5 +1,6 @@
 use naia_serde::{BitReader, SerdeErr};
 
+use crate::world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore};
 use crate::{
     messages::{
         channels::receivers::{
@@ -13,7 +14,6 @@ use crate::{
     types::MessageIndex,
     LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
-use crate::world::remote::entity_message_waitlist::{EntityWaitlist, WaitlistStore};
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
@@ -31,7 +31,7 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     incoming_messages: Vec<(MessageIndex, MessageContainer)>,
     arranger: A,
     fragment_receiver: FragmentReceiver,
-    waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>
+    waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>,
 }
 
 impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
@@ -41,7 +41,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             incoming_messages: Vec::new(),
             arranger,
             fragment_receiver: FragmentReceiver::new(),
-            waitlist_store: WaitlistStore::new()
+            waitlist_store: WaitlistStore::new(),
         }
     }
 
@@ -59,7 +59,11 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         };
 
         if let Some(entity_set) = full_message.relations_waiting() {
-            entity_waitlist.queue(entity_set, &mut self.waitlist_store, (first_index, full_message));
+            entity_waitlist.queue(
+                entity_set,
+                &mut self.waitlist_store,
+                (first_index, full_message),
+            );
             return;
         }
 
@@ -83,8 +87,10 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         }
     }
 
-    pub fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<(MessageIndex, MessageContainer)> {
-
+    pub fn receive_messages(
+        &mut self,
+        entity_waitlist: &mut EntityWaitlist,
+    ) -> Vec<(MessageIndex, MessageContainer)> {
         // return buffer
         std::mem::take(&mut self.incoming_messages)
     }

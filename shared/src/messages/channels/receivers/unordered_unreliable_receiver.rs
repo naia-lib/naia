@@ -2,6 +2,7 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, Serde, SerdeErr};
 
+use crate::world::remote::entity_waitlist::EntityWaitlist;
 use crate::{
     messages::{
         channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
@@ -9,7 +10,6 @@ use crate::{
     },
     LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
-use crate::world::remote::entity_message_waitlist::EntityWaitlist;
 
 pub struct UnorderedUnreliableReceiver {
     incoming_messages: VecDeque<MessageContainer>,
@@ -33,7 +33,6 @@ impl UnorderedUnreliableReceiver {
     }
 
     fn recv_message(&mut self, entity_waitlist: &mut EntityWaitlist, message: MessageContainer) {
-
         // use entity_waitlist
         todo!();
 
@@ -43,7 +42,6 @@ impl UnorderedUnreliableReceiver {
 
 impl ChannelReceiver<MessageContainer> for UnorderedUnreliableReceiver {
     fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
-
         // use entity_waitlist
         todo!();
 

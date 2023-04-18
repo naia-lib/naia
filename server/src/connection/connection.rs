@@ -88,10 +88,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             )?;
 
             // read messages
-            let messages =
-                self.base
-                    .message_manager
-                    .read_messages(protocol, &mut self.base.remote_world_manager.delayed_entity_messages, &entity_converter, reader)?;
+            let messages = self.base.message_manager.read_messages(
+                protocol,
+                &mut self.base.remote_world_manager.entity_waitlist,
+                &entity_converter,
+                reader,
+            )?;
             for (channel_kind, messages) in messages {
                 for message in messages {
                     incoming_events.push_message(&self.user_key, &channel_kind, message);

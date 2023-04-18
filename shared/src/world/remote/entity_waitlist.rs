@@ -1,6 +1,4 @@
-use std::{
-    collections::{HashMap, HashSet},
-};
+use std::collections::{HashMap, HashSet};
 
 use crate::{KeyGenerator, LocalEntity};
 
@@ -35,14 +33,16 @@ impl EntityWaitlist {
 
         for entity in &entities {
             if !self.waiting_entity_to_handles.contains_key(entity) {
-                self.waiting_entity_to_handles.insert(*entity, HashSet::new());
+                self.waiting_entity_to_handles
+                    .insert(*entity, HashSet::new());
             }
             if let Some(message_set) = self.waiting_entity_to_handles.get_mut(entity) {
                 message_set.insert(new_handle);
             }
         }
 
-        self.handle_to_required_entities.insert(new_handle, entities);
+        self.handle_to_required_entities
+            .insert(new_handle, entities);
 
         waitlist_store.queue(new_handle, item);
     }
@@ -66,15 +66,16 @@ impl EntityWaitlist {
 
         // get the messages ready to send, also clean up
         for outgoing_handle in outgoing_handles {
-            let entities =
-                self.handle_to_required_entities.remove(&outgoing_handle).unwrap();
+            let entities = self
+                .handle_to_required_entities
+                .remove(&outgoing_handle)
+                .unwrap();
 
             // push outgoing message
             self.ready_handles.insert(outgoing_handle);
 
             // recycle message handle
-            self.handle_store
-                .recycle_key(&outgoing_handle);
+            self.handle_store.recycle_key(&outgoing_handle);
 
             // for all associated entities, remove from waitlist
             for entity in entities {
@@ -97,7 +98,10 @@ impl EntityWaitlist {
         self.in_scope_entities.remove(entity);
     }
 
-    pub fn collect_ready_items<T>(&mut self, waitlist_store: &mut WaitlistStore<T>) -> Option<Vec<T>> {
+    pub fn collect_ready_items<T>(
+        &mut self,
+        waitlist_store: &mut WaitlistStore<T>,
+    ) -> Option<Vec<T>> {
         waitlist_store.collect_ready_items(&mut self.ready_handles)
     }
 }
@@ -118,7 +122,6 @@ impl<T> WaitlistStore<T> {
     }
 
     pub fn collect_ready_items(&mut self, ready_handles: &mut HashSet<Handle>) -> Option<Vec<T>> {
-
         let mut intersection: HashSet<Handle> = HashSet::new();
 
         for handle in self.items.keys() {

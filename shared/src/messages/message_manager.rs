@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
+use crate::world::remote::entity_waitlist::EntityWaitlist;
 use crate::{
     constants::FRAGMENTATION_LIMIT_BITS,
     messages::{
@@ -30,7 +31,6 @@ use crate::{
     types::{HostType, MessageIndex, PacketIndex},
     LocalEntityAndGlobalEntityConverter, MessageKinds, Protocol,
 };
-use crate::world::remote::entity_message_waitlist::EntityWaitlist;
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -283,7 +283,10 @@ impl MessageManager {
     }
 
     /// Retrieve all messages from the channel buffers
-    fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
+    fn receive_messages(
+        &mut self,
+        entity_waitlist: &mut EntityWaitlist,
+    ) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {

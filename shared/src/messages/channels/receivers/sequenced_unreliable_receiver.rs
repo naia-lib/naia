@@ -2,6 +2,7 @@ use std::mem;
 
 use naia_serde::{BitReader, SerdeErr};
 
+use crate::world::remote::entity_waitlist::EntityWaitlist;
 use crate::{
     messages::{
         channels::receivers::{
@@ -14,7 +15,6 @@ use crate::{
     types::MessageIndex,
     LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
-use crate::world::remote::entity_message_waitlist::EntityWaitlist;
 
 pub struct SequencedUnreliableReceiver {
     newest_received_message_index: Option<MessageIndex>,
@@ -29,8 +29,12 @@ impl SequencedUnreliableReceiver {
         }
     }
 
-    pub fn buffer_message(&mut self, entity_waitlist: &mut EntityWaitlist, message_index: MessageIndex, message: MessageContainer) {
-
+    pub fn buffer_message(
+        &mut self,
+        entity_waitlist: &mut EntityWaitlist,
+        message_index: MessageIndex,
+        message: MessageContainer,
+    ) {
         // use entity_waitlist
         todo!();
 
@@ -48,7 +52,6 @@ impl SequencedUnreliableReceiver {
 
 impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
     fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
-
         // use entity_waitlist
         todo!();
 

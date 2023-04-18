@@ -1,19 +1,19 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::world::remote::entity_message_waitlist::EntityWaitlist;
+use crate::world::remote::entity_waitlist::EntityWaitlist;
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
     world::{local_world_manager::LocalWorldManager, remote::entity_event::EntityEvent},
-    BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver,
-    EntityActionType, EntityAndGlobalEntityConverter, EntityConverter, LocalEntity,
-    LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol, Replicate,
-    Serde, SerdeErr, Tick, UnsignedVariableInteger, WorldMutType,
+    BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver, EntityActionType,
+    EntityAndGlobalEntityConverter, EntityConverter, LocalEntity,
+    LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol, Replicate, Serde, SerdeErr, Tick,
+    UnsignedVariableInteger, WorldMutType,
 };
 
 pub struct RemoteWorldManager {
     receiver: EntityActionReceiver<LocalEntity>,
     received_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
-    pub delayed_entity_messages: EntityWaitlist,
+    pub entity_waitlist: EntityWaitlist,
 }
 
 impl RemoteWorldManager {
@@ -21,16 +21,16 @@ impl RemoteWorldManager {
         Self {
             receiver: EntityActionReceiver::new(),
             received_components: HashMap::default(),
-            delayed_entity_messages: EntityWaitlist::new(),
+            entity_waitlist: EntityWaitlist::new(),
         }
     }
 
     fn on_entity_channel_opened(&mut self, local_entity: &LocalEntity) {
-        self.delayed_entity_messages.add_entity(local_entity);
+        self.entity_waitlist.add_entity(local_entity);
     }
 
     fn on_entity_channel_closing(&mut self, local_entity: &LocalEntity) {
-        self.delayed_entity_messages.remove_entity(local_entity);
+        self.entity_waitlist.remove_entity(local_entity);
     }
 
     pub fn read_world_events<E: Copy + Eq + Hash, W: WorldMutType<E>>(
