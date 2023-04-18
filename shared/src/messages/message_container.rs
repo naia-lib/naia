@@ -46,7 +46,7 @@ impl MessageContainer {
     }
 
     pub fn has_entity_properties(&self) -> bool {
-        return self.inner.has_entity_properties();
+        return self.inner.has_entity_relations();
     }
 
     pub fn entities(&self) -> Vec<GlobalEntity> {

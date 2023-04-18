@@ -74,6 +74,7 @@ pub use messages::{
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     named::Named,
+    entity_relation::EntityRelation,
 };
 pub use world::{
     component::{

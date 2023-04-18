@@ -38,9 +38,9 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
         writer: &mut dyn BitWrite,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     );
-    /// Returns whether has any EntityProperties
-    fn has_entity_properties(&self) -> bool;
-    /// Returns a list of Entities contained within the Message's EntityProperty fields
+    /// Returns whether has any EntityRelations
+    fn has_entity_relations(&self) -> bool;
+    /// Returns a list of Entities contained within the Message's EntityRelation fields
     fn entities(&self) -> Vec<GlobalEntity>;
 }
 
