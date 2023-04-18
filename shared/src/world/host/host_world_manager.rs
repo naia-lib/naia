@@ -341,18 +341,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         Self::write_action_id(writer, last_written_id, action_id);
 
         match action {
-            EntityActionEvent::SpawnEntity(entity) => {
+            EntityActionEvent::SpawnEntity(world_entity) => {
                 EntityActionType::SpawnEntity.ser(writer);
 
                 // write net entity
                 local_world_manager
-                    .entity_to_local_entity(entity)
+                    .entity_to_local_entity(world_entity)
                     .unwrap()
-                    .to_unowned()
-                    .ser(writer);
+                    .host_ser(writer);
 
                 // get component list
-                let component_kind_list = match global_world_manager.component_kinds(entity) {
+                let component_kind_list = match global_world_manager.component_kinds(world_entity) {
                     Some(kind_list) => kind_list,
                     None => Vec::new(),
                 };
@@ -370,7 +369,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
                     // write component payload
                     world
-                        .component_of_kind(entity, component_kind)
+                        .component_of_kind(world_entity, component_kind)
                         .expect("Component does not exist in World")
                         .write(component_kinds, writer, &converter);
                 }
@@ -381,19 +380,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                         &mut self.sent_action_packets,
                         packet_index,
                         action_id,
-                        EntityAction::SpawnEntity(*entity, component_kind_list),
+                        EntityAction::SpawnEntity(*world_entity, component_kind_list),
                     );
                 }
             }
-            EntityActionEvent::DespawnEntity(entity) => {
+            EntityActionEvent::DespawnEntity(world_entity) => {
                 EntityActionType::DespawnEntity.ser(writer);
 
                 // write net entity
                 local_world_manager
-                    .entity_to_local_entity(entity)
+                    .entity_to_local_entity(world_entity)
                     .unwrap()
-                    .to_unowned()
-                    .ser(writer);
+                    .host_ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -401,13 +399,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                         &mut self.sent_action_packets,
                         packet_index,
                         action_id,
-                        EntityAction::DespawnEntity(*entity),
+                        EntityAction::DespawnEntity(*world_entity),
                     );
                 }
             }
-            EntityActionEvent::InsertComponent(entity, component) => {
-                if !world.has_component_of_kind(entity, component)
-                    || !self.world_channel.entity_channel_is_open(entity)
+            EntityActionEvent::InsertComponent(world_entity, component) => {
+                if !world.has_component_of_kind(world_entity, component)
+                    || !self.world_channel.entity_channel_is_open(world_entity)
                 {
                     EntityActionType::Noop.ser(writer);
 
@@ -426,10 +424,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
                     // write net entity
                     local_world_manager
-                        .entity_to_local_entity(entity)
+                        .entity_to_local_entity(world_entity)
                         .unwrap()
-                        .to_unowned()
-                        .ser(writer);
+                        .host_ser(writer);
 
                     let converter = EntityConverter::new(
                         global_world_manager.to_global_entity_converter(),
@@ -438,7 +435,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
                     // write component payload
                     world
-                        .component_of_kind(entity, component)
+                        .component_of_kind(world_entity, component)
                         .expect("Component does not exist in World")
                         .write(component_kinds, writer, &converter);
 
@@ -449,13 +446,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                             &mut self.sent_action_packets,
                             packet_index,
                             action_id,
-                            EntityAction::InsertComponent(*entity, *component),
+                            EntityAction::InsertComponent(*world_entity, *component),
                         );
                     }
                 }
             }
-            EntityActionEvent::RemoveComponent(entity, component_kind) => {
-                if !self.world_channel.entity_channel_is_open(entity) {
+            EntityActionEvent::RemoveComponent(world_entity, component_kind) => {
+                if !self.world_channel.entity_channel_is_open(world_entity) {
                     EntityActionType::Noop.ser(writer);
 
                     // if we are actually writing this packet
@@ -473,10 +470,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
                     // write net entity
                     local_world_manager
-                        .entity_to_local_entity(entity)
+                        .entity_to_local_entity(world_entity)
                         .unwrap()
-                        .to_unowned()
-                        .ser(writer);
+                        .host_ser(writer);
 
                     // write component kind
                     component_kind.ser(component_kinds, writer);
@@ -487,7 +483,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                             &mut self.sent_action_packets,
                             packet_index,
                             action_id,
-                            EntityAction::RemoveComponent(*entity, *component_kind),
+                            EntityAction::RemoveComponent(*world_entity, *component_kind),
                         );
                     }
                 }
@@ -569,13 +565,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             // check that we can at least write a LocalEntity and a ComponentContinue bit
             let mut counter = writer.counter();
 
-            // get net entity id
-            let local_entity = local_world_manager
-                .entity_to_local_entity(&entity)
-                .unwrap()
-                .to_unowned();
+            // get LocalEntity
+            let local_entity = local_world_manager.entity_to_local_entity(&entity).unwrap();
 
-            local_entity.ser(&mut counter);
+            // write LocalEntity
+            local_entity.host_ser(&mut counter);
             counter.write_bit(false);
 
             if counter.overflowed() {
@@ -589,7 +583,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             writer.reserve_bits(1);
 
             // write LocalEntity
-            local_entity.ser(writer);
+            local_entity.host_ser(writer);
 
             // write Components
             self.write_update(

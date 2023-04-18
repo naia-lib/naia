@@ -45,18 +45,17 @@ impl EntityProperty {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) {
         if let Some(global_entity) = *self.global_entity_prop {
-            if let Ok(owned_entity) = converter.global_entity_to_local_entity(&global_entity) {
-                // Must reverse the OwnedEntity because the Host<->Remote
+            if let Ok(local_entity) = converter.global_entity_to_local_entity(&global_entity) {
+                // Must reverse the LocalEntity because the Host<->Remote
                 // relationship inverts after this data goes over the wire
-                let reversed_owned_entity = owned_entity.to_reversed();
+                let reversed_local_entity = local_entity.to_reversed();
 
-                let opt = Some(reversed_owned_entity);
-                reversed_owned_entity.owned_ser(writer);
+                true.ser(writer);
+                reversed_local_entity.owned_ser(writer);
                 return;
             }
         }
-        let opt: Option<LocalEntity> = None;
-        opt.ser(writer);
+        false.ser(writer);
     }
 
     pub fn bit_length(&self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> u32 {
@@ -70,8 +69,10 @@ impl EntityProperty {
         mutator_index: u8,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Self, SerdeErr> {
-        if let Some(owned_entity) = Option::<LocalEntity>::de(reader)? {
-            if let Ok(global_entity) = converter.local_entity_to_global_entity(&owned_entity) {
+        let exists = bool::de(reader)?;
+        if exists {
+            let local_entity = LocalEntity::owned_de(reader)?;
+            if let Ok(global_entity) = converter.local_entity_to_global_entity(&local_entity) {
                 let mut new_prop = Self::new(mutator_index);
                 *new_prop.global_entity_prop = Some(global_entity);
                 Ok(new_prop)
@@ -86,7 +87,12 @@ impl EntityProperty {
     }
 
     pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
-        Option::<LocalEntity>::de(reader)?.ser(writer);
+        let exists = bool::de(reader)?;
+        exists.ser(writer);
+        if exists {
+            let local_entity = LocalEntity::owned_de(reader)?;
+            local_entity.owned_ser(writer);
+        }
         Ok(())
     }
 
@@ -95,8 +101,10 @@ impl EntityProperty {
         reader: &mut BitReader,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<(), SerdeErr> {
-        if let Some(owned_entity) = Option::<LocalEntity>::de(reader)? {
-            if let Ok(global_entity) = converter.local_entity_to_global_entity(&owned_entity) {
+        let exists = bool::de(reader)?;
+        if exists {
+            let local_entity = LocalEntity::owned_de(reader)?;
+            if let Ok(global_entity) = converter.local_entity_to_global_entity(&local_entity) {
                 *self.global_entity_prop = Some(global_entity);
             } else {
                 panic!("Could not find Entity to associate with incoming EntityProperty value!");

@@ -37,7 +37,7 @@ pub trait LocalEntityAndGlobalEntityConverter {
     ) -> Result<LocalEntity, EntityDoesNotExistError>;
     fn local_entity_to_global_entity(
         &self,
-        owned_entity: &LocalEntity,
+        local_entity: &LocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError>;
 }
 
@@ -45,7 +45,7 @@ pub trait LocalEntityConverter<E: Copy + Eq + Hash> {
     fn entity_to_local_entity(&self, entity: &E) -> Result<LocalEntity, EntityDoesNotExistError>;
     fn local_entity_to_entity(
         &self,
-        owned_entity: &LocalEntity,
+        local_entity: &LocalEntity,
     ) -> Result<E, EntityDoesNotExistError>;
 }
 
@@ -102,11 +102,11 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
 
     fn local_entity_to_global_entity(
         &self,
-        owned_entity: &LocalEntity,
+        local_entity: &LocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         if let Ok(entity) = self
             .local_entity_converter
-            .local_entity_to_entity(owned_entity)
+            .local_entity_to_entity(local_entity)
         {
             return self
                 .global_entity_converter

@@ -1,6 +1,6 @@
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedVariableInteger};
 
-// OwnedEntity
+// LocalEntity
 #[derive(Copy, Eq, Hash, Clone, PartialEq)]
 pub enum LocalEntity {
     Host(u16),
