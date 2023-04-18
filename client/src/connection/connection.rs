@@ -104,6 +104,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                     EntityConverter::new(global_world_manager, &self.base.local_world_manager);
                 let messages = self.base.message_manager.read_messages(
                     protocol,
+                    &mut self.base.remote_world_manager.delayed_entity_messages,
                     &entity_converter,
                     &mut reader,
                 )?;

@@ -1,104 +1,142 @@
 use std::{
     collections::{HashMap, HashSet},
-    hash::Hash,
 };
 
-use crate::{ChannelKind, KeyGenerator, MessageContainer};
+use crate::{KeyGenerator, LocalEntity};
 
-type MessageHandle = u16;
+type Handle = u16;
 
-pub struct EntityMessageWaitlist<E: Copy + Eq + Hash> {
-    message_handle_store: KeyGenerator<MessageHandle>,
-    messages: HashMap<MessageHandle, (HashSet<E>, ChannelKind, MessageContainer)>,
-    waiting_entities: HashMap<E, HashSet<MessageHandle>>,
-    in_scope_entities: HashSet<E>,
-    ready_messages: Vec<(ChannelKind, MessageContainer)>,
+pub struct EntityWaitlist {
+    handle_store: KeyGenerator<Handle>,
+    handle_to_required_entities: HashMap<Handle, HashSet<LocalEntity>>,
+    waiting_entity_to_handles: HashMap<LocalEntity, HashSet<Handle>>,
+    in_scope_entities: HashSet<LocalEntity>,
+    ready_handles: HashSet<Handle>,
 }
 
-impl<E: Copy + Eq + Hash> EntityMessageWaitlist<E> {
+impl EntityWaitlist {
     pub fn new() -> Self {
         Self {
-            messages: HashMap::new(),
-            message_handle_store: KeyGenerator::new(),
-            waiting_entities: HashMap::new(),
+            handle_to_required_entities: HashMap::new(),
+            handle_store: KeyGenerator::new(),
+            waiting_entity_to_handles: HashMap::new(),
             in_scope_entities: HashSet::new(),
-            ready_messages: Vec::new(),
+            ready_handles: HashSet::new(),
         }
     }
 
-    pub fn queue_message(
+    pub fn queue<T>(
         &mut self,
-        entities: Vec<E>,
-        channel: &ChannelKind,
-        message: MessageContainer,
+        entities: HashSet<LocalEntity>,
+        waitlist_store: &mut WaitlistStore<T>,
+        item: T,
     ) {
-        let new_handle = self.message_handle_store.generate();
+        let new_handle = self.handle_store.generate();
 
         for entity in &entities {
-            if !self.waiting_entities.contains_key(entity) {
-                self.waiting_entities.insert(*entity, HashSet::new());
+            if !self.waiting_entity_to_handles.contains_key(entity) {
+                self.waiting_entity_to_handles.insert(*entity, HashSet::new());
             }
-            if let Some(message_set) = self.waiting_entities.get_mut(entity) {
+            if let Some(message_set) = self.waiting_entity_to_handles.get_mut(entity) {
                 message_set.insert(new_handle);
             }
         }
 
-        let entity_set: HashSet<E> = entities.into_iter().collect();
-        self.messages
-            .insert(new_handle, (entity_set, *channel, message));
+        self.handle_to_required_entities.insert(new_handle, entities);
+
+        waitlist_store.queue(new_handle, item);
     }
 
-    pub fn add_entity(&mut self, entity: &E) {
+    pub fn add_entity(&mut self, entity: &LocalEntity) {
         // put new entity into scope
         self.in_scope_entities.insert(*entity);
 
-        // get a list of handles to messages ready to send
-        let mut outgoing_message_handles = Vec::new();
+        // get a list of handles ready to send
+        let mut outgoing_handles = Vec::new();
 
-        if let Some(message_set) = self.waiting_entities.get_mut(entity) {
+        if let Some(message_set) = self.waiting_entity_to_handles.get_mut(entity) {
             for message_handle in message_set.iter() {
-                if let Some((entities, _, _)) = self.messages.get(message_handle) {
+                if let Some(entities) = self.handle_to_required_entities.get(message_handle) {
                     if entities.is_subset(&self.in_scope_entities) {
-                        outgoing_message_handles.push(*message_handle);
+                        outgoing_handles.push(*message_handle);
                     }
                 }
             }
         }
 
         // get the messages ready to send, also clean up
-        for outgoing_message_handle in outgoing_message_handles {
-            let (entities, channel, message) =
-                self.messages.remove(&outgoing_message_handle).unwrap();
+        for outgoing_handle in outgoing_handles {
+            let entities =
+                self.handle_to_required_entities.remove(&outgoing_handle).unwrap();
 
             // push outgoing message
-            self.ready_messages.push((channel, message));
+            self.ready_handles.insert(outgoing_handle);
 
             // recycle message handle
-            self.message_handle_store
-                .recycle_key(&outgoing_message_handle);
+            self.handle_store
+                .recycle_key(&outgoing_handle);
 
             // for all associated entities, remove from waitlist
             for entity in entities {
                 let mut remove = false;
-                if let Some(message_set) = self.waiting_entities.get_mut(&entity) {
-                    message_set.remove(&outgoing_message_handle);
+                if let Some(message_set) = self.waiting_entity_to_handles.get_mut(&entity) {
+                    message_set.remove(&outgoing_handle);
                     if message_set.is_empty() {
                         remove = true;
                     }
                 }
                 if remove {
-                    self.waiting_entities.remove(&entity);
+                    self.waiting_entity_to_handles.remove(&entity);
                 }
             }
         }
     }
 
-    pub fn remove_entity(&mut self, entity: &E) {
-        // Should we de-queue all our waiting messages that depend on this Entity?
+    pub fn remove_entity(&mut self, entity: &LocalEntity) {
+        // TODO: should we de-queue all our waiting messages that depend on this Entity?
         self.in_scope_entities.remove(entity);
     }
 
-    pub fn collect_ready_messages(&mut self) -> Vec<(ChannelKind, MessageContainer)> {
-        std::mem::replace(&mut self.ready_messages, Vec::new())
+    pub fn collect_ready_items<T>(&mut self, waitlist_store: &mut WaitlistStore<T>) -> Option<Vec<T>> {
+        waitlist_store.collect_ready_items(&mut self.ready_handles)
+    }
+}
+
+pub struct WaitlistStore<T> {
+    items: HashMap<Handle, T>,
+}
+
+impl<T> WaitlistStore<T> {
+    pub fn new() -> Self {
+        Self {
+            items: HashMap::new(),
+        }
+    }
+
+    pub fn queue(&mut self, handle: Handle, item: T) {
+        self.items.insert(handle, item);
+    }
+
+    pub fn collect_ready_items(&mut self, ready_handles: &mut HashSet<Handle>) -> Option<Vec<T>> {
+
+        let mut intersection: HashSet<Handle> = HashSet::new();
+
+        for handle in self.items.keys() {
+            if ready_handles.remove(handle) {
+                intersection.insert(*handle);
+            }
+        }
+
+        if intersection.len() == 0 {
+            return None;
+        }
+
+        let mut ready_messages = Vec::new();
+
+        for handle in intersection {
+            ready_messages.push(self.items.remove(&handle).unwrap());
+        }
+
+        Some(ready_messages)
     }
 }

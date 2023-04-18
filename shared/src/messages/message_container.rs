@@ -1,8 +1,9 @@
 use std::any::Any;
+use std::collections::HashSet;
 
 use naia_serde::BitWrite;
 
-use crate::{LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds};
+use crate::{LocalEntity, LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds};
 
 #[derive(Clone)]
 pub struct MessageContainer {
@@ -53,5 +54,13 @@ impl MessageContainer {
 
     pub fn kind(&self) -> MessageKind {
         return self.inner.kind();
+    }
+
+    pub fn relations_waiting(&self) -> Option<HashSet<LocalEntity>> {
+        return self.inner.relations_waiting();
+    }
+
+    pub fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        self.inner.relations_complete(converter);
     }
 }

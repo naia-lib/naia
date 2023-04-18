@@ -14,6 +14,7 @@ use crate::{
     types::MessageIndex,
     LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
+use crate::world::remote::entity_message_waitlist::EntityWaitlist;
 
 pub struct SequencedUnreliableReceiver {
     newest_received_message_index: Option<MessageIndex>,
@@ -28,7 +29,11 @@ impl SequencedUnreliableReceiver {
         }
     }
 
-    pub fn buffer_message(&mut self, message_index: MessageIndex, message: MessageContainer) {
+    pub fn buffer_message(&mut self, entity_waitlist: &mut EntityWaitlist, message_index: MessageIndex, message: MessageContainer) {
+
+        // use entity_waitlist
+        todo!();
+
         if let Some(most_recent_id) = self.newest_received_message_index {
             if sequence_greater_than(message_index, most_recent_id) {
                 self.incoming_messages.push(message);
@@ -42,7 +47,11 @@ impl SequencedUnreliableReceiver {
 }
 
 impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
-    fn receive_messages(&mut self) -> Vec<MessageContainer> {
+    fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
+
+        // use entity_waitlist
+        todo!();
+
         Vec::from(mem::take(&mut self.incoming_messages))
     }
 }
@@ -53,12 +62,13 @@ impl MessageChannelReceiver for SequencedUnreliableReceiver {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
+        entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;
         for (id, message) in id_w_msgs {
-            self.buffer_message(id, message);
+            self.buffer_message(entity_waitlist, id, message);
         }
         Ok(())
     }

@@ -13,6 +13,7 @@ use crate::{
     types::MessageIndex,
     LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
+use crate::world::remote::entity_message_waitlist::{EntityWaitlist, WaitlistStore};
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
@@ -30,6 +31,7 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     incoming_messages: Vec<(MessageIndex, MessageContainer)>,
     arranger: A,
     fragment_receiver: FragmentReceiver,
+    waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>
 }
 
 impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
@@ -39,27 +41,36 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             incoming_messages: Vec::new(),
             arranger,
             fragment_receiver: FragmentReceiver::new(),
+            waitlist_store: WaitlistStore::new()
         }
     }
 
     fn push_message(
         &mut self,
         message_kinds: &MessageKinds,
+        entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         message: MessageContainer,
     ) {
-        if let Some((first_index, full_message)) =
+        let Some((first_index, full_message)) =
             self.fragment_receiver
-                .receive(message_kinds, converter, message)
-        {
-            self.arranger
-                .process(&mut self.incoming_messages, first_index, full_message);
+                .receive(message_kinds, converter, message) else {
+            return;
+        };
+
+        if let Some(entity_set) = full_message.relations_waiting() {
+            entity_waitlist.queue(entity_set, &mut self.waitlist_store, (first_index, full_message));
+            return;
         }
+
+        self.arranger
+            .process(&mut self.incoming_messages, first_index, full_message);
     }
 
     pub fn buffer_message(
         &mut self,
         message_kinds: &MessageKinds,
+        entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         message_index: MessageIndex,
         message: MessageContainer,
@@ -68,19 +79,20 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             .buffer_message(message_index, message);
         let received_messages = self.reliable_receiver.receive_messages();
         for (_, received_message) in received_messages {
-            self.push_message(message_kinds, converter, received_message)
+            self.push_message(message_kinds, entity_waitlist, converter, received_message)
         }
     }
 
-    pub fn receive_messages(&mut self) -> Vec<(MessageIndex, MessageContainer)> {
+    pub fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<(MessageIndex, MessageContainer)> {
+
         // return buffer
         std::mem::take(&mut self.incoming_messages)
     }
 }
 
 impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageReceiver<A> {
-    fn receive_messages(&mut self) -> Vec<MessageContainer> {
-        self.receive_messages()
+    fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
+        self.receive_messages(entity_waitlist)
             .drain(..)
             .map(|(_, message)| message)
             .collect()
@@ -91,12 +103,13 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
+        entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;
         for (id, message) in id_w_msgs {
-            self.buffer_message(message_kinds, converter, id, message);
+            self.buffer_message(message_kinds, entity_waitlist, converter, id, message);
         }
         Ok(())
     }

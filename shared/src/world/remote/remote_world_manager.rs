@@ -1,19 +1,19 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::world::remote::entity_message_waitlist::EntityMessageWaitlist;
+use crate::world::remote::entity_message_waitlist::EntityWaitlist;
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
     world::{local_world_manager::LocalWorldManager, remote::entity_event::EntityEvent},
-    BitReader, ChannelKind, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver,
+    BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver,
     EntityActionType, EntityAndGlobalEntityConverter, EntityConverter, LocalEntity,
-    LocalEntityAndGlobalEntityConverter, MessageContainer, MessageIndex, Protocol, Replicate,
+    LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol, Replicate,
     Serde, SerdeErr, Tick, UnsignedVariableInteger, WorldMutType,
 };
 
 pub struct RemoteWorldManager {
     receiver: EntityActionReceiver<LocalEntity>,
     received_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
-    pub delayed_entity_messages: EntityMessageWaitlist<LocalEntity>,
+    pub delayed_entity_messages: EntityWaitlist,
 }
 
 impl RemoteWorldManager {
@@ -21,18 +21,8 @@ impl RemoteWorldManager {
         Self {
             receiver: EntityActionReceiver::new(),
             received_components: HashMap::default(),
-            delayed_entity_messages: EntityMessageWaitlist::new(),
+            delayed_entity_messages: EntityWaitlist::new(),
         }
-    }
-
-    pub fn queue_entity_message(
-        &mut self,
-        entities: Vec<LocalEntity>,
-        channel: &ChannelKind,
-        message: MessageContainer,
-    ) {
-        self.delayed_entity_messages
-            .queue_message(entities, channel, message);
     }
 
     fn on_entity_channel_opened(&mut self, local_entity: &LocalEntity) {

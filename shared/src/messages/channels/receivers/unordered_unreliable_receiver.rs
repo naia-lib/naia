@@ -9,6 +9,7 @@ use crate::{
     },
     LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
+use crate::world::remote::entity_message_waitlist::EntityWaitlist;
 
 pub struct UnorderedUnreliableReceiver {
     incoming_messages: VecDeque<MessageContainer>,
@@ -31,13 +32,21 @@ impl UnorderedUnreliableReceiver {
         message_kinds.read(reader, converter)
     }
 
-    fn recv_message(&mut self, message: MessageContainer) {
+    fn recv_message(&mut self, entity_waitlist: &mut EntityWaitlist, message: MessageContainer) {
+
+        // use entity_waitlist
+        todo!();
+
         self.incoming_messages.push_back(message);
     }
 }
 
 impl ChannelReceiver<MessageContainer> for UnorderedUnreliableReceiver {
-    fn receive_messages(&mut self) -> Vec<MessageContainer> {
+    fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
+
+        // use entity_waitlist
+        todo!();
+
         Vec::from(mem::take(&mut self.incoming_messages))
     }
 }
@@ -46,6 +55,7 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
+        entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
@@ -56,7 +66,7 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
             }
 
             let message = self.read_message(message_kinds, converter, reader)?;
-            self.recv_message(message);
+            self.recv_message(entity_waitlist, message);
         }
 
         Ok(())

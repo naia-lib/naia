@@ -30,6 +30,7 @@ use crate::{
     types::{HostType, MessageIndex, PacketIndex},
     LocalEntityAndGlobalEntityConverter, MessageKinds, Protocol,
 };
+use crate::world::remote::entity_message_waitlist::EntityWaitlist;
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -260,6 +261,7 @@ impl MessageManager {
     pub fn read_messages(
         &mut self,
         protocol: &Protocol,
+        entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<Vec<(ChannelKind, Vec<MessageContainer>)>, SerdeErr> {
@@ -274,18 +276,18 @@ impl MessageManager {
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(&protocol.message_kinds, converter, reader)?;
+            channel.read_messages(&protocol.message_kinds, entity_waitlist, converter, reader)?;
         }
 
-        Ok(self.receive_messages())
+        Ok(self.receive_messages(entity_waitlist))
     }
 
     /// Retrieve all messages from the channel buffers
-    fn receive_messages(&mut self) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
+    fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
-            let messages = channel.receive_messages();
+            let messages = channel.receive_messages(entity_waitlist);
             output.push((channel_kind.clone(), messages));
         }
         output
