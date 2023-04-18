@@ -1,4 +1,3 @@
-pub mod entity_message_waitlist;
 pub mod global_diff_handler;
 pub mod host_world_manager;
 pub mod mut_channel;

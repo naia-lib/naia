@@ -233,53 +233,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 &connection.base.local_world_manager,
             );
             let message = MessageContainer::from(message_box, &converter);
-
-            if message.has_entity_properties() {
-                // collect all entities in the message
-                let entities: Vec<E> = message
-                    .entities()
-                    .iter()
-                    .map(|global_entity| {
-                        self.global_world_manager
-                            .global_entity_to_entity(global_entity)
-                            .unwrap()
-                    })
-                    .collect();
-
-                // check whether all entities are in scope for the connection
-                let all_entities_in_scope = {
-                    entities.iter().all(|entity| {
-                        connection
-                            .base
-                            .host_world_manager
-                            .entity_channel_is_open(entity)
-                    })
-                };
-                if all_entities_in_scope {
-                    // All necessary entities are in scope, so send message
-                    connection.base.message_manager.send_message(
-                        &self.protocol.message_kinds,
-                        &converter,
-                        channel_kind,
-                        message,
-                    );
-                } else {
-                    // Entity hasn't been added to the User Scope yet, or replicated to Client
-                    // yet
-                    connection.base.host_world_manager.queue_entity_message(
-                        entities,
-                        channel_kind,
-                        message,
-                    );
-                }
-            } else {
-                connection.base.message_manager.send_message(
-                    &self.protocol.message_kinds,
-                    &converter,
-                    channel_kind,
-                    message,
-                );
-            }
+            connection.base.message_manager.send_message(
+                &self.protocol.message_kinds,
+                &converter,
+                channel_kind,
+                message,
+            );
         }
     }
 

@@ -151,8 +151,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         self.base.collect_outgoing_messages(
             now,
             &rtt_millis,
-            global_world_manager,
-            &protocol.message_kinds,
         );
 
         let mut any_sent = false;

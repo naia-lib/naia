@@ -1,17 +1,12 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::world::local_world_manager::LocalWorldManager;
-use crate::{
-    messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
-    world::remote::entity_event::EntityEvent, BitReader, ComponentKind, ComponentKinds,
-    EntityAction, EntityActionReceiver, EntityActionType, EntityAndGlobalEntityConverter,
-    EntityConverter, LocalEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol,
-    Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger, WorldMutType,
-};
+use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::{remote::entity_event::EntityEvent, local_world_manager::LocalWorldManager}, BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver, EntityActionType, EntityAndGlobalEntityConverter, EntityConverter, LocalEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger, WorldMutType, ChannelKind, MessageContainer};
+use crate::world::remote::entity_message_waitlist::EntityMessageWaitlist;
 
 pub struct RemoteWorldManager {
     receiver: EntityActionReceiver<LocalEntity>,
     received_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
+    pub delayed_entity_messages: EntityMessageWaitlist<LocalEntity>,
 }
 
 impl RemoteWorldManager {
@@ -19,7 +14,25 @@ impl RemoteWorldManager {
         Self {
             receiver: EntityActionReceiver::new(),
             received_components: HashMap::default(),
+            delayed_entity_messages: EntityMessageWaitlist::new(),
         }
+    }
+
+    pub fn queue_entity_message(
+        &mut self,
+        entities: Vec<LocalEntity>,
+        channel: &ChannelKind,
+        message: MessageContainer,
+    ) {
+        self.delayed_entity_messages.queue_message(entities, channel, message);
+    }
+
+    fn on_entity_channel_opened(&mut self, local_entity: &LocalEntity) {
+        self.delayed_entity_messages.add_entity(local_entity);
+    }
+
+    fn on_entity_channel_closing(&mut self, local_entity: &LocalEntity) {
+        self.delayed_entity_messages.remove_entity(local_entity);
     }
 
     pub fn read_world_events<E: Copy + Eq + Hash, W: WorldMutType<E>>(
@@ -200,6 +213,7 @@ impl RemoteWorldManager {
                     // set up entity
                     let world_entity = world.spawn_entity();
                     local_world_manager.remote_spawn_entity(&world_entity, &local_entity);
+                    self.on_entity_channel_opened(&local_entity);
 
                     events.push(EntityEvent::<E>::SpawnEntity(world_entity));
 
@@ -233,7 +247,7 @@ impl RemoteWorldManager {
                     }
 
                     world.despawn_entity(&world_entity);
-
+                    self.on_entity_channel_closing(&local_entity);
                     events.push(EntityEvent::<E>::DespawnEntity(world_entity));
                 }
                 EntityAction::InsertComponent(local_entity, component_kind) => {

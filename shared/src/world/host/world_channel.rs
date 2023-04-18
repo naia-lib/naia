@@ -7,7 +7,7 @@ use std::{
 use log::warn;
 
 use super::{
-    entity_action_event::EntityActionEvent, entity_message_waitlist::EntityMessageWaitlist,
+    entity_action_event::EntityActionEvent,
     host_world_manager::ActionId, user_diff_handler::UserDiffHandler,
 };
 use crate::{
@@ -51,7 +51,6 @@ pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
 
     address: Option<SocketAddr>,
     pub diff_handler: UserDiffHandler<E>,
-    pub delayed_entity_messages: EntityMessageWaitlist<E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
@@ -68,7 +67,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
             address: *address,
             diff_handler: UserDiffHandler::new(global_world_manager),
-            delayed_entity_messages: EntityMessageWaitlist::new(),
         }
     }
 
@@ -374,12 +372,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         world_manager.host_spawn_entity(entity);
     }
 
-    fn on_entity_channel_opened(&mut self, entity: &E) {
-        self.delayed_entity_messages.add_entity(entity);
+    fn on_entity_channel_opened(&mut self, _world_entity: &E) {
+
     }
 
-    fn on_entity_channel_closing(&mut self, entity: &E) {
-        self.delayed_entity_messages.remove_entity(entity);
+    fn on_entity_channel_closing(&mut self, _world_entity: &E) {
+
     }
 
     fn on_entity_channel_closed(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E) {

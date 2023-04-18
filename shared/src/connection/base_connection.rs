@@ -3,13 +3,12 @@ use std::{hash::Hash, net::SocketAddr};
 use naia_serde::{BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::world::local_world_manager::LocalWorldManager;
 use crate::{
     backends::Timer,
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
-    world::entity::entity_converters::GlobalWorldManagerType,
-    EntityAndGlobalEntityConverter, EntityConverter, EntityEvent, HostWorldManager, MessageKinds,
+    world::{entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager},
+    EntityAndGlobalEntityConverter, EntityConverter, EntityEvent, HostWorldManager,
     Protocol, RemoteWorldManager, WorldMutType, WorldRefType,
 };
 
@@ -120,16 +119,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
-        message_kinds: &MessageKinds,
     ) {
-        let converter = EntityConverter::new(global_entity_converter, &self.local_world_manager);
         self.host_world_manager.collect_outgoing_messages(
             now,
             rtt_millis,
-            &converter,
-            message_kinds,
-            &mut self.message_manager,
         );
         self.message_manager
             .collect_outgoing_messages(now, rtt_millis);

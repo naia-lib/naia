@@ -12,9 +12,9 @@ use crate::{
     world::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
     },
-    BitWrite, BitWriter, ChannelKind, ComponentKind, ComponentKinds, ConstBitLength, DiffMask,
-    EntityAction, EntityActionType, EntityConverter, Instant, LocalEntityAndGlobalEntityConverter,
-    LocalEntityConverter, MessageContainer, MessageIndex, MessageKinds, MessageManager,
+    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, DiffMask,
+    EntityAction, EntityActionType, EntityConverter, Instant,
+    LocalEntityConverter, MessageIndex,
     PacketIndex, Serde, UnsignedVariableInteger, WorldRefType,
 };
 
@@ -107,40 +107,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
     // Messages
 
-    pub fn queue_entity_message(
-        &mut self,
-        entities: Vec<E>,
-        channel: &ChannelKind,
-        message: MessageContainer,
-    ) {
-        self.world_channel
-            .delayed_entity_messages
-            .queue_message(entities, channel, message);
-    }
-
-    // Writer
-
     pub fn collect_outgoing_messages(
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-        global_entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
-        message_kinds: &MessageKinds,
-        message_manager: &mut MessageManager,
     ) {
-        let messages = self
-            .world_channel
-            .delayed_entity_messages
-            .collect_ready_messages();
-        for (channel_kind, message) in messages {
-            message_manager.send_message(
-                message_kinds,
-                global_entity_converter,
-                &channel_kind,
-                message,
-            );
-        }
-
         self.collect_dropped_update_packets(rtt_millis);
 
         self.collect_dropped_action_packets();
