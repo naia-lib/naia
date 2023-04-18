@@ -6,4 +6,3 @@ pub mod entity_ref;
 pub mod error;
 pub mod global_entity;
 pub mod local_entity;
-pub mod owned_entity;

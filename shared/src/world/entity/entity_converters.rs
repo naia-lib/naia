@@ -7,7 +7,7 @@ use crate::{
     bigmap::BigMapKey,
     world::{
         entity::{
-            error::EntityDoesNotExistError, global_entity::GlobalEntity, owned_entity::OwnedEntity,
+            error::EntityDoesNotExistError, global_entity::GlobalEntity, local_entity::LocalEntity,
         },
         host::mut_channel::MutChannelType,
     },
@@ -34,18 +34,18 @@ pub trait LocalEntityAndGlobalEntityConverter {
     fn global_entity_to_local_entity(
         &self,
         global_entity: &GlobalEntity,
-    ) -> Result<OwnedEntity, EntityDoesNotExistError>;
+    ) -> Result<LocalEntity, EntityDoesNotExistError>;
     fn local_entity_to_global_entity(
         &self,
-        owned_entity: &OwnedEntity,
+        owned_entity: &LocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError>;
 }
 
 pub trait LocalEntityConverter<E: Copy + Eq + Hash> {
-    fn entity_to_local_entity(&self, entity: &E) -> Result<OwnedEntity, EntityDoesNotExistError>;
+    fn entity_to_local_entity(&self, entity: &E) -> Result<LocalEntity, EntityDoesNotExistError>;
     fn local_entity_to_entity(
         &self,
-        owned_entity: &OwnedEntity,
+        owned_entity: &LocalEntity,
     ) -> Result<E, EntityDoesNotExistError>;
 }
 
@@ -55,13 +55,13 @@ impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
     fn global_entity_to_local_entity(
         &self,
         _: &GlobalEntity,
-    ) -> Result<OwnedEntity, EntityDoesNotExistError> {
-        Ok(OwnedEntity::Host(0))
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        Ok(LocalEntity::Host(0))
     }
 
     fn local_entity_to_global_entity(
         &self,
-        _: &OwnedEntity,
+        _: &LocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         Ok(GlobalEntity::from_u64(0))
     }
@@ -90,7 +90,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
     fn global_entity_to_local_entity(
         &self,
         global_entity: &GlobalEntity,
-    ) -> Result<OwnedEntity, EntityDoesNotExistError> {
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
         if let Ok(entity) = self
             .global_entity_converter
             .global_entity_to_entity(global_entity)
@@ -102,7 +102,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
 
     fn local_entity_to_global_entity(
         &self,
-        owned_entity: &OwnedEntity,
+        owned_entity: &LocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         if let Ok(entity) = self
             .local_entity_converter

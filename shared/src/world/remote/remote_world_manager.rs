@@ -5,13 +5,13 @@ use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
     world::remote::entity_event::EntityEvent, BitReader, ComponentKind, ComponentKinds,
     EntityAction, EntityActionReceiver, EntityActionType, EntityAndGlobalEntityConverter,
-    EntityConverter, LocalEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol,
+    EntityConverter, LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol,
     Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger, WorldMutType,
 };
 
 pub struct RemoteWorldManager {
-    receiver: EntityActionReceiver<LocalEntity>,
-    received_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
+    receiver: EntityActionReceiver<OldLocalEntity>,
+    received_components: HashMap<(OldLocalEntity, ComponentKind), Box<dyn Replicate>>,
 }
 
 impl RemoteWorldManager {
@@ -123,7 +123,7 @@ impl RemoteWorldManager {
             // Entity Creation
             EntityActionType::SpawnEntity => {
                 // read entity
-                let local_entity = LocalEntity::de(reader)?;
+                let local_entity = OldLocalEntity::de(reader)?;
 
                 // read components
                 let components_num = UnsignedVariableInteger::<3>::de(reader)?.get();
@@ -144,7 +144,7 @@ impl RemoteWorldManager {
             // Entity Deletion
             EntityActionType::DespawnEntity => {
                 // read all data
-                let local_entity = LocalEntity::de(reader)?;
+                let local_entity = OldLocalEntity::de(reader)?;
 
                 self.receiver
                     .buffer_action(action_id, EntityAction::DespawnEntity(local_entity));
@@ -152,7 +152,7 @@ impl RemoteWorldManager {
             // Add Component to Entity
             EntityActionType::InsertComponent => {
                 // read all data
-                let local_entity = LocalEntity::de(reader)?;
+                let local_entity = OldLocalEntity::de(reader)?;
                 let new_component = component_kinds.read(reader, converter)?;
                 let new_component_kind = new_component.kind();
 
@@ -166,7 +166,7 @@ impl RemoteWorldManager {
             // Component Removal
             EntityActionType::RemoveComponent => {
                 // read all data
-                let local_entity = LocalEntity::de(reader)?;
+                let local_entity = OldLocalEntity::de(reader)?;
                 let component_kind = ComponentKind::de(component_kinds, reader)?;
 
                 self.receiver.buffer_action(
@@ -287,7 +287,7 @@ impl RemoteWorldManager {
                 break;
             }
 
-            let local_entity = LocalEntity::de(reader)?;
+            let local_entity = OldLocalEntity::de(reader)?;
 
             self.read_update(
                 converter,
@@ -313,7 +313,7 @@ impl RemoteWorldManager {
         world: &mut W,
         server_tick: Tick,
         reader: &mut BitReader,
-        local_entity: &LocalEntity,
+        local_entity: &OldLocalEntity,
         events: &mut Vec<EntityEvent<E>>,
     ) -> Result<(), SerdeErr> {
         loop {

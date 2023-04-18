@@ -7,7 +7,7 @@ use crate::world::{
     entity::{
         entity_converters::{EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter},
         global_entity::GlobalEntity,
-        owned_entity::OwnedEntity,
+        local_entity::LocalEntity,
     },
 };
 
@@ -51,11 +51,11 @@ impl EntityProperty {
                 let reversed_owned_entity = owned_entity.to_reversed();
 
                 let opt = Some(reversed_owned_entity);
-                opt.ser(writer);
+                reversed_owned_entity.owned_ser(writer);
                 return;
             }
         }
-        let opt: Option<OwnedEntity> = None;
+        let opt: Option<LocalEntity> = None;
         opt.ser(writer);
     }
 
@@ -70,7 +70,7 @@ impl EntityProperty {
         mutator_index: u8,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Self, SerdeErr> {
-        if let Some(owned_entity) = Option::<OwnedEntity>::de(reader)? {
+        if let Some(owned_entity) = Option::<LocalEntity>::de(reader)? {
             if let Ok(global_entity) = converter.local_entity_to_global_entity(&owned_entity) {
                 let mut new_prop = Self::new(mutator_index);
                 *new_prop.global_entity_prop = Some(global_entity);
@@ -86,7 +86,7 @@ impl EntityProperty {
     }
 
     pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
-        Option::<OwnedEntity>::de(reader)?.ser(writer);
+        Option::<LocalEntity>::de(reader)?.ser(writer);
         Ok(())
     }
 
@@ -95,7 +95,7 @@ impl EntityProperty {
         reader: &mut BitReader,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<(), SerdeErr> {
-        if let Some(owned_entity) = Option::<OwnedEntity>::de(reader)? {
+        if let Some(owned_entity) = Option::<LocalEntity>::de(reader)? {
             if let Ok(global_entity) = converter.local_entity_to_global_entity(&owned_entity) {
                 *self.global_entity_prop = Some(global_entity);
             } else {
