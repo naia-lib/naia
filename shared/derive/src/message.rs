@@ -27,8 +27,10 @@ pub fn message_impl(
 
     // Methods
     let clone_method = get_clone_method(&fields, &struct_type);
-    let has_entity_relations_method = get_has_entity_relations_method(&fields);
-    let entities_method = get_entities_method(&fields, &struct_type);
+    // let has_entity_relations_method = get_has_entity_relations_method(&fields);
+    // let entities_method = get_entities_method(&fields, &struct_type);
+    let relations_waiting_method = get_relations_waiting_method(&fields, &struct_type);
+    let relations_complete_method = get_relations_complete_method(&fields, &struct_type);
     let bit_length_method = get_bit_length_method(&fields, &struct_type);
     let write_method = get_write_method(&fields, &struct_type);
     let create_builder_method = get_create_builder_method(&builder_name);
@@ -39,8 +41,9 @@ pub fn message_impl(
         mod #module_name {
 
             pub use std::any::Any;
+            pub use std::collections::HashSet;
             pub use #shared_crate_name::{
-                Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter,
+                Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntity,
                 EntityRelation, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer
             };
             use super::*;
@@ -60,8 +63,8 @@ pub fn message_impl(
                 #is_fragment_method
                 #bit_length_method
                 #create_builder_method
-                #has_entity_relations_method
-                #entities_method
+                #relations_waiting_method
+                #relations_complete_method
                 #write_method
             }
             impl Named for #struct_name {
@@ -122,33 +125,61 @@ fn get_clone_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 }
 
-fn get_has_entity_relations_method(fields: &[Field]) -> TokenStream {
-    for field in fields.iter() {
-        if let Field::EntityRelation(_) = field {
-            return quote! {
-                fn has_entity_relations(&self) -> bool {
-                    return true;
-                }
-            };
-        }
-    }
+// fn get_has_entity_relations_method(fields: &[Field]) -> TokenStream {
+//     for field in fields.iter() {
+//         if let Field::EntityRelation(_) = field {
+//             return quote! {
+//                 fn has_entity_relations(&self) -> bool {
+//                     return true;
+//                 }
+//             };
+//         }
+//     }
+//
+//     quote! {
+//         fn has_entity_relations(&self) -> bool {
+//             return false;
+//         }
+//     }
+// }
 
-    quote! {
-        fn has_entity_relations(&self) -> bool {
-            return false;
-        }
-    }
-}
+// fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+//     let mut body = quote! {};
+//
+//     for (index, field) in fields.iter().enumerate() {
+//         if let Field::EntityRelation(_) = field {
+//             let field_name = get_field_name(field, index, struct_type);
+//             let body_add_right = quote! {
+//                 if let Some(global_entity) = self.#field_name.global_entity() {
+//                     output.push(global_entity);
+//                 }
+//             };
+//             let new_body = quote! {
+//                 #body
+//                 #body_add_right
+//             };
+//             body = new_body;
+//         }
+//     }
+//
+//     quote! {
+//         fn entities(&self) -> Vec<GlobalEntity> {
+//             let mut output = Vec::new();
+//             #body
+//             return output;
+//         }
+//     }
+// }
 
-fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+fn get_relations_waiting_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
         if let Field::EntityRelation(_) = field {
             let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
-                if let Some(global_entity) = self.#field_name.global_entity() {
-                    output.push(global_entity);
+                if let Some(local_entity) = self.#field_name.waiting_local_entity() {
+                    output.insert(local_entity);
                 }
             };
             let new_body = quote! {
@@ -160,10 +191,37 @@ fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStrea
     }
 
     quote! {
-        fn entities(&self) -> Vec<GlobalEntity> {
-            let mut output = Vec::new();
+        fn relations_waiting(&self) -> Option<HashSet<LocalEntity>> {
+            let mut output = HashSet::new();
             #body
-            return output;
+            if output.is_empty() {
+                return None;
+            }
+            return Some(output);
+        }
+    }
+}
+
+fn get_relations_complete_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+    let mut body = quote! {};
+
+    for (index, field) in fields.iter().enumerate() {
+        if let Field::EntityRelation(_) = field {
+            let field_name = get_field_name(field, index, struct_type);
+            let body_add_right = quote! {
+                self.#field_name.waiting_complete(converter);
+            };
+            let new_body = quote! {
+                #body
+                #body_add_right
+            };
+            body = new_body;
+        }
+    }
+
+    quote! {
+        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+            #body
         }
     }
 }
@@ -192,7 +250,7 @@ pub fn get_read_method(
         let new_output_right = match field {
             Field::EntityRelation(_property) => {
                 quote! {
-                    let #field_name = EntityRelation::new_read(reader, converter)?;
+                    let #field_name = EntityRelation::read(reader, converter)?;
                 }
             }
             Field::Normal(normal_field) => {

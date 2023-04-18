@@ -77,7 +77,9 @@ impl EntityProperty {
                 *new_prop.global_entity_prop = Some(global_entity);
                 Ok(new_prop)
             } else {
-                panic!("Could not find GlobalEntity to associate with incoming EntityProperty value!");
+                panic!(
+                    "Could not find GlobalEntity to associate with incoming EntityProperty value!"
+                );
             }
         } else {
             let mut new_prop = Self::new(mutator_index);

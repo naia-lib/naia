@@ -2,9 +2,7 @@ use std::any::Any;
 
 use naia_serde::BitWrite;
 
-use crate::{
-    GlobalEntity, LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds,
-};
+use crate::{LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds};
 
 #[derive(Clone)]
 pub struct MessageContainer {
@@ -43,14 +41,6 @@ impl MessageContainer {
         } else {
             self.inner.write(message_kinds, writer, converter);
         }
-    }
-
-    pub fn has_entity_properties(&self) -> bool {
-        return self.inner.has_entity_relations();
-    }
-
-    pub fn entities(&self) -> Vec<GlobalEntity> {
-        return self.inner.entities();
     }
 
     pub fn is_fragment(&self) -> bool {

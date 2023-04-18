@@ -69,12 +69,12 @@ pub use messages::{
         },
         senders::{channel_sender::ChannelSender, reliable_sender::ReliableSender},
     },
+    entity_relation::EntityRelation,
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_container::MessageContainer,
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     named::Named,
-    entity_relation::EntityRelation,
 };
 pub use world::{
     component::{

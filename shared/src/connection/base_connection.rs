@@ -7,9 +7,11 @@ use crate::{
     backends::Timer,
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
-    world::{entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager},
-    EntityAndGlobalEntityConverter, EntityConverter, EntityEvent, HostWorldManager,
-    Protocol, RemoteWorldManager, WorldMutType, WorldRefType,
+    world::{
+        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+    },
+    EntityAndGlobalEntityConverter, EntityConverter, EntityEvent, HostWorldManager, Protocol,
+    RemoteWorldManager, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -115,15 +117,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
             || self.host_world_manager.has_outgoing_messages()
     }
 
-    pub fn collect_outgoing_messages(
-        &mut self,
-        now: &Instant,
-        rtt_millis: &f32,
-    ) {
-        self.host_world_manager.collect_outgoing_messages(
-            now,
-            rtt_millis,
-        );
+    pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+        self.host_world_manager
+            .collect_outgoing_messages(now, rtt_millis);
         self.message_manager
             .collect_outgoing_messages(now, rtt_millis);
     }

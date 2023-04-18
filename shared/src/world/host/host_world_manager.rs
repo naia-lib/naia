@@ -12,10 +12,9 @@ use crate::{
     world::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
     },
-    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, DiffMask,
-    EntityAction, EntityActionType, EntityConverter, Instant,
-    LocalEntityConverter, MessageIndex,
-    PacketIndex, Serde, UnsignedVariableInteger, WorldRefType,
+    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, DiffMask, EntityAction,
+    EntityActionType, EntityConverter, Instant, LocalEntityConverter, MessageIndex, PacketIndex,
+    Serde, UnsignedVariableInteger, WorldRefType,
 };
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
@@ -107,11 +106,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
     // Messages
 
-    pub fn collect_outgoing_messages(
-        &mut self,
-        now: &Instant,
-        rtt_millis: &f32,
-    ) {
+    pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.collect_dropped_update_packets(rtt_millis);
 
         self.collect_dropped_action_packets();

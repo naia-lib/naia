@@ -4,8 +4,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    EntityEvent, GlobalWorldManagerType, HostType, Instant, OwnedBitReader, PacketType, Protocol,
-    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    EntityEvent, HostType, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
+    StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -154,10 +154,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         global_world_manager: &GlobalWorldManager<E>,
     ) {
         let rtt_millis = self.time_manager.rtt();
-        self.base.collect_outgoing_messages(
-            now,
-            &rtt_millis,
-        );
+        self.base.collect_outgoing_messages(now, &rtt_millis);
 
         self.tick_buffer.collect_outgoing_messages(
             &self.time_manager.client_sending_tick,

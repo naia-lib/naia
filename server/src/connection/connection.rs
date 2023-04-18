@@ -148,10 +148,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         time_manager: &TimeManager,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
-        self.base.collect_outgoing_messages(
-            now,
-            &rtt_millis,
-        );
+        self.base.collect_outgoing_messages(now, &rtt_millis);
 
         let mut any_sent = false;
         loop {

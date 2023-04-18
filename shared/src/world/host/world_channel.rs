@@ -7,8 +7,8 @@ use std::{
 use log::warn;
 
 use super::{
-    entity_action_event::EntityActionEvent,
-    host_world_manager::ActionId, user_diff_handler::UserDiffHandler,
+    entity_action_event::EntityActionEvent, host_world_manager::ActionId,
+    user_diff_handler::UserDiffHandler,
 };
 use crate::{
     world::local_world_manager::LocalWorldManager, ChannelSender, ComponentKind, EntityAction,
@@ -372,13 +372,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         world_manager.host_spawn_entity(entity);
     }
 
-    fn on_entity_channel_opened(&mut self, _world_entity: &E) {
+    fn on_entity_channel_opened(&mut self, _world_entity: &E) {}
 
-    }
-
-    fn on_entity_channel_closing(&mut self, _world_entity: &E) {
-
-    }
+    fn on_entity_channel_closing(&mut self, _world_entity: &E) {}
 
     fn on_entity_channel_closed(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E) {
         world_manager.host_despawn_entity(entity);
