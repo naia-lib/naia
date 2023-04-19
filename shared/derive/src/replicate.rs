@@ -511,12 +511,12 @@ pub fn get_new_complete_method(
                 match *struct_type {
                     StructType::Struct => {
                         quote! {
-                            #field_name: Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
+                            #field_name: Property::<#field_type>::host_owned(#field_name, #enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     StructType::TupleStruct => {
                         quote! {
-                            Property::<#field_type>::new(#field_name, #enum_name::#uppercase_variant_name as u8)
+                            Property::<#field_type>::host_owned(#field_name, #enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     _ => {

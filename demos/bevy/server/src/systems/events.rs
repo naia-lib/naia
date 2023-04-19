@@ -16,7 +16,7 @@ use naia_bevy_server::{
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Relation, Color, ColorValue, Position, Shape, ShapeValue},
+    components::{Color, ColorValue, Position, Relation, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
 };
 

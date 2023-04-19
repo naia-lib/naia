@@ -19,7 +19,7 @@ use naia_bevy_client::{
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Relation, Color, ColorValue, Position, Shape, ShapeValue},
+    components::{Color, ColorValue, Position, Relation, Shape, ShapeValue},
     messages::{EntityAssignment, KeyCommand},
 };
 
@@ -53,7 +53,9 @@ pub fn connect_events(
 
         // Relation component
         let mut relation = Relation::new();
-        relation.entity.set(&client, &global.baseline_entity.unwrap());
+        relation
+            .entity
+            .set(&client, &global.baseline_entity.unwrap());
 
         // Spawn Cursor Entity
         let entity = commands

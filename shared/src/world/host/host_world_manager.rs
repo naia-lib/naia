@@ -6,9 +6,16 @@ use std::{
     time::Duration,
 };
 
-use crate::{messages::channels::senders::indexed_message_writer::IndexedMessageWriter, sequence_list::SequenceList, world::{
-    entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-}, BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, DiffMask, EntityAction, EntityActionType, Instant, LocalEntityConverter, MessageIndex, PacketIndex, Serde, UnsignedVariableInteger, WorldRefType, EntityConverterMut};
+use crate::{
+    messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
+    sequence_list::SequenceList,
+    world::{
+        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+    },
+    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, DiffMask, EntityAction,
+    EntityActionType, EntityConverterMut, Instant, LocalEntityConverter, MessageIndex, PacketIndex,
+    Serde, UnsignedVariableInteger, WorldRefType,
+};
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
 

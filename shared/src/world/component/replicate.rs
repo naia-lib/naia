@@ -3,16 +3,20 @@ use std::collections::HashSet;
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::{LocalEntity, LocalEntityAndGlobalEntityConverterMut, messages::named::Named, world::{
-    component::{
-        component_kinds::{ComponentKind, ComponentKinds},
-        component_update::ComponentUpdate,
-        diff_mask::DiffMask,
-        property_mutate::PropertyMutator,
-        replica_ref::{ReplicaDynMut, ReplicaDynRef},
+use crate::{
+    messages::named::Named,
+    world::{
+        component::{
+            component_kinds::{ComponentKind, ComponentKinds},
+            component_update::ComponentUpdate,
+            diff_mask::DiffMask,
+            property_mutate::PropertyMutator,
+            replica_ref::{ReplicaDynMut, ReplicaDynRef},
+        },
+        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
     },
-    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
-}};
+    LocalEntity, LocalEntityAndGlobalEntityConverterMut,
+};
 
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream

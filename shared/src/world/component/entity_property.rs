@@ -2,7 +2,6 @@ use log::warn;
 use std::hash::Hash;
 
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
-use crate::PropertyMutator;
 
 use crate::world::entity::{
     entity_converters::{
@@ -11,6 +10,7 @@ use crate::world::entity::{
     },
     global_entity::GlobalEntity,
     local_entity::LocalEntity,
+    PropertyMutator,
 };
 
 #[derive(Clone)]
@@ -18,6 +18,15 @@ enum EntityRelation {
     HostOwned(HostOwnedRelation),
     RemoteOwned(RemoteOwnedRelation),
     RemoteWaiting(RemoteWaitingRelation),
+}
+
+impl EntityRelation {
+    fn is_host_owned(&self) -> bool {
+        match self {
+            EntityRelation::HostOwned(_) => true,
+            EntityRelation::RemoteOwned(_) | EntityRelation::RemoteWaiting(_) => false,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -130,6 +139,9 @@ impl EntityProperty {
         reader: &mut BitReader,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<(), SerdeErr> {
+        if self.inner.is_host_owned() {
+            panic!("HostOwned EntityProperty should never read.");
+        }
         let exists = bool::de(reader)?;
         let new_inner = {
             if exists {
@@ -184,19 +196,17 @@ impl EntityProperty {
 
     pub fn mirror(&mut self, other: &EntityProperty) {
         match &mut self.inner {
-            EntityRelation::HostOwned(inner) => {
-                match &other.inner {
-                    EntityRelation::HostOwned(other_inner) => {
-                        inner.mirror_host(other_inner);
-                    }
-                    EntityRelation::RemoteOwned(other_inner) => {
-                        inner.mirror_remote(other_inner);
-                    }
-                    EntityRelation::RemoteWaiting(_) => {
-                        inner.mirror_waiting();
-                    }
+            EntityRelation::HostOwned(inner) => match &other.inner {
+                EntityRelation::HostOwned(other_inner) => {
+                    inner.mirror_host(other_inner);
                 }
-            }
+                EntityRelation::RemoteOwned(other_inner) => {
+                    inner.mirror_remote(other_inner);
+                }
+                EntityRelation::RemoteWaiting(_) => {
+                    inner.mirror_waiting();
+                }
+            },
             EntityRelation::RemoteOwned(_) | EntityRelation::RemoteWaiting(_) => {
                 panic!("Remote EntityProperty should never be set manually.");
             }
