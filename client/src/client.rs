@@ -733,7 +733,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .base
             .despawn_all_remote_entities(&mut self.global_world_manager, world);
 
-        self.incoming_events.receive_entity_events(events);
+        self.incoming_events.receive_world_events(events);
     }
 
     fn disconnect_reset_connection(&mut self) {

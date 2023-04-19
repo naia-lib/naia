@@ -72,7 +72,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         reader: &mut BitReader,
         world: &mut W,
         global_world_manager: &mut GlobalWorldManager<E>,
-        incoming_events: &mut Events<E>,
     ) -> Result<(), SerdeErr> {
         {
             let entity_converter =
@@ -88,12 +87,45 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             )?;
 
             // read messages
-            let messages = self.base.message_manager.read_messages(
+            self.base.message_manager.read_messages(
                 protocol,
                 &mut self.base.remote_world_manager.entity_waitlist,
                 &entity_converter,
                 reader,
             )?;
+        }
+
+        // read world events
+        if protocol.client_authoritative_entities {
+            self.base.remote_world_manager.read_world_events(
+                global_world_manager,
+                &mut self.base.local_world_manager,
+                protocol,
+                world,
+                client_tick,
+                reader,
+            )?;
+        }
+
+        return Ok(());
+    }
+
+    /// Read packet data received from a client
+    pub fn receive_incoming_data(
+        &mut self,
+        protocol: &Protocol,
+        global_world_manager: &mut GlobalWorldManager<E>,
+        incoming_events: &mut Events<E>,
+    ) {
+        {
+            let entity_converter =
+                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
+
+            // receive messages
+            let messages = self.base.message_manager.receive_messages(
+                &mut self.base.remote_world_manager.entity_waitlist,
+                &entity_converter,
+            );
             for (channel_kind, messages) in messages {
                 for message in messages {
                     incoming_events.push_message(&self.user_key, &channel_kind, message);
@@ -103,31 +135,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read world events
         if protocol.client_authoritative_entities {
-            let entity_events = self.base.remote_world_manager.read_world_events(
-                global_world_manager,
-                &mut self.base.local_world_manager,
-                protocol,
-                world,
-                client_tick,
-                reader,
-            )?;
-
+            let entity_events = self.base.remote_world_manager.receive_world_events();
             for event in &entity_events {
-                match event {
-                    EntityEvent::SpawnEntity(entity) => {
-                        global_world_manager.remote_spawn_entity(entity, &self.user_key);
-                    }
-                    EntityEvent::DespawnEntity(entity) => {
-                        global_world_manager.remote_despawn_entity(entity);
-                    }
-                    _ => {}
+                if let EntityEvent::SpawnEntity(entity) = event {
+                    global_world_manager.remote_spawn_entity_record(entity, &self.user_key);
                 }
             }
-
             incoming_events.receive_entity_events(&self.user_key, entity_events);
         }
-
-        return Ok(());
     }
 
     pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {

@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_set::Iter, HashMap},
+    collections::{hash_set::Iter, HashMap, HashSet},
     hash::Hash,
     net::SocketAddr,
     panic,
@@ -939,7 +939,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.handle_heartbeats();
         self.handle_pings();
 
-        //receive socket events
+        let mut addresses: HashSet<SocketAddr> = HashSet::new();
+        // receive socket events
         loop {
             match self.io.recv_reader() {
                 Ok(Some((address, owned_reader))) => {
@@ -960,6 +961,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         continue;
                     }
 
+                    addresses.insert(address);
+
                     if self
                         .maintain_connection(&address, &header, &mut reader, &mut world)
                         .is_err()
@@ -977,6 +980,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .push_error(NaiaServerError::Wrapped(Box::new(error)));
                 }
             }
+        }
+
+        for address in addresses {
+            self.receive_from_connection(&address);
         }
     }
 
@@ -1103,7 +1110,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     reader,
                     world,
                     &mut self.global_world_manager,
-                    &mut self.incoming_events,
                 )?;
             }
             PacketType::Disconnect => {
@@ -1128,6 +1134,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         return Ok(());
+    }
+
+    fn receive_from_connection(&mut self, address: &SocketAddr) {
+        // Packets requiring established connection
+        let Some(connection) = self.user_connections.get_mut(address) else {
+            return;
+        };
+
+        connection.receive_incoming_data(
+            &self.protocol,
+            &mut self.global_world_manager,
+            &mut self.incoming_events,
+        );
     }
 
     fn handle_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {

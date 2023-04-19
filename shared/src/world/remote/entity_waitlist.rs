@@ -1,3 +1,4 @@
+use log::warn;
 use std::collections::{HashMap, HashSet};
 
 use crate::{KeyGenerator, LocalEntity};
@@ -55,6 +56,8 @@ impl EntityWaitlist {
     }
 
     pub fn add_entity(&mut self, entity: &LocalEntity) {
+        warn!("Entity Waitlist received: {:?}", entity);
+
         // put new entity into scope
         self.in_scope_entities.insert(*entity);
 
@@ -101,6 +104,8 @@ impl EntityWaitlist {
     }
 
     pub fn remove_entity(&mut self, entity: &LocalEntity) {
+        warn!("Entity Waitlist lost: {:?}", entity);
+
         // TODO: should we de-queue all our waiting messages that depend on this Entity?
         self.in_scope_entities.remove(entity);
     }

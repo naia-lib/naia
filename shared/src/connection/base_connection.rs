@@ -25,7 +25,7 @@ use super::{
 pub struct BaseConnection<E: Copy + Eq + Hash + Send + Sync> {
     pub message_manager: MessageManager,
     pub host_world_manager: HostWorldManager<E>,
-    pub remote_world_manager: RemoteWorldManager,
+    pub remote_world_manager: RemoteWorldManager<E>,
     pub local_world_manager: LocalWorldManager<E>,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
@@ -228,7 +228,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
             }
 
             // Despawn from global world manager
-            global_world_manager.despawn(&entity);
+            global_world_manager.remote_despawn_entity(&entity);
 
             // Generate despawn event
             output.push(EntityEvent::DespawnEntity(entity));

@@ -4,8 +4,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    EntityConverterMut, EntityEvent, HostType, Instant, OwnedBitReader, PacketType, Protocol,
-    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    EntityConverterMut, HostType, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
+    StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -98,25 +98,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
 
+            warn!("Begin Read Packet");
+
             // read messages
             {
                 let entity_converter =
                     EntityConverter::new(global_world_manager, &self.base.local_world_manager);
-                let messages = self.base.message_manager.read_messages(
+                self.base.message_manager.read_messages(
                     protocol,
                     &mut self.base.remote_world_manager.entity_waitlist,
                     &entity_converter,
                     &mut reader,
                 )?;
-                for (channel_kind, messages) in messages {
-                    for message in messages {
-                        incoming_events.push_message(&channel_kind, message);
-                    }
-                }
             }
 
             // read world events
-            let entity_events = self.base.remote_world_manager.read_world_events(
+            self.base.remote_world_manager.read_world_events(
                 global_world_manager,
                 &mut self.base.local_world_manager,
                 protocol,
@@ -124,20 +121,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 server_tick,
                 &mut reader,
             )?;
+        }
 
-            for event in &entity_events {
-                match event {
-                    EntityEvent::SpawnEntity(entity) => {
-                        global_world_manager.remote_spawn_entity(entity);
-                    }
-                    EntityEvent::DespawnEntity(entity) => {
-                        global_world_manager.remote_despawn_entity(entity);
-                    }
-                    _ => {}
+        {
+            let entity_converter =
+                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
+
+            // Receive Message Events
+            let messages = self.base.message_manager.receive_messages(
+                &mut self.base.remote_world_manager.entity_waitlist,
+                &entity_converter,
+            );
+            for (channel_kind, messages) in messages {
+                for message in messages {
+                    incoming_events.push_message(&channel_kind, message);
                 }
             }
 
-            incoming_events.receive_entity_events(entity_events);
+            // Receive World Events
+            let world_events = self.base.remote_world_manager.receive_world_events();
+
+            incoming_events.receive_world_events(world_events);
         }
 
         Ok(())

@@ -60,17 +60,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         );
     }
 
-    pub fn remote_spawn_entity(&mut self, entity: &E) {
-        if self.entity_records.contains_key(entity) {
-            panic!("entity already initialized!");
-        }
-        let global_entity = self.global_entity_map.insert(*entity);
-        self.entity_records.insert(
-            *entity,
-            GlobalEntityRecord::new(global_entity, EntityOwner::Server),
-        );
-    }
-
     // Despawn
     pub fn host_despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord> {
         // Clean up associated components
@@ -84,15 +73,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
 
         self.entity_records.remove(entity)
-    }
-
-    pub fn remote_despawn_entity(&mut self, entity: &E) {
-        // Despawn from World Record
-        if !self.entity_records.contains_key(entity) {
-            panic!("entity does not exist!");
-        }
-
-        self.entity_records.remove(entity);
     }
 
     // Component Kinds
@@ -164,7 +144,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.diff_handler.clone()
     }
 
-    fn despawn(&mut self, entity: &E) {
+    fn remote_spawn_entity(&mut self, entity: &E) {
+        if self.entity_records.contains_key(entity) {
+            panic!("entity already initialized!");
+        }
+        let global_entity = self.global_entity_map.insert(*entity);
+        self.entity_records.insert(
+            *entity,
+            GlobalEntityRecord::new(global_entity, EntityOwner::Server),
+        );
+    }
+
+    fn remote_despawn_entity(&mut self, entity: &E) {
         let record = self
             .entity_records
             .remove(entity)

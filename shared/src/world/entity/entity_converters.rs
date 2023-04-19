@@ -19,7 +19,8 @@ pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConv
     fn to_global_entity_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E>;
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
-    fn despawn(&mut self, entity: &E);
+    fn remote_spawn_entity(&mut self, entity: &E);
+    fn remote_despawn_entity(&mut self, entity: &E);
 }
 
 pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {

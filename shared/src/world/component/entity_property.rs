@@ -3,13 +3,15 @@ use std::hash::Hash;
 
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
-use crate::world::entity::{
-    entity_converters::{
-        EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
-        LocalEntityAndGlobalEntityConverterMut,
+use crate::{
+    world::entity::{
+        entity_converters::{
+            EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
+            LocalEntityAndGlobalEntityConverterMut,
+        },
+        global_entity::GlobalEntity,
+        local_entity::LocalEntity,
     },
-    global_entity::GlobalEntity,
-    local_entity::LocalEntity,
     PropertyMutator,
 };
 

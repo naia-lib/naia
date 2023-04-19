@@ -64,17 +64,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         );
     }
 
-    pub fn remote_spawn_entity(&mut self, entity: &E, user_key: &UserKey) {
-        if self.entity_records.contains_key(entity) {
-            panic!("entity already initialized!");
-        }
-        let global_entity = self.global_entity_map.insert(*entity);
-        self.entity_records.insert(
-            *entity,
-            GlobalEntityRecord::new(global_entity, EntityOwner::Client(*user_key)),
-        );
-    }
-
     // Despawn
     pub fn host_despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord> {
         // Clean up associated components
@@ -88,15 +77,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
 
         self.entity_records.remove(entity)
-    }
-
-    pub fn remote_despawn_entity(&mut self, entity: &E) {
-        // Despawn from World Record
-        if !self.entity_records.contains_key(entity) {
-            panic!("entity does not exist!");
-        }
-
-        self.entity_records.remove(entity);
     }
 
     // Component Kinds
@@ -148,6 +128,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             .expect("Haven't initialized DiffHandler")
             .deregister_component(entity, component_kind);
     }
+
+    pub fn remote_spawn_entity_record(&mut self, entity: &E, user_key: &UserKey) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+
+        if record.owner != EntityOwner::ClientWaiting {
+            panic!("client entity record is not waiting to be updated!");
+        }
+
+        record.owner = EntityOwner::Client(*user_key);
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorldManager<E> {
@@ -168,7 +160,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.diff_handler.clone()
     }
 
-    fn despawn(&mut self, entity: &E) {
+    fn remote_spawn_entity(&mut self, entity: &E) {
+        if self.entity_records.contains_key(entity) {
+            panic!("entity already initialized!");
+        }
+        let global_entity = self.global_entity_map.insert(*entity);
+        self.entity_records.insert(
+            *entity,
+            GlobalEntityRecord::new(global_entity, EntityOwner::ClientWaiting),
+        );
+    }
+
+    fn remote_despawn_entity(&mut self, entity: &E) {
         let record = self
             .entity_records
             .remove(entity)

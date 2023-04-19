@@ -1,7 +1,7 @@
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedVariableInteger};
 
 // LocalEntity
-#[derive(Copy, Eq, Hash, Clone, PartialEq)]
+#[derive(Copy, Eq, Hash, Clone, PartialEq, Debug)]
 pub enum LocalEntity {
     Host(u16),
     Remote(u16),

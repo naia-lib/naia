@@ -267,7 +267,7 @@ impl MessageManager {
         entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
-    ) -> Result<Vec<(ChannelKind, Vec<MessageContainer>)>, SerdeErr> {
+    ) -> Result<(), SerdeErr> {
         loop {
             let message_continue = bool::de(reader)?;
             if !message_continue {
@@ -282,11 +282,11 @@ impl MessageManager {
             channel.read_messages(&protocol.message_kinds, entity_waitlist, converter, reader)?;
         }
 
-        Ok(self.receive_messages(entity_waitlist, converter))
+        Ok(())
     }
 
     /// Retrieve all messages from the channel buffers
-    fn receive_messages(
+    pub fn receive_messages(
         &mut self,
         entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
