@@ -47,6 +47,13 @@ impl EntityWaitlist {
         waitlist_store.queue(new_handle, item);
     }
 
+    pub fn collect_ready_items<T>(
+        &mut self,
+        waitlist_store: &mut WaitlistStore<T>,
+    ) -> Option<Vec<T>> {
+        waitlist_store.collect_ready_items(&mut self.ready_handles)
+    }
+
     pub fn add_entity(&mut self, entity: &LocalEntity) {
         // put new entity into scope
         self.in_scope_entities.insert(*entity);
@@ -96,13 +103,6 @@ impl EntityWaitlist {
     pub fn remove_entity(&mut self, entity: &LocalEntity) {
         // TODO: should we de-queue all our waiting messages that depend on this Entity?
         self.in_scope_entities.remove(entity);
-    }
-
-    pub fn collect_ready_items<T>(
-        &mut self,
-        waitlist_store: &mut WaitlistStore<T>,
-    ) -> Option<Vec<T>> {
-        waitlist_store.collect_ready_items(&mut self.ready_handles)
     }
 }
 
