@@ -82,7 +82,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
         self.handshake_manager
-            .set_auth_message(MessageContainer::from(Box::new(auth), &FakeEntityConverter));
+            .set_auth_message(MessageContainer::from_write(
+                Box::new(auth),
+                &FakeEntityConverter,
+            ));
     }
 
     /// Connect to the given server address
@@ -232,7 +235,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 &self.global_world_manager,
                 &connection.base.local_world_manager,
             );
-            let message = MessageContainer::from(message_box, &converter);
+            let message = MessageContainer::from_write(message_box, &converter);
             connection.base.message_manager.send_message(
                 &self.protocol.message_kinds,
                 &converter,
@@ -268,7 +271,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 &self.global_world_manager,
                 &connection.base.local_world_manager,
             );
-            let message = MessageContainer::from(message_box, &converter);
+            let message = MessageContainer::from_write(message_box, &converter);
             connection
                 .tick_buffer
                 .send_message(tick, channel_kind, message);

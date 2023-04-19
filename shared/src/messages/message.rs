@@ -7,6 +7,7 @@ use crate::{
         message_kinds::{MessageKind, MessageKinds},
         named::Named,
     },
+    world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     LocalEntity, LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
 
@@ -28,14 +29,14 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
     fn create_builder() -> Box<dyn MessageBuilder>
     where
         Self: Sized;
-    fn bit_length(&self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> u32;
+    fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32;
     fn is_fragment(&self) -> bool;
     /// Writes data into an outgoing byte stream
     fn write(
         &self,
         message_kinds: &MessageKinds,
         writer: &mut dyn BitWrite,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
     /// Returns a list of LocalEntities contained within the Message's EntityRelation fields, which are waiting to be converted to GlobalEntities
     fn relations_waiting(&self) -> Option<HashSet<LocalEntity>>;

@@ -4,7 +4,10 @@ use std::hash::Hash;
 use naia_serde::{BitCounter, BitReader, BitWrite, Serde, SerdeErr};
 
 use crate::world::entity::{
-    entity_converters::{EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter},
+    entity_converters::{
+        EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
+        LocalEntityAndGlobalEntityConverterMut,
+    },
     global_entity::GlobalEntity,
     local_entity::LocalEntity,
 };
@@ -33,7 +36,7 @@ impl EntityRelation {
     pub fn write(
         &self,
         writer: &mut dyn BitWrite,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
         match &self.inner {
             RelationImpl::HostOwned(inner) => {
@@ -45,7 +48,7 @@ impl EntityRelation {
         }
     }
 
-    pub fn bit_length(&self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> u32 {
+    pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
         match &self.inner {
             RelationImpl::HostOwned(inner) => inner.bit_length(converter),
             RelationImpl::RemoteOwned(_) | RelationImpl::RemoteWaiting(_) => {
@@ -169,7 +172,7 @@ impl HostOwnedRelation {
     pub fn write(
         &self,
         writer: &mut dyn BitWrite,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
         if let Some(global_entity) = &self.global_entity {
             let Ok(local_entity) = converter.global_entity_to_local_entity(global_entity) else {
@@ -188,7 +191,7 @@ impl HostOwnedRelation {
         false.ser(writer);
     }
 
-    pub fn bit_length(&self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> u32 {
+    pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
         let mut bit_counter = BitCounter::new(0, 0, u32::MAX);
         self.write(&mut bit_counter, converter);
         return bit_counter.bits_needed();

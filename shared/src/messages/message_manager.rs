@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::world::remote::entity_waitlist::EntityWaitlist;
 use crate::{
     constants::FRAGMENTATION_LIMIT_BITS,
     messages::{
@@ -29,6 +28,10 @@ use crate::{
         message_container::MessageContainer,
     },
     types::{HostType, MessageIndex, PacketIndex},
+    world::{
+        entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
+        remote::entity_waitlist::EntityWaitlist,
+    },
     LocalEntityAndGlobalEntityConverter, MessageKinds, Protocol,
 };
 
@@ -162,7 +165,7 @@ impl MessageManager {
     pub fn send_message(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {
@@ -211,7 +214,7 @@ impl MessageManager {
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         has_written: &mut bool,

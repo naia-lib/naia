@@ -13,7 +13,7 @@ use bevy_ecs::prelude::Resource;
 
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityConverter, EntityDoesNotExistError, EntityRef,
+    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, EntityRef,
     GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde,
     SerdeErr, SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
@@ -255,14 +255,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         if let Some(user) = self.users.get(user_key) {
             if let Some(connection) = self.user_connections.get_mut(&user.address) {
-                let converter = EntityConverter::new(
+                let mut converter = EntityConverterMut::new(
                     &self.global_world_manager,
-                    &connection.base.local_world_manager,
+                    &mut connection.base.local_world_manager,
                 );
-                let message = MessageContainer::from(message_box, &converter);
+                let message = MessageContainer::from_write(message_box, &mut converter);
                 connection.base.message_manager.send_message(
                     &self.protocol.message_kinds,
-                    &converter,
+                    &mut converter,
                     channel_kind,
                     message,
                 );

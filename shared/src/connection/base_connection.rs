@@ -8,10 +8,11 @@ use crate::{
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
     world::{
-        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+        entity::entity_converters::{EntityConverterMut, GlobalWorldManagerType},
+        local_world_manager::LocalWorldManager,
     },
-    EntityAndGlobalEntityConverter, EntityConverter, EntityEvent, HostWorldManager, Protocol,
-    RemoteWorldManager, WorldMutType, WorldRefType,
+    EntityAndGlobalEntityConverter, EntityEvent, HostWorldManager, Protocol, RemoteWorldManager,
+    WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -132,10 +133,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        let converter = EntityConverter::new(global_entity_converter, &self.local_world_manager);
+        let mut converter =
+            EntityConverterMut::new(global_entity_converter, &mut self.local_world_manager);
         self.message_manager.write_messages(
             protocol,
-            &converter,
+            &mut converter,
             writer,
             packet_index,
             has_written,

@@ -7,8 +7,8 @@ use crate::{
         channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
         message_kinds::MessageKinds,
     },
+    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
     LocalEntityAndGlobalEntityConverter, MessageContainer,
-    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}
 };
 
 pub struct UnorderedUnreliableReceiver {
@@ -36,11 +36,7 @@ impl UnorderedUnreliableReceiver {
 
     fn recv_message(&mut self, entity_waitlist: &mut EntityWaitlist, message: MessageContainer) {
         if let Some(entity_set) = message.relations_waiting() {
-            entity_waitlist.queue(
-                entity_set,
-                &mut self.waitlist_store,
-                message,
-            );
+            entity_waitlist.queue(entity_set, &mut self.waitlist_store, message);
             return;
         }
 

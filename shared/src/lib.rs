@@ -98,8 +98,9 @@ pub use world::{
         entity_action_receiver::EntityActionReceiver,
         entity_action_type::EntityActionType,
         entity_converters::{
-            EntityAndGlobalEntityConverter, EntityConverter, FakeEntityConverter,
-            GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, LocalEntityConverter,
+            EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut,
+            FakeEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+            LocalEntityAndGlobalEntityConverterMut, LocalEntityConverter,
         },
         entity_ref::EntityRef,
         error::EntityDoesNotExistError,

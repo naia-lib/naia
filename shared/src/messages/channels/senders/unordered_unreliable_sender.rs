@@ -10,7 +10,7 @@ use crate::{
         message_kinds::MessageKinds,
     },
     types::MessageIndex,
-    LocalEntityAndGlobalEntityConverter,
+    LocalEntityAndGlobalEntityConverterMut,
 };
 
 pub struct UnorderedUnreliableSender {
@@ -27,7 +27,7 @@ impl UnorderedUnreliableSender {
     fn write_message(
         &self,
         message_kinds: &MessageKinds,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut dyn BitWrite,
         message: &MessageContainer,
     ) {
@@ -64,7 +64,7 @@ impl MessageChannelSender for UnorderedUnreliableSender {
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {

@@ -3,11 +3,11 @@ pub use naia_shared::{
     ChannelMode, ComponentKind, ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask,
     EntityAndGlobalEntityConverter, EntityDoesNotExistError, EntityProperty, EntityRelation,
     GlobalEntity, LinkConditionerConfig, LocalEntity, LocalEntityAndGlobalEntityConverter,
-    MessageBevy as Message, MessageBuilder, MessageContainer, MessageKind, MessageKinds, Named,
-    OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random, ReliableSettings,
-    ReplicaDynMut, ReplicaDynRef, ReplicateBevy as Replicate, ReplicateBuilder, SerdeBevy as Serde,
-    SerdeErr, Tick, TickBufferSettings, UnsignedInteger, WorldMutType, WorldRefType,
-    MTU_SIZE_BYTES,
+    LocalEntityAndGlobalEntityConverterMut, MessageBevy as Message, MessageBuilder,
+    MessageContainer, MessageKind, MessageKinds, Named, OwnedBitReader, Property, PropertyMutate,
+    PropertyMutator, Random, ReliableSettings, ReplicaDynMut, ReplicaDynRef,
+    ReplicateBevy as Replicate, ReplicateBuilder, SerdeBevy as Serde, SerdeErr, Tick,
+    TickBufferSettings, UnsignedInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 mod change_detection;

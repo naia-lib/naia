@@ -11,7 +11,7 @@ use crate::{
         },
         host::mut_channel::MutChannelType,
     },
-    ComponentKind, GlobalDiffHandler,
+    ComponentKind, GlobalDiffHandler, LocalWorldManager,
 };
 
 pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConverter<E> {
@@ -106,6 +106,67 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         if let Ok(entity) = self
             .local_entity_converter
+            .local_entity_to_entity(local_entity)
+        {
+            return self
+                .global_entity_converter
+                .entity_to_global_entity(&entity);
+        }
+        return Err(EntityDoesNotExistError);
+    }
+}
+
+// Probably only should be used for writing messages
+pub struct EntityConverterMut<'a, 'b, E: Eq + Copy + Hash> {
+    global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
+    local_world_manager: &'b mut LocalWorldManager<E>,
+}
+
+impl<'a, 'b, E: Eq + Copy + Hash> EntityConverterMut<'a, 'b, E> {
+    pub fn new(
+        global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
+        local_world_manager: &'b mut LocalWorldManager<E>,
+    ) -> Self {
+        Self {
+            global_entity_converter,
+            local_world_manager,
+        }
+    }
+}
+
+pub trait LocalEntityAndGlobalEntityConverterMut {
+    fn global_entity_to_local_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError>;
+    fn local_entity_to_global_entity(
+        &self,
+        local_entity: &LocalEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError>;
+}
+
+impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
+    for EntityConverterMut<'a, 'b, E>
+{
+    fn global_entity_to_local_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self
+            .global_entity_converter
+            .global_entity_to_entity(global_entity)
+        {
+            return self.local_world_manager.entity_to_local_entity(&entity);
+        }
+        return Err(EntityDoesNotExistError);
+    }
+
+    fn local_entity_to_global_entity(
+        &self,
+        local_entity: &LocalEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self
+            .local_world_manager
             .local_entity_to_entity(local_entity)
         {
             return self

@@ -3,7 +3,6 @@ use std::mem;
 use naia_serde::{BitReader, SerdeErr};
 
 use crate::{
-    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
     messages::{
         channels::receivers::{
             channel_receiver::{ChannelReceiver, MessageChannelReceiver},
@@ -13,6 +12,7 @@ use crate::{
     },
     sequence_greater_than,
     types::MessageIndex,
+    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
     LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
 
@@ -49,11 +49,7 @@ impl SequencedUnreliableReceiver {
         self.arrange_message(message_index, message);
     }
 
-    pub fn arrange_message(
-        &mut self,
-        message_index: MessageIndex,
-        message: MessageContainer,
-    ) {
+    pub fn arrange_message(&mut self, message_index: MessageIndex, message: MessageContainer) {
         if let Some(most_recent_id) = self.newest_received_message_index {
             if sequence_greater_than(message_index, most_recent_id) {
                 self.incoming_messages.push(message);

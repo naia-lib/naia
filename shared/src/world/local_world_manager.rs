@@ -1,12 +1,15 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::world::entity::local_entity::LocalEntity;
-use crate::{EntityDoesNotExistError, KeyGenerator, LocalEntityConverter};
+use crate::{
+    world::entity::local_entity::LocalEntity, EntityDoesNotExistError, KeyGenerator,
+    LocalEntityConverter,
+};
 
 pub struct LocalWorldManager<E: Copy + Eq + Hash> {
     host_entity_generator: KeyGenerator<u16>,
     world_to_local_entity: HashMap<E, LocalEntity>,
     local_to_world_entity: HashMap<LocalEntity, E>,
+    reserved_entities: HashMap<E, LocalEntity>,
 }
 
 impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
@@ -15,25 +18,40 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             host_entity_generator: KeyGenerator::new(),
             world_to_local_entity: HashMap::new(),
             local_to_world_entity: HashMap::new(),
+            reserved_entities: HashMap::new(),
         }
     }
 
     // Host entities
 
-    pub(crate) fn host_spawn_entity(&mut self, world_entity: &E) {
+    pub(crate) fn host_reserve_entity(&mut self, world_entity: &E) {
+        if self.reserved_entities.contains_key(world_entity) {
+            panic!("World Entity has already reserved Local Entity!");
+        }
+        let host_entity = self.host_spawn_entity(world_entity);
+        self.reserved_entities.insert(*world_entity, host_entity);
+    }
+
+    pub(crate) fn host_spawn_entity(&mut self, world_entity: &E) -> LocalEntity {
+        if let Some(local_entity) = self.reserved_entities.remove(world_entity) {
+            return local_entity;
+        }
+
         let host_entity = LocalEntity::Host(self.host_entity_generator.generate());
 
         if self.world_to_local_entity.contains_key(world_entity) {
             panic!("Entity already exists!");
         }
         if self.local_to_world_entity.contains_key(&host_entity) {
-            panic!("Net Entity already exists!");
+            panic!("Host Entity already exists!");
         }
 
         self.world_to_local_entity
             .insert(*world_entity, host_entity);
         self.local_to_world_entity
             .insert(host_entity, *world_entity);
+
+        host_entity
     }
 
     pub(crate) fn host_despawn_entity(&mut self, world_entity: &E) {
@@ -42,7 +60,7 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             .remove(world_entity)
             .expect("Entity does not exist!");
         if !self.local_to_world_entity.contains_key(&local_entity) {
-            panic!("Net Entity does not exist!");
+            panic!("Local Entity does not exist!");
         }
         self.local_to_world_entity.remove(&local_entity);
         self.host_entity_generator

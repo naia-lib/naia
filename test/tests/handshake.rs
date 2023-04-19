@@ -23,7 +23,7 @@ fn end_to_end_handshake_w_auth() {
     // 0. set Client auth object
     let username = "charlie";
     let password = "1234567";
-    client.set_auth_message(MessageContainer::from(
+    client.set_auth_message(MessageContainer::from_write(
         Box::new(Auth::new(username, password)),
         &FakeEntityConverter,
     ));

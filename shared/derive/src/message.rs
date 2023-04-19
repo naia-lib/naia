@@ -43,7 +43,7 @@ pub fn message_impl(
             pub use std::any::Any;
             pub use std::collections::HashSet;
             pub use #shared_crate_name::{
-                Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntity,
+                Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, LocalEntity,
                 EntityRelation, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer
             };
             use super::*;
@@ -295,7 +295,7 @@ pub fn get_read_method(
         fn read(&self, reader: &mut BitReader, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<MessageContainer, SerdeErr> {
             #field_reads
 
-            return Ok(MessageContainer::from(Box::new(#struct_build), converter));
+            return Ok(MessageContainer::from_read(Box::new(#struct_build)));
         }
     }
 }
@@ -326,7 +326,7 @@ fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 
     quote! {
-        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) {
             self.kind().ser(message_kinds, writer);
             #field_writes
         }
@@ -359,7 +359,7 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
     }
 
     quote! {
-        fn bit_length(&self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> u32 {
+        fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
             let mut output = 0;
             output += <MessageKind as ConstBitLength>::const_bit_length();
             #field_bit_lengths

@@ -1,25 +1,34 @@
-use std::any::Any;
-use std::collections::HashSet;
+use std::{any::Any, collections::HashSet};
 
 use naia_serde::BitWrite;
 
-use crate::{LocalEntity, LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds};
+use crate::{
+    world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut, LocalEntity,
+    LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds,
+};
 
 #[derive(Clone)]
 pub struct MessageContainer {
     inner: Box<dyn Message>,
-    bit_length: u32,
+    bit_length: Option<u32>,
 }
 
 impl MessageContainer {
-    pub fn from(
+    pub fn from_write(
         message: Box<dyn Message>,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) -> Self {
         let bit_length = message.bit_length(converter);
         Self {
             inner: message,
-            bit_length,
+            bit_length: Some(bit_length),
+        }
+    }
+
+    pub fn from_read(message: Box<dyn Message>) -> Self {
+        Self {
+            inner: message,
+            bit_length: None,
         }
     }
 
@@ -28,17 +37,17 @@ impl MessageContainer {
     }
 
     pub fn bit_length(&self) -> u32 {
-        self.bit_length
+        self.bit_length.expect("bit_length should never be called on a MessageContainer that was created from a read operation")
     }
 
     pub fn write(
         &self,
         message_kinds: &MessageKinds,
         writer: &mut dyn BitWrite,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
         if writer.is_counter() {
-            writer.write_bits(self.bit_length);
+            writer.write_bits(self.bit_length());
         } else {
             self.inner.write(message_kinds, writer, converter);
         }
