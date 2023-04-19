@@ -7,10 +7,10 @@ use bevy_ecs::prelude::Resource;
 
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
-    EntityAndGlobalEntityConverter, EntityConverter, EntityDoesNotExistError, EntityRef,
-    FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer, PacketType,
-    PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut, EntityDoesNotExistError,
+    EntityRef, FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer,
+    PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer,
+    Timestamp, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -84,7 +84,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.handshake_manager
             .set_auth_message(MessageContainer::from_write(
                 Box::new(auth),
-                &FakeEntityConverter,
+                &mut FakeEntityConverter,
             ));
     }
 
@@ -231,14 +231,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some(connection) = &mut self.server_connection {
-            let converter = EntityConverter::new(
+            let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
-                &connection.base.local_world_manager,
+                &mut connection.base.local_world_manager,
             );
-            let message = MessageContainer::from_write(message_box, &converter);
+            let message = MessageContainer::from_write(message_box, &mut converter);
             connection.base.message_manager.send_message(
                 &self.protocol.message_kinds,
-                &converter,
+                &mut converter,
                 channel_kind,
                 message,
             );
@@ -267,11 +267,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some(connection) = self.server_connection.as_mut() {
-            let converter = EntityConverter::new(
+            let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
-                &connection.base.local_world_manager,
+                &mut connection.base.local_world_manager,
             );
-            let message = MessageContainer::from_write(message_box, &converter);
+            let message = MessageContainer::from_write(message_box, &mut converter);
             connection
                 .tick_buffer
                 .send_message(tick, channel_kind, message);

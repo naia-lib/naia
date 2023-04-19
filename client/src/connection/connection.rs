@@ -4,8 +4,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    EntityEvent, HostType, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
-    StandardHeader, Tick, WorldMutType, WorldRefType,
+    EntityConverterMut, EntityEvent, HostType, Instant, OwnedBitReader, PacketType, Protocol,
+    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -208,11 +208,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
             // write tick buffered messages
             {
-                let converter =
-                    EntityConverter::new(global_world_manager, &self.base.local_world_manager);
+                let mut converter = EntityConverterMut::new(
+                    global_world_manager,
+                    &mut self.base.local_world_manager,
+                );
                 self.tick_buffer.write_messages(
                     &protocol,
-                    &converter,
+                    &mut converter,
                     &mut writer,
                     next_packet_index,
                     &client_tick,

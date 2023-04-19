@@ -67,6 +67,15 @@ impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
     }
 }
 
+impl LocalEntityAndGlobalEntityConverterMut for FakeEntityConverter {
+    fn get_or_reserve_host_entity(
+        &mut self,
+        _global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        Ok(LocalEntity::Host(0))
+    }
+}
+
 pub struct EntityConverter<'a, 'b, E: Eq + Copy + Hash> {
     global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
     local_entity_converter: &'b dyn LocalEntityConverter<E>,
@@ -134,18 +143,14 @@ impl<'a, 'b, E: Eq + Copy + Hash> EntityConverterMut<'a, 'b, E> {
     }
 }
 
-pub trait LocalEntityAndGlobalEntityConverterMut {
-    fn global_entity_to_local_entity(
-        &self,
+pub trait LocalEntityAndGlobalEntityConverterMut: LocalEntityAndGlobalEntityConverter {
+    fn get_or_reserve_host_entity(
+        &mut self,
         global_entity: &GlobalEntity,
     ) -> Result<LocalEntity, EntityDoesNotExistError>;
-    fn local_entity_to_global_entity(
-        &self,
-        local_entity: &LocalEntity,
-    ) -> Result<GlobalEntity, EntityDoesNotExistError>;
 }
 
-impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
+impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
     for EntityConverterMut<'a, 'b, E>
 {
     fn global_entity_to_local_entity(
@@ -172,6 +177,27 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
             return self
                 .global_entity_converter
                 .entity_to_global_entity(&entity);
+        }
+        return Err(EntityDoesNotExistError);
+    }
+}
+
+impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
+    for EntityConverterMut<'a, 'b, E>
+{
+    fn get_or_reserve_host_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self
+            .global_entity_converter
+            .global_entity_to_entity(global_entity)
+        {
+            let result = self.local_world_manager.entity_to_local_entity(&entity);
+            if result.is_ok() {
+                return result;
+            }
+            return Ok(self.local_world_manager.host_reserve_entity(&entity));
         }
         return Err(EntityDoesNotExistError);
     }

@@ -24,12 +24,13 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     // Host entities
 
-    pub(crate) fn host_reserve_entity(&mut self, world_entity: &E) {
+    pub(crate) fn host_reserve_entity(&mut self, world_entity: &E) -> LocalEntity {
         if self.reserved_entities.contains_key(world_entity) {
             panic!("World Entity has already reserved Local Entity!");
         }
         let host_entity = self.host_spawn_entity(world_entity);
         self.reserved_entities.insert(*world_entity, host_entity);
+        host_entity
     }
 
     pub(crate) fn host_spawn_entity(&mut self, world_entity: &E) -> LocalEntity {
