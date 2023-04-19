@@ -1,22 +1,18 @@
 use std::any::Any;
+use std::collections::HashSet;
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::{
-    messages::named::Named,
-    world::{
-        component::{
-            component_kinds::{ComponentKind, ComponentKinds},
-            component_update::ComponentUpdate,
-            diff_mask::DiffMask,
-            property_mutate::PropertyMutator,
-            replica_ref::{ReplicaDynMut, ReplicaDynRef},
-        },
-        entity::{
-            entity_converters::LocalEntityAndGlobalEntityConverter, global_entity::GlobalEntity,
-        },
+use crate::{LocalEntity, LocalEntityAndGlobalEntityConverterMut, messages::named::Named, world::{
+    component::{
+        component_kinds::{ComponentKind, ComponentKinds},
+        component_update::ComponentUpdate,
+        diff_mask::DiffMask,
+        property_mutate::PropertyMutator,
+        replica_ref::{ReplicaDynMut, ReplicaDynRef},
     },
-};
+    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+}};
 
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream
@@ -61,7 +57,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
         &self,
         component_kinds: &ComponentKinds,
         writer: &mut dyn BitWrite,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Component on the client
@@ -69,7 +65,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
         &self,
         diff_mask: &DiffMask,
         writer: &mut dyn BitWrite,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
@@ -78,10 +74,14 @@ pub trait Replicate: ReplicateInner + Named + Any {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentUpdate,
     ) -> Result<(), SerdeErr>;
-    /// Returns whether has any EntityProperties
-    fn has_entity_properties(&self) -> bool;
-    /// Returns a list of Entities contained within the Replica's properties
-    fn entities(&self) -> Vec<GlobalEntity>;
+    /// Returns a list of LocalEntities contained within the Component's EntityProperty fields, which are waiting to be converted to GlobalEntities
+    fn relations_waiting(&self) -> Option<HashSet<LocalEntity>>;
+    /// Converts any LocalEntities contained within the Component's EntityProperty fields to GlobalEntities
+    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
+    // /// Returns whether has any EntityProperties
+    // fn has_entity_properties(&self) -> bool;
+    // /// Returns a list of Entities contained within the Replica's properties
+    // fn entities(&self) -> Vec<GlobalEntity>;
 }
 
 cfg_if! {

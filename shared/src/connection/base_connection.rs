@@ -180,7 +180,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
                     &packet_index,
                     world,
                     global_world_manager,
-                    &self.local_world_manager,
+                    &mut self.local_world_manager,
                     has_written,
                 );
 
@@ -198,7 +198,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
                     &packet_index,
                     world,
                     global_world_manager,
-                    &self.local_world_manager,
+                    &mut self.local_world_manager,
                     has_written,
                 );
 

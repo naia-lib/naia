@@ -48,7 +48,7 @@ pub fn init(mut commands: Commands, mut server: Server) {
         .id();
 
     // Init Global Resource
-    let mut global = Global {
+    let global = Global {
         main_room_key,
         user_to_square_map: HashMap::new(),
         user_to_cursor_map: HashMap::new(),

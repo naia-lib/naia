@@ -39,13 +39,13 @@ impl<T: Serde> Property<T> {
 
     /// Given a cursor into incoming packet data, initializes the Property with
     /// the synced value
-    pub fn new_read(reader: &mut BitReader, mutator_index: u8) -> Result<Self, SerdeErr> {
+    pub fn new_read(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let inner = Self::read_inner(reader)?;
 
         Ok(Property::<T> {
             inner,
             mutator: None,
-            mutator_index,
+            mutator_index: 0,
         })
     }
 

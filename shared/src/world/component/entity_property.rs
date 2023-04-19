@@ -1,7 +1,8 @@
 use log::warn;
 use std::hash::Hash;
 
-use naia_serde::{BitCounter, BitReader, BitWrite, Serde, SerdeErr};
+use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+use crate::PropertyMutator;
 
 use crate::world::entity::{
     entity_converters::{
@@ -25,9 +26,28 @@ pub struct EntityProperty {
 }
 
 impl EntityProperty {
+    // Should only be used by Messages
     pub fn new() -> Self {
         Self {
             inner: EntityRelation::HostOwned(HostOwnedRelation::new()),
+        }
+    }
+
+    // Should only be used by Components
+    pub fn with_mutator(mutator_index: u8) -> Self {
+        Self {
+            inner: EntityRelation::HostOwned(HostOwnedRelation::with_mutator(mutator_index)),
+        }
+    }
+
+    pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
+        match &mut self.inner {
+            EntityRelation::HostOwned(inner) => {
+                inner.set_mutator(mutator);
+            }
+            EntityRelation::RemoteOwned(_) | EntityRelation::RemoteWaiting(_) => {
+                panic!("Remote EntityProperty should never have a mutator.");
+            }
         }
     }
 
@@ -43,7 +63,7 @@ impl EntityProperty {
                 inner.write(writer, converter);
             }
             EntityRelation::RemoteOwned(_) | EntityRelation::RemoteWaiting(_) => {
-                panic!("Remote Relations should never be written.");
+                panic!("Remote EntityProperty should never be written.");
             }
         }
     }
@@ -53,13 +73,13 @@ impl EntityProperty {
             EntityRelation::HostOwned(inner) => inner.bit_length(converter),
             EntityRelation::RemoteOwned(_) | EntityRelation::RemoteWaiting(_) => {
                 panic!(
-                    "Remote Relations should never be written, so no need for their bit length."
+                    "Remote EntityProperty should never be written, so no need for their bit length."
                 );
             }
         }
     }
 
-    pub fn read(
+    pub fn new_read(
         reader: &mut BitReader,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Self, SerdeErr> {
@@ -96,6 +116,42 @@ impl EntityProperty {
         }
     }
 
+    pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
+        let exists = bool::de(reader)?;
+        exists.ser(writer);
+        if exists {
+            LocalEntity::owned_de(reader)?.owned_ser(writer);
+        }
+        Ok(())
+    }
+
+    pub fn read(
+        &mut self,
+        reader: &mut BitReader,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> Result<(), SerdeErr> {
+        let exists = bool::de(reader)?;
+        let new_inner = {
+            if exists {
+                let local_entity = LocalEntity::owned_de(reader)?;
+                if let Ok(global_entity) = converter.local_entity_to_global_entity(&local_entity) {
+                    let mut new_impl = RemoteOwnedRelation::new();
+                    new_impl.global_entity = Some(global_entity);
+                    EntityRelation::RemoteOwned(new_impl)
+                } else {
+                    let new_impl = RemoteWaitingRelation::new(local_entity);
+                    EntityRelation::RemoteWaiting(new_impl)
+                }
+            } else {
+                let mut new_impl = RemoteOwnedRelation::new();
+                new_impl.global_entity = None;
+                EntityRelation::RemoteOwned(new_impl)
+            }
+        };
+        self.inner = new_inner;
+        Ok(())
+    }
+
     // Internal
 
     pub fn get<E: Copy + Eq + Hash>(
@@ -106,7 +162,7 @@ impl EntityProperty {
             EntityRelation::HostOwned(inner) => inner.get(converter),
             EntityRelation::RemoteOwned(inner) => inner.get(converter),
             EntityRelation::RemoteWaiting(_) => {
-                panic!("Not ready to get RemoteWaiting Relation value!");
+                panic!("Not ready to get RemoteWaiting EntityProperty value!");
             }
         }
     }
@@ -121,7 +177,28 @@ impl EntityProperty {
                 inner.set(converter, entity);
             }
             EntityRelation::RemoteOwned(_) | EntityRelation::RemoteWaiting(_) => {
-                panic!("Remote Relations should never be set manually.");
+                panic!("Remote EntityProperty should never be set manually.");
+            }
+        }
+    }
+
+    pub fn mirror(&mut self, other: &EntityProperty) {
+        match &mut self.inner {
+            EntityRelation::HostOwned(inner) => {
+                match &other.inner {
+                    EntityRelation::HostOwned(other_inner) => {
+                        inner.mirror_host(other_inner);
+                    }
+                    EntityRelation::RemoteOwned(other_inner) => {
+                        inner.mirror_remote(other_inner);
+                    }
+                    EntityRelation::RemoteWaiting(_) => {
+                        inner.mirror_waiting();
+                    }
+                }
+            }
+            EntityRelation::RemoteOwned(_) | EntityRelation::RemoteWaiting(_) => {
+                panic!("Remote EntityProperty should never be set manually.");
             }
         }
     }
@@ -160,13 +237,29 @@ impl EntityProperty {
 #[derive(Clone)]
 struct HostOwnedRelation {
     global_entity: Option<GlobalEntity>,
+    mutator: Option<PropertyMutator>,
+    mutator_index: u8,
 }
 
 impl HostOwnedRelation {
     pub fn new() -> Self {
         Self {
             global_entity: None,
+            mutator: None,
+            mutator_index: 0,
         }
+    }
+
+    pub fn with_mutator(mutate_index: u8) -> Self {
+        Self {
+            global_entity: None,
+            mutator: None,
+            mutator_index: mutate_index,
+        }
+    }
+
+    pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
+        self.mutator = Some(mutator.clone_new());
     }
 
     pub fn write(
@@ -219,9 +312,31 @@ impl HostOwnedRelation {
     ) {
         if let Ok(new_global_entity) = converter.entity_to_global_entity(world_entity) {
             self.global_entity = Some(new_global_entity);
+            self.mutate();
         } else {
             warn!("Could not find Global Entity from World Entity, in order to set the EntityRelation value!");
             return;
+        }
+    }
+
+    pub fn mirror_host(&mut self, other: &HostOwnedRelation) {
+        self.global_entity = other.global_entity;
+        self.mutate();
+    }
+
+    pub fn mirror_remote(&mut self, other: &RemoteOwnedRelation) {
+        self.global_entity = other.global_entity;
+        self.mutate();
+    }
+
+    pub fn mirror_waiting(&mut self) {
+        self.global_entity = None;
+        self.mutate();
+    }
+
+    fn mutate(&mut self) {
+        if let Some(mutator) = &mut self.mutator {
+            mutator.mutate(self.mutator_index);
         }
     }
 }

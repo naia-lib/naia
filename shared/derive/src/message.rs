@@ -250,7 +250,7 @@ pub fn get_read_method(
         let new_output_right = match field {
             Field::EntityProperty(_property) => {
                 quote! {
-                    let #field_name = EntityProperty::read(reader, converter)?;
+                    let #field_name = EntityProperty::new_read(reader, converter)?;
                 }
             }
             Field::Normal(normal_field) => {

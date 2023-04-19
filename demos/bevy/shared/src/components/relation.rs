@@ -1,6 +1,6 @@
 use bevy_ecs::prelude::Component;
 
-use naia_bevy_shared::{EntityProperty, Property, Replicate, Serde};
+use naia_bevy_shared::{EntityProperty, Replicate};
 
 #[derive(Component, Replicate)]
 pub struct Relation {

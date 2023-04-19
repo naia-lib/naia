@@ -68,7 +68,7 @@ pub fn replicate_impl(
     let new_complete_method =
         get_new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
     let create_builder_method = get_create_builder_method(&builder_name);
-    let read_method = get_read_method(&replica_name, &enum_name, &properties, &struct_type);
+    let read_method = get_read_method(&replica_name, &properties, &struct_type);
     let read_create_update_method = get_read_create_update_method(&replica_name, &properties);
 
     let dyn_ref_method = get_dyn_ref_method();
@@ -79,17 +79,19 @@ pub fn replicate_impl(
     let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
     let write_method = get_write_method(&properties, &struct_type);
     let write_update_method = get_write_update_method(&enum_name, &properties, &struct_type);
-    let has_entity_properties = get_has_entity_properties_method(&properties);
-    let entities = get_entities_method(&properties, &struct_type);
+    // let has_entity_properties = get_has_entity_properties_method(&properties);
+    // let entities = get_entities_method(&properties, &struct_type);
+    let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
+    let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
 
     let gen = quote! {
         mod #module_name {
 
-            use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any};
+            use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any, collections::HashSet};
             use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
-                ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, ComponentKind, Named,
-                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde,
+                ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
+                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, LocalEntity,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder
             };
             use super::*;
@@ -140,8 +142,8 @@ pub fn replicate_impl(
                 #write_method
                 #write_update_method
                 #read_apply_update_method
-                #has_entity_properties
-                #entities
+                #relations_waiting_method
+                #relations_complete_method
             }
             impl Clone for #replica_name {
                 #clone_method
@@ -529,12 +531,12 @@ pub fn get_new_complete_method(
                 match *struct_type {
                     StructType::Struct => {
                         quote! {
-                             #field_name: EntityProperty::new(#enum_name::#uppercase_variant_name as u8)
+                             #field_name: EntityProperty::with_mutator(#enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     StructType::TupleStruct => {
                         quote! {
-                            EntityProperty::new(#enum_name::#uppercase_variant_name as u8)
+                            EntityProperty::with_mutator(#enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     _ => {
@@ -608,7 +610,6 @@ pub fn get_create_builder_method(builder_name: &Ident) -> TokenStream {
 
 pub fn get_read_method(
     replica_name: &Ident,
-    enum_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
 ) -> TokenStream {
@@ -631,15 +632,13 @@ pub fn get_read_method(
         let new_output_right = match property {
             Property::Normal(property) => {
                 let field_type = &property.inner_type;
-                let uppercase_variant_name = &property.uppercase_variable_name;
                 quote! {
-                    let #field_name = Property::<#field_type>::new_read(reader, #enum_name::#uppercase_variant_name as u8)?;
+                    let #field_name = Property::<#field_type>::new_read(reader)?;
                 }
             }
-            Property::Entity(property) => {
-                let uppercase_variant_name = &property.uppercase_variable_name;
+            Property::Entity(_) => {
                 quote! {
-                    let #field_name = EntityProperty::new_read(reader, #enum_name::#uppercase_variant_name as u8, converter)?;
+                    let #field_name = EntityProperty::new_read(reader, converter)?;
                 }
             }
             Property::NonReplicated(property) => {
@@ -812,7 +811,7 @@ fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenS
     }
 
     quote! {
-        fn write(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        fn write(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) {
             self.kind().ser(component_kinds, writer);
             #property_writes
         }
@@ -864,39 +863,67 @@ fn get_write_update_method(
     }
 
     quote! {
-        fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) {
             #output
         }
     }
 }
 
-fn get_has_entity_properties_method(properties: &[Property]) -> TokenStream {
-    for property in properties.iter() {
-        if let Property::Entity(_) = property {
-            return quote! {
-                fn has_entity_properties(&self) -> bool {
-                    return true;
-                }
-            };
-        }
-    }
+// fn get_has_entity_properties_method(properties: &[Property]) -> TokenStream {
+//     for property in properties.iter() {
+//         if let Property::Entity(_) = property {
+//             return quote! {
+//                 fn has_entity_properties(&self) -> bool {
+//                     return true;
+//                 }
+//             };
+//         }
+//     }
+//
+//     quote! {
+//         fn has_entity_properties(&self) -> bool {
+//             return false;
+//         }
+//     }
+// }
+//
+// fn get_entities_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+//     let mut body = quote! {};
+//
+//     for (index, property) in properties.iter().enumerate() {
+//         if let Property::Entity(_) = property {
+//             let field_name = get_field_name(property, index, struct_type);
+//             let body_add_right = quote! {
+//                 if let Some(global_entity) = self.#field_name.global_entity() {
+//                     output.push(global_entity);
+//                 }
+//             };
+//             let new_body = quote! {
+//                 #body
+//                 #body_add_right
+//             };
+//             body = new_body;
+//         }
+//     }
+//
+//     quote! {
+//         fn entities(&self) -> Vec<GlobalEntity> {
+//             let mut output = Vec::new();
+//             #body
+//             return output;
+//         }
+//     }
+// }
 
-    quote! {
-        fn has_entity_properties(&self) -> bool {
-            return false;
-        }
-    }
-}
-
-fn get_entities_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+fn get_relations_waiting_method(fields: &[Property], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
-    for (index, property) in properties.iter().enumerate() {
-        if let Property::Entity(_) = property {
-            let field_name = get_field_name(property, index, struct_type);
+    for (index, field) in fields.iter().enumerate() {
+        if let Property::Entity(_) = field {
+            let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
-                if let Some(global_entity) = self.#field_name.global_entity() {
-                    output.push(global_entity);
+                if let Some(local_entity) = self.#field_name.waiting_local_entity() {
+                    output.insert(local_entity);
                 }
             };
             let new_body = quote! {
@@ -908,10 +935,37 @@ fn get_entities_method(properties: &[Property], struct_type: &StructType) -> Tok
     }
 
     quote! {
-        fn entities(&self) -> Vec<GlobalEntity> {
-            let mut output = Vec::new();
+        fn relations_waiting(&self) -> Option<HashSet<LocalEntity>> {
+            let mut output = HashSet::new();
             #body
-            return output;
+            if output.is_empty() {
+                return None;
+            }
+            return Some(output);
+        }
+    }
+}
+
+fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut body = quote! {};
+
+    for (index, field) in fields.iter().enumerate() {
+        if let Property::Entity(_) = field {
+            let field_name = get_field_name(field, index, struct_type);
+            let body_add_right = quote! {
+                self.#field_name.waiting_complete(converter);
+            };
+            let new_body = quote! {
+                #body
+                #body_add_right
+            };
+            body = new_body;
+        }
+    }
+
+    quote! {
+        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+            #body
         }
     }
 }
