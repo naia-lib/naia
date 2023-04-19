@@ -1,5 +1,4 @@
 pub mod channels;
-pub mod entity_relation;
 pub mod fragment;
 pub mod message;
 pub mod message_container;

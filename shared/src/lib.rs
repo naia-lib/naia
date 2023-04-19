@@ -69,7 +69,6 @@ pub use messages::{
         },
         senders::{channel_sender::ChannelSender, reliable_sender::ReliableSender},
     },
-    entity_relation::EntityRelation,
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_container::MessageContainer,
     message_kinds::{MessageKind, MessageKinds},
@@ -92,6 +91,7 @@ pub use world::{
         replicate::{
             Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
         },
+        entity_relation::EntityRelation,
     },
     entity::{
         entity_action::EntityAction,
