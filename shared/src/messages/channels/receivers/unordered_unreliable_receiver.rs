@@ -45,9 +45,14 @@ impl UnorderedUnreliableReceiver {
 }
 
 impl ChannelReceiver<MessageContainer> for UnorderedUnreliableReceiver {
-    fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
+    fn receive_messages(
+        &mut self,
+        entity_waitlist: &mut EntityWaitlist,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
-            for message in list {
+            for mut message in list {
+                message.relations_complete(converter);
                 self.incoming_messages.push_back(message);
             }
         }

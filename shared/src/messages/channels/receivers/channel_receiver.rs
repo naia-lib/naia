@@ -1,14 +1,18 @@
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::world::remote::entity_waitlist::EntityWaitlist;
 use crate::{
     messages::{message_container::MessageContainer, message_kinds::MessageKinds},
+    world::remote::entity_waitlist::EntityWaitlist,
     LocalEntityAndGlobalEntityConverter,
 };
 
 pub trait ChannelReceiver<P>: Send + Sync {
     /// Read messages from an internal buffer and return their content
-    fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<P>;
+    fn receive_messages(
+        &mut self,
+        entity_waitlist: &mut EntityWaitlist,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> Vec<P>;
 }
 
 pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {

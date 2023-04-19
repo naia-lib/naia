@@ -90,9 +90,11 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
     pub fn receive_messages(
         &mut self,
         entity_waitlist: &mut EntityWaitlist,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<(MessageIndex, MessageContainer)> {
         if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
-            for (first_index, full_message) in list {
+            for (first_index, mut full_message) in list {
+                full_message.relations_complete(converter);
                 self.arranger
                     .process(&mut self.incoming_messages, first_index, full_message);
             }
@@ -104,8 +106,12 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
 }
 
 impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageReceiver<A> {
-    fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
-        self.receive_messages(entity_waitlist)
+    fn receive_messages(
+        &mut self,
+        entity_waitlist: &mut EntityWaitlist,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> Vec<MessageContainer> {
+        self.receive_messages(entity_waitlist, converter)
             .drain(..)
             .map(|(_, message)| message)
             .collect()

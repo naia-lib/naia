@@ -1,3 +1,4 @@
+use log::warn;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
@@ -25,6 +26,9 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     // Host entities
 
     pub(crate) fn host_reserve_entity(&mut self, world_entity: &E) -> LocalEntity {
+        warn!("Reserving LocalEntity because World Entity is not yet spawned.");
+        warn!("Make sure to put a TTL on this LocalEntity in the future!");
+
         if self.reserved_entities.contains_key(world_entity) {
             panic!("World Entity has already reserved Local Entity!");
         }

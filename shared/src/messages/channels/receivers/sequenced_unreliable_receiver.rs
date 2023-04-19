@@ -63,9 +63,14 @@ impl SequencedUnreliableReceiver {
 }
 
 impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
-    fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
+    fn receive_messages(
+        &mut self,
+        entity_waitlist: &mut EntityWaitlist,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
-            for (message_index, message) in list {
+            for (message_index, mut message) in list {
+                message.relations_complete(converter);
                 self.arrange_message(message_index, message);
             }
         }

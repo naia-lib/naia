@@ -282,18 +282,19 @@ impl MessageManager {
             channel.read_messages(&protocol.message_kinds, entity_waitlist, converter, reader)?;
         }
 
-        Ok(self.receive_messages(entity_waitlist))
+        Ok(self.receive_messages(entity_waitlist, converter))
     }
 
     /// Retrieve all messages from the channel buffers
     fn receive_messages(
         &mut self,
         entity_waitlist: &mut EntityWaitlist,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
-            let messages = channel.receive_messages(entity_waitlist);
+            let messages = channel.receive_messages(entity_waitlist, converter);
             output.push((channel_kind.clone(), messages));
         }
         output
