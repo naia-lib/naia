@@ -1,8 +1,8 @@
-use naia_bevy_shared::{EntityRelation, Message};
+use naia_bevy_shared::{EntityProperty, Message};
 
 #[derive(Message)]
 pub struct EntityAssignment {
-    pub entity: EntityRelation,
+    pub entity: EntityProperty,
     pub assign: bool,
 }
 
@@ -10,7 +10,7 @@ impl EntityAssignment {
     pub fn new(assign: bool) -> Self {
         Self {
             assign,
-            entity: EntityRelation::new(),
+            entity: EntityProperty::new(),
         }
     }
 }

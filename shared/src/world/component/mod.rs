@@ -6,4 +6,3 @@ pub mod property;
 pub mod property_mutate;
 pub mod replica_ref;
 pub mod replicate;
-pub mod entity_relation;

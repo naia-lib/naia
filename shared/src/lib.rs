@@ -91,7 +91,6 @@ pub use world::{
         replicate::{
             Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
         },
-        entity_relation::EntityRelation,
     },
     entity::{
         entity_action::EntityAction,

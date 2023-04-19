@@ -27,7 +27,7 @@ pub fn message_impl(
 
     // Methods
     let clone_method = get_clone_method(&fields, &struct_type);
-    // let has_entity_relations_method = get_has_entity_relations_method(&fields);
+    // let has_entity_propertys_method = get_has_entity_propertys_method(&fields);
     // let entities_method = get_entities_method(&fields, &struct_type);
     let relations_waiting_method = get_relations_waiting_method(&fields, &struct_type);
     let relations_complete_method = get_relations_complete_method(&fields, &struct_type);
@@ -44,7 +44,7 @@ pub fn message_impl(
             pub use std::collections::HashSet;
             pub use #shared_crate_name::{
                 Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, LocalEntity,
-                EntityRelation, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer
+                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer
             };
             use super::*;
 
@@ -102,7 +102,7 @@ fn get_clone_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     for (index, field) in fields.iter().enumerate() {
         let field_name = get_field_name(field, index, struct_type);
         match field {
-            Field::Normal(_) | Field::EntityRelation(_) => {
+            Field::Normal(_) | Field::EntityProperty(_) => {
                 let new_output_right = quote! {
                     #field_name: self.#field_name.clone(),
                 };
@@ -125,11 +125,11 @@ fn get_clone_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 }
 
-// fn get_has_entity_relations_method(fields: &[Field]) -> TokenStream {
+// fn get_has_entity_propertys_method(fields: &[Field]) -> TokenStream {
 //     for field in fields.iter() {
-//         if let Field::EntityRelation(_) = field {
+//         if let Field::EntityProperty(_) = field {
 //             return quote! {
-//                 fn has_entity_relations(&self) -> bool {
+//                 fn has_entity_propertys(&self) -> bool {
 //                     return true;
 //                 }
 //             };
@@ -137,7 +137,7 @@ fn get_clone_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
 //     }
 //
 //     quote! {
-//         fn has_entity_relations(&self) -> bool {
+//         fn has_entity_propertys(&self) -> bool {
 //             return false;
 //         }
 //     }
@@ -147,7 +147,7 @@ fn get_clone_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
 //     let mut body = quote! {};
 //
 //     for (index, field) in fields.iter().enumerate() {
-//         if let Field::EntityRelation(_) = field {
+//         if let Field::EntityProperty(_) = field {
 //             let field_name = get_field_name(field, index, struct_type);
 //             let body_add_right = quote! {
 //                 if let Some(global_entity) = self.#field_name.global_entity() {
@@ -175,7 +175,7 @@ fn get_relations_waiting_method(fields: &[Field], struct_type: &StructType) -> T
     let mut body = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
-        if let Field::EntityRelation(_) = field {
+        if let Field::EntityProperty(_) = field {
             let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
                 if let Some(local_entity) = self.#field_name.waiting_local_entity() {
@@ -206,7 +206,7 @@ fn get_relations_complete_method(fields: &[Field], struct_type: &StructType) -> 
     let mut body = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
-        if let Field::EntityRelation(_) = field {
+        if let Field::EntityProperty(_) = field {
             let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
                 self.#field_name.waiting_complete(converter);
@@ -248,9 +248,9 @@ pub fn get_read_method(
     for field in fields.iter() {
         let field_name = field.variable_name();
         let new_output_right = match field {
-            Field::EntityRelation(_property) => {
+            Field::EntityProperty(_property) => {
                 quote! {
-                    let #field_name = EntityRelation::read(reader, converter)?;
+                    let #field_name = EntityProperty::read(reader, converter)?;
                 }
             }
             Field::Normal(normal_field) => {
@@ -311,9 +311,9 @@ fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
                     self.#field_name.ser(writer);
                 }
             }
-            Field::EntityRelation(_) => {
+            Field::EntityProperty(_) => {
                 quote! {
-                    EntityRelation::write(&self.#field_name, writer, converter);
+                    EntityProperty::write(&self.#field_name, writer, converter);
                 }
             }
         };
@@ -344,7 +344,7 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
                     output += self.#field_name.bit_length();
                 }
             }
-            Field::EntityRelation(_) => {
+            Field::EntityProperty(_) => {
                 quote! {
                     output += self.#field_name.bit_length(converter);
                 }
@@ -388,9 +388,9 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
                             Type::Path(type_path) => {
                                 if let Some(property_seg) = type_path.path.segments.first() {
                                     let property_type = property_seg.ident.clone();
-                                    // EntityRelation
-                                    if property_type == "EntityRelation" {
-                                        fields.push(Field::entity_relation(variable_name.clone()));
+                                    // EntityProperty
+                                    if property_type == "EntityProperty" {
+                                        fields.push(Field::entity_property(variable_name.clone()));
                                         continue;
                                         // Property
                                     } else {
@@ -415,8 +415,8 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
                             let property_type = property_seg.ident.clone();
                             let variable_name =
                                 get_variable_name_for_unnamed_field(index, property_type.span());
-                            if property_type == "EntityRelation" {
-                                fields.push(Field::entity_relation(variable_name));
+                            if property_type == "EntityProperty" {
+                                fields.push(Field::entity_property(variable_name));
                                 continue;
                             } else {
                                 fields.push(Field::normal(variable_name, field.ty.clone()))
@@ -456,7 +456,7 @@ fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
     Ident::new(&format!("{}{}", UNNAMED_FIELD_PREFIX, index), span)
 }
 
-pub struct EntityRelation {
+pub struct EntityProperty {
     pub variable_name: Ident,
     pub uppercase_variable_name: Ident,
 }
@@ -468,13 +468,13 @@ pub struct Normal {
 
 #[allow(clippy::large_enum_variant)]
 pub enum Field {
-    EntityRelation(EntityRelation),
+    EntityProperty(EntityProperty),
     Normal(Normal),
 }
 
 impl Field {
-    pub fn entity_relation(variable_name: Ident) -> Self {
-        Self::EntityRelation(EntityRelation {
+    pub fn entity_property(variable_name: Ident) -> Self {
+        Self::EntityProperty(EntityProperty {
             variable_name: variable_name.clone(),
             uppercase_variable_name: Ident::new(
                 variable_name.to_string().to_uppercase().as_str(),
@@ -492,7 +492,7 @@ impl Field {
 
     pub fn variable_name(&self) -> &Ident {
         match self {
-            Self::EntityRelation(property) => &property.variable_name,
+            Self::EntityProperty(property) => &property.variable_name,
             Self::Normal(field) => &field.variable_name,
         }
     }

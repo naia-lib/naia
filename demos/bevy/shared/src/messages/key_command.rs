@@ -1,8 +1,8 @@
-use naia_bevy_shared::{EntityRelation, Message};
+use naia_bevy_shared::{EntityProperty, Message};
 
 #[derive(Message)]
 pub struct KeyCommand {
-    pub entity: EntityRelation,
+    pub entity: EntityProperty,
     pub w: bool,
     pub s: bool,
     pub a: bool,
@@ -12,7 +12,7 @@ pub struct KeyCommand {
 impl KeyCommand {
     pub fn new(w: bool, s: bool, a: bool, d: bool) -> Self {
         Self {
-            entity: EntityRelation::new(),
+            entity: EntityProperty::new(),
             w,
             s,
             a,

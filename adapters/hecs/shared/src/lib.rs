@@ -1,6 +1,6 @@
 pub use naia_shared::{
     BitReader, BitWrite, BitWriter, Channel, ChannelDirection, ChannelMode, ComponentKind,
-    ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask, EntityProperty, EntityRelation,
+    ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask, EntityProperty, EntityProperty,
     GlobalEntity, LinkConditionerConfig, LocalEntityAndGlobalEntityConverter,
     LocalEntityAndGlobalEntityConverterMut, MessageBuilder, MessageContainer,
     MessageHecs as Message, MessageKind, MessageKinds, Named, OwnedBitReader, Property,
