@@ -174,6 +174,7 @@ impl HostOwnedRelation {
         if let Some(global_entity) = &self.global_entity {
             let Ok(local_entity) = converter.global_entity_to_local_entity(global_entity) else {
                 warn!("Could not find Local Entity from Global Entity to associate with outgoing EntityProperty value!");
+                false.ser(writer);
                 return;
             };
             // Must reverse the LocalEntity because the Host<->Remote

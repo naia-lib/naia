@@ -2,8 +2,8 @@ use std::mem;
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::world::remote::entity_waitlist::EntityWaitlist;
 use crate::{
+    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
     messages::{
         channels::receivers::{
             channel_receiver::{ChannelReceiver, MessageChannelReceiver},
@@ -19,6 +19,7 @@ use crate::{
 pub struct SequencedUnreliableReceiver {
     newest_received_message_index: Option<MessageIndex>,
     incoming_messages: Vec<MessageContainer>,
+    waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>,
 }
 
 impl SequencedUnreliableReceiver {
@@ -26,6 +27,7 @@ impl SequencedUnreliableReceiver {
         Self {
             newest_received_message_index: None,
             incoming_messages: Vec::new(),
+            waitlist_store: WaitlistStore::new(),
         }
     }
 
@@ -35,9 +37,23 @@ impl SequencedUnreliableReceiver {
         message_index: MessageIndex,
         message: MessageContainer,
     ) {
-        // use entity_waitlist
-        todo!();
+        if let Some(entity_set) = message.relations_waiting() {
+            entity_waitlist.queue(
+                entity_set,
+                &mut self.waitlist_store,
+                (message_index, message),
+            );
+            return;
+        }
 
+        self.arrange_message(message_index, message);
+    }
+
+    pub fn arrange_message(
+        &mut self,
+        message_index: MessageIndex,
+        message: MessageContainer,
+    ) {
         if let Some(most_recent_id) = self.newest_received_message_index {
             if sequence_greater_than(message_index, most_recent_id) {
                 self.incoming_messages.push(message);
@@ -52,8 +68,11 @@ impl SequencedUnreliableReceiver {
 
 impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
     fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
-        // use entity_waitlist
-        todo!();
+        if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
+            for (message_index, message) in list {
+                self.arrange_message(message_index, message);
+            }
+        }
 
         Vec::from(mem::take(&mut self.incoming_messages))
     }

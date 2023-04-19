@@ -91,6 +91,14 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         &mut self,
         entity_waitlist: &mut EntityWaitlist,
     ) -> Vec<(MessageIndex, MessageContainer)> {
+
+        if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
+            for (first_index, full_message) in list {
+                self.arranger
+                    .process(&mut self.incoming_messages, first_index, full_message);
+            }
+        }
+
         // return buffer
         std::mem::take(&mut self.incoming_messages)
     }

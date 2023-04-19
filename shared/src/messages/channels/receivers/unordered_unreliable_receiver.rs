@@ -2,23 +2,25 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, Serde, SerdeErr};
 
-use crate::world::remote::entity_waitlist::EntityWaitlist;
 use crate::{
     messages::{
         channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
         message_kinds::MessageKinds,
     },
     LocalEntityAndGlobalEntityConverter, MessageContainer,
+    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}
 };
 
 pub struct UnorderedUnreliableReceiver {
     incoming_messages: VecDeque<MessageContainer>,
+    waitlist_store: WaitlistStore<MessageContainer>,
 }
 
 impl UnorderedUnreliableReceiver {
     pub fn new() -> Self {
         Self {
             incoming_messages: VecDeque::new(),
+            waitlist_store: WaitlistStore::new(),
         }
     }
 
@@ -33,8 +35,14 @@ impl UnorderedUnreliableReceiver {
     }
 
     fn recv_message(&mut self, entity_waitlist: &mut EntityWaitlist, message: MessageContainer) {
-        // use entity_waitlist
-        todo!();
+        if let Some(entity_set) = message.relations_waiting() {
+            entity_waitlist.queue(
+                entity_set,
+                &mut self.waitlist_store,
+                message,
+            );
+            return;
+        }
 
         self.incoming_messages.push_back(message);
     }
@@ -42,8 +50,11 @@ impl UnorderedUnreliableReceiver {
 
 impl ChannelReceiver<MessageContainer> for UnorderedUnreliableReceiver {
     fn receive_messages(&mut self, entity_waitlist: &mut EntityWaitlist) -> Vec<MessageContainer> {
-        // use entity_waitlist
-        todo!();
+        if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
+            for message in list {
+                self.incoming_messages.push_back(message);
+            }
+        }
 
         Vec::from(mem::take(&mut self.incoming_messages))
     }
