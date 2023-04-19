@@ -16,7 +16,7 @@ use naia_bevy_server::{
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, ColorValue, Position, Shape, ShapeValue},
+    components::{Relation, Color, ColorValue, Position, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
 };
 
@@ -75,6 +75,10 @@ pub fn connect_events(
         // Shape component
         let shape = Shape::new(ShapeValue::Square);
 
+        // Relation component
+        let mut relation = Relation::new();
+        relation.entity.set(&server, &global.baseline_entity);
+
         // Spawn entity
         let entity = commands
             // Spawn new Entity
@@ -87,6 +91,8 @@ pub fn connect_events(
             .insert(color)
             // Insert Shape component
             .insert(shape)
+            // Insert Relation component
+            .insert(relation)
             // return Entity id
             .id();
 

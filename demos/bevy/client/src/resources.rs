@@ -34,6 +34,7 @@ pub struct Global {
     pub green: Handle<ColorMaterial>,
     pub white: Handle<ColorMaterial>,
     pub circle: Handle<Mesh>,
+    pub baseline_entity: Option<Entity>,
 }
 
 impl Default for Global {
@@ -49,6 +50,7 @@ impl Default for Global {
             yellow: Handle::default(),
             green: Handle::default(),
             circle: Handle::default(),
+            baseline_entity: None,
         }
     }
 }

@@ -8,8 +8,8 @@ use bevy_render::{
 };
 use bevy_sprite::ColorMaterial;
 
-use naia_bevy_client::{transport::webrtc, Client};
-use naia_bevy_demo_shared::messages::Auth;
+use naia_bevy_client::{transport::webrtc, Client, Random, CommandsExt};
+use naia_bevy_demo_shared::{components::Position, messages::Auth};
 
 use crate::resources::Global;
 
@@ -40,6 +40,23 @@ pub fn init(
 
     // Load shapes
     global.circle = meshes.add(shape::Circle::new(6.).into());
+
+    // Set up new baseline entity
+    let position = {
+        let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
+        let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
+        Position::new(x, y)
+    };
+
+    global.baseline_entity = Some(commands
+        // Spawn new Entity
+        .spawn_empty()
+        // MUST call this to begin replication
+        .enable_replication(&mut client)
+        // Insert Position component
+        .insert(position)
+        // return Entity id
+        .id());
 
     // Insert Global Resource
     commands.insert_resource(global);
