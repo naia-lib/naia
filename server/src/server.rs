@@ -964,7 +964,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     addresses.insert(address);
 
                     if self
-                        .maintain_connection(&address, &header, &mut reader, &mut world)
+                        .read_packet(&address, &header, &mut reader, &mut world)
                         .is_err()
                     {
                         warn!("Server Error: cannot read malformed packet");
@@ -983,7 +983,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         for address in addresses {
-            self.receive_from_connection(&address);
+            self.receive_packets(&address);
         }
     }
 
@@ -1077,7 +1077,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return Ok(false);
     }
 
-    fn maintain_connection<W: WorldMutType<E>>(
+    fn read_packet<W: WorldMutType<E>>(
         &mut self,
         address: &SocketAddr,
         header: &StandardHeader,
@@ -1103,7 +1103,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 let server_tick = self.time_manager.current_tick();
 
                 // process data
-                connection.process_incoming_data(
+                connection.read_packet(
                     &self.protocol,
                     server_tick,
                     client_tick,
@@ -1136,13 +1136,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return Ok(());
     }
 
-    fn receive_from_connection(&mut self, address: &SocketAddr) {
+    fn receive_packets(&mut self, address: &SocketAddr) {
         // Packets requiring established connection
         let Some(connection) = self.user_connections.get_mut(address) else {
             return;
         };
 
-        connection.receive_incoming_data(
+        connection.receive_packets(
             &self.protocol,
             &mut self.global_world_manager,
             &mut self.incoming_events,

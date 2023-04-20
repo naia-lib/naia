@@ -156,19 +156,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 connection.time_manager.collect_ticks();
 
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
-                // apply updates on tick boundary
+                // read packets on tick boundary, de-jittering
                 if connection
-                    .process_buffered_packets(
+                    .read_buffered_packets(
                         &self.protocol,
                         &mut world,
                         &mut self.global_world_manager,
-                        &mut self.incoming_events,
                     )
                     .is_err()
                 {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading from buffered packet!");
                 }
+
+                // receive packets, process into events
+                connection
+                    .receive_packets(&mut self.global_world_manager, &mut self.incoming_events);
 
                 let mut index_tick = prev_receiving_tick.wrapping_add(1);
                 loop {

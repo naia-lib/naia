@@ -63,8 +63,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         self.base.process_incoming_header(header, &mut []);
     }
 
-    /// Read packet data received from a client
-    pub fn process_incoming_data<W: WorldMutType<E>>(
+    /// Read packet data received from a client, storing necessary data in an internal buffer
+    pub fn read_packet<W: WorldMutType<E>>(
         &mut self,
         protocol: &Protocol,
         server_tick: Tick,
@@ -110,8 +110,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         return Ok(());
     }
 
-    /// Read packet data received from a client
-    pub fn receive_incoming_data(
+    /// Receive & process stored packet data
+    pub fn receive_packets(
         &mut self,
         protocol: &Protocol,
         global_world_manager: &mut GlobalWorldManager<E>,
@@ -121,7 +121,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             let entity_converter =
                 EntityConverter::new(global_world_manager, &self.base.local_world_manager);
 
-            // receive messages
+            // Receive Message Events
             let messages = self.base.message_manager.receive_messages(
                 &mut self.base.remote_world_manager.entity_waitlist,
                 &entity_converter,
