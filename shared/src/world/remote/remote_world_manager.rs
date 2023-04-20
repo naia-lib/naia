@@ -1,4 +1,3 @@
-use log::warn;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
@@ -246,13 +245,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                             .unwrap();
 
                         if let Some(entity_set) = component.relations_waiting() {
-                            warn!(
-                                "Queuing Component into Waitlist. Need entities: {:?}",
-                                entity_set
-                            );
-
                             self.entity_waitlist.queue(
-                                entity_set,
+                                &entity_set,
                                 &mut self.insert_waitlist_store,
                                 (local_entity, component),
                             );
@@ -295,13 +289,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     let world_entity = local_world_manager.get_world_entity(&local_entity);
 
                     if let Some(entity_set) = component.relations_waiting() {
-                        warn!(
-                            "Queuing Component into Waitlist. Need entities: {:?}",
-                            entity_set
-                        );
-
                         self.entity_waitlist.queue(
-                            entity_set,
+                            &entity_set,
                             &mut self.insert_waitlist_store,
                             (local_entity, component),
                         );
@@ -344,8 +333,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             .collect_ready_items(&mut self.insert_waitlist_store)
         {
             for (local_entity, mut component) in list {
-                warn!("Waitlisted Component is ready for processing!");
-
                 let world_entity = local_world_manager.get_world_entity(&local_entity);
                 let component_kind = component.kind();
                 component.relations_complete(converter);
@@ -355,8 +342,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     world_entity,
                     component_kind,
                 ));
-
-                warn!("Inserted Waitlisted Component into World");
             }
         }
     }

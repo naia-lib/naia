@@ -98,8 +98,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
 
-            warn!("Begin Read Packet");
-
             // read messages
             {
                 let entity_converter =

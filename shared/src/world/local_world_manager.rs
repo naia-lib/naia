@@ -1,5 +1,5 @@
 use log::warn;
-use std::{collections::HashMap, hash::Hash};
+use std::{collections::HashMap, hash::Hash, time::Duration};
 
 use crate::{
     world::entity::local_entity::LocalEntity, EntityDoesNotExistError, KeyGenerator,
@@ -16,7 +16,7 @@ pub struct LocalWorldManager<E: Copy + Eq + Hash> {
 impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     pub fn new() -> Self {
         Self {
-            host_entity_generator: KeyGenerator::new(),
+            host_entity_generator: KeyGenerator::new(Duration::from_secs(60)),
             world_to_local_entity: HashMap::new(),
             local_to_world_entity: HashMap::new(),
             reserved_entities: HashMap::new(),

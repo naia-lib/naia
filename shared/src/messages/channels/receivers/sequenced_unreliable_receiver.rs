@@ -1,4 +1,3 @@
-use log::warn;
 use std::mem;
 
 use naia_serde::{BitReader, SerdeErr};
@@ -39,12 +38,8 @@ impl SequencedUnreliableReceiver {
         message: MessageContainer,
     ) {
         if let Some(entity_set) = message.relations_waiting() {
-            warn!(
-                "Queuing Message into Waitlist. Need entities: {:?}",
-                entity_set
-            );
             entity_waitlist.queue(
-                entity_set,
+                &entity_set,
                 &mut self.waitlist_store,
                 (message_index, message),
             );

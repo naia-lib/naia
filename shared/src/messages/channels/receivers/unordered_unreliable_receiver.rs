@@ -1,4 +1,3 @@
-use log::warn;
 use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, Serde, SerdeErr};
@@ -37,11 +36,7 @@ impl UnorderedUnreliableReceiver {
 
     fn recv_message(&mut self, entity_waitlist: &mut EntityWaitlist, message: MessageContainer) {
         if let Some(entity_set) = message.relations_waiting() {
-            warn!(
-                "Queuing Message into Waitlist. Need entities: {:?}",
-                entity_set
-            );
-            entity_waitlist.queue(entity_set, &mut self.waitlist_store, message);
+            entity_waitlist.queue(&entity_set, &mut self.waitlist_store, message);
             return;
         }
 

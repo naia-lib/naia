@@ -1,5 +1,7 @@
-use log::warn;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    time::Duration,
+};
 
 use crate::{KeyGenerator, LocalEntity};
 
@@ -17,22 +19,32 @@ impl EntityWaitlist {
     pub fn new() -> Self {
         Self {
             handle_to_required_entities: HashMap::new(),
-            handle_store: KeyGenerator::new(),
+            handle_store: KeyGenerator::new(Duration::from_secs(60)),
             waiting_entity_to_handles: HashMap::new(),
             in_scope_entities: HashSet::new(),
             ready_handles: HashSet::new(),
         }
     }
 
+    fn must_queue(&self, entities: &HashSet<LocalEntity>) -> bool {
+        !entities.is_subset(&self.in_scope_entities)
+    }
+
     pub fn queue<T>(
         &mut self,
-        entities: HashSet<LocalEntity>,
+        entities: &HashSet<LocalEntity>,
         waitlist_store: &mut WaitlistStore<T>,
         item: T,
-    ) {
+    ) -> Handle {
         let new_handle = self.handle_store.generate();
 
-        for entity in &entities {
+        // if all entities are in scope, we can send the message immediately
+        if !self.must_queue(entities) {
+            self.ready_handles.insert(new_handle);
+            return new_handle;
+        }
+
+        for entity in entities {
             if !self.waiting_entity_to_handles.contains_key(entity) {
                 self.waiting_entity_to_handles
                     .insert(*entity, HashSet::new());
@@ -43,9 +55,11 @@ impl EntityWaitlist {
         }
 
         self.handle_to_required_entities
-            .insert(new_handle, entities);
+            .insert(new_handle, entities.clone());
 
         waitlist_store.queue(new_handle, item);
+
+        new_handle
     }
 
     pub fn collect_ready_items<T>(
@@ -56,8 +70,6 @@ impl EntityWaitlist {
     }
 
     pub fn add_entity(&mut self, entity: &LocalEntity) {
-        warn!("Entity Waitlist received: {:?}", entity);
-
         // put new entity into scope
         self.in_scope_entities.insert(*entity);
 
@@ -104,8 +116,6 @@ impl EntityWaitlist {
     }
 
     pub fn remove_entity(&mut self, entity: &LocalEntity) {
-        warn!("Entity Waitlist lost: {:?}", entity);
-
         // TODO: should we de-queue all our waiting messages that depend on this Entity?
         self.in_scope_entities.remove(entity);
     }

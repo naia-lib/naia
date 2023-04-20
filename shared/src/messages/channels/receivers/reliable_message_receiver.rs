@@ -1,4 +1,3 @@
-use log::warn;
 use naia_serde::{BitReader, SerdeErr};
 
 use crate::{
@@ -60,12 +59,8 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         };
 
         if let Some(entity_set) = full_message.relations_waiting() {
-            warn!(
-                "Queuing Message into Waitlist. Need entities: {:?}",
-                entity_set
-            );
             entity_waitlist.queue(
-                entity_set,
+                &entity_set,
                 &mut self.waitlist_store,
                 (first_index, full_message),
             );
@@ -99,11 +94,9 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
     ) -> Vec<(MessageIndex, MessageContainer)> {
         if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
             for (first_index, mut full_message) in list {
-                warn!("Waitlisted Message is ready for processing!");
                 full_message.relations_complete(converter);
                 self.arranger
                     .process(&mut self.incoming_messages, first_index, full_message);
-                warn!("Waitlisted Message added to incoming stream!");
             }
         }
 
