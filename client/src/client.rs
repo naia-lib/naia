@@ -158,11 +158,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // read packets on tick boundary, de-jittering
                 if connection
-                    .read_buffered_packets(
-                        &self.protocol,
-                        &mut world,
-                        &mut self.global_world_manager,
-                    )
+                    .read_buffered_packets(&self.protocol, &mut self.global_world_manager)
                     .is_err()
                 {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
@@ -170,8 +166,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
 
                 // receive packets, process into events
-                connection
-                    .receive_packets(&mut self.global_world_manager, &mut self.incoming_events);
+                connection.process_packets(
+                    &mut self.global_world_manager,
+                    &mut world,
+                    &mut self.incoming_events,
+                );
 
                 let mut index_tick = prev_receiving_tick.wrapping_add(1);
                 loop {

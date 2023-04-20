@@ -64,13 +64,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     }
 
     /// Read packet data received from a client, storing necessary data in an internal buffer
-    pub fn read_packet<W: WorldMutType<E>>(
+    pub fn read_packet(
         &mut self,
         protocol: &Protocol,
         server_tick: Tick,
         client_tick: Tick,
         reader: &mut BitReader,
-        world: &mut W,
         global_world_manager: &mut GlobalWorldManager<E>,
     ) -> Result<(), SerdeErr> {
         {
@@ -101,7 +100,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 global_world_manager,
                 &mut self.base.local_world_manager,
                 protocol,
-                world,
                 client_tick,
                 reader,
             )?;
@@ -111,10 +109,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     }
 
     /// Receive & process stored packet data
-    pub fn receive_packets(
+    pub fn process_packets<W: WorldMutType<E>>(
         &mut self,
         protocol: &Protocol,
         global_world_manager: &mut GlobalWorldManager<E>,
+        world: &mut W,
         incoming_events: &mut Events<E>,
     ) {
         {
@@ -135,7 +134,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read world events
         if protocol.client_authoritative_entities {
-            let entity_events = self.base.remote_world_manager.receive_world_events();
+            let entity_events = self.base.remote_world_manager.process_world_events(
+                global_world_manager,
+                &mut self.base.local_world_manager,
+                world,
+            );
             for event in &entity_events {
                 if let EntityEvent::SpawnEntity(entity) = event {
                     global_world_manager.remote_spawn_entity_record(entity, &self.user_key);

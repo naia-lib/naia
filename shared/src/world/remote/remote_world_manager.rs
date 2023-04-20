@@ -1,3 +1,4 @@
+use log::warn;
 use std::{collections::HashMap, hash::Hash};
 
 use crate::{
@@ -9,8 +10,8 @@ use crate::{
             entity_waitlist::{EntityWaitlist, WaitlistStore},
         },
     },
-    BitReader, ComponentKind, ComponentKinds, EntityAction, EntityActionReceiver, EntityActionType,
-    EntityAndGlobalEntityConverter, EntityConverter, GlobalWorldManagerType, LocalEntity,
+    BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityActionReceiver,
+    EntityActionType, EntityConverter, GlobalWorldManagerType, LocalEntity,
     LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol, Replicate, Serde, SerdeErr, Tick,
     UnsignedVariableInteger, WorldMutType,
 };
@@ -21,6 +22,7 @@ pub struct RemoteWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     pub entity_waitlist: EntityWaitlist,
     insert_waitlist_store: WaitlistStore<(LocalEntity, Box<dyn Replicate>)>,
     outgoing_events: Vec<EntityEvent<E>>,
+    received_updates: Vec<(Tick, E, ComponentUpdate)>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
@@ -31,6 +33,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             entity_waitlist: EntityWaitlist::new(),
             insert_waitlist_store: WaitlistStore::new(),
             outgoing_events: Vec::new(),
+            received_updates: Vec::new(),
         }
     }
 
@@ -42,38 +45,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         self.entity_waitlist.remove_entity(local_entity);
     }
 
-    pub fn read_world_events<W: WorldMutType<E>>(
+    pub fn read_world_events(
         &mut self,
         global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         protocol: &Protocol,
-        world: &mut W,
         tick: Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read entity updates
-        self.read_updates(
-            global_world_manager.to_global_entity_converter(),
-            local_world_manager,
-            &protocol.component_kinds,
-            world,
-            tick,
-            reader,
-        )?;
+        self.read_updates(local_world_manager, &protocol.component_kinds, tick, reader)?;
 
         // read entity actions
         self.read_actions(
             global_world_manager,
             local_world_manager,
             &protocol.component_kinds,
-            world,
             reader,
         )?;
 
         Ok(())
     }
 
-    pub fn receive_world_events(&mut self) -> Vec<EntityEvent<E>> {
+    pub fn process_world_events<W: WorldMutType<E>>(
+        &mut self,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        local_world_manager: &mut LocalWorldManager<E>,
+        world: &mut W,
+    ) -> Vec<EntityEvent<E>> {
+        self.process_updates(global_world_manager, local_world_manager, world);
+
+        self.process_actions(global_world_manager, local_world_manager, world);
+
         std::mem::take(&mut self.outgoing_events)
     }
 
@@ -90,16 +93,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         Ok(current_index)
     }
 
-    /// Read and process incoming actions.
-    ///
-    /// * Emits client events corresponding to any [`EntityAction`] received
-    /// Store
-    pub fn read_actions<W: WorldMutType<E>>(
+    /// Read incoming Entity actions.
+    pub fn read_actions(
         &mut self,
         global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
-        world: &mut W,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
@@ -121,6 +120,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             }
         }
 
+        Ok(())
+    }
+
+    /// Process incoming Entity actions.
+    ///
+    /// * Emits client events corresponding to any [`EntityAction`] received
+    /// Store
+    pub fn process_actions<W: WorldMutType<E>>(
+        &mut self,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        local_world_manager: &mut LocalWorldManager<E>,
+        world: &mut W,
+    ) {
         self.process_incoming_actions(global_world_manager, local_world_manager, world);
 
         {
@@ -130,8 +142,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             );
             self.process_waitlist_actions(&converter, local_world_manager, world);
         }
-
-        Ok(())
     }
 
     /// Read the bits corresponding to the EntityAction and adds the [`EntityAction`]
@@ -347,13 +357,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
     }
 
     /// Read component updates from raw bits
-    pub fn read_updates<W: WorldMutType<E>>(
+    pub fn read_updates(
         &mut self,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
         local_world_manager: &LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
-        world: &mut W,
-        server_tick: Tick,
+        tick: Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -366,11 +374,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             let local_entity = LocalEntity::remote_de(reader)?;
 
             self.read_update(
-                converter,
                 local_world_manager,
                 component_kinds,
-                world,
-                server_tick,
+                tick,
                 reader,
                 &local_entity,
             )?;
@@ -380,13 +386,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
     }
 
     /// Read component updates from raw bits for a given entity
-    fn read_update<W: WorldMutType<E>>(
+    fn read_update(
         &mut self,
-        global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         local_world_manager: &LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
-        world: &mut W,
-        server_tick: Tick,
+        tick: Tick,
         reader: &mut BitReader,
         local_entity: &LocalEntity,
     ) -> Result<(), SerdeErr> {
@@ -398,24 +402,48 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             }
 
             let component_update = component_kinds.read_create_update(reader)?;
-            let component_kind = component_update.kind;
 
             let world_entity = local_world_manager.get_world_entity(local_entity);
-            let converter = EntityConverter::new(global_entity_converter, local_world_manager);
-            world.component_apply_update(
-                &converter,
-                &world_entity,
-                &component_kind,
-                component_update,
-            )?;
+
+            self.received_updates
+                .push((tick, world_entity, component_update));
+        }
+
+        Ok(())
+    }
+
+    /// Read component updates from raw bits for a given entity
+    fn process_updates<W: WorldMutType<E>>(
+        &mut self,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        local_world_manager: &LocalWorldManager<E>,
+        world: &mut W,
+    ) {
+        let converter = EntityConverter::new(
+            global_world_manager.to_global_entity_converter(),
+            local_world_manager,
+        );
+        for (tick, world_entity, component_update) in self.received_updates.drain(..) {
+            let component_kind = component_update.kind;
+
+            if world
+                .component_apply_update(
+                    &converter,
+                    &world_entity,
+                    &component_kind,
+                    component_update,
+                )
+                .is_err()
+            {
+                warn!("Remote World Manager: cannot read malformed component update message");
+                continue;
+            }
 
             self.outgoing_events.push(EntityEvent::UpdateComponent(
-                server_tick,
+                tick,
                 world_entity,
                 component_kind,
             ));
         }
-
-        Ok(())
     }
 }

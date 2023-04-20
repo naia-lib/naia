@@ -80,10 +80,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
     /// Read the packets (raw bits) from the jitter buffer that correspond to the
     /// `receiving_tick`. Reads packets, storing necessary data into an internal buffer
-    pub fn read_buffered_packets<W: WorldMutType<E>>(
+    pub fn read_buffered_packets(
         &mut self,
         protocol: &Protocol,
-        world: &mut W,
         global_world_manager: &mut GlobalWorldManager<E>,
     ) -> Result<(), SerdeErr> {
         let receiving_tick = self.time_manager.client_receiving_tick;
@@ -108,7 +107,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 global_world_manager,
                 &mut self.base.local_world_manager,
                 protocol,
-                world,
                 server_tick,
                 &mut reader,
             )?;
@@ -118,27 +116,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     }
 
     /// Receive & process messages / entity actions / entity updates and emit events for them
-    pub fn receive_packets(
+    pub fn process_packets<W: WorldMutType<E>>(
         &mut self,
         global_world_manager: &mut GlobalWorldManager<E>,
+        world: &mut W,
         incoming_events: &mut Events<E>,
     ) {
-        let entity_converter =
-            EntityConverter::new(global_world_manager, &self.base.local_world_manager);
+        {
+            let entity_converter =
+                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
 
-        // Receive Message Events
-        let messages = self.base.message_manager.receive_messages(
-            &mut self.base.remote_world_manager.entity_waitlist,
-            &entity_converter,
-        );
-        for (channel_kind, messages) in messages {
-            for message in messages {
-                incoming_events.push_message(&channel_kind, message);
+            // Receive Message Events
+            let messages = self.base.message_manager.receive_messages(
+                &mut self.base.remote_world_manager.entity_waitlist,
+                &entity_converter,
+            );
+            for (channel_kind, messages) in messages {
+                for message in messages {
+                    incoming_events.push_message(&channel_kind, message);
+                }
             }
         }
 
         // Receive World Events
-        let world_events = self.base.remote_world_manager.receive_world_events();
+        let world_events = self.base.remote_world_manager.process_world_events(
+            global_world_manager,
+            &mut self.base.local_world_manager,
+            world,
+        );
 
         incoming_events.receive_world_events(world_events);
     }

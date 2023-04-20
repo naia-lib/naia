@@ -983,7 +983,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         for address in addresses {
-            self.receive_packets(&address);
+            self.process_packets(&address, &mut world);
         }
     }
 
@@ -1108,7 +1108,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     server_tick,
                     client_tick,
                     reader,
-                    world,
                     &mut self.global_world_manager,
                 )?;
             }
@@ -1136,15 +1135,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return Ok(());
     }
 
-    fn receive_packets(&mut self, address: &SocketAddr) {
+    fn process_packets<W: WorldMutType<E>>(&mut self, address: &SocketAddr, world: &mut W) {
         // Packets requiring established connection
         let Some(connection) = self.user_connections.get_mut(address) else {
             return;
         };
 
-        connection.receive_packets(
+        connection.process_packets(
             &self.protocol,
             &mut self.global_world_manager,
+            world,
             &mut self.incoming_events,
         );
     }
