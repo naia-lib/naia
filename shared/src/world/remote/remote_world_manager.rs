@@ -21,7 +21,7 @@ pub struct RemoteWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     received_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
     pub entity_waitlist: EntityWaitlist,
     insert_waitlist_store: WaitlistStore<(E, Box<dyn Replicate>)>,
-    insert_waitlist_map: HashMap<E, WaitlistHandle>,
+    insert_waitlist_map: HashMap<(E, ComponentKind), WaitlistHandle>,
     update_waitlist_store: WaitlistStore<(Tick, E, ComponentUpdate)>,
     outgoing_events: Vec<EntityEvent<E>>,
     received_updates: Vec<(Tick, E, ComponentUpdate)>,
@@ -333,12 +333,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     // Generate event for each component, handing references off just in
                     // case
                     for component_kind in world.component_kinds(&world_entity) {
-                        if let Some(component) =
-                            world.remove_component_of_kind(&world_entity, &component_kind)
-                        {
-                            self.outgoing_events
-                                .push(EntityEvent::<E>::RemoveComponent(world_entity, component));
-                        }
+                        self.process_remove(world, world_entity, component_kind);
                     }
 
                     world.despawn_entity(&world_entity);
@@ -358,15 +353,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 }
                 EntityAction::RemoveComponent(local_entity, component_kind) => {
                     let world_entity = local_world_manager.get_world_entity(&local_entity);
-
-                    // Get component for last change
-                    let component = world
-                        .remove_component_of_kind(&world_entity, &component_kind)
-                        .expect("Component already removed?");
-
-                    // Generate event
-                    self.outgoing_events
-                        .push(EntityEvent::<E>::RemoveComponent(world_entity, component));
+                    self.process_remove(world, world_entity, component_kind);
                 }
                 EntityAction::Noop => {
                     // do nothing
@@ -382,7 +369,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 &mut self.insert_waitlist_store,
                 (world_entity, component),
             );
-            self.insert_waitlist_map.insert(world_entity, handle);
+            self.insert_waitlist_map.insert((world_entity, *component_kind), handle);
         } else {
             world.insert_boxed_component(&world_entity, component);
 
@@ -390,6 +377,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 world_entity,
                 *component_kind,
             ));
+        }
+    }
+
+    fn process_remove<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        world_entity: E,
+        component_kind: ComponentKind,
+    ) {
+        // Remove from waitlist if it's there
+        if let Some(handle) = self.insert_waitlist_map.remove(&(
+            world_entity,
+            component_kind,
+        )) {
+            self.insert_waitlist_store.remove(&handle);
+            self.entity_waitlist.remove_waiting(&handle);
+            return;
+        }
+        // Remove from world
+        if let Some(component) =
+            world.remove_component_of_kind(&world_entity, &component_kind)
+        {
+            // Send out event
+            self.outgoing_events
+                .push(EntityEvent::<E>::RemoveComponent(world_entity, component));
         }
     }
 
@@ -403,8 +415,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             .collect_ready_items(&mut self.insert_waitlist_store)
         {
             for (world_entity, mut component) in list {
-                self.insert_waitlist_map.remove(&world_entity);
                 let component_kind = component.kind();
+                self.insert_waitlist_map.remove(&(world_entity, component_kind));
                 component.relations_complete(converter);
                 world.insert_boxed_component(&world_entity, component);
 

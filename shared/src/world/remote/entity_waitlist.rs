@@ -85,6 +85,8 @@ impl EntityWaitlist {
                 if let Some(entities) = self.handle_to_required_entities.get(message_handle) {
                     if entities.is_subset(&self.in_scope_entities) {
                         outgoing_handles.push(*message_handle);
+                        // push outgoing message
+                        self.ready_handles.insert(*message_handle);
                     }
                 }
             }
@@ -92,36 +94,36 @@ impl EntityWaitlist {
 
         // get the messages ready to send, also clean up
         for outgoing_handle in outgoing_handles {
-            let entities = self
-                .handle_to_required_entities
-                .remove(&outgoing_handle)
-                .unwrap();
-
-            // push outgoing message
-            self.ready_handles.insert(outgoing_handle);
-
-            // recycle message handle
-            self.handle_store.recycle_key(&outgoing_handle);
-
-            // for all associated entities, remove from waitlist
-            for entity in entities {
-                let mut remove = false;
-                if let Some(message_set) = self.waiting_entity_to_handles.get_mut(&entity) {
-                    message_set.remove(&outgoing_handle);
-                    if message_set.is_empty() {
-                        remove = true;
-                    }
-                }
-                if remove {
-                    self.waiting_entity_to_handles.remove(&entity);
-                }
-            }
+            self.remove_waiting(&outgoing_handle);
         }
     }
 
     pub fn remove_entity(&mut self, entity: &LocalEntity) {
-        // TODO: should we de-queue all our waiting messages that depend on this Entity?
         self.in_scope_entities.remove(entity);
+    }
+
+    pub fn remove_waiting(&mut self, handle: &WaitlistHandle) {
+        let entities = self
+            .handle_to_required_entities
+            .remove(&handle)
+            .unwrap();
+
+        // recycle message handle
+        self.handle_store.recycle_key(&handle);
+
+        // for all associated entities, remove from waitlist
+        for entity in entities {
+            let mut remove = false;
+            if let Some(message_set) = self.waiting_entity_to_handles.get_mut(&entity) {
+                message_set.remove(&handle);
+                if message_set.is_empty() {
+                    remove = true;
+                }
+            }
+            if remove {
+                self.waiting_entity_to_handles.remove(&entity);
+            }
+        }
     }
 }
 
@@ -162,5 +164,10 @@ impl<T> WaitlistStore<T> {
         }
 
         Some(ready_messages)
+    }
+
+    pub fn remove(&mut self, handle: &WaitlistHandle) {
+        self.item_handles.remove(handle);
+        self.items.remove(handle);
     }
 }
