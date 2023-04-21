@@ -67,6 +67,9 @@ impl EntityWaitlist {
         &mut self,
         waitlist_store: &mut WaitlistStore<T>,
     ) -> Option<Vec<T>> {
+        if self.ready_handles.is_empty() {
+            return None;
+        }
         waitlist_store.collect_ready_items(&mut self.ready_handles)
     }
 
@@ -123,37 +126,39 @@ impl EntityWaitlist {
 }
 
 pub struct WaitlistStore<T> {
+    item_handles: HashSet<Handle>,
     items: HashMap<Handle, T>,
 }
 
 impl<T> WaitlistStore<T> {
     pub fn new() -> Self {
         Self {
+            item_handles: HashSet::new(),
             items: HashMap::new(),
         }
     }
 
     pub fn queue(&mut self, handle: Handle, item: T) {
+        self.item_handles.insert(handle);
         self.items.insert(handle, item);
     }
 
     pub fn collect_ready_items(&mut self, ready_handles: &mut HashSet<Handle>) -> Option<Vec<T>> {
-        let mut intersection: HashSet<Handle> = HashSet::new();
 
-        for handle in self.items.keys() {
-            if ready_handles.remove(handle) {
-                intersection.insert(*handle);
-            }
-        }
+        let intersection: HashSet<Handle> = self.item_handles.intersection(&ready_handles).cloned().collect();
 
         if intersection.len() == 0 {
+            // Handles in ready_handles must refer to items in another WaitlistStore
             return None;
         }
 
         let mut ready_messages = Vec::new();
 
         for handle in intersection {
-            ready_messages.push(self.items.remove(&handle).unwrap());
+            ready_handles.remove(&handle);
+            self.item_handles.remove(&handle);
+            let item = self.items.remove(&handle).unwrap();
+            ready_messages.push(item);
         }
 
         Some(ready_messages)
