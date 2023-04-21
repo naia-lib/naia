@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use naia_serde::{BitReader, OwnedBitReader};
+use naia_serde::{BitReader, OwnedBitReader, SerdeErr};
 
 use crate::{
     world::component::component_kinds::ComponentKind, ComponentKinds, LocalEntity,
@@ -25,7 +25,7 @@ impl ComponentUpdate {
         self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
-    ) -> (Option<(HashSet<LocalEntity>, Self)>, Option<Self>) {
+    ) -> Result<(Option<(HashSet<LocalEntity>, Self)>, Option<Self>), SerdeErr> {
         let kind = self.kind;
         component_kinds.split_update(converter, &kind, self)
     }

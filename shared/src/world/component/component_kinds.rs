@@ -1,5 +1,7 @@
-
-use std::{any::TypeId, collections::{HashMap, HashSet}};
+use std::{
+    any::TypeId,
+    collections::{HashMap, HashSet},
+};
 
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
@@ -99,10 +101,13 @@ impl ComponentKinds {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kind: &ComponentKind,
         update: ComponentUpdate,
-    ) -> (
-        Option<(HashSet<LocalEntity>, ComponentUpdate)>,
-        Option<ComponentUpdate>,
-    ) {
+    ) -> Result<
+        (
+            Option<(HashSet<LocalEntity>, ComponentUpdate)>,
+            Option<ComponentUpdate>,
+        ),
+        SerdeErr,
+    > {
         return self
             .kind_to_builder(component_kind)
             .split_update(converter, update);

@@ -83,6 +83,7 @@ pub fn replicate_impl(
     // let entities = get_entities_method(&properties, &struct_type);
     let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
+    let split_update_method = get_split_update_method(&replica_name, &properties);
 
     let gen = quote! {
         mod #module_name {
@@ -102,6 +103,7 @@ pub fn replicate_impl(
             impl ReplicateBuilder for #builder_name {
                 #read_method
                 #read_create_update_method
+                #split_update_method
             }
             impl Named for #builder_name {
                 fn name(&self) -> String {
@@ -630,8 +632,8 @@ pub fn get_read_method(
     for property in properties.iter() {
         let field_name = property.variable_name();
         let new_output_right = match property {
-            Property::Normal(property) => {
-                let field_type = &property.inner_type;
+            Property::Normal(inner_property) => {
+                let field_type = &inner_property.inner_type;
                 quote! {
                     let #field_name = Property::<#field_type>::new_read(reader)?;
                 }
@@ -641,9 +643,9 @@ pub fn get_read_method(
                     let #field_name = EntityProperty::new_read(reader, converter)?;
                 }
             }
-            Property::NonReplicated(property) => {
-                let field_name = &property.variable_name;
-                let field_type = &property.field_type;
+            Property::NonReplicated(inner_property) => {
+                let field_name = &inner_property.variable_name;
+                let field_type = &inner_property.field_type;
                 quote! {
                     let #field_name = <#field_type>::default();
                 }
@@ -692,8 +694,8 @@ pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Propert
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {
-            Property::Normal(property) => {
-                let field_type = &property.inner_type;
+            Property::Normal(inner_property) => {
+                let field_type = &inner_property.inner_type;
                 quote! {
                     {
                         let should_read = bool::de(reader)?;
@@ -737,6 +739,108 @@ pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Propert
             let owned_reader = update_writer.to_owned_reader();
 
             return Ok(ComponentUpdate::new(ComponentKind::of::<#replica_name>(), owned_reader));
+        }
+    }
+}
+
+fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
+    let mut output = quote! {};
+
+    for (_index, property) in properties.iter().enumerate() {
+        let new_output_right = match property {
+            Property::Normal(inner_property) => {
+                let field_type = &inner_property.inner_type;
+                quote! {
+                    let should_read = bool::de(reader)?;
+                    should_read.ser(&mut ready_writer);
+                    false.ser(&mut waiting_writer); // waiting update should never have Property<T> values
+                    if should_read {
+                        Property::<#field_type>::read_write(reader, &mut ready_writer)?;
+                        ready_did_write = true;
+                    }
+                }
+            }
+            Property::Entity(_) => {
+                quote! {
+                    let should_read = bool::de(reader)?;
+                    if should_read {
+                        // copy property to read whether it is waiting or not
+                        let prop_copy = EntityProperty::new_read(reader, converter)?;
+
+                        // get waiting local entity from copy after read
+                        let waiting_entity_opt = prop_copy.waiting_local_entity();
+                        if let Some(waiting_entity) = waiting_entity_opt {
+                            // property is waiting on waiting_entity, write into the waiting_writer
+                            waiting_entity_set.insert(waiting_entity);
+
+                            // write update into waiting writer
+                            waiting_did_write = true;
+                            false.ser(&mut ready_writer);
+                            true.ser(&mut waiting_writer);
+                            waiting_entity.owned_ser(&mut waiting_writer);
+                        } else {
+                            // write ready update into ready writer
+                            ready_did_write = true;
+                            true.ser(&mut ready_writer);
+                            false.ser(&mut waiting_writer);
+                            prop_copy.write_local_entity(converter, &mut ready_writer);
+                        }
+                    } else {
+                        // Neither writer gets an update here
+                        false.ser(&mut ready_writer);
+                        false.ser(&mut waiting_writer);
+                    }
+                }
+            }
+            Property::NonReplicated(_) => {
+                continue;
+            }
+        };
+
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn split_update(
+            &self,
+            converter: &dyn LocalEntityAndGlobalEntityConverter,
+            update: ComponentUpdate
+        ) -> Result<(
+            Option<(HashSet<LocalEntity>, ComponentUpdate)>,
+            Option<ComponentUpdate>
+        ), SerdeErr> {
+            let component_kind = ComponentKind::of::<#replica_name>();
+            let reader = &mut update.reader();
+
+            let mut waiting_writer = BitWriter::new();
+            let mut waiting_did_write = false;
+            let mut waiting_entity_set = HashSet::new();
+
+            let mut ready_writer = BitWriter::new();
+            let mut ready_did_write = false;
+
+            #output
+
+            let waiting_result = {
+                if waiting_did_write {
+                    Some((waiting_entity_set, ComponentUpdate::new(component_kind, waiting_writer.to_owned_reader())))
+                } else {
+                    None
+                }
+            };
+            let ready_result = {
+                if ready_did_write {
+                    Some(ComponentUpdate::new(component_kind, ready_writer.to_owned_reader()))
+                } else {
+                    None
+                }
+            };
+
+            return Ok((waiting_result, ready_result));
         }
     }
 }

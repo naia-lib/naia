@@ -243,6 +243,22 @@ impl EntityProperty {
             }
         }
     }
+
+    // used for writing out ready local entity value when splitting updates
+    pub fn write_local_entity(
+        &self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        writer: &mut BitWriter,
+    ) {
+        match &self.inner {
+            EntityRelation::HostOwned(_) | EntityRelation::RemoteWaiting(_) => {
+                panic!("Can't use this method to write a RemoteWaiting or HostOwned Relation!");
+            }
+            EntityRelation::RemoteOwned(inner) => {
+                inner.write_local_entity(converter, writer);
+            }
+        }
+    }
 }
 
 // HostOwnedRelation
@@ -279,21 +295,22 @@ impl HostOwnedRelation {
         writer: &mut dyn BitWrite,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
-        if let Some(global_entity) = &self.global_entity {
-            let Ok(local_entity) = converter.get_or_reserve_host_entity(global_entity) else {
-                warn!("Global Entity does not Exist! This should not happen.");
-                false.ser(writer);
-                return;
-            };
-            // Must reverse the LocalEntity because the Host<->Remote
-            // relationship inverts after this data goes over the wire
-            let reversed_local_entity = local_entity.to_reversed();
-
-            true.ser(writer);
-            reversed_local_entity.owned_ser(writer);
+        let Some(global_entity) = &self.global_entity else {
+            false.ser(writer);
             return;
-        }
-        false.ser(writer);
+        };
+        let Ok(local_entity) = converter.get_or_reserve_host_entity(global_entity) else {
+            warn!("Global Entity does not Exist! This should not happen.");
+            false.ser(writer);
+            return;
+        };
+
+        // Must reverse the LocalEntity because the Host<->Remote
+        // relationship inverts after this data goes over the wire
+        let reversed_local_entity = local_entity.to_reversed();
+
+        true.ser(writer);
+        reversed_local_entity.owned_ser(writer);
     }
 
     pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
@@ -379,6 +396,24 @@ impl RemoteOwnedRelation {
             }
         }
         return None;
+    }
+
+    pub fn write_local_entity(
+        &self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        writer: &mut BitWriter,
+    ) {
+        let Some(global_entity) = &self.global_entity else {
+            false.ser(writer);
+            return;
+        };
+        let Ok(local_entity) = converter.global_entity_to_local_entity(&global_entity) else {
+            warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
+            false.ser(writer);
+            return;
+        };
+        true.ser(writer);
+        local_entity.owned_ser(writer);
     }
 }
 

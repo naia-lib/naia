@@ -32,10 +32,13 @@ pub trait ReplicateBuilder: Send + Sync + Named {
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentUpdate,
-    ) -> (
-        Option<(HashSet<LocalEntity>, ComponentUpdate)>,
-        Option<ComponentUpdate>,
-    );
+    ) -> Result<
+        (
+            Option<(HashSet<LocalEntity>, ComponentUpdate)>,
+            Option<ComponentUpdate>,
+        ),
+        SerdeErr,
+    >;
 }
 
 /// A struct that implements Replicate is a Component, or otherwise,
