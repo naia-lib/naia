@@ -1,12 +1,8 @@
-use bevy_ecs::{
-    event::EventReader,
-    system::{Commands, Query, Res, ResMut},
-};
-use bevy_log::info;
-use bevy_math::Vec2;
-use bevy_render::color::Color as BevyColor;
-use bevy_sprite::{MaterialMesh2dBundle, Sprite, SpriteBundle};
-use bevy_transform::components::Transform;
+use std::default::Default;
+
+use bevy::{prelude::{VisibilityBundle, BuildChildren, Query, Res, Sprite, SpriteBundle, TransformBundle, Vec2, warn, Transform, Commands, EventReader, info, ResMut, Color as BevyColor},
+           sprite::MaterialMesh2dBundle};
+use bevy::sprite::Anchor;
 
 use naia_bevy_client::{
     events::{
@@ -24,7 +20,7 @@ use naia_bevy_demo_shared::{
 };
 
 use crate::{
-    components::{Confirmed, Interp, LocalCursor, Predicted},
+    components::{Line, Confirmed, Interp, LocalCursor, Predicted},
     resources::{Global, OwnedEntity},
 };
 
@@ -165,9 +161,11 @@ pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) 
 pub fn insert_component_events(
     mut commands: Commands,
     mut event_reader: EventReader<InsertComponentEvents>,
+    client: Client,
     global: Res<Global>,
     sprite_query: Query<(&Shape, &Color)>,
     position_query: Query<&Position>,
+    relation_query: Query<&Relation>
 ) {
     for events in event_reader.iter() {
         for entity in events.read::<Color>() {
@@ -185,6 +183,7 @@ pub fn insert_component_events(
                                 ColorValue::Blue => BevyColor::BLUE,
                                 ColorValue::Yellow => BevyColor::YELLOW,
                                 ColorValue::Green => BevyColor::GREEN,
+                                ColorValue::White => BevyColor::WHITE,
                             }
                         };
 
@@ -210,6 +209,7 @@ pub fn insert_component_events(
                                 ColorValue::Blue => &global.blue,
                                 ColorValue::Yellow => &global.yellow,
                                 ColorValue::Green => &global.green,
+                                ColorValue::White => &global.white,
                             }
                         };
                         commands
@@ -223,15 +223,56 @@ pub fn insert_component_events(
                             // mark as confirmed
                             .insert(Confirmed);
                     }
+                    // Circle
+                    ShapeValue::BigCircle => {
+                        let handle = &global.white;
+                        commands
+                            .entity(entity)
+                            .insert(MaterialMesh2dBundle {
+                                mesh: global.big_circle.clone().into(),
+                                material: handle.clone(),
+                                transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                                ..Default::default()
+                            })
+                            // mark as confirmed
+                            .insert(Confirmed);
+                    }
                 }
             }
         }
         for entity in events.read::<Position>() {
+            info!("add Position Component to entity");
             if let Ok(position) = position_query.get(entity) {
                 // initialize interpolation
                 commands
                     .entity(entity)
                     .insert(Interp::new(*position.x, *position.y));
+            }
+        }
+        for square_entity in events.read::<Relation>() {
+            info!("add Relation Component to entity");
+            if let Ok(relation) = relation_query.get(square_entity) {
+                if let Some(baseline_entity) = relation.entity.get(&client) {
+                    info!("spawn connecting line");
+                    // initialize connecting line
+                    commands
+                        .spawn(TransformBundle::default())
+                        .insert(VisibilityBundle::default())
+                        .insert(Line::new(square_entity, baseline_entity))
+                        .with_children(|parent| {
+                            parent.spawn(SpriteBundle {
+                                sprite: Sprite {
+                                    color: BevyColor::GRAY,
+                                    custom_size: Some(Vec2::new(1.0, 1.0)),
+                                    anchor: Anchor::CenterLeft,
+                                    ..Default::default()
+                                },
+                                ..Default::default()
+                            });
+                        });
+                } else {
+                    warn!("no baseline entity found for relation");
+                }
             }
         }
     }

@@ -22,21 +22,7 @@ crate-type = ["cdylib", "rlib"]
 naia-bevy-client = { path = "../../../adapters/bevy/client", features = ["transport_webrtc"] }
 naia-bevy-demo-shared = { path = "../shared" }
 
-bevy_a11y = { version = "0.10", default-features=false }
-bevy_app = { version = "0.10", default-features=false }
-bevy_asset = { version = "0.10", default-features=false }
-bevy_core = { version = "0.10", default-features=false }
-bevy_core_pipeline = { version = "0.10", default-features=false, features = ["webgl"] }
-bevy_ecs = { version = "0.10", default-features=false }
-bevy_input = { version = "0.10", default-features=false }
-bevy_log = { version = "0.10", default-features=false }
-bevy_math = { version = "0.10", default-features=false }
-bevy_render = { version = "0.10", default-features=false, features = ["webgl"] }
-bevy_sprite = { version = "0.10", default-features=false }
-bevy_time = { version = "0.10", default-features=false }
-bevy_transform = { version = "0.10", default-features=false }
-bevy_winit = { version = "0.10", default-features=false, features = ["x11"] }
-bevy_window = { version = "0.10", default-features=false }
+bevy = { version = "0.10.1", default_features = false, features = [ "bevy_asset", "bevy_winit", "bevy_core_pipeline", "bevy_render", "bevy_sprite", "x11"] }
 
 cfg-if = { version = "1.0" }
 

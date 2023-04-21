@@ -1,10 +1,9 @@
-use bevy_ecs::{query::With, system::Query};
-use bevy_transform::components::Transform;
+use bevy::prelude::{Quat, Query, Transform, Vec2, With};
 
 use naia_bevy_client::Client;
 use naia_bevy_demo_shared::components::Position;
 
-use crate::components::{Confirmed, Interp, LocalCursor, Predicted};
+use crate::components::{Confirmed, Interp, Line, LocalCursor, Predicted};
 
 pub fn sync_clientside_sprites(
     client: Client,
@@ -42,5 +41,23 @@ pub fn sync_cursor_sprite(mut query: Query<(&Position, &mut Transform), With<Loc
     for (position, mut transform) in query.iter_mut() {
         transform.translation.x = *position.x as f32;
         transform.translation.y = *position.y as f32;
+    }
+}
+
+pub fn sync_relation_lines(position_query: Query<&Position>, mut line_query: Query<(&mut Transform, &Line)>) {
+    for (mut line_transform, line_entities) in line_query.iter_mut() {
+        if let Ok([start, end]) = position_query.get_many([line_entities.start_entity, line_entities.end_entity]) {
+            let start_vec2 = Vec2::new(*start.x as f32, *start.y as f32);
+            let end_vec2 = Vec2::new(*end.x as f32, *end.y as f32);
+            line_transform.translation.x = end_vec2.x;
+            line_transform.translation.y = end_vec2.y;
+            line_transform.scale.x = start_vec2.distance(end_vec2);
+            let angle = {
+                let dx = start_vec2.x - end_vec2.x;
+                let dy = start_vec2.y - end_vec2.y;
+                dy.atan2(dx)
+            };
+            line_transform.rotation = Quat::from_rotation_z(angle);
+        }
     }
 }

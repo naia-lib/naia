@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bevy_ecs::system::Commands;
 use bevy_log::info;
-use naia_bevy_demo_shared::components::Position;
+use naia_bevy_demo_shared::components::{Color, ColorValue, Position, Shape, ShapeValue};
 
 use naia_bevy_server::{transport::webrtc, CommandsExt, Random, Server};
 
@@ -44,6 +44,10 @@ pub fn init(mut commands: Commands, mut server: Server) {
         .enable_replication(&mut server)
         // Insert Position component
         .insert(position)
+        // Insert Color component
+        .insert(Color::new(ColorValue::White))
+        // Insert Shape component (Big Circle)
+        .insert(Shape::new(ShapeValue::BigCircle))
         // return Entity id
         .id();
 

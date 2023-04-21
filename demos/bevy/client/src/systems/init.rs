@@ -1,12 +1,4 @@
-use bevy_asset::Assets;
-use bevy_core_pipeline::prelude::Camera2dBundle;
-use bevy_ecs::system::{Commands, ResMut};
-use bevy_log::info;
-use bevy_render::{
-    color::Color,
-    mesh::{shape, Mesh},
-};
-use bevy_sprite::ColorMaterial;
+use bevy::prelude::{Assets, Camera2dBundle, Color, ColorMaterial, Commands, info, Mesh, ResMut, shape};
 
 use naia_bevy_client::{transport::webrtc, Client, CommandsExt, Random};
 use naia_bevy_demo_shared::{components::Position, messages::Auth};
@@ -40,6 +32,7 @@ pub fn init(
 
     // Load shapes
     global.circle = meshes.add(shape::Circle::new(6.).into());
+    global.big_circle = meshes.add(shape::Circle::new(18.).into());
 
     // Set up new baseline entity
     let position = {

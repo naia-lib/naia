@@ -470,6 +470,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 continue;
             };
 
+            if waiting_update_opt.is_some() && ready_update_opt.is_some() {
+                warn!("Incoming Update split into BOTH waiting and ready parts");
+            }
+            if waiting_update_opt.is_some() && ready_update_opt.is_none() {
+                warn!("Incoming Update split into ONLY waiting part");
+            }
+            if waiting_update_opt.is_none() && ready_update_opt.is_some() {
+                warn!("Incoming Update split into ONLY ready part");
+            }
+            if waiting_update_opt.is_none() && ready_update_opt.is_none() {
+                panic!("Incoming Update split into NEITHER waiting nor ready parts. This should not happen.");
+            }
+
             // if it exists, queue the waiting part of the component update
             if let Some((waiting_entities, waiting_update)) = waiting_update_opt {
                 self.entity_waitlist.queue(
