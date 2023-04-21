@@ -103,10 +103,7 @@ impl EntityWaitlist {
     }
 
     pub fn remove_waiting(&mut self, handle: &WaitlistHandle) {
-        let entities = self
-            .handle_to_required_entities
-            .remove(&handle)
-            .unwrap();
+        let entities = self.handle_to_required_entities.remove(&handle).unwrap();
 
         // recycle message handle
         self.handle_store.recycle_key(&handle);
@@ -145,9 +142,15 @@ impl<T> WaitlistStore<T> {
         self.items.insert(handle, item);
     }
 
-    pub fn collect_ready_items(&mut self, ready_handles: &mut HashSet<WaitlistHandle>) -> Option<Vec<T>> {
-
-        let intersection: HashSet<WaitlistHandle> = self.item_handles.intersection(&ready_handles).cloned().collect();
+    pub fn collect_ready_items(
+        &mut self,
+        ready_handles: &mut HashSet<WaitlistHandle>,
+    ) -> Option<Vec<T>> {
+        let intersection: HashSet<WaitlistHandle> = self
+            .item_handles
+            .intersection(&ready_handles)
+            .cloned()
+            .collect();
 
         if intersection.len() == 0 {
             // Handles in ready_handles must refer to items in another WaitlistStore

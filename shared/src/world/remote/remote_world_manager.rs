@@ -7,7 +7,7 @@ use crate::{
         local_world_manager::LocalWorldManager,
         remote::{
             entity_event::EntityEvent,
-            entity_waitlist::{EntityWaitlist, WaitlistStore, WaitlistHandle},
+            entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
         },
     },
     BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityActionReceiver,
@@ -23,6 +23,7 @@ pub struct RemoteWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     insert_waitlist_store: WaitlistStore<(E, Box<dyn Replicate>)>,
     insert_waitlist_map: HashMap<(E, ComponentKind), WaitlistHandle>,
     update_waitlist_store: WaitlistStore<(Tick, E, ComponentUpdate)>,
+    update_waitlist_map: HashMap<(E, ComponentKind), WaitlistHandle>,
     outgoing_events: Vec<EntityEvent<E>>,
     received_updates: Vec<(Tick, E, ComponentUpdate)>,
 }
@@ -36,6 +37,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             insert_waitlist_store: WaitlistStore::new(),
             insert_waitlist_map: HashMap::new(),
             update_waitlist_store: WaitlistStore::new(),
+            update_waitlist_map: HashMap::new(),
             outgoing_events: Vec::new(),
             received_updates: Vec::new(),
         }
@@ -362,14 +364,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         }
     }
 
-    fn process_insert<W: WorldMutType<E>>(&mut self, world: &mut W, world_entity: E, component: Box<dyn Replicate>, component_kind: &ComponentKind) {
+    fn process_insert<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        world_entity: E,
+        component: Box<dyn Replicate>,
+        component_kind: &ComponentKind,
+    ) {
         if let Some(entity_set) = component.relations_waiting() {
             let handle = self.entity_waitlist.queue(
                 &entity_set,
                 &mut self.insert_waitlist_store,
                 (world_entity, component),
             );
-            self.insert_waitlist_map.insert((world_entity, *component_kind), handle);
+            self.insert_waitlist_map
+                .insert((world_entity, *component_kind), handle);
         } else {
             world.insert_boxed_component(&world_entity, component);
 
@@ -386,19 +395,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         world_entity: E,
         component_kind: ComponentKind,
     ) {
-        // Remove from waitlist if it's there
-        if let Some(handle) = self.insert_waitlist_map.remove(&(
-            world_entity,
-            component_kind,
-        )) {
+        // Remove from insert waitlist if it's there
+        if let Some(handle) = self
+            .insert_waitlist_map
+            .remove(&(world_entity, component_kind))
+        {
             self.insert_waitlist_store.remove(&handle);
             self.entity_waitlist.remove_waiting(&handle);
             return;
         }
-        // Remove from world
-        if let Some(component) =
-            world.remove_component_of_kind(&world_entity, &component_kind)
+        // Remove from update waitlist if it's there
+        if let Some(handle) = self
+            .update_waitlist_map
+            .remove(&(world_entity, component_kind))
         {
+            self.update_waitlist_store.remove(&handle);
+            self.entity_waitlist.remove_waiting(&handle);
+            return;
+        }
+        // Remove from world
+        if let Some(component) = world.remove_component_of_kind(&world_entity, &component_kind) {
             // Send out event
             self.outgoing_events
                 .push(EntityEvent::<E>::RemoveComponent(world_entity, component));
@@ -416,7 +432,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         {
             for (world_entity, mut component) in list {
                 let component_kind = component.kind();
-                self.insert_waitlist_map.remove(&(world_entity, component_kind));
+                self.insert_waitlist_map
+                    .remove(&(world_entity, component_kind));
                 component.relations_complete(converter);
                 world.insert_boxed_component(&world_entity, component);
 
@@ -492,11 +509,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
 
             // if it exists, queue the waiting part of the component update
             if let Some((waiting_entities, waiting_update)) = waiting_update_opt {
-                self.entity_waitlist.queue(
+                let handle = self.entity_waitlist.queue(
                     &waiting_entities,
                     &mut self.update_waitlist_store,
                     (tick, world_entity, waiting_update),
                 );
+                self.update_waitlist_map
+                    .insert((world_entity, component_kind), handle);
             }
             // if it exists, apply the ready part of the component update
             if let Some(ready_update) = ready_update_opt {
@@ -533,6 +552,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         {
             for (tick, world_entity, ready_update) in list {
                 let component_kind = ready_update.kind;
+
+                self.update_waitlist_map
+                    .remove(&(world_entity, component_kind));
+
                 if world
                     .component_apply_update(converter, &world_entity, &component_kind, ready_update)
                     .is_err()
