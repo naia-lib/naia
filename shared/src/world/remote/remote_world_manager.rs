@@ -267,7 +267,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             component_kinds,
             world,
         );
-
         self.process_actions(global_world_manager, local_world_manager, world);
 
         std::mem::take(&mut self.outgoing_events)
@@ -284,14 +283,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         world: &mut W,
     ) {
         self.process_ready_actions(global_world_manager, local_world_manager, world);
-
-        {
-            let converter = EntityConverter::new(
-                global_world_manager.to_global_entity_converter(),
-                local_world_manager,
-            );
-            self.process_waitlist_actions(&converter, world);
-        }
+        self.process_waitlist_actions(global_world_manager, local_world_manager, world);
     }
 
     /// For each [`EntityAction`] that can be executed now,
@@ -423,9 +415,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
 
     fn process_waitlist_actions<W: WorldMutType<E>>(
         &mut self,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
     ) {
+        let converter = EntityConverter::new(
+            global_world_manager.to_global_entity_converter(),
+            local_world_manager,
+        );
+
         if let Some(list) = self
             .entity_waitlist
             .collect_ready_items(&mut self.insert_waitlist_store)
@@ -434,7 +432,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 let component_kind = component.kind();
                 self.insert_waitlist_map
                     .remove(&(world_entity, component_kind));
-                component.relations_complete(converter);
+                component.relations_complete(&converter);
                 world.insert_boxed_component(&world_entity, component);
 
                 self.outgoing_events.push(EntityEvent::<E>::InsertComponent(
@@ -462,14 +460,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             component_kinds,
             world,
         );
-
-        {
-            let converter = EntityConverter::new(
-                global_world_manager.to_global_entity_converter(),
-                local_world_manager,
-            );
-            self.process_waitlist_updates(&converter, world);
-        }
+        self.process_waitlist_updates(global_world_manager, local_world_manager, world);
     }
 
     /// Process component updates from raw bits for a given entity
@@ -543,9 +534,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
 
     fn process_waitlist_updates<W: WorldMutType<E>>(
         &mut self,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        local_world_manager: &LocalWorldManager<E>,
         world: &mut W,
     ) {
+        let converter = EntityConverter::new(
+            global_world_manager.to_global_entity_converter(),
+            local_world_manager,
+        );
         if let Some(list) = self
             .entity_waitlist
             .collect_ready_items(&mut self.update_waitlist_store)
@@ -557,7 +553,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     .remove(&(world_entity, component_kind));
 
                 if world
-                    .component_apply_update(converter, &world_entity, &component_kind, ready_update)
+                    .component_apply_update(
+                        &converter,
+                        &world_entity,
+                        &component_kind,
+                        ready_update,
+                    )
                     .is_err()
                 {
                     warn!("Remote World Manager: cannot read malformed complete waitlisted component update message");
