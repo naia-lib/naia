@@ -1,7 +1,7 @@
 use bevy::prelude::{Assets, Camera2dBundle, Color, ColorMaterial, Commands, info, Mesh, ResMut, shape};
 
 use naia_bevy_client::{transport::webrtc, Client, CommandsExt, Random};
-use naia_bevy_demo_shared::{components::Position, messages::Auth};
+use naia_bevy_demo_shared::{components::{Position, Baseline}, messages::Auth};
 
 use crate::resources::Global;
 
@@ -35,10 +35,10 @@ pub fn init(
     global.big_circle = meshes.add(shape::Circle::new(18.).into());
 
     // Set up new baseline entity
-    let position = {
+    let baseline = {
         let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
         let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
-        Position::new(x, y)
+        Baseline::new(x, y)
     };
 
     global.baseline_entity = Some(
@@ -47,8 +47,8 @@ pub fn init(
             .spawn_empty()
             // MUST call this to begin replication
             .enable_replication(&mut client)
-            // Insert Position component
-            .insert(position)
+            // Insert Baseline component
+            .insert(baseline)
             // return Entity id
             .id(),
     );

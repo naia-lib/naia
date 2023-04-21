@@ -477,7 +477,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 warn!("Incoming Update split into ONLY waiting part");
             }
             if waiting_update_opt.is_none() && ready_update_opt.is_some() {
-                warn!("Incoming Update split into ONLY ready part");
+                // warn!("Incoming Update split into ONLY ready part");
             }
             if waiting_update_opt.is_none() && ready_update_opt.is_none() {
                 panic!("Incoming Update split into NEITHER waiting nor ready parts. This should not happen.");

@@ -6,6 +6,9 @@ pub use color::{Color, ColorValue};
 mod position;
 pub use position::Position;
 
+mod baseline;
+pub use baseline::Baseline;
+
 mod shape;
 pub use shape::{Shape, ShapeValue};
 
@@ -21,6 +24,7 @@ impl ProtocolPlugin for ComponentsPlugin {
             .add_component::<Color>()
             .add_component::<Position>()
             .add_component::<Shape>()
-            .add_component::<Relation>();
+            .add_component::<Relation>()
+            .add_component::<Baseline>();
     }
 }

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bevy_ecs::system::Commands;
 use bevy_log::info;
-use naia_bevy_demo_shared::components::{Color, ColorValue, Position, Shape, ShapeValue};
+use naia_bevy_demo_shared::components::{Baseline, Color, ColorValue, Position, Shape, ShapeValue};
 
 use naia_bevy_server::{transport::webrtc, CommandsExt, Random, Server};
 
@@ -31,10 +31,10 @@ pub fn init(mut commands: Commands, mut server: Server) {
     let main_room_key = server.make_room().key();
 
     // Set up new baseline entity
-    let position = {
+    let baseline = {
         let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
         let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
-        Position::new(x, y)
+        Baseline::new(x, y)
     };
 
     let baseline_entity = commands
@@ -42,8 +42,8 @@ pub fn init(mut commands: Commands, mut server: Server) {
         .spawn_empty()
         // MUST call this to begin replication
         .enable_replication(&mut server)
-        // Insert Position component
-        .insert(position)
+        // Insert Baseline component
+        .insert(baseline)
         // Insert Color component
         .insert(Color::new(ColorValue::White))
         // Insert Shape component (Big Circle)

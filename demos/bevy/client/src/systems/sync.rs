@@ -1,7 +1,7 @@
 use bevy::prelude::{Quat, Query, Transform, Vec2, With};
 
 use naia_bevy_client::Client;
-use naia_bevy_demo_shared::components::Position;
+use naia_bevy_demo_shared::components::{Baseline, Position};
 
 use crate::components::{Confirmed, Interp, Line, LocalCursor, Predicted};
 
@@ -44,20 +44,35 @@ pub fn sync_cursor_sprite(mut query: Query<(&Position, &mut Transform), With<Loc
     }
 }
 
-pub fn sync_relation_lines(position_query: Query<&Position>, mut line_query: Query<(&mut Transform, &Line)>) {
+pub fn sync_baseline(
+    mut query: Query<(&Baseline, &mut Transform), With<Confirmed>>,
+) {
+    for (baseline, mut transform) in query.iter_mut() {
+        transform.translation.x = *baseline.x as f32;
+        transform.translation.y = *baseline.y as f32;
+    }
+}
+
+pub fn sync_relation_lines(
+    position_query: Query<&Position>,
+    baseline_query: Query<&Baseline>,
+    mut line_query: Query<(&mut Transform, &Line)>
+) {
     for (mut line_transform, line_entities) in line_query.iter_mut() {
-        if let Ok([start, end]) = position_query.get_many([line_entities.start_entity, line_entities.end_entity]) {
-            let start_vec2 = Vec2::new(*start.x as f32, *start.y as f32);
-            let end_vec2 = Vec2::new(*end.x as f32, *end.y as f32);
-            line_transform.translation.x = end_vec2.x;
-            line_transform.translation.y = end_vec2.y;
-            line_transform.scale.x = start_vec2.distance(end_vec2);
-            let angle = {
-                let dx = start_vec2.x - end_vec2.x;
-                let dy = start_vec2.y - end_vec2.y;
-                dy.atan2(dx)
-            };
-            line_transform.rotation = Quat::from_rotation_z(angle);
+        if let Ok(start) = position_query.get(line_entities.start_entity) {
+            if let Ok(end) = baseline_query.get(line_entities.end_entity) {
+                let start_vec2 = Vec2::new(*start.x as f32, *start.y as f32);
+                let end_vec2 = Vec2::new(*end.x as f32, *end.y as f32);
+                line_transform.translation.x = start_vec2.x;
+                line_transform.translation.y = start_vec2.y;
+                line_transform.scale.x = start_vec2.distance(end_vec2);
+                let angle = {
+                    let dx = end_vec2.x - start_vec2.x;
+                    let dy = end_vec2.y - start_vec2.y;
+                    dy.atan2(dx)
+                };
+                line_transform.rotation = Quat::from_rotation_z(angle);
+            }
         }
     }
 }

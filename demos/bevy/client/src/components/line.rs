@@ -7,11 +7,10 @@ pub struct Line {
 }
 
 impl Line {
-    pub fn new(square: Entity,
-               baseline: Entity) -> Self {
+    pub fn new(start_entity: Entity, end_entity: Entity) -> Self {
         Self {
-            start_entity: square,
-            end_entity: baseline,
+            start_entity,
+            end_entity,
         }
     }
 }
