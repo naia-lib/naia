@@ -13,11 +13,13 @@ pub struct NormalProperty {
     pub variable_name: Ident,
     pub inner_type: Type,
     pub uppercase_variable_name: Ident,
+    pub index: usize,
 }
 
 pub struct EntityProperty {
     pub variable_name: Ident,
     pub uppercase_variable_name: Ident,
+    pub index: usize,
 }
 
 pub struct NonReplicatedProperty {
@@ -77,6 +79,7 @@ pub fn replicate_impl(
     let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type);
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
     let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
+    let read_apply_field_update_method = get_read_apply_field_update_method(&properties, &struct_type);
     let write_method = get_write_method(&properties, &struct_type);
     let write_update_method = get_write_update_method(&enum_name, &properties, &struct_type);
     // let has_entity_properties = get_has_entity_properties_method(&properties);
@@ -93,7 +96,7 @@ pub fn replicate_impl(
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, LocalEntity,
-                EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder
+                EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
             };
             use super::*;
 
@@ -144,6 +147,7 @@ pub fn replicate_impl(
                 #write_method
                 #write_update_method
                 #read_apply_update_method
+                #read_apply_field_update_method
                 #relations_waiting_method
                 #relations_complete_method
             }
@@ -162,12 +166,12 @@ fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
 }
 
 /// Get the field name as a TokenStream
-fn get_field_name(property: &Property, index: usize, struct_type: &StructType) -> Member {
+fn get_field_name(property: &Property, struct_type: &StructType) -> Member {
     match *struct_type {
         StructType::Struct => Member::from(property.variable_name().clone()),
         StructType::TupleStruct => {
             let index = Index {
-                index: index as u32,
+                index: property.index() as u32,
                 span: property.variable_name().span(),
             };
             Member::from(index)
@@ -179,8 +183,9 @@ fn get_field_name(property: &Property, index: usize, struct_type: &StructType) -
 }
 
 impl Property {
-    pub fn normal(variable_name: Ident, inner_type: Type) -> Self {
+    pub fn normal(index: usize, variable_name: Ident, inner_type: Type) -> Self {
         Self::Normal(NormalProperty {
+            index,
             variable_name: variable_name.clone(),
             inner_type,
             uppercase_variable_name: Ident::new(
@@ -190,8 +195,9 @@ impl Property {
         })
     }
 
-    pub fn entity(variable_name: Ident) -> Self {
+    pub fn entity(index: usize, variable_name: Ident) -> Self {
         Self::Entity(EntityProperty {
+            index,
             variable_name: variable_name.clone(),
             uppercase_variable_name: Ident::new(
                 variable_name.to_string().to_uppercase().as_str(),
@@ -229,6 +235,14 @@ impl Property {
             Self::NonReplicated(_) => panic!("Unused for non-replicated properties"),
         }
     }
+
+    pub fn index(&self) -> usize {
+        match self {
+            Self::Normal(property) => property.index,
+            Self::Entity(property) => property.index,
+            Self::NonReplicated(_) => panic!("Unused for non-replicated properties"),
+        }
+    }
 }
 
 fn get_properties(input: &DeriveInput) -> Vec<Property> {
@@ -244,7 +258,7 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
                                 let property_type = property_seg.ident.clone();
                                 // EntityProperty
                                 if property_type == "EntityProperty" {
-                                    fields.push(Property::entity(variable_name.clone()));
+                                    fields.push(Property::entity(fields.len(), variable_name.clone()));
                                     continue;
                                 // Property
                                 } else if property_type == "Property" {
@@ -255,6 +269,7 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
                                             angle_args.args.first()
                                         {
                                             fields.push(Property::normal(
+                                                fields.len(),
                                                 variable_name.clone(),
                                                 inner_type.clone(),
                                             ));
@@ -281,7 +296,7 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
                             let variable_name =
                                 get_variable_name_for_unnamed_field(index, property_type.span());
                             if property_type == "EntityProperty" {
-                                fields.push(Property::entity(variable_name));
+                                fields.push(Property::entity(fields.len(), variable_name));
                                 continue;
                             } else if let PathArguments::AngleBracketed(angle_args) =
                                 &property_seg.arguments
@@ -290,7 +305,7 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
                                     angle_args.args.first()
                                 {
                                     fields
-                                        .push(Property::normal(variable_name, inner_type.clone()));
+                                        .push(Property::normal(fields.len(), variable_name, inner_type.clone()));
                                     continue;
                                 }
                             }
@@ -318,8 +333,8 @@ fn get_property_enum_definition(enum_name: &Ident, properties: &[Property]) -> T
 
     let mut variant_list = quote! {};
 
-    for (index, property) in properties.iter().filter(|p| p.is_replicated()).enumerate() {
-        let index = syn::Index::from(index);
+    for (_, property) in properties.iter().filter(|p| p.is_replicated()).enumerate() {
+        let index = syn::Index::from(property.index());
         let uppercase_variant_name = property.uppercase_variable_name();
 
         let new_output_right = quote! {
@@ -364,8 +379,8 @@ fn get_clone_method(
     let mut output = quote! {};
     let mut entity_property_output = quote! {};
 
-    for (index, property) in properties.iter().enumerate() {
-        let field_name = get_field_name(property, index, struct_type);
+    for property in properties.iter() {
+        let field_name = get_field_name(property, struct_type);
         match property {
             Property::Normal(_) => {
                 let new_output_right = quote! {
@@ -417,7 +432,7 @@ fn get_mirror_method(
     let mut output = quote! {};
 
     for (index, property) in properties.iter().filter(|p| p.is_replicated()).enumerate() {
-        let field_name = get_field_name(property, index, struct_type);
+        let field_name = get_field_name(property, struct_type);
         let new_output_right = quote! {
             self.#field_name.mirror(&replica.#field_name);
         };
@@ -443,7 +458,7 @@ fn get_set_mutator_method(properties: &[Property], struct_type: &StructType) -> 
     let mut output = quote! {};
 
     for (index, property) in properties.iter().filter(|p| p.is_replicated()).enumerate() {
-        let field_name = get_field_name(property, index, struct_type);
+        let field_name = get_field_name(property, struct_type);
         let new_output_right = quote! {
                 self.#field_name.set_mutator(mutator);
         };
@@ -746,7 +761,7 @@ pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Propert
 fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
     let mut output = quote! {};
 
-    for (_index, property) in properties.iter().enumerate() {
+    for property in properties.iter() {
         let new_output_right = match property {
             Property::Normal(inner_property) => {
                 let field_type = &inner_property.inner_type;
@@ -810,7 +825,7 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
             converter: &dyn LocalEntityAndGlobalEntityConverter,
             update: ComponentUpdate
         ) -> Result<(
-            Option<(HashSet<LocalEntity>, ComponentUpdate)>,
+            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
             Option<ComponentUpdate>
         ), SerdeErr> {
             let component_kind = ComponentKind::of::<#replica_name>();
@@ -848,8 +863,8 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
 fn get_read_apply_update_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
-    for (index, property) in properties.iter().enumerate() {
-        let field_name = get_field_name(property, index, struct_type);
+    for property in properties.iter() {
+        let field_name = get_field_name(property, struct_type);
         let new_output_right = match property {
             Property::Normal(_) => {
                 quote! {
@@ -886,11 +901,49 @@ fn get_read_apply_update_method(properties: &[Property], struct_type: &StructTyp
     }
 }
 
+fn get_read_apply_field_update_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter() {
+        let field_name = get_field_name(property, struct_type);
+        let new_output_right = match property {
+            Property::Normal(_) | Property::NonReplicated(_) => {
+                continue;
+            }
+            Property::Entity(inner_property) => {
+                let index = inner_property.index;
+                quote! {
+                    index => {
+                        EntityProperty::read(&mut self.#field_name, reader, converter)?;
+                    }
+                }
+            }
+        };
+
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn read_apply_field_update(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter, mut update: ComponentFieldUpdate) -> Result<(), SerdeErr> {
+            let reader = &mut update.reader();
+            match update.field_id() {
+                #output
+                _ => {}
+            }
+            Ok(())
+        }
+    }
+}
+
 fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut property_writes = quote! {};
 
-    for (index, property) in properties.iter().enumerate() {
-        let field_name = get_field_name(property, index, struct_type);
+    for property in properties.iter() {
+        let field_name = get_field_name(property, struct_type);
         let new_output_right = match property {
             Property::Normal(_) => {
                 quote! {
@@ -929,8 +982,8 @@ fn get_write_update_method(
 ) -> TokenStream {
     let mut output = quote! {};
 
-    for (index, property) in properties.iter().enumerate() {
-        let field_name = get_field_name(property, index, struct_type);
+    for property in properties.iter() {
+        let field_name = get_field_name(property, struct_type);
         let new_output_right = match property {
             Property::Normal(property) => {
                 let uppercase_variant_name = &property.uppercase_variable_name;
@@ -994,7 +1047,7 @@ fn get_write_update_method(
 // fn get_entities_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
 //     let mut body = quote! {};
 //
-//     for (index, property) in properties.iter().enumerate() {
+//     for property in properties.iter() {
 //         if let Property::Entity(_) = property {
 //             let field_name = get_field_name(property, index, struct_type);
 //             let body_add_right = quote! {
@@ -1022,9 +1075,9 @@ fn get_write_update_method(
 fn get_relations_waiting_method(fields: &[Property], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
-    for (index, field) in fields.iter().enumerate() {
+    for field in fields.iter() {
         if let Property::Entity(_) = field {
-            let field_name = get_field_name(field, index, struct_type);
+            let field_name = get_field_name(field, struct_type);
             let body_add_right = quote! {
                 if let Some(local_entity) = self.#field_name.waiting_local_entity() {
                     output.insert(local_entity);
@@ -1053,9 +1106,9 @@ fn get_relations_waiting_method(fields: &[Property], struct_type: &StructType) -
 fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
-    for (index, field) in fields.iter().enumerate() {
+    for field in fields.iter() {
         if let Property::Entity(_) = field {
-            let field_name = get_field_name(field, index, struct_type);
+            let field_name = get_field_name(field, struct_type);
             let body_add_right = quote! {
                 self.#field_name.waiting_complete(converter);
             };

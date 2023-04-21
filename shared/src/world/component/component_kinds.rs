@@ -6,7 +6,7 @@ use std::{
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
 use crate::{
-    ComponentUpdate, LocalEntity, LocalEntityAndGlobalEntityConverter, Replicate, ReplicateBuilder,
+    ComponentUpdate, ComponentFieldUpdate, LocalEntity, LocalEntityAndGlobalEntityConverter, Replicate, ReplicateBuilder,
 };
 
 type NetId = u16;
@@ -101,13 +101,7 @@ impl ComponentKinds {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kind: &ComponentKind,
         update: ComponentUpdate,
-    ) -> Result<
-        (
-            Option<(HashSet<LocalEntity>, ComponentUpdate)>,
-            Option<ComponentUpdate>,
-        ),
-        SerdeErr,
-    > {
+    ) -> Result<(Option<Vec<(LocalEntity, ComponentFieldUpdate)>>, Option<ComponentUpdate>), SerdeErr> {
         return self
             .kind_to_builder(component_kind)
             .split_update(converter, update);

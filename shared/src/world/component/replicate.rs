@@ -1,22 +1,17 @@
-use std::any::Any;
-use std::collections::HashSet;
+use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::{
-    messages::named::Named,
-    world::{
-        component::{
-            component_kinds::{ComponentKind, ComponentKinds},
-            component_update::ComponentUpdate,
-            diff_mask::DiffMask,
-            property_mutate::PropertyMutator,
-            replica_ref::{ReplicaDynMut, ReplicaDynRef},
-        },
-        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+use crate::{messages::named::Named, world::{
+    component::{
+        component_kinds::{ComponentKind, ComponentKinds},
+        component_update::ComponentUpdate,
+        diff_mask::DiffMask,
+        property_mutate::PropertyMutator,
+        replica_ref::{ReplicaDynMut, ReplicaDynRef},
     },
-    LocalEntity, LocalEntityAndGlobalEntityConverterMut,
-};
+    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+}, LocalEntity, LocalEntityAndGlobalEntityConverterMut, ComponentFieldUpdate};
 
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream
@@ -32,13 +27,7 @@ pub trait ReplicateBuilder: Send + Sync + Named {
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentUpdate,
-    ) -> Result<
-        (
-            Option<(HashSet<LocalEntity>, ComponentUpdate)>,
-            Option<ComponentUpdate>,
-        ),
-        SerdeErr,
-    >;
+    ) -> Result<(Option<Vec<(LocalEntity, ComponentFieldUpdate)>>, Option<ComponentUpdate>), SerdeErr>;
 }
 
 /// A struct that implements Replicate is a Component, or otherwise,
@@ -89,6 +78,11 @@ pub trait Replicate: ReplicateInner + Named + Any {
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentUpdate,
+    ) -> Result<(), SerdeErr>;
+    fn read_apply_field_update(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        update: ComponentFieldUpdate,
     ) -> Result<(), SerdeErr>;
     /// Returns a list of LocalEntities contained within the Component's EntityProperty fields, which are waiting to be converted to GlobalEntities
     fn relations_waiting(&self) -> Option<HashSet<LocalEntity>>;

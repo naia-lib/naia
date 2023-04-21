@@ -25,8 +25,27 @@ impl ComponentUpdate {
         self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
-    ) -> Result<(Option<(HashSet<LocalEntity>, Self)>, Option<Self>), SerdeErr> {
+    ) -> Result<(Option<Vec<(LocalEntity, ComponentFieldUpdate)>>, Option<Self>), SerdeErr> {
         let kind = self.kind;
         component_kinds.split_update(converter, &kind, self)
+    }
+}
+
+pub struct ComponentFieldUpdate {
+    id: u8,
+    buffer: OwnedBitReader,
+}
+
+impl ComponentFieldUpdate {
+    pub fn new(id: u8, buffer: OwnedBitReader) -> Self {
+        Self { id, buffer }
+    }
+
+    pub fn field_id(&self) -> u8 {
+        self.id
+    }
+
+    pub fn reader(&self) -> BitReader {
+        self.buffer.borrow()
     }
 }

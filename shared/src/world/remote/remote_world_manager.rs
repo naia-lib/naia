@@ -1,25 +1,22 @@
 use log::warn;
 use std::{collections::HashMap, hash::Hash};
+use std::collections::HashSet;
 
-use crate::{
-    world::{
-        local_world_manager::LocalWorldManager,
-        remote::{
-            entity_event::EntityEvent,
-            entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
-            remote_world_reader::RemoteWorldEvents,
-        },
+use crate::{world::{
+    local_world_manager::LocalWorldManager,
+    remote::{
+        entity_event::EntityEvent,
+        entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
+        remote_world_reader::RemoteWorldEvents,
     },
-    ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityConverter,
-    GlobalWorldManagerType, LocalEntity, Replicate, Tick, WorldMutType,
-};
+}, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityConverter, GlobalWorldManagerType, LocalEntity, Replicate, Tick, WorldMutType, ComponentFieldUpdate};
 
 pub struct RemoteWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     pub entity_waitlist: EntityWaitlist,
     insert_waitlist_store: WaitlistStore<(E, Box<dyn Replicate>)>,
     insert_waitlist_map: HashMap<(E, ComponentKind), WaitlistHandle>,
-    update_waitlist_store: WaitlistStore<(Tick, E, ComponentUpdate)>,
-    update_waitlist_map: HashMap<(E, ComponentKind), WaitlistHandle>,
+    update_waitlist_store: WaitlistStore<(Tick, E, ComponentKind, ComponentFieldUpdate)>,
+    update_waitlist_map: HashMap<(E, ComponentKind), Vec<WaitlistHandle>>,
     outgoing_events: Vec<EntityEvent<E>>,
 }
 
@@ -199,12 +196,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             return;
         }
         // Remove from update waitlist if it's there
-        if let Some(handle) = self
+        if let Some(handles) = self
             .update_waitlist_map
             .remove(&(world_entity, component_kind))
         {
-            self.update_waitlist_store.remove(&handle);
-            self.entity_waitlist.remove_waiting(&handle);
+            for handle in handles {
+                self.update_waitlist_store.remove(&handle);
+                self.entity_waitlist.remove_waiting(&handle);
+            }
             return;
         }
         // Remove from world
@@ -284,34 +283,46 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             let component_kind = component_update.kind;
 
             // split the component_update into the waiting and ready parts
-            let Ok((waiting_update_opt, ready_update_opt)) =
+            let Ok((waiting_updates_opt, ready_update_opt)) =
                 component_update.split_into_waiting_and_ready(&converter, component_kinds) else {
                 warn!("Remote World Manager: cannot read malformed component update message");
                 continue;
             };
 
-            if waiting_update_opt.is_some() && ready_update_opt.is_some() {
+            if waiting_updates_opt.is_some() && ready_update_opt.is_some() {
                 warn!("Incoming Update split into BOTH waiting and ready parts");
             }
-            if waiting_update_opt.is_some() && ready_update_opt.is_none() {
+            if waiting_updates_opt.is_some() && ready_update_opt.is_none() {
                 warn!("Incoming Update split into ONLY waiting part");
             }
-            if waiting_update_opt.is_none() && ready_update_opt.is_some() {
+            if waiting_updates_opt.is_none() && ready_update_opt.is_some() {
                 // warn!("Incoming Update split into ONLY ready part");
             }
-            if waiting_update_opt.is_none() && ready_update_opt.is_none() {
+            if waiting_updates_opt.is_none() && ready_update_opt.is_none() {
                 panic!("Incoming Update split into NEITHER waiting nor ready parts. This should not happen.");
             }
 
             // if it exists, queue the waiting part of the component update
-            if let Some((waiting_entities, waiting_update)) = waiting_update_opt {
-                let handle = self.entity_waitlist.queue(
-                    &waiting_entities,
-                    &mut self.update_waitlist_store,
-                    (tick, world_entity, waiting_update),
-                );
-                self.update_waitlist_map
-                    .insert((world_entity, component_kind), handle);
+            if let Some(waiting_updates) = waiting_updates_opt {
+                for (waiting_entity, waiting_field_update) in waiting_updates {
+
+                    // Have to convert the single waiting entity to a HashSet ..
+                    // TODO: make this more efficient
+                    let mut waiting_entities = HashSet::new();
+                    waiting_entities.insert(waiting_entity);
+
+                    let handle = self.entity_waitlist.queue(
+                        &waiting_entities,
+                        &mut self.update_waitlist_store,
+                        (tick, world_entity, component_kind, waiting_field_update),
+                    );
+                    let component_key = (world_entity, component_kind);
+                    if !self.update_waitlist_map.contains_key(&component_key) {
+                        self.update_waitlist_map.insert(component_key, Vec::new());
+                    }
+                    let handles = self.update_waitlist_map.get_mut(&component_key).unwrap();
+                    handles.push(handle);
+                }
             }
             // if it exists, apply the ready part of the component update
             if let Some(ready_update) = ready_update_opt {
@@ -351,14 +362,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             .entity_waitlist
             .collect_ready_items(&mut self.update_waitlist_store)
         {
-            for (tick, world_entity, ready_update) in list {
-                let component_kind = ready_update.kind;
+            for (tick, world_entity, component_kind, ready_update) in list {
 
                 self.update_waitlist_map
                     .remove(&(world_entity, component_kind));
 
                 if world
-                    .component_apply_update(
+                    .component_apply_field_update(
                         &converter,
                         &world_entity,
                         &component_kind,
