@@ -4,8 +4,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    EntityEvent, HostType, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick,
-    WorldMutType, WorldRefType,
+    EntityEvent, HostType, HostWorldEvents, Instant, PacketType, Protocol, Serde, SerdeErr,
+    StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -168,6 +168,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
         self.base.collect_outgoing_messages(now, &rtt_millis);
+        let mut host_world_events = self
+            .base
+            .host_world_manager
+            .take_outgoing_events(now, &rtt_millis);
 
         let mut any_sent = false;
         loop {
@@ -178,6 +182,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 world,
                 global_world_manager,
                 time_manager,
+                &mut host_world_events,
             ) {
                 any_sent = true;
             } else {
@@ -199,8 +204,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         world: &W,
         global_world_manager: &GlobalWorldManager<E>,
         time_manager: &TimeManager,
+        host_world_events: &mut HostWorldEvents<E>,
     ) -> bool {
-        if self.base.has_outgoing_messages() {
+        if host_world_events.has_events() || self.base.message_manager.has_outgoing_messages() {
             let next_packet_index = self.base.next_packet_index();
 
             let mut writer = BitWriter::new();
@@ -233,6 +239,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 global_world_manager,
                 &mut has_written,
                 true,
+                host_world_events,
             );
 
             // send packet

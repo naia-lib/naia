@@ -4,8 +4,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig,
-    EntityConverter, EntityConverterMut, HostType, Instant, OwnedBitReader, PacketType, Protocol,
-    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    EntityConverter, EntityConverterMut, HostType, HostWorldEvents, Instant, OwnedBitReader,
+    PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -165,10 +165,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,
         );
+        let mut host_world_events = self
+            .base
+            .host_world_manager
+            .take_outgoing_events(now, &rtt_millis);
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(protocol, now, io, world, global_world_manager) {
+            if self.send_outgoing_packet(
+                protocol,
+                now,
+                io,
+                world,
+                global_world_manager,
+                &mut host_world_events,
+            ) {
                 any_sent = true;
             } else {
                 break;
@@ -187,8 +198,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         io: &mut Io,
         world: &W,
         global_world_manager: &GlobalWorldManager<E>,
+        host_world_events: &mut HostWorldEvents<E>,
     ) -> bool {
-        if self.base.has_outgoing_messages() || self.tick_buffer.has_outgoing_messages() {
+        if host_world_events.has_events()
+            || self.base.message_manager.has_outgoing_messages()
+            || self.tick_buffer.has_outgoing_messages()
+        {
             let next_packet_index = self.base.next_packet_index();
 
             let mut writer = BitWriter::new();
@@ -239,6 +254,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 global_world_manager,
                 &mut has_written,
                 protocol.client_authoritative_entities,
+                host_world_events,
             );
 
             // send packet

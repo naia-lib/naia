@@ -3,6 +3,8 @@ use std::{hash::Hash, net::SocketAddr};
 use naia_serde::{BitWriter, Serde};
 use naia_socket_shared::Instant;
 
+use crate::world::host::host_world_manager::HostWorldEvents;
+use crate::world::host::host_world_writer::HostWorldWriter;
 use crate::world::remote::remote_world_reader::RemoteWorldReader;
 use crate::{
     backends::Timer,
@@ -116,14 +118,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         self.ack_manager.next_sender_packet_index()
     }
 
-    pub fn has_outgoing_messages(&self) -> bool {
-        self.message_manager.has_outgoing_messages()
-            || self.host_world_manager.has_outgoing_messages()
-    }
-
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.host_world_manager
-            .collect_outgoing_messages(now, rtt_millis);
+            .collect_outgoing_messages(rtt_millis);
         self.message_manager
             .collect_outgoing_messages(now, rtt_millis);
     }
@@ -157,6 +154,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         has_written: &mut bool,
         write_world_events: bool,
+        host_world_events: &mut HostWorldEvents<E>,
     ) {
         // write messages
         {
@@ -174,41 +172,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         }
 
         if write_world_events {
-            // write entity updates
-            {
-                self.host_world_manager.write_updates(
-                    &protocol.component_kinds,
-                    now,
-                    writer,
-                    &packet_index,
-                    world,
-                    global_world_manager,
-                    &mut self.local_world_manager,
-                    has_written,
-                );
-
-                // finish updates
-                false.ser(writer);
-                writer.release_bits(1);
-            }
-
-            // write entity actions
-            {
-                self.host_world_manager.write_actions(
-                    &protocol.component_kinds,
-                    now,
-                    writer,
-                    &packet_index,
-                    world,
-                    global_world_manager,
-                    &mut self.local_world_manager,
-                    has_written,
-                );
-
-                // finish actions
-                false.ser(writer);
-                writer.release_bits(1);
-            }
+            HostWorldWriter::write_into_packet(
+                &protocol.component_kinds,
+                now,
+                writer,
+                &packet_index,
+                world,
+                global_world_manager,
+                &mut self.local_world_manager,
+                has_written,
+                &mut self.host_world_manager,
+                host_world_events,
+            );
         }
     }
 

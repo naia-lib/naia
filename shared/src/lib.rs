@@ -108,7 +108,7 @@ pub use world::{
     },
     host::{
         global_diff_handler::GlobalDiffHandler,
-        host_world_manager::HostWorldManager,
+        host_world_manager::{HostWorldEvents, HostWorldManager},
         mut_channel::{MutChannelType, MutReceiver},
     },
     local_world_manager::LocalWorldManager,
