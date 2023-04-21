@@ -137,6 +137,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             let entity_events = self.base.remote_world_manager.process_world_events(
                 global_world_manager,
                 &mut self.base.local_world_manager,
+                &protocol.component_kinds,
                 world,
             );
             for event in &entity_events {

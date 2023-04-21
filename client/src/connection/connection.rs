@@ -3,9 +3,9 @@ use std::hash::Hash;
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    EntityConverterMut, HostType, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
-    StandardHeader, Tick, WorldMutType, WorldRefType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig,
+    EntityConverter, EntityConverterMut, HostType, Instant, OwnedBitReader, PacketType, Protocol,
+    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -119,6 +119,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn process_packets<W: WorldMutType<E>>(
         &mut self,
         global_world_manager: &mut GlobalWorldManager<E>,
+        component_kinds: &ComponentKinds,
         world: &mut W,
         incoming_events: &mut Events<E>,
     ) {
@@ -142,6 +143,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         let world_events = self.base.remote_world_manager.process_world_events(
             global_world_manager,
             &mut self.base.local_world_manager,
+            component_kinds,
             world,
         );
 

@@ -168,6 +168,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // receive packets, process into events
                 connection.process_packets(
                     &mut self.global_world_manager,
+                    &self.protocol.component_kinds,
                     &mut world,
                     &mut self.incoming_events,
                 );

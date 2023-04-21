@@ -21,6 +21,7 @@ pub struct RemoteWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     received_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
     pub entity_waitlist: EntityWaitlist,
     insert_waitlist_store: WaitlistStore<(LocalEntity, Box<dyn Replicate>)>,
+    update_waitlist_store: WaitlistStore<(Tick, E, ComponentUpdate)>,
     outgoing_events: Vec<EntityEvent<E>>,
     received_updates: Vec<(Tick, E, ComponentUpdate)>,
 }
@@ -32,6 +33,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             received_components: HashMap::default(),
             entity_waitlist: EntityWaitlist::new(),
             insert_waitlist_store: WaitlistStore::new(),
+            update_waitlist_store: WaitlistStore::new(),
             outgoing_events: Vec::new(),
             received_updates: Vec::new(),
         }
@@ -252,9 +254,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         &mut self,
         global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
+        component_kinds: &ComponentKinds,
         world: &mut W,
     ) -> Vec<EntityEvent<E>> {
-        self.process_updates(global_world_manager, local_world_manager, world);
+        self.process_updates(
+            global_world_manager,
+            local_world_manager,
+            component_kinds,
+            world,
+        );
 
         self.process_actions(global_world_manager, local_world_manager, world);
 
@@ -423,9 +431,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         &mut self,
         global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
+        component_kinds: &ComponentKinds,
         world: &mut W,
     ) {
-        self.process_ready_updates(global_world_manager, local_world_manager, world);
+        self.process_ready_updates(
+            global_world_manager,
+            local_world_manager,
+            component_kinds,
+            world,
+        );
 
         {
             let converter = EntityConverter::new(
@@ -441,6 +455,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         &mut self,
         global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         local_world_manager: &LocalWorldManager<E>,
+        component_kinds: &ComponentKinds,
         world: &mut W,
     ) {
         let converter = EntityConverter::new(
@@ -450,24 +465,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         for (tick, world_entity, component_update) in self.received_updates.drain(..) {
             let component_kind = component_update.kind;
 
-            if world
-                .component_apply_update(
-                    &converter,
-                    &world_entity,
-                    &component_kind,
-                    component_update,
-                )
-                .is_err()
-            {
-                warn!("Remote World Manager: cannot read malformed component update message");
-                continue;
-            }
+            // split the component_update into the waiting and ready parts
+            let (waiting_update_opt, ready_update_opt) =
+                component_update.split_into_waiting_and_ready(&converter, component_kinds);
 
-            self.outgoing_events.push(EntityEvent::UpdateComponent(
-                tick,
-                world_entity,
-                component_kind,
-            ));
+            // if it exists, queue the waiting part of the component update
+            if let Some((waiting_entities, waiting_update)) = waiting_update_opt {
+                self.entity_waitlist.queue(
+                    &waiting_entities,
+                    &mut self.update_waitlist_store,
+                    (tick, world_entity, waiting_update),
+                );
+            }
+            // if it exists, apply the ready part of the component update
+            if let Some(ready_update) = ready_update_opt {
+                if world
+                    .component_apply_update(
+                        &converter,
+                        &world_entity,
+                        &component_kind,
+                        ready_update,
+                    )
+                    .is_err()
+                {
+                    warn!("Remote World Manager: cannot read malformed component update message");
+                    continue;
+                }
+
+                self.outgoing_events.push(EntityEvent::UpdateComponent(
+                    tick,
+                    world_entity,
+                    component_kind,
+                ));
+            }
         }
     }
 
