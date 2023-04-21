@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use bevy_ecs::system::Commands;
 use bevy_log::info;
-use naia_bevy_demo_shared::components::{Baseline, Color, ColorValue, Position, Shape, ShapeValue};
+use naia_bevy_demo_shared::components::{Baseline, Color, ColorValue, Shape, ShapeValue};
 
 use naia_bevy_server::{transport::webrtc, CommandsExt, Random, Server};
 

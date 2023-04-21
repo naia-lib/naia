@@ -5,14 +5,14 @@ use std::{
 
 use crate::{KeyGenerator, LocalEntity};
 
-type Handle = u16;
+pub type WaitlistHandle = u16;
 
 pub struct EntityWaitlist {
-    handle_store: KeyGenerator<Handle>,
-    handle_to_required_entities: HashMap<Handle, HashSet<LocalEntity>>,
-    waiting_entity_to_handles: HashMap<LocalEntity, HashSet<Handle>>,
+    handle_store: KeyGenerator<WaitlistHandle>,
+    handle_to_required_entities: HashMap<WaitlistHandle, HashSet<LocalEntity>>,
+    waiting_entity_to_handles: HashMap<LocalEntity, HashSet<WaitlistHandle>>,
     in_scope_entities: HashSet<LocalEntity>,
-    ready_handles: HashSet<Handle>,
+    ready_handles: HashSet<WaitlistHandle>,
 }
 
 impl EntityWaitlist {
@@ -35,7 +35,7 @@ impl EntityWaitlist {
         entities: &HashSet<LocalEntity>,
         waitlist_store: &mut WaitlistStore<T>,
         item: T,
-    ) -> Handle {
+    ) -> WaitlistHandle {
         let new_handle = self.handle_store.generate();
 
         // if all entities are in scope, we can send the message immediately
@@ -126,8 +126,8 @@ impl EntityWaitlist {
 }
 
 pub struct WaitlistStore<T> {
-    item_handles: HashSet<Handle>,
-    items: HashMap<Handle, T>,
+    item_handles: HashSet<WaitlistHandle>,
+    items: HashMap<WaitlistHandle, T>,
 }
 
 impl<T> WaitlistStore<T> {
@@ -138,14 +138,14 @@ impl<T> WaitlistStore<T> {
         }
     }
 
-    pub fn queue(&mut self, handle: Handle, item: T) {
+    pub fn queue(&mut self, handle: WaitlistHandle, item: T) {
         self.item_handles.insert(handle);
         self.items.insert(handle, item);
     }
 
-    pub fn collect_ready_items(&mut self, ready_handles: &mut HashSet<Handle>) -> Option<Vec<T>> {
+    pub fn collect_ready_items(&mut self, ready_handles: &mut HashSet<WaitlistHandle>) -> Option<Vec<T>> {
 
-        let intersection: HashSet<Handle> = self.item_handles.intersection(&ready_handles).cloned().collect();
+        let intersection: HashSet<WaitlistHandle> = self.item_handles.intersection(&ready_handles).cloned().collect();
 
         if intersection.len() == 0 {
             // Handles in ready_handles must refer to items in another WaitlistStore
