@@ -40,6 +40,7 @@ impl EntityWaitlist {
 
         // if all entities are in scope, we can send the message immediately
         if !self.must_queue(entities) {
+            waitlist_store.queue(new_handle, item);
             self.ready_handles.insert(new_handle);
             return new_handle;
         }

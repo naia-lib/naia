@@ -1,7 +1,9 @@
-use bevy::prelude::{Assets, Camera2dBundle, Color, ColorMaterial, Commands, info, Mesh, ResMut, shape};
+use bevy::prelude::{
+    info, shape, Assets, Camera2dBundle, Color, ColorMaterial, Commands, Mesh, ResMut,
+};
 
 use naia_bevy_client::{transport::webrtc, Client, CommandsExt, Random};
-use naia_bevy_demo_shared::{components::{Position, Baseline}, messages::Auth};
+use naia_bevy_demo_shared::{components::Baseline, messages::Auth};
 
 use crate::resources::Global;
 

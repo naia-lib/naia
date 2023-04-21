@@ -1,4 +1,9 @@
-use bevy::{DefaultPlugins, prelude::{IntoSystemSetConfig, IntoSystemConfig, SystemSet, IntoSystemConfigs, App, ClearColor, Color}};
+use bevy::{
+    prelude::{
+        App, ClearColor, Color, IntoSystemConfig, IntoSystemConfigs, IntoSystemSetConfig, SystemSet,
+    },
+    DefaultPlugins,
+};
 
 use naia_bevy_client::{ClientConfig, Plugin as ClientPlugin, ReceiveEvents};
 use naia_bevy_demo_shared::protocol;
@@ -50,7 +55,7 @@ pub fn run() {
                 sync::sync_serverside_sprites,
                 sync::sync_cursor_sprite,
                 sync::sync_relation_lines,
-                sync::sync_baseline
+                sync::sync_baseline,
             )
                 .chain()
                 .in_set(MainLoop),

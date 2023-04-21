@@ -1,8 +1,14 @@
 use std::default::Default;
 
-use bevy::{prelude::{VisibilityBundle, BuildChildren, Query, Res, Sprite, SpriteBundle, TransformBundle, Vec2, warn, Transform, Commands, EventReader, info, ResMut, Color as BevyColor},
-           sprite::MaterialMesh2dBundle};
 use bevy::sprite::Anchor;
+use bevy::{
+    prelude::{
+        info, warn, BuildChildren, Color as BevyColor, Commands, DespawnRecursiveExt, Entity,
+        EventReader, Query, Res, ResMut, Sprite, SpriteBundle, Transform, TransformBundle, Vec2,
+        VisibilityBundle,
+    },
+    sprite::MaterialMesh2dBundle,
+};
 
 use naia_bevy_client::{
     events::{
@@ -20,7 +26,7 @@ use naia_bevy_demo_shared::{
 };
 
 use crate::{
-    components::{Line, Confirmed, Interp, LocalCursor, Predicted},
+    components::{Confirmed, Interp, Line, LocalCursor, Predicted},
     resources::{Global, OwnedEntity},
 };
 
@@ -165,7 +171,7 @@ pub fn insert_component_events(
     global: Res<Global>,
     sprite_query: Query<(&Shape, &Color)>,
     position_query: Query<&Position>,
-    relation_query: Query<&Relation>
+    relation_query: Query<&Relation>,
 ) {
     for events in event_reader.iter() {
         for entity in events.read::<Color>() {
@@ -329,10 +335,27 @@ pub fn update_component_events(
     }
 }
 
-pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
+pub fn remove_component_events(
+    mut commands: Commands,
+    mut event_reader: EventReader<RemoveComponentEvents>,
+    line_query: Query<(Entity, &Line)>,
+) {
     for events in event_reader.iter() {
         for (_entity, _component) in events.read::<Position>() {
             info!("removed Position component from entity");
+        }
+        for (_entity, _component) in events.read::<Color>() {
+            info!("removed Color component from entity");
+        }
+        for (square_entity, _relation) in events.read::<Relation>() {
+            info!("removed Relation component from entity");
+            for (line_entity, line) in line_query.iter() {
+                if line.start_entity == square_entity {
+                    info!("despawned connecting line");
+                    commands.entity(line_entity).despawn_recursive();
+                    break;
+                }
+            }
         }
     }
 }

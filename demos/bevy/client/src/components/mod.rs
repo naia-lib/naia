@@ -1,7 +1,7 @@
 mod interp;
-mod markers;
 mod line;
+mod markers;
 
 pub use interp::Interp;
-pub use markers::{Confirmed, LocalCursor, Predicted};
 pub use line::Line;
+pub use markers::{Confirmed, LocalCursor, Predicted};

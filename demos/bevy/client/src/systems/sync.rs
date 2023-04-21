@@ -44,9 +44,7 @@ pub fn sync_cursor_sprite(mut query: Query<(&Position, &mut Transform), With<Loc
     }
 }
 
-pub fn sync_baseline(
-    mut query: Query<(&Baseline, &mut Transform), With<Confirmed>>,
-) {
+pub fn sync_baseline(mut query: Query<(&Baseline, &mut Transform), With<Confirmed>>) {
     for (baseline, mut transform) in query.iter_mut() {
         transform.translation.x = *baseline.x as f32;
         transform.translation.y = *baseline.y as f32;
@@ -56,7 +54,7 @@ pub fn sync_baseline(
 pub fn sync_relation_lines(
     position_query: Query<&Position>,
     baseline_query: Query<&Baseline>,
-    mut line_query: Query<(&mut Transform, &Line)>
+    mut line_query: Query<(&mut Transform, &Line)>,
 ) {
     for (mut line_transform, line_entities) in line_query.iter_mut() {
         if let Ok(start) = position_query.get(line_entities.start_entity) {
