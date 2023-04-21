@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::hash::Hash;
 
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
@@ -32,7 +33,8 @@ use crate::{
         entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
         remote::entity_waitlist::EntityWaitlist,
     },
-    LocalEntityAndGlobalEntityConverter, MessageKinds, Protocol,
+    EntityAndGlobalEntityConverter, EntityConverter, LocalEntityAndGlobalEntityConverter,
+    LocalEntityConverter, MessageKinds, Protocol,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -286,15 +288,18 @@ impl MessageManager {
     }
 
     /// Retrieve all messages from the channel buffers
-    pub fn receive_messages(
+    pub fn receive_messages<E: Eq + Copy + Hash>(
         &mut self,
+        global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        local_entity_converter: &dyn LocalEntityConverter<E>,
         entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
+        let entity_converter =
+            EntityConverter::new(global_entity_converter, local_entity_converter);
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
-            let messages = channel.receive_messages(entity_waitlist, converter);
+            let messages = channel.receive_messages(entity_waitlist, &entity_converter);
             output.push((channel_kind.clone(), messages));
         }
         output

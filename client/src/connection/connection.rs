@@ -103,7 +103,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
 
             // read world events
-            self.base.remote_world_manager.read_world_events(
+            self.base.remote_world_reader.read_world_events(
                 global_world_manager,
                 &mut self.base.local_world_manager,
                 protocol,
@@ -123,30 +123,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         world: &mut W,
         incoming_events: &mut Events<E>,
     ) {
-        {
-            let entity_converter =
-                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
-
-            // Receive Message Events
-            let messages = self.base.message_manager.receive_messages(
-                &mut self.base.remote_world_manager.entity_waitlist,
-                &entity_converter,
-            );
-            for (channel_kind, messages) in messages {
-                for message in messages {
-                    incoming_events.push_message(&channel_kind, message);
-                }
+        // Receive Message Events
+        let messages = self.base.message_manager.receive_messages(
+            global_world_manager,
+            &self.base.local_world_manager,
+            &mut self.base.remote_world_manager.entity_waitlist,
+        );
+        for (channel_kind, messages) in messages {
+            for message in messages {
+                incoming_events.push_message(&channel_kind, message);
             }
         }
 
         // Receive World Events
+        let remote_events = self.base.remote_world_reader.take_incoming_events();
         let world_events = self.base.remote_world_manager.process_world_events(
             global_world_manager,
             &mut self.base.local_world_manager,
             component_kinds,
             world,
+            remote_events,
         );
-
         incoming_events.receive_world_events(world_events);
     }
 

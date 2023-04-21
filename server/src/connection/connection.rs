@@ -96,7 +96,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read world events
         if protocol.client_authoritative_entities {
-            self.base.remote_world_manager.read_world_events(
+            self.base.remote_world_reader.read_world_events(
                 global_world_manager,
                 &mut self.base.local_world_manager,
                 protocol,
@@ -116,36 +116,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         world: &mut W,
         incoming_events: &mut Events<E>,
     ) {
-        {
-            let entity_converter =
-                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
-
-            // Receive Message Events
-            let messages = self.base.message_manager.receive_messages(
-                &mut self.base.remote_world_manager.entity_waitlist,
-                &entity_converter,
-            );
-            for (channel_kind, messages) in messages {
-                for message in messages {
-                    incoming_events.push_message(&self.user_key, &channel_kind, message);
-                }
+        // Receive Message Events
+        let messages = self.base.message_manager.receive_messages(
+            global_world_manager,
+            &self.base.local_world_manager,
+            &mut self.base.remote_world_manager.entity_waitlist,
+        );
+        for (channel_kind, messages) in messages {
+            for message in messages {
+                incoming_events.push_message(&self.user_key, &channel_kind, message);
             }
         }
 
         // read world events
         if protocol.client_authoritative_entities {
-            let entity_events = self.base.remote_world_manager.process_world_events(
+            let remote_events = self.base.remote_world_reader.take_incoming_events();
+            let world_events = self.base.remote_world_manager.process_world_events(
                 global_world_manager,
                 &mut self.base.local_world_manager,
                 &protocol.component_kinds,
                 world,
+                remote_events,
             );
-            for event in &entity_events {
+            for event in &world_events {
                 if let EntityEvent::SpawnEntity(entity) = event {
                     global_world_manager.remote_spawn_entity_record(entity, &self.user_key);
                 }
             }
-            incoming_events.receive_entity_events(&self.user_key, entity_events);
+            incoming_events.receive_entity_events(&self.user_key, world_events);
         }
     }
 
