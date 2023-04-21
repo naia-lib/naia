@@ -26,6 +26,7 @@ impl ComponentUpdate {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
     ) -> (Option<(HashSet<LocalEntity>, Self)>, Option<Self>) {
-        todo!()
+        let kind = self.kind;
+        component_kinds.split_update(converter, &kind, self)
     }
 }

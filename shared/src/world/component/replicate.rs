@@ -27,6 +27,15 @@ pub trait ReplicateBuilder: Send + Sync + Named {
     ) -> Result<Box<dyn Replicate>, SerdeErr>;
     /// Create new Component Update from incoming bit stream
     fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr>;
+    /// Split a Component update into Waiting and Ready updates
+    fn split_update(
+        &self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        update: ComponentUpdate,
+    ) -> (
+        Option<(HashSet<LocalEntity>, ComponentUpdate)>,
+        Option<ComponentUpdate>,
+    );
 }
 
 /// A struct that implements Replicate is a Component, or otherwise,
