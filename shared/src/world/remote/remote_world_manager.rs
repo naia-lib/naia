@@ -16,7 +16,7 @@ pub struct RemoteWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     insert_waitlist_store: WaitlistStore<(E, Box<dyn Replicate>)>,
     insert_waitlist_map: HashMap<(E, ComponentKind), WaitlistHandle>,
     update_waitlist_store: WaitlistStore<(Tick, E, ComponentKind, ComponentFieldUpdate)>,
-    update_waitlist_map: HashMap<(E, ComponentKind), Vec<WaitlistHandle>>,
+    update_waitlist_map: HashMap<(E, ComponentKind), HashMap<u8, WaitlistHandle>>,
     outgoing_events: Vec<EntityEvent<E>>,
 }
 
@@ -195,12 +195,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             self.entity_waitlist.remove_waiting(&handle);
             return;
         }
-        // Remove from update waitlist if it's there
-        if let Some(handles) = self
+        // Remove Component from update waitlist if it's there
+        if let Some(handle_map) = self
             .update_waitlist_map
             .remove(&(world_entity, component_kind))
         {
-            for handle in handles {
+            for (_index, handle) in handle_map {
                 self.update_waitlist_store.remove(&handle);
                 self.entity_waitlist.remove_waiting(&handle);
             }
@@ -305,6 +305,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             // if it exists, queue the waiting part of the component update
             if let Some(waiting_updates) = waiting_updates_opt {
                 for (waiting_entity, waiting_field_update) in waiting_updates {
+                    let field_id = waiting_field_update.field_id();
 
                     // Have to convert the single waiting entity to a HashSet ..
                     // TODO: make this more efficient
@@ -316,12 +317,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                         &mut self.update_waitlist_store,
                         (tick, world_entity, component_kind, waiting_field_update),
                     );
-                    let component_key = (world_entity, component_kind);
-                    if !self.update_waitlist_map.contains_key(&component_key) {
-                        self.update_waitlist_map.insert(component_key, Vec::new());
+                    let component_field_key = (world_entity, component_kind);
+                    if !self.update_waitlist_map.contains_key(&component_field_key) {
+                        self.update_waitlist_map.insert(component_field_key, HashMap::new());
                     }
-                    let handles = self.update_waitlist_map.get_mut(&component_key).unwrap();
-                    handles.push(handle);
+                    let handle_map = self.update_waitlist_map.get_mut(&component_field_key).unwrap();
+                    if let Some(old_handle) = handle_map.get(&field_id) {
+                        self.update_waitlist_store.remove(&handle);
+                        self.entity_waitlist.remove_waiting(old_handle);
+                    }
+                    handle_map.insert(field_id, handle);
                 }
             }
             // if it exists, apply the ready part of the component update
@@ -364,8 +369,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         {
             for (tick, world_entity, component_kind, ready_update) in list {
 
-                self.update_waitlist_map
-                    .remove(&(world_entity, component_kind));
+                let component_key = (world_entity, component_kind);
+                let mut remove_entry = false;
+                if let Some(component_map) = self.update_waitlist_map.get_mut(&component_key) {
+                    component_map.remove(&ready_update.field_id());
+                    if component_map.is_empty() {
+                        remove_entry = true;
+                    }
+                }
+                if remove_entry {
+                    self.update_waitlist_map.remove(&component_key);
+                }
 
                 if world
                     .component_apply_field_update(
