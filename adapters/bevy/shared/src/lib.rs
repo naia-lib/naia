@@ -1,13 +1,14 @@
 pub use naia_shared::{
     sequence_greater_than, BitReader, BitWrite, BitWriter, Channel, ChannelDirection, ChannelKind,
-    ChannelMode, ComponentKind, ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask,
-    EntityAndGlobalEntityConverter, EntityDoesNotExistError, EntityProperty, GlobalEntity,
-    LinkConditionerConfig, LocalEntity, LocalEntityAndGlobalEntityConverter,
-    LocalEntityAndGlobalEntityConverterMut, MessageBevy as Message, MessageBuilder,
-    MessageContainer, MessageKind, MessageKinds, Named, OwnedBitReader, Property, PropertyMutate,
-    PropertyMutator, Random, ReliableSettings, ReplicaDynMut, ReplicaDynRef,
-    ReplicateBevy as Replicate, ReplicateBuilder, SerdeBevy as Serde, SerdeErr, Tick,
-    TickBufferSettings, UnsignedInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, ComponentFieldUpdate,
+    ChannelMode, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
+    ConstBitLength, DiffMask, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
+    EntityProperty, GlobalEntity, LinkConditionerConfig, LocalEntity,
+    LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
+    MessageBevy as Message, MessageBuilder, MessageContainer, MessageKind, MessageKinds, Named,
+    OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random, ReliableSettings,
+    ReplicaDynMut, ReplicaDynRef, ReplicateBevy as Replicate, ReplicateBuilder, SerdeBevy as Serde,
+    SerdeErr, Tick, TickBufferSettings, UnsignedInteger, WorldMutType, WorldRefType,
+    MTU_SIZE_BYTES,
 };
 
 mod change_detection;

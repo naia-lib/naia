@@ -79,7 +79,8 @@ pub fn replicate_impl(
     let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type);
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
     let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
-    let read_apply_field_update_method = get_read_apply_field_update_method(&properties, &struct_type);
+    let read_apply_field_update_method =
+        get_read_apply_field_update_method(&properties, &struct_type);
     let write_method = get_write_method(&properties, &struct_type);
     let write_update_method = get_write_update_method(&enum_name, &properties, &struct_type);
     // let has_entity_properties = get_has_entity_properties_method(&properties);
@@ -258,7 +259,10 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
                                 let property_type = property_seg.ident.clone();
                                 // EntityProperty
                                 if property_type == "EntityProperty" {
-                                    fields.push(Property::entity(fields.len(), variable_name.clone()));
+                                    fields.push(Property::entity(
+                                        fields.len(),
+                                        variable_name.clone(),
+                                    ));
                                     continue;
                                 // Property
                                 } else if property_type == "Property" {
@@ -304,8 +308,11 @@ fn get_properties(input: &DeriveInput) -> Vec<Property> {
                                 if let Some(GenericArgument::Type(inner_type)) =
                                     angle_args.args.first()
                                 {
-                                    fields
-                                        .push(Property::normal(fields.len(), variable_name, inner_type.clone()));
+                                    fields.push(Property::normal(
+                                        fields.len(),
+                                        variable_name,
+                                        inner_type.clone(),
+                                    ));
                                     continue;
                                 }
                             }
@@ -897,7 +904,10 @@ fn get_read_apply_update_method(properties: &[Property], struct_type: &StructTyp
     }
 }
 
-fn get_read_apply_field_update_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+fn get_read_apply_field_update_method(
+    properties: &[Property],
+    struct_type: &StructType,
+) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter() {

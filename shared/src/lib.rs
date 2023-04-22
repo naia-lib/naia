@@ -78,7 +78,7 @@ pub use messages::{
 pub use world::{
     component::{
         component_kinds::{ComponentKind, ComponentKinds},
-        component_update::{ComponentUpdate, ComponentFieldUpdate},
+        component_update::{ComponentFieldUpdate, ComponentUpdate},
         diff_mask::DiffMask,
         entity_property::EntityProperty,
         property::Property,

@@ -3,7 +3,7 @@ use naia_serde::SerdeErr;
 use crate::world::{
     component::{
         component_kinds::ComponentKind,
-        component_update::{ComponentUpdate, ComponentFieldUpdate},
+        component_update::{ComponentFieldUpdate, ComponentUpdate},
         replica_ref::{
             ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
         },

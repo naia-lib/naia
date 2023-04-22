@@ -1,15 +1,20 @@
-use log::warn;
-use std::{collections::HashMap, hash::Hash};
-use std::collections::HashSet;
 
-use crate::{world::{
-    local_world_manager::LocalWorldManager,
-    remote::{
-        entity_event::EntityEvent,
-        entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
-        remote_world_reader::RemoteWorldEvents,
+use std::{collections::{HashMap, HashSet}, hash::Hash};
+
+use log::warn;
+
+use crate::{
+    world::{
+        local_world_manager::LocalWorldManager,
+        remote::{
+            entity_event::EntityEvent,
+            entity_waitlist::{EntityWaitlist, WaitlistHandle, WaitlistStore},
+            remote_world_reader::RemoteWorldEvents,
+        },
     },
-}, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityConverter, GlobalWorldManagerType, LocalEntity, Replicate, Tick, WorldMutType, ComponentFieldUpdate};
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction,
+    EntityConverter, GlobalWorldManagerType, LocalEntity, Replicate, Tick, WorldMutType,
+};
 
 pub struct RemoteWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     pub entity_waitlist: EntityWaitlist,
@@ -319,9 +324,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     );
                     let component_field_key = (world_entity, component_kind);
                     if !self.update_waitlist_map.contains_key(&component_field_key) {
-                        self.update_waitlist_map.insert(component_field_key, HashMap::new());
+                        self.update_waitlist_map
+                            .insert(component_field_key, HashMap::new());
                     }
-                    let handle_map = self.update_waitlist_map.get_mut(&component_field_key).unwrap();
+                    let handle_map = self
+                        .update_waitlist_map
+                        .get_mut(&component_field_key)
+                        .unwrap();
                     if let Some(old_handle) = handle_map.get(&field_id) {
                         self.update_waitlist_store.remove(&handle);
                         self.entity_waitlist.remove_waiting(old_handle);
@@ -368,7 +377,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             .collect_ready_items(&mut self.update_waitlist_store)
         {
             for (tick, world_entity, component_kind, ready_update) in list {
-
                 let component_key = (world_entity, component_kind);
                 let mut remove_entry = false;
                 if let Some(component_map) = self.update_waitlist_map.get_mut(&component_key) {

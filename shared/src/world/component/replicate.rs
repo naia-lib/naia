@@ -2,16 +2,20 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::{messages::named::Named, world::{
-    component::{
-        component_kinds::{ComponentKind, ComponentKinds},
-        component_update::ComponentUpdate,
-        diff_mask::DiffMask,
-        property_mutate::PropertyMutator,
-        replica_ref::{ReplicaDynMut, ReplicaDynRef},
+use crate::{
+    messages::named::Named,
+    world::{
+        component::{
+            component_kinds::{ComponentKind, ComponentKinds},
+            component_update::ComponentUpdate,
+            diff_mask::DiffMask,
+            property_mutate::PropertyMutator,
+            replica_ref::{ReplicaDynMut, ReplicaDynRef},
+        },
+        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
     },
-    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
-}, LocalEntity, LocalEntityAndGlobalEntityConverterMut, ComponentFieldUpdate};
+    ComponentFieldUpdate, LocalEntity, LocalEntityAndGlobalEntityConverterMut,
+};
 
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream
@@ -27,7 +31,13 @@ pub trait ReplicateBuilder: Send + Sync + Named {
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentUpdate,
-    ) -> Result<(Option<Vec<(LocalEntity, ComponentFieldUpdate)>>, Option<ComponentUpdate>), SerdeErr>;
+    ) -> Result<
+        (
+            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<ComponentUpdate>,
+        ),
+        SerdeErr,
+    >;
 }
 
 /// A struct that implements Replicate is a Component, or otherwise,

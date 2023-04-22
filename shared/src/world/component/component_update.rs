@@ -1,4 +1,3 @@
-
 use naia_serde::{BitReader, OwnedBitReader, SerdeErr};
 
 use crate::{
@@ -24,7 +23,13 @@ impl ComponentUpdate {
         self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
-    ) -> Result<(Option<Vec<(LocalEntity, ComponentFieldUpdate)>>, Option<Self>), SerdeErr> {
+    ) -> Result<
+        (
+            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<Self>,
+        ),
+        SerdeErr,
+    > {
         let kind = self.kind;
         component_kinds.split_update(converter, &kind, self)
     }

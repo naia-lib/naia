@@ -1,12 +1,10 @@
-use std::{
-    any::TypeId,
-    collections::HashMap,
-};
+use std::{any::TypeId, collections::HashMap};
 
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
 use crate::{
-    ComponentUpdate, ComponentFieldUpdate, LocalEntity, LocalEntityAndGlobalEntityConverter, Replicate, ReplicateBuilder,
+    ComponentFieldUpdate, ComponentUpdate, LocalEntity, LocalEntityAndGlobalEntityConverter,
+    Replicate, ReplicateBuilder,
 };
 
 type NetId = u16;
@@ -101,7 +99,13 @@ impl ComponentKinds {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kind: &ComponentKind,
         update: ComponentUpdate,
-    ) -> Result<(Option<Vec<(LocalEntity, ComponentFieldUpdate)>>, Option<ComponentUpdate>), SerdeErr> {
+    ) -> Result<
+        (
+            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<ComponentUpdate>,
+        ),
+        SerdeErr,
+    > {
         return self
             .kind_to_builder(component_kind)
             .split_update(converter, update);

@@ -4,7 +4,11 @@ use bevy_ecs::{
 };
 use std::any::TypeId;
 
-use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
+use naia_shared::{
+    ComponentFieldUpdate, ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    SerdeErr, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
