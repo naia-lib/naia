@@ -1,6 +1,6 @@
 use std::{
     any::TypeId,
-    collections::{HashMap, HashSet},
+    collections::HashMap,
 };
 
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};

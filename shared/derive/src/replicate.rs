@@ -431,7 +431,7 @@ fn get_mirror_method(
 ) -> TokenStream {
     let mut output = quote! {};
 
-    for (index, property) in properties.iter().filter(|p| p.is_replicated()).enumerate() {
+    for property in properties.iter().filter(|p| p.is_replicated()) {
         let field_name = get_field_name(property, struct_type);
         let new_output_right = quote! {
             self.#field_name.mirror(&replica.#field_name);
@@ -457,7 +457,7 @@ fn get_mirror_method(
 fn get_set_mutator_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
-    for (index, property) in properties.iter().filter(|p| p.is_replicated()).enumerate() {
+    for property in properties.iter().filter(|p| p.is_replicated()) {
         let field_name = get_field_name(property, struct_type);
         let new_output_right = quote! {
                 self.#field_name.set_mutator(mutator);
@@ -768,14 +768,14 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
                 quote! {
                     let should_read = bool::de(reader)?;
                     should_read.ser(&mut ready_writer);
-                    false.ser(&mut waiting_writer); // waiting update should never have Property<T> values
                     if should_read {
                         Property::<#field_type>::read_write(reader, &mut ready_writer)?;
                         ready_did_write = true;
                     }
                 }
             }
-            Property::Entity(_) => {
+            Property::Entity(inner_property) => {
+                let index = inner_property.index as u8;
                 quote! {
                     let should_read = bool::de(reader)?;
                     if should_read {
@@ -785,25 +785,22 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
                         // get waiting local entity from copy after read
                         let waiting_entity_opt = prop_copy.waiting_local_entity();
                         if let Some(waiting_entity) = waiting_entity_opt {
-                            // property is waiting on waiting_entity, write into the waiting_writer
-                            waiting_entity_set.insert(waiting_entity);
-
-                            // write update into waiting writer
                             waiting_did_write = true;
-                            false.ser(&mut ready_writer);
-                            true.ser(&mut waiting_writer);
+
+                            // property is waiting on waiting_entity, write into the waiting_writer
+                            let mut waiting_writer = BitWriter::new();
                             waiting_entity.owned_ser(&mut waiting_writer);
+                            waiting_updates.push((waiting_entity, ComponentFieldUpdate::new(#index, waiting_writer.to_owned_reader())));
                         } else {
-                            // write ready update into ready writer
                             ready_did_write = true;
+
+                            // write ready update into ready writer
                             true.ser(&mut ready_writer);
-                            false.ser(&mut waiting_writer);
                             prop_copy.write_local_entity(converter, &mut ready_writer);
                         }
                     } else {
                         // Neither writer gets an update here
                         false.ser(&mut ready_writer);
-                        false.ser(&mut waiting_writer);
                     }
                 }
             }
@@ -831,9 +828,8 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
             let component_kind = ComponentKind::of::<#replica_name>();
             let reader = &mut update.reader();
 
-            let mut waiting_writer = BitWriter::new();
             let mut waiting_did_write = false;
-            let mut waiting_entity_set = HashSet::new();
+            let mut waiting_updates: Vec<(LocalEntity, ComponentFieldUpdate)> = Vec::new();
 
             let mut ready_writer = BitWriter::new();
             let mut ready_did_write = false;
@@ -842,7 +838,7 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
 
             let waiting_result = {
                 if waiting_did_write {
-                    Some((waiting_entity_set, ComponentUpdate::new(component_kind, waiting_writer.to_owned_reader())))
+                    Some(waiting_updates)
                 } else {
                     None
                 }
@@ -911,9 +907,9 @@ fn get_read_apply_field_update_method(properties: &[Property], struct_type: &Str
                 continue;
             }
             Property::Entity(inner_property) => {
-                let index = inner_property.index;
+                let index = inner_property.index as u8;
                 quote! {
-                    index => {
+                    #index => {
                         EntityProperty::read(&mut self.#field_name, reader, converter)?;
                     }
                 }
