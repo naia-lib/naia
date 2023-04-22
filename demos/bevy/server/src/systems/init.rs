@@ -37,7 +37,7 @@ pub fn init(mut commands: Commands, mut server: Server) {
         Baseline::new(x, y)
     };
 
-    let baseline_entity = commands
+    let server_baseline = commands
         // Spawn new Entity
         .spawn_empty()
         // MUST call this to begin replication
@@ -57,13 +57,15 @@ pub fn init(mut commands: Commands, mut server: Server) {
         user_to_square_map: HashMap::new(),
         user_to_cursor_map: HashMap::new(),
         client_to_server_cursor_map: HashMap::new(),
-        baseline_entity,
+        server_baseline,
+        client_baselines: HashMap::new(),
+        square_to_user_map: HashMap::new(),
     };
 
     // Add baseline entity to main room
     server
         .room_mut(&global.main_room_key)
-        .add_entity(&baseline_entity);
+        .add_entity(&server_baseline);
 
     // Insert Global Resource
     commands.insert_resource(global);

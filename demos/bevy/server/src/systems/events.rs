@@ -1,6 +1,7 @@
 use bevy_ecs::{
     event::EventReader,
     system::{Commands, Query, ResMut},
+    prelude::{Entity, Local, Res}
 };
 use bevy_log::info;
 
@@ -19,6 +20,7 @@ use naia_bevy_demo_shared::{
     components::{Color, ColorValue, Position, Relation, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
 };
+use naia_bevy_demo_shared::components::Baseline;
 
 use crate::resources::Global;
 
@@ -77,7 +79,7 @@ pub fn connect_events(
 
         // Relation component
         let mut relation = Relation::new();
-        relation.entity.set(&server, &global.baseline_entity);
+        relation.entity.set(&server, &global.server_baseline);
 
         // Spawn entity
         let entity = commands
@@ -99,6 +101,7 @@ pub fn connect_events(
         server.room_mut(&global.main_room_key).add_entity(&entity);
 
         global.user_to_square_map.insert(*user_key, entity);
+        global.square_to_user_map.insert(entity, *user_key);
 
         // Send an Entity Assignment message to the User that owns the Square
         let mut assignment_message = EntityAssignment::new(true);
@@ -121,6 +124,7 @@ pub fn disconnect_events(
         info!("Naia Server disconnected from: {:?}", user.address);
 
         if let Some(entity) = global.user_to_square_map.remove(user_key) {
+            global.square_to_user_map.remove(&entity);
             commands.entity(entity).despawn();
             server
                 .room_mut(&global.main_room_key)
@@ -134,6 +138,7 @@ pub fn disconnect_events(
                     .remove_entity(&server_entity);
             }
         }
+        global.client_baselines.remove(user_key);
     }
 }
 
@@ -145,8 +150,11 @@ pub fn error_events(mut event_reader: EventReader<ErrorEvent>) {
 
 pub fn tick_events(
     mut server: Server,
+    global: Res<Global>,
     mut position_query: Query<&mut Position>,
     mut tick_reader: EventReader<TickEvent>,
+    mut timer: Local<u16>,
+    mut relation_query: Query<(Entity, &mut Relation)>,
 ) {
     let mut has_ticked = false;
 
@@ -178,6 +186,33 @@ pub fn tick_events(
 
             // And call this if Entity should NOT be in this scope.
             // server.user_scope(..).exclude(..);
+        }
+
+        // Move relations around
+        *timer += 1;
+        if *timer >= 30 {
+            *timer = 0;
+            info!("Timer went off!");
+            for (square_entity, mut relation) in relation_query.iter_mut() {
+                info!(" - have entity");
+                if let Some(relation_entity) = relation.entity.get(&server) {
+                    info!(" - have relation entity");
+                    if let Some(user_key) = global.square_to_user_map.get(&square_entity) {
+                        info!(" - have user key");
+                        if relation_entity == global.server_baseline {
+                            info!(" - relation is server baseline, switching to client baseline");
+                            // switch to client's baseline
+                            if let Some(client_baseline) = global.client_baselines.get(&user_key) {
+                                relation.entity.set(&server, client_baseline);
+                            }
+                        } else {
+                            info!(" - relation is client baseline, switching to server baseline");
+                            // switch to server's baseline
+                            relation.entity.set(&server, &global.server_baseline);
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -247,6 +282,9 @@ pub fn insert_component_events(
                     .client_to_server_cursor_map
                     .insert(client_entity, server_entity);
             }
+        }
+        for (user_key, client_entity) in events.read::<Baseline>() {
+            global.client_baselines.insert(user_key, client_entity);
         }
     }
 }

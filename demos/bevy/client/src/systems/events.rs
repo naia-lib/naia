@@ -60,7 +60,7 @@ pub fn connect_events(
             .set(&client, &global.baseline_entity.unwrap());
 
         // Spawn Cursor Entity
-        let entity = commands
+        let cursor_entity = commands
             // Spawn new Square Entity
             .spawn_empty()
             // MUST call this to begin replication
@@ -68,21 +68,21 @@ pub fn connect_events(
             // Insert Position component
             .insert(position)
             // Insert Relation component
-            .insert(relation)
+            //.insert(relation)
             // Insert Cursor marker component
             .insert(LocalCursor)
             // return Entity id
             .id();
 
         // Insert SpriteBundle locally only
-        commands.entity(entity).insert(MaterialMesh2dBundle {
+        commands.entity(cursor_entity).insert(MaterialMesh2dBundle {
             mesh: global.circle.clone().into(),
             material: global.white.clone(),
             transform: Transform::from_xyz(0.0, 0.0, 1.0),
             ..Default::default()
         });
 
-        global.cursor_entity = Some(entity);
+        global.cursor_entity = Some(cursor_entity);
     }
 }
 
@@ -285,9 +285,12 @@ pub fn insert_component_events(
 }
 
 pub fn update_component_events(
+    client: Client,
     mut global: ResMut<Global>,
     mut event_reader: EventReader<UpdateComponentEvents>,
     mut position_query: Query<&mut Position>,
+    relation_query: Query<&Relation>,
+    mut line_query: Query<(Entity, &mut Line)>,
 ) {
     // When we receive a new Position update for the Player's Entity,
     // we must ensure the Client-side Prediction also remains in-sync
@@ -299,6 +302,7 @@ pub fn update_component_events(
         let client_entity = owned_entity.predicted;
 
         for events in event_reader.iter() {
+            // Update square position
             for (server_tick, updated_entity) in events.read::<Position>() {
                 // If entity is owned
                 if updated_entity == server_entity {
@@ -308,6 +312,24 @@ pub fn update_component_events(
                         }
                     } else {
                         latest_tick = Some(server_tick);
+                    }
+                }
+            }
+            // Update Relation line
+            for (_server_tick, updated_entity) in events.read::<Relation>() {
+                info!("update Relation Component on entity");
+                if let Ok(relation) = relation_query.get(updated_entity) {
+                    if let Some(baseline_entity) = relation.entity.get(&client) {
+                        info!("get connecting line");
+                        for (line_entity, mut line) in line_query.iter_mut() {
+                            if line.start_entity == updated_entity {
+                                info!("update connecting line");
+                                line.end_entity = baseline_entity;
+                                break;
+                            }
+                        }
+                    } else {
+                        warn!("no baseline entity found for relation");
                     }
                 }
             }
