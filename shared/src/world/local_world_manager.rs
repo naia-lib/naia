@@ -1,6 +1,10 @@
 use log::warn;
-use std::{collections::{HashMap, VecDeque}, hash::Hash, time::Duration};
 use naia_socket_shared::Instant;
+use std::{
+    collections::{HashMap, VecDeque},
+    hash::Hash,
+    time::Duration,
+};
 
 use crate::{
     world::entity::local_entity::LocalEntity, EntityDoesNotExistError, KeyGenerator,
@@ -33,7 +37,6 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     // Host entities
 
     pub(crate) fn host_reserve_entity(&mut self, world_entity: &E) -> LocalEntity {
-
         self.process_reserved_entity_timeouts();
 
         if self.reserved_entities.contains_key(world_entity) {

@@ -9,12 +9,11 @@ use crate::{
     types::{HostType, PacketIndex},
     world::{
         entity::entity_converters::{EntityConverterMut, GlobalWorldManagerType},
+        host::{host_world_manager::HostWorldEvents, host_world_writer::HostWorldWriter},
         local_world_manager::LocalWorldManager,
         remote::remote_world_reader::RemoteWorldReader,
-        host::{host_world_writer::HostWorldWriter, host_world_manager::HostWorldEvents},
     },
-    EntityEvent, HostWorldManager, Protocol, RemoteWorldManager,
-    WorldMutType, WorldRefType,
+    EntityEvent, HostWorldManager, Protocol, RemoteWorldManager, WorldMutType, WorldRefType,
 };
 
 use super::{

@@ -1,9 +1,9 @@
+use naia_socket_shared::Instant;
+use std::collections::VecDeque;
 use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
-use std::collections::VecDeque;
-use naia_socket_shared::Instant;
 
 use crate::{KeyGenerator, LocalEntity};
 
@@ -76,7 +76,6 @@ impl EntityWaitlist {
         &mut self,
         waitlist_store: &mut WaitlistStore<T>,
     ) -> Option<Vec<T>> {
-
         self.check_handle_ttls();
         waitlist_store.remove_expired_items(&mut self.removed_handles);
 
@@ -116,9 +115,12 @@ impl EntityWaitlist {
     }
 
     pub fn remove_waiting_handle(&mut self, handle: &WaitlistHandle) {
-
         // remove handle from ttl list
-        if let Some(ttl_index) = self.handle_ttls.iter().position(|(_, ttl_handle)| ttl_handle == handle) {
+        if let Some(ttl_index) = self
+            .handle_ttls
+            .iter()
+            .position(|(_, ttl_handle)| ttl_handle == handle)
+        {
             self.handle_ttls.remove(ttl_index);
         }
 
@@ -202,10 +204,7 @@ impl<T> WaitlistStore<T> {
         Some(ready_messages)
     }
 
-    pub fn remove_expired_items(
-        &mut self,
-        expired_handles: &mut HashSet<WaitlistHandle>,
-    ) {
+    pub fn remove_expired_items(&mut self, expired_handles: &mut HashSet<WaitlistHandle>) {
         let intersection: HashSet<WaitlistHandle> = self
             .item_handles
             .intersection(&expired_handles)

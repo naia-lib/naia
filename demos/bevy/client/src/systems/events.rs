@@ -2,8 +2,8 @@ use std::default::Default;
 
 use bevy::{
     prelude::{
-        info, Color as BevyColor, Commands,
-        EventReader, Query, Res, ResMut, Sprite, SpriteBundle, Transform, Vec2,
+        info, Color as BevyColor, Commands, EventReader, Query, Res, ResMut, Sprite, SpriteBundle,
+        Transform, Vec2,
     },
     sprite::MaterialMesh2dBundle,
 };
@@ -290,9 +290,7 @@ pub fn update_component_events(
     }
 }
 
-pub fn remove_component_events(
-    mut event_reader: EventReader<RemoveComponentEvents>,
-) {
+pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
     for events in event_reader.iter() {
         for (_entity, _component) in events.read::<Position>() {
             info!("removed Position component from entity");

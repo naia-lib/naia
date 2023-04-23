@@ -4,7 +4,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate};
+use naia_shared::{
+    BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
+    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator,
+    Replicate,
+};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{world::mut_channel::MutChannelData, EntityOwner, UserKey};
@@ -151,9 +155,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         if let Some(record) = self.entity_records.get(entity) {
             return match record.owner {
                 EntityOwner::Server => true,
-                EntityOwner::Client(owning_user_key) | EntityOwner::ClientWaiting(owning_user_key) => {
+                EntityOwner::Client(owning_user_key)
+                | EntityOwner::ClientWaiting(owning_user_key) => {
                     return owning_user_key.to_u64() == *user_key;
-                },
+                }
                 EntityOwner::Local => false,
             };
         }
@@ -176,7 +181,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         let global_entity = self.global_entity_map.insert(*entity);
         self.entity_records.insert(
             *entity,
-            GlobalEntityRecord::new(global_entity, EntityOwner::ClientWaiting(UserKey::from_u64(*user_key))),
+            GlobalEntityRecord::new(
+                global_entity,
+                EntityOwner::ClientWaiting(UserKey::from_u64(*user_key)),
+            ),
         );
     }
 

@@ -208,10 +208,8 @@ impl HostWorldWriter {
                 components_num.ser(writer);
 
                 for component_kind in &component_kind_list {
-                    let mut converter = EntityConverterMut::new(
-                        global_world_manager,
-                        local_world_manager,
-                    );
+                    let mut converter =
+                        EntityConverterMut::new(global_world_manager, local_world_manager);
 
                     // write component payload
                     world
@@ -276,10 +274,8 @@ impl HostWorldWriter {
                         .unwrap()
                         .host_ser(writer);
 
-                    let mut converter = EntityConverterMut::new(
-                        global_world_manager,
-                        local_world_manager,
-                    );
+                    let mut converter =
+                        EntityConverterMut::new(global_world_manager, local_world_manager);
 
                     // write component payload
                     world
@@ -484,10 +480,7 @@ impl HostWorldWriter {
                 .expect("DiffHandler does not have registered Component!")
                 .clone();
 
-            let mut converter = EntityConverterMut::new(
-                global_world_manager,
-                local_world_manager,
-            );
+            let mut converter = EntityConverterMut::new(global_world_manager, local_world_manager);
 
             // check that we can write the next component update
             let mut counter = writer.counter();

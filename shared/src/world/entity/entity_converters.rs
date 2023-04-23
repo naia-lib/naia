@@ -176,9 +176,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
             .local_world_manager
             .local_entity_to_entity(local_entity)
         {
-            return self
-                .global_world_manager
-                .entity_to_global_entity(&entity);
+            return self.global_world_manager.entity_to_global_entity(&entity);
         }
         return Err(EntityDoesNotExistError);
     }

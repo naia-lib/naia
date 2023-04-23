@@ -1,5 +1,7 @@
-
-use std::{collections::{HashMap, HashSet}, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use log::warn;
 
@@ -110,7 +112,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     // set up entity
                     let world_entity = world.spawn_entity();
                     local_world_manager.remote_spawn_entity(&world_entity, &local_entity);
-                    global_world_manager.remote_spawn_entity(&world_entity, local_world_manager.get_user_key());
+                    global_world_manager
+                        .remote_spawn_entity(&world_entity, local_world_manager.get_user_key());
                     self.on_entity_channel_opened(&local_entity);
 
                     self.outgoing_events
