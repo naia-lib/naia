@@ -34,8 +34,6 @@ pub struct Global {
     pub orange: Handle<ColorMaterial>,
     pub aqua: Handle<ColorMaterial>,
     pub circle: Handle<Mesh>,
-    pub big_circle: Handle<Mesh>,
-    pub baseline_entity: Option<Entity>,
 }
 
 impl Default for Global {
@@ -46,8 +44,6 @@ impl Default for Global {
             queued_command: None,
             command_history: CommandHistory::default(),
             circle: Handle::default(),
-            big_circle: Handle::default(),
-            baseline_entity: None,
             red: Handle::default(),
             blue: Handle::default(),
             yellow: Handle::default(),

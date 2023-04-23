@@ -21,13 +21,17 @@ impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
     }
     /// Get a new, unused key
     pub fn generate(&mut self) -> K {
-        let mut should_pop = false;
-        if let Some((_, instant)) = self.recycled_local_keys.front() {
-            if instant.elapsed() > self.recycle_timeout {
-                should_pop = true;
+        loop {
+            let Some((_, instant)) = self.recycled_local_keys.front() else {
+                break;
+            };
+            if instant.elapsed() < self.recycle_timeout {
+                break;
             }
+            self.recycled_local_keys.pop_front();
         }
-        if should_pop {
+
+        if self.recycled_local_keys.len() > 0 {
             let (local_key, _) = self.recycled_local_keys.pop_front().unwrap();
             return K::from(local_key);
         }

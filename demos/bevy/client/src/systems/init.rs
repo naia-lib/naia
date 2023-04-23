@@ -2,8 +2,8 @@ use bevy::prelude::{
     info, shape, Assets, Camera2dBundle, Color, ColorMaterial, Commands, Mesh, ResMut,
 };
 
-use naia_bevy_client::{transport::webrtc, Client, CommandsExt, Random};
-use naia_bevy_demo_shared::{components::Baseline, messages::Auth};
+use naia_bevy_client::{transport::webrtc, Client};
+use naia_bevy_demo_shared::messages::Auth;
 
 use crate::resources::Global;
 
@@ -37,26 +37,6 @@ pub fn init(
 
     // Load shapes
     global.circle = meshes.add(shape::Circle::new(6.).into());
-    global.big_circle = meshes.add(shape::Circle::new(18.).into());
-
-    // Set up new baseline entity
-    let baseline = {
-        let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
-        let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
-        Baseline::new(x, y)
-    };
-
-    global.baseline_entity = Some(
-        commands
-            // Spawn new Entity
-            .spawn_empty()
-            // MUST call this to begin replication
-            .enable_replication(&mut client)
-            // Insert Baseline component
-            .insert(baseline)
-            // return Entity id
-            .id(),
-    );
 
     // Insert Global Resource
     commands.insert_resource(global);

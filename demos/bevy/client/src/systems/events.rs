@@ -1,11 +1,9 @@
 use std::default::Default;
 
-use bevy::sprite::Anchor;
 use bevy::{
     prelude::{
-        info, BuildChildren, Color as BevyColor, Commands, DespawnRecursiveExt, Entity,
-        EventReader, Query, Res, ResMut, Sprite, SpriteBundle, Transform, TransformBundle, Vec2,
-        VisibilityBundle,
+        info, Color as BevyColor, Commands,
+        EventReader, Query, Res, ResMut, Sprite, SpriteBundle, Transform, Vec2,
     },
     sprite::MaterialMesh2dBundle,
 };
@@ -21,12 +19,12 @@ use naia_bevy_client::{
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, ColorValue, Position, Relation, Shape, ShapeValue},
+    components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{EntityAssignment, KeyCommand},
 };
 
 use crate::{
-    components::{Confirmed, Interp, Line, LocalCursor, Predicted},
+    components::{Confirmed, Interp, LocalCursor, Predicted},
     resources::{Global, OwnedEntity},
 };
 
@@ -53,12 +51,6 @@ pub fn connect_events(
             Position::new(x, y)
         };
 
-        // Relation component
-        let mut relation = Relation::new();
-        relation
-            .entity
-            .set(&client, &global.baseline_entity.unwrap());
-
         // Spawn Cursor Entity
         let cursor_entity = commands
             // Spawn new Square Entity
@@ -67,8 +59,6 @@ pub fn connect_events(
             .enable_replication(&mut client)
             // Insert Position component
             .insert(position)
-            // Insert Relation component
-            //.insert(relation)
             // Insert Cursor marker component
             .insert(LocalCursor)
             // return Entity id
@@ -167,11 +157,9 @@ pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) 
 pub fn insert_component_events(
     mut commands: Commands,
     mut event_reader: EventReader<InsertComponentEvents>,
-    client: Client,
     global: Res<Global>,
     sprite_query: Query<(&Shape, &Color)>,
     position_query: Query<&Position>,
-    relation_query: Query<&Relation>,
 ) {
     for events in event_reader.iter() {
         for entity in events.read::<Color>() {
@@ -235,31 +223,6 @@ pub fn insert_component_events(
                             // mark as confirmed
                             .insert(Confirmed);
                     }
-                    // Circle
-                    ShapeValue::BigCircle => {
-                        let handle = {
-                            match *color.value {
-                                ColorValue::Red => &global.red,
-                                ColorValue::Blue => &global.blue,
-                                ColorValue::Yellow => &global.yellow,
-                                ColorValue::Green => &global.green,
-                                ColorValue::White => &global.white,
-                                ColorValue::Purple => &global.purple,
-                                ColorValue::Orange => &global.orange,
-                                ColorValue::Aqua => &global.aqua,
-                            }
-                        };
-                        commands
-                            .entity(entity)
-                            .insert(MaterialMesh2dBundle {
-                                mesh: global.big_circle.clone().into(),
-                                material: handle.clone(),
-                                transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                                ..Default::default()
-                            })
-                            // mark as confirmed
-                            .insert(Confirmed);
-                    }
                 }
             }
         }
@@ -272,39 +235,13 @@ pub fn insert_component_events(
                     .insert(Interp::new(*position.x, *position.y));
             }
         }
-        for square_entity in events.read::<Relation>() {
-            info!("add Relation Component to entity");
-            if let Ok(relation) = relation_query.get(square_entity) {
-                let baseline_entity = relation.entity.get(&client);
-                info!("spawn connecting line");
-                // initialize connecting line
-                commands
-                    .spawn(TransformBundle::default())
-                    .insert(VisibilityBundle::default())
-                    .insert(Line::new(square_entity, baseline_entity))
-                    .with_children(|parent| {
-                        parent.spawn(SpriteBundle {
-                            sprite: Sprite {
-                                color: BevyColor::GRAY,
-                                custom_size: Some(Vec2::new(1.0, 1.0)),
-                                anchor: Anchor::CenterLeft,
-                                ..Default::default()
-                            },
-                            ..Default::default()
-                        });
-                    });
-            }
-        }
     }
 }
 
 pub fn update_component_events(
-    client: Client,
     mut global: ResMut<Global>,
     mut event_reader: EventReader<UpdateComponentEvents>,
     mut position_query: Query<&mut Position>,
-    relation_query: Query<&Relation>,
-    mut line_query: Query<(Entity, &mut Line)>,
 ) {
     // When we receive a new Position update for the Player's Entity,
     // we must ensure the Client-side Prediction also remains in-sync
@@ -326,18 +263,6 @@ pub fn update_component_events(
                         }
                     } else {
                         latest_tick = Some(server_tick);
-                    }
-                }
-            }
-            // Update Relation line
-            for (_server_tick, updated_entity) in events.read::<Relation>() {
-                if let Ok(relation) = relation_query.get(updated_entity) {
-                    let baseline_entity = relation.entity.get(&client);
-                    for (_line_entity, mut line) in line_query.iter_mut() {
-                        if line.start_entity == updated_entity {
-                            line.end_entity = baseline_entity;
-                            break;
-                        }
                     }
                 }
             }
@@ -366,9 +291,7 @@ pub fn update_component_events(
 }
 
 pub fn remove_component_events(
-    mut commands: Commands,
     mut event_reader: EventReader<RemoveComponentEvents>,
-    line_query: Query<(Entity, &Line)>,
 ) {
     for events in event_reader.iter() {
         for (_entity, _component) in events.read::<Position>() {
@@ -376,16 +299,6 @@ pub fn remove_component_events(
         }
         for (_entity, _component) in events.read::<Color>() {
             info!("removed Color component from entity");
-        }
-        for (square_entity, _relation) in events.read::<Relation>() {
-            info!("removed Relation component from entity");
-            for (line_entity, line) in line_query.iter() {
-                if line.start_entity == square_entity {
-                    info!("despawned connecting line");
-                    commands.entity(line_entity).despawn_recursive();
-                    break;
-                }
-            }
         }
     }
 }

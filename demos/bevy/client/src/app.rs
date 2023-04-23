@@ -54,8 +54,6 @@ pub fn run() {
                 sync::sync_clientside_sprites,
                 sync::sync_serverside_sprites,
                 sync::sync_cursor_sprite,
-                sync::sync_relation_lines,
-                sync::sync_baseline,
             )
                 .chain()
                 .in_set(MainLoop),

@@ -36,9 +36,6 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
         self.process_reserved_entity_timeouts();
 
-        warn!("Reserving LocalEntity because World Entity is not yet spawned.");
-        warn!("Make sure to put a TTL on this LocalEntity in the future!");
-
         if self.reserved_entities.contains_key(world_entity) {
             panic!("World Entity has already reserved Local Entity!");
         }
