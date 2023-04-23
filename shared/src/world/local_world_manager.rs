@@ -1,5 +1,6 @@
 use log::warn;
-use std::{collections::HashMap, hash::Hash, time::Duration};
+use std::{collections::{HashMap, VecDeque}, hash::Hash, time::Duration};
+use naia_socket_shared::Instant;
 
 use crate::{
     world::entity::local_entity::LocalEntity, EntityDoesNotExistError, KeyGenerator,
@@ -12,6 +13,8 @@ pub struct LocalWorldManager<E: Copy + Eq + Hash> {
     world_to_local_entity: HashMap<E, LocalEntity>,
     local_to_world_entity: HashMap<LocalEntity, E>,
     reserved_entities: HashMap<E, LocalEntity>,
+    reserved_entity_ttl: Duration,
+    reserved_entities_ttls: VecDeque<(Instant, E)>,
 }
 
 impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
@@ -22,12 +25,17 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             world_to_local_entity: HashMap::new(),
             local_to_world_entity: HashMap::new(),
             reserved_entities: HashMap::new(),
+            reserved_entity_ttl: Duration::from_secs(60),
+            reserved_entities_ttls: VecDeque::new(),
         }
     }
 
     // Host entities
 
     pub(crate) fn host_reserve_entity(&mut self, world_entity: &E) -> LocalEntity {
+
+        self.process_reserved_entity_timeouts();
+
         warn!("Reserving LocalEntity because World Entity is not yet spawned.");
         warn!("Make sure to put a TTL on this LocalEntity in the future!");
 
@@ -37,6 +45,20 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         let host_entity = self.host_spawn_entity(world_entity);
         self.reserved_entities.insert(*world_entity, host_entity);
         host_entity
+    }
+
+    fn process_reserved_entity_timeouts(&mut self) {
+        let mut pop = false;
+        if let Some((timeout, world_entity)) = self.reserved_entities_ttls.front() {
+            if timeout.elapsed() >= self.reserved_entity_ttl {
+                pop = true;
+            }
+        }
+        if pop {
+            let (_, world_entity) = self.reserved_entities_ttls.pop_front().unwrap();
+            self.reserved_entities.remove(&world_entity);
+            warn!("A Entity reserved for spawning on the Remote Connection just timed out. Check that the reserved Entity is able to replicate to the Remote Connection.");
+        }
     }
 
     pub(crate) fn host_spawn_entity(&mut self, world_entity: &E) -> LocalEntity {
