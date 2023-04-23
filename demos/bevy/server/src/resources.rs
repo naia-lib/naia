@@ -10,7 +10,8 @@ pub struct Global {
     pub user_to_square_map: HashMap<UserKey, Entity>,
     pub user_to_cursor_map: HashMap<UserKey, Entity>,
     pub client_to_server_cursor_map: HashMap<Entity, Entity>,
-    pub server_baseline: Entity,
+    pub server_baseline_1: Entity,
+    pub server_baseline_2: Entity,
     pub client_baselines: HashMap<UserKey, Entity>,
     pub square_to_user_map: HashMap<Entity, UserKey>,
 }

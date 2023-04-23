@@ -9,6 +9,9 @@ pub enum ColorValue {
     Yellow,
     Green,
     White,
+    Purple,
+    Orange,
+    Aqua,
 }
 
 #[derive(Component, Replicate)]

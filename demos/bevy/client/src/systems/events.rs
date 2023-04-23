@@ -190,6 +190,9 @@ pub fn insert_component_events(
                                 ColorValue::Yellow => BevyColor::YELLOW,
                                 ColorValue::Green => BevyColor::GREEN,
                                 ColorValue::White => BevyColor::WHITE,
+                                ColorValue::Purple => BevyColor::PURPLE,
+                                ColorValue::Orange => BevyColor::ORANGE,
+                                ColorValue::Aqua => BevyColor::AQUAMARINE,
                             }
                         };
 
@@ -216,6 +219,9 @@ pub fn insert_component_events(
                                 ColorValue::Yellow => &global.yellow,
                                 ColorValue::Green => &global.green,
                                 ColorValue::White => &global.white,
+                                ColorValue::Purple => &global.purple,
+                                ColorValue::Orange => &global.orange,
+                                ColorValue::Aqua => &global.aqua,
                             }
                         };
                         commands
@@ -231,7 +237,18 @@ pub fn insert_component_events(
                     }
                     // Circle
                     ShapeValue::BigCircle => {
-                        let handle = &global.white;
+                        let handle = {
+                            match *color.value {
+                                ColorValue::Red => &global.red,
+                                ColorValue::Blue => &global.blue,
+                                ColorValue::Yellow => &global.yellow,
+                                ColorValue::Green => &global.green,
+                                ColorValue::White => &global.white,
+                                ColorValue::Purple => &global.purple,
+                                ColorValue::Orange => &global.orange,
+                                ColorValue::Aqua => &global.aqua,
+                            }
+                        };
                         commands
                             .entity(entity)
                             .insert(MaterialMesh2dBundle {
@@ -321,7 +338,7 @@ pub fn update_component_events(
                 if let Ok(relation) = relation_query.get(updated_entity) {
                     if let Some(baseline_entity) = relation.entity.get(&client) {
                         info!("get connecting line");
-                        for (line_entity, mut line) in line_query.iter_mut() {
+                        for (_line_entity, mut line) in line_query.iter_mut() {
                             if line.start_entity == updated_entity {
                                 info!("update connecting line");
                                 line.end_entity = baseline_entity;

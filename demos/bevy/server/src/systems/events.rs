@@ -17,10 +17,9 @@ use naia_bevy_server::{
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
-    components::{Color, ColorValue, Position, Relation, Shape, ShapeValue},
+    components::{Baseline, Color, ColorValue, Position, Relation, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
 };
-use naia_bevy_demo_shared::components::Baseline;
 
 use crate::resources::Global;
 
@@ -65,7 +64,7 @@ pub fn connect_events(
 
         // Color component
         let color = {
-            let color_value = match server.users_count() % 3 {
+            let color_value = match server.users_count() % 4 {
                 0 => ColorValue::Yellow,
                 1 => ColorValue::Red,
                 2 => ColorValue::Blue,
@@ -79,7 +78,7 @@ pub fn connect_events(
 
         // Relation component
         let mut relation = Relation::new();
-        relation.entity.set(&server, &global.server_baseline);
+        relation.entity.set(&server, &global.server_baseline_1);
 
         // Spawn entity
         let entity = commands
@@ -199,16 +198,20 @@ pub fn tick_events(
                     info!(" - have relation entity");
                     if let Some(user_key) = global.square_to_user_map.get(&square_entity) {
                         info!(" - have user key");
-                        if relation_entity == global.server_baseline {
-                            info!(" - relation is server baseline, switching to client baseline");
+                        if relation_entity == global.server_baseline_1 {
+                            info!(" - relation is server baseline 1, switching to server baseline 2");
+                            // switch to baseline 2
+                            relation.entity.set(&server, &global.server_baseline_2);
+                        } else if relation_entity == global.server_baseline_2 {
+                            info!(" - relation is server baseline 2, switching to client baseline");
                             // switch to client's baseline
                             if let Some(client_baseline) = global.client_baselines.get(&user_key) {
                                 relation.entity.set(&server, client_baseline);
                             }
                         } else {
-                            info!(" - relation is client baseline, switching to server baseline");
-                            // switch to server's baseline
-                            relation.entity.set(&server, &global.server_baseline);
+                            info!(" - relation is client baseline, switching to server baseline 1");
+                            // switch to baseline 1
+                            relation.entity.set(&server, &global.server_baseline_1);
                         }
                     }
                 }
@@ -246,7 +249,7 @@ pub fn insert_component_events(
 
                 // New Color component
                 let color = {
-                    let color_value = match server.users_count() % 3 {
+                    let color_value = match server.users_count() % 4 {
                         0 => ColorValue::Yellow,
                         1 => ColorValue::Red,
                         2 => ColorValue::Blue,

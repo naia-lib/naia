@@ -30,22 +30,42 @@ pub fn init(mut commands: Commands, mut server: Server) {
     // can receive updates from
     let main_room_key = server.make_room().key();
 
-    // Set up new baseline entity
-    let baseline = {
+    // Set up new baseline entities
+    let baseline_1_component = {
         let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
         let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
         Baseline::new(x, y)
     };
 
-    let server_baseline = commands
+    let baseline_1_entity = commands
         // Spawn new Entity
         .spawn_empty()
         // MUST call this to begin replication
         .enable_replication(&mut server)
         // Insert Baseline component
-        .insert(baseline)
+        .insert(baseline_1_component)
         // Insert Color component
-        .insert(Color::new(ColorValue::White))
+        .insert(Color::new(ColorValue::Purple))
+        // Insert Shape component (Big Circle)
+        .insert(Shape::new(ShapeValue::BigCircle))
+        // return Entity id
+        .id();
+
+    let baseline_2_component = {
+        let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
+        let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
+        Baseline::new(x, y)
+    };
+
+    let baseline_2_entity = commands
+        // Spawn new Entity
+        .spawn_empty()
+        // MUST call this to begin replication
+        .enable_replication(&mut server)
+        // Insert Baseline component
+        .insert(baseline_2_component)
+        // Insert Color component
+        .insert(Color::new(ColorValue::Orange))
         // Insert Shape component (Big Circle)
         .insert(Shape::new(ShapeValue::BigCircle))
         // return Entity id
@@ -57,15 +77,21 @@ pub fn init(mut commands: Commands, mut server: Server) {
         user_to_square_map: HashMap::new(),
         user_to_cursor_map: HashMap::new(),
         client_to_server_cursor_map: HashMap::new(),
-        server_baseline,
+        server_baseline_1: baseline_1_entity,
+        server_baseline_2: baseline_2_entity,
         client_baselines: HashMap::new(),
         square_to_user_map: HashMap::new(),
     };
 
-    // Add baseline entity to main room
+    // Add baseline entity 1 to main room
     server
         .room_mut(&global.main_room_key)
-        .add_entity(&server_baseline);
+        .add_entity(&baseline_1_entity);
+
+    // Add baseline entity 2 to main room
+    server
+        .room_mut(&global.main_room_key)
+        .add_entity(&baseline_2_entity);
 
     // Insert Global Resource
     commands.insert_resource(global);
