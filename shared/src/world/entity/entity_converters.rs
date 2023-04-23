@@ -17,10 +17,10 @@ use crate::{
 pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConverter<E> {
     fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>>;
     fn to_global_entity_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E>;
-    fn entity_is_host_owned(&self, entity: &E) -> bool;
+    fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool;
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
-    fn remote_spawn_entity(&mut self, entity: &E);
+    fn remote_spawn_entity(&mut self, entity: &E, user_key: &u64);
     fn remote_despawn_entity(&mut self, entity: &E);
 }
 
@@ -198,7 +198,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
         };
         if !self
             .global_world_manager
-            .entity_is_host_owned(&entity)
+            .entity_can_relate_to_user(&entity, self.local_world_manager.get_user_key())
         {
             return Err(EntityDoesNotExistError);
         }

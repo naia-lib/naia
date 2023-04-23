@@ -135,11 +135,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self
     }
 
-    fn entity_is_host_owned(&self, entity: &E) -> bool {
+    fn entity_can_relate_to_user(&self, entity: &E, _user_key: &u64) -> bool {
         if let Some(record) = self.entity_records.get(entity) {
             return match record.owner {
-                EntityOwner::Client => true,
-                _ => false,
+                EntityOwner::Server | EntityOwner::Client => true,
+                EntityOwner::Local => false,
             };
         }
         return false;
@@ -154,7 +154,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.diff_handler.clone()
     }
 
-    fn remote_spawn_entity(&mut self, entity: &E) {
+    fn remote_spawn_entity(&mut self, entity: &E, _user_key: &u64) {
         if self.entity_records.contains_key(entity) {
             panic!("entity already initialized!");
         }

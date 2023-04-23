@@ -40,6 +40,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     pub fn new(
         address: &Option<SocketAddr>,
         host_type: HostType,
+        user_key: u64,
         connection_config: &ConnectionConfig,
         channel_kinds: &ChannelKinds,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
@@ -52,7 +53,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
             host_world_manager: HostWorldManager::new(address, global_world_manager),
             remote_world_manager: RemoteWorldManager::new(),
             remote_world_reader: RemoteWorldReader::new(),
-            local_world_manager: LocalWorldManager::new(),
+            local_world_manager: LocalWorldManager::new(user_key),
         }
     }
 

@@ -58,27 +58,29 @@ pub fn sync_relation_lines(
 ) {
     for (mut line_transform, line_entities) in line_query.iter_mut() {
 
-        // if !line_entities.visible {
-        //     line_transform.translation.x = 0.0;
-        //     line_transform.translation.y = 0.0;
-        //     line_transform.scale.x = 0.0;
-        //     continue;
-        // }
-
-        if let Ok(start) = position_query.get(line_entities.start_entity) {
-            if let Ok(end) = baseline_query.get(line_entities.end_entity) {
-                let start_vec2 = Vec2::new(*start.x as f32, *start.y as f32);
-                let end_vec2 = Vec2::new(*end.x as f32, *end.y as f32);
-                line_transform.translation.x = start_vec2.x;
-                line_transform.translation.y = start_vec2.y;
-                line_transform.scale.x = start_vec2.distance(end_vec2);
-                let angle = {
-                    let dx = end_vec2.x - start_vec2.x;
-                    let dy = end_vec2.y - start_vec2.y;
-                    dy.atan2(dx)
-                };
-                line_transform.rotation = Quat::from_rotation_z(angle);
-            }
+        if line_entities.end_entity.is_none() {
+            line_transform.translation.x = 0.0;
+            line_transform.translation.y = 0.0;
+            line_transform.scale.x = 0.0;
+            continue;
         }
+
+        let Ok(start) = position_query.get(line_entities.start_entity) else {
+            continue;
+        };
+        let Ok(end) = baseline_query.get(line_entities.end_entity.unwrap()) else {
+            continue;
+        };
+        let start_vec2 = Vec2::new(*start.x as f32, *start.y as f32);
+        let end_vec2 = Vec2::new(*end.x as f32, *end.y as f32);
+        line_transform.translation.x = start_vec2.x;
+        line_transform.translation.y = start_vec2.y;
+        line_transform.scale.x = start_vec2.distance(end_vec2);
+        let angle = {
+            let dx = end_vec2.x - start_vec2.x;
+            let dy = end_vec2.y - start_vec2.y;
+            dy.atan2(dx)
+        };
+        line_transform.rotation = Quat::from_rotation_z(angle);
     }
 }

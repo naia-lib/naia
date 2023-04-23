@@ -3,7 +3,7 @@ use std::default::Default;
 use bevy::sprite::Anchor;
 use bevy::{
     prelude::{
-        info, warn, BuildChildren, Color as BevyColor, Commands, DespawnRecursiveExt, Entity,
+        info, BuildChildren, Color as BevyColor, Commands, DespawnRecursiveExt, Entity,
         EventReader, Query, Res, ResMut, Sprite, SpriteBundle, Transform, TransformBundle, Vec2,
         VisibilityBundle,
     },
@@ -275,27 +275,24 @@ pub fn insert_component_events(
         for square_entity in events.read::<Relation>() {
             info!("add Relation Component to entity");
             if let Ok(relation) = relation_query.get(square_entity) {
-                if let Some(baseline_entity) = relation.entity.get(&client) {
-                    info!("spawn connecting line");
-                    // initialize connecting line
-                    commands
-                        .spawn(TransformBundle::default())
-                        .insert(VisibilityBundle::default())
-                        .insert(Line::new(square_entity, baseline_entity))
-                        .with_children(|parent| {
-                            parent.spawn(SpriteBundle {
-                                sprite: Sprite {
-                                    color: BevyColor::GRAY,
-                                    custom_size: Some(Vec2::new(1.0, 1.0)),
-                                    anchor: Anchor::CenterLeft,
-                                    ..Default::default()
-                                },
+                let baseline_entity = relation.entity.get(&client);
+                info!("spawn connecting line");
+                // initialize connecting line
+                commands
+                    .spawn(TransformBundle::default())
+                    .insert(VisibilityBundle::default())
+                    .insert(Line::new(square_entity, baseline_entity))
+                    .with_children(|parent| {
+                        parent.spawn(SpriteBundle {
+                            sprite: Sprite {
+                                color: BevyColor::GRAY,
+                                custom_size: Some(Vec2::new(1.0, 1.0)),
+                                anchor: Anchor::CenterLeft,
                                 ..Default::default()
-                            });
+                            },
+                            ..Default::default()
                         });
-                } else {
-                    warn!("no baseline entity found for relation");
-                }
+                    });
             }
         }
     }
@@ -334,19 +331,13 @@ pub fn update_component_events(
             }
             // Update Relation line
             for (_server_tick, updated_entity) in events.read::<Relation>() {
-                info!("update Relation Component on entity");
                 if let Ok(relation) = relation_query.get(updated_entity) {
-                    if let Some(baseline_entity) = relation.entity.get(&client) {
-                        info!("get connecting line");
-                        for (_line_entity, mut line) in line_query.iter_mut() {
-                            if line.start_entity == updated_entity {
-                                info!("update connecting line");
-                                line.end_entity = baseline_entity;
-                                break;
-                            }
+                    let baseline_entity = relation.entity.get(&client);
+                    for (_line_entity, mut line) in line_query.iter_mut() {
+                        if line.start_entity == updated_entity {
+                            line.end_entity = baseline_entity;
+                            break;
                         }
-                    } else {
-                        warn!("no baseline entity found for relation");
                     }
                 }
             }

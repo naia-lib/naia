@@ -7,6 +7,7 @@ use crate::{
 };
 
 pub struct LocalWorldManager<E: Copy + Eq + Hash> {
+    user_key: u64,
     host_entity_generator: KeyGenerator<u16>,
     world_to_local_entity: HashMap<E, LocalEntity>,
     local_to_world_entity: HashMap<LocalEntity, E>,
@@ -14,8 +15,9 @@ pub struct LocalWorldManager<E: Copy + Eq + Hash> {
 }
 
 impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
-    pub fn new() -> Self {
+    pub fn new(user_key: u64) -> Self {
         Self {
+            user_key,
             host_entity_generator: KeyGenerator::new(Duration::from_secs(60)),
             world_to_local_entity: HashMap::new(),
             local_to_world_entity: HashMap::new(),
@@ -128,6 +130,10 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         } else {
             panic!("Trying to despawn a remote entity that does not exist!");
         }
+    }
+
+    pub fn get_user_key(&self) -> &u64 {
+        &self.user_key
     }
 }
 

@@ -39,6 +39,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             base: BaseConnection::new(
                 &None,
                 HostType::Client,
+                0,
                 connection_config,
                 channel_kinds,
                 global_world_manager,

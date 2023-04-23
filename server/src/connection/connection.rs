@@ -2,11 +2,7 @@ use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter,
-    EntityEvent, HostType, HostWorldEvents, Instant, PacketType, Protocol, Serde, SerdeErr,
-    StandardHeader, Tick, WorldMutType, WorldRefType,
-};
+use naia_shared::{BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityConverter, EntityEvent, HostType, HostWorldEvents, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -44,6 +40,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             base: BaseConnection::new(
                 &Some(*user_address),
                 HostType::Server,
+                user_key.to_u64(),
                 connection_config,
                 channel_kinds,
                 global_world_manager,

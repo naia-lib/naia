@@ -4,11 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
-    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator,
-    Replicate,
-};
+use naia_shared::{BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{world::mut_channel::MutChannelData, EntityOwner, UserKey};
@@ -134,7 +130,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             panic!("entity record does not exist!");
         };
 
-        if record.owner != EntityOwner::ClientWaiting {
+        if record.owner != EntityOwner::ClientWaiting(*user_key) {
             panic!("client entity record is not waiting to be updated!");
         }
 
@@ -151,11 +147,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self
     }
 
-    fn entity_is_host_owned(&self, entity: &E) -> bool {
+    fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool {
         if let Some(record) = self.entity_records.get(entity) {
             return match record.owner {
                 EntityOwner::Server => true,
-                _ => false,
+                EntityOwner::Client(owning_user_key) | EntityOwner::ClientWaiting(owning_user_key) => {
+                    return owning_user_key.to_u64() == *user_key;
+                },
+                EntityOwner::Local => false,
             };
         }
         return false;
@@ -170,14 +169,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.diff_handler.clone()
     }
 
-    fn remote_spawn_entity(&mut self, entity: &E) {
+    fn remote_spawn_entity(&mut self, entity: &E, user_key: &u64) {
         if self.entity_records.contains_key(entity) {
             panic!("entity already initialized!");
         }
         let global_entity = self.global_entity_map.insert(*entity);
         self.entity_records.insert(
             *entity,
-            GlobalEntityRecord::new(global_entity, EntityOwner::ClientWaiting),
+            GlobalEntityRecord::new(global_entity, EntityOwner::ClientWaiting(UserKey::from_u64(*user_key))),
         );
     }
 
