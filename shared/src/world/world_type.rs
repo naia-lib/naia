@@ -3,13 +3,13 @@ use naia_serde::SerdeErr;
 use crate::world::{
     component::{
         component_kinds::ComponentKind,
-        component_update::ComponentUpdate,
+        component_update::{ComponentFieldUpdate, ComponentUpdate},
         replica_ref::{
             ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
         },
         replicate::Replicate,
     },
-    entity::entity_converters::NetEntityHandleConverter,
+    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -68,10 +68,18 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// reads an incoming stream into a component
     fn component_apply_update(
         &mut self,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &E,
         component_kind: &ComponentKind,
         update: ComponentUpdate,
+    ) -> Result<(), SerdeErr>;
+    /// reads an incoming stream into a component
+    fn component_apply_field_update(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        entity: &E,
+        component_kind: &ComponentKind,
+        update: ComponentFieldUpdate,
     ) -> Result<(), SerdeErr>;
     /// mirrors the whole state of two different entities
     /// (setting 1st entity's component to 2nd entity's component's state)

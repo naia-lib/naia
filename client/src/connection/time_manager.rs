@@ -1,4 +1,3 @@
-use log::warn;
 use std::time::Duration;
 
 use naia_shared::{
@@ -389,7 +388,7 @@ fn adjust_time(
         tick_instant,
     );
     if sequence_less_than(new_tick, *tick) {
-        warn!("Attempted to Tick Backwards");
+        // warn!("Attempted to Tick Backwards");
     } else {
         *tick = new_tick;
     }

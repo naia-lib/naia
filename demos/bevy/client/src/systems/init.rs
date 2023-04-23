@@ -1,12 +1,6 @@
-use bevy_asset::Assets;
-use bevy_core_pipeline::prelude::Camera2dBundle;
-use bevy_ecs::system::{Commands, ResMut};
-use bevy_log::info;
-use bevy_render::{
-    color::Color,
-    mesh::{shape, Mesh},
+use bevy::prelude::{
+    info, shape, Assets, Camera2dBundle, Color, ColorMaterial, Commands, Mesh, ResMut,
 };
-use bevy_sprite::ColorMaterial;
 
 use naia_bevy_client::{transport::webrtc, Client};
 use naia_bevy_demo_shared::messages::Auth;
@@ -32,11 +26,14 @@ pub fn init(
     let mut global = Global::default();
 
     // Load colors
-    global.white = materials.add(ColorMaterial::from(Color::WHITE));
     global.red = materials.add(ColorMaterial::from(Color::RED));
     global.blue = materials.add(ColorMaterial::from(Color::BLUE));
     global.yellow = materials.add(ColorMaterial::from(Color::YELLOW));
     global.green = materials.add(ColorMaterial::from(Color::GREEN));
+    global.white = materials.add(ColorMaterial::from(Color::WHITE));
+    global.purple = materials.add(ColorMaterial::from(Color::PURPLE));
+    global.orange = materials.add(ColorMaterial::from(Color::ORANGE));
+    global.aqua = materials.add(ColorMaterial::from(Color::AQUAMARINE));
 
     // Load shapes
     global.circle = meshes.add(shape::Circle::new(6.).into());

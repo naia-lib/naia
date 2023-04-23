@@ -2,7 +2,10 @@ use std::{any::TypeId, collections::HashMap};
 
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
-use crate::{ComponentUpdate, NetEntityHandleConverter, Replicate, ReplicateBuilder};
+use crate::{
+    ComponentFieldUpdate, ComponentUpdate, LocalEntity, LocalEntityAndGlobalEntityConverter,
+    Replicate, ReplicateBuilder,
+};
 
 type NetId = u16;
 
@@ -76,7 +79,7 @@ impl ComponentKinds {
     pub fn read(
         &self,
         reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
         return self
@@ -89,6 +92,23 @@ impl ComponentKinds {
         return self
             .kind_to_builder(&component_kind)
             .read_create_update(reader);
+    }
+
+    pub fn split_update(
+        &self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        component_kind: &ComponentKind,
+        update: ComponentUpdate,
+    ) -> Result<
+        (
+            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<ComponentUpdate>,
+        ),
+        SerdeErr,
+    > {
+        return self
+            .kind_to_builder(component_kind)
+            .split_update(converter, update);
     }
 
     pub fn kind_to_name(&self, component_kind: &ComponentKind) -> String {

@@ -1,9 +1,6 @@
 use std::default::Default;
 
-use bevy_asset::Handle;
-use bevy_ecs::{entity::Entity, prelude::Resource};
-use bevy_render::mesh::Mesh;
-use bevy_sprite::ColorMaterial;
+use bevy::prelude::{ColorMaterial, Entity, Handle, Mesh, Resource};
 
 use naia_bevy_client::CommandHistory;
 use naia_bevy_demo_shared::messages::KeyCommand;
@@ -33,6 +30,9 @@ pub struct Global {
     pub yellow: Handle<ColorMaterial>,
     pub green: Handle<ColorMaterial>,
     pub white: Handle<ColorMaterial>,
+    pub purple: Handle<ColorMaterial>,
+    pub orange: Handle<ColorMaterial>,
+    pub aqua: Handle<ColorMaterial>,
     pub circle: Handle<Mesh>,
 }
 
@@ -43,12 +43,15 @@ impl Default for Global {
             cursor_entity: None,
             queued_command: None,
             command_history: CommandHistory::default(),
-            white: Handle::default(),
+            circle: Handle::default(),
             red: Handle::default(),
             blue: Handle::default(),
             yellow: Handle::default(),
             green: Handle::default(),
-            circle: Handle::default(),
+            white: Handle::default(),
+            purple: Handle::default(),
+            orange: Handle::default(),
+            aqua: Handle::default(),
         }
     }
 }

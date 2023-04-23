@@ -5,7 +5,8 @@ use naia_serde::{BitWrite, BitWriter, Serde, UnsignedVariableInteger};
 use crate::{
     messages::{message_container::MessageContainer, message_kinds::MessageKinds},
     types::MessageIndex,
-    wrapping_diff, NetEntityHandleConverter,
+    world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
+    wrapping_diff,
 };
 
 // Sender
@@ -15,7 +16,7 @@ impl IndexedMessageWriter {
     pub fn write_messages(
         message_kinds: &MessageKinds,
         outgoing_messages: &mut VecDeque<(MessageIndex, MessageContainer)>,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
@@ -91,7 +92,7 @@ impl IndexedMessageWriter {
 
     fn write_message(
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut dyn BitWrite,
         last_written_id: &Option<MessageIndex>,
         message_index: &MessageIndex,

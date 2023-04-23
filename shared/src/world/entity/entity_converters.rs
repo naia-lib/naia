@@ -7,98 +7,203 @@ use crate::{
     bigmap::BigMapKey,
     world::{
         entity::{
-            entity_handle::EntityHandle, error::EntityDoesNotExistError, net_entity::OwnedNetEntity,
+            error::EntityDoesNotExistError, global_entity::GlobalEntity, local_entity::LocalEntity,
         },
         host::mut_channel::MutChannelType,
     },
-    ComponentKind, GlobalDiffHandler,
+    ComponentKind, GlobalDiffHandler, LocalWorldManager,
 };
 
-pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityHandleConverter<E> {
+pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConverter<E> {
     fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>>;
-    fn to_handle_converter(&self) -> &dyn EntityHandleConverter<E>;
+    fn to_global_entity_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E>;
+    fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool;
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
-    fn despawn(&mut self, entity: &E);
+    fn remote_spawn_entity(&mut self, entity: &E, user_key: &u64);
+    fn remote_despawn_entity(&mut self, entity: &E);
 }
 
-pub trait EntityHandleConverter<E: Copy + Eq + Hash> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError>;
-    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError>;
+pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {
+    fn global_entity_to_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<E, EntityDoesNotExistError>;
+    fn entity_to_global_entity(&self, entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError>;
 }
 
-pub trait NetEntityHandleConverter {
-    fn handle_to_net_entity(
+pub trait LocalEntityAndGlobalEntityConverter {
+    fn global_entity_to_local_entity(
         &self,
-        entity_handle: &EntityHandle,
-    ) -> Result<OwnedNetEntity, EntityDoesNotExistError>;
-    fn net_entity_to_handle(
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError>;
+    fn local_entity_to_global_entity(
         &self,
-        net_entity: &OwnedNetEntity,
-    ) -> Result<EntityHandle, EntityDoesNotExistError>;
+        local_entity: &LocalEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError>;
 }
 
-pub trait NetEntityConverter<E: Copy + Eq + Hash> {
-    fn entity_to_net_entity(&self, entity: &E) -> Result<OwnedNetEntity, EntityDoesNotExistError>;
-    fn net_entity_to_entity(
+pub trait LocalEntityConverter<E: Copy + Eq + Hash> {
+    fn entity_to_local_entity(&self, entity: &E) -> Result<LocalEntity, EntityDoesNotExistError>;
+    fn local_entity_to_entity(
         &self,
-        net_entity: &OwnedNetEntity,
+        local_entity: &LocalEntity,
     ) -> Result<E, EntityDoesNotExistError>;
 }
 
 pub struct FakeEntityConverter;
 
-impl NetEntityHandleConverter for FakeEntityConverter {
-    fn handle_to_net_entity(
+impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
+    fn global_entity_to_local_entity(
         &self,
-        _: &EntityHandle,
-    ) -> Result<OwnedNetEntity, EntityDoesNotExistError> {
-        Ok(OwnedNetEntity::Host(0))
+        _: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        Ok(LocalEntity::Host(0))
     }
 
-    fn net_entity_to_handle(
+    fn local_entity_to_global_entity(
         &self,
-        _: &OwnedNetEntity,
-    ) -> Result<EntityHandle, EntityDoesNotExistError> {
-        Ok(EntityHandle::from_u64(0))
+        _: &LocalEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        Ok(GlobalEntity::from_u64(0))
+    }
+}
+
+impl LocalEntityAndGlobalEntityConverterMut for FakeEntityConverter {
+    fn get_or_reserve_host_entity(
+        &mut self,
+        _global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        Ok(LocalEntity::Host(0))
     }
 }
 
 pub struct EntityConverter<'a, 'b, E: Eq + Copy + Hash> {
-    handle_converter: &'a dyn EntityHandleConverter<E>,
-    net_entity_converter: &'b dyn NetEntityConverter<E>,
+    global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
+    local_entity_converter: &'b dyn LocalEntityConverter<E>,
 }
 
 impl<'a, 'b, E: Eq + Copy + Hash> EntityConverter<'a, 'b, E> {
     pub fn new(
-        handle_converter: &'a dyn EntityHandleConverter<E>,
-        net_entity_converter: &'b dyn NetEntityConverter<E>,
+        global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
+        local_entity_converter: &'b dyn LocalEntityConverter<E>,
     ) -> Self {
         Self {
-            handle_converter,
-            net_entity_converter,
+            global_entity_converter,
+            local_entity_converter,
         }
     }
 }
 
-impl<'a, 'b, E: Copy + Eq + Hash> NetEntityHandleConverter for EntityConverter<'a, 'b, E> {
-    fn handle_to_net_entity(
+impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
+    for EntityConverter<'a, 'b, E>
+{
+    fn global_entity_to_local_entity(
         &self,
-        entity_handle: &EntityHandle,
-    ) -> Result<OwnedNetEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self.handle_converter.handle_to_entity(entity_handle) {
-            return self.net_entity_converter.entity_to_net_entity(&entity);
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self
+            .global_entity_converter
+            .global_entity_to_entity(global_entity)
+        {
+            return self.local_entity_converter.entity_to_local_entity(&entity);
         }
         return Err(EntityDoesNotExistError);
     }
 
-    fn net_entity_to_handle(
+    fn local_entity_to_global_entity(
         &self,
-        net_entity: &OwnedNetEntity,
-    ) -> Result<EntityHandle, EntityDoesNotExistError> {
-        if let Ok(entity) = self.net_entity_converter.net_entity_to_entity(net_entity) {
-            return self.handle_converter.entity_to_handle(&entity);
+        local_entity: &LocalEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self
+            .local_entity_converter
+            .local_entity_to_entity(local_entity)
+        {
+            return self
+                .global_entity_converter
+                .entity_to_global_entity(&entity);
         }
         return Err(EntityDoesNotExistError);
+    }
+}
+
+// Probably only should be used for writing messages
+pub struct EntityConverterMut<'a, 'b, E: Eq + Copy + Hash> {
+    global_world_manager: &'a dyn GlobalWorldManagerType<E>,
+    local_world_manager: &'b mut LocalWorldManager<E>,
+}
+
+impl<'a, 'b, E: Eq + Copy + Hash> EntityConverterMut<'a, 'b, E> {
+    pub fn new(
+        global_world_manager: &'a dyn GlobalWorldManagerType<E>,
+        local_world_manager: &'b mut LocalWorldManager<E>,
+    ) -> Self {
+        Self {
+            global_world_manager,
+            local_world_manager,
+        }
+    }
+}
+
+pub trait LocalEntityAndGlobalEntityConverterMut: LocalEntityAndGlobalEntityConverter {
+    fn get_or_reserve_host_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError>;
+}
+
+impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
+    for EntityConverterMut<'a, 'b, E>
+{
+    fn global_entity_to_local_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self
+            .global_world_manager
+            .global_entity_to_entity(global_entity)
+        {
+            return self.local_world_manager.entity_to_local_entity(&entity);
+        }
+        return Err(EntityDoesNotExistError);
+    }
+
+    fn local_entity_to_global_entity(
+        &self,
+        local_entity: &LocalEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self
+            .local_world_manager
+            .local_entity_to_entity(local_entity)
+        {
+            return self.global_world_manager.entity_to_global_entity(&entity);
+        }
+        return Err(EntityDoesNotExistError);
+    }
+}
+
+impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
+    for EntityConverterMut<'a, 'b, E>
+{
+    fn get_or_reserve_host_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        let Ok(entity) = self
+            .global_world_manager
+            .global_entity_to_entity(global_entity) else {
+            return Err(EntityDoesNotExistError);
+        };
+        if !self
+            .global_world_manager
+            .entity_can_relate_to_user(&entity, self.local_world_manager.get_user_key())
+        {
+            return Err(EntityDoesNotExistError);
+        }
+        let result = self.local_world_manager.entity_to_local_entity(&entity);
+        if result.is_ok() {
+            return result;
+        }
+        return Ok(self.local_world_manager.host_reserve_entity(&entity));
     }
 }

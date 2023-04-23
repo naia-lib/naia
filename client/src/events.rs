@@ -191,7 +191,7 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn receive_entity_events(&mut self, entity_events: Vec<EntityEvent<E>>) {
+    pub(crate) fn receive_world_events(&mut self, entity_events: Vec<EntityEvent<E>>) {
         for event in entity_events {
             match event {
                 EntityEvent::SpawnEntity(entity) => {

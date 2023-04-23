@@ -5,8 +5,9 @@ use std::{
 };
 
 use naia_shared::{
-    BigMap, ComponentKind, EntityDoesNotExistError, EntityHandle, EntityHandleConverter,
-    GlobalDiffHandler, GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate,
+    BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
+    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator,
+    Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -16,8 +17,8 @@ pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
     /// Information about entities in the internal ECS World
     entity_records: HashMap<E, GlobalEntityRecord>,
-    /// Map from the internal [`EntityHandle`] to the external (e.g. Bevy's) entity id
-    handle_entity_map: BigMap<EntityHandle, E>,
+    /// Map from the internal [`GlobalEntity`] to the external (e.g. Bevy's) entity id
+    global_entity_map: BigMap<GlobalEntity, E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
@@ -25,7 +26,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         Self {
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             entity_records: HashMap::default(),
-            handle_entity_map: BigMap::new(),
+            global_entity_map: BigMap::new(),
         }
     }
 
@@ -56,21 +57,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         if self.entity_records.contains_key(entity) {
             panic!("entity already initialized!");
         }
-        let entity_handle = self.handle_entity_map.insert(*entity);
+        let global_entity = self.global_entity_map.insert(*entity);
         self.entity_records.insert(
             *entity,
-            GlobalEntityRecord::new(entity_handle, EntityOwner::Server),
-        );
-    }
-
-    pub fn remote_spawn_entity(&mut self, entity: &E, user_key: &UserKey) {
-        if self.entity_records.contains_key(entity) {
-            panic!("entity already initialized!");
-        }
-        let entity_handle = self.handle_entity_map.insert(*entity);
-        self.entity_records.insert(
-            *entity,
-            GlobalEntityRecord::new(entity_handle, EntityOwner::Client(*user_key)),
+            GlobalEntityRecord::new(global_entity, EntityOwner::Server),
         );
     }
 
@@ -87,15 +77,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
 
         self.entity_records.remove(entity)
-    }
-
-    pub fn remote_despawn_entity(&mut self, entity: &E) {
-        // Despawn from World Record
-        if !self.entity_records.contains_key(entity) {
-            panic!("entity does not exist!");
-        }
-
-        self.entity_records.remove(entity);
     }
 
     // Component Kinds
@@ -147,6 +128,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             .expect("Haven't initialized DiffHandler")
             .deregister_component(entity, component_kind);
     }
+
+    pub fn remote_spawn_entity_record(&mut self, entity: &E, user_key: &UserKey) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+
+        if record.owner != EntityOwner::ClientWaiting(*user_key) {
+            panic!("client entity record is not waiting to be updated!");
+        }
+
+        record.owner = EntityOwner::Client(*user_key);
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorldManager<E> {
@@ -154,8 +147,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.component_kinds(entity)
     }
 
-    fn to_handle_converter(&self) -> &dyn EntityHandleConverter<E> {
+    fn to_global_entity_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E> {
         self
+    }
+
+    fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool {
+        if let Some(record) = self.entity_records.get(entity) {
+            return match record.owner {
+                EntityOwner::Server => true,
+                EntityOwner::Client(owning_user_key)
+                | EntityOwner::ClientWaiting(owning_user_key) => {
+                    return owning_user_key.to_u64() == *user_key;
+                }
+                EntityOwner::Local => false,
+            };
+        }
+        return false;
     }
 
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
@@ -167,28 +174,47 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.diff_handler.clone()
     }
 
-    fn despawn(&mut self, entity: &E) {
+    fn remote_spawn_entity(&mut self, entity: &E, user_key: &u64) {
+        if self.entity_records.contains_key(entity) {
+            panic!("entity already initialized!");
+        }
+        let global_entity = self.global_entity_map.insert(*entity);
+        self.entity_records.insert(
+            *entity,
+            GlobalEntityRecord::new(
+                global_entity,
+                EntityOwner::ClientWaiting(UserKey::from_u64(*user_key)),
+            ),
+        );
+    }
+
+    fn remote_despawn_entity(&mut self, entity: &E) {
         let record = self
             .entity_records
             .remove(entity)
             .expect("Cannot despawn non-existant entity!");
-        let handle = record.entity_handle;
-        self.handle_entity_map.remove(&handle);
+        let global_entity = record.global_entity;
+        self.global_entity_map.remove(&global_entity);
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for GlobalWorldManager<E> {
-    fn handle_to_entity(&self, handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
-        if let Some(entity) = self.handle_entity_map.get(handle) {
+impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E>
+    for GlobalWorldManager<E>
+{
+    fn global_entity_to_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<E, EntityDoesNotExistError> {
+        if let Some(entity) = self.global_entity_map.get(global_entity) {
             Ok(*entity)
         } else {
             Err(EntityDoesNotExistError)
         }
     }
 
-    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
+    fn entity_to_global_entity(&self, entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {
         if let Some(record) = self.entity_records.get(entity) {
-            Ok(record.entity_handle)
+            Ok(record.global_entity)
         } else {
             Err(EntityDoesNotExistError)
         }

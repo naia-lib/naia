@@ -1,21 +1,34 @@
-use std::any::Any;
+use std::{any::Any, collections::HashSet};
 
 use naia_serde::BitWrite;
 
-use crate::{EntityHandle, Message, MessageKind, MessageKinds, NetEntityHandleConverter};
+use crate::{
+    world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut, LocalEntity,
+    LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds,
+};
 
 #[derive(Clone)]
 pub struct MessageContainer {
     inner: Box<dyn Message>,
-    bit_length: u32,
+    bit_length: Option<u32>,
 }
 
 impl MessageContainer {
-    pub fn from(message: Box<dyn Message>, converter: &dyn NetEntityHandleConverter) -> Self {
+    pub fn from_write(
+        message: Box<dyn Message>,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+    ) -> Self {
         let bit_length = message.bit_length(converter);
         Self {
             inner: message,
-            bit_length,
+            bit_length: Some(bit_length),
+        }
+    }
+
+    pub fn from_read(message: Box<dyn Message>) -> Self {
+        Self {
+            inner: message,
+            bit_length: None,
         }
     }
 
@@ -24,28 +37,20 @@ impl MessageContainer {
     }
 
     pub fn bit_length(&self) -> u32 {
-        self.bit_length
+        self.bit_length.expect("bit_length should never be called on a MessageContainer that was created from a read operation")
     }
 
     pub fn write(
         &self,
         message_kinds: &MessageKinds,
         writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
         if writer.is_counter() {
-            writer.write_bits(self.bit_length);
+            writer.write_bits(self.bit_length());
         } else {
             self.inner.write(message_kinds, writer, converter);
         }
-    }
-
-    pub fn has_entity_properties(&self) -> bool {
-        return self.inner.has_entity_properties();
-    }
-
-    pub fn entities(&self) -> Vec<EntityHandle> {
-        return self.inner.entities();
     }
 
     pub fn is_fragment(&self) -> bool {
@@ -58,5 +63,13 @@ impl MessageContainer {
 
     pub fn kind(&self) -> MessageKind {
         return self.inner.kind();
+    }
+
+    pub fn relations_waiting(&self) -> Option<HashSet<LocalEntity>> {
+        return self.inner.relations_waiting();
+    }
+
+    pub fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        self.inner.relations_complete(converter);
     }
 }
