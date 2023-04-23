@@ -29,11 +29,15 @@ pub fn init(mut commands: Commands, mut server: Server) {
     // can receive updates from
     let main_room_key = server.make_room().key();
 
-    // Resources
-    commands.insert_resource(Global {
+    // Init Global Resource
+    let global = Global {
         main_room_key,
         user_to_square_map: HashMap::new(),
         user_to_cursor_map: HashMap::new(),
         client_to_server_cursor_map: HashMap::new(),
-    })
+        square_to_user_map: HashMap::new(),
+    };
+
+    // Insert Global Resource
+    commands.insert_resource(global);
 }

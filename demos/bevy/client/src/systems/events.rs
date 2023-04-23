@@ -1,12 +1,12 @@
-use bevy_ecs::{
-    event::EventReader,
-    system::{Commands, Query, Res, ResMut},
+use std::default::Default;
+
+use bevy::{
+    prelude::{
+        info, Color as BevyColor, Commands, EventReader, Query, Res, ResMut, Sprite, SpriteBundle,
+        Transform, Vec2,
+    },
+    sprite::MaterialMesh2dBundle,
 };
-use bevy_log::info;
-use bevy_math::Vec2;
-use bevy_render::color::Color as BevyColor;
-use bevy_sprite::{MaterialMesh2dBundle, Sprite, SpriteBundle};
-use bevy_transform::components::Transform;
 
 use naia_bevy_client::{
     events::{
@@ -52,7 +52,7 @@ pub fn connect_events(
         };
 
         // Spawn Cursor Entity
-        let entity = commands
+        let cursor_entity = commands
             // Spawn new Square Entity
             .spawn_empty()
             // MUST call this to begin replication
@@ -65,14 +65,14 @@ pub fn connect_events(
             .id();
 
         // Insert SpriteBundle locally only
-        commands.entity(entity).insert(MaterialMesh2dBundle {
+        commands.entity(cursor_entity).insert(MaterialMesh2dBundle {
             mesh: global.circle.clone().into(),
             material: global.white.clone(),
             transform: Transform::from_xyz(0.0, 0.0, 1.0),
             ..Default::default()
         });
 
-        global.cursor_entity = Some(entity);
+        global.cursor_entity = Some(cursor_entity);
     }
 }
 
@@ -177,6 +177,10 @@ pub fn insert_component_events(
                                 ColorValue::Blue => BevyColor::BLUE,
                                 ColorValue::Yellow => BevyColor::YELLOW,
                                 ColorValue::Green => BevyColor::GREEN,
+                                ColorValue::White => BevyColor::WHITE,
+                                ColorValue::Purple => BevyColor::PURPLE,
+                                ColorValue::Orange => BevyColor::ORANGE,
+                                ColorValue::Aqua => BevyColor::AQUAMARINE,
                             }
                         };
 
@@ -202,6 +206,10 @@ pub fn insert_component_events(
                                 ColorValue::Blue => &global.blue,
                                 ColorValue::Yellow => &global.yellow,
                                 ColorValue::Green => &global.green,
+                                ColorValue::White => &global.white,
+                                ColorValue::Purple => &global.purple,
+                                ColorValue::Orange => &global.orange,
+                                ColorValue::Aqua => &global.aqua,
                             }
                         };
                         commands
@@ -219,6 +227,7 @@ pub fn insert_component_events(
             }
         }
         for entity in events.read::<Position>() {
+            info!("add Position Component to entity");
             if let Ok(position) = position_query.get(entity) {
                 // initialize interpolation
                 commands
@@ -244,6 +253,7 @@ pub fn update_component_events(
         let client_entity = owned_entity.predicted;
 
         for events in event_reader.iter() {
+            // Update square position
             for (server_tick, updated_entity) in events.read::<Position>() {
                 // If entity is owned
                 if updated_entity == server_entity {
@@ -284,6 +294,9 @@ pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEven
     for events in event_reader.iter() {
         for (_entity, _component) in events.read::<Position>() {
             info!("removed Position component from entity");
+        }
+        for (_entity, _component) in events.read::<Color>() {
+            info!("removed Color component from entity");
         }
     }
 }

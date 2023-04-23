@@ -13,7 +13,7 @@ use crate::{
         message_kinds::MessageKinds,
     },
     types::MessageIndex,
-    NetEntityHandleConverter,
+    LocalEntityAndGlobalEntityConverterMut,
 };
 
 pub struct SequencedUnreliableSender {
@@ -58,7 +58,7 @@ impl MessageChannelSender for SequencedUnreliableSender {
     fn write_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {

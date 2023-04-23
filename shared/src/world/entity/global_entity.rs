@@ -1,21 +1,21 @@
 use crate::BigMapKey;
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
-// EntityHandle
+// GlobalEntity
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
-pub struct EntityHandle(u64);
+pub struct GlobalEntity(u64);
 
-impl BigMapKey for EntityHandle {
+impl BigMapKey for GlobalEntity {
     fn to_u64(&self) -> u64 {
         self.0
     }
 
     fn from_u64(value: u64) -> Self {
-        EntityHandle(value)
+        GlobalEntity(value)
     }
 }
 
-impl Serde for EntityHandle {
+impl Serde for GlobalEntity {
     fn ser(&self, _: &mut dyn BitWrite) {
         panic!("shouldn't call this");
     }

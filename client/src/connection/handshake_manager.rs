@@ -226,7 +226,7 @@ impl HandshakeManager {
             // write that we have auth
             true.ser(&mut writer);
             // write payload
-            auth_message.write(message_kinds, &mut writer, &FakeEntityConverter);
+            auth_message.write(message_kinds, &mut writer, &mut FakeEntityConverter);
         } else {
             // write that we do not have auth
             false.ser(&mut writer);

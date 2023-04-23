@@ -7,10 +7,10 @@ use bevy_ecs::prelude::Resource;
 
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
-    EntityConverter, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, EntityRef,
-    FakeEntityConverter, GameInstant, Instant, Message, MessageContainer, PacketType, PingIndex,
-    Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+    EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut, EntityDoesNotExistError,
+    EntityRef, FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer,
+    PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer,
+    Timestamp, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -82,7 +82,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
         self.handshake_manager
-            .set_auth_message(MessageContainer::from(Box::new(auth), &FakeEntityConverter));
+            .set_auth_message(MessageContainer::from_write(
+                Box::new(auth),
+                &mut FakeEntityConverter,
+            ));
     }
 
     /// Connect to the given server address
@@ -153,19 +156,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 connection.time_manager.collect_ticks();
 
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
-                // apply updates on tick boundary
+                // read packets on tick boundary, de-jittering
                 if connection
-                    .process_buffered_packets(
-                        &self.protocol,
-                        &mut world,
-                        &mut self.global_world_manager,
-                        &mut self.incoming_events,
-                    )
+                    .read_buffered_packets(&self.protocol, &mut self.global_world_manager)
                     .is_err()
                 {
                     // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                     warn!("Error reading from buffered packet!");
                 }
+
+                // receive packets, process into events
+                connection.process_packets(
+                    &mut self.global_world_manager,
+                    &self.protocol.component_kinds,
+                    &mut world,
+                    &mut self.incoming_events,
+                );
 
                 let mut index_tick = prev_receiving_tick.wrapping_add(1);
                 loop {
@@ -228,54 +234,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some(connection) = &mut self.server_connection {
-            let converter = EntityConverter::new(
+            let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
-                &connection.base.local_world_manager,
+                &mut connection.base.local_world_manager,
             );
-            let message = MessageContainer::from(message_box, &converter);
-
-            if message.has_entity_properties() {
-                // collect all entities in the message
-                let entities: Vec<E> = message
-                    .entities()
-                    .iter()
-                    .map(|handle| self.global_world_manager.handle_to_entity(handle).unwrap())
-                    .collect();
-
-                // check whether all entities are in scope for the connection
-                let all_entities_in_scope = {
-                    entities.iter().all(|entity| {
-                        connection
-                            .base
-                            .host_world_manager
-                            .entity_channel_is_open(entity)
-                    })
-                };
-                if all_entities_in_scope {
-                    // All necessary entities are in scope, so send message
-                    connection.base.message_manager.send_message(
-                        &self.protocol.message_kinds,
-                        &converter,
-                        channel_kind,
-                        message,
-                    );
-                } else {
-                    // Entity hasn't been added to the User Scope yet, or replicated to Client
-                    // yet
-                    connection.base.host_world_manager.queue_entity_message(
-                        entities,
-                        channel_kind,
-                        message,
-                    );
-                }
-            } else {
-                connection.base.message_manager.send_message(
-                    &self.protocol.message_kinds,
-                    &converter,
-                    channel_kind,
-                    message,
-                );
-            }
+            let message = MessageContainer::from_write(message_box, &mut converter);
+            connection.base.message_manager.send_message(
+                &self.protocol.message_kinds,
+                &mut converter,
+                channel_kind,
+                message,
+            );
         }
     }
 
@@ -301,11 +270,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some(connection) = self.server_connection.as_mut() {
-            let converter = EntityConverter::new(
+            let mut converter = EntityConverterMut::new(
                 &self.global_world_manager,
-                &connection.base.local_world_manager,
+                &mut connection.base.local_world_manager,
             );
-            let message = MessageContainer::from(message_box, &converter);
+            let message = MessageContainer::from_write(message_box, &mut converter);
             connection
                 .tick_buffer
                 .send_message(tick, channel_kind, message);
@@ -767,7 +736,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .base
             .despawn_all_remote_entities(&mut self.global_world_manager, world);
 
-        self.incoming_events.receive_entity_events(events);
+        self.incoming_events.receive_world_events(events);
     }
 
     fn disconnect_reset_connection(&mut self) {
@@ -791,12 +760,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> EntityHandleConverter<E> for Client<E> {
-    fn handle_to_entity(&self, entity_handle: &EntityHandle) -> Result<E, EntityDoesNotExistError> {
-        self.global_world_manager.handle_to_entity(entity_handle)
+impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Client<E> {
+    fn global_entity_to_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<E, EntityDoesNotExistError> {
+        self.global_world_manager
+            .global_entity_to_entity(global_entity)
     }
 
-    fn entity_to_handle(&self, entity: &E) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.global_world_manager.entity_to_handle(entity)
+    fn entity_to_global_entity(&self, entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.global_world_manager.entity_to_global_entity(entity)
     }
 }

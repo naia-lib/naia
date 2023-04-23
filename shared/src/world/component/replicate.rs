@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
@@ -12,8 +12,9 @@ use crate::{
             property_mutate::PropertyMutator,
             replica_ref::{ReplicaDynMut, ReplicaDynRef},
         },
-        entity::{entity_converters::NetEntityHandleConverter, entity_handle::EntityHandle},
+        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
     },
+    ComponentFieldUpdate, LocalEntity, LocalEntityAndGlobalEntityConverterMut,
 };
 
 pub trait ReplicateBuilder: Send + Sync + Named {
@@ -21,10 +22,22 @@ pub trait ReplicateBuilder: Send + Sync + Named {
     fn read(
         &self,
         reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr>;
     /// Create new Component Update from incoming bit stream
     fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr>;
+    /// Split a Component update into Waiting and Ready updates
+    fn split_update(
+        &self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        update: ComponentUpdate,
+    ) -> Result<
+        (
+            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<ComponentUpdate>,
+        ),
+        SerdeErr,
+    >;
 }
 
 /// A struct that implements Replicate is a Component, or otherwise,
@@ -59,7 +72,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
         &self,
         component_kinds: &ComponentKinds,
         writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
     /// Write data into an outgoing byte stream, sufficient only to update the
     /// mutated Properties of the Component on the client
@@ -67,19 +80,28 @@ pub trait Replicate: ReplicateInner + Named + Any {
         &self,
         diff_mask: &DiffMask,
         writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
     fn read_apply_update(
         &mut self,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentUpdate,
     ) -> Result<(), SerdeErr>;
-    /// Returns whether has any EntityProperties
-    fn has_entity_properties(&self) -> bool;
-    /// Returns a list of Entities contained within the Replica's properties
-    fn entities(&self) -> Vec<EntityHandle>;
+    fn read_apply_field_update(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        update: ComponentFieldUpdate,
+    ) -> Result<(), SerdeErr>;
+    /// Returns a list of LocalEntities contained within the Component's EntityProperty fields, which are waiting to be converted to GlobalEntities
+    fn relations_waiting(&self) -> Option<HashSet<LocalEntity>>;
+    /// Converts any LocalEntities contained within the Component's EntityProperty fields to GlobalEntities
+    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
+    // /// Returns whether has any EntityProperties
+    // fn has_entity_properties(&self) -> bool;
+    // /// Returns a list of Entities contained within the Replica's properties
+    // fn entities(&self) -> Vec<GlobalEntity>;
 }
 
 cfg_if! {

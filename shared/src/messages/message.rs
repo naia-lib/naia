@@ -1,4 +1,4 @@
-use std::any::Any;
+use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
@@ -7,7 +7,8 @@ use crate::{
         message_kinds::{MessageKind, MessageKinds},
         named::Named,
     },
-    EntityHandle, MessageContainer, NetEntityHandleConverter,
+    world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
+    LocalEntity, LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
 
 // MessageBuilder
@@ -16,7 +17,7 @@ pub trait MessageBuilder: Send + Sync {
     fn read(
         &self,
         reader: &mut BitReader,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<MessageContainer, SerdeErr>;
 }
 
@@ -28,20 +29,23 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
     fn create_builder() -> Box<dyn MessageBuilder>
     where
         Self: Sized;
-    fn bit_length(&self, converter: &dyn NetEntityHandleConverter) -> u32;
+    fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32;
     fn is_fragment(&self) -> bool;
-    /// Writes data into an outgoing byte stream, sufficient to completely
-    /// recreate the Component on the client
+    /// Writes data into an outgoing byte stream
     fn write(
         &self,
         message_kinds: &MessageKinds,
         writer: &mut dyn BitWrite,
-        converter: &dyn NetEntityHandleConverter,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
-    /// Returns whether has any EntityProperties
-    fn has_entity_properties(&self) -> bool;
-    /// Returns a list of Entities contained within the Message's EntityProperty fields
-    fn entities(&self) -> Vec<EntityHandle>;
+    /// Returns a list of LocalEntities contained within the Message's EntityProperty fields, which are waiting to be converted to GlobalEntities
+    fn relations_waiting(&self) -> Option<HashSet<LocalEntity>>;
+    /// Converts any LocalEntities contained within the Message's EntityProperty fields to GlobalEntities
+    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
+    // /// Returns whether has any EntityRelations
+    // fn has_entity_relations(&self) -> bool;
+    // /// Returns a list of Entities contained within the Message's EntityRelation fields
+    // fn entities(&self) -> Vec<GlobalEntity>;
 }
 
 // Named

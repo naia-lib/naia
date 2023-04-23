@@ -63,7 +63,7 @@ pub fn connect_events(
 
         // Color component
         let color = {
-            let color_value = match server.users_count() % 3 {
+            let color_value = match server.users_count() % 4 {
                 0 => ColorValue::Yellow,
                 1 => ColorValue::Red,
                 2 => ColorValue::Blue,
@@ -93,6 +93,7 @@ pub fn connect_events(
         server.room_mut(&global.main_room_key).add_entity(&entity);
 
         global.user_to_square_map.insert(*user_key, entity);
+        global.square_to_user_map.insert(entity, *user_key);
 
         // Send an Entity Assignment message to the User that owns the Square
         let mut assignment_message = EntityAssignment::new(true);
@@ -115,6 +116,7 @@ pub fn disconnect_events(
         info!("Naia Server disconnected from: {:?}", user.address);
 
         if let Some(entity) = global.user_to_square_map.remove(user_key) {
+            global.square_to_user_map.remove(&entity);
             commands.entity(entity).despawn();
             server
                 .room_mut(&global.main_room_key)
@@ -205,7 +207,7 @@ pub fn insert_component_events(
 
                 // New Color component
                 let color = {
-                    let color_value = match server.users_count() % 3 {
+                    let color_value = match server.users_count() % 4 {
                         0 => ColorValue::Yellow,
                         1 => ColorValue::Red,
                         2 => ColorValue::Blue,

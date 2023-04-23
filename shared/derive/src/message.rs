@@ -27,8 +27,10 @@ pub fn message_impl(
 
     // Methods
     let clone_method = get_clone_method(&fields, &struct_type);
-    let has_entity_properties_method = get_has_entity_properties_method(&fields);
-    let entities_method = get_entities_method(&fields, &struct_type);
+    // let has_entity_propertys_method = get_has_entity_propertys_method(&fields);
+    // let entities_method = get_entities_method(&fields, &struct_type);
+    let relations_waiting_method = get_relations_waiting_method(&fields, &struct_type);
+    let relations_complete_method = get_relations_complete_method(&fields, &struct_type);
     let bit_length_method = get_bit_length_method(&fields, &struct_type);
     let write_method = get_write_method(&fields, &struct_type);
     let create_builder_method = get_create_builder_method(&builder_name);
@@ -39,8 +41,9 @@ pub fn message_impl(
         mod #module_name {
 
             pub use std::any::Any;
+            pub use std::collections::HashSet;
             pub use #shared_crate_name::{
-                Named, EntityHandle, Message, BitWrite, NetEntityHandleConverter,
+                Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, LocalEntity,
                 EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer
             };
             use super::*;
@@ -60,8 +63,8 @@ pub fn message_impl(
                 #is_fragment_method
                 #bit_length_method
                 #create_builder_method
-                #has_entity_properties_method
-                #entities_method
+                #relations_waiting_method
+                #relations_complete_method
                 #write_method
             }
             impl Named for #struct_name {
@@ -93,10 +96,7 @@ fn get_is_fragment_method(is_fragment: bool) -> TokenStream {
     }
 }
 
-fn get_clone_method(
-    fields: &[Field],
-    struct_type: &StructType,
-) -> TokenStream {
+fn get_clone_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
@@ -125,33 +125,61 @@ fn get_clone_method(
     }
 }
 
-fn get_has_entity_properties_method(fields: &[Field]) -> TokenStream {
-    for field in fields.iter() {
-        if let Field::EntityProperty(_) = field {
-            return quote! {
-                fn has_entity_properties(&self) -> bool {
-                    return true;
-                }
-            };
-        }
-    }
+// fn get_has_entity_propertys_method(fields: &[Field]) -> TokenStream {
+//     for field in fields.iter() {
+//         if let Field::EntityProperty(_) = field {
+//             return quote! {
+//                 fn has_entity_propertys(&self) -> bool {
+//                     return true;
+//                 }
+//             };
+//         }
+//     }
+//
+//     quote! {
+//         fn has_entity_propertys(&self) -> bool {
+//             return false;
+//         }
+//     }
+// }
 
-    quote! {
-        fn has_entity_properties(&self) -> bool {
-            return false;
-        }
-    }
-}
+// fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+//     let mut body = quote! {};
+//
+//     for (index, field) in fields.iter().enumerate() {
+//         if let Field::EntityProperty(_) = field {
+//             let field_name = get_field_name(field, index, struct_type);
+//             let body_add_right = quote! {
+//                 if let Some(global_entity) = self.#field_name.global_entity() {
+//                     output.push(global_entity);
+//                 }
+//             };
+//             let new_body = quote! {
+//                 #body
+//                 #body_add_right
+//             };
+//             body = new_body;
+//         }
+//     }
+//
+//     quote! {
+//         fn entities(&self) -> Vec<GlobalEntity> {
+//             let mut output = Vec::new();
+//             #body
+//             return output;
+//         }
+//     }
+// }
 
-fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+fn get_relations_waiting_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     let mut body = quote! {};
 
     for (index, field) in fields.iter().enumerate() {
         if let Field::EntityProperty(_) = field {
             let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
-                if let Some(handle) = self.#field_name.handle() {
-                    output.push(handle);
+                if let Some(local_entity) = self.#field_name.waiting_local_entity() {
+                    output.insert(local_entity);
                 }
             };
             let new_body = quote! {
@@ -163,10 +191,37 @@ fn get_entities_method(fields: &[Field], struct_type: &StructType) -> TokenStrea
     }
 
     quote! {
-        fn entities(&self) -> Vec<EntityHandle> {
-            let mut output = Vec::new();
+        fn relations_waiting(&self) -> Option<HashSet<LocalEntity>> {
+            let mut output = HashSet::new();
             #body
-            return output;
+            if output.is_empty() {
+                return None;
+            }
+            return Some(output);
+        }
+    }
+}
+
+fn get_relations_complete_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
+    let mut body = quote! {};
+
+    for (index, field) in fields.iter().enumerate() {
+        if let Field::EntityProperty(_) = field {
+            let field_name = get_field_name(field, index, struct_type);
+            let body_add_right = quote! {
+                self.#field_name.waiting_complete(converter);
+            };
+            let new_body = quote! {
+                #body
+                #body_add_right
+            };
+            body = new_body;
+        }
+    }
+
+    quote! {
+        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+            #body
         }
     }
 }
@@ -195,7 +250,7 @@ pub fn get_read_method(
         let new_output_right = match field {
             Field::EntityProperty(_property) => {
                 quote! {
-                    let #field_name = EntityProperty::new_read(reader, 0, converter)?;
+                    let #field_name = EntityProperty::new_read(reader, converter)?;
                 }
             }
             Field::Normal(normal_field) => {
@@ -237,10 +292,10 @@ pub fn get_read_method(
     };
 
     quote! {
-        fn read(&self, reader: &mut BitReader, converter: &dyn NetEntityHandleConverter) -> Result<MessageContainer, SerdeErr> {
+        fn read(&self, reader: &mut BitReader, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<MessageContainer, SerdeErr> {
             #field_reads
 
-            return Ok(MessageContainer::from(Box::new(#struct_build), converter));
+            return Ok(MessageContainer::from_read(Box::new(#struct_build)));
         }
     }
 }
@@ -271,7 +326,7 @@ fn get_write_method(fields: &[Field], struct_type: &StructType) -> TokenStream {
     }
 
     quote! {
-        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &dyn NetEntityHandleConverter) {
+        fn write(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) {
             self.kind().ser(message_kinds, writer);
             #field_writes
         }
@@ -304,7 +359,7 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
     }
 
     quote! {
-        fn bit_length(&self, converter: &dyn NetEntityHandleConverter) -> u32 {
+        fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
             let mut output = 0;
             output += <MessageKind as ConstBitLength>::const_bit_length();
             #field_bit_lengths
@@ -347,10 +402,7 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
                                 }
                             }
                             _ => {
-                                fields.push(Field::normal(
-                                    variable_name.clone(),
-                                    field.ty.clone(),
-                                ));
+                                fields.push(Field::normal(variable_name.clone(), field.ty.clone()));
                             }
                         }
                     }

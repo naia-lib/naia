@@ -1,4 +1,4 @@
-use bevy_ecs::prelude::Component;
+use bevy::prelude::Component;
 
 #[derive(Component)]
 pub struct Predicted;

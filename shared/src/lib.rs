@@ -78,7 +78,7 @@ pub use messages::{
 pub use world::{
     component::{
         component_kinds::{ComponentKind, ComponentKinds},
-        component_update::ComponentUpdate,
+        component_update::{ComponentFieldUpdate, ComponentUpdate},
         diff_mask::DiffMask,
         entity_property::EntityProperty,
         property::Property,
@@ -97,17 +97,18 @@ pub use world::{
         entity_action_receiver::EntityActionReceiver,
         entity_action_type::EntityActionType,
         entity_converters::{
-            EntityConverter, EntityHandleConverter, FakeEntityConverter, GlobalWorldManagerType,
-            NetEntityConverter, NetEntityHandleConverter,
+            EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut,
+            FakeEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+            LocalEntityAndGlobalEntityConverterMut, LocalEntityConverter,
         },
-        entity_handle::EntityHandle,
         entity_ref::EntityRef,
         error::EntityDoesNotExistError,
-        net_entity::{NetEntity, OwnedNetEntity},
+        global_entity::GlobalEntity,
+        local_entity::LocalEntity,
     },
     host::{
         global_diff_handler::GlobalDiffHandler,
-        host_world_manager::HostWorldManager,
+        host_world_manager::{HostWorldEvents, HostWorldManager},
         mut_channel::{MutChannelType, MutReceiver},
     },
     local_world_manager::LocalWorldManager,

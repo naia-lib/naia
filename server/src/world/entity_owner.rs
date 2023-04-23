@@ -4,5 +4,6 @@ use crate::UserKey;
 pub enum EntityOwner {
     Server,
     Client(UserKey),
+    ClientWaiting(UserKey),
     Local,
 }

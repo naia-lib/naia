@@ -6,7 +6,7 @@ use bevy_ecs::{
 };
 
 use naia_bevy_shared::{
-    Channel, EntityDoesNotExistError, EntityHandle, EntityHandleConverter, Message, Tick,
+    Channel, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, Message, Tick,
 };
 use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError};
 
@@ -98,15 +98,18 @@ impl<'w> Client<'w> {
     }
 }
 
-impl<'w> EntityHandleConverter<Entity> for Client<'w> {
-    fn handle_to_entity(
+impl<'w> EntityAndGlobalEntityConverter<Entity> for Client<'w> {
+    fn global_entity_to_entity(
         &self,
-        entity_handle: &EntityHandle,
+        global_entity: &GlobalEntity,
     ) -> Result<Entity, EntityDoesNotExistError> {
-        self.client.handle_to_entity(entity_handle)
+        self.client.global_entity_to_entity(global_entity)
     }
 
-    fn entity_to_handle(&self, entity: &Entity) -> Result<EntityHandle, EntityDoesNotExistError> {
-        self.client.entity_to_handle(entity)
+    fn entity_to_global_entity(
+        &self,
+        entity: &Entity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.client.entity_to_global_entity(entity)
     }
 }
