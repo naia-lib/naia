@@ -1,6 +1,6 @@
 [package]
 name = "naia-server"
-version = "0.20.0"
+version = "0.21.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "A server that uses either UDP or WebRTC communication to send/receive messages to/from connected clients, and syncs registered Entities/Components to clients to whom they are in-scope."
@@ -23,7 +23,7 @@ transport_webrtc = [ "naia-server-socket" ]
 transport_udp = []
 
 [dependencies]
-naia-shared = { version = "0.20", path = "../shared" }
+naia-shared = { version = "0.21", path = "../shared" }
 naia-server-socket = { version = "0.20", path = "../socket/server", optional = true }
 bevy_ecs = { version = "0.10", default_features = false, optional = true }
 cfg-if = { version = "1.0" }

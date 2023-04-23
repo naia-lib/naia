@@ -1,6 +1,6 @@
 [package]
 name = "naia-client"
-version = "0.20.1"
+version = "0.21.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "Provides a cross-platform client that can send/receive messages to/from a server, and has a pool of in-scope entities/components that is synced with the server."
@@ -25,7 +25,7 @@ transport_webrtc = [ "naia-client-socket" ]
 transport_udp = [ "local_ipaddress" ]
 
 [dependencies]
-naia-shared = { version = "0.20", path = "../shared" }
+naia-shared = { version = "0.21", path = "../shared" }
 naia-client-socket = { version = "0.20", path = "../socket/client", optional = true }
 bevy_ecs = { version = "0.10", default_features = false, optional = true }
 local_ipaddress = { version = "0.1", optional = true }
