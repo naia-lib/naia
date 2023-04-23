@@ -3,9 +3,6 @@ use std::{hash::Hash, net::SocketAddr};
 use naia_serde::{BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::world::host::host_world_manager::HostWorldEvents;
-use crate::world::host::host_world_writer::HostWorldWriter;
-use crate::world::remote::remote_world_reader::RemoteWorldReader;
 use crate::{
     backends::Timer,
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
@@ -13,8 +10,10 @@ use crate::{
     world::{
         entity::entity_converters::{EntityConverterMut, GlobalWorldManagerType},
         local_world_manager::LocalWorldManager,
+        remote::remote_world_reader::RemoteWorldReader,
+        host::{host_world_writer::HostWorldWriter, host_world_manager::HostWorldEvents},
     },
-    EntityAndGlobalEntityConverter, EntityEvent, HostWorldManager, Protocol, RemoteWorldManager,
+    EntityEvent, HostWorldManager, Protocol, RemoteWorldManager,
     WorldMutType, WorldRefType,
 };
 
@@ -128,13 +127,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     fn write_messages(
         &mut self,
         protocol: &Protocol,
-        global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
         let mut converter =
-            EntityConverterMut::new(global_entity_converter, &mut self.local_world_manager);
+            EntityConverterMut::new(global_world_manager, &mut self.local_world_manager);
         self.message_manager.write_messages(
             protocol,
             &mut converter,
@@ -160,7 +159,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         {
             self.write_messages(
                 &protocol,
-                global_world_manager.to_global_entity_converter(),
+                global_world_manager,
                 writer,
                 packet_index,
                 has_written,

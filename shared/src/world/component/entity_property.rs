@@ -300,7 +300,6 @@ impl HostOwnedRelation {
             return;
         };
         let Ok(local_entity) = converter.get_or_reserve_host_entity(global_entity) else {
-            warn!("Global Entity does not Exist! This should not happen.");
             false.ser(writer);
             return;
         };

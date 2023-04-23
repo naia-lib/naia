@@ -209,7 +209,7 @@ impl HostWorldWriter {
 
                 for component_kind in &component_kind_list {
                     let mut converter = EntityConverterMut::new(
-                        global_world_manager.to_global_entity_converter(),
+                        global_world_manager,
                         local_world_manager,
                     );
 
@@ -277,7 +277,7 @@ impl HostWorldWriter {
                         .host_ser(writer);
 
                     let mut converter = EntityConverterMut::new(
-                        global_world_manager.to_global_entity_converter(),
+                        global_world_manager,
                         local_world_manager,
                     );
 
@@ -485,7 +485,7 @@ impl HostWorldWriter {
                 .clone();
 
             let mut converter = EntityConverterMut::new(
-                global_world_manager.to_global_entity_converter(),
+                global_world_manager,
                 local_world_manager,
             );
 

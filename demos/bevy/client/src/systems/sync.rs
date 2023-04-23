@@ -57,6 +57,14 @@ pub fn sync_relation_lines(
     mut line_query: Query<(&mut Transform, &Line)>,
 ) {
     for (mut line_transform, line_entities) in line_query.iter_mut() {
+
+        // if !line_entities.visible {
+        //     line_transform.translation.x = 0.0;
+        //     line_transform.translation.y = 0.0;
+        //     line_transform.scale.x = 0.0;
+        //     continue;
+        // }
+
         if let Ok(start) = position_query.get(line_entities.start_entity) {
             if let Ok(end) = baseline_query.get(line_entities.end_entity) {
                 let start_vec2 = Vec2::new(*start.x as f32, *start.y as f32);

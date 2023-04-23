@@ -17,6 +17,7 @@ use crate::{
 pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConverter<E> {
     fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>>;
     fn to_global_entity_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E>;
+    fn entity_is_host_owned(&self, entity: &E) -> bool;
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
     fn remote_spawn_entity(&mut self, entity: &E);
@@ -128,17 +129,17 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
 
 // Probably only should be used for writing messages
 pub struct EntityConverterMut<'a, 'b, E: Eq + Copy + Hash> {
-    global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
+    global_world_manager: &'a dyn GlobalWorldManagerType<E>,
     local_world_manager: &'b mut LocalWorldManager<E>,
 }
 
 impl<'a, 'b, E: Eq + Copy + Hash> EntityConverterMut<'a, 'b, E> {
     pub fn new(
-        global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &'a dyn GlobalWorldManagerType<E>,
         local_world_manager: &'b mut LocalWorldManager<E>,
     ) -> Self {
         Self {
-            global_entity_converter,
+            global_world_manager,
             local_world_manager,
         }
     }
@@ -159,7 +160,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
         global_entity: &GlobalEntity,
     ) -> Result<LocalEntity, EntityDoesNotExistError> {
         if let Ok(entity) = self
-            .global_entity_converter
+            .global_world_manager
             .global_entity_to_entity(global_entity)
         {
             return self.local_world_manager.entity_to_local_entity(&entity);
@@ -176,7 +177,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
             .local_entity_to_entity(local_entity)
         {
             return self
-                .global_entity_converter
+                .global_world_manager
                 .entity_to_global_entity(&entity);
         }
         return Err(EntityDoesNotExistError);
@@ -190,16 +191,21 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Result<LocalEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .global_entity_converter
-            .global_entity_to_entity(global_entity)
+        let Ok(entity) = self
+            .global_world_manager
+            .global_entity_to_entity(global_entity) else {
+            return Err(EntityDoesNotExistError);
+        };
+        if !self
+            .global_world_manager
+            .entity_is_host_owned(&entity)
         {
-            let result = self.local_world_manager.entity_to_local_entity(&entity);
-            if result.is_ok() {
-                return result;
-            }
-            return Ok(self.local_world_manager.host_reserve_entity(&entity));
+            return Err(EntityDoesNotExistError);
         }
-        return Err(EntityDoesNotExistError);
+        let result = self.local_world_manager.entity_to_local_entity(&entity);
+        if result.is_ok() {
+            return result;
+        }
+        return Ok(self.local_world_manager.host_reserve_entity(&entity));
     }
 }

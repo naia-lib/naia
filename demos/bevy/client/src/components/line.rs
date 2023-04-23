@@ -4,6 +4,7 @@ use bevy::prelude::{Component, Entity};
 pub struct Line {
     pub start_entity: Entity,
     pub end_entity: Entity,
+    pub visible: bool,
 }
 
 impl Line {
@@ -11,6 +12,7 @@ impl Line {
         Self {
             start_entity,
             end_entity,
+            visible: true,
         }
     }
 }

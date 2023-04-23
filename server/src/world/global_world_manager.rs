@@ -151,6 +151,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self
     }
 
+    fn entity_is_host_owned(&self, entity: &E) -> bool {
+        if let Some(record) = self.entity_records.get(entity) {
+            return match record.owner {
+                EntityOwner::Server => true,
+                _ => false,
+            };
+        }
+        return false;
+    }
+
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
         let mut_channel = MutChannelData::new(diff_mask_length);
         return Arc::new(RwLock::new(mut_channel));
