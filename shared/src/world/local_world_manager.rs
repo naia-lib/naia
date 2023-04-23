@@ -48,13 +48,13 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     fn process_reserved_entity_timeouts(&mut self) {
-        let mut pop = false;
-        if let Some((timeout, world_entity)) = self.reserved_entities_ttls.front() {
-            if timeout.elapsed() >= self.reserved_entity_ttl {
-                pop = true;
+        loop {
+            let Some((timeout, _)) = self.reserved_entities_ttls.front() else {
+                break;
+            };
+            if timeout.elapsed() < self.reserved_entity_ttl {
+                break;
             }
-        }
-        if pop {
             let (_, world_entity) = self.reserved_entities_ttls.pop_front().unwrap();
             self.reserved_entities.remove(&world_entity);
             warn!("A Entity reserved for spawning on the Remote Connection just timed out. Check that the reserved Entity is able to replicate to the Remote Connection.");

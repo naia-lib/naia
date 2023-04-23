@@ -2,6 +2,8 @@ use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
+use std::collections::VecDeque;
+use naia_socket_shared::Instant;
 
 use crate::{KeyGenerator, LocalEntity};
 
@@ -13,6 +15,9 @@ pub struct EntityWaitlist {
     waiting_entity_to_handles: HashMap<LocalEntity, HashSet<WaitlistHandle>>,
     in_scope_entities: HashSet<LocalEntity>,
     ready_handles: HashSet<WaitlistHandle>,
+    removed_handles: HashSet<WaitlistHandle>,
+    handle_ttls: VecDeque<(Instant, WaitlistHandle)>,
+    handle_ttl: Duration,
 }
 
 impl EntityWaitlist {
@@ -23,6 +28,9 @@ impl EntityWaitlist {
             waiting_entity_to_handles: HashMap::new(),
             in_scope_entities: HashSet::new(),
             ready_handles: HashSet::new(),
+            removed_handles: HashSet::new(),
+            handle_ttls: VecDeque::new(),
+            handle_ttl: Duration::from_secs(60),
         }
     }
 
@@ -55,6 +63,7 @@ impl EntityWaitlist {
             }
         }
 
+        self.handle_ttls.push_back((Instant::now(), new_handle));
         self.handle_to_required_entities
             .insert(new_handle, entities.clone());
 
@@ -67,6 +76,10 @@ impl EntityWaitlist {
         &mut self,
         waitlist_store: &mut WaitlistStore<T>,
     ) -> Option<Vec<T>> {
+
+        self.check_handle_ttls();
+        waitlist_store.remove_expired_items(&mut self.removed_handles);
+
         if self.ready_handles.is_empty() {
             return None;
         }
@@ -85,8 +98,6 @@ impl EntityWaitlist {
                 if let Some(entities) = self.handle_to_required_entities.get(message_handle) {
                     if entities.is_subset(&self.in_scope_entities) {
                         outgoing_handles.push(*message_handle);
-                        // push outgoing message
-                        self.ready_handles.insert(*message_handle);
                     }
                 }
             }
@@ -94,7 +105,9 @@ impl EntityWaitlist {
 
         // get the messages ready to send, also clean up
         for outgoing_handle in outgoing_handles {
-            self.remove_waiting(&outgoing_handle);
+            // push outgoing message
+            self.ready_handles.insert(outgoing_handle);
+            self.remove_waiting_handle(&outgoing_handle);
         }
     }
 
@@ -102,7 +115,14 @@ impl EntityWaitlist {
         self.in_scope_entities.remove(entity);
     }
 
-    pub fn remove_waiting(&mut self, handle: &WaitlistHandle) {
+    pub fn remove_waiting_handle(&mut self, handle: &WaitlistHandle) {
+
+        // remove handle from ttl list
+        if let Some(ttl_index) = self.handle_ttls.iter().position(|(_, ttl_handle)| ttl_handle == handle) {
+            self.handle_ttls.remove(ttl_index);
+        }
+
+        // remove handle from required entities map
         let entities = self.handle_to_required_entities.remove(&handle).unwrap();
 
         // recycle message handle
@@ -120,6 +140,20 @@ impl EntityWaitlist {
             if remove {
                 self.waiting_entity_to_handles.remove(&entity);
             }
+        }
+    }
+
+    fn check_handle_ttls(&mut self) {
+        loop {
+            let Some((ttl, _)) = self.handle_ttls.front() else {
+                break;
+            };
+            if ttl.elapsed() < self.handle_ttl {
+                break;
+            }
+            let (_, handle) = self.handle_ttls.pop_front().unwrap();
+            self.removed_handles.insert(handle);
+            self.remove_waiting_handle(&handle);
         }
     }
 }
@@ -161,16 +195,31 @@ impl<T> WaitlistStore<T> {
 
         for handle in intersection {
             ready_handles.remove(&handle);
-            self.item_handles.remove(&handle);
-            let item = self.items.remove(&handle).unwrap();
+            let item = self.remove(&handle).unwrap();
             ready_messages.push(item);
         }
 
         Some(ready_messages)
     }
 
-    pub fn remove(&mut self, handle: &WaitlistHandle) {
+    pub fn remove_expired_items(
+        &mut self,
+        expired_handles: &mut HashSet<WaitlistHandle>,
+    ) {
+        let intersection: HashSet<WaitlistHandle> = self
+            .item_handles
+            .intersection(&expired_handles)
+            .cloned()
+            .collect();
+
+        for handle in intersection {
+            expired_handles.remove(&handle);
+            self.remove(&handle);
+        }
+    }
+
+    pub fn remove(&mut self, handle: &WaitlistHandle) -> Option<T> {
         self.item_handles.remove(handle);
-        self.items.remove(handle);
+        self.items.remove(handle)
     }
 }

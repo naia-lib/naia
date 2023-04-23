@@ -197,7 +197,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             .remove(&(world_entity, component_kind))
         {
             self.insert_waitlist_store.remove(&handle);
-            self.entity_waitlist.remove_waiting(&handle);
+            self.entity_waitlist.remove_waiting_handle(&handle);
             return;
         }
         // Remove Component from update waitlist if it's there
@@ -207,7 +207,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         {
             for (_index, handle) in handle_map {
                 self.update_waitlist_store.remove(&handle);
-                self.entity_waitlist.remove_waiting(&handle);
+                self.entity_waitlist.remove_waiting_handle(&handle);
             }
             return;
         }
@@ -333,7 +333,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                         .unwrap();
                     if let Some(old_handle) = handle_map.get(&field_id) {
                         self.update_waitlist_store.remove(&handle);
-                        self.entity_waitlist.remove_waiting(old_handle);
+                        self.entity_waitlist.remove_waiting_handle(old_handle);
                     }
                     handle_map.insert(field_id, handle);
                 }
