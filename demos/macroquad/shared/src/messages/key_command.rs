@@ -16,7 +16,7 @@ impl KeyCommand {
             s,
             a,
             d,
-            entity: EntityProperty::new_empty(),
+            entity: EntityProperty::new(),
         }
     }
 }

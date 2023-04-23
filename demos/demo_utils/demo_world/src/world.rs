@@ -1,10 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_shared::{
-    BigMap, ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
-    SerdeErr, WorldMutType, WorldRefType,
-};
+use naia_shared::{BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -208,6 +204,13 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     ) -> Result<(), SerdeErr> {
         if let Some(mut component) = component_mut_of_kind(self.world, entity, component_kind) {
             component.read_apply_update(converter, update)?;
+        }
+        Ok(())
+    }
+
+    fn component_apply_field_update(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter, entity: &Entity, component_kind: &ComponentKind, update: ComponentFieldUpdate) -> Result<(), SerdeErr> {
+        if let Some(mut component) = component_mut_of_kind(self.world, entity, component_kind) {
+            let _update_result = component.read_apply_field_update(converter, update);
         }
         Ok(())
     }

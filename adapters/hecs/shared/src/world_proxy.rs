@@ -1,10 +1,6 @@
 use hecs::{Entity, World};
 
-use naia_shared::{
-    ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper,
-    ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
-    WorldRefType,
-};
+use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -202,6 +198,15 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
         if let Some(access) = self.world_data.component_access(component_kind) {
             if let Some(mut component) = access.component_mut(self.world, entity) {
                 component.read_apply_update(converter, update)?;
+            }
+        }
+        Ok(())
+    }
+
+    fn component_apply_field_update(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter, entity: &Entity, component_kind: &ComponentKind, update: ComponentFieldUpdate) -> Result<(), SerdeErr> {
+        if let Some(access) = self.world_data.component_access(component_kind) {
+            if let Some(mut component) = access.component_mut(self.world, entity) {
+                let _update_result = component.read_apply_field_update(converter, update);
             }
         }
         Ok(())
