@@ -7,8 +7,8 @@ use bevy_log::info;
 use naia_bevy_server::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
-        UpdateComponentEvents, PublishEntityEvent,
+        InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, SpawnEntityEvent,
+        TickEvent, UpdateComponentEvents,
     },
     CommandsExt, Random, Server,
 };
@@ -59,7 +59,10 @@ pub fn connect_events(
             // MUST call this to begin replication
             .enable_replication(&mut server)
             // Insert Position component
-            .insert(Position::new(16 * ((Random::gen_range_u32(0, 40) as i16) - 20), 16 * ((Random::gen_range_u32(0, 30) as i16) - 15)))
+            .insert(Position::new(
+                16 * ((Random::gen_range_u32(0, 40) as i16) - 20),
+                16 * ((Random::gen_range_u32(0, 30) as i16) - 15),
+            ))
             // Insert Color component
             .insert(Color::new(match server.users_count() % 4 {
                 0 => ColorValue::Yellow,
@@ -163,19 +166,19 @@ pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) 
 pub fn publish_entity_events(
     mut server: Server,
     global: ResMut<Global>,
-    mut event_reader: EventReader<PublishEntityEvent>
+    mut event_reader: EventReader<PublishEntityEvent>,
 ) {
     for PublishEntityEvent(_user_key, client_entity) in event_reader.iter() {
         info!("client entity has been made public");
 
         // Add newly public entity to the main Room
-        server.room_mut(&global.main_room_key).add_entity(client_entity);
+        server
+            .room_mut(&global.main_room_key)
+            .add_entity(client_entity);
     }
 }
 
-pub fn insert_component_events(
-    mut event_reader: EventReader<InsertComponentEvents>,
-) {
+pub fn insert_component_events(mut event_reader: EventReader<InsertComponentEvents>) {
     for events in event_reader.iter() {
         for (_user_key, _client_entity) in events.read::<Position>() {
             info!("insert component into client entity");
@@ -183,9 +186,7 @@ pub fn insert_component_events(
     }
 }
 
-pub fn update_component_events(
-    mut event_reader: EventReader<UpdateComponentEvents>,
-) {
+pub fn update_component_events(mut event_reader: EventReader<UpdateComponentEvents>) {
     for events in event_reader.iter() {
         for (_user_key, _client_entity) in events.read::<Position>() {
             // info!("update component in client entity");

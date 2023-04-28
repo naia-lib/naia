@@ -14,15 +14,16 @@ use crate::ClientOwned;
 mod naia_events {
     pub use naia_server::{
         ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-        RemoveComponentEvent, SpawnEntityEvent, TickEvent, UpdateComponentEvent, PublishEntityEvent,
+        PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
+        UpdateComponentEvent,
     };
 }
 
 mod bevy_events {
     pub use crate::events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, MessageEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
-        UpdateComponentEvents, PublishEntityEvent,
+        InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
+        SpawnEntityEvent, TickEvent, UpdateComponentEvents,
     };
 }
 

@@ -10,7 +10,7 @@ use naia_client::{
     transport::webrtc,
     Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent,
     DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
-    SpawnEntityEvent, UpdateComponentEvent,
+    ReplicationConfig, SpawnEntityEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
@@ -50,7 +50,7 @@ pub struct App {
     owned_entity: Option<OwnedEntity>,
     cursor_entity: Option<Entity>,
     interp_entities: HashMap<Entity, Interp>,
-    squares: HashSet<Entity>,
+    server_entities: HashSet<Entity>,
     queued_command: Option<KeyCommand>,
     command_history: CommandHistory<KeyCommand>,
 }
@@ -71,7 +71,7 @@ impl App {
             owned_entity: None,
             cursor_entity: None,
             interp_entities: HashMap::new(),
-            squares: HashSet::new(),
+            server_entities: HashSet::new(),
             queued_command: None,
             command_history: CommandHistory::default(),
         }
@@ -143,6 +143,8 @@ impl App {
             let entity = self
                 .client
                 .spawn_entity(self.world.proxy_mut())
+                // This entity will be replicated to all other Clients
+                .configure_replication(ReplicationConfig::Public)
                 // Add Position component to Entity
                 .insert_component(Position::new(0, 0))
                 // Get Entity ID
@@ -157,7 +159,7 @@ impl App {
 
             self.world = World::default();
             self.owned_entity = None;
-            self.squares = HashSet::new();
+            self.server_entities = HashSet::new();
             self.queued_command = None;
             self.command_history = CommandHistory::default();
         }
@@ -201,13 +203,13 @@ impl App {
 
         // Spawn Entity Events
         for entity in events.read::<SpawnEntityEvent>() {
-            self.squares.insert(entity);
+            self.server_entities.insert(entity);
             info!("spawned entity");
         }
 
         // Despawn Entity Events
         for entity in events.read::<DespawnEntityEvent>() {
-            self.squares.remove(&entity);
+            self.server_entities.remove(&entity);
             self.interp_entities.remove(&entity);
             info!("despawned entity");
             // TODO: Sync up Predicted & Confirmed entities
@@ -303,7 +305,7 @@ impl App {
         }
 
         // draw unowned squares
-        for entity in &self.squares {
+        for entity in &self.server_entities {
             let shape_value = {
                 if let Some(shape) = self.world.proxy().component::<Shape>(entity) {
                     (*shape.value).clone()

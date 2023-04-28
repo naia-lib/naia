@@ -2,11 +2,10 @@ use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
     shared::Random, transport::webrtc, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent,
-    InsertComponentEvent, RoomKey, Server as NaiaServer, ServerConfig, TickEvent,
-    UpdateComponentEvent, UserKey,
+    PublishEntityEvent, RoomKey, Server as NaiaServer, ServerConfig, TickEvent, UserKey,
 };
 
-use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
+use naia_demo_world::{Entity, World};
 
 use naia_macroquad_demo_shared::{
     behavior as shared_behavior,
@@ -23,7 +22,6 @@ pub struct App {
     world: World,
     main_room_key: RoomKey,
     user_to_square_map: HashMap<UserKey, Entity>,
-    user_to_cursor_map: HashMap<UserKey, Entity>,
     square_last_command: HashMap<Entity, KeyCommand>,
 }
 
@@ -59,7 +57,6 @@ impl App {
             world: World::default(),
             main_room_key,
             user_to_square_map: HashMap::new(),
-            user_to_cursor_map: HashMap::new(),
             square_last_command: HashMap::new(),
         }
     }
@@ -95,19 +92,7 @@ impl App {
 
             info!("Naia Server connected to: {}", user_address);
 
-            // Create Position Component
-            let x = (Random::gen_range_u32(0, 50) * 16) as i16;
-            let y = (Random::gen_range_u32(0, 37) * 16) as i16;
-            let position_component = Position::new(x, y);
-
-            // Create Color Component
-            let color_value = match self.server.users_count() % 4 {
-                0 => ColorValue::Yellow,
-                1 => ColorValue::Red,
-                2 => ColorValue::Blue,
-                _ => ColorValue::Green,
-            };
-            let color_component = Color::new(color_value);
+            let user_count = self.server.users_count();
 
             // Spawn new Square Entity
             let entity_id = self
@@ -116,9 +101,17 @@ impl App {
                 // Entity enters Room
                 .enter_room(&self.main_room_key)
                 // Add Position component to Entity
-                .insert_component(position_component)
+                .insert_component(Position::new(
+                    (Random::gen_range_u32(0, 50) * 16) as i16,
+                    (Random::gen_range_u32(0, 37) * 16) as i16,
+                ))
                 // Add Color component to Entity
-                .insert_component(color_component)
+                .insert_component(Color::new(match user_count % 4 {
+                    0 => ColorValue::Yellow,
+                    1 => ColorValue::Red,
+                    2 => ColorValue::Blue,
+                    _ => ColorValue::Green,
+                }))
                 // Add Shape component to Entity
                 .insert_component(Shape::new(ShapeValue::Square))
                 // Get Entity ID
@@ -146,89 +139,19 @@ impl App {
             if let Some(entity) = self.user_to_square_map.remove(&user_key) {
                 self.server
                     .entity_mut(self.world.proxy_mut(), &entity)
-                    .leave_room(&self.main_room_key)
                     .despawn();
                 self.square_last_command.remove(&entity);
             }
-            if let Some(entity) = self.user_to_cursor_map.remove(&user_key) {
-                self.server
-                    .entity_mut(self.world.proxy_mut(), &entity)
-                    .leave_room(&self.main_room_key)
-                    .despawn();
-            }
         }
 
-        // Insert Component Events for Client Cursors
-        for (user_key, client_cursor_entity) in events.read::<InsertComponentEvent<Position>>() {
-            info!("insert component into client entity");
-            let (client_cursor_position_x, client_cursor_position_y) = {
-                if let Some(client_cursor_position) = self
-                    .world
-                    .proxy()
-                    .component::<Position>(&client_cursor_entity)
-                {
-                    (*client_cursor_position.x, *client_cursor_position.y)
-                } else {
-                    continue;
-                }
-            };
+        // Publish Entity Events for Client Cursors
+        for (_user_key, client_entity) in events.read::<PublishEntityEvent>() {
+            info!("client entity has been made public");
 
-            // Create Position Component
-            let server_cursor_position =
-                Position::new(client_cursor_position_x, client_cursor_position_y);
-
-            // Create Color Component
-            let color_value = match self.server.users_count() % 4 {
-                0 => ColorValue::Yellow,
-                1 => ColorValue::Red,
-                2 => ColorValue::Blue,
-                _ => ColorValue::Green,
-            };
-            let server_cursor_color = Color::new(color_value);
-
-            // Spawn new Cursor Entity
-            let server_cursor_entity = self
-                .server
-                .spawn_entity(self.world.proxy_mut())
-                // Entity enters Room
-                .enter_room(&self.main_room_key)
-                // Add Position component to Entity
-                .insert_component(server_cursor_position)
-                // Add Color component to Entity
-                .insert_component(server_cursor_color)
-                // Add Shape component to Entity
-                .insert_component(Shape::new(ShapeValue::Circle))
-                // Get Entity ID
-                .id();
-
-            self.user_to_cursor_map
-                .insert(user_key, server_cursor_entity);
-        }
-
-        // Update Component Events for Client Cursors
-        for (user_key, client_cursor_entity) in events.read::<UpdateComponentEvent<Position>>() {
-            let (client_cursor_position_x, client_cursor_position_y) = {
-                if let Some(client_cursor_position) = self
-                    .world
-                    .proxy()
-                    .component::<Position>(&client_cursor_entity)
-                {
-                    (*client_cursor_position.x, *client_cursor_position.y)
-                } else {
-                    continue;
-                }
-            };
-
-            if let Some(server_cursor_entity) = self.user_to_cursor_map.get(&user_key) {
-                if let Some(mut server_cursor_position) = self
-                    .world
-                    .proxy_mut()
-                    .component_mut::<Position>(server_cursor_entity)
-                {
-                    *server_cursor_position.x = client_cursor_position_x;
-                    *server_cursor_position.y = client_cursor_position_y;
-                }
-            }
+            // Add newly public client entity to the main Room
+            self.server
+                .room_mut(&self.main_room_key)
+                .add_entity(&client_entity);
         }
 
         // Tick Events
