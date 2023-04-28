@@ -15,9 +15,7 @@ extern crate cfg_if;
 
 pub mod transport;
 pub mod shared {
-    pub use naia_shared::{
-        default_channels, sequence_greater_than, EntityRef, Random, SocketConfig, Tick,
-    };
+    pub use naia_shared::{default_channels, sequence_greater_than, Random, SocketConfig, Tick};
 }
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};
@@ -40,4 +38,6 @@ pub use events::{
     InsertComponentEvent, MessageEvent, RejectEvent, RemoveComponentEvent, ServerTickEvent,
     SpawnEntityEvent, UpdateComponentEvent,
 };
-pub use world::entity_mut::EntityMut;
+pub use world::{
+    entity_mut::EntityMut, entity_ref::EntityRef, replication_config::ReplicationConfig,
+};

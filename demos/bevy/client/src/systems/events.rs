@@ -13,7 +13,7 @@ use naia_bevy_client::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
         MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
     },
-    sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
+    sequence_greater_than, Client, CommandsExt, Random, Replicate, ReplicationConfig, Tick,
 };
 
 use naia_bevy_demo_shared::{
@@ -44,21 +44,17 @@ pub fn connect_events(
 
         // Create entity for Client-authoritative Cursor
 
-        // Position component
-        let position = {
-            let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
-            let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
-            Position::new(x, y)
-        };
-
         // Spawn Cursor Entity
         let cursor_entity = commands
             // Spawn new Square Entity
             .spawn_empty()
-            // MUST call this to begin replication
-            .enable_replication(&mut client)
+            // MUST call this OR `enable_replication` to begin replication
+            .configure_replication(&mut client, ReplicationConfig::Public)
             // Insert Position component
-            .insert(position)
+            .insert(Position::new(
+                16 * ((Random::gen_range_u32(0, 40) as i16) - 20),
+                16 * ((Random::gen_range_u32(0, 30) as i16) - 15),
+            ))
             // Insert Cursor marker component
             .insert(LocalCursor)
             // return Entity id

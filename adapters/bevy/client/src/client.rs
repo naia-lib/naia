@@ -10,6 +10,8 @@ use naia_bevy_shared::{
 };
 use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError};
 
+use crate::ReplicationConfig;
+
 // Client
 #[derive(SystemParam)]
 pub struct Client<'w> {
@@ -95,6 +97,22 @@ impl<'w> Client<'w> {
 
     pub fn disable_replication(&mut self, entity: &Entity) {
         self.client.disable_replication(entity);
+    }
+
+    pub fn replication_config(&self, entity: &Entity) -> ReplicationConfig {
+        self.client.replication_config(entity)
+    }
+
+    pub fn configure_replication(&mut self, entity: &Entity, config: ReplicationConfig) {
+        match &config {
+            ReplicationConfig::Disabled => {
+                self.client.disable_replication(entity);
+            }
+            _ => {
+                self.client.enable_replication(entity);
+                self.client.configure_replication(entity, config);
+            }
+        }
     }
 }
 

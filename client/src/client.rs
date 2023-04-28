@@ -8,9 +8,9 @@ use bevy_ecs::prelude::Resource;
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
     EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut, EntityDoesNotExistError,
-    EntityRef, FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer,
-    PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer,
-    Timestamp, WorldMutType, WorldRefType,
+    FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer, PacketType,
+    PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -22,8 +22,10 @@ use crate::{
     },
     transport::Socket,
     world::{
-        entity_mut::EntityMut, entity_owner::EntityOwner, global_world_manager::GlobalWorldManager,
+        entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
+        global_world_manager::GlobalWorldManager,
     },
+    ReplicationConfig,
 };
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
@@ -283,16 +285,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     // Entities
 
-    pub fn enable_replication(&mut self, entity: &E) {
-        self.check_client_authoritative_allowed();
-        self.spawn_entity_inner(&entity);
-    }
-
-    pub fn disable_replication(&mut self, entity: &E) {
-        // Despawn from connections and inner tracking
-        self.despawn_entity_worldless(entity);
-    }
-
     /// Creates a new Entity and returns an EntityMut which can be used for
     /// further operations on the Entity
     pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
@@ -327,7 +319,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Panics if the Entity does not exist.
     pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
         if world.has_entity(entity) {
-            return EntityRef::new(world, entity);
+            return EntityRef::new(self, world, entity);
         }
         panic!("No Entity exists for given Key!");
     }
@@ -353,6 +345,66 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             return owner;
         }
         return EntityOwner::Local;
+    }
+
+    // Replicate options & authority management
+
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn enable_replication(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
+        self.spawn_entity_inner(&entity);
+    }
+
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn disable_replication(&mut self, entity: &E) {
+        // Despawn from connections and inner tracking
+        self.despawn_entity_worldless(entity);
+    }
+
+    pub fn configure_replication(&mut self, entity: &E, config: ReplicationConfig) {
+        self.check_client_authoritative_allowed();
+        match &config {
+            ReplicationConfig::Disabled => {
+                panic!("This configuration is only for adapter use.")
+            }
+            ReplicationConfig::Private => {
+                self.make_private(entity);
+            }
+            ReplicationConfig::Public => {
+                self.make_public(entity);
+            }
+            ReplicationConfig::Dynamic => {
+                self.make_dynamic(entity);
+            }
+        }
+    }
+
+    pub fn replication_config(&self, entity: &E) -> ReplicationConfig {
+        todo!();
+    }
+
+    pub fn make_private(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub fn make_public(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub fn make_dynamic(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub fn has_authority(&self, entity: &E) -> bool {
+        todo!();
+    }
+
+    pub fn request_authority(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub fn release_authority(&mut self, entity: &E) {
+        todo!();
     }
 
     // Connection

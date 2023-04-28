@@ -6,13 +6,19 @@ use bevy_ecs::{
 
 use naia_bevy_shared::{HostOwned, WorldMutType, WorldProxyMut};
 
-use crate::Client;
+use crate::{Client, ReplicationConfig};
 
 // Bevy Commands Extension
 pub trait CommandsExt<'w, 's, 'a> {
     fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn disable_replication(&'a mut self, client: &mut Client)
         -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn configure_replication(
+        &'a mut self,
+        client: &mut Client,
+        config: ReplicationConfig,
+    ) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn replication_config(&'a self, client: &Client) -> ReplicationConfig;
     fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
 }
 
@@ -30,6 +36,27 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         client.disable_replication(&self.id());
         self.remove::<HostOwned>();
         return self;
+    }
+
+    fn configure_replication(
+        &'a mut self,
+        client: &mut Client,
+        config: ReplicationConfig,
+    ) -> &'a mut EntityCommands<'w, 's, 'a> {
+        match &config {
+            ReplicationConfig::Disabled => {
+                self.remove::<HostOwned>();
+            }
+            _ => {
+                self.insert(HostOwned);
+            }
+        }
+        client.configure_replication(&self.id(), config);
+        return self;
+    }
+
+    fn replication_config(&'a self, client: &Client) -> ReplicationConfig {
+        client.replication_config(&self.id())
     }
 
     fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {

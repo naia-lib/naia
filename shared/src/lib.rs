@@ -101,7 +101,6 @@ pub use world::{
             FakeEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
             LocalEntityAndGlobalEntityConverterMut, LocalEntityConverter,
         },
-        entity_ref::EntityRef,
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
         local_entity::LocalEntity,

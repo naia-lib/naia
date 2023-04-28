@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use crate::{ReplicaRefWrapper, Replicate, WorldRefType};
+use naia_shared::{ReplicaRefWrapper, Replicate, WorldRefType};
 
 // EntityRef
 pub struct EntityRef<E: Copy + Eq + Hash, W: WorldRefType<E>> {

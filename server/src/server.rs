@@ -13,9 +13,9 @@ use bevy_ecs::prelude::Resource;
 
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, EntityRef,
-    GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde,
-    SerdeErr, SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, GlobalEntity,
+    Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr,
+    SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -28,8 +28,8 @@ use crate::{
     time_manager::TimeManager,
     transport::Socket,
     world::{
-        entity_mut::EntityMut, entity_owner::EntityOwner, entity_scope_map::EntityScopeMap,
-        global_world_manager::GlobalWorldManager,
+        entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
+        entity_scope_map::EntityScopeMap, global_world_manager::GlobalWorldManager,
     },
 };
 
