@@ -50,7 +50,6 @@ impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
     /// Recycle a used key, freeing it up
     pub fn recycle_key(&mut self, key: &K) {
         let key_u16: u16 = Into::<u16>::into(*key);
-        self.recycling_keys
-            .push_back((key_u16, Instant::now()));
+        self.recycling_keys.push_back((key_u16, Instant::now()));
     }
 }
