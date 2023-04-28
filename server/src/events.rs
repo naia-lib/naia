@@ -20,6 +20,7 @@ pub struct Events<E: Copy> {
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
     spawns: Vec<(UserKey, E)>,
     despawns: Vec<(UserKey, E)>,
+    publishes: Vec<(UserKey, E)>,
     inserts: HashMap<ComponentKind, Vec<(UserKey, E)>>,
     removes: HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>,
     updates: HashMap<ComponentKind, Vec<(UserKey, E)>>,
@@ -37,6 +38,7 @@ impl<E: Copy> Events<E> {
             messages: HashMap::new(),
             spawns: Vec::new(),
             despawns: Vec::new(),
+            publishes: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
             updates: HashMap::new(),
@@ -166,6 +168,11 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
+    pub(crate) fn push_publish(&mut self, user_key: &UserKey, entity: &E) {
+        self.publishes.push((*user_key, *entity));
+        self.empty = false;
+    }
+
     pub(crate) fn push_insert(
         &mut self,
         user_key: &UserKey,
@@ -222,6 +229,9 @@ impl<E: Copy> Events<E> {
                 }
                 EntityEvent::DespawnEntity(entity) => {
                     self.push_despawn(user_key, &entity);
+                }
+                EntityEvent::PublishEntity(entity) => {
+                    self.push_publish(user_key, &entity);
                 }
                 EntityEvent::InsertComponent(entity, component_kind) => {
                     self.push_insert(user_key, &entity, &component_kind);
@@ -413,7 +423,7 @@ pub(crate) fn push_message(
     list.push((*user_key, message));
 }
 
-// Spawn Event
+// Spawn Entity Event
 pub struct SpawnEntityEvent;
 impl<E: Copy> Event<E> for SpawnEntityEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -428,7 +438,7 @@ impl<E: Copy> Event<E> for SpawnEntityEvent {
     }
 }
 
-// Despawn Event
+// Despawn Entity Event
 pub struct DespawnEntityEvent;
 impl<E: Copy> Event<E> for DespawnEntityEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -443,7 +453,22 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
     }
 }
 
-// Insert Event
+// Publish Entity Event
+pub struct PublishEntityEvent;
+impl<E: Copy> Event<E> for PublishEntityEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.publishes);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.publishes.is_empty()
+    }
+}
+
+// Insert Component Event
 pub struct InsertComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -465,7 +490,7 @@ impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
     }
 }
 
-// Update Event
+// Update Component Event
 pub struct UpdateComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -487,7 +512,7 @@ impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
     }
 }
 
-// Remove Event
+// Remove Component Event
 pub struct RemoveComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }

@@ -38,7 +38,7 @@ pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events,
     InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-    UpdateComponentEvent,
+    UpdateComponentEvent, PublishEntityEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;

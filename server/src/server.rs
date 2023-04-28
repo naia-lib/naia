@@ -597,7 +597,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.entity_scope_map.remove_entity(entity);
 
         // Delete room cache entry
-        self.entity_room_map.remove(entity);
+        if let Some(room_key) = self.entity_room_map.remove(entity) {
+            if let Some(room) = self.rooms.get_mut(&room_key) {
+                room.remove_entity(entity);
+            }
+        }
 
         // Remove from ECS Record
         self.global_world_manager.host_despawn_entity(entity);
