@@ -27,8 +27,6 @@ pub fn message_impl(
 
     // Methods
     let clone_method = get_clone_method(&fields, &struct_type);
-    // let has_entity_propertys_method = get_has_entity_propertys_method(&fields);
-    // let entities_method = get_entities_method(&fields, &struct_type);
     let relations_waiting_method = get_relations_waiting_method(&fields, &struct_type);
     let relations_complete_method = get_relations_complete_method(&fields, &struct_type);
     let bit_length_method = get_bit_length_method(&fields, &struct_type);
@@ -40,8 +38,7 @@ pub fn message_impl(
     let gen = quote! {
         mod #module_name {
 
-            pub use std::any::Any;
-            pub use std::collections::HashSet;
+            pub use std::{any::Any, collections::HashSet};
             pub use #shared_crate_name::{
                 Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, LocalEntity,
                 EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer

@@ -33,10 +33,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
     }
 
     pub fn replication_config(&self) -> ReplicationConfig {
-        self.client.replication_config(&self.entity)
+        self.client.entity_replication_config(&self.entity)
     }
 
     pub fn has_authority(&self) -> bool {
-        self.client.has_authority(&self.entity)
+        self.client.entity_has_authority(&self.entity)
     }
 }

@@ -51,45 +51,46 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn configure_replication(&mut self, config: ReplicationConfig) -> &mut Self {
-        self.client.configure_replication(&self.entity, config);
+        self.client
+            .configure_entity_replication(&self.entity, config);
 
         self
     }
 
     pub fn replication_config(&self) -> ReplicationConfig {
-        self.client.replication_config(&self.entity)
+        self.client.entity_replication_config(&self.entity)
     }
 
     pub fn make_private(&mut self) -> &mut Self {
-        self.client.make_private(&self.entity);
+        self.client.unpublish_entity(&self.entity);
 
         self
     }
 
     pub fn make_public(&mut self) -> &mut Self {
-        self.client.make_public(&self.entity);
+        self.client.publish_entity(&self.entity);
 
         self
     }
 
     pub fn make_dynamic(&mut self) -> &mut Self {
-        self.client.make_dynamic(&self.entity);
+        self.client.entity_enable_delegation(&self.entity);
 
         self
     }
 
     pub fn has_authority(&self) -> bool {
-        self.client.has_authority(&self.entity)
+        self.client.entity_has_authority(&self.entity)
     }
 
     pub fn request_authority(&mut self) -> &mut Self {
-        self.client.request_authority(&self.entity);
+        self.client.request_entity_authority(&self.entity);
 
         self
     }
 
     pub fn release_authority(&mut self) -> &mut Self {
-        self.client.release_authority(&self.entity);
+        self.client.release_entity_authority(&self.entity);
 
         self
     }

@@ -10,8 +10,8 @@ use naia_shared::{
 
 use crate::{
     connection::{
-        io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
-        time_manager::TimeManager,
+        authority_manager::AuthorityManager, io::Io, tick_buffer_sender::TickBufferSender,
+        tick_queue::TickQueue, time_manager::TimeManager,
     },
     events::Events,
     world::global_world_manager::GlobalWorldManager,
@@ -21,6 +21,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub base: BaseConnection<E>,
     pub time_manager: TimeManager,
     pub tick_buffer: TickBufferSender,
+    pub authority_manager: AuthorityManager,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
     jitter_buffer: TickQueue<OwnedBitReader>,
@@ -46,6 +47,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             ),
             time_manager,
             tick_buffer,
+            authority_manager: AuthorityManager::new(),
             jitter_buffer: TickQueue::new(),
         };
 
@@ -91,27 +93,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
 
-            // read messages
-            {
-                let entity_converter =
-                    EntityConverter::new(global_world_manager, &self.base.local_world_manager);
-                self.base.message_manager.read_messages(
-                    protocol,
-                    &mut self.base.remote_world_manager.entity_waitlist,
-                    &entity_converter,
-                    &mut reader,
-                )?;
-            }
+            self.read_packet(protocol, global_world_manager, &server_tick, &mut reader)?;
+        }
 
-            // read world events
-            self.base.remote_world_reader.read_world_events(
-                global_world_manager,
-                &mut self.base.local_world_manager,
+        Ok(())
+    }
+
+    fn read_packet(
+        &mut self,
+        protocol: &Protocol,
+        global_world_manager: &mut GlobalWorldManager<E>,
+        server_tick: &Tick,
+        reader: &mut BitReader,
+    ) -> Result<(), SerdeErr> {
+        // read messages
+        {
+            let entity_converter =
+                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
+            self.base.message_manager.read_messages(
                 protocol,
-                server_tick,
-                &mut reader,
+                &mut self.base.remote_world_manager.entity_waitlist,
+                &entity_converter,
+                reader,
             )?;
         }
+
+        // read world events
+        self.base.remote_world_reader.read_world_events(
+            global_world_manager,
+            &mut self.base.local_world_manager,
+            protocol,
+            server_tick,
+            reader,
+        )?;
 
         Ok(())
     }
@@ -227,25 +241,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             let mut has_written = false;
 
             // write tick buffered messages
-            {
-                let mut converter = EntityConverterMut::new(
-                    global_world_manager,
-                    &mut self.base.local_world_manager,
-                );
-                self.tick_buffer.write_messages(
-                    &protocol,
-                    &mut converter,
-                    &mut writer,
-                    next_packet_index,
-                    &client_tick,
-                    &mut has_written,
-                );
+            let mut converter =
+                EntityConverterMut::new(global_world_manager, &mut self.base.local_world_manager);
+            self.tick_buffer.write_messages(
+                &protocol,
+                &mut converter,
+                &mut writer,
+                next_packet_index,
+                &client_tick,
+                &mut has_written,
+            );
 
-                // finish tick buffered messages
-                false.ser(&mut writer);
-                writer.release_bits(1);
-            }
+            // finish tick buffered messages
+            false.ser(&mut writer);
+            writer.release_bits(1);
 
+            // write common parts of packet (messages & world events)
             self.base.write_outgoing_packet(
                 protocol,
                 now,

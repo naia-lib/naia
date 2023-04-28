@@ -33,8 +33,8 @@ use crate::{
         entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
         remote::entity_waitlist::EntityWaitlist,
     },
-    EntityAndGlobalEntityConverter, EntityConverter, LocalEntityAndGlobalEntityConverter,
-    LocalEntityConverter, MessageKinds, Protocol,
+    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter,
+    LocalEntityAndGlobalEntityConverter, MessageKinds, Protocol,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -291,7 +291,7 @@ impl MessageManager {
     pub fn receive_messages<E: Eq + Copy + Hash>(
         &mut self,
         global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
-        local_entity_converter: &dyn LocalEntityConverter<E>,
+        local_entity_converter: &dyn EntityAndLocalEntityConverter<E>,
         entity_waitlist: &mut EntityWaitlist,
     ) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let entity_converter =

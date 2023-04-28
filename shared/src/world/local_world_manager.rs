@@ -7,8 +7,8 @@ use std::{
 };
 
 use crate::{
-    world::entity::local_entity::LocalEntity, EntityDoesNotExistError, KeyGenerator,
-    LocalEntityConverter,
+    world::entity::local_entity::LocalEntity, EntityAndLocalEntityConverter,
+    EntityDoesNotExistError, KeyGenerator,
 };
 
 pub struct LocalWorldManager<E: Copy + Eq + Hash> {
@@ -159,7 +159,7 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash> LocalEntityConverter<E> for LocalWorldManager<E> {
+impl<E: Copy + Eq + Hash> EntityAndLocalEntityConverter<E> for LocalWorldManager<E> {
     fn entity_to_local_entity(&self, entity: &E) -> Result<LocalEntity, EntityDoesNotExistError> {
         if let Some(local_entity) = self.world_to_local_entity.get(entity) {
             return Ok(*local_entity);

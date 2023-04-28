@@ -1,3 +1,4 @@
+pub mod authority_manager;
 pub mod base_time_manager;
 pub mod channel_tick_buffer_sender;
 #[allow(clippy::module_inception)]

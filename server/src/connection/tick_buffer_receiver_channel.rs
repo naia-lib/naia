@@ -8,11 +8,11 @@ use naia_shared::{
 
 /// Receive updates from the client and store them in a buffer along with the corresponding
 /// client tick.
-pub struct ChannelTickBufferReceiver {
+pub struct TickBufferReceiverChannel {
     incoming_messages: IncomingMessages,
 }
 
-impl ChannelTickBufferReceiver {
+impl TickBufferReceiverChannel {
     pub fn new(_settings: TickBufferSettings) -> Self {
         Self {
             incoming_messages: IncomingMessages::new(),

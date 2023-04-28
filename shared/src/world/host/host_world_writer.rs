@@ -11,8 +11,9 @@ use crate::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
     },
     BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityAction,
-    EntityActionType, EntityConverterMut, HostWorldEvents, HostWorldManager, Instant,
-    LocalEntityConverter, MessageIndex, PacketIndex, Serde, UnsignedVariableInteger, WorldRefType,
+    EntityActionType, EntityAndLocalEntityConverter, EntityConverterMut, HostWorldEvents,
+    HostWorldManager, Instant, MessageIndex, PacketIndex, Serde, UnsignedVariableInteger,
+    WorldRefType,
 };
 
 use super::entity_action_event::EntityActionEvent;

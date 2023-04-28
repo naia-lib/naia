@@ -43,7 +43,7 @@ pub trait LocalEntityAndGlobalEntityConverter {
     ) -> Result<GlobalEntity, EntityDoesNotExistError>;
 }
 
-pub trait LocalEntityConverter<E: Copy + Eq + Hash> {
+pub trait EntityAndLocalEntityConverter<E: Copy + Eq + Hash> {
     fn entity_to_local_entity(&self, entity: &E) -> Result<LocalEntity, EntityDoesNotExistError>;
     fn local_entity_to_entity(
         &self,
@@ -80,13 +80,13 @@ impl LocalEntityAndGlobalEntityConverterMut for FakeEntityConverter {
 
 pub struct EntityConverter<'a, 'b, E: Eq + Copy + Hash> {
     global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
-    local_entity_converter: &'b dyn LocalEntityConverter<E>,
+    local_entity_converter: &'b dyn EntityAndLocalEntityConverter<E>,
 }
 
 impl<'a, 'b, E: Eq + Copy + Hash> EntityConverter<'a, 'b, E> {
     pub fn new(
         global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
-        local_entity_converter: &'b dyn LocalEntityConverter<E>,
+        local_entity_converter: &'b dyn EntityAndLocalEntityConverter<E>,
     ) -> Self {
         Self {
             global_entity_converter,

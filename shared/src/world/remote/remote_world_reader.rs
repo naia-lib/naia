@@ -56,7 +56,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         protocol: &Protocol,
-        tick: Tick,
+        tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read entity updates
@@ -187,7 +187,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         &mut self,
         local_world_manager: &LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
-        tick: Tick,
+        tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -216,7 +216,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         &mut self,
         local_world_manager: &LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
-        tick: Tick,
+        tick: &Tick,
         reader: &mut BitReader,
         local_entity: &LocalEntity,
     ) -> Result<(), SerdeErr> {
@@ -232,7 +232,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
             let world_entity = local_world_manager.get_world_entity(local_entity);
 
             self.received_updates
-                .push((tick, world_entity, component_update));
+                .push((*tick, world_entity, component_update));
         }
 
         Ok(())

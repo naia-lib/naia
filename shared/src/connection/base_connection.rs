@@ -1,6 +1,6 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use naia_serde::{BitWriter, Serde};
+use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{
@@ -13,7 +13,8 @@ use crate::{
         local_world_manager::LocalWorldManager,
         remote::remote_world_reader::RemoteWorldReader,
     },
-    EntityEvent, HostWorldManager, Protocol, RemoteWorldManager, WorldMutType, WorldRefType,
+    EntityConverter, EntityEvent, HostWorldManager, Protocol, RemoteWorldManager, Tick,
+    WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -184,6 +185,40 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
                 host_world_events,
             );
         }
+    }
+
+    pub fn read_incoming_packet(
+        &mut self,
+        protocol: &Protocol,
+        client_tick: &Tick,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        reader: &mut BitReader,
+    ) -> Result<(), SerdeErr> {
+        {
+            let entity_converter = EntityConverter::new(
+                global_world_manager.to_global_entity_converter(),
+                &self.local_world_manager,
+            );
+            self.message_manager.read_messages(
+                protocol,
+                &mut self.remote_world_manager.entity_waitlist,
+                &entity_converter,
+                reader,
+            )?;
+        }
+
+        // read world events
+        if protocol.client_authoritative_entities {
+            self.remote_world_reader.read_world_events(
+                global_world_manager,
+                &mut self.local_world_manager,
+                protocol,
+                client_tick,
+                reader,
+            )?;
+        }
+
+        Ok(())
     }
 
     pub fn despawn_all_remote_entities<W: WorldMutType<E>>(

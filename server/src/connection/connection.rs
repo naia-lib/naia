@@ -3,15 +3,15 @@ use std::{hash::Hash, net::SocketAddr};
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ConnectionConfig,
-    EntityConverter, EntityEvent, HostType, HostWorldEvents, Instant, PacketType, Protocol, Serde,
-    SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityEvent,
+    HostType, HostWorldEvents, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader,
+    Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
     connection::{
-        io::Io, ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
-        tick_buffer_receiver::TickBufferReceiver,
+        authority_manager::AuthorityManager, io::Io, ping_config::PingConfig,
+        tick_buffer_messages::TickBufferMessages, tick_buffer_receiver::TickBufferReceiver,
     },
     events::Events,
     time_manager::TimeManager,
@@ -26,6 +26,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
     pub base: BaseConnection<E>,
     pub ping_manager: PingManager,
+    pub authority_manager: AuthorityManager,
     tick_buffer: TickBufferReceiver,
 }
 
@@ -49,8 +50,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 channel_kinds,
                 global_world_manager,
             ),
-            tick_buffer: TickBufferReceiver::new(channel_kinds),
             ping_manager: PingManager::new(ping_config),
+            authority_manager: AuthorityManager::new(),
+            tick_buffer: TickBufferReceiver::new(channel_kinds),
         }
     }
 
@@ -73,38 +75,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         reader: &mut BitReader,
         global_world_manager: &mut GlobalWorldManager<E>,
     ) -> Result<(), SerdeErr> {
-        {
-            let entity_converter =
-                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
+        // read tick-buffered messages
+        self.tick_buffer.read_messages(
+            protocol,
+            &server_tick,
+            &client_tick,
+            global_world_manager,
+            &self.base.local_world_manager,
+            reader,
+        )?;
 
-            // read tick-buffered messages
-            self.tick_buffer.read_messages(
-                protocol,
-                &server_tick,
-                &client_tick,
-                &entity_converter,
-                reader,
-            )?;
-
-            // read messages
-            self.base.message_manager.read_messages(
-                protocol,
-                &mut self.base.remote_world_manager.entity_waitlist,
-                &entity_converter,
-                reader,
-            )?;
-        }
-
-        // read world events
-        if protocol.client_authoritative_entities {
-            self.base.remote_world_reader.read_world_events(
-                global_world_manager,
-                &mut self.base.local_world_manager,
-                protocol,
-                client_tick,
-                reader,
-            )?;
-        }
+        // read common parts of packet (messages & world events)
+        self.base
+            .read_incoming_packet(protocol, &client_tick, global_world_manager, reader)?;
 
         return Ok(());
     }

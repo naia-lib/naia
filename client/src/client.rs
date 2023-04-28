@@ -350,60 +350,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     // Replicate options & authority management
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn enable_replication(&mut self, entity: &E) {
+    pub fn enable_entity_replication(&mut self, entity: &E) {
         self.check_client_authoritative_allowed();
         self.spawn_entity_inner(&entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn disable_replication(&mut self, entity: &E) {
+    pub fn disable_entity_replication(&mut self, entity: &E) {
         // Despawn from connections and inner tracking
         self.despawn_entity_worldless(entity);
     }
 
-    pub fn configure_replication(&mut self, entity: &E, config: ReplicationConfig) {
+    pub fn configure_entity_replication(&mut self, entity: &E, config: ReplicationConfig) {
         self.check_client_authoritative_allowed();
         match &config {
             ReplicationConfig::Disabled => {
                 panic!("This configuration is only for adapter use.")
             }
             ReplicationConfig::Private => {
-                self.make_private(entity);
+                self.unpublish_entity(entity);
             }
             ReplicationConfig::Public => {
-                self.make_public(entity);
+                self.publish_entity(entity);
             }
             ReplicationConfig::Dynamic => {
-                self.make_dynamic(entity);
+                self.entity_enable_delegation(entity);
             }
         }
     }
 
-    pub fn replication_config(&self, entity: &E) -> ReplicationConfig {
-        todo!();
-    }
-
-    pub fn make_private(&mut self, entity: &E) {
-        todo!();
-    }
-
-    pub fn make_public(&mut self, entity: &E) {
-        todo!();
-    }
-
-    pub fn make_dynamic(&mut self, entity: &E) {
-        todo!();
-    }
-
-    pub fn has_authority(&self, entity: &E) -> bool {
-        todo!();
-    }
-
-    pub fn request_authority(&mut self, entity: &E) {
-        todo!();
-    }
-
-    pub fn release_authority(&mut self, entity: &E) {
+    pub fn entity_replication_config(&self, entity: &E) -> ReplicationConfig {
         todo!();
     }
 
@@ -580,6 +556,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // cleanup all other loose ends
         self.global_world_manager
             .host_remove_component(entity, &component_kind);
+    }
+
+    pub(crate) fn publish_entity(&mut self, entity: &E) {
+        if let Some(connection) = &mut self.server_connection {
+            let global_entity = self
+                .global_world_manager
+                .entity_to_global_entity(entity)
+                .unwrap();
+            connection.authority_manager.publish_entity(&global_entity);
+        }
+    }
+
+    pub(crate) fn unpublish_entity(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub(crate) fn entity_has_authority(&self, entity: &E) -> bool {
+        todo!();
+    }
+
+    pub(crate) fn request_entity_authority(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub(crate) fn release_entity_authority(&mut self, entity: &E) {
+        todo!();
     }
 
     // Private methods
