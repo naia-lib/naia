@@ -78,7 +78,7 @@ pub fn replicate_impl(
     let clone_method = get_clone_method(&replica_name, &properties, &struct_type);
     let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type);
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
-    let publish_method = get_publish_method(&properties, &struct_type);
+    let publish_method = get_publish_method(&enum_name, &properties, &struct_type);
     let localize_method = get_localize_method(&properties, &struct_type);
     let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
     let read_apply_field_update_method =
@@ -485,13 +485,14 @@ fn get_set_mutator_method(properties: &[Property], struct_type: &StructType) -> 
     }
 }
 
-fn get_publish_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+fn get_publish_method(enum_name: &Ident, properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter().filter(|p| p.is_replicated()) {
         let field_name = get_field_name(property, struct_type);
+        let uppercase_variant_name = property.uppercase_variable_name();
         let new_output_right = quote! {
-                self.#field_name.remote_publish(self.diff_mask_size(), mutator);
+                self.#field_name.remote_publish(#enum_name::#uppercase_variant_name as u8, mutator);
         };
         let new_output_result = quote! {
             #output

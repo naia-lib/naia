@@ -55,6 +55,14 @@ pub fn connect_events(
                 16 * ((Random::gen_range_u32(0, 40) as i16) - 20),
                 16 * ((Random::gen_range_u32(0, 30) as i16) - 15),
             ))
+            // Insert Color component
+            .insert(Color::new(
+                ColorValue::Aqua,
+            ))
+            // Insert Shape component
+            .insert(Shape::new(
+                ShapeValue::Circle,
+            ))
             // Insert Cursor marker component
             .insert(LocalCursor)
             // return Entity id
