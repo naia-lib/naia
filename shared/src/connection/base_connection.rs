@@ -117,7 +117,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         self.ack_manager.next_sender_packet_index()
     }
 
-    pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+    pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.host_world_manager
             .collect_outgoing_messages(rtt_millis);
         self.message_manager

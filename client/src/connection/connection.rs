@@ -3,9 +3,9 @@ use std::hash::Hash;
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig,
-    EntityConverterMut, HostType, HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol,
-    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig, HostType,
+    HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
+    StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -93,8 +93,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
 
-            self.base
-                .read_packet(protocol, &server_tick, global_world_manager, true, &mut reader)?;
+            self.base.read_packet(
+                protocol,
+                &server_tick,
+                global_world_manager,
+                true,
+                &mut reader,
+            )?;
         }
 
         Ok(())
@@ -135,7 +140,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     // Outgoing data
 
     /// Collect and send any outgoing packets from client to server
-    pub fn send_outgoing_packets<W: WorldRefType<E>>(
+    pub fn send_packets<W: WorldRefType<E>>(
         &mut self,
         protocol: &Protocol,
         now: &Instant,
@@ -144,9 +149,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         global_world_manager: &GlobalWorldManager<E>,
     ) {
         let rtt_millis = self.time_manager.rtt();
-        self.base.collect_outgoing_messages(now, &rtt_millis);
+        self.base.collect_messages(now, &rtt_millis);
 
-        self.tick_buffer.collect_outgoing_messages(
+        self.tick_buffer.collect_messages(
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,
         );
@@ -157,7 +162,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(
+            if self.send_packet(
                 protocol,
                 now,
                 io,
@@ -176,7 +181,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     }
 
     // Sends packet and returns whether or not a packet was sent
-    fn send_outgoing_packet<W: WorldRefType<E>>(
+    fn send_packet<W: WorldRefType<E>>(
         &mut self,
         protocol: &Protocol,
         now: &Instant,
@@ -187,50 +192,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     ) -> bool {
         if host_world_events.has_events()
             || self.base.message_manager.has_outgoing_messages()
-            || self.tick_buffer.has_outgoing_messages()
+            || self.tick_buffer.has_messages()
         {
-            let next_packet_index = self.base.next_packet_index();
-
-            let mut writer = BitWriter::new();
-
-            // Reserve bits we know will be required to finish the message:
-            // 1. Tick buffer finish bit
-            // 2. Messages finish bit
-            // 3. Updates finish bit
-            // 4. Actions finish bit
-            writer.reserve_bits(4);
-
-            // write header
-            self.base.write_header(PacketType::Data, &mut writer);
-
-            // write client tick
-            let client_tick: Tick = self.time_manager.client_sending_tick;
-            client_tick.ser(&mut writer);
-
-            let mut has_written = false;
-
-            // write tick buffered messages
-            let mut converter =
-                EntityConverterMut::new(global_world_manager, &mut self.base.local_world_manager);
-            self.tick_buffer.write_messages(
-                &protocol,
-                &mut converter,
-                &mut writer,
-                next_packet_index,
-                &client_tick,
-                &mut has_written,
-            );
-
-            // write common parts of packet (messages & world events)
-            self.base.write_packet(
+            let writer = self.write_packet(
                 protocol,
                 now,
-                &mut writer,
-                next_packet_index,
                 world,
                 global_world_manager,
-                &mut has_written,
-                protocol.client_authoritative_entities,
                 host_world_events,
             );
 
@@ -244,5 +212,60 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
 
         false
+    }
+
+    fn write_packet<W: WorldRefType<E>>(
+        &mut self,
+        protocol: &Protocol,
+        now: &Instant,
+        world: &W,
+        global_world_manager: &GlobalWorldManager<E>,
+        host_world_events: &mut HostWorldEvents<E>,
+    ) -> BitWriter {
+        let next_packet_index = self.base.next_packet_index();
+
+        let mut writer = BitWriter::new();
+
+        // Reserve bits we know will be required to finish the message:
+        // 1. Tick buffer finish bit
+        // 2. Messages finish bit
+        // 3. Updates finish bit
+        // 4. Actions finish bit
+        writer.reserve_bits(4);
+
+        // write header
+        self.base.write_header(PacketType::Data, &mut writer);
+
+        // write client tick
+        let client_tick: Tick = self.time_manager.client_sending_tick;
+        client_tick.ser(&mut writer);
+
+        let mut has_written = false;
+
+        // write tick buffered messages
+        self.tick_buffer.write_messages(
+            &protocol,
+            global_world_manager,
+            &mut self.base.local_world_manager,
+            &mut writer,
+            next_packet_index,
+            &client_tick,
+            &mut has_written,
+        );
+
+        // write common parts of packet (messages & world events)
+        self.base.write_packet(
+            protocol,
+            now,
+            &mut writer,
+            next_packet_index,
+            world,
+            global_world_manager,
+            &mut has_written,
+            protocol.client_authoritative_entities,
+            host_world_events,
+        );
+
+        writer
     }
 }

@@ -340,7 +340,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
 
-            connection.send_outgoing_packets(
+            connection.send_packets(
                 &self.protocol,
                 &now,
                 &mut self.io,

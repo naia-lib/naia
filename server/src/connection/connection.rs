@@ -86,8 +86,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         )?;
 
         // read common parts of packet (messages & world events)
-        self.base
-            .read_packet(protocol, &client_tick, global_world_manager, protocol.client_authoritative_entities, reader)?;
+        self.base.read_packet(
+            protocol,
+            &client_tick,
+            global_world_manager,
+            protocol.client_authoritative_entities,
+            reader,
+        )?;
 
         return Ok(());
     }
@@ -112,7 +117,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
         }
 
-        // read world events
+        // Receive World Events
         if protocol.client_authoritative_entities {
             let remote_events = self.base.remote_world_reader.take_incoming_events();
             let world_events = self.base.remote_world_manager.process_world_events(
@@ -141,7 +146,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     }
 
     // Outgoing data
-    pub fn send_outgoing_packets<W: WorldRefType<E>>(
+    pub fn send_packets<W: WorldRefType<E>>(
         &mut self,
         protocol: &Protocol,
         now: &Instant,
@@ -151,7 +156,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         time_manager: &TimeManager,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
-        self.base.collect_outgoing_messages(now, &rtt_millis);
+        self.base.collect_messages(now, &rtt_millis);
         let mut host_world_events = self
             .base
             .host_world_manager
@@ -159,7 +164,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         let mut any_sent = false;
         loop {
-            if self.send_outgoing_packet(
+            if self.send_packet(
                 protocol,
                 now,
                 io,
@@ -180,7 +185,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
     /// Send any message, component actions and component updates to the client
     /// Will split the data into multiple packets.
-    fn send_outgoing_packet<W: WorldRefType<E>>(
+    fn send_packet<W: WorldRefType<E>>(
         &mut self,
         protocol: &Protocol,
         now: &Instant,
@@ -191,37 +196,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         host_world_events: &mut HostWorldEvents<E>,
     ) -> bool {
         if host_world_events.has_events() || self.base.message_manager.has_outgoing_messages() {
-            let next_packet_index = self.base.next_packet_index();
-
-            let mut writer = BitWriter::new();
-
-            // Reserve bits we know will be required to finish the message:
-            // 1. Messages finish bit
-            // 2. Updates finish bit
-            // 3. Actions finish bit
-            writer.reserve_bits(3);
-
-            // write header
-            self.base.write_header(PacketType::Data, &mut writer);
-
-            // write server tick
-            time_manager.current_tick().ser(&mut writer);
-
-            // write server tick instant
-            time_manager.current_tick_instant().ser(&mut writer);
-
-            // write common data packet
-            let mut has_written = false;
-
-            self.base.write_packet(
-                &protocol,
+            let writer = self.write_packet(
+                protocol,
                 now,
-                &mut writer,
-                next_packet_index,
                 world,
                 global_world_manager,
-                &mut has_written,
-                true,
+                time_manager,
                 host_world_events,
             );
 
@@ -235,5 +215,50 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
 
         false
+    }
+
+    fn write_packet<W: WorldRefType<E>>(
+        &mut self,
+        protocol: &Protocol,
+        now: &Instant,
+        world: &W,
+        global_world_manager: &GlobalWorldManager<E>,
+        time_manager: &TimeManager,
+        host_world_events: &mut HostWorldEvents<E>,
+    ) -> BitWriter {
+        let next_packet_index = self.base.next_packet_index();
+
+        let mut writer = BitWriter::new();
+
+        // Reserve bits we know will be required to finish the message:
+        // 1. Messages finish bit
+        // 2. Updates finish bit
+        // 3. Actions finish bit
+        writer.reserve_bits(3);
+
+        // write header
+        self.base.write_header(PacketType::Data, &mut writer);
+
+        // write server tick
+        time_manager.current_tick().ser(&mut writer);
+
+        // write server tick instant
+        time_manager.current_tick_instant().ser(&mut writer);
+
+        // write common data packet
+        let mut has_written = false;
+        self.base.write_packet(
+            &protocol,
+            now,
+            &mut writer,
+            next_packet_index,
+            world,
+            global_world_manager,
+            &mut has_written,
+            true,
+            host_world_events,
+        );
+
+        writer
     }
 }

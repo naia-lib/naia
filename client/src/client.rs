@@ -190,7 +190,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // send outgoing packets
                 let now = Instant::now();
 
-                connection.send_outgoing_packets(
+                connection.send_packets(
                     &self.protocol,
                     &now,
                     &mut self.io,

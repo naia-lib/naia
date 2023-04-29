@@ -25,11 +25,7 @@ impl ChannelTickBufferSender {
         }
     }
 
-    pub fn collect_outgoing_messages(
-        &mut self,
-        client_sending_tick: &Tick,
-        server_receivable_tick: &Tick,
-    ) {
+    pub fn collect_messages(&mut self, client_sending_tick: &Tick, server_receivable_tick: &Tick) {
         if sequence_greater_than(*client_sending_tick, self.last_sent) || self.never_sent {
             // Remove messages that would never be able to reach the Server
             self.sending_messages
