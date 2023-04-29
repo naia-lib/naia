@@ -230,9 +230,6 @@ impl<E: Copy> Events<E> {
                 EntityEvent::DespawnEntity(entity) => {
                     self.push_despawn(user_key, &entity);
                 }
-                EntityEvent::PublishEntity(entity) => {
-                    self.push_publish(user_key, &entity);
-                }
                 EntityEvent::InsertComponent(entity, component_kind) => {
                     self.push_insert(user_key, &entity, &component_kind);
                 }

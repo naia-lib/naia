@@ -60,6 +60,7 @@ pub use connection::{
 };
 pub use messages::{
     channels::{
+        system_channel::SystemChannel,
         channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
         channel_kinds::{ChannelKind, ChannelKinds},
         default_channels,
@@ -67,7 +68,10 @@ pub use messages::{
             channel_receiver::ChannelReceiver, ordered_reliable_receiver::OrderedReliableReceiver,
             unordered_reliable_receiver::UnorderedReliableReceiver,
         },
-        senders::{channel_sender::ChannelSender, reliable_sender::ReliableSender},
+        senders::{
+            channel_sender::{ChannelSender, MessageChannelSender},
+            reliable_sender::ReliableSender,
+        },
     },
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_container::MessageContainer,
@@ -96,7 +100,7 @@ pub use world::{
         entity_action::EntityAction,
         entity_action_receiver::EntityActionReceiver,
         entity_action_type::EntityActionType,
-        entity_auth_event::EntityAuthEvent,
+        entity_auth_event::EntityEventMessage,
         entity_converters::{
             EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter,
             EntityConverterMut, FakeEntityConverter, GlobalWorldManagerType,

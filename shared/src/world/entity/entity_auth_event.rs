@@ -1,22 +1,33 @@
+use std::hash::Hash;
+
 use naia_derive::MessageInternal;
 use naia_serde::SerdeInternal;
 
-use crate::GlobalEntity;
+use crate::{EntityAndGlobalEntityConverter, EntityProperty};
 
 #[derive(MessageInternal)]
-pub struct EntityAuthEvent {
-    pub inner: EntityAuthEventInner,
+pub struct EntityEventMessage {
+    pub entity: EntityProperty,
+    pub action: EntityEvent,
 }
 
 #[derive(SerdeInternal, Clone, Debug, PartialEq)]
-pub enum EntityAuthEventInner {
-    Publish(GlobalEntity),
+pub enum EntityEvent {
+    Publish,
 }
 
-impl EntityAuthEvent {
-    pub fn new_publish(global_entity: &GlobalEntity) -> Self {
-        Self {
-            inner: EntityAuthEventInner::Publish(*global_entity),
-        }
+impl EntityEventMessage {
+    pub fn new_publish<E: Copy + Eq + Hash + Send + Sync>(
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        entity: &E,
+    ) -> Self {
+        let mut output = Self {
+            entity: EntityProperty::new(),
+            action: EntityEvent::Publish,
+        };
+
+        output.entity.set(converter, entity);
+
+        output
     }
 }

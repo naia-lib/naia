@@ -150,7 +150,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     ) {
         let rtt_millis = self.time_manager.rtt();
         self.base.collect_messages(now, &rtt_millis);
-
         self.tick_buffer.collect_messages(
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,

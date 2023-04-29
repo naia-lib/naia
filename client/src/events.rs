@@ -200,9 +200,6 @@ impl<E: Copy> Events<E> {
                 EntityEvent::DespawnEntity(entity) => {
                     self.push_despawn(entity);
                 }
-                EntityEvent::PublishEntity(_) => {
-                    panic!("PublishEntity event should not be received by Client! Intended for Server only.");
-                }
                 EntityEvent::InsertComponent(entity, component_kind) => {
                     self.push_insert(entity, component_kind);
                 }

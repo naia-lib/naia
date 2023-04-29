@@ -10,7 +10,7 @@ pub use naia_shared::{
     EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut, EntityDoesNotExistError,
     FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer, PacketType,
     PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
-    WorldMutType, WorldRefType,
+    WorldMutType, WorldRefType, SystemChannel, EntityEventMessage
 };
 
 use crate::{
@@ -559,13 +559,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub(crate) fn publish_entity(&mut self, entity: &E) {
-        if let Some(connection) = &mut self.server_connection {
-            let global_entity = self
-                .global_world_manager
-                .entity_to_global_entity(entity)
-                .unwrap();
-            connection.authority_manager.publish_entity(&global_entity);
-        }
+        let message = EntityEventMessage::new_publish(&self.global_world_manager, entity);
+        self.send_message::<SystemChannel, EntityEventMessage>(&message);
     }
 
     pub(crate) fn unpublish_entity(&mut self, entity: &E) {
