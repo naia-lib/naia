@@ -1,9 +1,12 @@
-use std::{hash::Hash, net::SocketAddr};
-use std::any::Any;
+use std::{any::Any, hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig, EntityEvent, EntityEventMessage, HostType, HostWorldEvents, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{
+    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig,
+    EntityEvent, EntityEventMessage, HostType, HostWorldEvents, Instant, PacketType, Protocol,
+    Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -23,7 +26,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
     pub base: BaseConnection<E>,
     pub ping_manager: PingManager,
-    pub authority_manager: AuthorityManager,
+    pub authority_manager: AuthorityManager<E>,
     tick_buffer: TickBufferReceiver,
 }
 
@@ -119,6 +122,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                     let Some(entity) = event_message.entity.get(global_world_manager) else {
                         panic!("Received message with no Entity over SystemChannel!");
                     };
+                    self.authority_manager.add_public(&entity);
                     incoming_events.push_publish(&self.user_key, &entity);
                 }
             } else {

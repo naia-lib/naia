@@ -60,7 +60,6 @@ pub use connection::{
 };
 pub use messages::{
     channels::{
-        system_channel::SystemChannel,
         channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
         channel_kinds::{ChannelKind, ChannelKinds},
         default_channels,
@@ -72,6 +71,7 @@ pub use messages::{
             channel_sender::{ChannelSender, MessageChannelSender},
             reliable_sender::ReliableSender,
         },
+        system_channel::SystemChannel,
     },
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_container::MessageContainer,

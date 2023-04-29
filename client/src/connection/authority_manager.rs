@@ -1,12 +1,7 @@
-
-pub struct AuthorityManager {
-
-}
+pub struct AuthorityManager {}
 
 impl AuthorityManager {
     pub fn new() -> Self {
-        Self {
-
-        }
+        Self {}
     }
 }

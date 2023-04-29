@@ -22,6 +22,8 @@ pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConv
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
     fn remote_spawn_entity(&mut self, entity: &E, user_key: &u64);
     fn remote_despawn_entity(&mut self, entity: &E);
+    fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind);
+    fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind);
 }
 
 pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {

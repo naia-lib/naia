@@ -2,17 +2,22 @@ use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
-use crate::{connection::compression_config::CompressionConfig, EntityEventMessage, messages::{
-    channels::{
-        channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
-        channel_kinds::ChannelKinds,
-        default_channels::DefaultChannelsPlugin,
-        system_channel::SystemChannel,
+use crate::{
+    connection::compression_config::CompressionConfig,
+    messages::{
+        channels::{
+            channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
+            channel_kinds::ChannelKinds,
+            default_channels::DefaultChannelsPlugin,
+            system_channel::SystemChannel,
+        },
+        fragment::FragmentedMessage,
+        message::Message,
+        message_kinds::MessageKinds,
     },
-    fragment::FragmentedMessage,
-    message::Message,
-    message_kinds::MessageKinds,
-}, ReliableSettings, world::component::{component_kinds::ComponentKinds, replicate::Replicate}};
+    world::component::{component_kinds::ComponentKinds, replicate::Replicate},
+    EntityEventMessage, ReliableSettings,
+};
 
 // Protocol Plugin
 pub trait ProtocolPlugin {

@@ -8,9 +8,9 @@ use bevy_ecs::prelude::Resource;
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
     EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut, EntityDoesNotExistError,
-    FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer, PacketType,
-    PingIndex, Protocol, Replicate, Serde, SocketConfig, StandardHeader, Tick, Timer, Timestamp,
-    WorldMutType, WorldRefType, SystemChannel, EntityEventMessage
+    EntityEventMessage, FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message,
+    MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig,
+    StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use crate::{

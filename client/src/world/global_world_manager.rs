@@ -173,6 +173,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         let global_entity = record.global_entity;
         self.global_entity_map.remove(&global_entity);
     }
+
+    fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
+        component_kind_set.insert(*component_kind);
+    }
+
+    fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
+        if !component_kind_set.remove(component_kind) {
+            panic!("component does not exist!");
+        }
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E>

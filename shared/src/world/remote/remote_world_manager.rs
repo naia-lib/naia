@@ -125,7 +125,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                             .remove(&(local_entity, component_kind))
                             .unwrap();
 
-                        self.process_insert(world, world_entity, component, &component_kind);
+                        self.process_insert(
+                            global_world_manager,
+                            world,
+                            world_entity,
+                            component,
+                            &component_kind,
+                        );
                     }
                 }
                 EntityAction::DespawnEntity(local_entity) => {
@@ -135,7 +141,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     // Generate event for each component, handing references off just in
                     // case
                     for component_kind in world.component_kinds(&world_entity) {
-                        self.process_remove(world, world_entity, component_kind);
+                        self.process_remove(
+                            global_world_manager,
+                            world,
+                            world_entity,
+                            component_kind,
+                        );
                     }
 
                     world.despawn_entity(&world_entity);
@@ -150,11 +161,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
 
                     let world_entity = local_world_manager.get_world_entity(&local_entity);
 
-                    self.process_insert(world, world_entity, component, &component_kind);
+                    self.process_insert(
+                        global_world_manager,
+                        world,
+                        world_entity,
+                        component,
+                        &component_kind,
+                    );
                 }
                 EntityAction::RemoveComponent(local_entity, component_kind) => {
                     let world_entity = local_world_manager.get_world_entity(&local_entity);
-                    self.process_remove(world, world_entity, component_kind);
+                    self.process_remove(global_world_manager, world, world_entity, component_kind);
                 }
                 EntityAction::Noop => {
                     // do nothing
@@ -165,6 +182,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
 
     fn process_insert<W: WorldMutType<E>>(
         &mut self,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         world: &mut W,
         world_entity: E,
         component: Box<dyn Replicate>,
@@ -179,21 +197,43 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             self.insert_waitlist_map
                 .insert((world_entity, *component_kind), handle);
         } else {
-            world.insert_boxed_component(&world_entity, component);
-
-            self.outgoing_events.push(EntityEvent::<E>::InsertComponent(
+            self.finish_insert(
+                global_world_manager,
+                world,
                 world_entity,
-                *component_kind,
-            ));
+                component,
+                component_kind,
+            );
         }
+    }
+
+    fn finish_insert<W: WorldMutType<E>>(
+        &mut self,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        world: &mut W,
+        world_entity: E,
+        component: Box<dyn Replicate>,
+        component_kind: &ComponentKind,
+    ) {
+        global_world_manager.remote_insert_component(&world_entity, component_kind);
+
+        world.insert_boxed_component(&world_entity, component);
+
+        self.outgoing_events.push(EntityEvent::<E>::InsertComponent(
+            world_entity,
+            *component_kind,
+        ));
     }
 
     fn process_remove<W: WorldMutType<E>>(
         &mut self,
+        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         world: &mut W,
         world_entity: E,
         component_kind: ComponentKind,
     ) {
+        // Remove from Global World Manager
+        global_world_manager.remote_remove_component(&world_entity, &component_kind);
         // Remove from insert waitlist if it's there
         if let Some(handle) = self
             .insert_waitlist_map
@@ -228,11 +268,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
     ) {
-        let converter = EntityConverter::new(
-            global_world_manager.to_global_entity_converter(),
-            local_world_manager,
-        );
-
         if let Some(list) = self
             .entity_waitlist
             .collect_ready_items(&mut self.insert_waitlist_store)
@@ -241,13 +276,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 let component_kind = component.kind();
                 self.insert_waitlist_map
                     .remove(&(world_entity, component_kind));
-                component.relations_complete(&converter);
-                world.insert_boxed_component(&world_entity, component);
-
-                self.outgoing_events.push(EntityEvent::<E>::InsertComponent(
+                {
+                    let converter = EntityConverter::new(
+                        global_world_manager.to_global_entity_converter(),
+                        local_world_manager,
+                    );
+                    component.relations_complete(&converter);
+                }
+                self.finish_insert(
+                    global_world_manager,
+                    world,
                     world_entity,
-                    component_kind,
-                ));
+                    component,
+                    &component_kind,
+                );
             }
         }
     }

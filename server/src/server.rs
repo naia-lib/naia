@@ -1276,10 +1276,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // TODO: we should be able to cache these tuples of keys to avoid building a new
             // list each time
             for user_key in room.user_keys() {
-                for entity in room.entities() {
-                    if world.has_entity(entity) {
-                        if let Some(user) = self.users.get(user_key) {
-                            if let Some(connection) = self.user_connections.get_mut(&user.address) {
+                if let Some(user) = self.users.get(user_key) {
+                    if let Some(connection) = self.user_connections.get_mut(&user.address) {
+                        for entity in room.entities() {
+                            if world.has_entity(entity) {
+                                if connection.authority_manager.is_public(entity) {
+                                    // entity is owned by client, but it is public, so we don't need to replicate it
+                                    continue;
+                                }
+
                                 let currently_in_scope =
                                     connection.base.host_world_manager.host_has_entity(entity);
 

@@ -8,6 +8,7 @@ use crate::world::component::property_mutate::PropertyMutator;
 enum PropertyImpl<T: Serde> {
     HostOwned(HostOwnedProperty<T>),
     RemoteOwned(RemoteOwnedProperty<T>),
+    RemotePublic(RemotePublicProperty<T>),
 }
 
 /// A Property of an Component/Message, that contains data
@@ -26,6 +27,16 @@ impl<T: Serde> Property<T> {
         }
     }
 
+    /// Given a cursor into incoming packet data, initializes the Property with
+    /// the synced value
+    pub fn new_read(reader: &mut BitReader) -> Result<Self, SerdeErr> {
+        let inner_value = Self::read_inner(reader)?;
+
+        Ok(Self {
+            inner: PropertyImpl::RemoteOwned(RemoteOwnedProperty::new(inner_value)),
+        })
+    }
+
     /// Set an PropertyMutator to track changes to the Property
     pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
         match &mut self.inner {
@@ -34,6 +45,9 @@ impl<T: Serde> Property<T> {
             }
             PropertyImpl::RemoteOwned(_) => {
                 panic!("Remote Property should never have a mutator.");
+            }
+            PropertyImpl::RemotePublic(inner) => {
+                inner.set_mutator(mutator);
             }
         }
     }
@@ -49,17 +63,10 @@ impl<T: Serde> Property<T> {
             PropertyImpl::RemoteOwned(_) => {
                 panic!("Remote Property should never be written.");
             }
+            PropertyImpl::RemotePublic(inner) => {
+                inner.write(writer);
+            }
         }
-    }
-
-    /// Given a cursor into incoming packet data, initializes the Property with
-    /// the synced value
-    pub fn new_read(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let inner_value = Self::read_inner(reader)?;
-
-        Ok(Self {
-            inner: PropertyImpl::RemoteOwned(RemoteOwnedProperty::new(inner_value)),
-        })
     }
 
     /// Reads from a stream and immediately writes to a stream
@@ -79,6 +86,9 @@ impl<T: Serde> Property<T> {
             PropertyImpl::RemoteOwned(inner) => {
                 inner.read(reader)?;
             }
+            PropertyImpl::RemotePublic(inner) => {
+                inner.read(reader)?;
+            }
         }
         Ok(())
     }
@@ -93,6 +103,7 @@ impl<T: Serde> Property<T> {
         match &self.inner {
             PropertyImpl::HostOwned(inner) => &inner.inner,
             PropertyImpl::RemoteOwned(inner) => &inner.inner,
+            PropertyImpl::RemotePublic(inner) => &inner.inner,
         }
     }
 
@@ -109,8 +120,27 @@ impl<T: Serde> Property<T> {
                 let other_inner = other.inner();
                 inner.mirror(other_inner);
             }
-            PropertyImpl::RemoteOwned(_) => {
+            PropertyImpl::RemoteOwned(_) | PropertyImpl::RemotePublic(_) => {
                 panic!("Remote Property should never be set manually.");
+            }
+        }
+    }
+
+    /// Migrate Remote Property to Public version
+    pub fn remote_publish(&mut self, mutator_index: u8) {
+        match &mut self.inner {
+            PropertyImpl::HostOwned(_) => {
+                panic!("Host Property should never be made public.");
+            }
+            PropertyImpl::RemoteOwned(inner) => {
+                let inner_value = inner.inner.clone();
+                self.inner = PropertyImpl::RemotePublic(RemotePublicProperty::new(
+                    inner_value,
+                    mutator_index,
+                ));
+            }
+            PropertyImpl::RemotePublic(_) => {
+                panic!("Remote Property should never be made public twice.");
             }
         }
     }
@@ -134,7 +164,7 @@ impl<T: Serde> DerefMut for Property<T> {
                 inner.mutate();
                 &mut inner.inner
             }
-            PropertyImpl::RemoteOwned(_) => {
+            PropertyImpl::RemoteOwned(_) | PropertyImpl::RemotePublic(_) => {
                 panic!("Remote Property should never be set manually.");
             }
         }
@@ -172,9 +202,10 @@ impl<T: Serde> HostOwnedProperty<T> {
     }
 
     pub fn mutate(&mut self) {
-        if let Some(mutator) = &mut self.mutator {
-            mutator.mutate(self.mutator_index);
-        }
+        let Some(mutator) = &mut self.mutator else {
+            panic!("Host Property should have a mutator immediately after creation.");
+        };
+        mutator.mutate(self.mutator_index);
     }
 }
 
@@ -192,5 +223,44 @@ impl<T: Serde> RemoteOwnedProperty<T> {
     pub fn read(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
         self.inner = Property::read_inner(reader)?;
         Ok(())
+    }
+}
+
+#[derive(Clone)]
+pub struct RemotePublicProperty<T: Serde> {
+    inner: T,
+    mutator: Option<PropertyMutator>,
+    mutator_index: u8,
+}
+
+impl<T: Serde> RemotePublicProperty<T> {
+    /// Create a new RemotePublicProperty
+    pub fn new(value: T, mutator_index: u8) -> Self {
+        Self {
+            inner: value,
+            mutator: None,
+            mutator_index,
+        }
+    }
+
+    pub fn read(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
+        self.inner = Property::read_inner(reader)?;
+        self.mutate();
+        Ok(())
+    }
+
+    pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
+        self.mutator = Some(mutator.clone_new());
+    }
+
+    pub fn write(&self, writer: &mut dyn BitWrite) {
+        self.inner.ser(writer);
+    }
+
+    fn mutate(&mut self) {
+        let Some(mutator) = &mut self.mutator else {
+            panic!("Remote Public Property should have a mutator immediately after creation.");
+        };
+        mutator.mutate(self.mutator_index);
     }
 }
