@@ -94,7 +94,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             let mut reader = owned_reader.borrow();
 
             self.base
-                .read_packet(protocol, &server_tick, global_world_manager, &mut reader)?;
+                .read_packet(protocol, &server_tick, global_world_manager, true, &mut reader)?;
         }
 
         Ok(())

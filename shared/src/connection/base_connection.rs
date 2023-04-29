@@ -186,6 +186,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         protocol: &Protocol,
         client_tick: &Tick,
         global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read messages
@@ -198,7 +199,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         )?;
 
         // read world events
-        if protocol.client_authoritative_entities {
+        if read_world_events {
             self.remote_world_reader.read_world_events(
                 global_world_manager,
                 &mut self.local_world_manager,

@@ -87,7 +87,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read common parts of packet (messages & world events)
         self.base
-            .read_packet(protocol, &client_tick, global_world_manager, reader)?;
+            .read_packet(protocol, &client_tick, global_world_manager, protocol.client_authoritative_entities, reader)?;
 
         return Ok(());
     }
