@@ -175,7 +175,7 @@ impl App {
                 info!("gave ownership of entity");
 
                 // create prediction
-                let prediction_entity = self.world.proxy_mut().duplicate_entity(&entity);
+                let prediction_entity = self.world.proxy_mut().local_duplicate_entity(&entity);
                 self.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
 
                 // create interpolation

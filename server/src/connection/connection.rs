@@ -123,6 +123,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                         panic!("Received message with no Entity over SystemChannel!");
                     };
                     self.authority_manager.add_public(&entity);
+                    world.entity_publish(global_world_manager, &entity);
                     incoming_events.push_publish(&self.user_key, &entity);
                 }
             } else {

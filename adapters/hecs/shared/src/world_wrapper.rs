@@ -117,15 +117,15 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
         self.inner.spawn(())
     }
 
-    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
+    fn local_duplicate_entity(&mut self, entity: &Entity) -> Entity {
         let new_entity = WorldMutType::<Entity>::spawn_entity(self);
 
-        WorldMutType::<Entity>::duplicate_components(self, &new_entity, entity);
+        WorldMutType::<Entity>::local_duplicate_components(self, &new_entity, entity);
 
         new_entity
     }
 
-    fn duplicate_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity) {
+    fn local_duplicate_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, immutable_entity) {
             let mut component_copy_opt: Option<Box<dyn Replicate>> = None;
             if let Some(component) = self.component_of_kind(immutable_entity, &component_kind) {

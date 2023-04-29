@@ -2,20 +2,16 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::{
-    messages::named::Named,
-    world::{
-        component::{
-            component_kinds::{ComponentKind, ComponentKinds},
-            component_update::ComponentUpdate,
-            diff_mask::DiffMask,
-            property_mutate::PropertyMutator,
-            replica_ref::{ReplicaDynMut, ReplicaDynRef},
-        },
-        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+use crate::{messages::named::Named, world::{
+    component::{
+        component_kinds::{ComponentKind, ComponentKinds},
+        component_update::ComponentUpdate,
+        diff_mask::DiffMask,
+        property_mutate::PropertyMutator,
+        replica_ref::{ReplicaDynMut, ReplicaDynRef},
     },
-    ComponentFieldUpdate, LocalEntity, LocalEntityAndGlobalEntityConverterMut,
-};
+    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+}, ComponentFieldUpdate, LocalEntity, LocalEntityAndGlobalEntityConverterMut};
 
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream
@@ -98,10 +94,10 @@ pub trait Replicate: ReplicateInner + Named + Any {
     fn relations_waiting(&self) -> Option<HashSet<LocalEntity>>;
     /// Converts any LocalEntities contained within the Component's EntityProperty fields to GlobalEntities
     fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
-    // /// Returns whether has any EntityProperties
-    // fn has_entity_properties(&self) -> bool;
-    // /// Returns a list of Entities contained within the Replica's properties
-    // fn entities(&self) -> Vec<GlobalEntity>;
+    /// Publish Replicate
+    fn publish(&mut self, mutator: &PropertyMutator);
+    /// Convert to Local Replicate
+    fn localize(&mut self);
 }
 
 cfg_if! {

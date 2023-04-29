@@ -191,6 +191,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
             panic!("component does not exist!");
         }
     }
+
+    fn get_property_mutator(&self, _entity: &E, _component_kind: &ComponentKind, _diff_mask_length: u8) -> PropertyMutator {
+        panic!("Client Global World Manager should not need this method. (This indicates a refactor is probably needed ...)")
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E>

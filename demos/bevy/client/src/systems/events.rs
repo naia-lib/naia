@@ -103,7 +103,7 @@ pub fn message_events(
                 if let Ok(position) = position_query.get(entity) {
                     let prediction_entity = commands
                         .entity(entity)
-                        .duplicate() // copies all Replicate components as well
+                        .local_duplicate() // copies all Replicate components as well
                         .insert(SpriteBundle {
                             sprite: Sprite {
                                 custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),

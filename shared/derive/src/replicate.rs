@@ -78,13 +78,13 @@ pub fn replicate_impl(
     let clone_method = get_clone_method(&replica_name, &properties, &struct_type);
     let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type);
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
+    let publish_method = get_publish_method(&properties, &struct_type);
+    let localize_method = get_localize_method(&properties, &struct_type);
     let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
     let read_apply_field_update_method =
         get_read_apply_field_update_method(&properties, &struct_type);
     let write_method = get_write_method(&properties, &struct_type);
     let write_update_method = get_write_update_method(&enum_name, &properties, &struct_type);
-    // let has_entity_properties = get_has_entity_properties_method(&properties);
-    // let entities = get_entities_method(&properties, &struct_type);
     let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
     let split_update_method = get_split_update_method(&replica_name, &properties);
@@ -144,6 +144,8 @@ pub fn replicate_impl(
                 #dyn_ref_method
                 #dyn_mut_method
                 #mirror_method
+                #publish_method
+                #localize_method
                 #set_mutator_method
                 #write_method
                 #write_update_method
@@ -478,6 +480,50 @@ fn get_set_mutator_method(properties: &[Property], struct_type: &StructType) -> 
 
     quote! {
         fn set_mutator(&mut self, mutator: &PropertyMutator) {
+            #output
+        }
+    }
+}
+
+fn get_publish_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let new_output_right = quote! {
+                self.#field_name.remote_publish(self.diff_mask_size(), mutator);
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn publish(&mut self, mutator: &PropertyMutator) {
+            #output
+        }
+    }
+}
+
+fn get_localize_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let new_output_right = quote! {
+                self.#field_name.localize();
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn localize(&mut self) {
             #output
         }
     }

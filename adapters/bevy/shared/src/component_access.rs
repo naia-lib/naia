@@ -3,7 +3,7 @@ use std::{any::Any, marker::PhantomData};
 use bevy_app::App;
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs, world::World};
 
-use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
+use naia_shared::{GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::{
     change_detection::{on_component_added, on_component_removed},
@@ -32,6 +32,12 @@ pub trait ComponentAccess: Send + Sync {
         world: &mut World,
         entity: &Entity,
         boxed_component: Box<dyn Replicate>,
+    );
+    fn component_publish(
+        &self,
+        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        world: &mut World,
+        entity: &Entity,
     );
 }
 
@@ -122,5 +128,14 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
             phantom_r: PhantomData,
         };
         Box::new(new_me)
+    }
+
+    fn component_publish(&self, global_manager: &dyn GlobalWorldManagerType<Entity>, world: &mut World, entity: &Entity) {
+        if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
+            let component_kind = component_mut.kind();
+            let diff_mask_size = component_mut.diff_mask_size();
+            let mutator = global_manager.get_property_mutator(entity, &component_kind, diff_mask_size);
+            component_mut.publish(&mutator);
+        }
     }
 }

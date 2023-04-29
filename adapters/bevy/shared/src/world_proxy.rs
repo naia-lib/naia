@@ -4,11 +4,7 @@ use bevy_ecs::{
 };
 use std::any::TypeId;
 
-use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
-    SerdeErr, WorldMutType, WorldRefType,
-};
+use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -133,21 +129,22 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         entity
     }
 
-    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
+    fn local_duplicate_entity(&mut self, entity: &Entity) -> Entity {
         let new_entity = WorldMutType::<Entity>::spawn_entity(self);
 
-        WorldMutType::<Entity>::duplicate_components(self, &new_entity, entity);
+        WorldMutType::<Entity>::local_duplicate_components(self, &new_entity, entity);
 
         new_entity
     }
 
-    fn duplicate_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity) {
+    fn local_duplicate_components(&mut self, mutable_entity: &Entity, immutable_entity: &Entity) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, immutable_entity) {
             let mut component_copy_opt: Option<Box<dyn Replicate>> = None;
             if let Some(component) = self.component_of_kind(immutable_entity, &component_kind) {
                 component_copy_opt = Some(component.copy_to_box());
             }
-            if let Some(component_copy) = component_copy_opt {
+            if let Some(mut component_copy) = component_copy_opt {
+                component_copy.localize();
                 self.insert_boxed_component(mutable_entity, component_copy);
             }
         }
@@ -294,6 +291,26 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 }
             });
         output
+    }
+
+    fn entity_publish(&mut self, global_world_manager: &dyn GlobalWorldManagerType<Entity>, entity: &Entity) {
+        for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
+            WorldMutType::<Entity>::component_publish(
+                self,
+                global_world_manager,
+                entity,
+                &component_kind,
+            );
+        }
+    }
+
+    fn component_publish(&mut self, global_world_manager: &dyn GlobalWorldManagerType<Entity>, entity: &Entity, component_kind: &ComponentKind) {
+        self.world
+            .resource_scope(|world: &mut World, data: Mut<WorldData>| {
+                if let Some(accessor) = data.component_access(component_kind) {
+                    accessor.component_publish(global_world_manager, world, entity);
+                }
+            });
     }
 }
 

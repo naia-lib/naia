@@ -19,7 +19,7 @@ pub trait CommandsExt<'w, 's, 'a> {
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn replication_config(&'a self, client: &Client) -> ReplicationConfig;
-    fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
+    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
 }
 
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
@@ -59,24 +59,24 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         client.replication_config(&self.id())
     }
 
-    fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {
+    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {
         let old_entity = self.id();
         let commands = self.commands();
         let new_entity = commands.spawn_empty().id();
-        let command = DuplicateComponents::new(new_entity, old_entity);
+        let command = LocalDuplicateComponents::new(new_entity, old_entity);
         commands.add(command);
         commands.entity(new_entity)
     }
 }
 
-//// DuplicateComponents Command ////
+//// LocalDuplicateComponents Command ////
 
-pub(crate) struct DuplicateComponents {
+pub(crate) struct LocalDuplicateComponents {
     mutable_entity: Entity,
     immutable_entity: Entity,
 }
 
-impl DuplicateComponents {
+impl LocalDuplicateComponents {
     pub fn new(new_entity: Entity, old_entity: Entity) -> Self {
         Self {
             mutable_entity: new_entity,
@@ -85,9 +85,9 @@ impl DuplicateComponents {
     }
 }
 
-impl BevyCommand for DuplicateComponents {
+impl BevyCommand for LocalDuplicateComponents {
     fn write(self, world: &mut World) {
-        WorldMutType::<Entity>::duplicate_components(
+        WorldMutType::<Entity>::local_duplicate_components(
             &mut world.proxy_mut(),
             &self.mutable_entity,
             &self.immutable_entity,

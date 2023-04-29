@@ -3,16 +3,12 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{
-    bigmap::BigMapKey,
-    world::{
-        entity::{
-            error::EntityDoesNotExistError, global_entity::GlobalEntity, local_entity::LocalEntity,
-        },
-        host::mut_channel::MutChannelType,
+use crate::{bigmap::BigMapKey, world::{
+    entity::{
+        error::EntityDoesNotExistError, global_entity::GlobalEntity, local_entity::LocalEntity,
     },
-    ComponentKind, GlobalDiffHandler, LocalWorldManager,
-};
+    host::mut_channel::MutChannelType,
+}, ComponentKind, GlobalDiffHandler, LocalWorldManager, PropertyMutator};
 
 pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConverter<E> {
     fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>>;
@@ -24,6 +20,7 @@ pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConv
     fn remote_despawn_entity(&mut self, entity: &E);
     fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind);
     fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind);
+    fn get_property_mutator(&self, entity: &E, component_kind: &ComponentKind, diff_mask_length: u8) -> PropertyMutator;
 }
 
 pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {

@@ -112,11 +112,11 @@ mod inner {
             unimplemented!()
         }
 
-        fn duplicate_entity(&mut self, _entity: &EmptyEntity) -> EmptyEntity {
+        fn local_duplicate_entity(&mut self, _entity: &EmptyEntity) -> EmptyEntity {
             unimplemented!()
         }
 
-        fn duplicate_components(
+        fn local_duplicate_components(
             &mut self,
             _mutable_entity: &EmptyEntity,
             _immutable_entity: &EmptyEntity,

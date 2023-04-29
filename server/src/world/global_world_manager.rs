@@ -100,14 +100,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
         component_kind_set.insert(component_kind);
 
-        let mut_sender = self
-            .diff_handler
-            .as_ref()
-            .write()
-            .expect("DiffHandler should be initialized")
-            .register_component(self, entity, &component_kind, diff_mask_length);
-
-        let prop_mutator = PropertyMutator::new(mut_sender);
+        let prop_mutator = self.get_property_mutator(entity, &component_kind, diff_mask_length);
 
         component.set_mutator(&prop_mutator);
     }
@@ -214,6 +207,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         if !component_kind_set.remove(component_kind) {
             panic!("component does not exist!");
         }
+    }
+
+    fn get_property_mutator(&self, entity: &E, component_kind: &ComponentKind, diff_mask_length: u8) -> PropertyMutator {
+        let mut_sender = self
+            .diff_handler
+            .as_ref()
+            .write()
+            .expect("DiffHandler should be initialized")
+            .register_component(self, entity, component_kind, diff_mask_length);
+
+        PropertyMutator::new(mut_sender)
     }
 }
 
