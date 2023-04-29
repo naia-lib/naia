@@ -48,7 +48,7 @@ impl Default for Protocol {
         ));
 
         Self {
-            channel_kinds: ChannelKinds::new(),
+            channel_kinds,
             message_kinds,
             component_kinds: ComponentKinds::new(),
             socket: SocketConfig::new(None, None),

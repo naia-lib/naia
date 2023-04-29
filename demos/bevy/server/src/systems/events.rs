@@ -172,9 +172,10 @@ pub fn publish_entity_events(
         info!("client entity has been made public");
 
         // Add newly public entity to the main Room
-        server
-            .room_mut(&global.main_room_key)
-            .add_entity(client_entity);
+        // TODO: add this back
+        // server
+        //     .room_mut(&global.main_room_key)
+        //     .add_entity(client_entity);
     }
 }
 

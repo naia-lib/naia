@@ -1,12 +1,9 @@
 use std::{hash::Hash, net::SocketAddr};
+use std::any::Any;
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ConnectionConfig, EntityEvent,
-    HostType, HostWorldEvents, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader,
-    Tick, WorldMutType, WorldRefType,
-};
+use naia_shared::{BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig, EntityEvent, EntityEventMessage, HostType, HostWorldEvents, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -112,8 +109,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             &mut self.base.remote_world_manager.entity_waitlist,
         );
         for (channel_kind, messages) in messages {
-            for message in messages {
-                incoming_events.push_message(&self.user_key, &channel_kind, message);
+            if channel_kind == ChannelKind::of::<SystemChannel>() {
+                for message in messages {
+                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<EntityEventMessage>(message.to_boxed_any())
+                                .ok()
+                                .map(|boxed_m| *boxed_m) else {
+                        panic!("Received unknown message over SystemChannel!");
+                    };
+                    let Some(entity) = event_message.entity.get(global_world_manager) else {
+                        panic!("Received message with no Entity over SystemChannel!");
+                    };
+                    incoming_events.push_publish(&self.user_key, &entity);
+                }
+            } else {
+                for message in messages {
+                    incoming_events.push_message(&self.user_key, &channel_kind, message);
+                }
             }
         }
 

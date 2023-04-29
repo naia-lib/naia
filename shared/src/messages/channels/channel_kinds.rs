@@ -79,7 +79,7 @@ impl ChannelKinds {
     }
 
     pub fn channel(&self, kind: &ChannelKind) -> ChannelSettings {
-        let (_, settings) = self.kind_map.get(kind).unwrap();
+        let (_, settings) = self.kind_map.get(kind).expect("could not find ChannelKind for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!");
         settings.clone()
     }
 
