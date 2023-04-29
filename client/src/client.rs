@@ -753,7 +753,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // write header
             connection
                 .base
-                .write_outgoing_header(PacketType::Heartbeat, &mut writer);
+                .write_header(PacketType::Heartbeat, &mut writer);
 
             // send packet
             if io.send_packet(writer.to_packet()).is_err() {

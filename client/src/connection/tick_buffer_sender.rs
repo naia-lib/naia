@@ -114,6 +114,10 @@ impl TickBufferSender {
             false.ser(writer);
             writer.release_bits(1);
         }
+
+        // finish tick buffered messages
+        false.ser(writer);
+        writer.release_bits(1);
     }
 }
 

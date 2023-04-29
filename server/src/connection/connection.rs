@@ -87,7 +87,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // read common parts of packet (messages & world events)
         self.base
-            .read_incoming_packet(protocol, &client_tick, global_world_manager, reader)?;
+            .read_packet(protocol, &client_tick, global_world_manager, reader)?;
 
         return Ok(());
     }
@@ -202,8 +202,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             writer.reserve_bits(3);
 
             // write header
-            self.base
-                .write_outgoing_header(PacketType::Data, &mut writer);
+            self.base.write_header(PacketType::Data, &mut writer);
 
             // write server tick
             time_manager.current_tick().ser(&mut writer);
@@ -214,7 +213,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             // write common data packet
             let mut has_written = false;
 
-            self.base.write_outgoing_packet(
+            self.base.write_packet(
                 &protocol,
                 now,
                 &mut writer,

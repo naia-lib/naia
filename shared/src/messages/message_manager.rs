@@ -33,8 +33,8 @@ use crate::{
         entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
         remote::entity_waitlist::EntityWaitlist,
     },
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter,
-    LocalEntityAndGlobalEntityConverter, MessageKinds, Protocol,
+    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds,
+    Protocol,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -259,17 +259,23 @@ impl MessageManager {
             false.ser(writer);
             writer.release_bits(1);
         }
+
+        // finish messages
+        false.ser(writer);
+        writer.release_bits(1);
     }
 
     // Incoming Messages
 
-    pub fn read_messages(
+    pub fn read_messages<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         protocol: &Protocol,
         entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        global_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        local_converter: &dyn EntityAndLocalEntityConverter<E>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
+        let converter = EntityConverter::new(global_converter, local_converter);
         loop {
             let message_continue = bool::de(reader)?;
             if !message_continue {
@@ -281,7 +287,7 @@ impl MessageManager {
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(&protocol.message_kinds, entity_waitlist, converter, reader)?;
+            channel.read_messages(&protocol.message_kinds, entity_waitlist, &converter, reader)?;
         }
 
         Ok(())

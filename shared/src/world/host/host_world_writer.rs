@@ -45,44 +45,32 @@ impl HostWorldWriter {
         world_events: &mut HostWorldEvents<E>,
     ) {
         // write entity updates
-        {
-            Self::write_updates(
-                component_kinds,
-                now,
-                writer,
-                &packet_index,
-                world,
-                global_world_manager,
-                local_world_manager,
-                has_written,
-                host_manager,
-                &mut world_events.next_send_updates,
-            );
-
-            // finish updates
-            false.ser(writer);
-            writer.release_bits(1);
-        }
+        Self::write_updates(
+            component_kinds,
+            now,
+            writer,
+            &packet_index,
+            world,
+            global_world_manager,
+            local_world_manager,
+            has_written,
+            host_manager,
+            &mut world_events.next_send_updates,
+        );
 
         // write entity actions
-        {
-            Self::write_actions(
-                component_kinds,
-                now,
-                writer,
-                &packet_index,
-                world,
-                global_world_manager,
-                local_world_manager,
-                has_written,
-                host_manager,
-                &mut world_events.next_send_actions,
-            );
-
-            // finish actions
-            false.ser(writer);
-            writer.release_bits(1);
-        }
+        Self::write_actions(
+            component_kinds,
+            now,
+            writer,
+            &packet_index,
+            world,
+            global_world_manager,
+            local_world_manager,
+            has_written,
+            host_manager,
+            &mut world_events.next_send_actions,
+        );
     }
 
     fn write_actions<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -167,6 +155,10 @@ impl HostWorldWriter {
             // pop action we've written
             next_send_actions.pop_front();
         }
+
+        // finish actions
+        false.ser(writer);
+        writer.release_bits(1);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -453,6 +445,10 @@ impl HostWorldWriter {
             false.ser(writer);
             writer.release_bits(1);
         }
+
+        // finish updates
+        false.ser(writer);
+        writer.release_bits(1);
     }
 
     /// For a given entity, write component value updates into a packet

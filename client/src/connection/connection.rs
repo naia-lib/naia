@@ -4,8 +4,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig,
-    EntityConverter, EntityConverterMut, HostType, HostWorldEvents, Instant, OwnedBitReader,
-    PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    EntityConverterMut, HostType, HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol,
+    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -93,39 +93,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             let mut reader = owned_reader.borrow();
 
-            self.read_packet(protocol, global_world_manager, &server_tick, &mut reader)?;
+            self.base
+                .read_packet(protocol, &server_tick, global_world_manager, &mut reader)?;
         }
-
-        Ok(())
-    }
-
-    fn read_packet(
-        &mut self,
-        protocol: &Protocol,
-        global_world_manager: &mut GlobalWorldManager<E>,
-        server_tick: &Tick,
-        reader: &mut BitReader,
-    ) -> Result<(), SerdeErr> {
-        // read messages
-        {
-            let entity_converter =
-                EntityConverter::new(global_world_manager, &self.base.local_world_manager);
-            self.base.message_manager.read_messages(
-                protocol,
-                &mut self.base.remote_world_manager.entity_waitlist,
-                &entity_converter,
-                reader,
-            )?;
-        }
-
-        // read world events
-        self.base.remote_world_reader.read_world_events(
-            global_world_manager,
-            &mut self.base.local_world_manager,
-            protocol,
-            server_tick,
-            reader,
-        )?;
 
         Ok(())
     }
@@ -231,8 +201,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             writer.reserve_bits(4);
 
             // write header
-            self.base
-                .write_outgoing_header(PacketType::Data, &mut writer);
+            self.base.write_header(PacketType::Data, &mut writer);
 
             // write client tick
             let client_tick: Tick = self.time_manager.client_sending_tick;
@@ -252,12 +221,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 &mut has_written,
             );
 
-            // finish tick buffered messages
-            false.ser(&mut writer);
-            writer.release_bits(1);
-
             // write common parts of packet (messages & world events)
-            self.base.write_outgoing_packet(
+            self.base.write_packet(
                 protocol,
                 now,
                 &mut writer,

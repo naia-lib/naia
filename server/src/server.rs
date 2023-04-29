@@ -1189,7 +1189,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     // write header
                     connection
                         .base
-                        .write_outgoing_header(PacketType::Heartbeat, &mut writer);
+                        .write_header(PacketType::Heartbeat, &mut writer);
 
                     // write server tick
                     self.time_manager.current_tick().ser(&mut writer);
@@ -1226,9 +1226,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let mut writer = BitWriter::new();
 
                     // write header
-                    connection
-                        .base
-                        .write_outgoing_header(PacketType::Ping, &mut writer);
+                    connection.base.write_header(PacketType::Ping, &mut writer);
 
                     // write server tick
                     self.time_manager.current_tick().ser(&mut writer);

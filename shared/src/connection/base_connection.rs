@@ -13,8 +13,7 @@ use crate::{
         local_world_manager::LocalWorldManager,
         remote::remote_world_reader::RemoteWorldReader,
     },
-    EntityConverter, EntityEvent, HostWorldManager, Protocol, RemoteWorldManager, Tick,
-    WorldMutType, WorldRefType,
+    EntityEvent, HostWorldManager, Protocol, RemoteWorldManager, Tick, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -106,7 +105,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     /// Given a packet payload, start tracking the packet via it's index, attach
     /// the appropriate header, and return the packet's resulting underlying
     /// bytes
-    pub fn write_outgoing_header(&mut self, packet_type: PacketType, writer: &mut BitWriter) {
+    pub fn write_header(&mut self, packet_type: PacketType, writer: &mut BitWriter) {
         // Add header onto message!
         self.ack_manager
             .next_outgoing_packet_header(packet_type)
@@ -144,7 +143,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         );
     }
 
-    pub fn write_outgoing_packet<W: WorldRefType<E>>(
+    pub fn write_packet<W: WorldRefType<E>>(
         &mut self,
         protocol: &Protocol,
         now: &Instant,
@@ -157,20 +156,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         host_world_events: &mut HostWorldEvents<E>,
     ) {
         // write messages
-        {
-            self.write_messages(
-                &protocol,
-                global_world_manager,
-                writer,
-                packet_index,
-                has_written,
-            );
+        self.write_messages(
+            &protocol,
+            global_world_manager,
+            writer,
+            packet_index,
+            has_written,
+        );
 
-            // finish messages
-            false.ser(writer);
-            writer.release_bits(1);
-        }
-
+        // write world events
         if write_world_events {
             HostWorldWriter::write_into_packet(
                 &protocol.component_kinds,
@@ -187,25 +181,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         }
     }
 
-    pub fn read_incoming_packet(
+    pub fn read_packet(
         &mut self,
         protocol: &Protocol,
         client_tick: &Tick,
         global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        {
-            let entity_converter = EntityConverter::new(
-                global_world_manager.to_global_entity_converter(),
-                &self.local_world_manager,
-            );
-            self.message_manager.read_messages(
-                protocol,
-                &mut self.remote_world_manager.entity_waitlist,
-                &entity_converter,
-                reader,
-            )?;
-        }
+        // read messages
+        self.message_manager.read_messages(
+            protocol,
+            &mut self.remote_world_manager.entity_waitlist,
+            global_world_manager.to_global_entity_converter(),
+            &self.local_world_manager,
+            reader,
+        )?;
 
         // read world events
         if protocol.client_authoritative_entities {
