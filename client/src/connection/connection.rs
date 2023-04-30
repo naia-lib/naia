@@ -3,9 +3,9 @@ use std::hash::Hash;
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig, HostType,
-    HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
-    StandardHeader, Tick, WorldMutType, WorldRefType,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig,
+    EntityResponseEvent, HostType, HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol,
+    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -110,7 +110,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         component_kinds: &ComponentKinds,
         world: &mut W,
         incoming_events: &mut Events<E>,
-    ) {
+    ) -> Vec<EntityResponseEvent<E>> {
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
             global_world_manager,
@@ -132,7 +132,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             world,
             remote_events,
         );
-        incoming_events.receive_world_events(world_events);
+        incoming_events.receive_world_events(world_events)
     }
 
     // Outgoing data

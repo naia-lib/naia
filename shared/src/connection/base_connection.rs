@@ -214,7 +214,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
 
     pub fn despawn_all_remote_entities<W: WorldMutType<E>>(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
         world: &mut W,
     ) -> Vec<EntityEvent<E>> {
         let mut output = Vec::new();
@@ -229,9 +228,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
                     output.push(EntityEvent::<E>::RemoveComponent(entity, component));
                 }
             }
-
-            // Despawn from global world manager
-            global_world_manager.remote_despawn_entity(&entity);
 
             // Generate despawn event
             output.push(EntityEvent::DespawnEntity(entity));

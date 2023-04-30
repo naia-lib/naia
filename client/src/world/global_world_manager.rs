@@ -124,6 +124,44 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             .expect("Haven't initialized DiffHandler")
             .deregister_component(entity, component_kind);
     }
+
+    pub fn remote_spawn_entity(&mut self, entity: &E) {
+        if self.entity_records.contains_key(entity) {
+            panic!("entity already initialized!");
+        }
+        let global_entity = self.global_entity_map.insert(*entity);
+        self.entity_records.insert(
+            *entity,
+            GlobalEntityRecord::new(global_entity, EntityOwner::Server),
+        );
+    }
+
+    pub fn remote_despawn_entity(&mut self, entity: &E) {
+        let record = self
+            .entity_records
+            .remove(entity)
+            .expect("Cannot despawn non-existant entity!");
+        let global_entity = record.global_entity;
+        self.global_entity_map.remove(&global_entity);
+    }
+
+    pub fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
+        component_kind_set.insert(*component_kind);
+    }
+
+    pub fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
+        if !component_kind_set.remove(component_kind) {
+            panic!("component does not exist!");
+        }
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorldManager<E> {
@@ -152,44 +190,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
 
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>> {
         self.diff_handler.clone()
-    }
-
-    fn remote_spawn_entity(&mut self, entity: &E, _user_key: &u64) {
-        if self.entity_records.contains_key(entity) {
-            panic!("entity already initialized!");
-        }
-        let global_entity = self.global_entity_map.insert(*entity);
-        self.entity_records.insert(
-            *entity,
-            GlobalEntityRecord::new(global_entity, EntityOwner::Server),
-        );
-    }
-
-    fn remote_despawn_entity(&mut self, entity: &E) {
-        let record = self
-            .entity_records
-            .remove(entity)
-            .expect("Cannot despawn non-existant entity!");
-        let global_entity = record.global_entity;
-        self.global_entity_map.remove(&global_entity);
-    }
-
-    fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
-        if !self.entity_records.contains_key(entity) {
-            panic!("entity does not exist!");
-        }
-        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
-        component_kind_set.insert(*component_kind);
-    }
-
-    fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
-        if !self.entity_records.contains_key(entity) {
-            panic!("entity does not exist!");
-        }
-        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
-        if !component_kind_set.remove(component_kind) {
-            panic!("component does not exist!");
-        }
     }
 
     fn get_property_mutator(

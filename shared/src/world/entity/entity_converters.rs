@@ -21,10 +21,6 @@ pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConv
     fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool;
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
-    fn remote_spawn_entity(&mut self, entity: &E, user_key: &u64);
-    fn remote_despawn_entity(&mut self, entity: &E);
-    fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind);
-    fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind);
     fn get_property_mutator(
         &self,
         entity: &E,

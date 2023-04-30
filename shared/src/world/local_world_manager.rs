@@ -98,6 +98,10 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     // Remote entities
 
+    pub(crate) fn has_local_entity(&self, local_entity: &LocalEntity) -> bool {
+        self.local_to_world_entity.contains_key(local_entity)
+    }
+
     pub(crate) fn get_world_entity(&self, local_entity: &LocalEntity) -> E {
         if !local_entity.is_remote() {
             panic!("can only call this method with remote entities");

@@ -7,3 +7,10 @@ pub enum EntityEvent<E: Copy> {
     RemoveComponent(E, Box<dyn Replicate>),
     UpdateComponent(Tick, E, ComponentKind),
 }
+
+pub enum EntityResponseEvent<E: Copy> {
+    SpawnEntity(E),
+    DespawnEntity(E),
+    InsertComponent(E, ComponentKind),
+    RemoveComponent(E, ComponentKind),
+}

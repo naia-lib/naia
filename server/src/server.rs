@@ -13,12 +13,12 @@ use bevy_ecs::prelude::Resource;
 
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, GlobalEntity,
-    Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr,
-    SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError,
+    EntityResponseEvent, GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol,
+    Replicate, Serde, SerdeErr, SocketConfig, StandardHeader, Tick, Timer, WorldMutType,
+    WorldRefType,
 };
 
-use crate::connection::connection::EntityResponseEvent;
 use crate::{
     connection::{
         connection::Connection,
@@ -378,7 +378,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     fn spawn_entity_inner(&mut self, entity: &E) {
-        self.global_world_manager.host_spawn_entity(entity);
+        self.global_world_manager
+            .spawn_entity_record(entity, EntityOwner::Server);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -605,7 +606,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // Remove from ECS Record
-        self.global_world_manager.host_despawn_entity(entity);
+        self.global_world_manager
+            .remove_entity_diff_handlers(entity);
+        self.global_world_manager.remove_entity_record(entity);
     }
 
     //// Entity Scopes
@@ -664,7 +667,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // update in world manager
         self.global_world_manager
-            .host_insert_component(entity, component);
+            .insert_component_record(entity, &component_kind);
+        self.global_world_manager
+            .insert_component_diff_handler(entity, component);
     }
 
     fn insert_new_component_into_entity_scopes(
@@ -698,6 +703,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // This intended to be used by adapter crates, do not use this as it will not update the world
     pub fn remove_component_worldless(&mut self, entity: &E, component_kind: &ComponentKind) {
+        self.remove_component_from_all_connections(entity, component_kind);
+
+        // cleanup all other loose ends
+        self.global_world_manager
+            .remove_component_record(entity, &component_kind);
+        self.global_world_manager
+            .remove_component_diff_handler(entity, &component_kind);
+    }
+
+    fn remove_component_from_all_connections(
+        &mut self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) {
         // TODO: should be able to make this more efficient by caching for every Entity
         // which scopes they are part of
         for (_, connection) in self.user_connections.iter_mut() {
@@ -707,10 +726,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 .host_world_manager
                 .remove_component(entity, &component_kind);
         }
-
-        // cleanup all other loose ends
-        self.global_world_manager
-            .host_remove_component(entity, &component_kind);
     }
 
     //// Users
@@ -764,11 +779,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
-        let entity_events = connection
-            .base
-            .despawn_all_remote_entities(&mut self.global_world_manager, world);
-        self.incoming_events
+        let entity_events = connection.base.despawn_all_remote_entities(world);
+        let response_events = self
+            .incoming_events
             .receive_entity_events(user_key, entity_events);
+        self.process_response_events(world, user_key, response_events);
     }
 
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> User {
@@ -1160,33 +1175,50 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 )
                 .map(|events| (connection.user_key, events))
         } {
-            for response_event in response_events {
-                match response_event {
-                    EntityResponseEvent::SpawnEntity(entity) => {
+            self.process_response_events(world, &user_key, response_events);
+        }
+    }
+
+    fn process_response_events<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        user_key: &UserKey,
+        response_events: Vec<EntityResponseEvent<E>>,
+    ) {
+        for response_event in response_events {
+            match response_event {
+                EntityResponseEvent::SpawnEntity(entity) => {
+                    self.global_world_manager
+                        .spawn_entity_record(&entity, EntityOwner::Client(*user_key));
+                }
+                EntityResponseEvent::DespawnEntity(entity) => {
+                    if self.global_world_manager.entity_is_public(&entity) {
+                        self.despawn_entity_worldless(&entity);
+                        info!("server process public EntityResponseEvent::DespawnEntity");
+                    } else {
+                        self.global_world_manager.remove_entity_record(&entity);
+                    }
+                }
+                EntityResponseEvent::InsertComponent(entity, component_kind) => {
+                    self.global_world_manager
+                        .insert_component_record(&entity, &component_kind);
+                    if self.global_world_manager.entity_is_public(&entity) {
+                        world.component_publish(
+                            &self.global_world_manager,
+                            &entity,
+                            &component_kind,
+                        );
+                        self.insert_new_component_into_entity_scopes(&entity, &component_kind);
+                        info!("server process public EntityResponseEvent::InsertComponent");
+                    }
+                }
+                EntityResponseEvent::RemoveComponent(entity, component_kind) => {
+                    if self.global_world_manager.entity_is_public(&entity) {
+                        self.remove_component_worldless(&entity, &component_kind);
+                        info!("server process public EntityResponseEvent::RemoveComponent");
+                    } else {
                         self.global_world_manager
-                            .remote_spawn_entity_record(&entity, &user_key);
-                    }
-                    EntityResponseEvent::DespawnEntity(entity) => {
-                        if self.global_world_manager.entity_is_public(&entity) {
-                            self.despawn_entity_worldless(&entity);
-                            info!("server process EntityResponseEvent::DespawnEntity");
-                        }
-                    }
-                    EntityResponseEvent::InsertComponent(entity, component_kind) => {
-                        if self.global_world_manager.entity_is_public(&entity) {
-                            world.component_publish(
-                                &self.global_world_manager,
-                                &entity,
-                                &component_kind,
-                            );
-                            self.insert_new_component_into_entity_scopes(&entity, &component_kind);
-                        }
-                    }
-                    EntityResponseEvent::RemoveComponent(entity, component_kind) => {
-                        if self.global_world_manager.entity_is_public(&entity) {
-                            self.remove_component_worldless(&entity, &component_kind);
-                            info!("server process EntityResponseEvent::RemoveComponent");
-                        }
+                            .remove_component_record(&entity, &component_kind);
                     }
                 }
             }
@@ -1341,6 +1373,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                                 if should_be_in_scope {
                                     if !currently_in_scope {
+                                        //temp//remove!//
+                                        if self.global_world_manager.entity_is_public(entity) {
+                                            info!("Server: replicating Public Entity to User")
+                                        }
+                                        //
+
                                         let component_kinds = self
                                             .global_world_manager
                                             .component_kinds(entity)

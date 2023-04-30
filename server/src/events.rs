@@ -3,8 +3,8 @@ use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIte
 use log::warn;
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, EntityEvent, Message, MessageContainer, MessageKind,
-    Replicate, Tick,
+    Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, Message,
+    MessageContainer, MessageKind, Replicate, Tick,
 };
 
 use super::user::{User, UserKey};
@@ -221,26 +221,34 @@ impl<E: Copy> Events<E> {
         &mut self,
         user_key: &UserKey,
         entity_events: Vec<EntityEvent<E>>,
-    ) {
+    ) -> Vec<EntityResponseEvent<E>> {
+        let mut response_events = Vec::new();
         for event in entity_events {
             match event {
                 EntityEvent::SpawnEntity(entity) => {
                     self.push_spawn(user_key, &entity);
+                    response_events.push(EntityResponseEvent::SpawnEntity(entity));
                 }
                 EntityEvent::DespawnEntity(entity) => {
                     self.push_despawn(user_key, &entity);
+                    response_events.push(EntityResponseEvent::DespawnEntity(entity));
                 }
                 EntityEvent::InsertComponent(entity, component_kind) => {
                     self.push_insert(user_key, &entity, &component_kind);
+                    response_events
+                        .push(EntityResponseEvent::InsertComponent(entity, component_kind));
                 }
                 EntityEvent::RemoveComponent(entity, component_box) => {
+                    let kind = component_box.kind();
                     self.push_remove(user_key, &entity, component_box);
+                    response_events.push(EntityResponseEvent::RemoveComponent(entity, kind));
                 }
                 EntityEvent::UpdateComponent(_tick, entity, component_kind) => {
                     self.push_update(user_key, &entity, &component_kind);
                 }
             }
         }
+        response_events
     }
 }
 

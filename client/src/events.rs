@@ -1,8 +1,8 @@
 use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, EntityEvent, Message, MessageContainer, MessageKind,
-    Replicate, Tick,
+    Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, Message,
+    MessageContainer, MessageKind, Replicate, Tick,
 };
 
 use crate::NaiaClientError;
@@ -191,26 +191,37 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn receive_world_events(&mut self, entity_events: Vec<EntityEvent<E>>) {
+    pub(crate) fn receive_world_events(
+        &mut self,
+        entity_events: Vec<EntityEvent<E>>,
+    ) -> Vec<EntityResponseEvent<E>> {
+        let mut response_events = Vec::new();
         for event in entity_events {
             match event {
                 EntityEvent::SpawnEntity(entity) => {
                     self.push_spawn(entity);
+                    response_events.push(EntityResponseEvent::SpawnEntity(entity));
                 }
                 EntityEvent::DespawnEntity(entity) => {
                     self.push_despawn(entity);
+                    response_events.push(EntityResponseEvent::DespawnEntity(entity));
                 }
                 EntityEvent::InsertComponent(entity, component_kind) => {
                     self.push_insert(entity, component_kind);
+                    response_events
+                        .push(EntityResponseEvent::InsertComponent(entity, component_kind));
                 }
                 EntityEvent::RemoveComponent(entity, component_box) => {
+                    let kind = component_box.kind();
                     self.push_remove(entity, component_box);
+                    response_events.push(EntityResponseEvent::RemoveComponent(entity, kind));
                 }
                 EntityEvent::UpdateComponent(tick, entity, component_kind) => {
                     self.push_update(tick, entity, component_kind);
                 }
             }
         }
+        response_events
     }
 
     pub(crate) fn clear(&mut self) {

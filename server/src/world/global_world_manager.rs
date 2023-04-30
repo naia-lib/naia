@@ -53,32 +53,32 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     // Spawn
-    pub fn host_spawn_entity(&mut self, entity: &E) {
+    pub fn spawn_entity_record(&mut self, entity: &E, entity_owner: EntityOwner) {
         if self.entity_records.contains_key(entity) {
             panic!("entity already initialized!");
         }
         let global_entity = self.global_entity_map.insert(*entity);
         self.entity_records.insert(
             *entity,
-            GlobalEntityRecord::new(global_entity, EntityOwner::Server),
+            GlobalEntityRecord::new(global_entity, entity_owner),
         );
     }
 
     // Despawn
-    pub fn host_despawn_entity(&mut self, entity: &E) -> Option<GlobalEntityRecord> {
+    pub fn remove_entity_diff_handlers(&mut self, entity: &E) {
         // Clean up associated components
         for component_kind in self.component_kinds(entity).unwrap() {
-            self.host_remove_component(entity, &component_kind);
+            self.remove_component_diff_handler(entity, &component_kind);
         }
+    }
 
-        // Despawn from World Record
+    pub fn remove_entity_record(&mut self, entity: &E) {
         let record = self
             .entity_records
             .remove(entity)
             .expect("Cannot despawn non-existant entity!");
         let global_entity = record.global_entity;
         self.global_entity_map.remove(&global_entity);
-        Some(record)
     }
 
     // Component Kinds
@@ -92,21 +92,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     // Insert Component
-    pub fn host_insert_component(&mut self, entity: &E, component: &mut dyn Replicate) {
+    pub fn insert_component_record(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
         let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
-        let component_kind = component.kind();
-        component_kind_set.insert(component_kind);
+        component_kind_set.insert(*component_kind);
+    }
 
+    pub fn insert_component_diff_handler(&mut self, entity: &E, component: &mut dyn Replicate) {
+        let kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
-        let prop_mutator = self.get_property_mutator(entity, &component_kind, diff_mask_length);
+        let prop_mutator = self.get_property_mutator(entity, &kind, diff_mask_length);
         component.set_mutator(&prop_mutator);
     }
 
     // Remove Component
-    pub fn host_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn remove_component_record(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
@@ -114,24 +116,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         if !component_kind_set.remove(component_kind) {
             panic!("component does not exist!");
         }
+    }
 
+    pub fn remove_component_diff_handler(&mut self, entity: &E, component_kind: &ComponentKind) {
         self.diff_handler
             .as_ref()
             .write()
             .expect("Haven't initialized DiffHandler")
             .deregister_component(entity, component_kind);
-    }
-
-    pub fn remote_spawn_entity_record(&mut self, entity: &E, user_key: &UserKey) {
-        let Some(record) = self.entity_records.get_mut(entity) else {
-            panic!("entity record does not exist!");
-        };
-
-        if record.owner != EntityOwner::ClientWaiting(*user_key) {
-            panic!("client entity record is not waiting to be updated!");
-        }
-
-        record.owner = EntityOwner::Client(*user_key);
     }
 
     // Public
@@ -179,7 +171,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self
     }
 
-    /// Whether or not a given user can receive a Message/Componet with an EntityProperty relating to the given Entity
+    /// Whether or not a given user can receive a Message/Component with an EntityProperty relating to the given Entity
     fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool {
         if let Some(record) = self.entity_records.get(entity) {
             return match record.owner {
@@ -201,48 +193,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
 
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>> {
         self.diff_handler.clone()
-    }
-
-    fn remote_spawn_entity(&mut self, entity: &E, user_key: &u64) {
-        if self.entity_records.contains_key(entity) {
-            panic!("entity already initialized!");
-        }
-        let global_entity = self.global_entity_map.insert(*entity);
-        self.entity_records.insert(
-            *entity,
-            GlobalEntityRecord::new(
-                global_entity,
-                EntityOwner::ClientWaiting(UserKey::from_u64(*user_key)),
-            ),
-        );
-    }
-
-    fn remote_despawn_entity(&mut self, entity: &E) {
-        let record = self
-            .entity_records
-            .remove(entity)
-            .expect("Cannot despawn non-existant entity!");
-        let global_entity = record.global_entity;
-        self.global_entity_map.remove(&global_entity);
-    }
-
-    fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
-        if !self.entity_records.contains_key(entity) {
-            panic!("entity does not exist!");
-        }
-        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
-        component_kind_set.insert(*component_kind);
-    }
-
-    // Remove Component
-    fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
-        if !self.entity_records.contains_key(entity) {
-            panic!("entity does not exist!");
-        }
-        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
-        if !component_kind_set.remove(component_kind) {
-            panic!("component does not exist!");
-        }
     }
 
     fn get_property_mutator(

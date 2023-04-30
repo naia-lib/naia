@@ -8,9 +8,10 @@ use bevy_ecs::prelude::Resource;
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
     EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut, EntityDoesNotExistError,
-    EntityEventMessage, FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message,
-    MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SocketConfig,
-    StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
+    Instant, Message, MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde,
+    SocketConfig, StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{
@@ -148,7 +149,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.maintain_socket();
 
         // all other operations
-        if let Some(connection) = self.server_connection.as_mut() {
+        let connection_mut = &mut self.server_connection;
+        if let Some(connection) = connection_mut {
             if connection.base.should_drop() || self.manual_disconnect {
                 self.disconnect_with_events(&mut world);
                 return std::mem::take(&mut self.incoming_events);
@@ -168,12 +170,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
 
                 // receive packets, process into events
-                connection.process_packets(
+                let response_events = connection.process_packets(
                     &mut self.global_world_manager,
                     &self.protocol.component_kinds,
                     &mut world,
                     &mut self.incoming_events,
                 );
+                process_response_events(&mut self.global_world_manager, response_events);
 
                 let mut index_tick = prev_receiving_tick.wrapping_add(1);
                 loop {
@@ -785,11 +788,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Client is already disconnected!");
         };
 
-        let events = connection
-            .base
-            .despawn_all_remote_entities(&mut self.global_world_manager, world);
-
-        self.incoming_events.receive_world_events(events);
+        let events = connection.base.despawn_all_remote_entities(world);
+        let response_events = self.incoming_events.receive_world_events(events);
+        process_response_events(&mut self.global_world_manager, response_events);
     }
 
     fn disconnect_reset_connection(&mut self) {
@@ -810,6 +811,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     fn server_address_unwrapped(&self) -> SocketAddr {
         // NOTE: may panic if the connection is not yet established!
         self.io.server_addr().expect("connection not established!")
+    }
+}
+
+fn process_response_events<E: Copy + Eq + Hash + Send + Sync>(
+    global_world_manager: &mut GlobalWorldManager<E>,
+    response_events: Vec<EntityResponseEvent<E>>,
+) {
+    for response_event in response_events {
+        match response_event {
+            EntityResponseEvent::SpawnEntity(entity) => {
+                global_world_manager.remote_spawn_entity(&entity);
+            }
+            EntityResponseEvent::DespawnEntity(entity) => {
+                global_world_manager.remote_despawn_entity(&entity);
+            }
+            EntityResponseEvent::InsertComponent(entity, component_kind) => {
+                global_world_manager.remote_insert_component(&entity, &component_kind);
+            }
+            EntityResponseEvent::RemoveComponent(entity, component_kind) => {
+                global_world_manager.remote_remove_component(&entity, &component_kind);
+            }
+        }
     }
 }
 
