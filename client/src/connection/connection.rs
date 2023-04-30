@@ -10,8 +10,8 @@ use naia_shared::{
 
 use crate::{
     connection::{
-        authority_manager::AuthorityManager, io::Io, tick_buffer_sender::TickBufferSender,
-        tick_queue::TickQueue, time_manager::TimeManager,
+        io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
+        time_manager::TimeManager,
     },
     events::Events,
     world::global_world_manager::GlobalWorldManager,
@@ -21,7 +21,6 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub base: BaseConnection<E>,
     pub time_manager: TimeManager,
     pub tick_buffer: TickBufferSender,
-    pub authority_manager: AuthorityManager,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
     jitter_buffer: TickQueue<OwnedBitReader>,
@@ -47,7 +46,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             ),
             time_manager,
             tick_buffer,
-            authority_manager: AuthorityManager::new(),
             jitter_buffer: TickQueue::new(),
         };
 

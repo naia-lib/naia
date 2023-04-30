@@ -133,6 +133,41 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
         record.owner = EntityOwner::Client(*user_key);
     }
+
+    // Public
+
+    pub(crate) fn entity_publish(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if let EntityOwner::Client(user_key) = record.owner {
+            record.owner = EntityOwner::ClientPublic(user_key);
+        }
+    }
+
+    pub(crate) fn entity_is_public(&self, entity: &E) -> bool {
+        let Some(record) = self.entity_records.get(entity) else {
+            panic!("entity record does not exist!");
+        };
+        match record.owner {
+            EntityOwner::ClientPublic(_) => true,
+            _ => false,
+        }
+    }
+
+    pub(crate) fn entity_is_public_and_owned_by_user(
+        &self,
+        user_key: &UserKey,
+        entity: &E,
+    ) -> bool {
+        let Some(record) = self.entity_records.get(entity) else {
+            panic!("entity record does not exist!");
+        };
+        match &record.owner {
+            EntityOwner::ClientPublic(owning_user_key) => owning_user_key == user_key,
+            _ => false,
+        }
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorldManager<E> {
@@ -144,10 +179,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self
     }
 
+    /// Whether or not a given user can receive a Message/Componet with an EntityProperty relating to the given Entity
     fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool {
         if let Some(record) = self.entity_records.get(entity) {
             return match record.owner {
-                EntityOwner::Server => true,
+                EntityOwner::Server | EntityOwner::ClientPublic(_) => true,
                 EntityOwner::Client(owning_user_key)
                 | EntityOwner::ClientWaiting(owning_user_key) => {
                     return owning_user_key.to_u64() == *user_key;
@@ -209,7 +245,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         }
     }
 
-    fn get_property_mutator(&self, entity: &E, component_kind: &ComponentKind, diff_mask_length: u8) -> PropertyMutator {
+    fn get_property_mutator(
+        &self,
+        entity: &E,
+        component_kind: &ComponentKind,
+        diff_mask_length: u8,
+    ) -> PropertyMutator {
         let mut_sender = self
             .diff_handler
             .as_ref()

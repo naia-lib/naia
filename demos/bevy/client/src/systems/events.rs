@@ -55,26 +55,12 @@ pub fn connect_events(
                 16 * ((Random::gen_range_u32(0, 40) as i16) - 20),
                 16 * ((Random::gen_range_u32(0, 30) as i16) - 15),
             ))
-            // Insert Color component
-            .insert(Color::new(
-                ColorValue::Aqua,
-            ))
             // Insert Shape component
-            .insert(Shape::new(
-                ShapeValue::Circle,
-            ))
+            .insert(Shape::new(ShapeValue::Circle))
             // Insert Cursor marker component
             .insert(LocalCursor)
             // return Entity id
             .id();
-
-        // Insert SpriteBundle locally only
-        commands.entity(cursor_entity).insert(MaterialMesh2dBundle {
-            mesh: global.circle.clone().into(),
-            material: global.white.clone(),
-            transform: Transform::from_xyz(0.0, 0.0, 1.0),
-            ..Default::default()
-        });
 
         global.cursor_entity = Some(cursor_entity);
     }
@@ -98,6 +84,7 @@ pub fn message_events(
     mut global: ResMut<Global>,
     mut event_reader: EventReader<MessageEvents>,
     position_query: Query<&Position>,
+    color_query: Query<&Color>,
 ) {
     for events in event_reader.iter() {
         for message in events.read::<EntityAssignmentChannel, EntityAssignment>() {
@@ -128,6 +115,34 @@ pub fn message_events(
                         .id();
 
                     global.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
+                }
+                // Now that we know the Color of the player, we assign it to our Cursor
+                if let Ok(color) = color_query.get(entity) {
+                    if let Some(cursor_entity) = global.cursor_entity {
+                        // Add Color to cursor entity
+                        commands.entity(cursor_entity).insert(color.clone());
+
+                        // Insert SpriteBundle locally only
+                        let color_handle = {
+                            match *color.value {
+                                ColorValue::Red => &global.red,
+                                ColorValue::Blue => &global.blue,
+                                ColorValue::Yellow => &global.yellow,
+                                ColorValue::Green => &global.green,
+                                ColorValue::White => &global.white,
+                                ColorValue::Purple => &global.purple,
+                                ColorValue::Orange => &global.orange,
+                                ColorValue::Aqua => &global.aqua,
+                            }
+                        };
+                        commands.entity(cursor_entity).insert(MaterialMesh2dBundle {
+                            mesh: global.circle.clone().into(),
+                            material: color_handle.clone(),
+                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                            ..Default::default()
+                        });
+                        info!("assigned color to cursor");
+                    }
                 }
             } else {
                 let mut disowned: bool = false;

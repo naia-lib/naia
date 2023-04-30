@@ -13,9 +13,9 @@ use bevy_ecs::prelude::Resource;
 
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, GlobalEntity,
-    Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr,
-    SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, EntityEvent,
+    GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde,
+    SerdeErr, SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -648,7 +648,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             component_mut.mirror(&component);
         } else {
             // Entity does not have this Component type yet, initialize Component
-
             self.insert_component_worldless(entity, &mut component);
 
             // actually insert component into world
@@ -660,6 +659,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn insert_component_worldless(&mut self, entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
 
+        self.insert_new_component_into_entity_scopes(entity, &component_kind);
+
+        // update in world manager
+        self.global_world_manager
+            .host_insert_component(entity, component);
+    }
+
+    fn insert_new_component_into_entity_scopes(
+        &mut self,
+        entity: &E,
+        component_kind: &ComponentKind,
+    ) {
         // add component to connections already tracking entity
         for (_, connection) in self.user_connections.iter_mut() {
             // insert component into user's connection
@@ -670,10 +681,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     .insert_component(entity, &component_kind);
             }
         }
-
-        // update in world manager
-        self.global_world_manager
-            .host_insert_component(entity, component);
     }
 
     /// Removes a Component from an Entity
@@ -1141,16 +1148,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     fn process_packets<W: WorldMutType<E>>(&mut self, address: &SocketAddr, world: &mut W) {
         // Packets requiring established connection
-        let Some(connection) = self.user_connections.get_mut(address) else {
-            return;
-        };
-
-        connection.process_packets(
-            &self.protocol,
-            &mut self.global_world_manager,
-            world,
-            &mut self.incoming_events,
-        );
+        if let Some((user_key, response_events)) = {
+            let Some(connection) = self.user_connections.get_mut(address) else {
+                return;
+            };
+            connection
+                .process_packets(
+                    &self.protocol,
+                    &mut self.global_world_manager,
+                    world,
+                    &mut self.incoming_events,
+                )
+                .map(|events| (connection.user_key, events))
+        } {
+            for response_event in response_events {
+                match response_event {
+                    EntityEvent::SpawnEntity(entity) => {
+                        self.global_world_manager
+                            .remote_spawn_entity_record(&entity, &user_key);
+                    }
+                    EntityEvent::InsertComponent(entity, component_kind) => {
+                        if self.global_world_manager.entity_is_public(&entity) {
+                            world.component_publish(
+                                &self.global_world_manager,
+                                &entity,
+                                &component_kind,
+                            );
+                            self.insert_new_component_into_entity_scopes(&entity, &component_kind);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
 
     fn handle_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
@@ -1280,7 +1310,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     if let Some(connection) = self.user_connections.get_mut(&user.address) {
                         for entity in room.entities() {
                             if world.has_entity(entity) {
-                                if connection.authority_manager.is_public(entity) {
+                                if self
+                                    .global_world_manager
+                                    .entity_is_public_and_owned_by_user(user_key, entity)
+                                {
                                     // entity is owned by client, but it is public, so we don't need to replicate it
                                     continue;
                                 }

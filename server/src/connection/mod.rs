@@ -1,4 +1,3 @@
-pub mod authority_manager;
 pub mod bandwidth_monitor;
 pub mod connection;
 pub mod handshake_manager;

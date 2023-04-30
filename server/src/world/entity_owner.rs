@@ -5,5 +5,6 @@ pub enum EntityOwner {
     Server,
     Client(UserKey),
     ClientWaiting(UserKey),
+    ClientPublic(UserKey),
     Local,
 }

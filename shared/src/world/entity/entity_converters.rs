@@ -3,16 +3,21 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{bigmap::BigMapKey, world::{
-    entity::{
-        error::EntityDoesNotExistError, global_entity::GlobalEntity, local_entity::LocalEntity,
+use crate::{
+    bigmap::BigMapKey,
+    world::{
+        entity::{
+            error::EntityDoesNotExistError, global_entity::GlobalEntity, local_entity::LocalEntity,
+        },
+        host::mut_channel::MutChannelType,
     },
-    host::mut_channel::MutChannelType,
-}, ComponentKind, GlobalDiffHandler, LocalWorldManager, PropertyMutator};
+    ComponentKind, GlobalDiffHandler, LocalWorldManager, PropertyMutator,
+};
 
 pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConverter<E> {
     fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>>;
     fn to_global_entity_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E>;
+    /// Whether or not a given user can receive a Message/Componet with an EntityProperty relating to the given Entity
     fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool;
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
@@ -20,7 +25,12 @@ pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConv
     fn remote_despawn_entity(&mut self, entity: &E);
     fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind);
     fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind);
-    fn get_property_mutator(&self, entity: &E, component_kind: &ComponentKind, diff_mask_length: u8) -> PropertyMutator;
+    fn get_property_mutator(
+        &self,
+        entity: &E,
+        component_kind: &ComponentKind,
+        diff_mask_length: u8,
+    ) -> PropertyMutator;
 }
 
 pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {

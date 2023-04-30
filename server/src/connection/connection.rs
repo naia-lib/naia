@@ -10,8 +10,8 @@ use naia_shared::{
 
 use crate::{
     connection::{
-        authority_manager::AuthorityManager, io::Io, ping_config::PingConfig,
-        tick_buffer_messages::TickBufferMessages, tick_buffer_receiver::TickBufferReceiver,
+        io::Io, ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
+        tick_buffer_receiver::TickBufferReceiver,
     },
     events::Events,
     time_manager::TimeManager,
@@ -26,7 +26,6 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub user_key: UserKey,
     pub base: BaseConnection<E>,
     pub ping_manager: PingManager,
-    pub authority_manager: AuthorityManager<E>,
     tick_buffer: TickBufferReceiver,
 }
 
@@ -51,7 +50,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 global_world_manager,
             ),
             ping_manager: PingManager::new(ping_config),
-            authority_manager: AuthorityManager::new(),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
         }
     }
@@ -104,7 +102,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         global_world_manager: &mut GlobalWorldManager<E>,
         world: &mut W,
         incoming_events: &mut Events<E>,
-    ) {
+    ) -> Option<Vec<EntityEvent<E>>> {
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
             global_world_manager,
@@ -122,7 +120,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                     let Some(entity) = event_message.entity.get(global_world_manager) else {
                         panic!("Received message with no Entity over SystemChannel!");
                     };
-                    self.authority_manager.add_public(&entity);
+                    global_world_manager.entity_publish(&entity);
                     world.entity_publish(global_world_manager, &entity);
                     incoming_events.push_publish(&self.user_key, &entity);
                 }
@@ -135,6 +133,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // Receive World Events
         if protocol.client_authoritative_entities {
+            let mut response_events = Vec::new();
             let remote_events = self.base.remote_world_reader.take_incoming_events();
             let world_events = self.base.remote_world_manager.process_world_events(
                 global_world_manager,
@@ -144,11 +143,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 remote_events,
             );
             for event in &world_events {
-                if let EntityEvent::SpawnEntity(entity) = event {
-                    global_world_manager.remote_spawn_entity_record(entity, &self.user_key);
+                match event {
+                    EntityEvent::SpawnEntity(entity) => {
+                        response_events.push(EntityEvent::SpawnEntity(*entity));
+                    }
+                    EntityEvent::InsertComponent(entity, component_kind) => {
+                        response_events
+                            .push(EntityEvent::InsertComponent(*entity, *component_kind));
+                    }
+                    _ => {}
                 }
             }
             incoming_events.receive_entity_events(&self.user_key, world_events);
+            return Some(response_events);
+        } else {
+            return None;
         }
     }
 
