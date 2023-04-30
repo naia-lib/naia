@@ -15,6 +15,9 @@ use systems::{events, init};
 fn main() {
     info!("Naia Bevy Server Demo starting up");
 
+    let mut server_config = ServerConfig::default();
+    server_config.connection.disconnection_timeout_duration = Duration::from_secs(10);
+
     // Build App
     App::default()
         // Plugins
@@ -27,7 +30,7 @@ fn main() {
         )
         .add_plugin(ScheduleRunnerPlugin::default())
         .add_plugin(LogPlugin::default())
-        .add_plugin(ServerPlugin::new(ServerConfig::default(), protocol()))
+        .add_plugin(ServerPlugin::new(server_config, protocol()))
         // Startup System
         .add_startup_system(init)
         // Receive Server Events

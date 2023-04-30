@@ -130,11 +130,17 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
         Box::new(new_me)
     }
 
-    fn component_publish(&self, global_manager: &dyn GlobalWorldManagerType<Entity>, world: &mut World, entity: &Entity) {
+    fn component_publish(
+        &self,
+        global_manager: &dyn GlobalWorldManagerType<Entity>,
+        world: &mut World,
+        entity: &Entity,
+    ) {
         if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
             let component_kind = component_mut.kind();
             let diff_mask_size = component_mut.diff_mask_size();
-            let mutator = global_manager.get_property_mutator(entity, &component_kind, diff_mask_size);
+            let mutator =
+                global_manager.get_property_mutator(entity, &component_kind, diff_mask_size);
             component_mut.publish(&mutator);
         }
     }

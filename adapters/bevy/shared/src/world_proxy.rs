@@ -4,7 +4,11 @@ use bevy_ecs::{
 };
 use std::any::TypeId;
 
-use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
+use naia_shared::{
+    ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
+    LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -162,14 +166,14 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
         let components = self.world.components();
 
-        for component_kind in self.world.entity(*entity).archetype().components() {
+        for component_id in self.world.entity(*entity).archetype().components() {
             let component_info = components
-                .get_info(component_kind)
+                .get_info(component_id)
                 .expect("Components need info to instantiate");
-            let ref_type = component_info
+            let type_id = component_info
                 .type_id()
                 .expect("Components need type_id to instantiate");
-            let component_kind = ComponentKind::from(ref_type);
+            let component_kind = ComponentKind::from(type_id);
             kinds.push(component_kind);
         }
 
@@ -293,7 +297,11 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         output
     }
 
-    fn entity_publish(&mut self, global_world_manager: &dyn GlobalWorldManagerType<Entity>, entity: &Entity) {
+    fn entity_publish(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        entity: &Entity,
+    ) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_publish(
                 self,
@@ -304,7 +312,12 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         }
     }
 
-    fn component_publish(&mut self, global_world_manager: &dyn GlobalWorldManagerType<Entity>, entity: &Entity, component_kind: &ComponentKind) {
+    fn component_publish(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
                 if let Some(accessor) = data.component_access(component_kind) {

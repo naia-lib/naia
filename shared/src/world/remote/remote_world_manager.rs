@@ -136,18 +136,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 }
                 EntityAction::DespawnEntity(local_entity) => {
                     let world_entity = local_world_manager.remote_despawn_entity(&local_entity);
-                    global_world_manager.remote_despawn_entity(&world_entity);
 
                     // Generate event for each component, handing references off just in
                     // case
-                    for component_kind in world.component_kinds(&world_entity) {
-                        self.process_remove(
-                            global_world_manager,
-                            world,
-                            world_entity,
-                            component_kind,
-                        );
+                    if let Some(component_kinds) =
+                        global_world_manager.component_kinds(&world_entity)
+                    {
+                        for component_kind in component_kinds {
+                            self.process_remove(
+                                global_world_manager,
+                                world,
+                                world_entity,
+                                component_kind,
+                            );
+                        }
                     }
+
+                    global_world_manager.remote_despawn_entity(&world_entity);
 
                     world.despawn_entity(&world_entity);
                     self.on_entity_channel_closing(&local_entity);

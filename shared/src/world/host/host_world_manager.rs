@@ -67,7 +67,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
     // World
 
-    // used for
+    // used when Entity first comes into Connection's scope
     pub fn init_entity(
         &mut self,
         world_manager: &mut LocalWorldManager<E>,

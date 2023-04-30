@@ -1,4 +1,5 @@
 use std::ops::{Deref, DerefMut};
+
 use log::info;
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
@@ -22,7 +23,6 @@ pub struct Property<T: Serde> {
 
 // should be shared
 impl<T: Serde> Property<T> {
-
     /// Create a new Local Property
     pub fn new_local(value: T) -> Self {
         Self {
@@ -120,7 +120,7 @@ impl<T: Serde> Property<T> {
             PropertyImpl::HostOwned(inner) => &inner.inner,
             PropertyImpl::RemoteOwned(inner) => &inner.inner,
             PropertyImpl::RemotePublic(inner) => &inner.inner,
-            PropertyImpl::Local(inner) => { &inner.inner },
+            PropertyImpl::Local(inner) => &inner.inner,
         }
     }
 
@@ -177,9 +177,7 @@ impl<T: Serde> Property<T> {
             PropertyImpl::HostOwned(inner) => {
                 info!("Host Owned Property made Local!");
                 let inner_value = inner.inner.clone();
-                self.inner = PropertyImpl::Local(LocalProperty::new(
-                    inner_value,
-                ));
+                self.inner = PropertyImpl::Local(LocalProperty::new(inner_value));
             }
             PropertyImpl::RemoteOwned(_) | PropertyImpl::RemotePublic(_) => {
                 panic!("Remote Property should never be made local.");
@@ -212,9 +210,7 @@ impl<T: Serde> DerefMut for Property<T> {
             PropertyImpl::RemoteOwned(_) | PropertyImpl::RemotePublic(_) => {
                 panic!("Remote Property should never be set manually.");
             }
-            PropertyImpl::Local(inner) => {
-                &mut inner.inner
-            }
+            PropertyImpl::Local(inner) => &mut inner.inner,
         }
     }
 }
@@ -265,9 +261,7 @@ pub struct LocalProperty<T: Serde> {
 impl<T: Serde> LocalProperty<T> {
     /// Create a new LocalProperty
     pub fn new(value: T) -> Self {
-        Self {
-            inner: value,
-        }
+        Self { inner: value }
     }
 
     pub fn mirror(&mut self, other: &T) {

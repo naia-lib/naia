@@ -485,7 +485,11 @@ fn get_set_mutator_method(properties: &[Property], struct_type: &StructType) -> 
     }
 }
 
-fn get_publish_method(enum_name: &Ident, properties: &[Property], struct_type: &StructType) -> TokenStream {
+fn get_publish_method(
+    enum_name: &Ident,
+    properties: &[Property],
+    struct_type: &StructType,
+) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter().filter(|p| p.is_replicated()) {

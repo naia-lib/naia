@@ -1,16 +1,19 @@
 use naia_serde::SerdeErr;
 
-use crate::{world::{
-    component::{
-        component_kinds::ComponentKind,
-        component_update::{ComponentFieldUpdate, ComponentUpdate},
-        replica_ref::{
-            ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+use crate::{
+    world::{
+        component::{
+            component_kinds::ComponentKind,
+            component_update::{ComponentFieldUpdate, ComponentUpdate},
+            replica_ref::{
+                ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+            },
+            replicate::Replicate,
         },
-        replicate::Replicate,
+        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
     },
-    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
-}, GlobalWorldManagerType};
+    GlobalWorldManagerType,
+};
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
@@ -108,5 +111,10 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// publish entity
     fn entity_publish(&mut self, global_world_manager: &dyn GlobalWorldManagerType<E>, entity: &E);
     /// publish component
-    fn component_publish(&mut self, global_world_manager: &dyn GlobalWorldManagerType<E>, entity: &E, component_kind: &ComponentKind);
+    fn component_publish(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        entity: &E,
+        component_kind: &ComponentKind,
+    );
 }

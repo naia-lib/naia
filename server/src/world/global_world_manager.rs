@@ -72,11 +72,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
 
         // Despawn from World Record
-        if !self.entity_records.contains_key(entity) {
-            panic!("entity does not exist!");
-        }
-
-        self.entity_records.remove(entity)
+        let record = self
+            .entity_records
+            .remove(entity)
+            .expect("Cannot despawn non-existant entity!");
+        let global_entity = record.global_entity;
+        self.global_entity_map.remove(&global_entity);
+        Some(record)
     }
 
     // Component Kinds
@@ -91,17 +93,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
     // Insert Component
     pub fn host_insert_component(&mut self, entity: &E, component: &mut dyn Replicate) {
-        let component_kind = component.kind();
-        let diff_mask_length: u8 = component.diff_mask_size();
-
         if !self.entity_records.contains_key(entity) {
             panic!("entity does not exist!");
         }
         let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
+        let component_kind = component.kind();
         component_kind_set.insert(component_kind);
 
+        let diff_mask_length: u8 = component.diff_mask_size();
         let prop_mutator = self.get_property_mutator(entity, &component_kind, diff_mask_length);
-
         component.set_mutator(&prop_mutator);
     }
 

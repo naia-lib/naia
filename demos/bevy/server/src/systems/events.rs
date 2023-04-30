@@ -181,7 +181,13 @@ pub fn publish_entity_events(
 pub fn insert_component_events(mut event_reader: EventReader<InsertComponentEvents>) {
     for events in event_reader.iter() {
         for (_user_key, _client_entity) in events.read::<Position>() {
-            info!("insert component into client entity");
+            info!("insert Position component into client entity");
+        }
+        for (_user_key, _client_entity) in events.read::<Color>() {
+            info!("insert Color component into client entity");
+        }
+        for (_user_key, _client_entity) in events.read::<Shape>() {
+            info!("insert Shape component into client entity");
         }
     }
 }
@@ -198,6 +204,12 @@ pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEven
     for events in event_reader.iter() {
         for (_user_key, _entity, _component) in events.read::<Position>() {
             info!("removed Position component from client entity");
+        }
+        for (_user_key, _entity, _component) in events.read::<Color>() {
+            info!("removed Color component from client entity");
+        }
+        for (_user_key, _entity, _component) in events.read::<Shape>() {
+            info!("removed Shape component from client entity");
         }
     }
 }

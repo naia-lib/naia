@@ -6,18 +6,19 @@ use std::{
     time::Duration,
 };
 
-use log::warn;
+use log::{info, warn};
 
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, EntityEvent,
-    GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde,
-    SerdeErr, SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, GlobalEntity,
+    Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr,
+    SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
+use crate::connection::connection::EntityResponseEvent;
 use crate::{
     connection::{
         connection::Connection,
@@ -697,8 +698,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // This intended to be used by adapter crates, do not use this as it will not update the world
     pub fn remove_component_worldless(&mut self, entity: &E, component_kind: &ComponentKind) {
-        // clean up component on all connections
-
         // TODO: should be able to make this more efficient by caching for every Entity
         // which scopes they are part of
         for (_, connection) in self.user_connections.iter_mut() {
@@ -1163,11 +1162,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         } {
             for response_event in response_events {
                 match response_event {
-                    EntityEvent::SpawnEntity(entity) => {
+                    EntityResponseEvent::SpawnEntity(entity) => {
                         self.global_world_manager
                             .remote_spawn_entity_record(&entity, &user_key);
                     }
-                    EntityEvent::InsertComponent(entity, component_kind) => {
+                    EntityResponseEvent::DespawnEntity(entity) => {
+                        if self.global_world_manager.entity_is_public(&entity) {
+                            self.despawn_entity_worldless(&entity);
+                            info!("server process EntityResponseEvent::DespawnEntity");
+                        }
+                    }
+                    EntityResponseEvent::InsertComponent(entity, component_kind) => {
                         if self.global_world_manager.entity_is_public(&entity) {
                             world.component_publish(
                                 &self.global_world_manager,
@@ -1177,7 +1182,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             self.insert_new_component_into_entity_scopes(&entity, &component_kind);
                         }
                     }
-                    _ => {}
+                    EntityResponseEvent::RemoveComponent(entity, component_kind) => {
+                        if self.global_world_manager.entity_is_public(&entity) {
+                            self.remove_component_worldless(&entity, &component_kind);
+                            info!("server process EntityResponseEvent::RemoveComponent");
+                        }
+                    }
                 }
             }
         }

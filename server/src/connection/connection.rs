@@ -3,9 +3,10 @@ use std::{any::Any, hash::Hash, net::SocketAddr};
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityEvent, EntityEventMessage, HostType, HostWorldEvents, Instant, PacketType, Protocol,
-    Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
+    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKind,
+    ConnectionConfig, EntityEvent, EntityEventMessage, HostType, HostWorldEvents, Instant,
+    PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{
@@ -102,7 +103,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         global_world_manager: &mut GlobalWorldManager<E>,
         world: &mut W,
         incoming_events: &mut Events<E>,
-    ) -> Option<Vec<EntityEvent<E>>> {
+    ) -> Option<Vec<EntityResponseEvent<E>>> {
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
             global_world_manager,
@@ -145,11 +146,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             for event in &world_events {
                 match event {
                     EntityEvent::SpawnEntity(entity) => {
-                        response_events.push(EntityEvent::SpawnEntity(*entity));
+                        response_events.push(EntityResponseEvent::SpawnEntity(*entity));
+                    }
+                    EntityEvent::DespawnEntity(entity) => {
+                        response_events.push(EntityResponseEvent::DespawnEntity(*entity));
                     }
                     EntityEvent::InsertComponent(entity, component_kind) => {
-                        response_events
-                            .push(EntityEvent::InsertComponent(*entity, *component_kind));
+                        response_events.push(EntityResponseEvent::InsertComponent(
+                            *entity,
+                            *component_kind,
+                        ));
+                    }
+                    EntityEvent::RemoveComponent(entity, component) => {
+                        response_events.push(EntityResponseEvent::RemoveComponent(
+                            *entity,
+                            component.kind(),
+                        ));
                     }
                     _ => {}
                 }
@@ -286,4 +298,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         writer
     }
+}
+
+pub enum EntityResponseEvent<E: Copy> {
+    SpawnEntity(E),
+    DespawnEntity(E),
+    InsertComponent(E, ComponentKind),
+    RemoveComponent(E, ComponentKind),
 }
