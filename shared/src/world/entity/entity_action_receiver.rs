@@ -123,6 +123,12 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
         components: Vec<ComponentKind>,
         outgoing_actions: &mut Vec<EntityAction<E>>,
     ) {
+        // this is the problem:
+        // the point of the receiver is to de-dup a given event, like a Spawn Action here
+        // we only only convert the NEWEST spawn packet into a SpawnAction
+        // so the problem we're running into is that: Two Spawn Packets are sent, 1 with components A, B, and 1 with components A, B, C
+        // action_index will be the same for both, however ...
+
         // do not process any spawn OLDER than last received spawn index / despawn index
         if let Some(last_index) = self.last_canonical_index {
             if sequence_less_than(action_index, last_index) {

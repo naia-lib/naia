@@ -180,7 +180,7 @@ impl HostWorldWriter {
         Self::write_action_id(writer, last_written_id, action_id);
 
         match action {
-            EntityActionEvent::SpawnEntity(world_entity) => {
+            EntityActionEvent::SpawnEntity(world_entity, component_kind_list) => {
                 EntityActionType::SpawnEntity.ser(writer);
 
                 // write net entity
@@ -189,18 +189,12 @@ impl HostWorldWriter {
                     .unwrap()
                     .host_ser(writer);
 
-                // get component list
-                let component_kind_list = match global_world_manager.component_kinds(world_entity) {
-                    Some(kind_list) => kind_list,
-                    None => Vec::new(),
-                };
-
                 // write number of components
                 let components_num =
                     UnsignedVariableInteger::<3>::new(component_kind_list.len() as i128);
                 components_num.ser(writer);
 
-                for component_kind in &component_kind_list {
+                for component_kind in component_kind_list {
                     let mut converter =
                         EntityConverterMut::new(global_world_manager, local_world_manager);
 
@@ -217,7 +211,7 @@ impl HostWorldWriter {
                         &mut host_manager.sent_action_packets,
                         packet_index,
                         action_id,
-                        EntityAction::SpawnEntity(*world_entity, component_kind_list),
+                        EntityAction::SpawnEntity(*world_entity, component_kind_list.clone()),
                     );
                 }
             }
@@ -352,16 +346,12 @@ impl HostWorldWriter {
         let (_action_id, action) = next_send_actions.front().unwrap();
 
         match action {
-            EntityActionEvent::SpawnEntity(entity) => {
-                let component_kind_list = match global_world_manager.component_kinds(entity) {
-                    Some(kind_list) => kind_list,
-                    None => Vec::new(),
-                };
+            EntityActionEvent::SpawnEntity(entity, component_kind_list) => {
 
                 let mut component_names = "".to_owned();
                 let mut added = false;
 
-                for component_kind in &component_kind_list {
+                for component_kind in component_kind_list {
                     if added {
                         component_names.push(',');
                     } else {

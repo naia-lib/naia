@@ -149,9 +149,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                         .remove(&(local_entity, component_kind))
                         .unwrap();
 
-                    let world_entity = local_world_manager.get_world_entity(&local_entity);
+                    if local_world_manager.has_local_entity(&local_entity) {
+                        let world_entity = local_world_manager.get_world_entity(&local_entity);
 
-                    self.process_insert(world, world_entity, component, &component_kind);
+                        self.process_insert(world, world_entity, component, &component_kind);
+                    } else {
+                        // entity may have despawned on disconnect or something similar?
+                    }
                 }
                 EntityAction::RemoveComponent(local_entity, component_kind) => {
                     let world_entity = local_world_manager.get_world_entity(&local_entity);

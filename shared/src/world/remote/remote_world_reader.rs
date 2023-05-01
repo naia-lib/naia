@@ -233,10 +233,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
             let component_update = component_kinds.read_create_update(reader)?;
 
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
-            let world_entity = local_world_manager.get_world_entity(local_entity);
+            if local_world_manager.has_local_entity(local_entity) {
+                let world_entity = local_world_manager.get_world_entity(local_entity);
 
-            self.received_updates
-                .push((*tick, world_entity, component_update));
+                self.received_updates
+                    .push((*tick, world_entity, component_update));
+            }
         }
 
         Ok(())

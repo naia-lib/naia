@@ -83,9 +83,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         )
     }
 
+    pub fn host_component_kinds(&self, entity: &E) -> Vec<ComponentKind> {
+        if let Some(component_kinds) = self.host_world.get(entity) {
+            component_kinds.iter().cloned().collect()
+        } else {
+            Vec::new()
+        }
+    }
+
     // Host Updates
 
-    pub fn host_spawn_entity(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E) {
+    pub fn host_spawn_entity(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E, component_kinds: &Vec<ComponentKind>) {
         if self.host_world.contains_key(entity) {
             panic!("World Channel: cannot spawn entity that already exists");
         }
@@ -97,7 +105,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             self.entity_channels
                 .insert(*entity, EntityChannel::Spawning);
             self.outgoing_actions
-                .send_message(EntityActionEvent::SpawnEntity(*entity));
+                .send_message(EntityActionEvent::SpawnEntity(*entity, component_kinds.clone()));
             self.on_entity_channel_opening(world_manager, entity);
         }
     }
@@ -296,7 +304,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 self.entity_channels
                     .insert(*entity, EntityChannel::Spawning);
                 self.outgoing_actions
-                    .send_message(EntityActionEvent::SpawnEntity(*entity));
+                    .send_message(EntityActionEvent::SpawnEntity(*entity, self.host_component_kinds(entity)));
                 self.on_entity_channel_opening(local_world_manager, entity);
             }
         } else {
@@ -581,5 +589,9 @@ impl<K: Eq + Hash> CheckedSet<K> {
         }
 
         self.inner.remove(key);
+    }
+
+    pub fn iter(&self) -> std::collections::hash_set::Iter<K> {
+        self.inner.iter()
     }
 }
