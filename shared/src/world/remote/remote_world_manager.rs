@@ -111,7 +111,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 EntityAction::SpawnEntity(local_entity, components) => {
                     // set up entity
                     let world_entity = world.spawn_entity();
-                    local_world_manager.remote_spawn_entity(&world_entity, &local_entity);
+                    local_world_manager.insert_entity(world_entity, local_entity);
                     self.on_entity_channel_opened(&local_entity);
 
                     self.outgoing_events
@@ -127,7 +127,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     }
                 }
                 EntityAction::DespawnEntity(local_entity) => {
-                    let world_entity = local_world_manager.remote_despawn_entity(&local_entity);
+                    let world_entity = local_world_manager.remove_local_entity(&local_entity);
 
                     // Generate event for each component, handing references off just in
                     // case

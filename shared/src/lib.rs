@@ -43,6 +43,7 @@ mod sequence_list;
 mod types;
 mod world;
 mod wrapping_number;
+mod doublemap;
 
 pub use backends::{Timer, Timestamp};
 pub use connection::{
@@ -125,6 +126,7 @@ pub use world::{
 };
 
 pub use bigmap::{BigMap, BigMapKey};
+pub use doublemap::DoubleMap;
 pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
 pub use protocol::{Protocol, ProtocolPlugin};

@@ -368,16 +368,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     // State Transition events
 
-    fn on_entity_channel_opening(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E) {
-        world_manager.host_spawn_entity(entity);
+    fn on_entity_channel_opening(&mut self, local_world_manager: &mut LocalWorldManager<E>, world_entity: &E) {
+        if local_world_manager.remove_reserved_host_entity(world_entity).is_none() {
+            let local_entity = local_world_manager.generate_host_entity();
+            local_world_manager.insert_entity(*world_entity, local_entity);
+        }
     }
 
     fn on_entity_channel_opened(&mut self, _world_entity: &E) {}
 
     fn on_entity_channel_closing(&mut self, _world_entity: &E) {}
 
-    fn on_entity_channel_closed(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E) {
-        world_manager.host_despawn_entity(entity);
+    fn on_entity_channel_closed(&mut self, local_world_manager: &mut LocalWorldManager<E>, entity: &E) {
+        let host_entity = local_world_manager.remove_world_entity(entity);
+        local_world_manager.recycle_host_entity(host_entity);
     }
 
     fn on_component_channel_opened(&mut self, entity: &E, component_kind: &ComponentKind) {
