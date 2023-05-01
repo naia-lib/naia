@@ -122,8 +122,8 @@ pub use world::{
         entity_event::{EntityEvent, EntityResponseEvent},
         remote_world_manager::RemoteWorldManager,
     },
-    world_type::{WorldMutType, WorldRefType},
     shared_global_world_manager::SharedGlobalWorldManager,
+    world_type::{WorldMutType, WorldRefType},
 };
 
 pub use bigmap::{BigMap, BigMapKey};

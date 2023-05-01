@@ -11,7 +11,13 @@ use log::{info, warn};
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, EntityResponseEvent, GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType};
+use naia_shared::{
+    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
+    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverterMut,
+    EntityDoesNotExistError, EntityResponseEvent, GlobalEntity, Instant, Message, MessageContainer,
+    PacketType, Protocol, Replicate, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig,
+    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -600,10 +606,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.global_world_manager.remove_entity_record(entity);
     }
 
-    fn despawn_entity_from_all_connections(
-        &mut self,
-        entity: &E,
-    ) {
+    fn despawn_entity_from_all_connections(&mut self, entity: &E) {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
         for (_, connection) in self.user_connections.iter_mut() {
@@ -666,7 +669,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn insert_component_worldless(&mut self, entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
 
-        self.insert_new_component_into_entity_scopes(entity, &component_kind, false);
+        self.insert_new_component_into_entity_scopes(entity, &component_kind);
 
         // update in world manager
         self.global_world_manager
@@ -679,11 +682,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         entity: &E,
         component_kind: &ComponentKind,
-        log: bool,
     ) {
-        if log {
-            info!("Inserting new RemotePublic component. There are {} users:", self.user_connections.len());
-        }
         // add component to connections already tracking entity
         for (_, connection) in self.user_connections.iter_mut() {
             // insert component into user's connection
@@ -691,11 +690,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 connection
                     .base
                     .host_world_manager
-                    .insert_component(entity, &component_kind, log);
+                    .insert_component(entity, &component_kind);
             }
-        }
-        if log {
-            info!("...")
         }
     }
 
@@ -792,7 +788,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         };
 
         let remote_entities = connection.base.remote_entities();
-        let entity_events = SharedGlobalWorldManager::<E>::despawn_all_entities(world, &self.global_world_manager, remote_entities);
+        let entity_events = SharedGlobalWorldManager::<E>::despawn_all_entities(
+            world,
+            &self.global_world_manager,
+            remote_entities,
+        );
         let response_events = self
             .incoming_events
             .receive_entity_events(user_key, entity_events);
@@ -1203,6 +1203,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::SpawnEntity(entity) => {
                     self.global_world_manager
                         .spawn_entity_record(&entity, EntityOwner::Client(*user_key));
+                    let user = self.users.get(user_key).unwrap();
+                    let connection = self.user_connections.get_mut(&user.address).unwrap();
+                    let local_entity = connection
+                        .base
+                        .local_world_manager
+                        .entity_to_local_entity(&entity)
+                        .unwrap();
+                    connection
+                        .base
+                        .remote_world_manager
+                        .on_entity_channel_opened(&local_entity);
                 }
                 EntityResponseEvent::DespawnEntity(entity) => {
                     if self.global_world_manager.entity_is_public(&entity) {
@@ -1222,7 +1233,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             &component_kind,
                         );
 
-                        self.insert_new_component_into_entity_scopes(&entity, &component_kind, true);
+                        self.insert_new_component_into_entity_scopes(&entity, &component_kind);
                     }
                 }
                 EntityResponseEvent::RemoveComponent(entity, component_kind) => {

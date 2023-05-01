@@ -13,7 +13,7 @@ use crate::{
         local_world_manager::LocalWorldManager,
         remote::remote_world_reader::RemoteWorldReader,
     },
-    EntityEvent, HostWorldManager, Protocol, RemoteWorldManager, Tick, WorldMutType, WorldRefType,
+    HostWorldManager, Protocol, RemoteWorldManager, Tick, WorldRefType,
 };
 
 use super::{
@@ -118,8 +118,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     }
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
-        self.host_world_manager
-            .handle_dropped_packets(rtt_millis);
+        self.host_world_manager.handle_dropped_packets(rtt_millis);
         self.message_manager
             .collect_outgoing_messages(now, rtt_millis);
     }
@@ -185,7 +184,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         &mut self,
         protocol: &Protocol,
         client_tick: &Tick,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {

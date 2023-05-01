@@ -78,21 +78,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         self.spawn_entity(world_manager, entity, &component_kinds);
         // add components
         for component_kind in component_kinds {
-            self.insert_component(entity, &component_kind, false);
+            self.insert_component(entity, &component_kind);
         }
     }
 
-    pub fn spawn_entity(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E, component_kinds: &Vec<ComponentKind>) {
-        self.world_channel.host_spawn_entity(world_manager, entity, component_kinds);
+    pub fn spawn_entity(
+        &mut self,
+        world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+        component_kinds: &Vec<ComponentKind>,
+    ) {
+        self.world_channel
+            .host_spawn_entity(world_manager, entity, component_kinds);
     }
 
     pub fn despawn_entity(&mut self, entity: &E) {
         self.world_channel.host_despawn_entity(entity);
     }
 
-    pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind, log: bool) {
+    pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         self.world_channel
-            .host_insert_component(entity, component_kind, log);
+            .host_insert_component(entity, component_kind);
     }
 
     pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {

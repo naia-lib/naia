@@ -116,7 +116,6 @@ impl HostWorldWriter {
                 if !*has_written {
                     Self::warn_overflow_action(
                         component_kinds,
-                        global_world_manager,
                         counter.bits_needed(),
                         writer.bits_free(),
                         next_send_actions,
@@ -339,7 +338,6 @@ impl HostWorldWriter {
 
     fn warn_overflow_action<E: Copy + Eq + Hash + Send + Sync>(
         component_kinds: &ComponentKinds,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
         bits_needed: u32,
         bits_free: u32,
         next_send_actions: &VecDeque<(ActionId, EntityActionEvent<E>)>,
@@ -347,8 +345,7 @@ impl HostWorldWriter {
         let (_action_id, action) = next_send_actions.front().unwrap();
 
         match action {
-            EntityActionEvent::SpawnEntity(entity, component_kind_list) => {
-
+            EntityActionEvent::SpawnEntity(_entity, component_kind_list) => {
                 let mut component_names = "".to_owned();
                 let mut added = false;
 
@@ -394,7 +391,6 @@ impl HostWorldWriter {
         let all_update_entities: Vec<E> = next_send_updates.keys().copied().collect();
 
         for entity in all_update_entities {
-
             // get LocalEntity
             let local_entity = local_world_manager.entity_to_local_entity(&entity).unwrap();
 

@@ -13,7 +13,7 @@ pub use naia_shared::{
     SocketConfig, StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType,
     WorldRefType,
 };
-use naia_shared::SharedGlobalWorldManager;
+use naia_shared::{EntityAndLocalEntityConverter, SharedGlobalWorldManager};
 
 use crate::{
     connection::{
@@ -177,7 +177,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     &mut world,
                     &mut self.incoming_events,
                 );
-                process_response_events(&mut self.global_world_manager, response_events);
+                process_response_events(
+                    connection,
+                    &mut self.global_world_manager,
+                    response_events,
+                );
 
                 let mut index_tick = prev_receiving_tick.wrapping_add(1);
                 loop {
@@ -523,7 +527,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 connection
                     .base
                     .host_world_manager
-                    .insert_component(entity, &component_kind, false);
+                    .insert_component(entity, &component_kind);
             }
         }
 
@@ -790,9 +794,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
 
         let remote_entities = connection.base.remote_entities();
-        let entity_events = SharedGlobalWorldManager::<E>::despawn_all_entities(world, &self.global_world_manager, remote_entities);
+        let entity_events = SharedGlobalWorldManager::<E>::despawn_all_entities(
+            world,
+            &self.global_world_manager,
+            remote_entities,
+        );
         let response_events = self.incoming_events.receive_world_events(entity_events);
-        process_response_events(&mut self.global_world_manager, response_events);
+        process_response_events(connection, &mut self.global_world_manager, response_events);
     }
 
     fn disconnect_reset_connection(&mut self) {
@@ -817,6 +825,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 }
 
 fn process_response_events<E: Copy + Eq + Hash + Send + Sync>(
+    connection: &mut Connection<E>,
     global_world_manager: &mut GlobalWorldManager<E>,
     response_events: Vec<EntityResponseEvent<E>>,
 ) {
@@ -824,6 +833,15 @@ fn process_response_events<E: Copy + Eq + Hash + Send + Sync>(
         match response_event {
             EntityResponseEvent::SpawnEntity(entity) => {
                 global_world_manager.remote_spawn_entity(&entity);
+                let local_entity = connection
+                    .base
+                    .local_world_manager
+                    .entity_to_local_entity(&entity)
+                    .unwrap();
+                connection
+                    .base
+                    .remote_world_manager
+                    .on_entity_channel_opened(&local_entity);
             }
             EntityResponseEvent::DespawnEntity(entity) => {
                 global_world_manager.remote_despawn_entity(&entity);

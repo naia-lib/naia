@@ -1,7 +1,5 @@
 use std::ops::{Deref, DerefMut};
 
-use log::info;
-
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::world::component::property_mutate::PropertyMutator;
@@ -54,7 +52,7 @@ impl<T: Serde> Property<T> {
                 inner.set_mutator(mutator);
             }
             PropertyImpl::RemoteOwned(_) | PropertyImpl::RemotePublic(_) => {
-                panic!("Remote Property should never have a mutator.");
+                panic!("Remote Property should never call set_mutator().");
             }
             PropertyImpl::Local(_) => {
                 panic!("Local Property should never have a mutator.");
@@ -174,7 +172,6 @@ impl<T: Serde> Property<T> {
     pub fn localize(&mut self) {
         match &mut self.inner {
             PropertyImpl::HostOwned(inner) => {
-                info!("Host Owned Property made Local!");
                 let inner_value = inner.inner.clone();
                 self.inner = PropertyImpl::Local(LocalProperty::new(inner_value));
             }

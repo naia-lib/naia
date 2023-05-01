@@ -1,5 +1,4 @@
 use std::{collections::HashMap, hash::Hash};
-use log::info;
 
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
@@ -54,7 +53,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
 
     pub fn read_world_events(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         protocol: &Protocol,
         tick: &Tick,
@@ -77,7 +76,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
     /// Read incoming Entity actions.
     fn read_actions(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         reader: &mut BitReader,
@@ -136,8 +135,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
                         .insert((local_entity, new_component_kind), new_component);
                     component_kind_list.push(new_component_kind);
                 }
-
-                info!("Read SpawnEntity action for entity `{:?}` with components: `{:?}`", local_entity, component_kind_list);
 
                 self.receiver.buffer_action(
                     action_id,
