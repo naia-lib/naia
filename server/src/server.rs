@@ -11,13 +11,7 @@ use log::{info, warn};
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_shared::{
-    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError,
-    EntityResponseEvent, GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol,
-    Replicate, Serde, SerdeErr, SocketConfig, StandardHeader, Tick, Timer, WorldMutType,
-    WorldRefType,
-};
+use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityConverterMut, EntityDoesNotExistError, EntityResponseEvent, GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, Timer, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -588,12 +582,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn despawn_entity_worldless(&mut self, entity: &E) {
-        // TODO: we can make this more efficient in the future by caching which Entities
-        // are in each User's scope
-        for (_, connection) in self.user_connections.iter_mut() {
-            //remove entity from user connection
-            connection.base.host_world_manager.despawn_entity(entity);
-        }
+        self.despawn_entity_from_all_connections(entity);
 
         // Delete scope
         self.entity_scope_map.remove_entity(entity);
@@ -601,7 +590,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // Delete room cache entry
         if let Some(room_key) = self.entity_room_map.remove(entity) {
             if let Some(room) = self.rooms.get_mut(&room_key) {
-                room.remove_entity(entity);
+                room.remove_entity(entity, true);
             }
         }
 
@@ -609,6 +598,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.global_world_manager
             .remove_entity_diff_handlers(entity);
         self.global_world_manager.remove_entity_record(entity);
+    }
+
+    fn despawn_entity_from_all_connections(
+        &mut self,
+        entity: &E,
+    ) {
+        // TODO: we can make this more efficient in the future by caching which Entities
+        // are in each User's scope
+        for (_, connection) in self.user_connections.iter_mut() {
+            if connection.base.host_world_manager.host_has_entity(entity) {
+                //remove entity from user connection
+                connection.base.host_world_manager.despawn_entity(entity);
+            }
+        }
     }
 
     //// Entity Scopes
@@ -663,7 +666,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn insert_component_worldless(&mut self, entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
 
-        self.insert_new_component_into_entity_scopes(entity, &component_kind);
+        self.insert_new_component_into_entity_scopes(entity, &component_kind, false);
 
         // update in world manager
         self.global_world_manager
@@ -676,7 +679,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         entity: &E,
         component_kind: &ComponentKind,
+        log: bool,
     ) {
+        if log {
+            info!("Inserting new RemotePublic component. There are {} users:", self.user_connections.len());
+        }
         // add component to connections already tracking entity
         for (_, connection) in self.user_connections.iter_mut() {
             // insert component into user's connection
@@ -684,8 +691,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 connection
                     .base
                     .host_world_manager
-                    .insert_component(entity, &component_kind);
+                    .insert_component(entity, &component_kind, log);
             }
+        }
+        if log {
+            info!("...")
         }
     }
 
@@ -720,11 +730,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // TODO: should be able to make this more efficient by caching for every Entity
         // which scopes they are part of
         for (_, connection) in self.user_connections.iter_mut() {
-            // remove component from user connection
-            connection
-                .base
-                .host_world_manager
-                .remove_component(entity, &component_kind);
+            if connection.base.host_world_manager.host_has_entity(entity) {
+                // remove component from user connection
+                connection
+                    .base
+                    .host_world_manager
+                    .remove_component(entity, &component_kind);
+            }
         }
     }
 
@@ -779,7 +791,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
-        let entity_events = connection.base.despawn_all_remote_entities(world);
+        let remote_entities = connection.base.remote_entities();
+        let entity_events = SharedGlobalWorldManager::<E>::despawn_all_entities(world, &self.global_world_manager, remote_entities);
         let response_events = self
             .incoming_events
             .receive_entity_events(user_key, entity_events);
@@ -932,7 +945,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &E) {
         if let Some(room) = self.rooms.get_mut(room_key) {
-            room.remove_entity(entity);
+            room.remove_entity(entity, false);
             self.entity_room_map.remove(entity);
         }
     }
@@ -942,7 +955,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if let Some(room) = self.rooms.get_mut(room_key) {
             let entities: Vec<E> = room.entities().copied().collect();
             for entity in entities {
-                room.remove_entity(&entity);
+                room.remove_entity(&entity, false);
                 self.entity_room_map.remove(&entity);
             }
         }
@@ -1208,8 +1221,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             &entity,
                             &component_kind,
                         );
-                        self.insert_new_component_into_entity_scopes(&entity, &component_kind);
-                        info!("server process public EntityResponseEvent::InsertComponent");
+
+                        self.insert_new_component_into_entity_scopes(&entity, &component_kind, true);
                     }
                 }
                 EntityResponseEvent::RemoveComponent(entity, component_kind) => {
@@ -1374,9 +1387,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 if should_be_in_scope {
                                     if !currently_in_scope {
                                         //temp//remove!//
-                                        if self.global_world_manager.entity_is_public(entity) {
-                                            info!("Server: replicating Public Entity to User")
-                                        }
+                                        // if self.global_world_manager.entity_is_public(entity) {
+                                        //     info!("Server: replicating Public Entity to User")
+                                        // }
                                         //
 
                                         let component_kinds = self

@@ -13,6 +13,7 @@ pub use naia_shared::{
     SocketConfig, StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType,
     WorldRefType,
 };
+use naia_shared::SharedGlobalWorldManager;
 
 use crate::{
     connection::{
@@ -522,7 +523,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 connection
                     .base
                     .host_world_manager
-                    .insert_component(entity, &component_kind);
+                    .insert_component(entity, &component_kind, false);
             }
         }
 
@@ -788,8 +789,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Client is already disconnected!");
         };
 
-        let events = connection.base.despawn_all_remote_entities(world);
-        let response_events = self.incoming_events.receive_world_events(events);
+        let remote_entities = connection.base.remote_entities();
+        let entity_events = SharedGlobalWorldManager::<E>::despawn_all_entities(world, &self.global_world_manager, remote_entities);
+        let response_events = self.incoming_events.receive_world_events(entity_events);
         process_response_events(&mut self.global_world_manager, response_events);
     }
 

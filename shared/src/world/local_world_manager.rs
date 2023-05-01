@@ -1,4 +1,4 @@
-use log::warn;
+use log::{info, warn};
 use naia_socket_shared::Instant;
 use std::{
     collections::{HashMap, VecDeque},
@@ -69,6 +69,7 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     pub(crate) fn insert_entity(&mut self, world_entity: E, local_entity: LocalEntity) {
+        info!("local world manager: inserting entity: `{:?}`", local_entity);
         if self.entity_map.contains_key(&world_entity) {
             panic!("World Entity already exists!");
         }
@@ -111,11 +112,13 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         //     panic!("can only call this method with remote entities");
         // }
 
-        let world_entity = self
+        if let Some(world_entity) = self
             .entity_map
-            .get_by_value(&local_entity)
-            .expect("Attempting to access remote entity which does not exist!");
-        return *world_entity;
+            .get_by_value(&local_entity) {
+            return *world_entity;
+        } else {
+            panic!("Attempting to get world entity for local entity which does not exist!: `{:?}`", local_entity);
+        }
     }
 
     pub(crate) fn remote_entities(&self) -> Vec<E> {

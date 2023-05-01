@@ -212,30 +212,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         Ok(())
     }
 
-    pub fn despawn_all_remote_entities<W: WorldMutType<E>>(
-        &mut self,
-        world: &mut W,
-    ) -> Vec<EntityEvent<E>> {
-        let mut output = Vec::new();
-
-        let remote_entities = self.local_world_manager.remote_entities();
-
-        for entity in remote_entities {
-            // Generate remove event for each component, handing references off just in
-            // case
-            for component_kind in world.component_kinds(&entity) {
-                if let Some(component) = world.remove_component_of_kind(&entity, &component_kind) {
-                    output.push(EntityEvent::<E>::RemoveComponent(entity, component));
-                }
-            }
-
-            // Generate despawn event
-            output.push(EntityEvent::DespawnEntity(entity));
-
-            // Despawn entity
-            world.despawn_entity(&entity);
-        }
-
-        output
+    pub fn remote_entities(&self) -> Vec<E> {
+        self.local_world_manager.remote_entities()
     }
 }

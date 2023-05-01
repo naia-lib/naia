@@ -123,6 +123,7 @@ pub use world::{
         remote_world_manager::RemoteWorldManager,
     },
     world_type::{WorldMutType, WorldRefType},
+    shared_global_world_manager::SharedGlobalWorldManager,
 };
 
 pub use bigmap::{BigMap, BigMapKey};

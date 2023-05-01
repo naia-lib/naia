@@ -78,7 +78,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         self.spawn_entity(world_manager, entity);
         // add components
         for component_kind in component_kinds {
-            self.insert_component(entity, &component_kind);
+            self.insert_component(entity, &component_kind, false);
         }
     }
 
@@ -90,9 +90,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         self.world_channel.host_despawn_entity(entity);
     }
 
-    pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind, log: bool) {
         self.world_channel
-            .host_insert_component(entity, component_kind);
+            .host_insert_component(entity, component_kind, log);
     }
 
     pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {

@@ -154,7 +154,6 @@ impl<T: Serde> Property<T> {
                 panic!("Host Property should never be made public.");
             }
             PropertyImpl::RemoteOwned(inner) => {
-                info!("Remote Owned Property made Public!");
                 let inner_value = inner.inner.clone();
                 self.inner = PropertyImpl::RemotePublic(RemotePublicProperty::new(
                     inner_value,
