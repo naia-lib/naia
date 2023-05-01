@@ -35,6 +35,7 @@ mod backends;
 mod bigmap;
 mod connection;
 mod constants;
+mod doublemap;
 mod game_time;
 mod key_generator;
 mod messages;
@@ -43,7 +44,6 @@ mod sequence_list;
 mod types;
 mod world;
 mod wrapping_number;
-mod doublemap;
 
 pub use backends::{Timer, Timestamp};
 pub use connection::{

@@ -7,9 +7,8 @@ use std::{
 };
 
 use crate::{
-    world::entity::local_entity::LocalEntity, EntityAndLocalEntityConverter,
+    doublemap::DoubleMap, world::entity::local_entity::LocalEntity, EntityAndLocalEntityConverter,
     EntityDoesNotExistError, KeyGenerator,
-    doublemap::DoubleMap
 };
 
 pub struct LocalWorldManager<E: Copy + Eq + Hash> {
@@ -81,18 +80,23 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     pub(crate) fn remove_world_entity(&mut self, world_entity: &E) -> LocalEntity {
-        self.entity_map.remove_by_key(world_entity).expect("Attempting to despawn entity which does not exist!")
+        self.entity_map
+            .remove_by_key(world_entity)
+            .expect("Attempting to despawn entity which does not exist!")
     }
 
     pub(crate) fn remove_local_entity(&mut self, local_entity: &LocalEntity) -> E {
-        self.entity_map.remove_by_value(local_entity).expect("Attempting to despawn entity which does not exist!")
+        self.entity_map
+            .remove_by_value(local_entity)
+            .expect("Attempting to despawn entity which does not exist!")
     }
 
     pub(crate) fn recycle_host_entity(&mut self, local_entity: LocalEntity) {
         if !local_entity.is_host() {
             panic!("can only call this method with host entities");
         }
-        self.host_entity_generator.recycle_key(&local_entity.value());
+        self.host_entity_generator
+            .recycle_key(&local_entity.value());
     }
 
     // Remote entities
@@ -107,16 +111,19 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         //     panic!("can only call this method with remote entities");
         // }
 
-        let world_entity = self.entity_map.get_by_value(&local_entity).expect("Attempting to access remote entity which does not exist!");
+        let world_entity = self
+            .entity_map
+            .get_by_value(&local_entity)
+            .expect("Attempting to access remote entity which does not exist!");
         return *world_entity;
     }
 
     pub(crate) fn remote_entities(&self) -> Vec<E> {
-        self.entity_map.iter().filter(|(_, local_entity)| {
-            local_entity.is_remote()
-        }).map(|(world_entity, _)| {
-            *world_entity
-        }).collect::<Vec<E>>()
+        self.entity_map
+            .iter()
+            .filter(|(_, local_entity)| local_entity.is_remote())
+            .map(|(world_entity, _)| *world_entity)
+            .collect::<Vec<E>>()
     }
 
     pub fn get_user_key(&self) -> &u64 {
@@ -125,7 +132,10 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 }
 
 impl<E: Copy + Eq + Hash> EntityAndLocalEntityConverter<E> for LocalWorldManager<E> {
-    fn entity_to_local_entity(&self, world_entity: &E) -> Result<LocalEntity, EntityDoesNotExistError> {
+    fn entity_to_local_entity(
+        &self,
+        world_entity: &E,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
         if let Some(local_entity) = self.entity_map.get_by_key(world_entity) {
             return Ok(*local_entity);
         } else {

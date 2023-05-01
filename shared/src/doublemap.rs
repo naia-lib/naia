@@ -2,12 +2,17 @@
 
 use std::{collections::HashMap, hash::Hash};
 
-pub struct DoubleMap<K: Eq + PartialEq + Clone + Copy + Hash, V: Eq + PartialEq + Clone + Copy + Hash> {
+pub struct DoubleMap<
+    K: Eq + PartialEq + Clone + Copy + Hash,
+    V: Eq + PartialEq + Clone + Copy + Hash,
+> {
     key_to_value: HashMap<K, V>,
     value_to_key: HashMap<V, K>,
 }
 
-impl<K: Eq + PartialEq + Clone + Copy + Hash, V: Eq + PartialEq + Clone + Copy + Hash> DoubleMap<K, V> {
+impl<K: Eq + PartialEq + Clone + Copy + Hash, V: Eq + PartialEq + Clone + Copy + Hash>
+    DoubleMap<K, V>
+{
     pub fn new() -> Self {
         Self {
             key_to_value: HashMap::new(),

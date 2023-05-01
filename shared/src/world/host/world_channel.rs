@@ -368,8 +368,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     // State Transition events
 
-    fn on_entity_channel_opening(&mut self, local_world_manager: &mut LocalWorldManager<E>, world_entity: &E) {
-        if local_world_manager.remove_reserved_host_entity(world_entity).is_none() {
+    fn on_entity_channel_opening(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        world_entity: &E,
+    ) {
+        if local_world_manager
+            .remove_reserved_host_entity(world_entity)
+            .is_none()
+        {
             let local_entity = local_world_manager.generate_host_entity();
             local_world_manager.insert_entity(*world_entity, local_entity);
         }
@@ -379,7 +386,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     fn on_entity_channel_closing(&mut self, _world_entity: &E) {}
 
-    fn on_entity_channel_closed(&mut self, local_world_manager: &mut LocalWorldManager<E>, entity: &E) {
+    fn on_entity_channel_closed(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+    ) {
         let host_entity = local_world_manager.remove_world_entity(entity);
         local_world_manager.recycle_host_entity(host_entity);
     }
