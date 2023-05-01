@@ -77,6 +77,9 @@ impl ChannelTickBufferSender {
 
             // check that we can write the next message
             let mut counter = writer.counter();
+            // write MessageContinue bit
+            true.ser(&mut counter);
+            // write data
             self.write_message(
                 message_kinds,
                 converter,
@@ -100,7 +103,6 @@ impl ChannelTickBufferSender {
 
             // write MessageContinue bit
             true.ser(writer);
-
             // write data
             let message_indices = self.write_message(
                 message_kinds,

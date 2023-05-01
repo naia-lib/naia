@@ -95,6 +95,9 @@ impl HostWorldWriter {
 
             // check that we can write the next message
             let mut counter = writer.counter();
+            // write ActionContinue bit
+            true.ser(&mut counter);
+            // write data
             Self::write_action(
                 component_kinds,
                 world,
@@ -107,7 +110,6 @@ impl HostWorldWriter {
                 host_manager,
                 next_send_actions,
             );
-
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
@@ -125,9 +127,6 @@ impl HostWorldWriter {
 
             *has_written = true;
 
-            // write ActionContinue bit
-            true.ser(writer);
-
             // optimization
             if !host_manager
                 .sent_action_packets
@@ -138,6 +137,8 @@ impl HostWorldWriter {
                     .insert_scan_from_back(*packet_index, (now.clone(), Vec::new()));
             }
 
+            // write ActionContinue bit
+            true.ser(writer);
             // write data
             Self::write_action(
                 component_kinds,
@@ -156,7 +157,7 @@ impl HostWorldWriter {
             next_send_actions.pop_front();
         }
 
-        // finish actions
+        // Finish actions by writing false ActionContinue bit
         false.ser(writer);
         writer.release_bits(1);
     }
@@ -393,29 +394,28 @@ impl HostWorldWriter {
         let all_update_entities: Vec<E> = next_send_updates.keys().copied().collect();
 
         for entity in all_update_entities {
-            // check that we can at least write a LocalEntity and a ComponentContinue bit
-            let mut counter = writer.counter();
 
             // get LocalEntity
             let local_entity = local_world_manager.entity_to_local_entity(&entity).unwrap();
 
+            // check that we can at least write a LocalEntity and a ComponentContinue bit
+            let mut counter = writer.counter();
+            // reserve ComponentContinue bit
+            counter.write_bit(true);
+            // write UpdateContinue bit
+            counter.write_bit(true);
             // write LocalEntity
             local_entity.host_ser(&mut counter);
-            counter.write_bit(false);
-
             if counter.overflowed() {
                 break;
             }
 
-            // write UpdateContinue bit
-            true.ser(writer);
-
             // reserve ComponentContinue bit
             writer.reserve_bits(1);
-
+            // write UpdateContinue bit
+            true.ser(writer);
             // write LocalEntity
             local_entity.host_ser(writer);
-
             // write Components
             Self::write_update(
                 component_kinds,
@@ -436,7 +436,7 @@ impl HostWorldWriter {
             writer.release_bits(1);
         }
 
-        // finish updates
+        // write EntityContinue finish bit, release
         false.ser(writer);
         writer.release_bits(1);
     }
@@ -471,12 +471,15 @@ impl HostWorldWriter {
 
             // check that we can write the next component update
             let mut counter = writer.counter();
+            // write ComponentContinue bit
+            true.ser(&mut counter);
+            // write component kind
             counter.write_bits(<ComponentKind as ConstBitLength>::const_bit_length());
+            // write data
             world
                 .component_of_kind(entity, component_kind)
                 .expect("Component does not exist in World")
                 .write_update(&diff_mask, &mut counter, &mut converter);
-
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
@@ -496,10 +499,8 @@ impl HostWorldWriter {
 
             // write ComponentContinue bit
             true.ser(writer);
-
             // write component kind
             component_kind.ser(component_kinds, writer);
-
             // write data
             world
                 .component_of_kind(entity, component_kind)

@@ -28,9 +28,13 @@ impl IndexedMessageWriter {
                 break;
             }
 
-            // check that we can write the next message
             let (message_index, message) = outgoing_messages.front().unwrap();
+
+            // check that we can write the next message
             let mut counter = writer.counter();
+            // write MessageContinue bit
+            true.ser(&mut counter);
+            // write data
             Self::write_message(
                 message_kinds,
                 converter,
@@ -39,7 +43,6 @@ impl IndexedMessageWriter {
                 message_index,
                 message,
             );
-
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of message being too big
@@ -54,7 +57,6 @@ impl IndexedMessageWriter {
 
             // write MessageContinue bit
             true.ser(writer);
-
             // write data
             Self::write_message(
                 message_kinds,

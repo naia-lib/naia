@@ -228,22 +228,22 @@ impl MessageManager {
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
             let mut counter = writer.counter();
-            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
+            // reserve MessageContinue bit
             counter.write_bit(false);
-
+            // write ChannelContinue bit
+            counter.write_bit(false);
+            // write ChannelIndex
+            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
             if counter.overflowed() {
                 break;
             }
 
-            // write ChannelContinue bit
-            true.ser(writer);
-
             // reserve MessageContinue bit
             writer.reserve_bits(1);
-
+            // write ChannelContinue bit
+            true.ser(writer);
             // write ChannelIndex
             channel_kind.ser(&protocol.channel_kinds, writer);
-
             // write Messages
             if let Some(message_indices) =
                 channel.write_messages(&protocol.message_kinds, converter, writer, has_written)
@@ -260,7 +260,7 @@ impl MessageManager {
             writer.release_bits(1);
         }
 
-        // finish messages
+        // write ChannelContinue finish bit, release
         false.ser(writer);
         writer.release_bits(1);
     }

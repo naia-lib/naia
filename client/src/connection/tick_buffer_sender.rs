@@ -79,22 +79,23 @@ impl TickBufferSender {
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
             let mut counter = writer.counter();
+            // reserve MessageContinue bit
+            true.ser(&mut counter);
+            // write ChannelContinue bit
+            true.ser(&mut counter);
+            // write ChannelIndex
             counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
-            counter.write_bit(false);
 
             if counter.overflowed() {
                 break;
             }
 
-            // write ChannelContinue bit
-            true.ser(writer);
-
             // reserve MessageContinue bit
             writer.reserve_bits(1);
-
+            // write ChannelContinue bit
+            true.ser(writer);
             // write ChannelIndex
             channel_kind.ser(&protocol.channel_kinds, writer);
-
             // write Messages
             if let Some(message_indices) = channel.write_messages(
                 &protocol.message_kinds,
@@ -115,7 +116,7 @@ impl TickBufferSender {
             writer.release_bits(1);
         }
 
-        // finish tick buffered messages
+        // write ChannelContinue finish bit, release
         false.ser(writer);
         writer.release_bits(1);
     }

@@ -73,11 +73,14 @@ impl MessageChannelSender for UnorderedUnreliableSender {
                 break;
             }
 
-            // Check that we can write the next message
             let message = self.outgoing_messages.front().unwrap();
-            let mut counter = writer.counter();
-            self.write_message(message_kinds, converter, &mut counter, message);
 
+            // Check that we can write the next message
+            let mut counter = writer.counter();
+            // write MessageContinue bit
+            true.ser(&mut counter);
+            // write data
+            self.write_message(message_kinds, converter, &mut counter, message);
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of message being too big
@@ -92,7 +95,6 @@ impl MessageChannelSender for UnorderedUnreliableSender {
 
             // write MessageContinue bit
             true.ser(writer);
-
             // write data
             self.write_message(message_kinds, converter, writer, &message);
 
