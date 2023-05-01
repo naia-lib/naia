@@ -1,4 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
+use log::info;
 
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
@@ -135,6 +136,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
                         .insert((local_entity, new_component_kind), new_component);
                     component_kind_list.push(new_component_kind);
                 }
+
+                info!("Read SpawnEntity action for entity `{:?}` with components: `{:?}`", local_entity, component_kind_list);
 
                 self.receiver.buffer_action(
                     action_id,

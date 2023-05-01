@@ -110,14 +110,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
     // Messages
 
-    pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        self.collect_dropped_update_packets(rtt_millis);
-        self.collect_dropped_action_packets();
+    pub fn handle_dropped_packets(&mut self, rtt_millis: &f32) {
+        self.handle_dropped_update_packets(rtt_millis);
+        self.handle_dropped_action_packets();
     }
 
     // Collecting
 
-    fn collect_dropped_action_packets(&mut self) {
+    fn handle_dropped_action_packets(&mut self) {
         let mut pop = false;
 
         loop {
@@ -136,7 +136,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         }
     }
 
-    fn collect_dropped_update_packets(&mut self, rtt_millis: &f32) {
+    fn handle_dropped_update_packets(&mut self, rtt_millis: &f32) {
         let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
 
         {

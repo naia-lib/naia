@@ -10,7 +10,7 @@ use crate::{
 type NetId = u16;
 
 /// ComponentKind - should be one unique value for each type of Component
-#[derive(Eq, Hash, Copy, Clone, PartialEq)]
+#[derive(Eq, Hash, Copy, Clone, PartialEq, Debug)]
 pub struct ComponentKind {
     type_id: TypeId,
 }

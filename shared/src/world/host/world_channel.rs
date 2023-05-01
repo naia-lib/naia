@@ -201,7 +201,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     // Remote Actions
 
-    pub fn remote_spawn_entity(
+    pub fn on_remote_spawn_entity(
         &mut self,
         entity: &E,
         inserted_component_kinds: &HashSet<ComponentKind>,
@@ -211,7 +211,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
 
         if let Some(EntityChannel::Spawning) = self.entity_channels.get(entity) {
-            info!("   on Entity Spawn:");
+            let address_str: String = match &self.address {
+                None => {
+                    "no address".to_string()
+                }
+                Some(addr) => {
+                    addr.to_string()
+                }
+            };
+            info!("   on Entity Spawn (to addr: `{:?}`):", address_str);
 
             self.remote_world.insert(*entity, CheckedSet::new());
             self.entity_channels.remove(entity);
@@ -252,7 +260,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
                 // receive inserted components
                 for component_kind in inserted_component_kinds {
-                    self.remote_insert_component(entity, component_kind);
+                    self.on_remote_insert_component(entity, component_kind);
                 }
             } else {
                 // despawn entity
@@ -267,7 +275,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
-    pub fn remote_despawn_entity(
+    pub fn on_remote_despawn_entity(
         &mut self,
         local_world_manager: &mut LocalWorldManager<E>,
         entity: &E,
@@ -298,7 +306,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.remote_world.remove(entity);
     }
 
-    pub fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn on_remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.remote_world.contains_key(entity) {
             panic!("World Channel: cannot insert component into non-existent entity");
         }
@@ -341,7 +349,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
-    pub fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn on_remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         if !self.remote_world.contains_key(entity) {
             panic!("World Channel: cannot remove component from non-existent entity");
         }
@@ -440,16 +448,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 EntityAction::SpawnEntity(entity, components) => {
                     let component_set: HashSet<ComponentKind> =
                         components.iter().copied().collect();
-                    self.remote_spawn_entity(&entity, &component_set);
+                    self.on_remote_spawn_entity(&entity, &component_set);
                 }
                 EntityAction::DespawnEntity(entity) => {
-                    self.remote_despawn_entity(local_world_manager, &entity);
+                    self.on_remote_despawn_entity(local_world_manager, &entity);
                 }
                 EntityAction::InsertComponent(entity, component) => {
-                    self.remote_insert_component(&entity, &component);
+                    self.on_remote_insert_component(&entity, &component);
                 }
                 EntityAction::RemoveComponent(entity, component) => {
-                    self.remote_remove_component(&entity, &component);
+                    self.on_remote_remove_component(&entity, &component);
                 }
                 EntityAction::Noop => {
                     // do nothing

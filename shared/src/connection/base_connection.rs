@@ -119,7 +119,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.host_world_manager
-            .collect_outgoing_messages(rtt_millis);
+            .handle_dropped_packets(rtt_millis);
         self.message_manager
             .collect_outgoing_messages(now, rtt_millis);
     }
