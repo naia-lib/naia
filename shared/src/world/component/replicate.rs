@@ -100,6 +100,8 @@ pub trait Replicate: ReplicateInner + Named + Any {
     fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
     /// Publish Replicate
     fn publish(&mut self, mutator: &PropertyMutator);
+    /// Unpublish Replicate
+    fn unpublish(&mut self);
     /// Convert to Local Replicate
     fn localize(&mut self);
 }

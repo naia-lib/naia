@@ -9,10 +9,12 @@ use naia_shared::{
     GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator,
     Replicate,
 };
-use crate::ReplicationConfig;
 
 use super::global_entity_record::GlobalEntityRecord;
-use crate::world::{entity_owner::EntityOwner, mut_channel::MutChannelData};
+use crate::{
+    world::{entity_owner::EntityOwner, mut_channel::MutChannelData},
+    ReplicationConfig,
+};
 
 pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
@@ -165,6 +167,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
         if !component_kind_set.remove(component_kind) {
             panic!("component does not exist!");
+        }
+    }
+
+    pub(crate) fn set_entity_replication_config(&mut self, entity: &E, config: ReplicationConfig) {
+        if let Some(record) = self.entity_records.get_mut(entity) {
+            record.replication_config = config;
+        } else {
+            panic!("Entity does not exist!");
         }
     }
 

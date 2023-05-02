@@ -366,17 +366,45 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.despawn_entity_worldless(entity);
     }
 
-    pub fn configure_entity_replication(&mut self, entity: &E, config: ReplicationConfig) {
+    pub fn configure_entity_replication<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        config: ReplicationConfig,
+    ) {
         if !self.global_world_manager.has_entity(entity) {
             panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Server, before configuring replication.");
         }
-        let prev_config = self.global_world_manager.entity_replication_config(entity).unwrap();
+        let prev_config = self
+            .global_world_manager
+            .entity_replication_config(entity)
+            .unwrap();
         if prev_config == config {
-            panic!("Entity replication config is already set to {:?}. Should not set twice.", config);
+            panic!(
+                "Entity replication config is already set to {:?}. Should not set twice.",
+                config
+            );
         }
         match &config {
+            ReplicationConfig::Private => {
+                match prev_config {
+                    ReplicationConfig::Private => {
+                        // will not happen, because of the check above
+                    }
+                    ReplicationConfig::Public => {
+                        self.unpublish_entity(world, entity);
+                    }
+                    ReplicationConfig::Dynamic => {
+                        self.entity_disable_delegation(entity);
+                        self.unpublish_entity(world, entity);
+                    }
+                }
+            }
             ReplicationConfig::Public => {
                 match prev_config {
+                    ReplicationConfig::Private => {
+                        self.publish_entity(world, entity);
+                    }
                     ReplicationConfig::Public => {
                         // will not happen, because of the check above
                     }
@@ -387,6 +415,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             }
             ReplicationConfig::Dynamic => {
                 match prev_config {
+                    ReplicationConfig::Private => {
+                        self.publish_entity(world, entity);
+                        self.entity_enable_delegation(entity);
+                    }
                     ReplicationConfig::Public => {
                         self.entity_enable_delegation(entity);
                     }
@@ -400,6 +432,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     pub fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
         self.global_world_manager.entity_replication_config(entity)
+    }
+
+    pub(crate) fn publish_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
+        self.global_world_manager.entity_publish(&entity);
+        world.entity_publish(&self.global_world_manager, &entity);
+    }
+
+    pub(crate) fn unpublish_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
+        world.entity_unpublish(&entity);
+        self.global_world_manager.entity_unpublish(&entity);
+        self.cleanup_entity_replication(&entity);
     }
 
     /// Creates a new Entity and returns an EntityMut which can be used for
@@ -623,6 +666,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn despawn_entity_worldless(&mut self, entity: &E) {
+        self.cleanup_entity_replication(entity);
+        self.global_world_manager.remove_entity_record(entity);
+    }
+
+    fn cleanup_entity_replication(&mut self, entity: &E) {
         self.despawn_entity_from_all_connections(entity);
 
         // Delete scope
@@ -636,8 +684,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // Remove from ECS Record
-        self.global_world_manager.remove_entity_diff_handlers(entity);
-        self.global_world_manager.remove_entity_record(entity);
+        self.global_world_manager
+            .remove_entity_diff_handlers(entity);
     }
 
     fn despawn_entity_from_all_connections(&mut self, entity: &E) {
@@ -1231,21 +1279,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     fn process_packets<W: WorldMutType<E>>(&mut self, address: &SocketAddr, world: &mut W) {
         // Packets requiring established connection
-        if let Some((user_key, response_events)) = {
+        let (user_key, response_events) = {
             let Some(connection) = self.user_connections.get_mut(address) else {
                 return;
             };
-            connection
-                .process_packets(
+            (
+                connection.user_key,
+                connection.process_packets(
                     &self.protocol,
                     &mut self.global_world_manager,
                     world,
                     &mut self.incoming_events,
-                )
-                .map(|events| (connection.user_key, events))
-        } {
-            self.process_response_events(world, &user_key, response_events);
-        }
+                ),
+            )
+        };
+        self.process_response_events(world, &user_key, response_events);
     }
 
     fn process_response_events<W: WorldMutType<E>>(
@@ -1300,6 +1348,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         self.global_world_manager
                             .remove_component_record(&entity, &component_kind);
                     }
+                }
+                EntityResponseEvent::PublishEntity(entity) => {
+                    self.publish_entity(world, &entity);
+                    self.incoming_events.push_publish(user_key, &entity);
+                }
+                EntityResponseEvent::UnpublishEntity(entity) => {
+                    self.unpublish_entity(world, &entity);
+                    self.incoming_events.push_unpublish(user_key, &entity);
                 }
             }
         }

@@ -11,7 +11,7 @@ use naia_shared::{
 };
 
 use super::global_entity_record::GlobalEntityRecord;
-use crate::{world::mut_channel::MutChannelData, EntityOwner, UserKey, ReplicationConfig};
+use crate::{world::mut_channel::MutChannelData, EntityOwner, ReplicationConfig, UserKey};
 
 pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
@@ -134,8 +134,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         };
         if let EntityOwner::Client(user_key) = record.owner {
             record.owner = EntityOwner::ClientPublic(user_key);
+            record.replication_config = ReplicationConfig::Public;
         } else {
             panic!("Can only publish an Entity that is owned by a Client!");
+        }
+    }
+
+    pub(crate) fn entity_unpublish(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if let EntityOwner::ClientPublic(user_key) = record.owner {
+            record.owner = EntityOwner::Client(user_key);
+            record.replication_config = ReplicationConfig::Private;
+        } else {
+            panic!("Can only unpublish an Entity that is public!");
         }
     }
 
@@ -160,6 +173,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         match &record.owner {
             EntityOwner::ClientPublic(owning_user_key) => owning_user_key == user_key,
             _ => false,
+        }
+    }
+
+    pub(crate) fn set_entity_replication_config(&mut self, entity: &E, config: ReplicationConfig) {
+        if let Some(record) = self.entity_records.get_mut(entity) {
+            record.replication_config = config;
+        } else {
+            panic!("Entity does not exist!");
         }
     }
 

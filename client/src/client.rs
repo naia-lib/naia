@@ -383,9 +383,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if !self.global_world_manager.has_entity(entity) {
             panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Client, before configuring replication.");
         }
-        let prev_config = self.global_world_manager.entity_replication_config(entity).unwrap();
+        let prev_config = self
+            .global_world_manager
+            .entity_replication_config(entity)
+            .unwrap();
         if prev_config == config {
-            panic!("Entity replication config is already set to {:?}. Should not set twice.", config);
+            panic!(
+                "Entity replication config is already set to {:?}. Should not set twice.",
+                config
+            );
         }
         match &config {
             ReplicationConfig::Private => {
@@ -430,12 +436,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
         }
+        self.global_world_manager
+            .set_entity_replication_config(entity, config);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_replication_config(&self, entity: &E) -> ReplicationConfig {
+    pub fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
         self.check_client_authoritative_allowed();
-        todo!();
+        self.global_world_manager.entity_replication_config(entity)
     }
 
     // Connection
@@ -619,7 +627,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub(crate) fn unpublish_entity(&mut self, entity: &E) {
-        todo!();
+        let message = EntityEventMessage::new_unpublish(&self.global_world_manager, entity);
+        self.send_message::<SystemChannel, EntityEventMessage>(&message);
     }
 
     pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
@@ -903,6 +912,12 @@ fn process_response_events<E: Copy + Eq + Hash + Send + Sync>(
             }
             EntityResponseEvent::RemoveComponent(entity, component_kind) => {
                 global_world_manager.remote_remove_component(&entity, &component_kind);
+            }
+            EntityResponseEvent::PublishEntity(_) => {
+                panic!("Client should not receive PublishEntity event... ?");
+            }
+            EntityResponseEvent::UnpublishEntity(_) => {
+                panic!("Client should not receive UnpublishEntity event... ?");
             }
         }
     }

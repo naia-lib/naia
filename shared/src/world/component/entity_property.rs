@@ -367,6 +367,30 @@ impl EntityProperty {
         }
     }
 
+    /// Migrate Remote Property to Public version
+    pub fn remote_unpublish(&mut self) {
+        match &mut self.inner {
+            EntityRelation::HostOwned(_) => {
+                panic!("Host Relation should never be unpublished.");
+            }
+            EntityRelation::RemoteOwned(_) => {
+                panic!("Remote Private Relation should never be unpublished.");
+            }
+            EntityRelation::RemotePublic(inner) => {
+                let inner_value = inner.global_entity.clone();
+                self.inner = EntityRelation::RemoteOwned(RemoteOwnedRelation {
+                    global_entity: inner_value,
+                });
+            }
+            EntityRelation::Local(_) => {
+                panic!("Local Relation should never be unpublished.");
+            }
+            EntityRelation::RemoteWaiting(inner) => {
+                inner.remote_unpublish();
+            }
+        }
+    }
+
     /// Migrate Host Property to Local version
     pub fn localize(&mut self) {
         match &mut self.inner {
@@ -577,6 +601,9 @@ impl RemoteWaitingRelation {
     }
     pub(crate) fn remote_publish(&mut self, index: u8, mutator: &PropertyMutator) {
         self.will_publish = Some((index, mutator.clone_new()));
+    }
+    pub(crate) fn remote_unpublish(&mut self) {
+        self.will_publish = None;
     }
 }
 

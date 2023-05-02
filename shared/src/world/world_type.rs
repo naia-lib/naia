@@ -117,4 +117,8 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         entity: &E,
         component_kind: &ComponentKind,
     );
+    /// publish entity
+    fn entity_unpublish(&mut self, entity: &E);
+    /// publish component
+    fn component_unpublish(&mut self, entity: &E, component_kind: &ComponentKind);
 }

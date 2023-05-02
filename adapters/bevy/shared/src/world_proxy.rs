@@ -325,6 +325,21 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 }
             });
     }
+
+    fn entity_unpublish(&mut self, entity: &Entity) {
+        for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
+            WorldMutType::<Entity>::component_unpublish(self, entity, &component_kind);
+        }
+    }
+
+    fn component_unpublish(&mut self, entity: &Entity, component_kind: &ComponentKind) {
+        self.world
+            .resource_scope(|world: &mut World, data: Mut<WorldData>| {
+                if let Some(accessor) = data.component_access(component_kind) {
+                    accessor.component_unpublish(world, entity);
+                }
+            });
+    }
 }
 
 // private static methods

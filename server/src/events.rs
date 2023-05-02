@@ -21,6 +21,7 @@ pub struct Events<E: Copy> {
     spawns: Vec<(UserKey, E)>,
     despawns: Vec<(UserKey, E)>,
     publishes: Vec<(UserKey, E)>,
+    unpublishes: Vec<(UserKey, E)>,
     inserts: HashMap<ComponentKind, Vec<(UserKey, E)>>,
     removes: HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>,
     updates: HashMap<ComponentKind, Vec<(UserKey, E)>>,
@@ -39,6 +40,7 @@ impl<E: Copy> Events<E> {
             spawns: Vec::new(),
             despawns: Vec::new(),
             publishes: Vec::new(),
+            unpublishes: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
             updates: HashMap::new(),
@@ -170,6 +172,11 @@ impl<E: Copy> Events<E> {
 
     pub(crate) fn push_publish(&mut self, user_key: &UserKey, entity: &E) {
         self.publishes.push((*user_key, *entity));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_unpublish(&mut self, user_key: &UserKey, entity: &E) {
+        self.unpublishes.push((*user_key, *entity));
         self.empty = false;
     }
 

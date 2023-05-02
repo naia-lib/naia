@@ -1,9 +1,8 @@
 use std::collections::HashSet;
 
 use naia_shared::{ComponentKind, GlobalEntity};
-use crate::ReplicationConfig;
 
-use crate::world::entity_owner::EntityOwner;
+use crate::{world::entity_owner::EntityOwner, ReplicationConfig};
 
 pub struct GlobalEntityRecord {
     pub global_entity: GlobalEntity,

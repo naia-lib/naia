@@ -101,7 +101,7 @@ pub use world::{
         entity_action::EntityAction,
         entity_action_receiver::EntityActionReceiver,
         entity_action_type::EntityActionType,
-        entity_auth_event::EntityEventMessage,
+        entity_auth_event::{EntityEventMessage, EntityEventMessageAction},
         entity_converters::{
             EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter,
             EntityConverterMut, FakeEntityConverter, GlobalWorldManagerType,

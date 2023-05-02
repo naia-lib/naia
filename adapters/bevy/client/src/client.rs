@@ -99,7 +99,7 @@ impl<'w> Client<'w> {
         self.client.disable_entity_replication(entity);
     }
 
-    pub(crate) fn replication_config(&self, entity: &Entity) -> ReplicationConfig {
+    pub(crate) fn replication_config(&self, entity: &Entity) -> Option<ReplicationConfig> {
         self.client.entity_replication_config(entity)
     }
 

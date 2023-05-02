@@ -79,6 +79,7 @@ pub fn replicate_impl(
     let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type);
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
     let publish_method = get_publish_method(&enum_name, &properties, &struct_type);
+    let unpublish_method = get_unpublish_method(&properties, &struct_type);
     let localize_method = get_localize_method(&properties, &struct_type);
     let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
     let read_apply_field_update_method =
@@ -145,6 +146,7 @@ pub fn replicate_impl(
                 #dyn_mut_method
                 #mirror_method
                 #publish_method
+                #unpublish_method
                 #localize_method
                 #set_mutator_method
                 #write_method
@@ -507,6 +509,28 @@ fn get_publish_method(
 
     quote! {
         fn publish(&mut self, mutator: &PropertyMutator) {
+            #output
+        }
+    }
+}
+
+fn get_unpublish_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let new_output_right = quote! {
+                self.#field_name.remote_unpublish();
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn unpublish(&mut self) {
             #output
         }
     }

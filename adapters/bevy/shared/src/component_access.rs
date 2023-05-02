@@ -39,6 +39,7 @@ pub trait ComponentAccess: Send + Sync {
         world: &mut World,
         entity: &Entity,
     );
+    fn component_unpublish(&self, world: &mut World, entity: &Entity);
 }
 
 pub struct ComponentAccessor<R: Replicate> {
@@ -142,6 +143,12 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
             let mutator =
                 global_manager.get_property_mutator(entity, &component_kind, diff_mask_size);
             component_mut.publish(&mutator);
+        }
+    }
+
+    fn component_unpublish(&self, world: &mut World, entity: &Entity) {
+        if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
+            component_mut.unpublish();
         }
     }
 }

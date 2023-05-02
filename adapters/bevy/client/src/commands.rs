@@ -18,7 +18,7 @@ pub trait CommandsExt<'w, 's, 'a> {
         client: &mut Client,
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn replication_config(&'a self, client: &Client) -> ReplicationConfig;
+    fn replication_config(&'a self, client: &Client) -> Option<ReplicationConfig>;
     fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
 }
 
@@ -47,7 +47,7 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         return self;
     }
 
-    fn replication_config(&'a self, client: &Client) -> ReplicationConfig {
+    fn replication_config(&'a self, client: &Client) -> Option<ReplicationConfig> {
         client.replication_config(&self.id())
     }
 

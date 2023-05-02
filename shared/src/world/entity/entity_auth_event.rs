@@ -8,12 +8,13 @@ use crate::{EntityAndGlobalEntityConverter, EntityProperty};
 #[derive(MessageInternal)]
 pub struct EntityEventMessage {
     pub entity: EntityProperty,
-    pub action: EntityEvent,
+    pub action: EntityEventMessageAction,
 }
 
 #[derive(SerdeInternal, Clone, Debug, PartialEq)]
-pub enum EntityEvent {
+pub enum EntityEventMessageAction {
     Publish,
+    Unpublish,
 }
 
 impl EntityEventMessage {
@@ -23,7 +24,21 @@ impl EntityEventMessage {
     ) -> Self {
         let mut output = Self {
             entity: EntityProperty::new(),
-            action: EntityEvent::Publish,
+            action: EntityEventMessageAction::Publish,
+        };
+
+        output.entity.set(converter, entity);
+
+        output
+    }
+
+    pub fn new_unpublish<E: Copy + Eq + Hash + Send + Sync>(
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        entity: &E,
+    ) -> Self {
+        let mut output = Self {
+            entity: EntityProperty::new(),
+            action: EntityEventMessageAction::Unpublish,
         };
 
         output.entity.set(converter, entity);

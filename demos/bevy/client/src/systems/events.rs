@@ -258,7 +258,7 @@ pub fn insert_component_events(
                     .insert(Interp::new(*position.x, *position.y));
             }
         }
-        for entity in events.read::<Shape>() {
+        for _entity in events.read::<Shape>() {
             info!("add Shape Component to entity");
         }
     }

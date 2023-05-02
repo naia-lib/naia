@@ -168,6 +168,25 @@ impl<T: Serde> Property<T> {
         }
     }
 
+    /// Migrate Remote Property to Private version
+    pub fn remote_unpublish(&mut self) {
+        match &mut self.inner {
+            PropertyImpl::HostOwned(_) => {
+                panic!("Host Property should never be unpublished.");
+            }
+            PropertyImpl::RemoteOwned(_) => {
+                panic!("Private Remote Property should never be unpublished.");
+            }
+            PropertyImpl::RemotePublic(inner) => {
+                let inner_value = inner.inner.clone();
+                self.inner = PropertyImpl::RemoteOwned(RemoteOwnedProperty::new(inner_value));
+            }
+            PropertyImpl::Local(_) => {
+                panic!("Local Property should never be unpublished.");
+            }
+        }
+    }
+
     /// Migrate Host Property to Local version
     pub fn localize(&mut self) {
         match &mut self.inner {

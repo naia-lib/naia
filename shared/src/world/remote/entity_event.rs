@@ -13,4 +13,6 @@ pub enum EntityResponseEvent<E: Copy> {
     DespawnEntity(E),
     InsertComponent(E, ComponentKind),
     RemoveComponent(E, ComponentKind),
+    PublishEntity(E),
+    UnpublishEntity(E),
 }

@@ -4,8 +4,9 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityEventMessage, EntityResponseEvent, HostType, HostWorldEvents, Instant, PacketType,
-    Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
+    EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType, HostWorldEvents,
+    Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -102,7 +103,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         global_world_manager: &mut GlobalWorldManager<E>,
         world: &mut W,
         incoming_events: &mut Events<E>,
-    ) -> Option<Vec<EntityResponseEvent<E>>> {
+    ) -> Vec<EntityResponseEvent<E>> {
+        let mut response_events = Vec::new();
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
             global_world_manager,
@@ -120,9 +122,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                     let Some(entity) = event_message.entity.get(global_world_manager) else {
                         panic!("Received message with no Entity over SystemChannel!");
                     };
-                    global_world_manager.entity_publish(&entity);
-                    world.entity_publish(global_world_manager, &entity);
-                    incoming_events.push_publish(&self.user_key, &entity);
+                    match event_message.action {
+                        EntityEventMessageAction::Publish => {
+                            response_events.push(EntityResponseEvent::PublishEntity(entity));
+                        }
+                        EntityEventMessageAction::Unpublish => {
+                            response_events.push(EntityResponseEvent::UnpublishEntity(entity));
+                        }
+                    }
                 }
             } else {
                 for message in messages {
@@ -141,12 +148,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 world,
                 remote_events,
             );
-            let response_events =
-                incoming_events.receive_entity_events(&self.user_key, world_events);
-            return Some(response_events);
-        } else {
-            return None;
+            response_events
+                .extend(incoming_events.receive_entity_events(&self.user_key, world_events));
         }
+
+        return response_events;
     }
 
     pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {
