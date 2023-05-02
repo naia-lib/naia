@@ -19,6 +19,7 @@ use naia_bevy_demo_shared::{
     components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
 };
+use naia_bevy_server::events::UnpublishEntityEvent;
 
 use crate::resources::Global;
 
@@ -175,6 +176,12 @@ pub fn publish_entity_events(
         server
             .room_mut(&global.main_room_key)
             .add_entity(client_entity);
+    }
+}
+
+pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent>) {
+    for UnpublishEntityEvent(_user_key, _client_entity) in event_reader.iter() {
+        info!("client entity has been unpublished");
     }
 }
 

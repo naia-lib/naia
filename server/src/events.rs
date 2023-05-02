@@ -480,6 +480,21 @@ impl<E: Copy> Event<E> for PublishEntityEvent {
     }
 }
 
+// Unpublish Entity Event
+pub struct UnpublishEntityEvent;
+impl<E: Copy> Event<E> for UnpublishEntityEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.unpublishes);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.unpublishes.is_empty()
+    }
+}
+
 // Insert Component Event
 pub struct InsertComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,

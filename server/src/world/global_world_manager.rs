@@ -176,14 +176,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
     }
 
-    pub(crate) fn set_entity_replication_config(&mut self, entity: &E, config: ReplicationConfig) {
-        if let Some(record) = self.entity_records.get_mut(entity) {
-            record.replication_config = config;
-        } else {
-            panic!("Entity does not exist!");
-        }
-    }
-
     pub(crate) fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
         if let Some(record) = self.entity_records.get(entity) {
             return Some(record.replication_config);

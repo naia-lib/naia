@@ -15,7 +15,7 @@ mod naia_events {
     pub use naia_server::{
         ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
         PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-        UpdateComponentEvent,
+        UnpublishEntityEvent, UpdateComponentEvent,
     };
 }
 
@@ -23,7 +23,7 @@ mod bevy_events {
     pub use crate::events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
-        SpawnEntityEvent, TickEvent, UpdateComponentEvents,
+        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     };
 }
 
@@ -153,6 +153,16 @@ pub fn before_receive_events(world: &mut World) {
                     .unwrap();
                 for (user_key, entity) in events.read::<naia_events::PublishEntityEvent>() {
                     publish_entity_event_writer.send(bevy_events::PublishEntityEvent(user_key, entity));
+                }
+            }
+
+            // Unpublish Entity Event
+            if events.has::<naia_events::UnpublishEntityEvent>() {
+                let mut unpublish_entity_event_writer = world
+                    .get_resource_mut::<Events<bevy_events::UnpublishEntityEvent>>()
+                    .unwrap();
+                for (user_key, entity) in events.read::<naia_events::UnpublishEntityEvent>() {
+                    unpublish_entity_event_writer.send(bevy_events::UnpublishEntityEvent(user_key, entity));
                 }
             }
 

@@ -3,6 +3,7 @@ use std::{ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfig};
 
+use crate::events::UnpublishEntityEvent;
 use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin};
 use naia_server::{Server, ServerConfig};
 
@@ -67,6 +68,7 @@ impl PluginType for Plugin {
             .add_event::<SpawnEntityEvent>()
             .add_event::<DespawnEntityEvent>()
             .add_event::<PublishEntityEvent>()
+            .add_event::<UnpublishEntityEvent>()
             .add_event::<InsertComponentEvents>()
             .add_event::<UpdateComponentEvents>()
             .add_event::<RemoveComponentEvents>()
