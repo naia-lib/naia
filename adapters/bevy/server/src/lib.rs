@@ -1,5 +1,5 @@
 pub use naia_bevy_shared::{Random, ReceiveEvents, Tick};
-pub use naia_server::{transport, RoomKey, ServerConfig, UserKey};
+pub use naia_server::{transport, ReplicationConfig, RoomKey, ServerConfig, UserKey};
 
 pub mod events;
 

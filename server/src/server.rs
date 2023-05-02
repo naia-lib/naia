@@ -392,35 +392,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         // will not happen, because of the check above
                     }
                     ReplicationConfig::Public => {
-                        self.unpublish_entity(world, entity);
+                        self.unpublish_entity(world, entity, true);
                     }
                     ReplicationConfig::Dynamic => {
-                        self.entity_disable_delegation(entity);
-                        self.unpublish_entity(world, entity);
+                        self.entity_disable_delegation(entity, true);
+                        self.unpublish_entity(world, entity, true);
                     }
                 }
             }
             ReplicationConfig::Public => {
                 match prev_config {
                     ReplicationConfig::Private => {
-                        self.publish_entity(world, entity);
+                        self.publish_entity(world, entity, true);
                     }
                     ReplicationConfig::Public => {
                         // will not happen, because of the check above
                     }
                     ReplicationConfig::Dynamic => {
-                        self.entity_disable_delegation(entity);
+                        self.entity_disable_delegation(entity, true);
                     }
                 }
             }
             ReplicationConfig::Dynamic => {
                 match prev_config {
                     ReplicationConfig::Private => {
-                        self.publish_entity(world, entity);
-                        self.entity_enable_delegation(entity);
+                        self.publish_entity(world, entity, true);
+                        self.entity_enable_delegation(entity, true);
                     }
                     ReplicationConfig::Public => {
-                        self.entity_enable_delegation(entity);
+                        self.entity_enable_delegation(entity, true);
                     }
                     ReplicationConfig::Dynamic => {
                         // will not happen, because of the check above
@@ -434,15 +434,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.global_world_manager.entity_replication_config(entity)
     }
 
-    pub(crate) fn publish_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
+    pub(crate) fn publish_entity<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        server_origin: bool,
+    ) {
         self.global_world_manager.entity_publish(&entity);
         world.entity_publish(&self.global_world_manager, &entity);
+        if server_origin {
+            todo!("send publish entity message to client!");
+        }
     }
 
-    pub(crate) fn unpublish_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
+    pub(crate) fn unpublish_entity<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        server_origin: bool,
+    ) {
         world.entity_unpublish(&entity);
         self.global_world_manager.entity_unpublish(&entity);
         self.cleanup_entity_replication(&entity);
+        if server_origin {
+            todo!("send unpublish entity message to client!");
+        }
     }
 
     /// Creates a new Entity and returns an EntityMut which can be used for
@@ -820,11 +836,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     //// Authority
 
-    pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
+    pub(crate) fn entity_enable_delegation(&mut self, entity: &E, server_origin: bool) {
         todo!();
     }
 
-    pub(crate) fn entity_disable_delegation(&mut self, entity: &E) {
+    pub(crate) fn entity_disable_delegation(&mut self, entity: &E, server_origin: bool) {
         todo!();
     }
 
@@ -1350,11 +1366,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     }
                 }
                 EntityResponseEvent::PublishEntity(entity) => {
-                    self.publish_entity(world, &entity);
+                    self.publish_entity(world, &entity, false);
                     self.incoming_events.push_publish(user_key, &entity);
                 }
                 EntityResponseEvent::UnpublishEntity(entity) => {
-                    self.unpublish_entity(world, &entity);
+                    self.unpublish_entity(world, &entity, false);
                     self.incoming_events.push_unpublish(user_key, &entity);
                 }
             }
