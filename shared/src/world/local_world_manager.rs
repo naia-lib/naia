@@ -1,10 +1,12 @@
-use log::{info, warn};
-use naia_socket_shared::Instant;
+
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
     time::Duration,
 };
+
+use log::warn;
+use naia_socket_shared::Instant;
 
 use crate::{
     doublemap::DoubleMap, world::entity::local_entity::LocalEntity, EntityAndLocalEntityConverter,
@@ -69,10 +71,6 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     pub(crate) fn insert_entity(&mut self, world_entity: E, local_entity: LocalEntity) {
-        info!(
-            "local world manager: inserting entity: `{:?}`",
-            local_entity
-        );
         if self.entity_map.contains_key(&world_entity) {
             panic!("World Entity already exists!");
         }

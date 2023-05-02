@@ -1,10 +1,10 @@
-use log::info;
-use naia_socket_shared::Instant;
-use std::collections::VecDeque;
+
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, VecDeque, HashSet},
     time::Duration,
 };
+
+use naia_socket_shared::Instant;
 
 use crate::{KeyGenerator, LocalEntity};
 
@@ -47,11 +47,6 @@ impl EntityWaitlist {
     ) -> WaitlistHandle {
         let new_handle = self.handle_store.generate();
 
-        info!(
-            "Queueing on waitlist, handle: `{:?}`, waitlist: `{:?}`",
-            new_handle, entities
-        );
-
         // if all entities are in scope, we can send the message immediately
         if !self.must_queue(entities) {
             waitlist_store.queue(new_handle, item);
@@ -92,7 +87,6 @@ impl EntityWaitlist {
     }
 
     pub fn add_entity(&mut self, entity: &LocalEntity) {
-        info!("Adding entity to waitlist: {:?}", entity);
         // put new entity into scope
         self.in_scope_entities.insert(*entity);
 

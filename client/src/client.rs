@@ -578,7 +578,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub(crate) fn publish_entity(&mut self, entity: &E) {
-        warn!("Sending Publish Entity Message!");
         let message = EntityEventMessage::new_publish(&self.global_world_manager, entity);
         self.send_message::<SystemChannel, EntityEventMessage>(&message);
     }

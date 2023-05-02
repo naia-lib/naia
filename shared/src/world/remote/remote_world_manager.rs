@@ -1,9 +1,10 @@
+
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
 };
 
-use log::{info, warn};
+use log::warn;
 
 use crate::{
     world::{
@@ -251,7 +252,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 self.insert_waitlist_map
                     .remove(&(world_entity, component_kind));
                 {
-                    info!("Calling Relations Complete on Component");
                     let converter = EntityConverter::new(
                         global_world_manager.to_global_entity_converter(),
                         local_world_manager,

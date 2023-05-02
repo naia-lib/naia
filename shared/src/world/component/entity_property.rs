@@ -1,6 +1,7 @@
-use log::{info, warn};
+
 use std::hash::Hash;
 
+use log::warn;
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::{
@@ -371,7 +372,6 @@ impl EntityProperty {
     pub fn localize(&mut self) {
         match &mut self.inner {
             EntityRelation::HostOwned(inner) => {
-                info!("Host Owned Relation made Local!");
                 let inner_value = inner.global_entity.clone();
                 self.inner = EntityRelation::Local(LocalRelation::new(inner_value));
             }
