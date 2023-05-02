@@ -48,7 +48,9 @@ pub fn connect_events(
         let cursor_entity = commands
             // Spawn new Square Entity
             .spawn_empty()
-            // MUST call this OR `enable_replication` to begin replication
+            // MUST call this to begin replication
+            .enable_replication(&mut client)
+            // make Entity Public, which means it will be visibile to other Clients
             .configure_replication(&mut client, ReplicationConfig::Public)
             // Insert Position component
             .insert(Position::new(
@@ -243,6 +245,8 @@ pub fn insert_component_events(
                             .insert(Confirmed);
                     }
                 }
+            } else {
+                panic!("spritequery failed!");
             }
         }
         for entity in events.read::<Position>() {
@@ -253,6 +257,9 @@ pub fn insert_component_events(
                     .entity(entity)
                     .insert(Interp::new(*position.x, *position.y));
             }
+        }
+        for entity in events.read::<Shape>() {
+            info!("add Shape Component to entity");
         }
     }
 }

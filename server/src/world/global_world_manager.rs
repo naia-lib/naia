@@ -11,7 +11,7 @@ use naia_shared::{
 };
 
 use super::global_entity_record::GlobalEntityRecord;
-use crate::{world::mut_channel::MutChannelData, EntityOwner, UserKey};
+use crate::{world::mut_channel::MutChannelData, EntityOwner, UserKey, ReplicationConfig};
 
 pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
@@ -161,6 +161,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             EntityOwner::ClientPublic(owning_user_key) => owning_user_key == user_key,
             _ => false,
         }
+    }
+
+    pub(crate) fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
+        if let Some(record) = self.entity_records.get(entity) {
+            return Some(record.replication_config);
+        }
+        return None;
     }
 }
 

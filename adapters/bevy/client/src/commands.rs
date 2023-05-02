@@ -43,14 +43,6 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         client: &mut Client,
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a> {
-        match &config {
-            ReplicationConfig::Disabled => {
-                self.remove::<HostOwned>();
-            }
-            _ => {
-                self.insert(HostOwned);
-            }
-        }
         client.configure_replication(&self.id(), config);
         return self;
     }

@@ -1,5 +1,5 @@
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ReplicationConfig {
-    Disabled,
     Public,
     Dynamic,
 }

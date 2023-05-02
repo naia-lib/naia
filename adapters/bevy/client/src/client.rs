@@ -91,28 +91,20 @@ impl<'w> Client<'w> {
 
     // Entity Registration
 
-    pub fn enable_replication(&mut self, entity: &Entity) {
+    pub(crate) fn enable_replication(&mut self, entity: &Entity) {
         self.client.enable_entity_replication(entity);
     }
 
-    pub fn disable_replication(&mut self, entity: &Entity) {
+    pub(crate) fn disable_replication(&mut self, entity: &Entity) {
         self.client.disable_entity_replication(entity);
     }
 
-    pub fn replication_config(&self, entity: &Entity) -> ReplicationConfig {
+    pub(crate) fn replication_config(&self, entity: &Entity) -> ReplicationConfig {
         self.client.entity_replication_config(entity)
     }
 
-    pub fn configure_replication(&mut self, entity: &Entity, config: ReplicationConfig) {
-        match &config {
-            ReplicationConfig::Disabled => {
-                self.client.disable_entity_replication(entity);
-            }
-            _ => {
-                self.client.enable_entity_replication(entity);
-                self.client.configure_entity_replication(entity, config);
-            }
-        }
+    pub(crate) fn configure_replication(&mut self, entity: &Entity, config: ReplicationConfig) {
+        self.client.configure_entity_replication(entity, config);
     }
 }
 

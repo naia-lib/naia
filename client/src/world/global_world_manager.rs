@@ -9,6 +9,7 @@ use naia_shared::{
     GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator,
     Replicate,
 };
+use crate::ReplicationConfig;
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::world::{entity_owner::EntityOwner, mut_channel::MutChannelData};
@@ -39,6 +40,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
 
         output
+    }
+
+    pub fn has_entity(&self, entity: &E) -> bool {
+        self.entity_records.contains_key(entity)
     }
 
     pub fn entity_owner(&self, entity: &E) -> Option<EntityOwner> {
@@ -161,6 +166,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         if !component_kind_set.remove(component_kind) {
             panic!("component does not exist!");
         }
+    }
+
+    pub(crate) fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
+        if let Some(record) = self.entity_records.get(entity) {
+            return Some(record.replication_config);
+        }
+        return None;
     }
 }
 

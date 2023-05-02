@@ -367,24 +367,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn configure_entity_replication(&mut self, entity: &E, config: ReplicationConfig) {
+        if !self.global_world_manager.has_entity(entity) {
+            panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Server, before configuring replication.");
+        }
+        let prev_config = self.global_world_manager.entity_replication_config(entity).unwrap();
+        if prev_config == config {
+            panic!("Entity replication config is already set to {:?}. Should not set twice.", config);
+        }
         match &config {
-            ReplicationConfig::Disabled => {
-                panic!("This configuration is only for adapter use.")
-            }
             ReplicationConfig::Public => {
-                todo!("if was previously Disabled, then Enable replication");
-                todo!("if was previously Dynamic, then Disable delegation");
+                match prev_config {
+                    ReplicationConfig::Public => {
+                        // will not happen, because of the check above
+                    }
+                    ReplicationConfig::Dynamic => {
+                        self.entity_disable_delegation(entity);
+                    }
+                }
             }
             ReplicationConfig::Dynamic => {
-                todo!("if was previously Disabled, then Enable replication");
-                todo!("if was previously Public, then Enable delegation");
-                self.entity_enable_delegation(entity);
+                match prev_config {
+                    ReplicationConfig::Public => {
+                        self.entity_enable_delegation(entity);
+                    }
+                    ReplicationConfig::Dynamic => {
+                        // will not happen, because of the check above
+                    }
+                }
             }
         }
     }
 
-    pub fn entity_replication_config(&self, entity: &E) -> ReplicationConfig {
-        todo!();
+    pub fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
+        self.global_world_manager.entity_replication_config(entity)
     }
 
     /// Creates a new Entity and returns an EntityMut which can be used for
@@ -397,10 +412,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Creates a new Entity with a specific id
-    pub fn spawn_entity_at(&mut self, entity: &E) {
-        self.spawn_entity_inner(entity);
-    }
-
     fn spawn_entity_inner(&mut self, entity: &E) {
         self.global_world_manager
             .spawn_entity_record(entity, EntityOwner::Server);
@@ -625,8 +636,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         // Remove from ECS Record
-        self.global_world_manager
-            .remove_entity_diff_handlers(entity);
+        self.global_world_manager.remove_entity_diff_handlers(entity);
         self.global_world_manager.remove_entity_record(entity);
     }
 
@@ -763,6 +773,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     //// Authority
 
     pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub(crate) fn entity_disable_delegation(&mut self, entity: &E) {
         todo!();
     }
 

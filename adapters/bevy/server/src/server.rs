@@ -131,28 +131,20 @@ impl<'w> Server<'w> {
 
     // Entity Replication
 
-    pub fn enable_replication(&mut self, entity: &Entity) {
+    pub(crate) fn enable_replication(&mut self, entity: &Entity) {
         self.server.enable_entity_replication(entity);
     }
 
-    pub fn disable_replication(&mut self, entity: &Entity) {
+    pub(crate) fn disable_replication(&mut self, entity: &Entity) {
         self.server.disable_entity_replication(entity);
     }
 
-    pub fn replication_config(&self, entity: &Entity) -> ReplicationConfig {
+    pub(crate) fn replication_config(&self, entity: &Entity) -> Option<ReplicationConfig> {
         self.server.entity_replication_config(entity)
     }
 
-    pub fn configure_replication(&mut self, entity: &Entity, config: ReplicationConfig) {
-        match &config {
-            ReplicationConfig::Disabled => {
-                self.server.disable_entity_replication(entity);
-            }
-            _ => {
-                self.server.enable_entity_replication(entity);
-                self.server.configure_entity_replication(entity, config);
-            }
-        }
+    pub(crate) fn configure_replication(&mut self, entity: &Entity, config: ReplicationConfig) {
+        self.server.configure_entity_replication(entity, config);
     }
 }
 

@@ -32,7 +32,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
         self.world.component::<R>(&self.entity)
     }
 
-    pub fn replication_config(&self) -> ReplicationConfig {
+    pub fn replication_config(&self) -> Option<ReplicationConfig> {
         self.server.entity_replication_config(&self.entity)
     }
 

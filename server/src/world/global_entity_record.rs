@@ -2,12 +2,13 @@ use std::collections::HashSet;
 
 use naia_shared::{ComponentKind, GlobalEntity};
 
-use crate::EntityOwner;
+use crate::{EntityOwner, ReplicationConfig};
 
 pub struct GlobalEntityRecord {
     pub global_entity: GlobalEntity,
     pub component_kinds: HashSet<ComponentKind>,
     pub owner: EntityOwner,
+    pub replication_config: ReplicationConfig,
 }
 
 impl GlobalEntityRecord {
@@ -19,6 +20,7 @@ impl GlobalEntityRecord {
             global_entity,
             component_kinds: HashSet::new(),
             owner,
+            replication_config: ReplicationConfig::Public,
         }
     }
 }

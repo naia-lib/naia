@@ -15,7 +15,7 @@ pub trait CommandsExt<'w, 's, 'a> {
         server: &mut Server,
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn replication_config(&'a self, server: &Server) -> ReplicationConfig;
+    fn replication_config(&'a self, server: &Server) -> Option<ReplicationConfig>;
 }
 
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
@@ -39,19 +39,11 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         server: &mut Server,
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a> {
-        match &config {
-            ReplicationConfig::Disabled => {
-                self.remove::<HostOwned>();
-            }
-            _ => {
-                self.insert(HostOwned);
-            }
-        }
         server.configure_replication(&self.id(), config);
         return self;
     }
 
-    fn replication_config(&'a self, server: &Server) -> ReplicationConfig {
+    fn replication_config(&'a self, server: &Server) -> Option<ReplicationConfig> {
         server.replication_config(&self.id())
     }
 }

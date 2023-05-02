@@ -317,11 +317,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// Creates a new Entity with a specific id
-    pub fn spawn_entity_at(&mut self, entity: &E) {
-        self.check_client_authoritative_allowed();
-        self.spawn_entity_inner(entity)
-    }
-
     fn spawn_entity_inner(&mut self, entity: &E) {
         self.global_world_manager.host_spawn_entity(entity);
         if let Some(connection) = &mut self.server_connection {
@@ -377,38 +372,69 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn disable_entity_replication(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
         // Despawn from connections and inner tracking
         self.despawn_entity_worldless(entity);
     }
 
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn configure_entity_replication(&mut self, entity: &E, config: ReplicationConfig) {
         self.check_client_authoritative_allowed();
+        if !self.global_world_manager.has_entity(entity) {
+            panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Client, before configuring replication.");
+        }
+        let prev_config = self.global_world_manager.entity_replication_config(entity).unwrap();
+        if prev_config == config {
+            panic!("Entity replication config is already set to {:?}. Should not set twice.", config);
+        }
         match &config {
-            ReplicationConfig::Disabled => {
-                panic!("This configuration is only for adapter use.")
-            }
             ReplicationConfig::Private => {
-                todo!("if was previously Disabled, then Enable replication");
-                todo!("if was previously Public, then Unpublish entity");
-                todo!("if was previously Dynamic, then Disable delegation");
-                self.unpublish_entity(entity);
+                match prev_config {
+                    ReplicationConfig::Private => {
+                        // will not happen, because of the check above
+                    }
+                    ReplicationConfig::Public => {
+                        self.unpublish_entity(entity);
+                    }
+                    ReplicationConfig::Dynamic => {
+                        self.entity_disable_delegation(entity);
+                        self.unpublish_entity(entity);
+                    }
+                }
             }
             ReplicationConfig::Public => {
-                todo!("if was previously Disabled, then Enable replication");
-                todo!("if was previously Private, then Publish entity");
-                todo!("if was previously Dynamic, then Disable delegation");
-                self.publish_entity(entity);
+                match prev_config {
+                    ReplicationConfig::Private => {
+                        self.publish_entity(entity);
+                    }
+                    ReplicationConfig::Public => {
+                        // will not happen, because of the check above
+                    }
+                    ReplicationConfig::Dynamic => {
+                        self.entity_disable_delegation(entity);
+                    }
+                }
             }
             ReplicationConfig::Dynamic => {
-                todo!("if was previously Disabled, then Enable replication");
-                todo!("if was previously Private, then Publish entity");
-                todo!("if was previously Public, then Enable delegation");
-                self.entity_enable_delegation(entity);
+                match prev_config {
+                    ReplicationConfig::Private => {
+                        self.publish_entity(entity);
+                        self.entity_enable_delegation(entity);
+                    }
+                    ReplicationConfig::Public => {
+                        self.entity_enable_delegation(entity);
+                    }
+                    ReplicationConfig::Dynamic => {
+                        // will not happen, because of the check above
+                    }
+                }
             }
         }
     }
 
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_replication_config(&self, entity: &E) -> ReplicationConfig {
+        self.check_client_authoritative_allowed();
         todo!();
     }
 
@@ -597,6 +623,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub(crate) fn entity_disable_delegation(&mut self, entity: &E) {
         todo!();
     }
 
