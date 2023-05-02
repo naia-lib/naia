@@ -68,6 +68,12 @@ pub struct SpawnEntityEvent(pub Entity);
 // DespawnEntityEvent
 pub struct DespawnEntityEvent(pub Entity);
 
+// PublishEntityEvent
+pub struct PublishEntityEvent(pub Entity);
+
+// UnpublishEntityEvent
+pub struct UnpublishEntityEvent(pub Entity);
+
 // InsertComponentEvent
 pub struct InsertComponentEvents {
     inner: HashMap<ComponentKind, Vec<Entity>>,

@@ -35,8 +35,8 @@ pub use command_history::CommandHistory;
 pub use error::NaiaClientError;
 pub use events::{
     ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events,
-    InsertComponentEvent, MessageEvent, RejectEvent, RemoveComponentEvent, ServerTickEvent,
-    SpawnEntityEvent, UpdateComponentEvent,
+    InsertComponentEvent, MessageEvent, PublishEntityEvent, RejectEvent, RemoveComponentEvent,
+    ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
 };
 pub use world::{
     entity_mut::EntityMut, entity_ref::EntityRef, replication_config::ReplicationConfig,

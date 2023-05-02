@@ -11,11 +11,11 @@ use bevy::{
 use naia_bevy_client::{
     events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
-        MessageEvents, RejectEvent, RemoveComponentEvents, SpawnEntityEvent, UpdateComponentEvents,
+        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, SpawnEntityEvent,
+        UnpublishEntityEvent, UpdateComponentEvents,
     },
-    sequence_greater_than, Client, CommandsExt, Random, Replicate, ReplicationConfig, Tick,
+    sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
 };
-
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
@@ -51,7 +51,7 @@ pub fn connect_events(
             // MUST call this to begin replication
             .enable_replication(&mut client)
             // make Entity Public, which means it will be visibile to other Clients
-            .configure_replication(&mut client, ReplicationConfig::Public)
+            //.configure_replication(&mut client, ReplicationConfig::Public)
             // Insert Position component
             .insert(Position::new(
                 16 * ((Random::gen_range_u32(0, 40) as i16) - 20),
@@ -172,6 +172,18 @@ pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
 pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) {
     for DespawnEntityEvent(_entity) in event_reader.iter() {
         info!("despawned entity");
+    }
+}
+
+pub fn publish_entity_events(mut event_reader: EventReader<PublishEntityEvent>) {
+    for PublishEntityEvent(_entity) in event_reader.iter() {
+        info!("publish entity");
+    }
+}
+
+pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent>) {
+    for UnpublishEntityEvent(_entity) in event_reader.iter() {
+        info!("unpublish entity");
     }
 }
 

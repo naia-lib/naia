@@ -10,7 +10,7 @@ use naia_bevy_server::{
         InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, SpawnEntityEvent,
         TickEvent, UpdateComponentEvents,
     },
-    CommandsExt, Random, Server,
+    CommandsExt, Random, ReplicationConfig, Server,
 };
 
 use naia_bevy_demo_shared::{
@@ -152,9 +152,23 @@ pub fn tick_events(
     }
 }
 
-pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
-    for SpawnEntityEvent(_, _) in event_reader.iter() {
-        info!("spawned client entity");
+pub fn spawn_entity_events(
+    mut commands: Commands,
+    mut server: Server,
+    global: ResMut<Global>,
+    mut event_reader: EventReader<SpawnEntityEvent>,
+) {
+    for SpawnEntityEvent(_user_key, client_entity) in event_reader.iter() {
+        info!("spawned client entity, publish");
+
+        // make public to other clients as well
+        commands
+            .entity(*client_entity)
+            .configure_replication(ReplicationConfig::Public);
+
+        server
+            .room_mut(&global.main_room_key)
+            .add_entity(client_entity);
     }
 }
 

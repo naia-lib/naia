@@ -17,6 +17,8 @@ pub struct Events<E: Copy> {
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
     spawns: Vec<E>,
     despawns: Vec<E>,
+    publishes: Vec<E>,
+    unpublishes: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<E>>,
     removes: HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>,
     updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
@@ -41,6 +43,8 @@ impl<E: Copy> Events<E> {
             messages: HashMap::new(),
             spawns: Vec::new(),
             despawns: Vec::new(),
+            publishes: Vec::new(),
+            unpublishes: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
             updates: HashMap::new(),
@@ -160,6 +164,16 @@ impl<E: Copy> Events<E> {
 
     pub(crate) fn push_despawn(&mut self, entity: E) {
         self.despawns.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_publish(&mut self, entity: E) {
+        self.publishes.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_unpublish(&mut self, entity: E) {
+        self.unpublishes.push(entity);
         self.empty = false;
     }
 
@@ -404,6 +418,36 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
 
     fn has(events: &Events<E>) -> bool {
         !events.despawns.is_empty()
+    }
+}
+
+// Publish Entity Event
+pub struct PublishEntityEvent;
+impl<E: Copy> Event<E> for PublishEntityEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.publishes);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.publishes.is_empty()
+    }
+}
+
+// Unpublish Entity Event
+pub struct UnpublishEntityEvent;
+impl<E: Copy> Event<E> for UnpublishEntityEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.unpublishes);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.unpublishes.is_empty()
     }
 }
 

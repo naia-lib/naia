@@ -150,9 +150,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // until none left
         self.maintain_socket();
 
+        let mut response_events = None;
+
         // all other operations
-        let connection_mut = &mut self.server_connection;
-        if let Some(connection) = connection_mut {
+        if let Some(connection) = &mut self.server_connection {
             if connection.base.should_drop() || self.manual_disconnect {
                 self.disconnect_with_events(&mut world);
                 return std::mem::take(&mut self.incoming_events);
@@ -172,17 +173,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
 
                 // receive packets, process into events
-                let response_events = connection.process_packets(
+                response_events = Some(connection.process_packets(
                     &mut self.global_world_manager,
                     &self.protocol.component_kinds,
                     &mut world,
                     &mut self.incoming_events,
-                );
-                process_response_events(
-                    connection,
-                    &mut self.global_world_manager,
-                    response_events,
-                );
+                ));
 
                 let mut index_tick = prev_receiving_tick.wrapping_add(1);
                 loop {
@@ -221,6 +217,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         } else {
             self.handshake_manager
                 .send(&self.protocol.message_kinds, &mut self.io);
+        }
+
+        if let Some(events) = response_events {
+            self.process_response_events(events);
         }
 
         std::mem::take(&mut self.incoming_events)
@@ -400,18 +400,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         // will not happen, because of the check above
                     }
                     ReplicationConfig::Public => {
-                        self.unpublish_entity(entity);
+                        self.unpublish_entity(entity, true);
                     }
                     ReplicationConfig::Dynamic => {
                         self.entity_disable_delegation(entity);
-                        self.unpublish_entity(entity);
+                        self.unpublish_entity(entity, true);
                     }
                 }
             }
             ReplicationConfig::Public => {
                 match prev_config {
                     ReplicationConfig::Private => {
-                        self.publish_entity(entity);
+                        self.publish_entity(entity, true);
                     }
                     ReplicationConfig::Public => {
                         // will not happen, because of the check above
@@ -424,7 +424,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             ReplicationConfig::Dynamic => {
                 match prev_config {
                     ReplicationConfig::Private => {
-                        self.publish_entity(entity);
+                        self.publish_entity(entity, true);
                         self.entity_enable_delegation(entity);
                     }
                     ReplicationConfig::Public => {
@@ -621,14 +621,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .host_remove_component(entity, &component_kind);
     }
 
-    pub(crate) fn publish_entity(&mut self, entity: &E) {
-        let message = EntityEventMessage::new_publish(&self.global_world_manager, entity);
-        self.send_message::<SystemChannel, EntityEventMessage>(&message);
+    pub(crate) fn publish_entity(&mut self, entity: &E, client_is_origin: bool) {
+        if client_is_origin {
+            let message = EntityEventMessage::new_publish(&self.global_world_manager, entity);
+            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+        } else {
+            if self.global_world_manager.entity_replication_config(entity)
+                != Some(ReplicationConfig::Private)
+            {
+                panic!("Server can only publish Private entities");
+            }
+            self.global_world_manager
+                .set_entity_replication_config(entity, ReplicationConfig::Public);
+        }
     }
 
-    pub(crate) fn unpublish_entity(&mut self, entity: &E) {
-        let message = EntityEventMessage::new_unpublish(&self.global_world_manager, entity);
-        self.send_message::<SystemChannel, EntityEventMessage>(&message);
+    pub(crate) fn unpublish_entity(&mut self, entity: &E, client_is_origin: bool) {
+        if client_is_origin {
+            let message = EntityEventMessage::new_unpublish(&self.global_world_manager, entity);
+            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+        } else {
+            if self.global_world_manager.entity_replication_config(entity)
+                != Some(ReplicationConfig::Public)
+            {
+                panic!("Server can only unpublish Public entities");
+            }
+            self.global_world_manager
+                .set_entity_replication_config(entity, ReplicationConfig::Private);
+        }
     }
 
     pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
@@ -861,7 +881,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             remote_entities,
         );
         let response_events = self.incoming_events.receive_world_events(entity_events);
-        process_response_events(connection, &mut self.global_world_manager, response_events);
+        self.process_response_events(response_events);
     }
 
     fn disconnect_reset_connection(&mut self) {
@@ -883,41 +903,44 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // NOTE: may panic if the connection is not yet established!
         self.io.server_addr().expect("connection not established!")
     }
-}
 
-fn process_response_events<E: Copy + Eq + Hash + Send + Sync>(
-    connection: &mut Connection<E>,
-    global_world_manager: &mut GlobalWorldManager<E>,
-    response_events: Vec<EntityResponseEvent<E>>,
-) {
-    for response_event in response_events {
-        match response_event {
-            EntityResponseEvent::SpawnEntity(entity) => {
-                global_world_manager.remote_spawn_entity(&entity);
-                let local_entity = connection
-                    .base
-                    .local_world_manager
-                    .entity_to_local_entity(&entity)
-                    .unwrap();
-                connection
-                    .base
-                    .remote_world_manager
-                    .on_entity_channel_opened(&local_entity);
-            }
-            EntityResponseEvent::DespawnEntity(entity) => {
-                global_world_manager.remote_despawn_entity(&entity);
-            }
-            EntityResponseEvent::InsertComponent(entity, component_kind) => {
-                global_world_manager.remote_insert_component(&entity, &component_kind);
-            }
-            EntityResponseEvent::RemoveComponent(entity, component_kind) => {
-                global_world_manager.remote_remove_component(&entity, &component_kind);
-            }
-            EntityResponseEvent::PublishEntity(_) => {
-                panic!("Client should not receive PublishEntity event... ?");
-            }
-            EntityResponseEvent::UnpublishEntity(_) => {
-                panic!("Client should not receive UnpublishEntity event... ?");
+    fn process_response_events(&mut self, response_events: Vec<EntityResponseEvent<E>>) {
+        for response_event in response_events {
+            match response_event {
+                EntityResponseEvent::SpawnEntity(entity) => {
+                    self.global_world_manager.remote_spawn_entity(&entity);
+                    let Some(connection) = self.server_connection.as_mut() else {
+                        panic!("Client is disconnected!");
+                    };
+                    let local_entity = connection
+                        .base
+                        .local_world_manager
+                        .entity_to_local_entity(&entity)
+                        .unwrap();
+                    connection
+                        .base
+                        .remote_world_manager
+                        .on_entity_channel_opened(&local_entity);
+                }
+                EntityResponseEvent::DespawnEntity(entity) => {
+                    self.global_world_manager.remote_despawn_entity(&entity);
+                }
+                EntityResponseEvent::InsertComponent(entity, component_kind) => {
+                    self.global_world_manager
+                        .remote_insert_component(&entity, &component_kind);
+                }
+                EntityResponseEvent::RemoveComponent(entity, component_kind) => {
+                    self.global_world_manager
+                        .remote_remove_component(&entity, &component_kind);
+                }
+                EntityResponseEvent::PublishEntity(entity) => {
+                    self.publish_entity(&entity, false);
+                    self.incoming_events.push_publish(entity);
+                }
+                EntityResponseEvent::UnpublishEntity(entity) => {
+                    self.unpublish_entity(&entity, false);
+                    self.incoming_events.push_unpublish(entity);
+                }
             }
         }
     }

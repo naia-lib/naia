@@ -49,7 +49,7 @@ impl Default for Protocol {
         let mut channel_kinds = ChannelKinds::new();
         channel_kinds.add_channel::<SystemChannel>(ChannelSettings::new(
             ChannelMode::OrderedReliable(ReliableSettings::default()),
-            ChannelDirection::ClientToServer,
+            ChannelDirection::Bidirectional,
         ));
 
         Self {

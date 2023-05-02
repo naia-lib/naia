@@ -14,9 +14,10 @@ use bevy_ecs::prelude::Resource;
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
     EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverterMut,
-    EntityDoesNotExistError, EntityResponseEvent, GlobalEntity, Instant, Message, MessageContainer,
-    PacketType, Protocol, Replicate, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig,
-    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, Instant,
+    Message, MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr,
+    SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -440,11 +441,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
         server_origin: bool,
     ) {
+        if server_origin {
+            // send publish message to entity owner
+            let entity_owner = self.global_world_manager.entity_owner(&entity);
+            let Some(EntityOwner::Client(user_key)) = entity_owner else {
+                panic!("Entity is not owned by a Client. Cannot publish entity. Owner is: {:?}", entity_owner);
+            };
+            let message = EntityEventMessage::new_publish(&self.global_world_manager, entity);
+            self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+        }
+
         self.global_world_manager.entity_publish(&entity);
         world.entity_publish(&self.global_world_manager, &entity);
-        if server_origin {
-            todo!("send publish entity message to client!");
-        }
     }
 
     pub(crate) fn unpublish_entity<W: WorldMutType<E>>(
@@ -453,12 +461,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
         server_origin: bool,
     ) {
+        if server_origin {
+            // send publish message to entity owner
+            let entity_owner = self.global_world_manager.entity_owner(&entity);
+            let Some(EntityOwner::ClientPublic(user_key)) = entity_owner else {
+                panic!("Entity is not owned by a Client or is Private. Cannot publish entity. Owner is: {:?}", entity_owner);
+            };
+            let message = EntityEventMessage::new_unpublish(&self.global_world_manager, entity);
+            self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+        }
+
         world.entity_unpublish(&entity);
         self.global_world_manager.entity_unpublish(&entity);
         self.cleanup_entity_replication(&entity);
-        if server_origin {
-            todo!("send unpublish entity message to client!");
-        }
     }
 
     /// Creates a new Entity and returns an EntityMut which can be used for

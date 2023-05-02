@@ -14,15 +14,16 @@ use crate::ServerOwned;
 mod naia_events {
     pub use naia_client::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        RejectEvent, ServerTickEvent, SpawnEntityEvent,
+        PublishEntityEvent, RejectEvent, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
     };
 }
 
 mod bevy_events {
     pub use crate::events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, MessageEvents, RejectEvent, RemoveComponentEvents, ServerTickEvent,
-        SpawnEntityEvent, UpdateComponentEvents,
+        InsertComponentEvents, MessageEvents, PublishEntityEvent, RejectEvent,
+        RemoveComponentEvents, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
+        UpdateComponentEvents,
     };
 }
 
@@ -147,6 +148,26 @@ pub fn before_receive_events(world: &mut World) {
                     .unwrap();
                 for entity in events.read::<naia_events::DespawnEntityEvent>() {
                     despawn_entity_event_writer.send(bevy_events::DespawnEntityEvent(entity));
+                }
+            }
+
+            // Publish Entity Event
+            if events.has::<naia_events::PublishEntityEvent>() {
+                let mut publish_entity_event_writer = world
+                    .get_resource_mut::<Events<bevy_events::PublishEntityEvent>>()
+                    .unwrap();
+                for entity in events.read::<naia_events::PublishEntityEvent>() {
+                    publish_entity_event_writer.send(bevy_events::PublishEntityEvent(entity));
+                }
+            }
+
+            // Unpublish Entity Event
+            if events.has::<naia_events::UnpublishEntityEvent>() {
+                let mut unpublish_entity_event_writer = world
+                    .get_resource_mut::<Events<bevy_events::UnpublishEntityEvent>>()
+                    .unwrap();
+                for entity in events.read::<naia_events::UnpublishEntityEvent>() {
+                    unpublish_entity_event_writer.send(bevy_events::UnpublishEntityEvent(entity));
                 }
             }
 

@@ -34,6 +34,8 @@ pub fn run() {
                 events::reject_events,
                 events::spawn_entity_events,
                 events::despawn_entity_events,
+                events::publish_entity_events,
+                events::unpublish_entity_events,
                 events::insert_component_events,
                 events::update_component_events,
                 events::remove_component_events,

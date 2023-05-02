@@ -1,11 +1,12 @@
-use std::hash::Hash;
+use std::{any::Any, hash::Hash};
 
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig,
-    EntityResponseEvent, HostType, HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol,
-    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds,
+    ConnectionConfig, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType,
+    HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
+    StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -111,6 +112,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         world: &mut W,
         incoming_events: &mut Events<E>,
     ) -> Vec<EntityResponseEvent<E>> {
+        let mut response_events = Vec::new();
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
             global_world_manager,
@@ -118,8 +120,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             &mut self.base.remote_world_manager.entity_waitlist,
         );
         for (channel_kind, messages) in messages {
-            for message in messages {
-                incoming_events.push_message(&channel_kind, message);
+            if channel_kind == ChannelKind::of::<SystemChannel>() {
+                for message in messages {
+                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<EntityEventMessage>(message.to_boxed_any())
+                        .ok()
+                        .map(|boxed_m| *boxed_m) else {
+                        panic!("Received unknown message over SystemChannel!");
+                    };
+                    let Some(entity) = event_message.entity.get(global_world_manager) else {
+                        panic!("Received message with no Entity over SystemChannel!");
+                    };
+                    match event_message.action {
+                        EntityEventMessageAction::Publish => {
+                            response_events.push(EntityResponseEvent::PublishEntity(entity));
+                        }
+                        EntityEventMessageAction::Unpublish => {
+                            response_events.push(EntityResponseEvent::UnpublishEntity(entity));
+                        }
+                    }
+                }
+            } else {
+                for message in messages {
+                    incoming_events.push_message(&channel_kind, message);
+                }
             }
         }
 
@@ -132,7 +155,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             world,
             remote_events,
         );
-        incoming_events.receive_world_events(world_events)
+        response_events.extend(incoming_events.receive_world_events(world_events));
+        response_events
     }
 
     // Outgoing data
