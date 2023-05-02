@@ -376,6 +376,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if !self.global_world_manager.has_entity(entity) {
             panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Server, before configuring replication.");
         }
+        let next_config = config;
         let prev_config = self
             .global_world_manager
             .entity_replication_config(entity)
@@ -395,7 +396,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     ReplicationConfig::Public => {
                         self.unpublish_entity(world, entity, true);
                     }
-                    ReplicationConfig::Dynamic => {
+                    ReplicationConfig::Delegated => {
                         self.entity_disable_delegation(entity, true);
                         self.unpublish_entity(world, entity, true);
                     }
@@ -409,12 +410,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     ReplicationConfig::Public => {
                         // will not happen, because of the check above
                     }
-                    ReplicationConfig::Dynamic => {
+                    ReplicationConfig::Delegated => {
                         self.entity_disable_delegation(entity, true);
                     }
                 }
             }
-            ReplicationConfig::Dynamic => {
+            ReplicationConfig::Delegated => {
                 match prev_config {
                     ReplicationConfig::Private => {
                         self.publish_entity(world, entity, true);
@@ -423,7 +424,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     ReplicationConfig::Public => {
                         self.entity_enable_delegation(entity, true);
                     }
-                    ReplicationConfig::Dynamic => {
+                    ReplicationConfig::Delegated => {
                         // will not happen, because of the check above
                     }
                 }

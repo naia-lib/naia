@@ -2,5 +2,5 @@
 pub enum ReplicationConfig {
     Private,
     Public,
-    Dynamic,
+    Delegated,
 }

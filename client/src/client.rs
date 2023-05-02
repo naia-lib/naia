@@ -402,7 +402,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     ReplicationConfig::Public => {
                         self.unpublish_entity(entity, true);
                     }
-                    ReplicationConfig::Dynamic => {
+                    ReplicationConfig::Delegated => {
                         self.entity_disable_delegation(entity);
                         self.unpublish_entity(entity, true);
                     }
@@ -416,12 +416,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     ReplicationConfig::Public => {
                         // will not happen, because of the check above
                     }
-                    ReplicationConfig::Dynamic => {
+                    ReplicationConfig::Delegated => {
                         self.entity_disable_delegation(entity);
                     }
                 }
             }
-            ReplicationConfig::Dynamic => {
+            ReplicationConfig::Delegated => {
                 match prev_config {
                     ReplicationConfig::Private => {
                         self.publish_entity(entity, true);
@@ -430,7 +430,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     ReplicationConfig::Public => {
                         self.entity_enable_delegation(entity);
                     }
-                    ReplicationConfig::Dynamic => {
+                    ReplicationConfig::Delegated => {
                         // will not happen, because of the check above
                     }
                 }
