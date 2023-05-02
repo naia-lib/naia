@@ -2,15 +2,19 @@ use std::hash::Hash;
 
 use naia_shared::{ReplicaRefWrapper, Replicate, WorldRefType};
 
+use crate::{ReplicationConfig, Server};
+
 // EntityRef
-pub struct EntityRef<E: Copy + Eq + Hash, W: WorldRefType<E>> {
+pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> {
+    server: &'s Server<E>,
     world: W,
     entity: E,
 }
 
-impl<E: Copy + Eq + Hash, W: WorldRefType<E>> EntityRef<E, W> {
-    pub fn new(world: W, entity: &E) -> Self {
+impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E, W> {
+    pub fn new(server: &'s Server<E>, world: W, entity: &E) -> Self {
         EntityRef {
+            server,
             world,
             entity: *entity,
         }
@@ -26,5 +30,13 @@ impl<E: Copy + Eq + Hash, W: WorldRefType<E>> EntityRef<E, W> {
 
     pub fn component<R: Replicate>(&self) -> Option<ReplicaRefWrapper<R>> {
         self.world.component::<R>(&self.entity)
+    }
+
+    pub fn replication_config(&self) -> ReplicationConfig {
+        self.server.entity_replication_config(&self.entity)
+    }
+
+    pub fn has_authority(&self) -> bool {
+        self.server.entity_has_authority(&self.entity)
     }
 }

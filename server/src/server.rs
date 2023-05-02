@@ -32,6 +32,7 @@ use crate::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
         entity_scope_map::EntityScopeMap, global_world_manager::GlobalWorldManager,
     },
+    ReplicationConfig,
 };
 
 use super::{
@@ -354,13 +355,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // Entities
 
-    pub fn enable_replication(&mut self, entity: &E) {
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn enable_entity_replication(&mut self, entity: &E) {
         self.spawn_entity_inner(&entity);
     }
 
-    pub fn disable_replication(&mut self, entity: &E) {
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn disable_entity_replication(&mut self, entity: &E) {
         // Despawn from connections and inner tracking
         self.despawn_entity_worldless(entity);
+    }
+
+    pub fn configure_entity_replication(&mut self, entity: &E, config: ReplicationConfig) {
+        match &config {
+            ReplicationConfig::Disabled => {
+                panic!("This configuration is only for adapter use.")
+            }
+            ReplicationConfig::Public => {
+                todo!("if was previously Disabled, then Enable replication");
+                todo!("if was previously Dynamic, then Disable delegation");
+            }
+            ReplicationConfig::Dynamic => {
+                todo!("if was previously Disabled, then Enable replication");
+                todo!("if was previously Public, then Enable delegation");
+                self.entity_enable_delegation(entity);
+            }
+        }
+    }
+
+    pub fn entity_replication_config(&self, entity: &E) -> ReplicationConfig {
+        todo!();
     }
 
     /// Creates a new Entity and returns an EntityMut which can be used for
@@ -387,7 +411,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Panics if the Entity does not exist.
     pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<E, W> {
         if world.has_entity(entity) {
-            return EntityRef::new(world, entity);
+            return EntityRef::new(self, world, entity);
         }
         panic!("No Entity exists for given Key!");
     }
@@ -734,6 +758,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     .remove_component(entity, &component_kind);
             }
         }
+    }
+
+    //// Authority
+
+    pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub(crate) fn entity_has_authority(&self, entity: &E) -> bool {
+        todo!();
+    }
+
+    pub(crate) fn request_entity_authority(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub(crate) fn release_entity_authority(&mut self, entity: &E) {
+        todo!();
     }
 
     //// Users

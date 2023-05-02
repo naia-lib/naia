@@ -1,6 +1,5 @@
-
 use std::{
-    collections::{HashMap, VecDeque, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     time::Duration,
 };
 

@@ -45,5 +45,6 @@ pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::{User, UserKey, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
-pub use world::entity_mut::EntityMut;
-pub use world::entity_owner::EntityOwner;
+pub use world::{
+    entity_mut::EntityMut, entity_owner::EntityOwner, replication_config::ReplicationConfig,
+};

@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use naia_shared::{ReplicaMutWrapper, Replicate, WorldMutType};
 
-use crate::{room::RoomKey, server::Server};
+use crate::{room::RoomKey, server::Server, ReplicationConfig};
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
@@ -56,6 +56,35 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     pub fn remove_component<R: Replicate>(&mut self) -> Option<R> {
         self.server
             .remove_component::<R, W>(&mut self.world, &self.entity)
+    }
+
+    // Authority / Config
+
+    pub fn configure_replication(&mut self, config: ReplicationConfig) -> &mut Self {
+        self.server
+            .configure_entity_replication(&self.entity, config);
+
+        self
+    }
+
+    pub fn replication_config(&self) -> ReplicationConfig {
+        self.server.entity_replication_config(&self.entity)
+    }
+
+    pub fn has_authority(&self) -> bool {
+        self.server.entity_has_authority(&self.entity)
+    }
+
+    pub fn request_authority(&mut self) -> &mut Self {
+        self.server.request_entity_authority(&self.entity);
+
+        self
+    }
+
+    pub fn release_authority(&mut self) -> &mut Self {
+        self.server.release_entity_authority(&self.entity);
+
+        self
     }
 
     // Rooms

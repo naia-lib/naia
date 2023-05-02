@@ -6,8 +6,8 @@ use bevy_ecs::{
 };
 
 use naia_server::{
-    shared::SocketConfig, transport::Socket, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
-    TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
+    shared::SocketConfig, transport::Socket, ReplicationConfig, RoomKey, RoomMut, RoomRef,
+    Server as NaiaServer, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{
@@ -132,11 +132,27 @@ impl<'w> Server<'w> {
     // Entity Replication
 
     pub fn enable_replication(&mut self, entity: &Entity) {
-        self.server.enable_replication(entity);
+        self.server.enable_entity_replication(entity);
     }
 
     pub fn disable_replication(&mut self, entity: &Entity) {
-        self.server.disable_replication(entity);
+        self.server.disable_entity_replication(entity);
+    }
+
+    pub fn replication_config(&self, entity: &Entity) -> ReplicationConfig {
+        self.server.entity_replication_config(entity)
+    }
+
+    pub fn configure_replication(&mut self, entity: &Entity, config: ReplicationConfig) {
+        match &config {
+            ReplicationConfig::Disabled => {
+                self.server.disable_entity_replication(entity);
+            }
+            _ => {
+                self.server.enable_entity_replication(entity);
+                self.server.configure_entity_replication(entity, config);
+            }
+        }
     }
 }
 

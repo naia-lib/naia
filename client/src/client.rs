@@ -1,4 +1,4 @@
-use std::{hash::Hash, net::SocketAddr, collections::VecDeque};
+use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::warn;
 
@@ -7,11 +7,11 @@ use bevy_ecs::prelude::Resource;
 
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
-    EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut, EntityDoesNotExistError,
-    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
-    Instant, Message, MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde,
-    SocketConfig, StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType,
-    WorldRefType, EntityAndLocalEntityConverter, SharedGlobalWorldManager
+    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter,
+    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
+    FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer, PacketType,
+    PingIndex, Protocol, Replicate, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader,
+    SystemChannel, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -257,7 +257,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 message,
             );
         } else {
-            self.waitlist_messages.push_back((channel_kind.clone(), message_box));
+            self.waitlist_messages
+                .push_back((channel_kind.clone(), message_box));
         }
     }
 
@@ -387,12 +388,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 panic!("This configuration is only for adapter use.")
             }
             ReplicationConfig::Private => {
+                todo!("if was previously Disabled, then Enable replication");
+                todo!("if was previously Public, then Unpublish entity");
+                todo!("if was previously Dynamic, then Disable delegation");
                 self.unpublish_entity(entity);
             }
             ReplicationConfig::Public => {
+                todo!("if was previously Disabled, then Enable replication");
+                todo!("if was previously Private, then Publish entity");
+                todo!("if was previously Dynamic, then Disable delegation");
                 self.publish_entity(entity);
             }
             ReplicationConfig::Dynamic => {
+                todo!("if was previously Disabled, then Enable replication");
+                todo!("if was previously Private, then Publish entity");
+                todo!("if was previously Public, then Enable delegation");
                 self.entity_enable_delegation(entity);
             }
         }
