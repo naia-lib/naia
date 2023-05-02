@@ -1,4 +1,4 @@
-use std::{hash::Hash, net::SocketAddr};
+use std::{hash::Hash, net::SocketAddr, collections::VecDeque};
 
 use log::warn;
 
@@ -11,9 +11,8 @@ pub use naia_shared::{
     EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
     Instant, Message, MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde,
     SocketConfig, StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+    WorldRefType, EntityAndLocalEntityConverter, SharedGlobalWorldManager
 };
-use naia_shared::{EntityAndLocalEntityConverter, SharedGlobalWorldManager};
 
 use crate::{
     connection::{
@@ -44,6 +43,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     server_connection: Option<Connection<E>>,
     handshake_manager: HandshakeManager,
     manual_disconnect: bool,
+    waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
     global_world_manager: GlobalWorldManager<E>,
     // Events
@@ -76,6 +76,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             server_connection: None,
             handshake_manager,
             manual_disconnect: false,
+            waitlist_messages: VecDeque::new(),
             // World
             global_world_manager: GlobalWorldManager::new(),
             // Events
@@ -255,6 +256,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 channel_kind,
                 message,
             );
+        } else {
+            self.waitlist_messages.push_back((channel_kind.clone(), message_box));
+        }
+    }
+
+    fn on_connect(&mut self) {
+        // send queued messages
+        let messages = std::mem::take(&mut self.waitlist_messages);
+        for (channel_kind, message_box) in messages {
+            self.send_message_inner(&channel_kind, message_box);
         }
     }
 
@@ -567,6 +578,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub(crate) fn publish_entity(&mut self, entity: &E) {
+        warn!("Sending Publish Entity Message!");
         let message = EntityEventMessage::new_publish(&self.global_world_manager, entity);
         self.send_message::<SystemChannel, EntityEventMessage>(&message);
     }
@@ -627,6 +639,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 time_manager,
                                 &self.global_world_manager,
                             ));
+                            self.on_connect();
 
                             let server_addr = self.server_address_unwrapped();
                             self.incoming_events.push_connection(&server_addr);

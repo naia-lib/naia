@@ -134,6 +134,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         };
         if let EntityOwner::Client(user_key) = record.owner {
             record.owner = EntityOwner::ClientPublic(user_key);
+        } else {
+            panic!("Can only publish an Entity that is owned by a Client!");
         }
     }
 
