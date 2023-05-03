@@ -167,19 +167,54 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
     }
 
-    pub(crate) fn set_entity_replication_config(&mut self, entity: &E, config: ReplicationConfig) {
-        if let Some(record) = self.entity_records.get_mut(entity) {
-            record.replication_config = config;
-        } else {
-            panic!("Entity does not exist!");
-        }
-    }
-
     pub(crate) fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
         if let Some(record) = self.entity_records.get(entity) {
             return Some(record.replication_config);
         }
         return None;
+    }
+
+    pub(crate) fn entity_publish(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        record.replication_config = ReplicationConfig::Public;
+    }
+
+    pub(crate) fn entity_unpublish(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        record.replication_config = ReplicationConfig::Public;
+    }
+
+    pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Public {
+            panic!("Can only enable delegation on an Entity that is Public!");
+        }
+
+        record.replication_config = ReplicationConfig::Delegated;
+        self.auth_handler.register_entity(entity);
+
+        if record.owner.is_client() {
+            record.owner = EntityOwner::Server;
+            todo!("Implement passing ownership to Server .. need to move Entity from remote_entity_manager to host_entity_manager");
+        }
+    }
+
+    pub(crate) fn entity_disable_delegation(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Delegated {
+            panic!("Can only disable delegation on an Entity that is Delegated!");
+        }
+
+        record.replication_config = ReplicationConfig::Public;
+        self.auth_handler.deregister_entity(entity);
     }
 }
 

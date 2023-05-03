@@ -888,8 +888,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         world: &mut W,
         entity: &E,
-        server_origin: bool,
+        server_is_origin: bool,
     ) {
+        info!("server.entity_enable_delegation");
         // for any users that have this entity in scope, send an `enable_delegation` message
         {
             // TODO: we can make this more efficient in the future by caching which Entities
@@ -918,8 +919,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         world: &mut W,
         entity: &E,
-        server_origin: bool,
+        server_is_origin: bool,
     ) {
+        info!("server.entity_disable_delegation");
         // for any users that have this entity in scope, send an `disable_delegation` message
         {
             // TODO: we can make this more efficient in the future by caching which Entities

@@ -177,25 +177,25 @@ pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) 
 
 pub fn publish_entity_events(mut event_reader: EventReader<PublishEntityEvent>) {
     for PublishEntityEvent(_entity) in event_reader.iter() {
-        info!("publish entity");
+        info!("client demo: publish entity event");
     }
 }
 
 pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent>) {
     for UnpublishEntityEvent(_entity) in event_reader.iter() {
-        info!("unpublish entity");
+        info!("client demo: unpublish entity event");
     }
 }
 
 pub fn entity_enable_delegation_events(mut event_reader: EventReader<EntityEnableDelegationEvent>) {
     for EntityEnableDelegationEvent(_entity) in event_reader.iter() {
-        info!("entity enable delegation");
+        info!("client demo: entity enable delegation");
     }
 }
 
 pub fn entity_disable_delegation_events(mut event_reader: EventReader<EntityDisableDelegationEvent>) {
     for EntityDisableDelegationEvent(_entity) in event_reader.iter() {
-        info!("entity disable delegation");
+        info!("client demo: entity disable delegation");
     }
 }
 

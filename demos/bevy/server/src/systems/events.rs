@@ -92,6 +92,7 @@ pub fn connect_events(
         );
 
         // Create a new delegated Entity
+        info!("Spawn Delegated Entity on Connect");
         let delegated_entity = commands
             // Spawn new Entity
             .spawn_empty()

@@ -25,4 +25,11 @@ impl EntityOwner {
             _ => false,
         }
     }
+
+    pub fn is_public(&self) -> bool {
+        match self {
+            EntityOwner::ClientPublic(_) | EntityOwner::Server => true,
+            _ => false,
+        }
+    }
 }

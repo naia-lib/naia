@@ -155,7 +155,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             record.owner = EntityOwner::Client(user_key);
             record.replication_config = ReplicationConfig::Private;
         } else {
-            panic!("Can only unpublish an Entity that is public!");
+            panic!("Can only unpublish an Entity that is Client-owned and Public!");
         }
     }
 
@@ -190,12 +190,33 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         return None;
     }
 
-    pub(crate) fn entity_enable_delegation(&self, entity: &E) {
-        todo!()
+    pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Public {
+            panic!("Can only enable delegation on an Entity that is Public!");
+        }
+
+        record.replication_config = ReplicationConfig::Delegated;
+        self.auth_handler.register_entity(entity);
+
+        if record.owner.is_client() {
+            record.owner = EntityOwner::Server;
+            todo!("Implement passing ownership to Server .. need to move Entity from remote_entity_manager to host_entity_manager");
+        }
     }
 
-    pub(crate) fn entity_disable_delegation(&self, entity: &E) {
-        todo!()
+    pub(crate) fn entity_disable_delegation(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Delegated {
+            panic!("Can only disable delegation on an Entity that is Delegated!");
+        }
+
+        record.replication_config = ReplicationConfig::Public;
+        self.auth_handler.deregister_entity(entity);
     }
 }
 

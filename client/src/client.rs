@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
-use log::warn;
+use log::{info, warn};
 
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
@@ -640,9 +640,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 panic!("Server can only publish Private entities");
             }
         }
-
-        self.global_world_manager
-            .set_entity_replication_config(entity, ReplicationConfig::Public);
+        self.global_world_manager.entity_publish(entity);
+        // don't need to publish the Entity/Component via the World here, because Remote entities work the same whether they are published or not
     }
 
     pub(crate) fn unpublish_entity(&mut self, entity: &E, client_is_origin: bool) {
@@ -656,8 +655,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 panic!("Server can only unpublish Public entities");
             }
         }
-        self.global_world_manager
-            .set_entity_replication_config(entity, ReplicationConfig::Private);
+        self.global_world_manager.entity_unpublish(entity);
+        // don't need to publish the Entity/Component via the World here, because Remote entities work the same whether they are published or not
     }
 
     pub(crate) fn entity_enable_delegation<W: WorldMutType<E>>(
@@ -666,14 +665,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         entity: &E,
         client_is_origin: bool,
     ) {
+        info!("client.entity_enable_delegation");
         if client_is_origin {
             let message =
                 EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
         }
 
-        self.global_world_manager
-            .set_entity_replication_config(entity, ReplicationConfig::Delegated);
+        self.global_world_manager.entity_enable_delegation(&entity);
         world.entity_enable_delegation(&self.global_world_manager, &entity);
     }
 
@@ -683,12 +682,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         entity: &E,
         client_is_origin: bool,
     ) {
+        info!("client.entity_disable_delegation");
         if client_is_origin {
             panic!("Cannot disable delegation from Client. Server owns all delegated Entities.");
         }
 
-        self.global_world_manager
-            .set_entity_replication_config(entity, ReplicationConfig::Public);
+        self.global_world_manager.entity_disable_delegation(&entity);
         world.entity_disable_delegation(&entity);
     }
 
