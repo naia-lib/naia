@@ -16,11 +16,19 @@ impl GlobalEntityRecord {
         if owner == EntityOwner::Local {
             panic!("Should not insert Local entity in this record");
         }
+
+        // Host-owned entities always start public, client-owned entities always start private
+        let replication_config = if owner.is_server() {
+            ReplicationConfig::Public
+        } else {
+            ReplicationConfig::Private
+        };
+
         Self {
             global_entity,
             component_kinds: HashSet::new(),
             owner,
-            replication_config: ReplicationConfig::Private,
+            replication_config,
         }
     }
 }
