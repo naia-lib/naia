@@ -54,7 +54,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
 
     pub fn configure_replication(&mut self, config: ReplicationConfig) -> &mut Self {
         self.client
-            .configure_entity_replication(&self.entity, config);
+            .configure_entity_replication(&mut self.world, &self.entity, config);
 
         self
     }

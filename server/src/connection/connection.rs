@@ -4,9 +4,8 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType, HostWorldEvents,
-    Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick,
-    WorldMutType, WorldRefType,
+    EntityEventMessage, EntityResponseEvent, HostType, HostWorldEvents, Instant, PacketType,
+    Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{

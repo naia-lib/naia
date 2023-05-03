@@ -5,6 +5,7 @@ use naia_serde::{BitReader, BitWrite, SerdeErr};
 use crate::{
     messages::named::Named,
     world::{
+        delegation::auth_channel::EntityAuthAccessor,
         component::{
             component_kinds::{ComponentKind, ComponentKinds},
             component_update::ComponentUpdate,
@@ -103,7 +104,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
     /// Unpublish Replicate
     fn unpublish(&mut self);
     /// Enable Delegation Replicate
-    fn enable_delegation(&mut self);
+    fn enable_delegation(&mut self, accessor: &EntityAuthAccessor);
     /// Disable Delegation Replicate
     fn disable_delegation(&mut self);
     /// Convert to Local Replicate

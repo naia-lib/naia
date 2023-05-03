@@ -5,15 +5,21 @@ use std::{
 };
 
 use naia_shared::{
-    BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
-    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator,
-    Replicate,
+    BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor,
+    EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
+    MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
-use crate::{world::mut_channel::MutChannelData, EntityOwner, ReplicationConfig, UserKey};
+use crate::{
+    world::{mut_channel::MutChannelData, server_auth_handler::ServerAuthHandler},
+    EntityOwner, ReplicationConfig, UserKey,
+};
 
 pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
+    /// Manages authorization to mutate delegated Entities
+    auth_handler: ServerAuthHandler<E>,
+    /// Manages mutation of individual Component properties
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
     /// Information about entities in the internal ECS World
     entity_records: HashMap<E, GlobalEntityRecord>,
@@ -24,6 +30,7 @@ pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     pub fn new() -> Self {
         Self {
+            auth_handler: ServerAuthHandler::new(),
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             entity_records: HashMap::default(),
             global_entity_map: BigMap::new(),
@@ -103,7 +110,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     pub fn insert_component_diff_handler(&mut self, entity: &E, component: &mut dyn Replicate) {
         let kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
-        let prop_mutator = self.get_property_mutator(entity, &kind, diff_mask_length);
+        let prop_mutator = self.register_component(entity, &kind, diff_mask_length);
         component.set_mutator(&prop_mutator);
     }
 
@@ -182,6 +189,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
         return None;
     }
+
+    pub(crate) fn entity_enable_delegation(&self, entity: &E) {
+        todo!()
+    }
+
+    pub(crate) fn entity_disable_delegation(&self, entity: &E) {
+        todo!()
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorldManager<E> {
@@ -217,7 +232,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.diff_handler.clone()
     }
 
-    fn get_property_mutator(
+    fn register_component(
         &self,
         entity: &E,
         component_kind: &ComponentKind,
@@ -231,6 +246,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
             .register_component(self, entity, component_kind, diff_mask_length);
 
         PropertyMutator::new(mut_sender)
+    }
+
+    fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor {
+        self.auth_handler.get_accessor(entity)
     }
 }
 

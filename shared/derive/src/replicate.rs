@@ -99,7 +99,7 @@ pub fn replicate_impl(
             use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
-                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, LocalEntity,
+                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, LocalEntity, EntityAuthAccessor,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
             };
             use super::*;
@@ -546,7 +546,7 @@ fn get_enable_delegation_method(properties: &[Property], struct_type: &StructTyp
     for property in properties.iter().filter(|p| p.is_replicated()) {
         let field_name = get_field_name(property, struct_type);
         let new_output_right = quote! {
-                self.#field_name.enable_delegation();
+                self.#field_name.enable_delegation(accessor);
         };
         let new_output_result = quote! {
             #output
@@ -556,7 +556,7 @@ fn get_enable_delegation_method(properties: &[Property], struct_type: &StructTyp
     }
 
     quote! {
-        fn enable_delegation(&mut self) {
+        fn enable_delegation(&mut self, accessor: &EntityAuthAccessor) {
             #output
         }
     }

@@ -435,7 +435,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             // The reasoning here is that the Client's ownership should be respected.
                             // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
                         }
-                        self.entity_enable_delegation(entity, true);
+                        self.entity_enable_delegation(world, entity, true);
                     }
                 }
             }
@@ -449,12 +449,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         if server_owned {
                             panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
                         }
-                        self.entity_disable_delegation(entity, true);
+                        self.entity_disable_delegation(world, entity, true);
                         self.unpublish_entity(world, entity, true);
                     }
                     ReplicationConfig::Public => {
                         // delegated -> public
-                        self.entity_disable_delegation(entity, true);
+                        self.entity_disable_delegation(world, entity, true);
                     }
                     ReplicationConfig::Delegated => {
                         panic!("Should not be able to happen");
@@ -884,17 +884,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.cleanup_entity_replication(&entity);
     }
 
-    pub(crate) fn entity_enable_delegation<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E, server_origin: bool) {
+    pub(crate) fn entity_enable_delegation<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        server_origin: bool,
+    ) {
         // for any users that have this entity in scope, send an `enable_delegation` message
         {
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
+            let mut messages_to_send = Vec::new();
             for (user_key, user) in self.users.iter() {
                 let connection = self.user_connections.get(&user.address).unwrap();
                 if connection.base.host_world_manager.host_has_entity(entity) {
-                    let message = EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
-                    self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+                    let message = EntityEventMessage::new_enable_delegation(
+                        &self.global_world_manager,
+                        entity,
+                    );
+                    messages_to_send.push((user_key, message));
                 }
+            }
+            for (user_key, message) in messages_to_send {
+                self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
             }
         }
 
@@ -902,22 +914,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world.entity_enable_delegation(&self.global_world_manager, &entity);
     }
 
-    pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E, server_origin: bool) {
+    pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        server_origin: bool,
+    ) {
         // for any users that have this entity in scope, send an `disable_delegation` message
         {
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
+            let mut messages_to_send = Vec::new();
             for (user_key, user) in self.users.iter() {
                 let connection = self.user_connections.get(&user.address).unwrap();
                 if connection.base.host_world_manager.host_has_entity(entity) {
-                    let message = EntityEventMessage::new_disable_delegation(&self.global_world_manager, entity);
-                    self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+                    let message = EntityEventMessage::new_disable_delegation(
+                        &self.global_world_manager,
+                        entity,
+                    );
+                    messages_to_send.push((user_key, message));
                 }
+            }
+            for (user_key, message) in messages_to_send {
+                self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
             }
         }
 
         self.global_world_manager.entity_disable_delegation(&entity);
-        world.entity_disable_delegation(&self.global_world_manager, &entity);
+        world.entity_disable_delegation(&entity);
     }
 
     pub(crate) fn entity_has_authority(&self, entity: &E) -> bool {
@@ -1412,7 +1436,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .on_entity_channel_opened(&local_entity);
                 }
                 EntityResponseEvent::DespawnEntity(entity) => {
-                    if self.global_world_manager.entity_is_public_and_client_owned(&entity) {
+                    if self
+                        .global_world_manager
+                        .entity_is_public_and_client_owned(&entity)
+                    {
                         self.despawn_entity_worldless(&entity);
                         info!("server process public EntityResponseEvent::DespawnEntity");
                     } else {
@@ -1422,7 +1449,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::InsertComponent(entity, component_kind) => {
                     self.global_world_manager
                         .insert_component_record(&entity, &component_kind);
-                    if self.global_world_manager.entity_is_public_and_client_owned(&entity) {
+                    if self
+                        .global_world_manager
+                        .entity_is_public_and_client_owned(&entity)
+                    {
                         world.component_publish(
                             &self.global_world_manager,
                             &entity,
@@ -1433,7 +1463,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     }
                 }
                 EntityResponseEvent::RemoveComponent(entity, component_kind) => {
-                    if self.global_world_manager.entity_is_public_and_client_owned(&entity) {
+                    if self
+                        .global_world_manager
+                        .entity_is_public_and_client_owned(&entity)
+                    {
                         self.remove_component_worldless(&entity, &component_kind);
                         info!("server process public EntityResponseEvent::RemoveComponent");
                     } else {
@@ -1448,6 +1481,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::UnpublishEntity(entity) => {
                     self.unpublish_entity(world, &entity, false);
                     self.incoming_events.push_unpublish(user_key, &entity);
+                }
+                EntityResponseEvent::EnableDelegationEntity(entity) => {
+                    self.entity_enable_delegation(world, &entity, false);
+                    self.incoming_events
+                        .push_enable_delegation(user_key, &entity);
+                }
+                EntityResponseEvent::DisableDelegationEntity(entity) => {
+                    self.entity_disable_delegation(world, &entity, false);
+                    self.incoming_events
+                        .push_disable_delegation(user_key, &entity);
                 }
             }
         }

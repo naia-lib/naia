@@ -24,8 +24,12 @@ impl EntityEventMessageAction {
         match self {
             EntityEventMessageAction::Publish => EntityResponseEvent::PublishEntity(*entity),
             EntityEventMessageAction::Unpublish => EntityResponseEvent::UnpublishEntity(*entity),
-            EntityEventMessageAction::EnableDelegation => EntityResponseEvent::EnableDelegationEntity(*entity),
-            EntityEventMessageAction::DisableDelegation => EntityResponseEvent::EnableDelegationEntity(*entity),
+            EntityEventMessageAction::EnableDelegation => {
+                EntityResponseEvent::EnableDelegationEntity(*entity)
+            }
+            EntityEventMessageAction::DisableDelegation => {
+                EntityResponseEvent::EnableDelegationEntity(*entity)
+            }
         }
     }
 }

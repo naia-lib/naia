@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
-use crate::world::component::property_mutate::PropertyMutator;
+use crate::world::{component::property_mutate::PropertyMutator, delegation::{auth_channel::EntityAuthAccessor, entity_auth_status::EntityAuthStatus}};
 
 #[derive(Clone)]
 enum PropertyImpl<T: Serde> {
@@ -129,9 +129,7 @@ impl<T: Serde> Property<T> {
             PropertyImpl::RemoteOwned(inner) => &inner.inner,
             PropertyImpl::RemotePublic(inner) => &inner.inner,
             PropertyImpl::Local(inner) => &inner.inner,
-            PropertyImpl::Delegated(inner) => {
-                &inner.inner
-            }
+            PropertyImpl::Delegated(inner) => &inner.inner,
         }
     }
 
@@ -208,6 +206,61 @@ impl<T: Serde> Property<T> {
         }
     }
 
+    /// Migrate Host/RemotePublic Property to Delegated version
+    pub fn enable_delegation(&mut self, accessor: &EntityAuthAccessor) {
+        match &mut self.inner {
+            PropertyImpl::HostOwned(inner) => {
+                self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
+                    inner.inner.clone(),
+                    inner.index,
+                    inner.mutator.as_ref().unwrap(),
+                    accessor,
+                ));
+            }
+            PropertyImpl::RemoteOwned(_) => {
+                panic!("Private Remote Property should never enable delegation.");
+            }
+            PropertyImpl::RemotePublic(inner) => {
+                self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
+                    inner.inner.clone(),
+                    inner.index,
+                    &inner.mutator,
+                    accessor,
+                ));
+            }
+            PropertyImpl::Local(_) => {
+                panic!("Local Property should never enable delegation.");
+            }
+            PropertyImpl::Delegated(_) => {
+                panic!("Delegated Property should never enable delegation twice.");
+            }
+        }
+    }
+
+    /// Migrate Delegated Property to Host-Owned (Public) version
+    pub fn disable_delegation(&mut self) {
+        match &mut self.inner {
+            PropertyImpl::HostOwned(_) => {
+                panic!("Host Property should never disable delegation.");
+            }
+            PropertyImpl::RemoteOwned(_) => {
+                panic!("Private Remote Property should never disable delegation.");
+            }
+            PropertyImpl::RemotePublic(_) => {
+                panic!("Public Remote Property should never disable delegation.");
+            }
+            PropertyImpl::Local(_) => {
+                panic!("Local Property should never disable delegation.");
+            }
+            PropertyImpl::Delegated(inner) => {
+                let inner_value = inner.inner.clone();
+                let mut new_inner = HostOwnedProperty::new(inner_value, inner.index);
+                new_inner.set_mutator(&inner.mutator);
+                self.inner = PropertyImpl::HostOwned(new_inner);
+            }
+        }
+    }
+
     /// Migrate Host Property to Local version
     pub fn localize(&mut self) {
         match &mut self.inner {
@@ -251,8 +304,10 @@ impl<T: Serde> DerefMut for Property<T> {
             }
             PropertyImpl::Local(inner) => &mut inner.inner,
             PropertyImpl::Delegated(inner) => {
+                if !inner.can_mutate() {
+                    panic!("Must request authority to mutate a Delegated Property.");
+                }
                 inner.mutate();
-                todo!("Need to check whether we have authority first");
                 &mut inner.inner
             }
         }
@@ -263,7 +318,7 @@ impl<T: Serde> DerefMut for Property<T> {
 pub struct HostOwnedProperty<T: Serde> {
     inner: T,
     mutator: Option<PropertyMutator>,
-    mutator_index: u8,
+    index: u8,
 }
 
 impl<T: Serde> HostOwnedProperty<T> {
@@ -272,7 +327,7 @@ impl<T: Serde> HostOwnedProperty<T> {
         Self {
             inner: value,
             mutator: None,
-            mutator_index,
+            index: mutator_index,
         }
     }
 
@@ -293,7 +348,7 @@ impl<T: Serde> HostOwnedProperty<T> {
         let Some(mutator) = &mut self.mutator else {
             panic!("Host Property should have a mutator immediately after creation.");
         };
-        mutator.mutate(self.mutator_index);
+        mutator.mutate(self.index);
     }
 }
 
@@ -334,7 +389,7 @@ impl<T: Serde> RemoteOwnedProperty<T> {
 pub struct RemotePublicProperty<T: Serde> {
     inner: T,
     mutator: PropertyMutator,
-    mutator_index: u8,
+    index: u8,
 }
 
 impl<T: Serde> RemotePublicProperty<T> {
@@ -343,7 +398,7 @@ impl<T: Serde> RemotePublicProperty<T> {
         Self {
             inner: value,
             mutator: mutator.clone_new(),
-            mutator_index,
+            index: mutator_index,
         }
     }
 
@@ -358,7 +413,7 @@ impl<T: Serde> RemotePublicProperty<T> {
     }
 
     fn mutate(&mut self) {
-        self.mutator.mutate(self.mutator_index);
+        self.mutator.mutate(self.index);
     }
 }
 
@@ -366,22 +421,77 @@ impl<T: Serde> RemotePublicProperty<T> {
 pub struct DelegatedProperty<T: Serde> {
     inner: T,
     mutator: PropertyMutator,
-    auth_accessor: PropertyAuthAccessor,
+    auth_accessor: EntityAuthAccessor,
     index: u8,
 }
 
 impl<T: Serde> DelegatedProperty<T> {
     /// Create a new DelegatedProperty
-    pub fn new(value: T, index: u8, mutator: &PropertyMutator, auth_accessor: &AuthAccesor) -> Self {
+    pub fn new(
+        value: T,
+        index: u8,
+        mutator: &PropertyMutator,
+        auth_accessor: &EntityAuthAccessor,
+    ) -> Self {
         Self {
             inner: value,
             mutator: mutator.clone_new(),
-            auth_accessor: auth_accessor.clone_new(),
+            auth_accessor: auth_accessor.clone(),
             index,
         }
     }
 
+    pub fn read(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
+        if !self.can_read() {
+            panic!("Should only read Delegated Property if we do not have authority.");
+        }
+        self.inner = Property::read_inner(reader)?;
+        Ok(())
+    }
+
     pub fn write(&self, writer: &mut dyn BitWrite) {
+        if !self.can_write() {
+            panic!("Must have Authority over Entity before performing this operation.");
+        }
         self.inner.ser(writer);
+    }
+
+    pub fn mirror(&mut self, other: &T) {
+        if !self.can_mutate() {
+            panic!("Request Authority over Entity before performing this operation.");
+        }
+        self.mutate();
+        self.inner = other.clone();
+    }
+
+    fn mutate(&mut self) {
+        self.mutator.mutate(self.index);
+    }
+
+    fn can_mutate(&self) -> bool {
+        match self.auth_accessor.auth_status() {
+            EntityAuthStatus::AvailableAuthority => false,
+            EntityAuthStatus::RequestedAuthority => true,
+            EntityAuthStatus::HasAuthority => true,
+            EntityAuthStatus::NoAuthority => false,
+        }
+    }
+
+    fn can_read(&self) -> bool {
+        match self.auth_accessor.auth_status() {
+            EntityAuthStatus::AvailableAuthority => true,
+            EntityAuthStatus::RequestedAuthority => false,
+            EntityAuthStatus::HasAuthority => false,
+            EntityAuthStatus::NoAuthority => true,
+        }
+    }
+
+    fn can_write(&self) -> bool {
+        match self.auth_accessor.auth_status() {
+            EntityAuthStatus::AvailableAuthority => false,
+            EntityAuthStatus::RequestedAuthority => false,
+            EntityAuthStatus::HasAuthority => true,
+            EntityAuthStatus::NoAuthority => false,
+        }
     }
 }

@@ -318,11 +318,12 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         entity: &Entity,
         component_kind: &ComponentKind,
     ) {
-        self.world.resource_scope(|world: &mut World, data: Mut<WorldData>| {
-            if let Some(accessor) = data.component_access(component_kind) {
-                accessor.component_publish(global_world_manager, world, entity);
-            }
-        });
+        self.world
+            .resource_scope(|world: &mut World, data: Mut<WorldData>| {
+                if let Some(accessor) = data.component_access(component_kind) {
+                    accessor.component_publish(global_world_manager, world, entity);
+                }
+            });
     }
 
     fn entity_unpublish(&mut self, entity: &Entity) {
@@ -342,11 +343,13 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_enable_delegation(
         &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
         entity: &Entity,
     ) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_enable_delegation(
                 self,
+                global_world_manager,
                 entity,
                 &component_kind,
             );
@@ -355,39 +358,31 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_enable_delegation(
         &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
         entity: &Entity,
         component_kind: &ComponentKind,
     ) {
-        self.world.resource_scope(|world: &mut World, data: Mut<WorldData>| {
-            if let Some(accessor) = data.component_access(component_kind) {
-                accessor.component_enable_delegation(world, entity);
-            }
-        });
+        self.world
+            .resource_scope(|world: &mut World, data: Mut<WorldData>| {
+                if let Some(accessor) = data.component_access(component_kind) {
+                    accessor.component_enable_delegation(global_world_manager, world, entity);
+                }
+            });
     }
 
-    fn entity_disable_delegation(
-        &mut self,
-        entity: &Entity,
-    ) {
+    fn entity_disable_delegation(&mut self, entity: &Entity) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
-            WorldMutType::<Entity>::component_disable_delegation(
-                self,
-                entity,
-                &component_kind,
-            );
+            WorldMutType::<Entity>::component_disable_delegation(self, entity, &component_kind);
         }
     }
 
-    fn component_disable_delegation(
-        &mut self,
-        entity: &Entity,
-        component_kind: &ComponentKind,
-    ) {
-        self.world.resource_scope(|world: &mut World, data: Mut<WorldData>| {
-            if let Some(accessor) = data.component_access(component_kind) {
-                accessor.component_disable_delegation(world, entity);
-            }
-        });
+    fn component_disable_delegation(&mut self, entity: &Entity, component_kind: &ComponentKind) {
+        self.world
+            .resource_scope(|world: &mut World, data: Mut<WorldData>| {
+                if let Some(accessor) = data.component_access(component_kind) {
+                    accessor.component_disable_delegation(world, entity);
+                }
+            });
     }
 }
 

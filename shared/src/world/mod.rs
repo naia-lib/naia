@@ -1,4 +1,5 @@
 pub mod component;
+pub mod delegation;
 pub mod entity;
 pub mod host;
 pub mod local_world_manager;

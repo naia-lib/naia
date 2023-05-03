@@ -19,7 +19,9 @@ impl EntityOwner {
 
     pub fn is_client(&self) -> bool {
         match self {
-            EntityOwner::Client(_) | EntityOwner::ClientPublic(_) | EntityOwner::ClientWaiting(_) => true,
+            EntityOwner::Client(_)
+            | EntityOwner::ClientPublic(_)
+            | EntityOwner::ClientWaiting(_) => true,
             _ => false,
         }
     }

@@ -122,19 +122,20 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// unpublish component
     fn component_unpublish(&mut self, entity: &E, component_kind: &ComponentKind);
     /// enable delegation on entity
-    fn entity_enable_delegation(&mut self, entity: &E);
+    fn entity_enable_delegation(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        entity: &E,
+    );
     /// enable delegation on component
     fn component_enable_delegation(
         &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         entity: &E,
         component_kind: &ComponentKind,
     );
     /// disable delegation on entity
     fn entity_disable_delegation(&mut self, entity: &E);
     /// disable delegation on component
-    fn component_disable_delegation(
-        &mut self,
-        entity: &E,
-        component_kind: &ComponentKind,
-    );
+    fn component_disable_delegation(&mut self, entity: &E, component_kind: &ComponentKind);
 }

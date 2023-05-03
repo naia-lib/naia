@@ -1,8 +1,8 @@
 pub use naia_shared::{
     sequence_greater_than, BitReader, BitWrite, BitWriter, Channel, ChannelDirection, ChannelKind,
     ChannelMode, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
-    ConstBitLength, DiffMask, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
-    EntityProperty, GlobalEntity, LinkConditionerConfig, LocalEntity,
+    ConstBitLength, DiffMask, EntityAndGlobalEntityConverter, EntityAuthAccessor,
+    EntityDoesNotExistError, EntityProperty, GlobalEntity, LinkConditionerConfig, LocalEntity,
     LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
     MessageBevy as Message, MessageBuilder, MessageContainer, MessageKind, MessageKinds, Named,
     OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random, ReliableSettings,

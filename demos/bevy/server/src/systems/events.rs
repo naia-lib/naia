@@ -104,7 +104,9 @@ pub fn connect_events(
             ))
             // return Entity id
             .id();
-        server.room_mut(&global.main_room_key).add_entity(&delegated_entity);
+        server
+            .room_mut(&global.main_room_key)
+            .add_entity(&delegated_entity);
     }
 }
 

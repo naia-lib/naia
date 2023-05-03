@@ -220,7 +220,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some(events) = response_events {
-            self.process_response_events(events);
+            self.process_response_events(&mut world, events);
         }
 
         std::mem::take(&mut self.incoming_events)
@@ -378,7 +378,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn configure_entity_replication(&mut self, entity: &E, config: ReplicationConfig) {
+    pub fn configure_entity_replication<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        config: ReplicationConfig,
+    ) {
         self.check_client_authoritative_allowed();
         if !self.global_world_manager.has_entity(entity) {
             panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Client, before configuring replication.");
@@ -416,7 +421,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     ReplicationConfig::Delegated => {
                         // private -> delegated
                         self.publish_entity(entity, true);
-                        self.entity_enable_delegation(entity, true);
+                        self.entity_enable_delegation(world, entity, true);
                     }
                 }
             }
@@ -431,12 +436,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     }
                     ReplicationConfig::Delegated => {
                         // public -> delegated
-                        self.entity_enable_delegation(entity, true);
+                        self.entity_enable_delegation(world, entity, true);
                     }
                 }
             }
             ReplicationConfig::Delegated => {
-                panic!("Delegated Entities are always ultimately Server-owned. Client cannot modify.")
+                panic!(
+                    "Delegated Entities are always ultimately Server-owned. Client cannot modify."
+                )
             }
         }
     }
@@ -653,23 +660,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .set_entity_replication_config(entity, ReplicationConfig::Private);
     }
 
-    pub(crate) fn entity_enable_delegation(&mut self, entity: &E, client_is_origin: bool) {
+    pub(crate) fn entity_enable_delegation<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        client_is_origin: bool,
+    ) {
         if client_is_origin {
-            let message = EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
+            let message =
+                EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
         }
 
         self.global_world_manager
             .set_entity_replication_config(entity, ReplicationConfig::Delegated);
+        world.entity_enable_delegation(&self.global_world_manager, &entity);
     }
 
-    pub(crate) fn entity_disable_delegation(&mut self, entity: &E, client_is_origin: bool) {
+    pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        client_is_origin: bool,
+    ) {
         if client_is_origin {
             panic!("Cannot disable delegation from Client. Server owns all delegated Entities.");
         }
 
         self.global_world_manager
             .set_entity_replication_config(entity, ReplicationConfig::Public);
+        world.entity_disable_delegation(&entity);
     }
 
     pub(crate) fn entity_has_authority(&self, entity: &E) -> bool {
@@ -894,7 +914,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             remote_entities,
         );
         let response_events = self.incoming_events.receive_world_events(entity_events);
-        self.process_response_events(response_events);
+        self.process_response_events(world, response_events);
     }
 
     fn disconnect_reset_connection(&mut self) {
@@ -917,7 +937,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.io.server_addr().expect("connection not established!")
     }
 
-    fn process_response_events(&mut self, response_events: Vec<EntityResponseEvent<E>>) {
+    fn process_response_events<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        response_events: Vec<EntityResponseEvent<E>>,
+    ) {
         for response_event in response_events {
             match response_event {
                 EntityResponseEvent::SpawnEntity(entity) => {
@@ -955,10 +979,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.incoming_events.push_unpublish(entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
-                    todo!();
+                    self.entity_enable_delegation(world, &entity, false);
+                    self.incoming_events.push_enable_delegation(entity);
                 }
                 EntityResponseEvent::DisableDelegationEntity(entity) => {
-                    todo!();
+                    self.entity_disable_delegation(world, &entity, false);
+                    self.incoming_events.push_disable_delegation(entity);
                 }
             }
         }

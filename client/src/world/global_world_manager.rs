@@ -5,9 +5,9 @@ use std::{
 };
 
 use naia_shared::{
-    BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
-    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator,
-    Replicate,
+    BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor,
+    EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
+    HostAuthHandler, MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -17,6 +17,9 @@ use crate::{
 };
 
 pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
+    /// Manages authorization to mutate delegated Entities
+    auth_handler: HostAuthHandler<E>,
+    /// Manages mutation of individual Component properties
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
     /// Information about entities in the internal ECS World
     entity_records: HashMap<E, GlobalEntityRecord>,
@@ -27,6 +30,7 @@ pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     pub fn new() -> Self {
         Self {
+            auth_handler: HostAuthHandler::new(),
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             entity_records: HashMap::default(),
             global_entity_map: BigMap::new(),
@@ -103,14 +107,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
         component_kind_set.insert(component_kind);
 
-        let mut_sender = self
-            .diff_handler
-            .as_ref()
-            .write()
-            .expect("DiffHandler should be initialized")
-            .register_component(self, entity, &component_kind, diff_mask_length);
-
-        let prop_mutator = PropertyMutator::new(mut_sender);
+        let prop_mutator = self.register_component(entity, &component_kind, diff_mask_length);
 
         component.set_mutator(&prop_mutator);
     }
@@ -214,13 +211,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.diff_handler.clone()
     }
 
-    fn get_property_mutator(
+    fn register_component(
         &self,
-        _entity: &E,
-        _component_kind: &ComponentKind,
-        _diff_mask_length: u8,
+        entity: &E,
+        component_kind: &ComponentKind,
+        diff_mask_length: u8,
     ) -> PropertyMutator {
-        panic!("Client Global World Manager should not need this method. (This indicates a refactor is probably needed ...)")
+        let mut_sender = self
+            .diff_handler
+            .as_ref()
+            .write()
+            .expect("DiffHandler should be initialized")
+            .register_component(self, entity, &component_kind, diff_mask_length);
+
+        PropertyMutator::new(mut_sender)
+    }
+
+    fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor {
+        self.auth_handler.get_accessor(entity)
     }
 }
 

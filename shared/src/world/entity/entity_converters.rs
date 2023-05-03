@@ -6,6 +6,7 @@ use std::{
 use crate::{
     bigmap::BigMapKey,
     world::{
+        delegation::auth_channel::EntityAuthAccessor,
         entity::{
             error::EntityDoesNotExistError, global_entity::GlobalEntity, local_entity::LocalEntity,
         },
@@ -21,12 +22,13 @@ pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConv
     fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool;
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
-    fn get_property_mutator(
+    fn register_component(
         &self,
         entity: &E,
         component_kind: &ComponentKind,
         diff_mask_length: u8,
     ) -> PropertyMutator;
+    fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor;
 }
 
 pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {
