@@ -1,12 +1,13 @@
 use bevy_ecs::{
     entity::Entity,
     system::{Command as BevyCommand, EntityCommands},
-    world::World,
+    world::{World, Mut},
 };
 
 use naia_bevy_shared::{HostOwned, WorldMutType, WorldProxyMut};
+use naia_client::{ReplicationConfig, Client as NaiaClient};
 
-use crate::{Client, ReplicationConfig};
+use crate::Client;
 
 // Bevy Commands Extension
 pub trait CommandsExt<'w, 's, 'a> {
@@ -15,7 +16,6 @@ pub trait CommandsExt<'w, 's, 'a> {
         -> &'a mut EntityCommands<'w, 's, 'a>;
     fn configure_replication(
         &'a mut self,
-        client: &mut Client,
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn replication_config(&'a self, client: &Client) -> Option<ReplicationConfig>;
@@ -40,10 +40,12 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
 
     fn configure_replication(
         &'a mut self,
-        client: &mut Client,
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a> {
-        client.configure_replication(&self.id(), config);
+        let entity = self.id();
+        let commands = self.commands();
+        let command = ConfigureReplicationCommand::new(entity, config);
+        commands.add(command);
         return self;
     }
 
@@ -62,7 +64,6 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
 }
 
 //// LocalDuplicateComponents Command ////
-
 pub(crate) struct LocalDuplicateComponents {
     mutable_entity: Entity,
     immutable_entity: Entity,
@@ -84,5 +85,25 @@ impl BevyCommand for LocalDuplicateComponents {
             &self.mutable_entity,
             &self.immutable_entity,
         );
+    }
+}
+
+//// ConfigureReplicationCommand Command ////
+pub(crate) struct ConfigureReplicationCommand {
+    entity: Entity,
+    config: ReplicationConfig,
+}
+
+impl ConfigureReplicationCommand {
+    pub fn new(entity: Entity, config: ReplicationConfig) -> Self {
+        Self { entity, config }
+    }
+}
+
+impl BevyCommand for ConfigureReplicationCommand {
+    fn write(self, world: &mut World) {
+        world.resource_scope(|world, mut client: Mut<NaiaClient<Entity>>| {
+            client.configure_entity_replication(&mut world.proxy_mut(), &self.entity, self.config);
+        });
     }
 }

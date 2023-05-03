@@ -278,6 +278,18 @@ impl<E: Copy> Drop for Events<E> {
         if !self.spawns.is_empty() {
             warn!("Dropped Server Spawn Event(s)! Make sure to handle these through `events.read::<SpawnEntityEvent>()`, and note that this may be an attack vector.");
         }
+        if !self.publishes.is_empty() {
+            warn!("Dropped Server Publish Entity Event(s)! Make sure to handle these through `events.read::<PublishEntityEvent>()`, and note that this may be an attack vector.");
+        }
+        if !self.unpublishes.is_empty() {
+            warn!("Dropped Server Unpublish Entity Event(s)! Make sure to handle these through `events.read::<UnpublishEntityEvent>()`, and note that this may be an attack vector.");
+        }
+        if !self.delegation_enables.is_empty() {
+            warn!("Dropped Server Entity Enable Delegation Event(s)! Make sure to handle these through `events.read::<EntityEnableDelegationEvent>()`, and note that this may be an attack vector.");
+        }
+        if !self.delegation_disables.is_empty() {
+            warn!("Dropped Server Entity Disable Delegation Event(s)! Make sure to handle these through `events.read::<EntityDisableDelegationEvent>()`, and note that this may be an attack vector.");
+        }
         if !self.inserts.is_empty() {
             warn!("Dropped Server Insert Event(s)! Make sure to handle these through `events.read::<InsertComponentEvent<Component>>()`, and note that this may be an attack vector.");
         }

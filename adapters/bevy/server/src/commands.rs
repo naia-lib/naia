@@ -54,7 +54,6 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
 }
 
 //// ConfigureReplicationCommand Command ////
-
 pub(crate) struct ConfigureReplicationCommand {
     entity: Entity,
     config: ReplicationConfig,

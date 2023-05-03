@@ -102,10 +102,6 @@ impl<'w> Client<'w> {
     pub(crate) fn replication_config(&self, entity: &Entity) -> Option<ReplicationConfig> {
         self.client.entity_replication_config(entity)
     }
-
-    pub(crate) fn configure_replication(&mut self, entity: &Entity, config: ReplicationConfig) {
-        self.client.configure_entity_replication(entity, config);
-    }
 }
 
 impl<'w> EntityAndGlobalEntityConverter<Entity> for Client<'w> {

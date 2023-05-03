@@ -36,6 +36,8 @@ pub fn run() {
                 events::despawn_entity_events,
                 events::publish_entity_events,
                 events::unpublish_entity_events,
+                events::entity_enable_delegation_events,
+                events::entity_disable_delegation_events,
                 events::insert_component_events,
                 events::update_component_events,
                 events::remove_component_events,

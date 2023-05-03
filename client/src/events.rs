@@ -19,6 +19,8 @@ pub struct Events<E: Copy> {
     despawns: Vec<E>,
     publishes: Vec<E>,
     unpublishes: Vec<E>,
+    delegation_enables: Vec<E>,
+    delegation_disables: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<E>>,
     removes: HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>,
     updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
@@ -45,6 +47,8 @@ impl<E: Copy> Events<E> {
             despawns: Vec::new(),
             publishes: Vec::new(),
             unpublishes: Vec::new(),
+            delegation_enables: Vec::new(),
+            delegation_disables: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
             updates: HashMap::new(),
@@ -177,6 +181,16 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
+    pub(crate) fn push_delegation_enable(&mut self, entity: E) {
+        self.delegation_enables.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_delegation_disable(&mut self, entity: E) {
+        self.delegation_disables.push(entity);
+        self.empty = false;
+    }
+
     pub(crate) fn push_insert(&mut self, entity: E, component_kind: ComponentKind) {
         if !self.inserts.contains_key(&component_kind) {
             self.inserts.insert(component_kind, Vec::new());
@@ -248,6 +262,10 @@ impl<E: Copy> Events<E> {
         self.messages.clear();
         self.spawns.clear();
         self.despawns.clear();
+        self.publishes.clear();
+        self.unpublishes.clear();
+        self.delegation_enables.clear();
+        self.delegation_disables.clear();
         self.inserts.clear();
         self.removes.clear();
         self.updates.clear();
@@ -391,7 +409,7 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
     }
 }
 
-// Spawn Event
+// Spawn Entity Event
 pub struct SpawnEntityEvent;
 impl<E: Copy> Event<E> for SpawnEntityEvent {
     type Iter = IntoIter<E>;
@@ -406,7 +424,7 @@ impl<E: Copy> Event<E> for SpawnEntityEvent {
     }
 }
 
-// Despawn Event
+// Despawn Entity Event
 pub struct DespawnEntityEvent;
 impl<E: Copy> Event<E> for DespawnEntityEvent {
     type Iter = IntoIter<E>;
@@ -451,7 +469,37 @@ impl<E: Copy> Event<E> for UnpublishEntityEvent {
     }
 }
 
-// Insert Event
+// Entity Enable Delegation Event
+pub struct EntityEnableDelegationEvent;
+impl<E: Copy> Event<E> for EntityEnableDelegationEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.delegation_enables);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.delegation_enables.is_empty()
+    }
+}
+
+// Entity Disable Delegation Event
+pub struct EntityDisableDelegationEvent;
+impl<E: Copy> Event<E> for EntityDisableDelegationEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.delegation_disables);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.delegation_disables.is_empty()
+    }
+}
+
+// Insert Component Event
 pub struct InsertComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -473,7 +521,7 @@ impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
     }
 }
 
-// Update Event
+// Update Component Event
 pub struct UpdateComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -495,7 +543,7 @@ impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
     }
 }
 
-// Remove Event
+// Remove Component Event
 pub struct RemoveComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }

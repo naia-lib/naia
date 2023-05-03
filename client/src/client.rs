@@ -980,11 +980,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
                     self.entity_enable_delegation(world, &entity, false);
-                    self.incoming_events.push_enable_delegation(entity);
+                    self.incoming_events.push_delegation_enable(entity);
                 }
                 EntityResponseEvent::DisableDelegationEntity(entity) => {
                     self.entity_disable_delegation(world, &entity, false);
-                    self.incoming_events.push_disable_delegation(entity);
+                    self.incoming_events.push_delegation_disable(entity);
                 }
             }
         }
