@@ -5,7 +5,6 @@ use naia_serde::{BitReader, BitWrite, SerdeErr};
 use crate::{
     messages::named::Named,
     world::{
-        delegation::auth_channel::EntityAuthAccessor,
         component::{
             component_kinds::{ComponentKind, ComponentKinds},
             component_update::ComponentUpdate,
@@ -13,6 +12,7 @@ use crate::{
             property_mutate::PropertyMutator,
             replica_ref::{ReplicaDynMut, ReplicaDynRef},
         },
+        delegation::auth_channel::EntityAuthAccessor,
         entity::entity_converters::LocalEntityAndGlobalEntityConverter,
     },
     ComponentFieldUpdate, LocalEntity, LocalEntityAndGlobalEntityConverterMut,

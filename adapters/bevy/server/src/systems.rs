@@ -13,15 +13,17 @@ use crate::ClientOwned;
 
 mod naia_events {
     pub use naia_server::{
-        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
-        PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-        UnpublishEntityEvent, UpdateComponentEvent,
+        ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityDisableDelegationEvent,
+        EntityEnableDelegationEvent, ErrorEvent, InsertComponentEvent, PublishEntityEvent,
+        RemoveComponentEvent, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
+        UpdateComponentEvent,
     };
 }
 
 mod bevy_events {
     pub use crate::events::{
-        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
+        EntityDisableDelegationEvent, EntityEnableDelegationEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
         SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     };
@@ -163,6 +165,26 @@ pub fn before_receive_events(world: &mut World) {
                     .unwrap();
                 for (user_key, entity) in events.read::<naia_events::UnpublishEntityEvent>() {
                     unpublish_entity_event_writer.send(bevy_events::UnpublishEntityEvent(user_key, entity));
+                }
+            }
+
+            // Entity Enable Delegation Event
+            if events.has::<naia_events::EntityEnableDelegationEvent>() {
+                let mut entity_enable_delegation_event_writer = world
+                    .get_resource_mut::<Events<bevy_events::EntityEnableDelegationEvent>>()
+                    .unwrap();
+                for (user_key, entity) in events.read::<naia_events::EntityEnableDelegationEvent>() {
+                    entity_enable_delegation_event_writer.send(bevy_events::EntityEnableDelegationEvent(user_key, entity));
+                }
+            }
+
+            // Entity Disable Delegation Event
+            if events.has::<naia_events::EntityDisableDelegationEvent>() {
+                let mut entity_disable_delegation_event_writer = world
+                    .get_resource_mut::<Events<bevy_events::EntityDisableDelegationEvent>>()
+                    .unwrap();
+                for (user_key, entity) in events.read::<naia_events::EntityDisableDelegationEvent>() {
+                    entity_disable_delegation_event_writer.send(bevy_events::EntityDisableDelegationEvent(user_key, entity));
                 }
             }
 

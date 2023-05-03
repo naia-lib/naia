@@ -2,7 +2,10 @@ use std::ops::{Deref, DerefMut};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
-use crate::world::{component::property_mutate::PropertyMutator, delegation::{auth_channel::EntityAuthAccessor, entity_auth_status::EntityAuthStatus}};
+use crate::world::{
+    component::property_mutate::PropertyMutator,
+    delegation::{auth_channel::EntityAuthAccessor, entity_auth_status::EntityAuthStatus},
+};
 
 #[derive(Clone)]
 enum PropertyImpl<T: Serde> {

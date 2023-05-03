@@ -1485,12 +1485,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
                     self.entity_enable_delegation(world, &entity, false);
                     self.incoming_events
-                        .push_enable_delegation(user_key, &entity);
+                        .push_delegation_enable(user_key, &entity);
                 }
                 EntityResponseEvent::DisableDelegationEntity(entity) => {
                     self.entity_disable_delegation(world, &entity, false);
                     self.incoming_events
-                        .push_disable_delegation(user_key, &entity);
+                        .push_delegation_disable(user_key, &entity);
                 }
             }
         }
