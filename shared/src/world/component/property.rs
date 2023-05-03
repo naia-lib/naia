@@ -9,6 +9,7 @@ enum PropertyImpl<T: Serde> {
     HostOwned(HostOwnedProperty<T>),
     RemoteOwned(RemoteOwnedProperty<T>),
     RemotePublic(RemotePublicProperty<T>),
+    Delegated(DelegatedProperty<T>),
     Local(LocalProperty<T>),
 }
 
@@ -54,6 +55,9 @@ impl<T: Serde> Property<T> {
             PropertyImpl::RemoteOwned(_) | PropertyImpl::RemotePublic(_) => {
                 panic!("Remote Property should never call set_mutator().");
             }
+            PropertyImpl::Delegated(_) => {
+                panic!("Delegated Property should never call set_mutator().");
+            }
             PropertyImpl::Local(_) => {
                 panic!("Local Property should never have a mutator.");
             }
@@ -76,6 +80,9 @@ impl<T: Serde> Property<T> {
             }
             PropertyImpl::Local(_) => {
                 panic!("Local Property should never be written.");
+            }
+            PropertyImpl::Delegated(inner) => {
+                inner.write(writer);
             }
         }
     }
@@ -103,6 +110,9 @@ impl<T: Serde> Property<T> {
             PropertyImpl::Local(_) => {
                 panic!("Local Property should never read.");
             }
+            PropertyImpl::Delegated(inner) => {
+                inner.read(reader)?;
+            }
         }
         Ok(())
     }
@@ -119,6 +129,9 @@ impl<T: Serde> Property<T> {
             PropertyImpl::RemoteOwned(inner) => &inner.inner,
             PropertyImpl::RemotePublic(inner) => &inner.inner,
             PropertyImpl::Local(inner) => &inner.inner,
+            PropertyImpl::Delegated(inner) => {
+                &inner.inner
+            }
         }
     }
 
@@ -130,16 +143,18 @@ impl<T: Serde> Property<T> {
     /// Set value to the value of another Property, queues for update if value
     /// changes
     pub fn mirror(&mut self, other: &Self) {
+        let other_inner = other.inner();
         match &mut self.inner {
             PropertyImpl::HostOwned(inner) => {
-                let other_inner = other.inner();
                 inner.mirror(other_inner);
             }
             PropertyImpl::RemoteOwned(_) | PropertyImpl::RemotePublic(_) => {
                 panic!("Remote Property should never be set manually.");
             }
+            PropertyImpl::Delegated(inner) => {
+                inner.mirror(other_inner);
+            }
             PropertyImpl::Local(inner) => {
-                let other_inner = other.inner();
                 inner.mirror(other_inner);
             }
         }
@@ -165,6 +180,9 @@ impl<T: Serde> Property<T> {
             PropertyImpl::Local(_) => {
                 panic!("Local Property should never be made public.");
             }
+            PropertyImpl::Delegated(_) => {
+                panic!("Delegated Property should never be made public.");
+            }
         }
     }
 
@@ -184,6 +202,9 @@ impl<T: Serde> Property<T> {
             PropertyImpl::Local(_) => {
                 panic!("Local Property should never be unpublished.");
             }
+            PropertyImpl::Delegated(_) => {
+                panic!("Delegated Property should never be unpublished.");
+            }
         }
     }
 
@@ -199,6 +220,9 @@ impl<T: Serde> Property<T> {
             }
             PropertyImpl::Local(_) => {
                 panic!("Local Property should never be made local twice.");
+            }
+            PropertyImpl::Delegated(_) => {
+                panic!("Delegated Property should never be made local.");
             }
         }
     }
@@ -226,6 +250,11 @@ impl<T: Serde> DerefMut for Property<T> {
                 panic!("Remote Property should never be set manually.");
             }
             PropertyImpl::Local(inner) => &mut inner.inner,
+            PropertyImpl::Delegated(inner) => {
+                inner.mutate();
+                todo!("Need to check whether we have authority first");
+                &mut inner.inner
+            }
         }
     }
 }
@@ -330,5 +359,29 @@ impl<T: Serde> RemotePublicProperty<T> {
 
     fn mutate(&mut self) {
         self.mutator.mutate(self.mutator_index);
+    }
+}
+
+#[derive(Clone)]
+pub struct DelegatedProperty<T: Serde> {
+    inner: T,
+    mutator: PropertyMutator,
+    auth_accessor: PropertyAuthAccessor,
+    index: u8,
+}
+
+impl<T: Serde> DelegatedProperty<T> {
+    /// Create a new DelegatedProperty
+    pub fn new(value: T, index: u8, mutator: &PropertyMutator, auth_accessor: &AuthAccesor) -> Self {
+        Self {
+            inner: value,
+            mutator: mutator.clone_new(),
+            auth_accessor: auth_accessor.clone_new(),
+            index,
+        }
+    }
+
+    pub fn write(&self, writer: &mut dyn BitWrite) {
+        self.inner.ser(writer);
     }
 }

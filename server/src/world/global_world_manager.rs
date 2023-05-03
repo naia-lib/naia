@@ -152,7 +152,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
     }
 
-    pub(crate) fn entity_is_public(&self, entity: &E) -> bool {
+    pub(crate) fn entity_is_public_and_client_owned(&self, entity: &E) -> bool {
         let Some(record) = self.entity_records.get(entity) else {
             panic!("entity record does not exist!");
         };

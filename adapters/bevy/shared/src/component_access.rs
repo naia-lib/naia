@@ -40,6 +40,12 @@ pub trait ComponentAccess: Send + Sync {
         entity: &Entity,
     );
     fn component_unpublish(&self, world: &mut World, entity: &Entity);
+    fn component_enable_delegation(
+        &self,
+        world: &mut World,
+        entity: &Entity,
+    );
+    fn component_disable_delegation(&self, world: &mut World, entity: &Entity);
 }
 
 pub struct ComponentAccessor<R: Replicate> {
@@ -149,6 +155,18 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
     fn component_unpublish(&self, world: &mut World, entity: &Entity) {
         if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
             component_mut.unpublish();
+        }
+    }
+
+    fn component_enable_delegation(&self, world: &mut World, entity: &Entity) {
+        if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
+            component_mut.enable_delegation();
+        }
+    }
+
+    fn component_disable_delegation(&self, world: &mut World, entity: &Entity) {
+        if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
+            component_mut.disable_delegation();
         }
     }
 }

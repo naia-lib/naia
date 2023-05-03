@@ -80,6 +80,8 @@ pub fn replicate_impl(
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
     let publish_method = get_publish_method(&enum_name, &properties, &struct_type);
     let unpublish_method = get_unpublish_method(&properties, &struct_type);
+    let enable_delegation_method = get_enable_delegation_method(&properties, &struct_type);
+    let disable_delegation_method = get_disable_delegation_method(&properties, &struct_type);
     let localize_method = get_localize_method(&properties, &struct_type);
     let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
     let read_apply_field_update_method =
@@ -147,6 +149,8 @@ pub fn replicate_impl(
                 #mirror_method
                 #publish_method
                 #unpublish_method
+                #enable_delegation_method
+                #disable_delegation_method
                 #localize_method
                 #set_mutator_method
                 #write_method
@@ -531,6 +535,50 @@ fn get_unpublish_method(properties: &[Property], struct_type: &StructType) -> To
 
     quote! {
         fn unpublish(&mut self) {
+            #output
+        }
+    }
+}
+
+fn get_enable_delegation_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let new_output_right = quote! {
+                self.#field_name.enable_delegation();
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn enable_delegation(&mut self) {
+            #output
+        }
+    }
+}
+
+fn get_disable_delegation_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let new_output_right = quote! {
+                self.#field_name.disable_delegation();
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn disable_delegation(&mut self) {
             #output
         }
     }

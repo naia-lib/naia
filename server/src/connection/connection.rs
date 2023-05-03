@@ -122,14 +122,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                     let Some(entity) = event_message.entity.get(global_world_manager) else {
                         panic!("Received message with no Entity over SystemChannel!");
                     };
-                    match event_message.action {
-                        EntityEventMessageAction::Publish => {
-                            response_events.push(EntityResponseEvent::PublishEntity(entity));
-                        }
-                        EntityEventMessageAction::Unpublish => {
-                            response_events.push(EntityResponseEvent::UnpublishEntity(entity));
-                        }
-                    }
+                    response_events.push(event_message.action.to_response_event(&entity));
                 }
             } else {
                 for message in messages {

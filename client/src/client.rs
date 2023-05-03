@@ -416,7 +416,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     ReplicationConfig::Delegated => {
                         // private -> delegated
                         self.publish_entity(entity, true);
-                        self.entity_enable_delegation(entity);
+                        self.entity_enable_delegation(entity, true);
                     }
                 }
             }
@@ -431,7 +431,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     }
                     ReplicationConfig::Delegated => {
                         // public -> delegated
-                        self.entity_enable_delegation(entity);
+                        self.entity_enable_delegation(entity, true);
                     }
                 }
             }
@@ -653,12 +653,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .set_entity_replication_config(entity, ReplicationConfig::Private);
     }
 
-    pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
-        todo!();
+    pub(crate) fn entity_enable_delegation(&mut self, entity: &E, client_is_origin: bool) {
+        if client_is_origin {
+            let message = EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
+            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+        }
+
+        self.global_world_manager
+            .set_entity_replication_config(entity, ReplicationConfig::Delegated);
     }
 
-    pub(crate) fn entity_disable_delegation(&mut self, entity: &E) {
-        todo!();
+    pub(crate) fn entity_disable_delegation(&mut self, entity: &E, client_is_origin: bool) {
+        if client_is_origin {
+            panic!("Cannot disable delegation from Client. Server owns all delegated Entities.");
+        }
+
+        self.global_world_manager
+            .set_entity_replication_config(entity, ReplicationConfig::Public);
     }
 
     pub(crate) fn entity_has_authority(&self, entity: &E) -> bool {
@@ -942,6 +953,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityResponseEvent::UnpublishEntity(entity) => {
                     self.unpublish_entity(&entity, false);
                     self.incoming_events.push_unpublish(entity);
+                }
+                EntityResponseEvent::EnableDelegationEntity(entity) => {
+                    todo!();
+                }
+                EntityResponseEvent::DisableDelegationEntity(entity) => {
+                    todo!();
                 }
             }
         }

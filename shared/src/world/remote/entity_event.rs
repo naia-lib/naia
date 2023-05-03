@@ -15,4 +15,6 @@ pub enum EntityResponseEvent<E: Copy> {
     RemoveComponent(E, ComponentKind),
     PublishEntity(E),
     UnpublishEntity(E),
+    EnableDelegationEntity(E),
+    DisableDelegationEntity(E),
 }

@@ -102,6 +102,10 @@ pub trait Replicate: ReplicateInner + Named + Any {
     fn publish(&mut self, mutator: &PropertyMutator);
     /// Unpublish Replicate
     fn unpublish(&mut self);
+    /// Enable Delegation Replicate
+    fn enable_delegation(&mut self);
+    /// Disable Delegation Replicate
+    fn disable_delegation(&mut self);
     /// Convert to Local Replicate
     fn localize(&mut self);
 }
