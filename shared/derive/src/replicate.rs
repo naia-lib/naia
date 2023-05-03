@@ -80,7 +80,8 @@ pub fn replicate_impl(
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
     let publish_method = get_publish_method(&enum_name, &properties, &struct_type);
     let unpublish_method = get_unpublish_method(&properties, &struct_type);
-    let enable_delegation_method = get_enable_delegation_method(&properties, &struct_type);
+    let enable_delegation_method =
+        get_enable_delegation_method(&enum_name, &properties, &struct_type);
     let disable_delegation_method = get_disable_delegation_method(&properties, &struct_type);
     let localize_method = get_localize_method(&properties, &struct_type);
     let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
@@ -540,13 +541,18 @@ fn get_unpublish_method(properties: &[Property], struct_type: &StructType) -> To
     }
 }
 
-fn get_enable_delegation_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+fn get_enable_delegation_method(
+    enum_name: &Ident,
+    properties: &[Property],
+    struct_type: &StructType,
+) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter().filter(|p| p.is_replicated()) {
         let field_name = get_field_name(property, struct_type);
+        let uppercase_variant_name = property.uppercase_variable_name();
         let new_output_right = quote! {
-                self.#field_name.enable_delegation(accessor);
+                self.#field_name.enable_delegation(accessor, #enum_name::#uppercase_variant_name as u8, mutator);
         };
         let new_output_result = quote! {
             #output
@@ -556,7 +562,7 @@ fn get_enable_delegation_method(properties: &[Property], struct_type: &StructTyp
     }
 
     quote! {
-        fn enable_delegation(&mut self, accessor: &EntityAuthAccessor) {
+        fn enable_delegation(&mut self, accessor: &EntityAuthAccessor, mutator: &Option<PropertyMutator>) {
             #output
         }
     }

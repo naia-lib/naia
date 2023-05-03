@@ -10,9 +10,10 @@ use bevy::{
 
 use naia_bevy_client::{
     events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
+        EntityDisableDelegationEvent, EntityEnableDelegationEvent, InsertComponentEvents,
         MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, SpawnEntityEvent,
-        UnpublishEntityEvent, UpdateComponentEvents, EntityEnableDelegationEvent, EntityDisableDelegationEvent
+        UnpublishEntityEvent, UpdateComponentEvents,
     },
     sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
 };
@@ -193,7 +194,9 @@ pub fn entity_enable_delegation_events(mut event_reader: EventReader<EntityEnabl
     }
 }
 
-pub fn entity_disable_delegation_events(mut event_reader: EventReader<EntityDisableDelegationEvent>) {
+pub fn entity_disable_delegation_events(
+    mut event_reader: EventReader<EntityDisableDelegationEvent>,
+) {
     for EntityDisableDelegationEvent(_entity) in event_reader.iter() {
         info!("client demo: entity disable delegation");
     }

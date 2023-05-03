@@ -1646,12 +1646,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                                 if should_be_in_scope {
                                     if !currently_in_scope {
-                                        //temp//remove!//
-                                        // if self.global_world_manager.entity_is_public(entity) {
-                                        //     info!("Server: replicating Public Entity to User")
-                                        // }
-                                        //
-
                                         let component_kinds = self
                                             .global_world_manager
                                             .component_kinds(entity)
@@ -1662,6 +1656,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                             entity,
                                             component_kinds,
                                         );
+
+                                        // if entity is delegated, send message to connection
+                                        if self.global_world_manager.entity_is_delegated(entity) {
+                                            let event_message =
+                                                EntityEventMessage::new_enable_delegation(
+                                                    &self.global_world_manager,
+                                                    entity,
+                                                );
+                                            let mut converter = EntityConverterMut::new(
+                                                &self.global_world_manager,
+                                                &mut connection.base.local_world_manager,
+                                            );
+                                            let channel_kind = ChannelKind::of::<SystemChannel>();
+                                            let message = MessageContainer::from_write(
+                                                Box::new(event_message),
+                                                &mut converter,
+                                            );
+                                            connection.base.message_manager.send_message(
+                                                &self.protocol.message_kinds,
+                                                &mut converter,
+                                                &channel_kind,
+                                                message,
+                                            );
+                                        }
                                     }
                                 } else if currently_in_scope {
                                     // remove entity from the connections local scope

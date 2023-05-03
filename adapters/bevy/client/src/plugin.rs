@@ -8,10 +8,11 @@ use naia_client::{Client, ClientConfig};
 
 use super::{
     events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
+        EntityDisableDelegationEvent, EntityEnableDelegationEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RejectEvent,
         RemoveComponentEvents, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
-        UpdateComponentEvents, EntityEnableDelegationEvent, EntityDisableDelegationEvent,
+        UpdateComponentEvents,
     },
     systems::before_receive_events,
 };

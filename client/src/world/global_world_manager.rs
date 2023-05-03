@@ -188,6 +188,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         record.replication_config = ReplicationConfig::Public;
     }
 
+    pub(crate) fn entity_register_auth_for_delegation(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Public {
+            panic!("Can only enable delegation on an Entity that is Public!");
+        }
+        self.auth_handler.register_entity(entity);
+    }
+
     pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
         let Some(record) = self.entity_records.get_mut(entity) else {
             panic!("entity record does not exist!");
@@ -197,7 +207,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
 
         record.replication_config = ReplicationConfig::Delegated;
-        self.auth_handler.register_entity(entity);
 
         if record.owner.is_client() {
             record.owner = EntityOwner::Server;
@@ -264,6 +273,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
 
     fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor {
         self.auth_handler.get_accessor(entity)
+    }
+
+    fn entity_is_server_owned_and_remote(&self, entity: &E) -> bool {
+        if let Some(record) = self.entity_records.get(entity) {
+            let server_owned = record.owner == EntityOwner::Server;
+            let remote_owned = record.replication_config == ReplicationConfig::Public;
+            return server_owned && remote_owned;
+        }
+        return false;
     }
 }
 

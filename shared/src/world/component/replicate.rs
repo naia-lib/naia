@@ -104,7 +104,11 @@ pub trait Replicate: ReplicateInner + Named + Any {
     /// Unpublish Replicate
     fn unpublish(&mut self);
     /// Enable Delegation Replicate
-    fn enable_delegation(&mut self, accessor: &EntityAuthAccessor);
+    fn enable_delegation(
+        &mut self,
+        accessor: &EntityAuthAccessor,
+        mutator: &Option<PropertyMutator>,
+    );
     /// Disable Delegation Replicate
     fn disable_delegation(&mut self);
     /// Convert to Local Replicate

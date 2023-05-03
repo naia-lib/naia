@@ -11,17 +11,18 @@ use naia_client::Client;
 
 mod naia_events {
     pub use naia_client::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        PublishEntityEvent, RejectEvent, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent, EntityEnableDelegationEvent, EntityDisableDelegationEvent,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
+        EntityDisableDelegationEvent, EntityEnableDelegationEvent, ErrorEvent, PublishEntityEvent,
+        RejectEvent, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
     };
 }
 
 mod bevy_events {
     pub use crate::events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
+        EntityDisableDelegationEvent, EntityEnableDelegationEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RejectEvent,
         RemoveComponentEvents, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
-        EntityEnableDelegationEvent, EntityDisableDelegationEvent,
         UpdateComponentEvents,
     };
 }

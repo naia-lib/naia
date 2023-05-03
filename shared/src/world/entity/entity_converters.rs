@@ -29,6 +29,7 @@ pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConv
         diff_mask_length: u8,
     ) -> PropertyMutator;
     fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor;
+    fn entity_is_server_owned_and_remote(&self, entity: &E) -> bool;
 }
 
 pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {

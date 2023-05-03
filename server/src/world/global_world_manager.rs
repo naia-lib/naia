@@ -190,6 +190,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         return None;
     }
 
+    pub(crate) fn entity_is_delegated(&self, entity: &E) -> bool {
+        if let Some(record) = self.entity_records.get(entity) {
+            return record.replication_config == ReplicationConfig::Delegated;
+        }
+        return false;
+    }
+
     pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
         let Some(record) = self.entity_records.get_mut(entity) else {
             panic!("entity record does not exist!");
@@ -271,6 +278,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
 
     fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor {
         self.auth_handler.get_accessor(entity)
+    }
+
+    fn entity_is_server_owned_and_remote(&self, _entity: &E) -> bool {
+        // server cannot own an entity that is also remote
+        false
     }
 }
 

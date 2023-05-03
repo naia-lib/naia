@@ -210,9 +210,16 @@ impl<T: Serde> Property<T> {
     }
 
     /// Migrate Host/RemotePublic Property to Delegated version
-    pub fn enable_delegation(&mut self, accessor: &EntityAuthAccessor) {
+    pub fn enable_delegation(
+        &mut self,
+        accessor: &EntityAuthAccessor,
+        mutator_index: u8,
+        mutator_opt: &Option<PropertyMutator>,
+    ) {
         match &mut self.inner {
             PropertyImpl::HostOwned(inner) => {
+                // This is used by the Server when it transforms it's own Entities to Delegated
+                // and by the Client when it transforms it's own Entities to Delegated
                 self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
                     inner.inner.clone(),
                     inner.index,
@@ -220,10 +227,20 @@ impl<T: Serde> Property<T> {
                     accessor,
                 ));
             }
-            PropertyImpl::RemoteOwned(_) => {
-                panic!("Private Remote Property should never enable delegation.");
+            PropertyImpl::RemoteOwned(inner) => {
+                // This is used by the Client when it is told to transform a Server entity to Delegated
+                let Some(mutator) = mutator_opt.as_ref() else {
+                    panic!("RemoteOwned Property should never enable delegation without a mutator.");
+                };
+                self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
+                    inner.inner.clone(),
+                    mutator_index,
+                    mutator,
+                    accessor,
+                ));
             }
             PropertyImpl::RemotePublic(inner) => {
+                // This is used by the Server when it is told to transform a Client entity to Delegated
                 self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
                     inner.inner.clone(),
                     inner.index,

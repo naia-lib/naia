@@ -1,11 +1,11 @@
 use bevy_ecs::{
     entity::Entity,
     system::{Command as BevyCommand, EntityCommands},
-    world::{World, Mut},
+    world::{Mut, World},
 };
 
 use naia_bevy_shared::{HostOwned, WorldMutType, WorldProxyMut};
-use naia_client::{ReplicationConfig, Client as NaiaClient};
+use naia_client::{Client as NaiaClient, ReplicationConfig};
 
 use crate::Client;
 

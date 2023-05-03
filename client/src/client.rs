@@ -672,8 +672,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
         }
 
-        self.global_world_manager.entity_enable_delegation(&entity);
+        // this should happen BEFORE the world entity/component has been translated over to Delegated
+        self.global_world_manager
+            .entity_register_auth_for_delegation(&entity);
+
         world.entity_enable_delegation(&self.global_world_manager, &entity);
+
+        // this should happen AFTER the world entity/component has been translated over to Delegated
+        self.global_world_manager.entity_enable_delegation(&entity);
     }
 
     pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
