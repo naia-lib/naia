@@ -376,6 +376,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if !self.global_world_manager.has_entity(entity) {
             panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Server, before configuring replication.");
         }
+        let entity_owner = self.global_world_manager.entity_owner(entity).unwrap();
+        let server_owned: bool = entity_owner.is_server();
+        let client_owned: bool = entity_owner.is_client();
         let next_config = config;
         let prev_config = self
             .global_world_manager
@@ -387,45 +390,74 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 config
             );
         }
-        match &config {
+
+        match prev_config {
             ReplicationConfig::Private => {
-                match prev_config {
+                if server_owned {
+                    panic!("Server-owned entity should never be private");
+                }
+                match next_config {
                     ReplicationConfig::Private => {
-                        // will not happen, because of the check above
+                        panic!("Should not be able to happen");
                     }
                     ReplicationConfig::Public => {
-                        self.unpublish_entity(world, entity, true);
+                        // private -> public
+                        self.publish_entity(world, entity, true);
                     }
                     ReplicationConfig::Delegated => {
-                        self.entity_disable_delegation(entity, true);
-                        self.unpublish_entity(world, entity, true);
+                        // private -> delegated
+                        if client_owned {
+                            panic!("Cannot downgrade Client's ownership of Entity to Delegated. Do this Client-side if needed.");
+                            // The reasoning here is that the Client's ownership should be respected.
+                            // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
+                        }
+                        self.publish_entity(world, entity, true);
+                        self.entity_enable_delegation(entity, true);
                     }
                 }
             }
             ReplicationConfig::Public => {
-                match prev_config {
+                match next_config {
                     ReplicationConfig::Private => {
-                        self.publish_entity(world, entity, true);
+                        // public -> private
+                        if server_owned {
+                            panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                        }
+                        self.unpublish_entity(world, entity, true);
                     }
                     ReplicationConfig::Public => {
-                        // will not happen, because of the check above
+                        panic!("Should not be able to happen");
                     }
                     ReplicationConfig::Delegated => {
-                        self.entity_disable_delegation(entity, true);
+                        // public -> delegated
+                        if client_owned {
+                            panic!("Cannot downgrade Client's ownership of Entity to Delegated. Do this Client-side if needed.");
+                            // The reasoning here is that the Client's ownership should be respected.
+                            // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
+                        }
+                        self.entity_enable_delegation(entity, true);
                     }
                 }
             }
             ReplicationConfig::Delegated => {
-                match prev_config {
+                if client_owned {
+                    panic!("Client-owned entity should never be delegated");
+                }
+                match next_config {
                     ReplicationConfig::Private => {
-                        self.publish_entity(world, entity, true);
-                        self.entity_enable_delegation(entity, true);
+                        // delegated -> private
+                        if server_owned {
+                            panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                        }
+                        self.entity_disable_delegation(entity, true);
+                        self.unpublish_entity(world, entity, true);
                     }
                     ReplicationConfig::Public => {
-                        self.entity_enable_delegation(entity, true);
+                        // delegated -> public
+                        self.entity_disable_delegation(entity, true);
                     }
                     ReplicationConfig::Delegated => {
-                        // will not happen, because of the check above
+                        panic!("Should not be able to happen");
                     }
                 }
             }

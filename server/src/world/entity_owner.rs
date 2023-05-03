@@ -8,3 +8,19 @@ pub enum EntityOwner {
     ClientPublic(UserKey),
     Local,
 }
+
+impl EntityOwner {
+    pub fn is_server(&self) -> bool {
+        match self {
+            EntityOwner::Server => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_client(&self) -> bool {
+        match self {
+            EntityOwner::Client(_) | EntityOwner::ClientPublic(_) | EntityOwner::ClientWaiting(_) => true,
+            _ => false,
+        }
+    }
+}

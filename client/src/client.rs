@@ -383,6 +383,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if !self.global_world_manager.has_entity(entity) {
             panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Client, before configuring replication.");
         }
+        let entity_owner = self.global_world_manager.entity_owner(entity).unwrap();
+        let server_owned = entity_owner.is_server();
+        if server_owned {
+            panic!("Client cannot configure replication strategy of Server-owned Entities.");
+        }
+        let client_owned = entity_owner.is_client();
+        if !client_owned {
+            panic!("Client cannot configure replication strategy of Entities it does not own.");
+        }
+        let next_config = config;
         let prev_config = self
             .global_world_manager
             .entity_replication_config(entity)
@@ -393,51 +403,42 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 config
             );
         }
-        match &config {
+        match prev_config {
             ReplicationConfig::Private => {
-                match prev_config {
+                match next_config {
                     ReplicationConfig::Private => {
-                        // will not happen, because of the check above
+                        panic!("This should not be possible.");
                     }
                     ReplicationConfig::Public => {
-                        self.unpublish_entity(entity, true);
+                        // private -> public
+                        self.publish_entity(entity, true);
                     }
                     ReplicationConfig::Delegated => {
-                        self.entity_disable_delegation(entity);
-                        self.unpublish_entity(entity, true);
+                        // private -> delegated
+                        self.publish_entity(entity, true);
+                        self.entity_enable_delegation(entity);
                     }
                 }
             }
             ReplicationConfig::Public => {
-                match prev_config {
+                match next_config {
                     ReplicationConfig::Private => {
-                        self.publish_entity(entity, true);
+                        // public -> private
+                        self.unpublish_entity(entity, true);
                     }
                     ReplicationConfig::Public => {
-                        // will not happen, because of the check above
+                        panic!("This should not be possible.");
                     }
                     ReplicationConfig::Delegated => {
-                        self.entity_disable_delegation(entity);
+                        // public -> delegated
+                        self.entity_enable_delegation(entity);
                     }
                 }
             }
             ReplicationConfig::Delegated => {
-                match prev_config {
-                    ReplicationConfig::Private => {
-                        self.publish_entity(entity, true);
-                        self.entity_enable_delegation(entity);
-                    }
-                    ReplicationConfig::Public => {
-                        self.entity_enable_delegation(entity);
-                    }
-                    ReplicationConfig::Delegated => {
-                        // will not happen, because of the check above
-                    }
-                }
+                panic!("Delegated Entities are always ultimately Server-owned. Client cannot modify.")
             }
         }
-        self.global_world_manager
-            .set_entity_replication_config(entity, config);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -631,9 +632,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             {
                 panic!("Server can only publish Private entities");
             }
-            self.global_world_manager
-                .set_entity_replication_config(entity, ReplicationConfig::Public);
         }
+
+        self.global_world_manager
+            .set_entity_replication_config(entity, ReplicationConfig::Public);
     }
 
     pub(crate) fn unpublish_entity(&mut self, entity: &E, client_is_origin: bool) {
@@ -646,9 +648,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             {
                 panic!("Server can only unpublish Public entities");
             }
-            self.global_world_manager
-                .set_entity_replication_config(entity, ReplicationConfig::Private);
         }
+        self.global_world_manager
+            .set_entity_replication_config(entity, ReplicationConfig::Private);
     }
 
     pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
