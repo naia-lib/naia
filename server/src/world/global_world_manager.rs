@@ -6,8 +6,8 @@ use std::{
 
 use naia_shared::{
     BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor,
-    EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
-    MutChannelType, PropertyMutator, Replicate,
+    EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity,
+    GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -227,6 +227,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
         record.replication_config = ReplicationConfig::Public;
         self.auth_handler.deregister_entity(entity);
+    }
+
+    pub(crate) fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
+        self.auth_handler.authority_status(entity)
     }
 
     pub(crate) fn request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {

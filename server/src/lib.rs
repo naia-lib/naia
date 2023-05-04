@@ -36,10 +36,9 @@ mod world;
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;
 pub use events::{
-    AuthEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityDisableDelegationEvent,
-    EntityEnableDelegationEvent, ErrorEvent, Events, InsertComponentEvent, MessageEvent,
-    PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
-    UpdateComponentEvent,
+    AuthEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events,
+    InsertComponentEvent, MessageEvent, PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent,
+    TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;

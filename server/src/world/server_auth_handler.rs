@@ -47,6 +47,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
         self.entity_auth_map.remove(&entity);
     }
 
+    pub(crate) fn authority_status(&self, entity: &E) -> EntityAuthStatus {
+        self.host_auth_handler.auth_status(entity)
+    }
+
     pub(crate) fn request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
         if let Some(owner) = self.entity_auth_map.get_mut(entity) {
             if *owner == AuthOwner::None {

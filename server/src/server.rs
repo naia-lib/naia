@@ -357,6 +357,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // Entities
 
+    /// Creates a new Entity and returns an EntityMut which can be used for
+    /// further operations on the Entity
+    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
+        let entity = world.spawn_entity();
+        self.spawn_entity_inner(&entity);
+
+        EntityMut::new(self, world, &entity)
+    }
+
+    /// Creates a new Entity with a specific id
+    fn spawn_entity_inner(&mut self, entity: &E) {
+        self.global_world_manager
+            .spawn_entity_record(entity, EntityOwner::Server);
+    }
+
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.spawn_entity_inner(&entity);
@@ -366,6 +381,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn disable_entity_replication(&mut self, entity: &E) {
         // Despawn from connections and inner tracking
         self.despawn_entity_worldless(entity);
+    }
+
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
+        self.global_world_manager.entity_replication_config(entity)
     }
 
     pub fn configure_entity_replication<W: WorldMutType<E>>(
@@ -465,23 +485,77 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
     }
 
-    pub fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
-        self.global_world_manager.entity_replication_config(entity)
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn entity_request_authority(&mut self, origin_user: &Option<UserKey>, entity: &E) {
+        let requester = AuthOwner::from_user_key(origin_user);
+        let success = self
+            .global_world_manager
+            .request_authority(&entity, &requester);
+        if success {
+            // entity authority was granted for origin user
+
+            // for any users that have this entity in scope, send an `update_authority_status` message
+
+            // TODO: we can make this more efficient in the future by caching which Entities
+            // are in each User's scope
+            let mut messages_to_send = Vec::new();
+            for (user_key, user) in self.users.iter() {
+                let connection = self.user_connections.get(&user.address).unwrap();
+                if connection.base.host_world_manager.host_has_entity(entity) {
+                    let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
+                    if let Some(new_owner_user) = origin_user {
+                        if *new_owner_user == user_key {
+                            new_status = EntityAuthStatus::Granted;
+                        }
+                    }
+
+                    let message = EntityEventMessage::new_update_auth_status(
+                        &self.global_world_manager,
+                        entity,
+                        new_status,
+                    );
+                    messages_to_send.push((user_key, message));
+                }
+            }
+            for (user_key, message) in messages_to_send {
+                self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+            }
+        }
     }
 
-    /// Creates a new Entity and returns an EntityMut which can be used for
-    /// further operations on the Entity
-    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<E, W> {
-        let entity = world.spawn_entity();
-        self.spawn_entity_inner(&entity);
-
-        EntityMut::new(self, world, &entity)
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
+        self.global_world_manager.entity_authority_status(entity)
     }
 
-    /// Creates a new Entity with a specific id
-    fn spawn_entity_inner(&mut self, entity: &E) {
-        self.global_world_manager
-            .spawn_entity_record(entity, EntityOwner::Server);
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn entity_release_authority(&mut self, origin_user: &Option<UserKey>, entity: &E) {
+        let releaser = AuthOwner::from_user_key(origin_user);
+        let success = self
+            .global_world_manager
+            .release_authority(&entity, &releaser);
+        if success {
+            // authority was released from entity
+            // for any users that have this entity in scope, send an `update_authority_status` message
+
+            // TODO: we can make this more efficient in the future by caching which Entities
+            // are in each User's scope
+            let mut messages_to_send = Vec::new();
+            for (user_key, user) in self.users.iter() {
+                let connection = self.user_connections.get(&user.address).unwrap();
+                if connection.base.host_world_manager.host_has_entity(entity) {
+                    let message = EntityEventMessage::new_update_auth_status(
+                        &self.global_world_manager,
+                        entity,
+                        EntityAuthStatus::Available,
+                    );
+                    messages_to_send.push((user_key, message));
+                }
+            }
+            for (user_key, message) in messages_to_send {
+                self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+            }
+        }
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -945,72 +1019,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         self.global_world_manager.entity_disable_delegation(&entity);
         world.entity_disable_delegation(&entity);
-    }
-
-    pub(crate) fn entity_request_authority(&mut self, origin_user: &Option<UserKey>, entity: &E) {
-        let requester = AuthOwner::from_user_key(origin_user);
-        let success = self
-            .global_world_manager
-            .request_authority(&entity, &requester);
-        if success {
-            // entity authority was granted for origin user
-
-            // for any users that have this entity in scope, send an `update_authority_status` message
-
-            // TODO: we can make this more efficient in the future by caching which Entities
-            // are in each User's scope
-            let mut messages_to_send = Vec::new();
-            for (user_key, user) in self.users.iter() {
-                let connection = self.user_connections.get(&user.address).unwrap();
-                if connection.base.host_world_manager.host_has_entity(entity) {
-                    let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
-                    if let Some(new_owner_user) = origin_user {
-                        if *new_owner_user == user_key {
-                            new_status = EntityAuthStatus::Granted;
-                        }
-                    }
-
-                    let message = EntityEventMessage::new_update_auth_status(
-                        &self.global_world_manager,
-                        entity,
-                        new_status,
-                    );
-                    messages_to_send.push((user_key, message));
-                }
-            }
-            for (user_key, message) in messages_to_send {
-                self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
-            }
-        }
-    }
-
-    pub(crate) fn entity_release_authority(&mut self, origin_user: &Option<UserKey>, entity: &E) {
-        let releaser = AuthOwner::from_user_key(origin_user);
-        let success = self
-            .global_world_manager
-            .release_authority(&entity, &releaser);
-        if success {
-            // authority was released from entity
-            // for any users that have this entity in scope, send an `update_authority_status` message
-
-            // TODO: we can make this more efficient in the future by caching which Entities
-            // are in each User's scope
-            let mut messages_to_send = Vec::new();
-            for (user_key, user) in self.users.iter() {
-                let connection = self.user_connections.get(&user.address).unwrap();
-                if connection.base.host_world_manager.host_has_entity(entity) {
-                    let message = EntityEventMessage::new_update_auth_status(
-                        &self.global_world_manager,
-                        entity,
-                        EntityAuthStatus::Available,
-                    );
-                    messages_to_send.push((user_key, message));
-                }
-            }
-            for (user_key, message) in messages_to_send {
-                self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
-            }
-        }
     }
 
     //// Users
@@ -1539,15 +1547,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.unpublish_entity(world, &entity, false);
                     self.incoming_events.push_unpublish(user_key, &entity);
                 }
-                EntityResponseEvent::EnableDelegationEntity(entity) => {
-                    self.entity_enable_delegation(world, &entity);
-                    self.incoming_events
-                        .push_delegation_enable(user_key, &entity);
+                EntityResponseEvent::EnableDelegationEntity(_entity) => {
+                    // yes, it should be possible for clients to enable delegation on their own public entities
+                    // hard one!
+                    todo!();
                 }
-                EntityResponseEvent::DisableDelegationEntity(entity) => {
-                    self.entity_disable_delegation(world, &entity);
-                    self.incoming_events
-                        .push_delegation_disable(user_key, &entity);
+                EntityResponseEvent::DisableDelegationEntity(_) => {
+                    panic!("Clients should not be able to disable entity delegation.");
                 }
                 EntityResponseEvent::EntityRequestAuthority(entity) => {
                     self.entity_request_authority(&Some(*user_key), &entity);
@@ -1556,7 +1562,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.entity_release_authority(&Some(*user_key), &entity);
                 }
                 EntityResponseEvent::EntityUpdateAuthority(_, _) => {
-                    panic!("Clients should not be able to update entity authority.")
+                    panic!("Clients should not be able to update entity authority.");
                 }
             }
         }

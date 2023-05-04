@@ -11,9 +11,8 @@ use naia_client::Client;
 
 mod naia_events {
     pub use naia_client::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
-        EntityDisableDelegationEvent, EntityEnableDelegationEvent, ErrorEvent, PublishEntityEvent,
-        RejectEvent, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
+        PublishEntityEvent, RejectEvent, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
     };
 }
 

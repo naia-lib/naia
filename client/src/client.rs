@@ -379,6 +379,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
+        self.check_client_authoritative_allowed();
+        self.global_world_manager.entity_replication_config(entity)
+    }
+
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn configure_entity_replication<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -450,13 +456,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
+    pub fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
         self.check_client_authoritative_allowed();
-        self.global_world_manager.entity_replication_config(entity)
+
+        self.global_world_manager.entity_authority_status(entity)
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    ///
     pub fn entity_request_authority(&mut self, entity: &E) {
         self.check_client_authoritative_allowed();
 
@@ -478,13 +484,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // 2. Send request to Server
         let message = EntityEventMessage::new_release_authority(&self.global_world_manager, entity);
         self.send_message::<SystemChannel, EntityEventMessage>(&message);
-    }
-
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
-        self.check_client_authoritative_allowed();
-
-        self.global_world_manager.entity_authority_status(entity)
     }
 
     // Connection
@@ -1020,11 +1019,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
                     self.entity_enable_delegation(world, &entity, false);
-                    self.incoming_events.push_delegation_enable(entity);
                 }
                 EntityResponseEvent::DisableDelegationEntity(entity) => {
                     self.entity_disable_delegation(world, &entity, false);
-                    self.incoming_events.push_delegation_disable(entity);
                 }
                 EntityResponseEvent::EntityRequestAuthority(_entity) => {
                     panic!("Client should never receive an EntityRequestAuthority event");

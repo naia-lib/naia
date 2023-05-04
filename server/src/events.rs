@@ -22,8 +22,6 @@ pub struct Events<E: Copy> {
     despawns: Vec<(UserKey, E)>,
     publishes: Vec<(UserKey, E)>,
     unpublishes: Vec<(UserKey, E)>,
-    delegation_enables: Vec<(UserKey, E)>,
-    delegation_disables: Vec<(UserKey, E)>,
     inserts: HashMap<ComponentKind, Vec<(UserKey, E)>>,
     removes: HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>,
     updates: HashMap<ComponentKind, Vec<(UserKey, E)>>,
@@ -43,8 +41,6 @@ impl<E: Copy> Events<E> {
             despawns: Vec::new(),
             publishes: Vec::new(),
             unpublishes: Vec::new(),
-            delegation_enables: Vec::new(),
-            delegation_disables: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
             updates: HashMap::new(),
@@ -184,16 +180,6 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_delegation_enable(&mut self, user_key: &UserKey, entity: &E) {
-        self.delegation_enables.push((*user_key, *entity));
-        self.empty = false;
-    }
-
-    pub(crate) fn push_delegation_disable(&mut self, user_key: &UserKey, entity: &E) {
-        self.delegation_disables.push((*user_key, *entity));
-        self.empty = false;
-    }
-
     pub(crate) fn push_insert(
         &mut self,
         user_key: &UserKey,
@@ -283,12 +269,6 @@ impl<E: Copy> Drop for Events<E> {
         }
         if !self.unpublishes.is_empty() {
             warn!("Dropped Server Unpublish Entity Event(s)! Make sure to handle these through `events.read::<UnpublishEntityEvent>()`, and note that this may be an attack vector.");
-        }
-        if !self.delegation_enables.is_empty() {
-            warn!("Dropped Server Entity Enable Delegation Event(s)! Make sure to handle these through `events.read::<EntityEnableDelegationEvent>()`, and note that this may be an attack vector.");
-        }
-        if !self.delegation_disables.is_empty() {
-            warn!("Dropped Server Entity Disable Delegation Event(s)! Make sure to handle these through `events.read::<EntityDisableDelegationEvent>()`, and note that this may be an attack vector.");
         }
         if !self.inserts.is_empty() {
             warn!("Dropped Server Insert Event(s)! Make sure to handle these through `events.read::<InsertComponentEvent<Component>>()`, and note that this may be an attack vector.");
@@ -518,36 +498,6 @@ impl<E: Copy> Event<E> for UnpublishEntityEvent {
 
     fn has(events: &Events<E>) -> bool {
         !events.unpublishes.is_empty()
-    }
-}
-
-// Entity Enable Delegation Event
-pub struct EntityEnableDelegationEvent;
-impl<E: Copy> Event<E> for EntityEnableDelegationEvent {
-    type Iter = IntoIter<(UserKey, E)>;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        let list = std::mem::take(&mut events.delegation_enables);
-        return IntoIterator::into_iter(list);
-    }
-
-    fn has(events: &Events<E>) -> bool {
-        !events.delegation_enables.is_empty()
-    }
-}
-
-// Entity Disable Delegation Event
-pub struct EntityDisableDelegationEvent;
-impl<E: Copy> Event<E> for EntityDisableDelegationEvent {
-    type Iter = IntoIter<(UserKey, E)>;
-
-    fn iter(events: &mut Events<E>) -> Self::Iter {
-        let list = std::mem::take(&mut events.delegation_disables);
-        return IntoIterator::into_iter(list);
-    }
-
-    fn has(events: &Events<E>) -> bool {
-        !events.delegation_disables.is_empty()
     }
 }
 

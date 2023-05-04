@@ -13,10 +13,9 @@ use crate::ClientOwned;
 
 mod naia_events {
     pub use naia_server::{
-        ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityDisableDelegationEvent,
-        EntityEnableDelegationEvent, ErrorEvent, InsertComponentEvent, PublishEntityEvent,
-        RemoveComponentEvent, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
-        UpdateComponentEvent,
+        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
+        PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
+        UnpublishEntityEvent, UpdateComponentEvent,
     };
 }
 
