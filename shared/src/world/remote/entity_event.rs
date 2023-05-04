@@ -1,4 +1,4 @@
-use crate::{ComponentKind, Replicate, Tick};
+use crate::{ComponentKind, EntityAuthStatus, Replicate, Tick};
 
 pub enum EntityEvent<E: Copy> {
     SpawnEntity(E),
@@ -17,4 +17,7 @@ pub enum EntityResponseEvent<E: Copy> {
     UnpublishEntity(E),
     EnableDelegationEntity(E),
     DisableDelegationEntity(E),
+    EntityRequestAuthority(E),
+    EntityReleaseAuthority(E),
+    EntityUpdateAuthority(E, EntityAuthStatus),
 }

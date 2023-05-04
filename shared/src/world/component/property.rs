@@ -3,8 +3,7 @@ use std::ops::{Deref, DerefMut};
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::world::{
-    component::property_mutate::PropertyMutator,
-    delegation::auth_channel::EntityAuthAccessor,
+    component::property_mutate::PropertyMutator, delegation::auth_channel::EntityAuthAccessor,
 };
 
 #[derive(Clone)]

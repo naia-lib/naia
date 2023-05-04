@@ -1,10 +1,11 @@
-
 use std::hash::Hash;
 
 use naia_derive::MessageInternal;
 use naia_serde::SerdeInternal;
 
-use crate::{EntityAndGlobalEntityConverter, EntityProperty, EntityResponseEvent};
+use crate::{
+    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityProperty, EntityResponseEvent,
+};
 
 #[derive(MessageInternal)]
 pub struct EntityEventMessage {
@@ -20,30 +21,28 @@ pub enum EntityEventMessageAction {
     DisableDelegation,
     RequestAuthority,
     ReleaseAuthority,
+    UpdateAuthority(EntityAuthStatus),
 }
 
 impl EntityEventMessageAction {
-    pub fn to_response_event<E: Copy>(&self, entity: &E) -> Option<EntityResponseEvent<E>> {
+    pub fn to_response_event<E: Copy>(&self, entity: &E) -> EntityResponseEvent<E> {
         match self {
-            EntityEventMessageAction::Publish => {
-                Some(EntityResponseEvent::PublishEntity(*entity))
-            },
-            EntityEventMessageAction::Unpublish => {
-                Some(EntityResponseEvent::UnpublishEntity(*entity))
-            },
+            EntityEventMessageAction::Publish => EntityResponseEvent::PublishEntity(*entity),
+            EntityEventMessageAction::Unpublish => EntityResponseEvent::UnpublishEntity(*entity),
             EntityEventMessageAction::EnableDelegation => {
-                Some(EntityResponseEvent::EnableDelegationEntity(*entity))
+                EntityResponseEvent::EnableDelegationEntity(*entity)
             }
             EntityEventMessageAction::DisableDelegation => {
-                Some(EntityResponseEvent::EnableDelegationEntity(*entity))
+                EntityResponseEvent::EnableDelegationEntity(*entity)
             }
             EntityEventMessageAction::RequestAuthority => {
-                // don't need to process this, as the origin of the action is always the host
-                todo!()
+                EntityResponseEvent::EntityRequestAuthority(*entity)
             }
             EntityEventMessageAction::ReleaseAuthority => {
-                // don't need to process this, as the origin of the action is always the host
-                todo!()
+                EntityResponseEvent::EntityReleaseAuthority(*entity)
+            }
+            EntityEventMessageAction::UpdateAuthority(new_auth_status) => {
+                EntityResponseEvent::EntityUpdateAuthority(*entity, *new_auth_status)
             }
         }
     }
@@ -68,28 +67,56 @@ impl EntityEventMessage {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
     ) -> Self {
-        Self::new(converter, entity, EntityEventMessageAction::EnableDelegation)
+        Self::new(
+            converter,
+            entity,
+            EntityEventMessageAction::EnableDelegation,
+        )
     }
 
     pub fn new_disable_delegation<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
     ) -> Self {
-        Self::new(converter, entity, EntityEventMessageAction::DisableDelegation)
+        Self::new(
+            converter,
+            entity,
+            EntityEventMessageAction::DisableDelegation,
+        )
     }
 
     pub fn new_request_authority<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
     ) -> Self {
-        Self::new(converter, entity, EntityEventMessageAction::RequestAuthority)
+        Self::new(
+            converter,
+            entity,
+            EntityEventMessageAction::RequestAuthority,
+        )
     }
 
     pub fn new_release_authority<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
     ) -> Self {
-        Self::new(converter, entity, EntityEventMessageAction::ReleaseAuthority)
+        Self::new(
+            converter,
+            entity,
+            EntityEventMessageAction::ReleaseAuthority,
+        )
+    }
+
+    pub fn new_update_auth_status<E: Copy + Eq + Hash + Send + Sync>(
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        entity: &E,
+        auth_status: EntityAuthStatus,
+    ) -> Self {
+        Self::new(
+            converter,
+            entity,
+            EntityEventMessageAction::UpdateAuthority(auth_status),
+        )
     }
 
     fn new<E: Copy + Eq + Hash + Send + Sync>(

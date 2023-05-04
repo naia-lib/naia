@@ -97,7 +97,10 @@ pub use world::{
             Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
         },
     },
-    delegation::{auth_channel::EntityAuthAccessor, host_auth_handler::HostAuthHandler, entity_auth_status::EntityAuthStatus},
+    delegation::{
+        auth_channel::EntityAuthAccessor, entity_auth_status::EntityAuthStatus,
+        host_auth_handler::HostAuthHandler,
+    },
     entity::{
         entity_action::EntityAction,
         entity_action_receiver::EntityActionReceiver,

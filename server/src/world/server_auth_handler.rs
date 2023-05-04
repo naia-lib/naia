@@ -1,14 +1,23 @@
 use std::{collections::HashMap, hash::Hash};
 
-use naia_shared::{EntityAuthAccessor, HostAuthHandler};
+use naia_shared::{EntityAuthAccessor, EntityAuthStatus, HostAuthHandler};
 
 use crate::UserKey;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
-enum AuthOwner {
+pub enum AuthOwner {
     None,
     Server,
     Client(UserKey),
+}
+
+impl AuthOwner {
+    pub fn from_user_key(user_key: &Option<UserKey>) -> Self {
+        match user_key {
+            Some(user_key) => AuthOwner::Client(*user_key),
+            None => AuthOwner::Server,
+        }
+    }
 }
 
 pub struct ServerAuthHandler<E: Copy + Eq + Hash + Send + Sync> {
@@ -36,5 +45,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
     pub fn deregister_entity(&mut self, entity: &E) {
         self.host_auth_handler.deregister_entity(entity);
         self.entity_auth_map.remove(&entity);
+    }
+
+    pub(crate) fn request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
+        if let Some(owner) = self.entity_auth_map.get_mut(entity) {
+            if *owner == AuthOwner::None {
+                *owner = requester.clone();
+                if requester == &AuthOwner::Server {
+                    self.host_auth_handler
+                        .set_auth_status(entity, EntityAuthStatus::Granted);
+                } else {
+                    self.host_auth_handler
+                        .set_auth_status(entity, EntityAuthStatus::Denied);
+                }
+
+                return true;
+            }
+        }
+        return false;
+    }
+
+    pub(crate) fn release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
+        if let Some(owner) = self.entity_auth_map.get_mut(entity) {
+            if owner == releaser {
+                *owner = AuthOwner::None;
+                self.host_auth_handler
+                    .set_auth_status(entity, EntityAuthStatus::Available);
+                return true;
+            }
+        }
+        return false;
     }
 }

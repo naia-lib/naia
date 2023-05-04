@@ -37,6 +37,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
     }
 
     pub fn has_authority(&self) -> bool {
-        self.server.entity_has_authority(&self.entity)
+        todo!();
+        //self.server.entity_has_authority(&self.entity)
     }
 }

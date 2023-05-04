@@ -1,4 +1,6 @@
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+use naia_serde::SerdeInternal;
+
+#[derive(SerdeInternal, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EntityAuthStatus {
     // as far as we know, no authority over entity has been granted
     Available,

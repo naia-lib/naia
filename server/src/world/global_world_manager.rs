@@ -12,7 +12,10 @@ use naia_shared::{
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
-    world::{mut_channel::MutChannelData, server_auth_handler::ServerAuthHandler},
+    world::{
+        mut_channel::MutChannelData,
+        server_auth_handler::{AuthOwner, ServerAuthHandler},
+    },
     EntityOwner, ReplicationConfig, UserKey,
 };
 
@@ -224,6 +227,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
         record.replication_config = ReplicationConfig::Public;
         self.auth_handler.deregister_entity(entity);
+    }
+
+    pub(crate) fn request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
+        self.auth_handler.request_authority(entity, requester)
+    }
+
+    pub(crate) fn release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
+        self.auth_handler.release_authority(entity, releaser)
     }
 }
 

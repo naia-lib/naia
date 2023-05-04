@@ -13,10 +13,10 @@ use bevy_ecs::prelude::Resource;
 
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverterMut,
-    EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, Instant,
-    Message, MessageContainer, PacketType, Protocol, Replicate, Serde, SerdeErr,
-    SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer,
+    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
+    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
+    GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde,
+    SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer,
     WorldMutType, WorldRefType,
 };
 
@@ -32,6 +32,7 @@ use crate::{
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
         entity_scope_map::EntityScopeMap, global_world_manager::GlobalWorldManager,
+        server_auth_handler::AuthOwner,
     },
     ReplicationConfig,
 };
@@ -890,6 +891,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
         server_is_origin: bool,
     ) {
+        // TODO: check that entity is eligible for delegation?
         info!("server.entity_enable_delegation");
         // for any users that have this entity in scope, send an `enable_delegation` message
         {
@@ -921,6 +923,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
         server_is_origin: bool,
     ) {
+        // TODO: check that entity is eligible for delegation?
         info!("server.entity_disable_delegation");
         // for any users that have this entity in scope, send an `disable_delegation` message
         {
@@ -946,16 +949,70 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world.entity_disable_delegation(&entity);
     }
 
-    pub(crate) fn entity_has_authority(&self, entity: &E) -> bool {
-        todo!();
+    pub(crate) fn entity_request_authority(&mut self, origin_user: &Option<UserKey>, entity: &E) {
+        let requester = AuthOwner::from_user_key(origin_user);
+        let success = self
+            .global_world_manager
+            .request_authority(&entity, &requester);
+        if success {
+            // entity authority was granted for origin user
+
+            // for any users that have this entity in scope, send an `update_authority_status` message
+
+            // TODO: we can make this more efficient in the future by caching which Entities
+            // are in each User's scope
+            let mut messages_to_send = Vec::new();
+            for (user_key, user) in self.users.iter() {
+                let connection = self.user_connections.get(&user.address).unwrap();
+                if connection.base.host_world_manager.host_has_entity(entity) {
+                    let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
+                    if let Some(new_owner_user) = origin_user {
+                        if *new_owner_user == user_key {
+                            new_status = EntityAuthStatus::Granted;
+                        }
+                    }
+
+                    let message = EntityEventMessage::new_update_auth_status(
+                        &self.global_world_manager,
+                        entity,
+                        new_status,
+                    );
+                    messages_to_send.push((user_key, message));
+                }
+            }
+            for (user_key, message) in messages_to_send {
+                self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+            }
+        }
     }
 
-    pub(crate) fn request_entity_authority(&mut self, entity: &E) {
-        todo!();
-    }
+    pub(crate) fn entity_release_authority(&mut self, origin_user: &Option<UserKey>, entity: &E) {
+        let releaser = AuthOwner::from_user_key(origin_user);
+        let success = self
+            .global_world_manager
+            .release_authority(&entity, &releaser);
+        if success {
+            // authority was released from entity
+            // for any users that have this entity in scope, send an `update_authority_status` message
 
-    pub(crate) fn release_entity_authority(&mut self, entity: &E) {
-        todo!();
+            // TODO: we can make this more efficient in the future by caching which Entities
+            // are in each User's scope
+            let mut messages_to_send = Vec::new();
+            for (user_key, user) in self.users.iter() {
+                let connection = self.user_connections.get(&user.address).unwrap();
+                if connection.base.host_world_manager.host_has_entity(entity) {
+                    let message = EntityEventMessage::new_update_auth_status(
+                        &self.global_world_manager,
+                        entity,
+                        EntityAuthStatus::Available,
+                    );
+                    messages_to_send.push((user_key, message));
+                }
+            }
+            for (user_key, message) in messages_to_send {
+                self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+            }
+        }
     }
 
     //// Users
@@ -1493,6 +1550,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.entity_disable_delegation(world, &entity, false);
                     self.incoming_events
                         .push_delegation_disable(user_key, &entity);
+                }
+                EntityResponseEvent::EntityRequestAuthority(entity) => {
+                    self.entity_request_authority(&Some(*user_key), &entity);
+                }
+                EntityResponseEvent::EntityReleaseAuthority(entity) => {
+                    self.entity_release_authority(&Some(*user_key), &entity);
+                }
+                EntityResponseEvent::EntityUpdateAuthority(_, _) => {
+                    panic!("Clients should not be able to update entity authority.")
                 }
             }
         }

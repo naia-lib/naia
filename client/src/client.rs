@@ -1,4 +1,3 @@
-
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::{info, warn};
@@ -8,11 +7,12 @@ use bevy_ecs::prelude::Resource;
 
 pub use naia_shared::{
     BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter,
-    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
-    FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer, PacketType,
-    PingIndex, Protocol, Replicate, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader,
-    SystemChannel, Tick, Timer, Timestamp, WorldMutType, WorldRefType, EntityAuthStatus
+    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
+    EntityConverter, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage,
+    EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message,
+    MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SharedGlobalWorldManager,
+    SocketConfig, StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{
@@ -741,6 +741,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         todo!();
     }
 
+    pub(crate) fn entity_update_authority(
+        &mut self,
+        entity: &E,
+        new_auth_status: EntityAuthStatus,
+        origin_is_client: bool,
+    ) {
+        if origin_is_client {
+            panic!("Cannot update authority from Client. Server owns all delegated Entities.")
+        }
+
+        self.global_world_manager
+            .entity_update_authority(entity, new_auth_status);
+    }
+
     // Private methods
 
     fn check_client_authoritative_allowed(&self) {
@@ -1022,6 +1036,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityResponseEvent::DisableDelegationEntity(entity) => {
                     self.entity_disable_delegation(world, &entity, false);
                     self.incoming_events.push_delegation_disable(entity);
+                }
+                EntityResponseEvent::EntityRequestAuthority(entity) => {
+                    panic!("Client should never receive an EntityRequestAuthority event");
+                }
+                EntityResponseEvent::EntityReleaseAuthority(entity) => {
+                    panic!("Client should never receive an EntityReleaseAuthority event");
+                }
+                EntityResponseEvent::EntityUpdateAuthority(entity, new_auth_status) => {
+                    warn!(
+                        "Client received EntityUpdateAuthority event! New auth status: {:?}",
+                        new_auth_status
+                    );
+                    self.entity_update_authority(&entity, new_auth_status, false);
                 }
             }
         }

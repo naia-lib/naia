@@ -72,17 +72,20 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn has_authority(&self) -> bool {
-        self.server.entity_has_authority(&self.entity)
+        todo!();
+        //self.server.entity_has_authority(&self.entity)
     }
 
     pub fn request_authority(&mut self) -> &mut Self {
-        self.server.request_entity_authority(&self.entity);
+        todo!();
+        //self.server.request_entity_authority(&self.entity);
 
         self
     }
 
     pub fn release_authority(&mut self) -> &mut Self {
-        self.server.release_entity_authority(&self.entity);
+        todo!();
+        //self.server.release_entity_authority(&self.entity);
 
         self
     }

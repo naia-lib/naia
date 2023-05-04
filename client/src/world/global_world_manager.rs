@@ -4,7 +4,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, MutChannelType, PropertyMutator, Replicate};
+use naia_shared::{
+    BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus,
+    EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
+    HostAuthHandler, MutChannelType, PropertyMutator, Replicate,
+};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -234,9 +238,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             panic!("Can only request authority for an Entity that is Delegated!");
         }
         if !self.auth_handler.auth_status(entity).can_request() {
-            panic!("Cannot request authority for an Entity that is not Available! Status: {:?}", self.auth_handler.auth_status(entity));
+            panic!(
+                "Cannot request authority for an Entity that is not Available! Status: {:?}",
+                self.auth_handler.auth_status(entity)
+            );
         }
-        self.auth_handler.set_auth_status(entity, EntityAuthStatus::Requested);
+        self.auth_handler
+            .set_auth_status(entity, EntityAuthStatus::Requested);
     }
 
     pub(crate) fn entity_release_authority(&mut self, entity: &E) {
@@ -249,7 +257,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         if !self.auth_handler.auth_status(entity).can_release() {
             panic!("Cannot release authority for an Entity unless you already have it!");
         }
-        self.auth_handler.set_auth_status(entity, EntityAuthStatus::Available);
+        self.auth_handler
+            .set_auth_status(entity, EntityAuthStatus::Available);
+    }
+
+    pub(crate) fn entity_update_authority(&self, entity: &E, new_auth_status: EntityAuthStatus) {
+        self.auth_handler.set_auth_status(entity, new_auth_status);
     }
 }
 
