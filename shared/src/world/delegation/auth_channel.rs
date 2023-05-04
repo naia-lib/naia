@@ -47,7 +47,7 @@ struct EntityAuthData {
 impl EntityAuthData {
     fn new() -> Self {
         Self {
-            status: EntityAuthStatus::AvailableAuthority,
+            status: EntityAuthStatus::Available,
         }
     }
 

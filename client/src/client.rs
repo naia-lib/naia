@@ -1,3 +1,4 @@
+
 use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::{info, warn};
@@ -11,7 +12,7 @@ pub use naia_shared::{
     EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
     FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer, PacketType,
     PingIndex, Protocol, Replicate, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader,
-    SystemChannel, Tick, Timer, Timestamp, WorldMutType, WorldRefType,
+    SystemChannel, Tick, Timer, Timestamp, WorldMutType, WorldRefType, EntityAuthStatus
 };
 
 use crate::{
@@ -452,6 +453,37 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
         self.check_client_authoritative_allowed();
         self.global_world_manager.entity_replication_config(entity)
+    }
+
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn entity_request_authority(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
+
+        // 1. Set local authority status for Entity
+        self.global_world_manager.entity_request_authority(entity);
+
+        // 2. Send request to Server
+        let message = EntityEventMessage::new_request_authority(&self.global_world_manager, entity);
+        self.send_message::<SystemChannel, EntityEventMessage>(&message);
+    }
+
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn entity_release_authority(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
+
+        // 1. Set local authority status for Entity
+        self.global_world_manager.entity_release_authority(entity);
+
+        // 2. Send request to Server
+        let message = EntityEventMessage::new_release_authority(&self.global_world_manager, entity);
+        self.send_message::<SystemChannel, EntityEventMessage>(&message);
+    }
+
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
+        self.check_client_authoritative_allowed();
+
+        self.global_world_manager.entity_authority_status(entity)
     }
 
     // Connection

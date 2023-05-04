@@ -106,6 +106,7 @@ pub fn connect_events(
             ))
             // return Entity id
             .id();
+        // Add to room
         server
             .room_mut(&global.main_room_key)
             .add_entity(&delegated_entity);

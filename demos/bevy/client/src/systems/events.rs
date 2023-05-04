@@ -188,9 +188,36 @@ pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEven
     }
 }
 
-pub fn entity_enable_delegation_events(mut event_reader: EventReader<EntityEnableDelegationEvent>) {
-    for EntityEnableDelegationEvent(_entity) in event_reader.iter() {
+pub fn entity_enable_delegation_events(
+    mut commands: Commands,
+    mut client: Client,
+    mut event_reader: EventReader<EntityEnableDelegationEvent>,
+    mut position_query: Query<&mut Position>,
+) {
+    for EntityEnableDelegationEvent(entity) in event_reader.iter() {
         info!("client demo: entity enable delegation");
+
+        commands.entity(*entity).request_authority(&mut client);
+
+        if commands.entity(*entity).authority(&client).is_available() {
+            // auth is available
+        }
+        if commands.entity(*entity).authority(&client).is_requested() {
+            // auth has been requested
+        }
+        if commands.entity(*entity).authority(&client).is_granted() {
+            // auth was granted
+        }
+        if commands.entity(*entity).authority(&client).is_denied() {
+            // auth was rejected
+        }
+
+        if let Ok(mut position) = position_query.get_mut(*entity) {
+            *position.x = 3;
+            *position.y = 17;
+        }
+
+        commands.entity(*entity).release_authority(&mut client);
     }
 }
 

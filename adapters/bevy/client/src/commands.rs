@@ -4,13 +4,14 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{HostOwned, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{HostOwned, WorldMutType, WorldProxyMut, EntityAuthStatus};
 use naia_client::{Client as NaiaClient, ReplicationConfig};
 
 use crate::Client;
 
 // Bevy Commands Extension
 pub trait CommandsExt<'w, 's, 'a> {
+    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
     fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn disable_replication(&'a mut self, client: &mut Client)
         -> &'a mut EntityCommands<'w, 's, 'a>;
@@ -19,10 +20,21 @@ pub trait CommandsExt<'w, 's, 'a> {
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn replication_config(&'a self, client: &Client) -> Option<ReplicationConfig>;
-    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
+    fn request_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn release_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn authority(&'a self, client: &Client) -> EntityAuthStatus;
 }
 
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
+    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {
+        let old_entity = self.id();
+        let commands = self.commands();
+        let new_entity = commands.spawn_empty().id();
+        let command = LocalDuplicateComponents::new(new_entity, old_entity);
+        commands.add(command);
+        commands.entity(new_entity)
+    }
+
     fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.enable_replication(&self.id());
         self.insert(HostOwned);
@@ -53,13 +65,18 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         client.replication_config(&self.id())
     }
 
-    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {
-        let old_entity = self.id();
-        let commands = self.commands();
-        let new_entity = commands.spawn_empty().id();
-        let command = LocalDuplicateComponents::new(new_entity, old_entity);
-        commands.add(command);
-        commands.entity(new_entity)
+    fn request_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+        client.entity_request_authority(&self.id());
+        return self;
+    }
+
+    fn release_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+        client.entity_release_authority(&self.id());
+        return self;
+    }
+
+    fn authority(&'a self, client: &Client) -> EntityAuthStatus {
+        client.entity_authority_status(&self.id())
     }
 }
 

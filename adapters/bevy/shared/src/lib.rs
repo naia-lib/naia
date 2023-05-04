@@ -8,7 +8,7 @@ pub use naia_shared::{
     OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random, ReliableSettings,
     ReplicaDynMut, ReplicaDynRef, ReplicateBevy as Replicate, ReplicateBuilder, SerdeBevy as Serde,
     SerdeErr, Tick, TickBufferSettings, UnsignedInteger, WorldMutType, WorldRefType,
-    MTU_SIZE_BYTES,
+    MTU_SIZE_BYTES, EntityAuthStatus,
 };
 
 mod change_detection;

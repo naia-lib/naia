@@ -4,11 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor,
-    EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
-    HostAuthHandler, MutChannelType, PropertyMutator, Replicate,
-};
+use naia_shared::{BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, MutChannelType, PropertyMutator, Replicate};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -224,6 +220,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
         record.replication_config = ReplicationConfig::Public;
         self.auth_handler.deregister_entity(entity);
+    }
+
+    pub(crate) fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
+        self.auth_handler.auth_status(entity)
+    }
+
+    pub(crate) fn entity_request_authority(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Delegated {
+            panic!("Can only request authority for an Entity that is Delegated!");
+        }
+        if !self.auth_handler.auth_status(entity).can_request() {
+            panic!("Cannot request authority for an Entity that is not Available! Status: {:?}", self.auth_handler.auth_status(entity));
+        }
+        self.auth_handler.set_auth_status(entity, EntityAuthStatus::Requested);
+    }
+
+    pub(crate) fn entity_release_authority(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Delegated {
+            panic!("Can only release authority for an Entity that is Delegated!");
+        }
+        if !self.auth_handler.auth_status(entity).can_release() {
+            panic!("Cannot release authority for an Entity unless you already have it!");
+        }
+        self.auth_handler.set_auth_status(entity, EntityAuthStatus::Available);
     }
 }
 

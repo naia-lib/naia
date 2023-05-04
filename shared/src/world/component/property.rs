@@ -4,7 +4,7 @@ use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::world::{
     component::property_mutate::PropertyMutator,
-    delegation::{auth_channel::EntityAuthAccessor, entity_auth_status::EntityAuthStatus},
+    delegation::auth_channel::EntityAuthAccessor,
 };
 
 #[derive(Clone)]
@@ -489,29 +489,14 @@ impl<T: Serde> DelegatedProperty<T> {
     }
 
     fn can_mutate(&self) -> bool {
-        match self.auth_accessor.auth_status() {
-            EntityAuthStatus::AvailableAuthority => false,
-            EntityAuthStatus::RequestedAuthority => true,
-            EntityAuthStatus::HasAuthority => true,
-            EntityAuthStatus::NoAuthority => false,
-        }
+        self.auth_accessor.auth_status().can_mutate()
     }
 
     fn can_read(&self) -> bool {
-        match self.auth_accessor.auth_status() {
-            EntityAuthStatus::AvailableAuthority => true,
-            EntityAuthStatus::RequestedAuthority => false,
-            EntityAuthStatus::HasAuthority => false,
-            EntityAuthStatus::NoAuthority => true,
-        }
+        self.auth_accessor.auth_status().can_read()
     }
 
     fn can_write(&self) -> bool {
-        match self.auth_accessor.auth_status() {
-            EntityAuthStatus::AvailableAuthority => false,
-            EntityAuthStatus::RequestedAuthority => false,
-            EntityAuthStatus::HasAuthority => true,
-            EntityAuthStatus::NoAuthority => false,
-        }
+        self.auth_accessor.auth_status().can_write()
     }
 }
