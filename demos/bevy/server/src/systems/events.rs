@@ -6,8 +6,7 @@ use bevy_log::info;
 
 use naia_bevy_server::{
     events::{
-        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
-        EntityDisableDelegationEvent, EntityEnableDelegationEvent, ErrorEvent,
+        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, SpawnEntityEvent,
         TickEvent, UpdateComponentEvents,
     },
@@ -217,20 +216,6 @@ pub fn publish_entity_events(
 pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent>) {
     for UnpublishEntityEvent(_user_key, _client_entity) in event_reader.iter() {
         info!("client entity has been unpublished");
-    }
-}
-
-pub fn entity_enable_delegation_events(mut event_reader: EventReader<EntityEnableDelegationEvent>) {
-    for EntityEnableDelegationEvent(_user_key, _client_entity) in event_reader.iter() {
-        info!("client entity has been made delegated");
-    }
-}
-
-pub fn entity_disable_delegation_events(
-    mut event_reader: EventReader<EntityDisableDelegationEvent>,
-) {
-    for EntityDisableDelegationEvent(_user_key, _client_entity) in event_reader.iter() {
-        info!("delegated client entity has been un-delegated");
     }
 }
 

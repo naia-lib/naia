@@ -413,7 +413,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
                         }
                         self.publish_entity(world, entity, true);
-                        self.entity_enable_delegation(world, entity, true);
+                        self.entity_enable_delegation(world, entity);
                     }
                 }
             }
@@ -436,7 +436,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             // The reasoning here is that the Client's ownership should be respected.
                             // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
                         }
-                        self.entity_enable_delegation(world, entity, true);
+                        self.entity_enable_delegation(world, entity);
                     }
                 }
             }
@@ -450,12 +450,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         if server_owned {
                             panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
                         }
-                        self.entity_disable_delegation(world, entity, true);
+                        self.entity_disable_delegation(world, entity);
                         self.unpublish_entity(world, entity, true);
                     }
                     ReplicationConfig::Public => {
                         // delegated -> public
-                        self.entity_disable_delegation(world, entity, true);
+                        self.entity_disable_delegation(world, entity);
                     }
                     ReplicationConfig::Delegated => {
                         panic!("Should not be able to happen");
@@ -889,7 +889,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         world: &mut W,
         entity: &E,
-        server_is_origin: bool,
     ) {
         // TODO: check that entity is eligible for delegation?
         info!("server.entity_enable_delegation");
@@ -921,7 +920,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         world: &mut W,
         entity: &E,
-        server_is_origin: bool,
     ) {
         // TODO: check that entity is eligible for delegation?
         info!("server.entity_disable_delegation");
@@ -1542,12 +1540,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.incoming_events.push_unpublish(user_key, &entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
-                    self.entity_enable_delegation(world, &entity, false);
+                    self.entity_enable_delegation(world, &entity);
                     self.incoming_events
                         .push_delegation_enable(user_key, &entity);
                 }
                 EntityResponseEvent::DisableDelegationEntity(entity) => {
-                    self.entity_disable_delegation(world, &entity, false);
+                    self.entity_disable_delegation(world, &entity);
                     self.incoming_events
                         .push_delegation_disable(user_key, &entity);
                 }

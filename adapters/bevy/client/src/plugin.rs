@@ -8,8 +8,7 @@ use naia_client::{Client, ClientConfig};
 
 use super::{
     events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
-        EntityDisableDelegationEvent, EntityEnableDelegationEvent, ErrorEvent,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RejectEvent,
         RemoveComponentEvents, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
         UpdateComponentEvents,
@@ -71,8 +70,6 @@ impl PluginType for Plugin {
             .add_event::<DespawnEntityEvent>()
             .add_event::<PublishEntityEvent>()
             .add_event::<UnpublishEntityEvent>()
-            .add_event::<EntityEnableDelegationEvent>()
-            .add_event::<EntityDisableDelegationEvent>()
             .add_event::<InsertComponentEvents>()
             .add_event::<UpdateComponentEvents>()
             .add_event::<RemoveComponentEvents>()

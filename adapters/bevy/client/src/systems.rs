@@ -19,8 +19,7 @@ mod naia_events {
 
 mod bevy_events {
     pub use crate::events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent,
-        EntityDisableDelegationEvent, EntityEnableDelegationEvent, ErrorEvent,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RejectEvent,
         RemoveComponentEvents, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
         UpdateComponentEvents,
@@ -170,26 +169,6 @@ pub fn before_receive_events(world: &mut World) {
                     .unwrap();
                 for entity in events.read::<naia_events::UnpublishEntityEvent>() {
                     unpublish_entity_event_writer.send(bevy_events::UnpublishEntityEvent(entity));
-                }
-            }
-
-            // Entity Enable Delegation Event
-            if events.has::<naia_events::EntityEnableDelegationEvent>() {
-                let mut entity_enable_delegation_event_writer = world
-                    .get_resource_mut::<Events<bevy_events::EntityEnableDelegationEvent>>()
-                    .unwrap();
-                for entity in events.read::<naia_events::EntityEnableDelegationEvent>() {
-                    entity_enable_delegation_event_writer.send(bevy_events::EntityEnableDelegationEvent(entity));
-                }
-            }
-
-            // Entity Disable Delegation Event
-            if events.has::<naia_events::EntityDisableDelegationEvent>() {
-                let mut entity_disable_delegation_event_writer = world
-                    .get_resource_mut::<Events<bevy_events::EntityDisableDelegationEvent>>()
-                    .unwrap();
-                for entity in events.read::<naia_events::EntityDisableDelegationEvent>() {
-                    entity_disable_delegation_event_writer.send(bevy_events::EntityDisableDelegationEvent(entity));
                 }
             }
 

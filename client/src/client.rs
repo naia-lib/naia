@@ -456,6 +456,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    ///
     pub fn entity_request_authority(&mut self, entity: &E) {
         self.check_client_authoritative_allowed();
 
@@ -727,18 +728,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         self.global_world_manager.entity_disable_delegation(&entity);
         world.entity_disable_delegation(&entity);
-    }
-
-    pub(crate) fn entity_has_authority(&self, entity: &E) -> bool {
-        todo!();
-    }
-
-    pub(crate) fn request_entity_authority(&mut self, entity: &E) {
-        todo!();
-    }
-
-    pub(crate) fn release_entity_authority(&mut self, entity: &E) {
-        todo!();
     }
 
     pub(crate) fn entity_update_authority(
@@ -1037,10 +1026,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.entity_disable_delegation(world, &entity, false);
                     self.incoming_events.push_delegation_disable(entity);
                 }
-                EntityResponseEvent::EntityRequestAuthority(entity) => {
+                EntityResponseEvent::EntityRequestAuthority(_entity) => {
                     panic!("Client should never receive an EntityRequestAuthority event");
                 }
-                EntityResponseEvent::EntityReleaseAuthority(entity) => {
+                EntityResponseEvent::EntityReleaseAuthority(_entity) => {
                     panic!("Client should never receive an EntityReleaseAuthority event");
                 }
                 EntityResponseEvent::EntityUpdateAuthority(entity, new_auth_status) => {

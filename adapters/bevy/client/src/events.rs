@@ -74,12 +74,6 @@ pub struct PublishEntityEvent(pub Entity);
 // UnpublishEntityEvent
 pub struct UnpublishEntityEvent(pub Entity);
 
-// EntityEnableDelegationEvent
-pub struct EntityEnableDelegationEvent(pub Entity);
-
-// EntityDisableDelegationEvent
-pub struct EntityDisableDelegationEvent(pub Entity);
-
 // InsertComponentEvent
 pub struct InsertComponentEvents {
     inner: HashMap<ComponentKind, Vec<Entity>>,
