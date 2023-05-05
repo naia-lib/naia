@@ -42,13 +42,12 @@ impl<E: Copy + Eq + Hash> HostAuthHandler<E> {
         receiver.clone()
     }
 
-    pub fn auth_status(&self, entity: &E) -> EntityAuthStatus {
-        let (_, receiver) = self
-            .auth_channels
-            .get(&entity)
-            .expect("Entity must be registered with Server before it can receive messages!");
+    pub fn auth_status(&self, entity: &E) -> Option<EntityAuthStatus> {
+        if let Some((_, receiver)) = self.auth_channels.get(&entity) {
+            return Some(receiver.auth_status());
+        }
 
-        receiver.auth_status()
+        return None;
     }
 
     pub fn set_auth_status(&self, entity: &E, auth_status: EntityAuthStatus) {

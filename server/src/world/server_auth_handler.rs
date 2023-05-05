@@ -47,7 +47,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
         self.entity_auth_map.remove(&entity);
     }
 
-    pub(crate) fn authority_status(&self, entity: &E) -> EntityAuthStatus {
+    pub(crate) fn authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.host_auth_handler.auth_status(entity)
     }
 
@@ -55,10 +55,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
         if let Some(owner) = self.entity_auth_map.get_mut(entity) {
             if *owner == AuthOwner::None {
                 *owner = requester.clone();
+
                 if requester == &AuthOwner::Server {
+                    // If the Server is requesting Authority, grant the Server local Authority
                     self.host_auth_handler
                         .set_auth_status(entity, EntityAuthStatus::Granted);
                 } else {
+                    // If a Client is requesting Authority, restrict the Server's local Authority
                     self.host_auth_handler
                         .set_auth_status(entity, EntityAuthStatus::Denied);
                 }

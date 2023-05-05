@@ -229,7 +229,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         self.auth_handler.deregister_entity(entity);
     }
 
-    pub(crate) fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
+    pub(crate) fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.auth_handler.authority_status(entity)
     }
 

@@ -456,7 +456,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
+    pub fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.check_client_authoritative_allowed();
 
         self.global_world_manager.entity_authority_status(entity)
@@ -467,11 +467,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.check_client_authoritative_allowed();
 
         // 1. Set local authority status for Entity
-        self.global_world_manager.entity_request_authority(entity);
-
-        // 2. Send request to Server
-        let message = EntityEventMessage::new_request_authority(&self.global_world_manager, entity);
-        self.send_message::<SystemChannel, EntityEventMessage>(&message);
+        let success = self.global_world_manager.entity_request_authority(entity);
+        if success {
+            warn!(" --> Client sending authority REQUEST message!");
+            // 2. Send request to Server
+            let message =
+                EntityEventMessage::new_request_authority(&self.global_world_manager, entity);
+            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+        }
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -479,11 +482,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.check_client_authoritative_allowed();
 
         // 1. Set local authority status for Entity
-        self.global_world_manager.entity_release_authority(entity);
-
-        // 2. Send request to Server
-        let message = EntityEventMessage::new_release_authority(&self.global_world_manager, entity);
-        self.send_message::<SystemChannel, EntityEventMessage>(&message);
+        let success = self.global_world_manager.entity_release_authority(entity);
+        if success {
+            warn!(" --> Client sending authority RELEASE message!");
+            // 2. Send request to Server
+            let message =
+                EntityEventMessage::new_release_authority(&self.global_world_manager, entity);
+            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+        }
     }
 
     // Connection
@@ -1031,7 +1037,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityResponseEvent::EntityUpdateAuthority(entity, new_auth_status) => {
                     warn!(
-                        "Client received EntityUpdateAuthority event! New auth status: {:?}",
+                        " <-- Client received EntityUpdateAuthority event! New auth status: {:?}",
                         new_auth_status
                     );
                     self.entity_update_authority(&entity, new_auth_status, false);

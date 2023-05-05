@@ -226,39 +226,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         self.auth_handler.deregister_entity(entity);
     }
 
-    pub(crate) fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
+    pub(crate) fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.auth_handler.auth_status(entity)
     }
 
-    pub(crate) fn entity_request_authority(&mut self, entity: &E) {
+    pub(crate) fn entity_request_authority(&mut self, entity: &E) -> bool {
         let Some(record) = self.entity_records.get_mut(entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config != ReplicationConfig::Delegated {
+        let Some(auth_status) = self.auth_handler.auth_status(entity)  else {
             panic!("Can only request authority for an Entity that is Delegated!");
-        }
-        if !self.auth_handler.auth_status(entity).can_request() {
-            panic!(
-                "Cannot request authority for an Entity that is not Available! Status: {:?}",
-                self.auth_handler.auth_status(entity)
-            );
+        };
+        if !auth_status.can_request() {
+            // Cannot request authority for an Entity that is not Available!
+            return false;
         }
         self.auth_handler
             .set_auth_status(entity, EntityAuthStatus::Requested);
+        return true;
     }
 
-    pub(crate) fn entity_release_authority(&mut self, entity: &E) {
+    pub(crate) fn entity_release_authority(&mut self, entity: &E) -> bool {
         let Some(record) = self.entity_records.get_mut(entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config != ReplicationConfig::Delegated {
-            panic!("Can only release authority for an Entity that is Delegated!");
-        }
-        if !self.auth_handler.auth_status(entity).can_release() {
-            panic!("Cannot release authority for an Entity unless you already have it!");
+        let Some(auth_status) = self.auth_handler.auth_status(entity) else {
+            panic!("Can only releast authority for an Entity that is Delegated!");
+        };
+        if !auth_status.can_release() {
+            return false;
         }
         self.auth_handler
             .set_auth_status(entity, EntityAuthStatus::Available);
+        return true;
     }
 
     pub(crate) fn entity_update_authority(&self, entity: &E, new_auth_status: EntityAuthStatus) {

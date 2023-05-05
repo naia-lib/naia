@@ -36,7 +36,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
         self.server.entity_replication_config(&self.entity)
     }
 
-    pub fn authority(&self) -> EntityAuthStatus {
+    pub fn authority(&self) -> Option<EntityAuthStatus> {
         self.server.entity_authority_status(&self.entity)
     }
 }

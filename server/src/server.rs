@@ -509,6 +509,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         }
                     }
 
+                    if new_status == EntityAuthStatus::Denied {
+                        warn!("Denying status of entity to user: `{:?}`", user_key);
+                    } else {
+                        warn!("Granting status of entity to user: `{:?}`", user_key);
+                    }
+
                     let message = EntityEventMessage::new_update_auth_status(
                         &self.global_world_manager,
                         entity,
@@ -524,7 +530,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_authority_status(&self, entity: &E) -> EntityAuthStatus {
+    pub fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.global_world_manager.entity_authority_status(entity)
     }
 

@@ -112,7 +112,7 @@ impl<'w> Client<'w> {
         self.client.entity_release_authority(entity);
     }
 
-    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> EntityAuthStatus {
+    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {
         self.client.entity_authority_status(entity)
     }
 }
