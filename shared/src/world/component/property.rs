@@ -221,9 +221,10 @@ impl<T: Serde> Property<T> {
                 // and by the Client when it transforms it's own Entities to Delegated
                 self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
                     inner.inner.clone(),
-                    inner.index,
-                    inner.mutator.as_ref().unwrap(),
                     accessor,
+
+                    inner.mutator.as_ref().unwrap(),
+                    inner.index,
                 ));
             }
             PropertyImpl::RemoteOwned(inner) => {
@@ -233,18 +234,18 @@ impl<T: Serde> Property<T> {
                 };
                 self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
                     inner.inner.clone(),
-                    mutator_index,
-                    mutator,
                     accessor,
+                    mutator,
+                    mutator_index,
                 ));
             }
             PropertyImpl::RemotePublic(inner) => {
                 // This is used by the Server when it is told to transform a Client entity to Delegated
                 self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
                     inner.inner.clone(),
-                    inner.index,
-                    &inner.mutator,
                     accessor,
+                    &inner.mutator,
+                    inner.index,
                 ));
             }
             PropertyImpl::Local(_) => {
@@ -323,9 +324,6 @@ impl<T: Serde> DerefMut for Property<T> {
             }
             PropertyImpl::Local(inner) => &mut inner.inner,
             PropertyImpl::Delegated(inner) => {
-                if !inner.can_mutate() {
-                    panic!("Must request authority to mutate a Delegated Property.");
-                }
                 inner.mutate();
                 &mut inner.inner
             }
@@ -439,8 +437,8 @@ impl<T: Serde> RemotePublicProperty<T> {
 #[derive(Clone)]
 pub struct DelegatedProperty<T: Serde> {
     inner: T,
-    mutator: PropertyMutator,
     auth_accessor: EntityAuthAccessor,
+    mutator: PropertyMutator,
     index: u8,
 }
 
@@ -448,14 +446,14 @@ impl<T: Serde> DelegatedProperty<T> {
     /// Create a new DelegatedProperty
     pub fn new(
         value: T,
-        index: u8,
-        mutator: &PropertyMutator,
         auth_accessor: &EntityAuthAccessor,
+        mutator: &PropertyMutator,
+        index: u8,
     ) -> Self {
         Self {
             inner: value,
-            mutator: mutator.clone_new(),
             auth_accessor: auth_accessor.clone(),
+            mutator: mutator.clone_new(),
             index,
         }
     }
@@ -476,14 +474,14 @@ impl<T: Serde> DelegatedProperty<T> {
     }
 
     pub fn mirror(&mut self, other: &T) {
-        if !self.can_mutate() {
-            panic!("Request Authority over Entity before performing this operation.");
-        }
         self.mutate();
         self.inner = other.clone();
     }
 
     fn mutate(&mut self) {
+        if !self.can_mutate() {
+            panic!("Must request authority to mutate a Delegated Property.");
+        }
         self.mutator.mutate(self.index);
     }
 
