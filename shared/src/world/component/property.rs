@@ -222,7 +222,6 @@ impl<T: Serde> Property<T> {
                 self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
                     inner.inner.clone(),
                     accessor,
-
                     inner.mutator.as_ref().unwrap(),
                     inner.index,
                 ));
