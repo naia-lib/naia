@@ -206,6 +206,45 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
+    // Track Remote Entities
+
+    pub fn track_remote_entity(
+        &mut self,
+        entity: &E,
+    ) {
+        if self.host_world.contains_key(entity) {
+            panic!("World Channel: cannot track remote entity that already exists");
+        }
+
+        self.host_world.insert(*entity, CheckedSet::new());
+
+        // spawn entity
+        self.entity_channels
+            .insert(*entity, EntityChannel::Spawned(CheckedMap::new()));
+    }
+
+    pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        if !self.host_world.contains_key(entity) {
+            panic!("World Channel: cannot insert component into entity that doesn't exist");
+        }
+
+        let components = self.host_world.get_mut(entity).unwrap();
+        if components.contains(component_kind) {
+            warn!("World Channel: cannot insert component into entity that already has it.. this shouldn't happen?");
+            return;
+        }
+
+        components.insert(*component_kind);
+
+        let Some(EntityChannel::Spawned(component_channels)) =
+            self.entity_channels.get_mut(entity) else {
+            panic!("Make sure to track remote entity first before calling this method");
+        };
+        component_channels.insert(*component_kind, ComponentChannel::Inserted);
+
+        info!("Remote Delegated Entity now is Tracking Component");
+    }
+
     // Remote Actions
 
     pub fn on_remote_spawn_entity(
@@ -487,6 +526,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                             }
                             _ => {}
                         }
+
+                        info!("Detected Updates!");
 
                         if !output.contains_key(entity) {
                             output.insert(*entity, HashSet::new());

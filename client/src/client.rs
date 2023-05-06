@@ -716,6 +716,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // this should happen AFTER the world entity/component has been translated over to Delegated
         self.global_world_manager.entity_enable_delegation(&entity);
+
+        // Migrate Entity from Remote -> Host connection
+        if !client_is_origin {
+            let Some(connection) = &mut self.server_connection else {
+                return;
+            };
+            let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
+            connection.base.host_world_manager.track_remote_entity(
+                entity,
+                component_kinds,
+            );
+        }
     }
 
     pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
@@ -729,8 +741,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Cannot disable delegation from Client. Server owns all delegated Entities.");
         }
 
-        self.global_world_manager.entity_disable_delegation(&entity);
-        world.entity_disable_delegation(&entity);
+        self.global_world_manager.entity_disable_delegation(entity);
+        world.entity_disable_delegation(entity);
+
+        // Despawn Entity in Host connection
+        self.despawn_entity_worldless(entity)
+
     }
 
     pub(crate) fn entity_update_authority(

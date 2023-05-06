@@ -1,8 +1,9 @@
+use std::any::TypeId;
+
 use bevy_ecs::{
     entity::Entity,
     world::{Mut, World},
 };
-use std::any::TypeId;
 
 use naia_shared::{
     ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
