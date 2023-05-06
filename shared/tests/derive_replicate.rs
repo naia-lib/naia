@@ -199,7 +199,7 @@ fn read_write_entity_replica() {
         }
     }
     impl LocalEntityAndGlobalEntityConverter for TestEntityConverter {
-        fn global_entity_to_local_entity(
+        fn global_entity_to_host_entity(
             &self,
             global_entity: &GlobalEntity,
         ) -> Result<LocalEntity, EntityDoesNotExistError> {

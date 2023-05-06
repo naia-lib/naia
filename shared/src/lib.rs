@@ -35,7 +35,6 @@ mod backends;
 mod bigmap;
 mod connection;
 mod constants;
-mod doublemap;
 mod game_time;
 mod key_generator;
 mod messages;
@@ -131,7 +130,6 @@ pub use world::{
 };
 
 pub use bigmap::{BigMap, BigMapKey};
-pub use doublemap::DoubleMap;
 pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
 pub use protocol::{Protocol, ProtocolPlugin};

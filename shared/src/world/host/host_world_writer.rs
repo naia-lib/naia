@@ -185,7 +185,7 @@ impl HostWorldWriter {
 
                 // write net entity
                 local_world_manager
-                    .entity_to_local_entity(world_entity)
+                    .entity_to_host_entity(world_entity)
                     .unwrap()
                     .host_ser(writer);
 
@@ -220,7 +220,7 @@ impl HostWorldWriter {
 
                 // write net entity
                 local_world_manager
-                    .entity_to_local_entity(world_entity)
+                    .entity_to_host_entity(world_entity)
                     .unwrap()
                     .host_ser(writer);
 
@@ -257,7 +257,7 @@ impl HostWorldWriter {
 
                     // write net entity
                     local_world_manager
-                        .entity_to_local_entity(world_entity)
+                        .entity_to_host_entity(world_entity)
                         .unwrap()
                         .host_ser(writer);
 
@@ -304,7 +304,7 @@ impl HostWorldWriter {
 
                     // write net entity
                     local_world_manager
-                        .entity_to_local_entity(world_entity)
+                        .entity_to_host_entity(world_entity)
                         .unwrap()
                         .host_ser(writer);
 
@@ -392,7 +392,7 @@ impl HostWorldWriter {
 
         for entity in all_update_entities {
             // get LocalEntity
-            let local_entity = local_world_manager.entity_to_local_entity(&entity).unwrap();
+            let local_entity = local_world_manager.entity_to_host_entity(&entity).unwrap();
 
             // check that we can at least write a LocalEntity and a ComponentContinue bit
             let mut counter = writer.counter();

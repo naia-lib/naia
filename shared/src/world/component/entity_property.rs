@@ -772,13 +772,19 @@ impl RemoteOwnedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.global_entity_to_local_entity(&global_entity) else {
-            warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
-            false.ser(writer);
-            return;
+        let Ok(host_entity) = converter.global_entity_to_host_entity(&global_entity) else {
+            if let Ok(remote_entity) = converter.global_entity_to_remote_entity(&global_entity) {
+                true.ser(writer);
+                remote_entity.owned_ser(writer);
+                return;
+            } else {
+                warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
+                false.ser(writer);
+                return;
+            };
         };
         true.ser(writer);
-        local_entity.owned_ser(writer);
+        host_entity.owned_ser(writer);
     }
 }
 
@@ -900,13 +906,19 @@ impl RemotePublicRelation {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.global_entity_to_local_entity(&global_entity) else {
-            warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
-            false.ser(writer);
-            return;
+        let Ok(host_entity) = converter.global_entity_to_host_entity(&global_entity) else {
+            if let Ok(remote_entity) = converter.global_entity_to_remote_entity(&global_entity) {
+                true.ser(writer);
+                remote_entity.owned_ser(writer);
+                return;
+            } else {
+                warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
+                false.ser(writer);
+                return;
+            };
         };
         true.ser(writer);
-        local_entity.owned_ser(writer);
+        host_entity.owned_ser(writer);
     }
 }
 
@@ -1033,13 +1045,19 @@ impl DelegatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.global_entity_to_local_entity(&global_entity) else {
-            warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
-            false.ser(writer);
-            return;
+        let Ok(host_entity) = converter.global_entity_to_host_entity(&global_entity) else {
+            if let Ok(remote_entity) = converter.global_entity_to_remote_entity(&global_entity) {
+                true.ser(writer);
+                remote_entity.owned_ser(writer);
+                return;
+            } else {
+                warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
+                false.ser(writer);
+                return;
+            };
         };
         true.ser(writer);
-        local_entity.owned_ser(writer);
+        host_entity.owned_ser(writer);
     }
 
     fn mutate(&mut self) {

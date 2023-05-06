@@ -111,7 +111,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 EntityAction::SpawnEntity(local_entity, components) => {
                     // set up entity
                     let world_entity = world.spawn_entity();
-                    local_world_manager.insert_entity(world_entity, local_entity);
+                    local_world_manager.insert_remote_entity(world_entity, local_entity);
 
                     self.outgoing_events
                         .push(EntityEvent::<E>::SpawnEntity(world_entity));

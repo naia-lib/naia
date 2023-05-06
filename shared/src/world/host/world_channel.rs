@@ -435,7 +435,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             .is_none()
         {
             let local_entity = local_world_manager.generate_host_entity();
-            local_world_manager.insert_entity(*world_entity, local_entity);
+            local_world_manager.insert_host_entity(*world_entity, local_entity);
         }
     }
 
@@ -448,8 +448,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         local_world_manager: &mut LocalWorldManager<E>,
         entity: &E,
     ) {
-        let host_entity = local_world_manager.remove_world_entity(entity);
-        local_world_manager.recycle_host_entity(host_entity);
+        let local_record = local_world_manager.remove_world_entity(entity);
+        local_world_manager.recycle_host_entity(local_record.host().unwrap());
     }
 
     fn on_component_channel_opened(&mut self, entity: &E, component_kind: &ComponentKind) {

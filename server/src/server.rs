@@ -1525,7 +1525,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let local_entity = connection
                         .base
                         .local_world_manager
-                        .entity_to_local_entity(&entity)
+                        .entity_to_remote_entity(&entity)
                         .unwrap();
                     connection
                         .base

@@ -41,7 +41,11 @@ pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {
 }
 
 pub trait LocalEntityAndGlobalEntityConverter {
-    fn global_entity_to_local_entity(
+    fn global_entity_to_host_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError>;
+    fn global_entity_to_remote_entity(
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<LocalEntity, EntityDoesNotExistError>;
@@ -52,7 +56,8 @@ pub trait LocalEntityAndGlobalEntityConverter {
 }
 
 pub trait EntityAndLocalEntityConverter<E: Copy + Eq + Hash> {
-    fn entity_to_local_entity(&self, entity: &E) -> Result<LocalEntity, EntityDoesNotExistError>;
+    fn entity_to_host_entity(&self, entity: &E) -> Result<LocalEntity, EntityDoesNotExistError>;
+    fn entity_to_remote_entity(&self, entity: &E) -> Result<LocalEntity, EntityDoesNotExistError>;
     fn local_entity_to_entity(
         &self,
         local_entity: &LocalEntity,
@@ -62,11 +67,18 @@ pub trait EntityAndLocalEntityConverter<E: Copy + Eq + Hash> {
 pub struct FakeEntityConverter;
 
 impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
-    fn global_entity_to_local_entity(
+    fn global_entity_to_host_entity(
         &self,
         _: &GlobalEntity,
     ) -> Result<LocalEntity, EntityDoesNotExistError> {
         Ok(LocalEntity::Host(0))
+    }
+
+    fn global_entity_to_remote_entity(
+        &self,
+        _: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        Ok(LocalEntity::Remote(0))
     }
 
     fn local_entity_to_global_entity(
@@ -106,7 +118,7 @@ impl<'a, 'b, E: Eq + Copy + Hash> EntityConverter<'a, 'b, E> {
 impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
     for EntityConverter<'a, 'b, E>
 {
-    fn global_entity_to_local_entity(
+    fn global_entity_to_host_entity(
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<LocalEntity, EntityDoesNotExistError> {
@@ -114,7 +126,20 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
             .global_entity_converter
             .global_entity_to_entity(global_entity)
         {
-            return self.local_entity_converter.entity_to_local_entity(&entity);
+            return self.local_entity_converter.entity_to_host_entity(&entity);
+        }
+        return Err(EntityDoesNotExistError);
+    }
+
+    fn global_entity_to_remote_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self
+            .global_entity_converter
+            .global_entity_to_entity(global_entity)
+        {
+            return self.local_entity_converter.entity_to_remote_entity(&entity);
         }
         return Err(EntityDoesNotExistError);
     }
@@ -163,7 +188,7 @@ pub trait LocalEntityAndGlobalEntityConverterMut: LocalEntityAndGlobalEntityConv
 impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
     for EntityConverterMut<'a, 'b, E>
 {
-    fn global_entity_to_local_entity(
+    fn global_entity_to_host_entity(
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<LocalEntity, EntityDoesNotExistError> {
@@ -171,7 +196,20 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
             .global_world_manager
             .global_entity_to_entity(global_entity)
         {
-            return self.local_world_manager.entity_to_local_entity(&entity);
+            return self.local_world_manager.entity_to_host_entity(&entity);
+        }
+        return Err(EntityDoesNotExistError);
+    }
+
+    fn global_entity_to_remote_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        if let Ok(entity) = self
+            .global_world_manager
+            .global_entity_to_entity(global_entity)
+        {
+            return self.local_world_manager.entity_to_remote_entity(&entity);
         }
         return Err(EntityDoesNotExistError);
     }
@@ -208,7 +246,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
         {
             return Err(EntityDoesNotExistError);
         }
-        let result = self.local_world_manager.entity_to_local_entity(&entity);
+        let result = self.local_world_manager.entity_to_host_entity(&entity);
         if result.is_ok() {
             return result;
         }
