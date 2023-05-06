@@ -16,6 +16,7 @@ pub enum EntityResponseEvent<E: Copy> {
     PublishEntity(E),
     UnpublishEntity(E),
     EnableDelegationEntity(E),
+    EnableDelegationEntityResponse(E),
     DisableDelegationEntity(E),
     EntityRequestAuthority(E),
     EntityReleaseAuthority(E),

@@ -531,6 +531,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
     }
 
+    fn entity_enable_delegation_response(&mut self, user_key: &UserKey, entity: &E) {
+        if self.global_world_manager.entity_is_delegated(entity) {
+            let Some(auth_status) = self.global_world_manager.entity_authority_status(entity) else {
+                panic!("Entity should have an Auth status if it is delegated..")
+            };
+            if auth_status != EntityAuthStatus::Available {
+                let message = EntityEventMessage::new_update_auth_status(
+                    &self.global_world_manager,
+                    entity,
+                    auth_status,
+                );
+                self.send_message::<SystemChannel, EntityEventMessage>(user_key, &message);
+            }
+        }
+    }
+
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.global_world_manager.entity_authority_status(entity)
@@ -1062,6 +1078,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ) {
         if self.protocol.client_authoritative_entities {
             self.despawn_all_remote_entities(user_key, world);
+            if let Some(all_owned_entities) = self.global_world_manager.user_all_owned_entities(user_key) {
+                let copied_entities = all_owned_entities.clone();
+                for entity in copied_entities {
+                    self.entity_release_authority(&Some(*user_key), &entity);
+                }
+            }
         }
         let user = self.user_delete(user_key);
         self.incoming_events.push_disconnection(user_key, user);
@@ -1556,9 +1578,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.incoming_events.push_unpublish(user_key, &entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(_entity) => {
-                    // yes, it should be possible for clients to enable delegation on their own public entities
-                    // hard one!
+                    // yes, it should be possible for clients to enable delegation on their own public entities..
+                    // it will be a hard one!
                     todo!();
+                }
+                EntityResponseEvent::EnableDelegationEntityResponse(entity) => {
+                    self.entity_enable_delegation_response(user_key, &entity);
                 }
                 EntityResponseEvent::DisableDelegationEntity(_) => {
                     panic!("Clients should not be able to disable entity delegation.");

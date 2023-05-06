@@ -1025,6 +1025,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
                     self.entity_enable_delegation(world, &entity, false);
+                    let message =
+                        EntityEventMessage::new_enable_delegation_response(&self.global_world_manager, &entity);
+                    self.send_message::<SystemChannel, EntityEventMessage>(&message);
+                }
+                EntityResponseEvent::EnableDelegationEntityResponse(_) => {
+                    panic!("Client should never receive an EnableDelegationEntityResponse event");
                 }
                 EntityResponseEvent::DisableDelegationEntity(entity) => {
                     self.entity_disable_delegation(world, &entity, false);

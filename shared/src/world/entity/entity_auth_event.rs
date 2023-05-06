@@ -18,6 +18,7 @@ pub enum EntityEventMessageAction {
     Publish,
     Unpublish,
     EnableDelegation,
+    EnableDelegationResponse,
     DisableDelegation,
     RequestAuthority,
     ReleaseAuthority,
@@ -31,6 +32,9 @@ impl EntityEventMessageAction {
             EntityEventMessageAction::Unpublish => EntityResponseEvent::UnpublishEntity(*entity),
             EntityEventMessageAction::EnableDelegation => {
                 EntityResponseEvent::EnableDelegationEntity(*entity)
+            }
+            EntityEventMessageAction::EnableDelegationResponse => {
+                EntityResponseEvent::EnableDelegationEntityResponse(*entity)
             }
             EntityEventMessageAction::DisableDelegation => {
                 EntityResponseEvent::EnableDelegationEntity(*entity)
@@ -71,6 +75,17 @@ impl EntityEventMessage {
             converter,
             entity,
             EntityEventMessageAction::EnableDelegation,
+        )
+    }
+
+    pub fn new_enable_delegation_response<E: Copy + Eq + Hash + Send + Sync>(
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        entity: &E,
+    ) -> Self {
+        Self::new(
+            converter,
+            entity,
+            EntityEventMessageAction::EnableDelegationResponse,
         )
     }
 

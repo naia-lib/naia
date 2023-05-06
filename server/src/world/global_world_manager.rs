@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::Hash,
     sync::{Arc, RwLock},
 };
@@ -239,6 +239,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
     pub(crate) fn release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
         self.auth_handler.release_authority(entity, releaser)
+    }
+
+    pub(crate) fn user_all_owned_entities(&self, user_key: &UserKey) -> Option<&HashSet<E>> {
+        self.auth_handler.user_all_owned_entities(user_key)
     }
 }
 
