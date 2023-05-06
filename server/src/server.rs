@@ -526,6 +526,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             for (user_key, message) in messages_to_send {
                 self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
             }
+        } else {
+            warn!("Failed to request authority for entity");
         }
     }
 

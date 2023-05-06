@@ -231,9 +231,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     pub(crate) fn entity_request_authority(&mut self, entity: &E) -> bool {
-        let Some(record) = self.entity_records.get_mut(entity) else {
-            panic!("entity record does not exist!");
-        };
         let Some(auth_status) = self.auth_handler.auth_status(entity)  else {
             panic!("Can only request authority for an Entity that is Delegated!");
         };
@@ -247,9 +244,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     pub(crate) fn entity_release_authority(&mut self, entity: &E) -> bool {
-        let Some(record) = self.entity_records.get_mut(entity) else {
-            panic!("entity record does not exist!");
-        };
         let Some(auth_status) = self.auth_handler.auth_status(entity) else {
             panic!("Can only releast authority for an Entity that is Delegated!");
         };
