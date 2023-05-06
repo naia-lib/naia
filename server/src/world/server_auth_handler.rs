@@ -1,4 +1,7 @@
-use std::{collections::{HashMap, HashSet}, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use naia_shared::{EntityAuthAccessor, EntityAuthStatus, HostAuthHandler};
 
@@ -23,7 +26,7 @@ impl AuthOwner {
 pub struct ServerAuthHandler<E: Copy + Eq + Hash + Send + Sync> {
     host_auth_handler: HostAuthHandler<E>,
     entity_auth_map: HashMap<E, AuthOwner>,
-    user_to_entity_map: HashMap<UserKey, HashSet<E>>
+    user_to_entity_map: HashMap<UserKey, HashSet<E>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
@@ -65,7 +68,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
                     }
                     AuthOwner::Client(user_key) => {
                         *owner = AuthOwner::Client(*user_key);
-                        self.user_to_entity_map.entry(*user_key).or_insert(HashSet::new()).insert(*entity);
+                        self.user_to_entity_map
+                            .entry(*user_key)
+                            .or_insert(HashSet::new())
+                            .insert(*entity);
                         // If a Client is requesting Authority, restrict the Server's local Authority
                         self.host_auth_handler
                             .set_auth_status(entity, EntityAuthStatus::Denied);
@@ -82,7 +88,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
     pub(crate) fn release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
         if let Some(owner) = self.entity_auth_map.get_mut(entity) {
             if owner == releaser {
-
                 if let AuthOwner::Client(user_key) = releaser {
                     let mut remove_user = false;
                     if let Some(entities) = self.user_to_entity_map.get_mut(user_key) {

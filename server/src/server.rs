@@ -509,11 +509,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         }
                     }
 
-                    if new_status == EntityAuthStatus::Denied {
-                        warn!("Denying status of entity to user: `{:?}`", user_key);
-                    } else {
-                        warn!("Granting status of entity to user: `{:?}`", user_key);
-                    }
+                    // if new_status == EntityAuthStatus::Denied {
+                    //     warn!("Denying status of entity to user: `{:?}`", user_key);
+                    // } else {
+                    //     warn!("Granting status of entity to user: `{:?}`", user_key);
+                    // }
 
                     let message = EntityEventMessage::new_update_auth_status(
                         &self.global_world_manager,
@@ -989,7 +989,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
     ) {
         // TODO: check that entity is eligible for delegation?
-        info!("server.entity_enable_delegation");
+
         // for any users that have this entity in scope, send an `enable_delegation` message
         {
             // TODO: we can make this more efficient in the future by caching which Entities
@@ -1078,7 +1078,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ) {
         if self.protocol.client_authoritative_entities {
             self.despawn_all_remote_entities(user_key, world);
-            if let Some(all_owned_entities) = self.global_world_manager.user_all_owned_entities(user_key) {
+            if let Some(all_owned_entities) =
+                self.global_world_manager.user_all_owned_entities(user_key)
+            {
                 let copied_entities = all_owned_entities.clone();
                 for entity in copied_entities {
                     self.entity_release_authority(&Some(*user_key), &entity);

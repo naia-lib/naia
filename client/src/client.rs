@@ -469,7 +469,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // 1. Set local authority status for Entity
         let success = self.global_world_manager.entity_request_authority(entity);
         if success {
-            warn!(" --> Client sending authority REQUEST message!");
             // 2. Send request to Server
             let message =
                 EntityEventMessage::new_request_authority(&self.global_world_manager, entity);
@@ -703,7 +702,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         entity: &E,
         client_is_origin: bool,
     ) {
-        info!("client.entity_enable_delegation");
         if client_is_origin {
             let message =
                 EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
@@ -1025,8 +1023,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
                     self.entity_enable_delegation(world, &entity, false);
-                    let message =
-                        EntityEventMessage::new_enable_delegation_response(&self.global_world_manager, &entity);
+                    let message = EntityEventMessage::new_enable_delegation_response(
+                        &self.global_world_manager,
+                        &entity,
+                    );
                     self.send_message::<SystemChannel, EntityEventMessage>(&message);
                 }
                 EntityResponseEvent::EnableDelegationEntityResponse(_) => {
@@ -1042,10 +1042,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     panic!("Client should never receive an EntityReleaseAuthority event");
                 }
                 EntityResponseEvent::EntityUpdateAuthority(entity, new_auth_status) => {
-                    warn!(
-                        " <-- Client received EntityUpdateAuthority event! New auth status: {:?}",
-                        new_auth_status
-                    );
                     self.entity_update_authority(&entity, new_auth_status, false);
                 }
             }
