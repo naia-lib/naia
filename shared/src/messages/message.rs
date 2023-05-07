@@ -8,7 +8,7 @@ use crate::{
         named::Named,
     },
     world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
-    LocalEntity, LocalEntityAndGlobalEntityConverter, MessageContainer,
+    LocalEntityAndGlobalEntityConverter, MessageContainer, RemoteEntity,
 };
 
 // MessageBuilder
@@ -39,7 +39,7 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
     /// Returns a list of LocalEntities contained within the Message's EntityProperty fields, which are waiting to be converted to GlobalEntities
-    fn relations_waiting(&self) -> Option<HashSet<LocalEntity>>;
+    fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
     /// Converts any LocalEntities contained within the Message's EntityProperty fields to GlobalEntities
     fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
     // /// Returns whether has any EntityRelations

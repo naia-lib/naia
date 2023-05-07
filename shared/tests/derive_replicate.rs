@@ -74,8 +74,7 @@ mod some_nonreplicated_replica {
 
 use naia_shared::{
     BigMapKey, BitReader, BitWriter, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
-    FakeEntityConverter, GlobalEntity, LocalEntity, LocalEntityAndGlobalEntityConverter, Protocol,
-    Replicate,
+    FakeEntityConverter, GlobalEntity, LocalEntityAndGlobalEntityConverter, Protocol, Replicate,
 };
 
 use some_entity_replica::EntityPropertyHolder;
@@ -202,14 +201,14 @@ fn read_write_entity_replica() {
         fn global_entity_to_host_entity(
             &self,
             global_entity: &GlobalEntity,
-        ) -> Result<LocalEntity, EntityDoesNotExistError> {
+        ) -> Result<HostEntity, EntityDoesNotExistError> {
             Ok(LocalEntity::new_host(global_entity.to_u64() as u16))
         }
-        fn local_entity_to_global_entity(
+        fn host_entity_to_global_entity(
             &self,
-            local_entity: &LocalEntity,
+            host_entity: &HostEntity,
         ) -> Result<GlobalEntity, EntityDoesNotExistError> {
-            let local_entity_value = (*local_entity).value();
+            let local_entity_value = (*host_entity).value();
             Ok(GlobalEntity::from_u64(local_entity_value as u64))
         }
     }

@@ -187,7 +187,7 @@ impl HostWorldWriter {
                 local_world_manager
                     .entity_to_host_entity(world_entity)
                     .unwrap()
-                    .host_ser(writer);
+                    .ser(writer);
 
                 // write number of components
                 let components_num =
@@ -222,7 +222,7 @@ impl HostWorldWriter {
                 local_world_manager
                     .entity_to_host_entity(world_entity)
                     .unwrap()
-                    .host_ser(writer);
+                    .ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -259,7 +259,7 @@ impl HostWorldWriter {
                     local_world_manager
                         .entity_to_host_entity(world_entity)
                         .unwrap()
-                        .host_ser(writer);
+                        .ser(writer);
 
                     let mut converter =
                         EntityConverterMut::new(global_world_manager, local_world_manager);
@@ -306,7 +306,7 @@ impl HostWorldWriter {
                     local_world_manager
                         .entity_to_host_entity(world_entity)
                         .unwrap()
-                        .host_ser(writer);
+                        .ser(writer);
 
                     // write component kind
                     component_kind.ser(component_kinds, writer);
@@ -392,7 +392,7 @@ impl HostWorldWriter {
 
         for entity in all_update_entities {
             // get LocalEntity
-            let local_entity = local_world_manager.entity_to_host_entity(&entity).unwrap();
+            let host_entity = local_world_manager.entity_to_host_entity(&entity).unwrap();
 
             // check that we can at least write a LocalEntity and a ComponentContinue bit
             let mut counter = writer.counter();
@@ -401,7 +401,7 @@ impl HostWorldWriter {
             // write UpdateContinue bit
             counter.write_bit(true);
             // write LocalEntity
-            local_entity.host_ser(&mut counter);
+            host_entity.ser(&mut counter);
             if counter.overflowed() {
                 break;
             }
@@ -410,8 +410,8 @@ impl HostWorldWriter {
             writer.reserve_bits(1);
             // write UpdateContinue bit
             true.ser(writer);
-            // write LocalEntity
-            local_entity.host_ser(writer);
+            // write HostEntity
+            host_entity.ser(writer);
             // write Components
             Self::write_update(
                 component_kinds,

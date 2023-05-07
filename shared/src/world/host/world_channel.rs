@@ -208,10 +208,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     // Track Remote Entities
 
-    pub fn track_remote_entity(
-        &mut self,
-        entity: &E,
-    ) {
+    pub fn track_remote_entity(&mut self, entity: &E) {
         if self.host_world.contains_key(entity) {
             panic!("World Channel: cannot track remote entity that already exists");
         }

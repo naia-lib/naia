@@ -7,6 +7,7 @@ use log::warn;
 
 use crate::{
     world::{
+        entity::local_entity::RemoteEntity,
         local_world_manager::LocalWorldManager,
         remote::{
             entity_event::EntityEvent,
@@ -15,7 +16,7 @@ use crate::{
         },
     },
     ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction,
-    EntityConverter, GlobalWorldManagerType, LocalEntity, Replicate, Tick, WorldMutType,
+    EntityConverter, GlobalWorldManagerType, Replicate, Tick, WorldMutType,
 };
 
 pub struct RemoteWorldManager<E: Copy + Eq + Hash + Send + Sync> {
@@ -39,12 +40,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         }
     }
 
-    pub fn on_entity_channel_opened(&mut self, local_entity: &LocalEntity) {
-        self.entity_waitlist.add_entity(local_entity);
+    pub fn on_entity_channel_opened(&mut self, remote_entity: &RemoteEntity) {
+        self.entity_waitlist.add_entity(remote_entity);
     }
 
-    fn on_entity_channel_closing(&mut self, local_entity: &LocalEntity) {
-        self.entity_waitlist.remove_entity(local_entity);
+    fn on_entity_channel_closing(&mut self, remote_entity: &RemoteEntity) {
+        self.entity_waitlist.remove_entity(remote_entity);
     }
 
     pub fn process_world_events<W: WorldMutType<E>>(
@@ -82,8 +83,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
-        incoming_actions: Vec<EntityAction<LocalEntity>>,
-        incoming_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
+        incoming_actions: Vec<EntityAction<RemoteEntity>>,
+        incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     ) {
         self.process_ready_actions(
             global_world_manager,
@@ -102,8 +103,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
-        incoming_actions: Vec<EntityAction<LocalEntity>>,
-        mut incoming_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
+        incoming_actions: Vec<EntityAction<RemoteEntity>>,
+        mut incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     ) {
         // execute the action and emit an event
         for action in incoming_actions {
@@ -125,8 +126,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                         self.process_insert(world, world_entity, component, &component_kind);
                     }
                 }
-                EntityAction::DespawnEntity(local_entity) => {
-                    let world_entity = local_world_manager.remove_local_entity(&local_entity);
+                EntityAction::DespawnEntity(remote_entity) => {
+                    let world_entity = local_world_manager.remove_remote_entity(&remote_entity);
 
                     // Generate event for each component, handing references off just in
                     // case
@@ -139,25 +140,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     }
 
                     world.despawn_entity(&world_entity);
-                    self.on_entity_channel_closing(&local_entity);
+                    self.on_entity_channel_closing(&remote_entity);
                     self.outgoing_events
                         .push(EntityEvent::<E>::DespawnEntity(world_entity));
                 }
-                EntityAction::InsertComponent(local_entity, component_kind) => {
+                EntityAction::InsertComponent(remote_entity, component_kind) => {
                     let component = incoming_components
-                        .remove(&(local_entity, component_kind))
+                        .remove(&(remote_entity, component_kind))
                         .unwrap();
 
-                    if local_world_manager.has_local_entity(&local_entity) {
-                        let world_entity = local_world_manager.get_world_entity(&local_entity);
+                    if local_world_manager.has_remote_entity(&remote_entity) {
+                        let world_entity =
+                            local_world_manager.world_entity_from_remote(&remote_entity);
 
                         self.process_insert(world, world_entity, component, &component_kind);
                     } else {
                         // entity may have despawned on disconnect or something similar?
                     }
                 }
-                EntityAction::RemoveComponent(local_entity, component_kind) => {
-                    let world_entity = local_world_manager.get_world_entity(&local_entity);
+                EntityAction::RemoveComponent(remote_entity, component_kind) => {
+                    let world_entity = local_world_manager.world_entity_from_remote(&remote_entity);
                     self.process_remove(world, world_entity, component_kind);
                 }
                 EntityAction::Noop => {

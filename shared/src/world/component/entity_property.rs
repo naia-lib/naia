@@ -5,14 +5,14 @@ use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::{
     world::entity::{
+        local_entity::OwnedLocalEntity,
         entity_converters::{
             EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
             LocalEntityAndGlobalEntityConverterMut,
         },
         global_entity::GlobalEntity,
-        local_entity::LocalEntity,
     },
-    EntityAuthAccessor, PropertyMutator,
+    EntityAuthAccessor, PropertyMutator, RemoteEntity,
 };
 
 #[derive(Clone)]
@@ -210,14 +210,14 @@ impl EntityRelation {
             }
         }
     }
-    fn waiting_local_entity(&self) -> Option<LocalEntity> {
+    fn waiting_local_entity(&self) -> Option<RemoteEntity> {
         match self {
             EntityRelation::HostOwned(_)
             | EntityRelation::RemoteOwned(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
             | EntityRelation::Delegated(_) => None,
-            EntityRelation::RemoteWaiting(inner) => Some(inner.local_entity),
+            EntityRelation::RemoteWaiting(inner) => Some(inner.remote_entity),
         }
     }
     pub fn write_local_entity(
@@ -274,8 +274,10 @@ impl EntityProperty {
     ) -> Result<Self, SerdeErr> {
         let exists = bool::de(reader)?;
         if exists {
-            let local_entity = LocalEntity::owned_de(reader)?;
-            if let Ok(global_entity) = converter.local_entity_to_global_entity(&local_entity) {
+            // LocalEntity is reversed on write, don't worry here
+            let local_entity = OwnedLocalEntity::de(reader)?;
+
+            if let Ok(global_entity) = local_entity.convert_to_global(converter) {
                 let mut new_impl = RemoteOwnedRelation::new_empty();
                 new_impl.global_entity = Some(global_entity);
 
@@ -285,7 +287,10 @@ impl EntityProperty {
 
                 Ok(new_self)
             } else {
-                let new_impl = RemoteWaitingRelation::new(local_entity);
+                let OwnedLocalEntity::Remote(remote_entity_id) = local_entity else {
+                    panic!("This should not be possible");
+                };
+                let new_impl = RemoteWaitingRelation::new(RemoteEntity::new(remote_entity_id));
 
                 let new_self = Self {
                     inner: EntityRelation::RemoteWaiting(new_impl),
@@ -309,7 +314,7 @@ impl EntityProperty {
         let exists = bool::de(reader)?;
         exists.ser(writer);
         if exists {
-            LocalEntity::owned_de(reader)?.owned_ser(writer);
+            OwnedLocalEntity::de(reader)?.ser(writer);
         }
         Ok(())
     }
@@ -321,7 +326,7 @@ impl EntityProperty {
     ) -> Result<(), SerdeErr> {
         let exists = bool::de(reader)?;
         let local_entity_opt = if exists {
-            Some(LocalEntity::owned_de(reader)?)
+            Some(OwnedLocalEntity::de(reader)?)
         } else {
             None
         };
@@ -330,16 +335,15 @@ impl EntityProperty {
             self.inner.clone_public(),
             self.inner.clone_delegated(),
             local_entity_opt,
-            local_entity_opt
-                .map(|local_entity| converter.local_entity_to_global_entity(&local_entity)),
+            local_entity_opt.map(|local_entity| local_entity.convert_to_global(converter)),
         );
         self.inner = match eval {
             (None, None, None, None) => {
                 EntityRelation::RemoteOwned(RemoteOwnedRelation::new_empty())
             }
-            (None, None, Some(local_entity), Some(Err(_))) => {
-                EntityRelation::RemoteWaiting(RemoteWaitingRelation::new(local_entity))
-            }
+            (None, None, Some(local_entity), Some(Err(_))) => EntityRelation::RemoteWaiting(
+                RemoteWaitingRelation::new(local_entity.take_remote()),
+            ),
             (None, None, Some(_), Some(Ok(global_entity))) => EntityRelation::RemoteOwned(
                 RemoteOwnedRelation::new_with_value(Some(global_entity)),
             ),
@@ -348,7 +352,7 @@ impl EntityProperty {
             ),
             (Some(public_relation), None, Some(local_entity), Some(Err(_))) => {
                 EntityRelation::RemoteWaiting(RemoteWaitingRelation::new_public(
-                    local_entity,
+                    local_entity.take_remote(),
                     public_relation.index,
                     &public_relation.mutator,
                 ))
@@ -365,7 +369,7 @@ impl EntityProperty {
             }
             (None, Some(delegated_relation), Some(local_entity), Some(Err(_))) => {
                 EntityRelation::RemoteWaiting(RemoteWaitingRelation::new_delegated(
-                    local_entity,
+                    local_entity.take_remote(),
                     &delegated_relation.auth_accessor,
                     &delegated_relation.mutator,
                     delegated_relation.index,
@@ -386,7 +390,7 @@ impl EntityProperty {
         match &mut self.inner {
             EntityRelation::RemoteWaiting(inner) => {
                 if let Ok(global_entity) =
-                    converter.local_entity_to_global_entity(&inner.local_entity)
+                    converter.remote_entity_to_global_entity(&inner.remote_entity)
                 {
                     if let Some((index, mutator)) = &inner.will_publish {
                         if let Some(accesor) = &inner.will_delegate {
@@ -614,7 +618,7 @@ impl EntityProperty {
         self.inner.mirror(other);
     }
 
-    pub fn waiting_local_entity(&self) -> Option<LocalEntity> {
+    pub fn waiting_local_entity(&self) -> Option<RemoteEntity> {
         self.inner.waiting_local_entity()
     }
 
@@ -666,17 +670,17 @@ impl HostOwnedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.get_or_reserve_host_entity(global_entity) else {
+        let Ok(owned_local_entity) = converter.get_or_reserve_entity(global_entity) else {
             false.ser(writer);
             return;
         };
 
         // Must reverse the LocalEntity because the Host<->Remote
         // relationship inverts after this data goes over the wire
-        let reversed_local_entity = local_entity.to_reversed();
+        let reversed_local_entity = owned_local_entity.to_reversed();
 
         true.ser(writer);
-        reversed_local_entity.owned_ser(writer);
+        reversed_local_entity.ser(writer);
     }
 
     pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
@@ -772,53 +776,47 @@ impl RemoteOwnedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(host_entity) = converter.global_entity_to_host_entity(&global_entity) else {
-            if let Ok(remote_entity) = converter.global_entity_to_remote_entity(&global_entity) {
-                true.ser(writer);
-                remote_entity.owned_ser(writer);
-                return;
-            } else {
-                warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
-                false.ser(writer);
-                return;
-            };
+        let Ok(owned_entity) = converter.global_entity_to_owned_entity(&global_entity) else {
+            warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
+            false.ser(writer);
+            return;
         };
         true.ser(writer);
-        host_entity.owned_ser(writer);
+        owned_entity.ser(writer);
     }
 }
 
 // RemoteWaitingRelation
 #[derive(Clone)]
 struct RemoteWaitingRelation {
-    local_entity: LocalEntity,
+    remote_entity: RemoteEntity,
     will_publish: Option<(u8, PropertyMutator)>,
     will_delegate: Option<EntityAuthAccessor>,
 }
 
 impl RemoteWaitingRelation {
-    fn new(local_entity: LocalEntity) -> Self {
+    fn new(remote_entity: RemoteEntity) -> Self {
         Self {
-            local_entity,
+            remote_entity,
             will_publish: None,
             will_delegate: None,
         }
     }
-    fn new_public(local_entity: LocalEntity, index: u8, mutator: &PropertyMutator) -> Self {
+    fn new_public(remote_entity: RemoteEntity, index: u8, mutator: &PropertyMutator) -> Self {
         Self {
-            local_entity,
+            remote_entity,
             will_publish: Some((index, mutator.clone_new())),
             will_delegate: None,
         }
     }
     fn new_delegated(
-        local_entity: LocalEntity,
+        local_entity: RemoteEntity,
         auth_accessor: &EntityAuthAccessor,
         mutator: &PropertyMutator,
         index: u8,
     ) -> Self {
         Self {
-            local_entity,
+            remote_entity: local_entity,
             will_publish: Some((index, mutator.clone_new())),
             will_delegate: Some(auth_accessor.clone()),
         }
@@ -884,7 +882,7 @@ impl RemotePublicRelation {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.get_or_reserve_host_entity(global_entity) else {
+        let Ok(local_entity) = converter.get_or_reserve_entity(global_entity) else {
             false.ser(writer);
             return;
         };
@@ -894,7 +892,7 @@ impl RemotePublicRelation {
         let reversed_local_entity = local_entity.to_reversed();
 
         true.ser(writer);
-        reversed_local_entity.owned_ser(writer);
+        reversed_local_entity.ser(writer);
     }
 
     pub fn write_local_entity(
@@ -906,19 +904,13 @@ impl RemotePublicRelation {
             false.ser(writer);
             return;
         };
-        let Ok(host_entity) = converter.global_entity_to_host_entity(&global_entity) else {
-            if let Ok(remote_entity) = converter.global_entity_to_remote_entity(&global_entity) {
-                true.ser(writer);
-                remote_entity.owned_ser(writer);
-                return;
-            } else {
-                warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
-                false.ser(writer);
-                return;
-            };
+        let Ok(owned_entity) = converter.global_entity_to_owned_entity(&global_entity) else {
+            warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
+            false.ser(writer);
+            return;
         };
         true.ser(writer);
-        host_entity.owned_ser(writer);
+        owned_entity.ser(writer);
     }
 }
 
@@ -1023,7 +1015,7 @@ impl DelegatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(local_entity) = converter.get_or_reserve_host_entity(global_entity) else {
+        let Ok(local_entity) = converter.get_or_reserve_entity(global_entity) else {
             false.ser(writer);
             return;
         };
@@ -1033,7 +1025,7 @@ impl DelegatedRelation {
         let reversed_local_entity = local_entity.to_reversed();
 
         true.ser(writer);
-        reversed_local_entity.owned_ser(writer);
+        reversed_local_entity.ser(writer);
     }
 
     pub fn write_local_entity(
@@ -1045,19 +1037,13 @@ impl DelegatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(host_entity) = converter.global_entity_to_host_entity(&global_entity) else {
-            if let Ok(remote_entity) = converter.global_entity_to_remote_entity(&global_entity) {
-                true.ser(writer);
-                remote_entity.owned_ser(writer);
-                return;
-            } else {
-                warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
-                false.ser(writer);
-                return;
-            };
+        let Ok(host_entity) = converter.global_entity_to_owned_entity(&global_entity) else {
+            warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
+            false.ser(writer);
+            return;
         };
         true.ser(writer);
-        host_entity.owned_ser(writer);
+        host_entity.ser(writer);
     }
 
     fn mutate(&mut self) {

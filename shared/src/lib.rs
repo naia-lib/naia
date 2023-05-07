@@ -112,7 +112,7 @@ pub use world::{
         },
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
-        local_entity::LocalEntity,
+        local_entity::{HostEntity, RemoteEntity},
     },
     host::{
         global_diff_handler::GlobalDiffHandler,

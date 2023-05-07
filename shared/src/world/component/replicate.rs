@@ -15,7 +15,7 @@ use crate::{
         delegation::auth_channel::EntityAuthAccessor,
         entity::entity_converters::LocalEntityAndGlobalEntityConverter,
     },
-    ComponentFieldUpdate, LocalEntity, LocalEntityAndGlobalEntityConverterMut,
+    ComponentFieldUpdate, LocalEntityAndGlobalEntityConverterMut, RemoteEntity,
 };
 
 pub trait ReplicateBuilder: Send + Sync + Named {
@@ -34,7 +34,7 @@ pub trait ReplicateBuilder: Send + Sync + Named {
         update: ComponentUpdate,
     ) -> Result<
         (
-            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
             Option<ComponentUpdate>,
         ),
         SerdeErr,
@@ -96,7 +96,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
         update: ComponentFieldUpdate,
     ) -> Result<(), SerdeErr>;
     /// Returns a list of LocalEntities contained within the Component's EntityProperty fields, which are waiting to be converted to GlobalEntities
-    fn relations_waiting(&self) -> Option<HashSet<LocalEntity>>;
+    fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
     /// Converts any LocalEntities contained within the Component's EntityProperty fields to GlobalEntities
     fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
     /// Publish Replicate

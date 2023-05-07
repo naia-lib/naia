@@ -2,21 +2,21 @@ use std::{collections::HashMap, hash::Hash};
 
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
-    world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds,
-    ComponentUpdate, EntityAction, EntityActionReceiver, EntityActionType, EntityConverter,
-    GlobalWorldManagerType, LocalEntity, LocalEntityAndGlobalEntityConverter, MessageIndex,
-    Protocol, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger,
+    world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager,
+    BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityActionReceiver,
+    EntityActionType, EntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+    MessageIndex, Protocol, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger,
 };
 
 pub struct RemoteWorldReader<E: Copy + Eq + Hash + Send + Sync> {
-    receiver: EntityActionReceiver<LocalEntity>,
-    received_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
+    receiver: EntityActionReceiver<RemoteEntity>,
+    received_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     received_updates: Vec<(Tick, E, ComponentUpdate)>,
 }
 
 pub struct RemoteWorldEvents<E: Copy + Eq + Hash + Send + Sync> {
-    pub incoming_actions: Vec<EntityAction<LocalEntity>>,
-    pub incoming_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
+    pub incoming_actions: Vec<EntityAction<RemoteEntity>>,
+    pub incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     pub incoming_updates: Vec<(Tick, E, ComponentUpdate)>,
 }
 
@@ -123,7 +123,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
             // Entity Creation
             EntityActionType::SpawnEntity => {
                 // read entity
-                let local_entity = LocalEntity::remote_de(reader)?;
+                let remote_entity = RemoteEntity::de(reader)?;
 
                 // read components
                 let components_num = UnsignedVariableInteger::<3>::de(reader)?.get();
@@ -132,46 +132,46 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
                     let new_component = component_kinds.read(reader, converter)?;
                     let new_component_kind = new_component.kind();
                     self.received_components
-                        .insert((local_entity, new_component_kind), new_component);
+                        .insert((remote_entity, new_component_kind), new_component);
                     component_kind_list.push(new_component_kind);
                 }
 
                 self.receiver.buffer_action(
                     action_id,
-                    EntityAction::SpawnEntity(local_entity, component_kind_list),
+                    EntityAction::SpawnEntity(remote_entity, component_kind_list),
                 );
             }
             // Entity Deletion
             EntityActionType::DespawnEntity => {
                 // read all data
-                let local_entity = LocalEntity::remote_de(reader)?;
+                let remote_entity = RemoteEntity::de(reader)?;
 
                 self.receiver
-                    .buffer_action(action_id, EntityAction::DespawnEntity(local_entity));
+                    .buffer_action(action_id, EntityAction::DespawnEntity(remote_entity));
             }
             // Add Component to Entity
             EntityActionType::InsertComponent => {
                 // read all data
-                let local_entity = LocalEntity::remote_de(reader)?;
+                let remote_entity = RemoteEntity::de(reader)?;
                 let new_component = component_kinds.read(reader, converter)?;
                 let new_component_kind = new_component.kind();
 
                 self.receiver.buffer_action(
                     action_id,
-                    EntityAction::InsertComponent(local_entity, new_component_kind),
+                    EntityAction::InsertComponent(remote_entity, new_component_kind),
                 );
                 self.received_components
-                    .insert((local_entity, new_component_kind), new_component);
+                    .insert((remote_entity, new_component_kind), new_component);
             }
             // Component Removal
             EntityActionType::RemoveComponent => {
                 // read all data
-                let local_entity = LocalEntity::remote_de(reader)?;
+                let remote_entity = RemoteEntity::de(reader)?;
                 let component_kind = ComponentKind::de(component_kinds, reader)?;
 
                 self.receiver.buffer_action(
                     action_id,
-                    EntityAction::RemoveComponent(local_entity, component_kind),
+                    EntityAction::RemoveComponent(remote_entity, component_kind),
                 );
             }
             EntityActionType::Noop => {
@@ -197,14 +197,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
                 break;
             }
 
-            let local_entity = LocalEntity::remote_de(reader)?;
+            let remote_entity = RemoteEntity::de(reader)?;
 
             self.read_update(
                 local_world_manager,
                 component_kinds,
                 tick,
                 reader,
-                &local_entity,
+                &remote_entity,
             )?;
         }
 
@@ -218,7 +218,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
-        local_entity: &LocalEntity,
+        remote_entity: &RemoteEntity,
     ) -> Result<(), SerdeErr> {
         loop {
             // read update continue bit
@@ -230,8 +230,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
             let component_update = component_kinds.read_create_update(reader)?;
 
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
-            if local_world_manager.has_local_entity(local_entity) {
-                let world_entity = local_world_manager.get_world_entity(local_entity);
+            if local_world_manager.has_remote_entity(remote_entity) {
+                let world_entity = local_world_manager.world_entity_from_remote(remote_entity);
 
                 self.received_updates
                     .push((*tick, world_entity, component_update));

@@ -723,10 +723,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 return;
             };
             let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
-            connection.base.host_world_manager.track_remote_entity(
-                entity,
-                component_kinds,
-            );
+            connection
+                .base
+                .host_world_manager
+                .track_remote_entity(entity, component_kinds);
         }
     }
 
@@ -746,7 +746,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // Despawn Entity in Host connection
         self.despawn_entity_worldless(entity)
-
     }
 
     pub(crate) fn entity_update_authority(

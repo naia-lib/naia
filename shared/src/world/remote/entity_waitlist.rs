@@ -5,15 +5,15 @@ use std::{
 
 use naia_socket_shared::Instant;
 
-use crate::{KeyGenerator, LocalEntity};
+use crate::{KeyGenerator, RemoteEntity};
 
 pub type WaitlistHandle = u16;
 
 pub struct EntityWaitlist {
     handle_store: KeyGenerator<WaitlistHandle>,
-    handle_to_required_entities: HashMap<WaitlistHandle, HashSet<LocalEntity>>,
-    waiting_entity_to_handles: HashMap<LocalEntity, HashSet<WaitlistHandle>>,
-    in_scope_entities: HashSet<LocalEntity>,
+    handle_to_required_entities: HashMap<WaitlistHandle, HashSet<RemoteEntity>>,
+    waiting_entity_to_handles: HashMap<RemoteEntity, HashSet<WaitlistHandle>>,
+    in_scope_entities: HashSet<RemoteEntity>,
     ready_handles: HashSet<WaitlistHandle>,
     removed_handles: HashSet<WaitlistHandle>,
     handle_ttls: VecDeque<(Instant, WaitlistHandle)>,
@@ -34,13 +34,13 @@ impl EntityWaitlist {
         }
     }
 
-    fn must_queue(&self, entities: &HashSet<LocalEntity>) -> bool {
+    fn must_queue(&self, entities: &HashSet<RemoteEntity>) -> bool {
         !entities.is_subset(&self.in_scope_entities)
     }
 
     pub fn queue<T>(
         &mut self,
-        entities: &HashSet<LocalEntity>,
+        entities: &HashSet<RemoteEntity>,
         waitlist_store: &mut WaitlistStore<T>,
         item: T,
     ) -> WaitlistHandle {
@@ -85,7 +85,7 @@ impl EntityWaitlist {
         waitlist_store.collect_ready_items(&mut self.ready_handles)
     }
 
-    pub fn add_entity(&mut self, entity: &LocalEntity) {
+    pub fn add_entity(&mut self, entity: &RemoteEntity) {
         // put new entity into scope
         self.in_scope_entities.insert(*entity);
 
@@ -110,7 +110,7 @@ impl EntityWaitlist {
         }
     }
 
-    pub fn remove_entity(&mut self, entity: &LocalEntity) {
+    pub fn remove_entity(&mut self, entity: &RemoteEntity) {
         self.in_scope_entities.remove(entity);
     }
 

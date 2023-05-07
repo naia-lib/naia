@@ -115,11 +115,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
     }
 
     // used when Remote Entity becomes Delegated
-    pub fn track_remote_entity(
-        &mut self,
-        entity: &E,
-        component_kinds: Vec<ComponentKind>,
-    ) {
+    pub fn track_remote_entity(&mut self, entity: &E, component_kinds: Vec<ComponentKind>) {
         // add entity
         self.world_channel.track_remote_entity(entity);
         // add components
@@ -128,12 +124,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         }
     }
 
-    pub fn track_remote_component(
-        &mut self,
-        entity: &E,
-        component_kind: &ComponentKind,
-    ) {
-        self.world_channel.track_remote_component(entity, component_kind);
+    pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        self.world_channel
+            .track_remote_component(entity, component_kind);
     }
 
     // Messages

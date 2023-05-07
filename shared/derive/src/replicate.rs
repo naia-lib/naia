@@ -100,7 +100,7 @@ pub fn replicate_impl(
             use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
-                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, LocalEntity, EntityAuthAccessor,
+                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, EntityAuthAccessor, RemoteEntity,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
             };
             use super::*;
@@ -925,7 +925,7 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
 
                             // property is waiting on waiting_entity, write into the waiting_writer
                             let mut waiting_writer = BitWriter::new();
-                            waiting_entity.owned_ser(&mut waiting_writer);
+                            waiting_entity.copy_to_owned().ser(&mut waiting_writer);
                             waiting_updates.push((waiting_entity, ComponentFieldUpdate::new(#index, waiting_writer.to_owned_reader())));
                         } else {
                             ready_did_write = true;
@@ -958,14 +958,14 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
             converter: &dyn LocalEntityAndGlobalEntityConverter,
             update: ComponentUpdate
         ) -> Result<(
-            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
             Option<ComponentUpdate>
         ), SerdeErr> {
             let component_kind = ComponentKind::of::<#replica_name>();
             let reader = &mut update.reader();
 
             let mut waiting_did_write = false;
-            let mut waiting_updates: Vec<(LocalEntity, ComponentFieldUpdate)> = Vec::new();
+            let mut waiting_updates: Vec<(RemoteEntity, ComponentFieldUpdate)> = Vec::new();
 
             let mut ready_writer = BitWriter::new();
             let mut ready_did_write = false;
@@ -1227,7 +1227,7 @@ fn get_relations_waiting_method(fields: &[Property], struct_type: &StructType) -
     }
 
     quote! {
-        fn relations_waiting(&self) -> Option<HashSet<LocalEntity>> {
+        fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
             let mut output = HashSet::new();
             #body
             if output.is_empty() {

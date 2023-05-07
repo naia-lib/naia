@@ -40,8 +40,8 @@ pub fn message_impl(
 
             pub use std::{any::Any, collections::HashSet};
             pub use #shared_crate_name::{
-                Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, LocalEntity,
-                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer
+                Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
+                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer, RemoteEntity
             };
             use super::*;
 
@@ -188,7 +188,7 @@ fn get_relations_waiting_method(fields: &[Field], struct_type: &StructType) -> T
     }
 
     quote! {
-        fn relations_waiting(&self) -> Option<HashSet<LocalEntity>> {
+        fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
             let mut output = HashSet::new();
             #body
             if output.is_empty() {

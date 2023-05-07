@@ -8,16 +8,15 @@ use log::warn;
 use naia_socket_shared::Instant;
 
 use crate::{
-    world::{entity::local_entity::LocalEntity, local_entity_map::LocalEntityMap}, EntityAndLocalEntityConverter,
-    EntityDoesNotExistError, KeyGenerator,
+    world::{local_entity_map::{LocalEntityMap, LocalEntityRecord}, entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}},
+    EntityAndLocalEntityConverter, EntityDoesNotExistError, KeyGenerator,
 };
-use crate::world::local_entity_map::LocalEntityRecord;
 
 pub struct LocalWorldManager<E: Copy + Eq + Hash> {
     user_key: u64,
     host_entity_generator: KeyGenerator<u16>,
     entity_map: LocalEntityMap<E>,
-    reserved_entities: HashMap<E, LocalEntity>,
+    reserved_entities: HashMap<E, HostEntity>,
     reserved_entity_ttl: Duration,
     reserved_entities_ttls: VecDeque<(Instant, E)>,
 }
@@ -36,14 +35,15 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     // Host entities
 
-    pub(crate) fn host_reserve_entity(&mut self, world_entity: &E) -> LocalEntity {
+    pub(crate) fn host_reserve_entity(&mut self, world_entity: &E) -> HostEntity {
         self.process_reserved_entity_timeouts();
 
         if self.reserved_entities.contains_key(world_entity) {
             panic!("World Entity has already reserved Local Entity!");
         }
         let host_entity = self.generate_host_entity();
-        self.entity_map.insert_with_host_entity(*world_entity, host_entity);
+        self.entity_map
+            .insert_with_host_entity(*world_entity, host_entity);
         self.reserved_entities.insert(*world_entity, host_entity);
         host_entity
     }
@@ -62,34 +62,36 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         }
     }
 
-    pub(crate) fn remove_reserved_host_entity(&mut self, world_entity: &E) -> Option<LocalEntity> {
+    pub(crate) fn remove_reserved_host_entity(&mut self, world_entity: &E) -> Option<HostEntity> {
         self.reserved_entities.remove(world_entity)
     }
 
-    pub(crate) fn generate_host_entity(&mut self) -> LocalEntity {
-        LocalEntity::Host(self.host_entity_generator.generate())
+    pub(crate) fn generate_host_entity(&mut self) -> HostEntity {
+        HostEntity::new(self.host_entity_generator.generate())
     }
 
-    pub(crate) fn insert_host_entity(&mut self, world_entity: E, local_entity: LocalEntity) {
+    pub(crate) fn insert_host_entity(&mut self, world_entity: E, host_entity: HostEntity) {
         if self.entity_map.contains_world_entity(&world_entity) {
             panic!("World Entity already exists!");
         }
-        if self.entity_map.contains_local_entity(&local_entity) {
+        if self.entity_map.contains_host_entity(&host_entity) {
             panic!("Local Entity already exists!");
         }
 
-        self.entity_map.insert_with_host_entity(world_entity, local_entity);
+        self.entity_map
+            .insert_with_host_entity(world_entity, host_entity);
     }
 
-    pub(crate) fn insert_remote_entity(&mut self, world_entity: E, local_entity: LocalEntity) {
+    pub(crate) fn insert_remote_entity(&mut self, world_entity: E, remote_entity: RemoteEntity) {
         if self.entity_map.contains_world_entity(&world_entity) {
             panic!("World Entity already exists!");
         }
-        if self.entity_map.contains_local_entity(&local_entity) {
+        if self.entity_map.contains_remote_entity(&remote_entity) {
             panic!("Local Entity already exists!");
         }
 
-        self.entity_map.insert_with_remote_entity(world_entity, local_entity);
+        self.entity_map
+            .insert_with_remote_entity(world_entity, remote_entity);
     }
 
     pub(crate) fn remove_world_entity(&mut self, world_entity: &E) -> LocalEntityRecord {
@@ -98,40 +100,38 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             .expect("Attempting to despawn entity which does not exist!")
     }
 
-    pub(crate) fn remove_local_entity(&mut self, local_entity: &LocalEntity) -> E {
-        let world_entity = *(self.entity_map.get_world_entity(local_entity).expect("Attempting to despawn entity which does not exist!"));
+    pub(crate) fn remove_remote_entity(&mut self, remote_entity: &RemoteEntity) -> E {
+        let world_entity = *(self
+            .entity_map
+            .world_entity_from_remote(remote_entity)
+            .expect("Attempting to despawn entity which does not exist!"));
         self.entity_map
             .remove_by_world_entity(&world_entity)
             .expect("Attempting to despawn entity which does not exist!");
         world_entity
     }
 
-    pub(crate) fn recycle_host_entity(&mut self, local_entity: LocalEntity) {
-        if !local_entity.is_host() {
-            panic!("can only call this method with host entities");
-        }
-        self.host_entity_generator
-            .recycle_key(&local_entity.value());
+    pub(crate) fn recycle_host_entity(&mut self, host_entity: HostEntity) {
+        self.host_entity_generator.recycle_key(&host_entity.value());
+    }
+
+    pub(crate) fn has_host_entity(&self, host_entity: &HostEntity) -> bool {
+        self.entity_map.contains_host_entity(host_entity)
     }
 
     // Remote entities
 
-    pub(crate) fn has_local_entity(&self, local_entity: &LocalEntity) -> bool {
-        self.entity_map.contains_local_entity(local_entity)
+    pub(crate) fn has_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {
+        self.entity_map.contains_remote_entity(remote_entity)
     }
 
-    pub(crate) fn get_world_entity(&self, local_entity: &LocalEntity) -> E {
-        // Why is this needed? Should uncomment?
-        // if !local_entity.is_remote() {
-        //     panic!("can only call this method with remote entities");
-        // }
-
-        if let Some(world_entity) = self.entity_map.get_world_entity(&local_entity) {
+    pub(crate) fn world_entity_from_remote(&self, remote_entity: &RemoteEntity) -> E {
+        if let Some(world_entity) = self.entity_map.world_entity_from_remote(remote_entity) {
             return *world_entity;
         } else {
             panic!(
                 "Attempting to get world entity for local entity which does not exist!: `{:?}`",
-                local_entity
+                remote_entity
             );
         }
     }
@@ -153,7 +153,7 @@ impl<E: Copy + Eq + Hash> EntityAndLocalEntityConverter<E> for LocalWorldManager
     fn entity_to_host_entity(
         &self,
         world_entity: &E,
-    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+    ) -> Result<HostEntity, EntityDoesNotExistError> {
         if let Some(local_entity) = self.entity_map.get_host_entity(world_entity) {
             return Ok(local_entity);
         } else {
@@ -164,7 +164,7 @@ impl<E: Copy + Eq + Hash> EntityAndLocalEntityConverter<E> for LocalWorldManager
     fn entity_to_remote_entity(
         &self,
         world_entity: &E,
-    ) -> Result<LocalEntity, EntityDoesNotExistError> {
+    ) -> Result<RemoteEntity, EntityDoesNotExistError> {
         if let Some(local_entity) = self.entity_map.get_remote_entity(world_entity) {
             return Ok(local_entity);
         } else {
@@ -172,11 +172,33 @@ impl<E: Copy + Eq + Hash> EntityAndLocalEntityConverter<E> for LocalWorldManager
         }
     }
 
-    fn local_entity_to_entity(
+    fn entity_to_owned_entity(
         &self,
-        local_entity: &LocalEntity,
+        world_entity: &E,
+    ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
+        if let Some(local_entity) = self.entity_map.get_owned_entity(world_entity) {
+            return Ok(local_entity);
+        } else {
+            return Err(EntityDoesNotExistError);
+        }
+    }
+
+    fn host_entity_to_entity(
+        &self,
+        host_entity: &HostEntity,
     ) -> Result<E, EntityDoesNotExistError> {
-        if let Some(entity) = self.entity_map.get_world_entity(local_entity) {
+        if let Some(entity) = self.entity_map.world_entity_from_host(host_entity) {
+            return Ok(*entity);
+        } else {
+            return Err(EntityDoesNotExistError);
+        }
+    }
+
+    fn remote_entity_to_entity(
+        &self,
+        remote_entity: &RemoteEntity,
+    ) -> Result<E, EntityDoesNotExistError> {
+        if let Some(entity) = self.entity_map.world_entity_from_remote(remote_entity) {
             return Ok(*entity);
         } else {
             return Err(EntityDoesNotExistError);

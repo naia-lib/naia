@@ -3,7 +3,7 @@ use std::{any::TypeId, collections::HashMap};
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
 use crate::{
-    ComponentFieldUpdate, ComponentUpdate, LocalEntity, LocalEntityAndGlobalEntityConverter,
+    ComponentFieldUpdate, ComponentUpdate, LocalEntityAndGlobalEntityConverter, RemoteEntity,
     Replicate, ReplicateBuilder,
 };
 
@@ -101,7 +101,7 @@ impl ComponentKinds {
         update: ComponentUpdate,
     ) -> Result<
         (
-            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
             Option<ComponentUpdate>,
         ),
         SerdeErr,
