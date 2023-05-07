@@ -14,6 +14,7 @@ pub use naia_shared::{
     SocketConfig, StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType,
     WorldRefType,
 };
+use naia_shared::HostEntityAuthStatus;
 
 use crate::{
     connection::{
@@ -456,7 +457,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
+    pub fn entity_authority_status(&self, entity: &E) -> Option<HostEntityAuthStatus> {
         self.check_client_authoritative_allowed();
 
         self.global_world_manager.entity_authority_status(entity)
@@ -716,18 +717,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // this should happen AFTER the world entity/component has been translated over to Delegated
         self.global_world_manager.entity_enable_delegation(&entity);
-
-        // Migrate Entity from Remote -> Host connection
-        if !client_is_origin {
-            let Some(connection) = &mut self.server_connection else {
-                return;
-            };
-            let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
-            connection
-                .base
-                .host_world_manager
-                .track_remote_entity(entity, component_kinds);
-        }
     }
 
     pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
@@ -752,14 +741,51 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         &mut self,
         entity: &E,
         new_auth_status: EntityAuthStatus,
-        origin_is_client: bool,
     ) {
-        if origin_is_client {
-            panic!("Cannot update authority from Client. Server owns all delegated Entities.")
-        }
+        let old_auth_status = self.global_world_manager.entity_authority_status(entity).unwrap();
 
         self.global_world_manager
             .entity_update_authority(entity, new_auth_status);
+
+        // Updated Host Manager
+        match (old_auth_status.status() == EntityAuthStatus::Granted, new_auth_status == EntityAuthStatus::Granted) {
+            (false, true) => {
+                info!("-- Entity GAINED Authority --");
+                // Granted Authority
+
+                // Migrate Entity from Remote -> Host connection
+                let Some(connection) = &mut self.server_connection else {
+                    return;
+                };
+                let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
+                let new_host_entity = connection
+                    .base
+                    .host_world_manager
+                    .track_remote_entity(&mut connection.base.local_world_manager, entity, component_kinds);
+
+                // send response
+                let message = EntityEventMessage::new_update_auth_response(
+                    &self.global_world_manager,
+                    &entity,
+                    new_host_entity,
+                );
+                self.send_message::<SystemChannel, EntityEventMessage>(&message);
+            }
+            (true, false) => {
+                info!("-- Entity LOST Authority --");
+                // Lost Authority
+
+                // Remove Entity from Host connection
+                let Some(connection) = &mut self.server_connection else {
+                    return;
+                };
+                connection
+                    .base
+                    .host_world_manager
+                    .untrack_remote_entity(&mut connection.base.local_world_manager, entity);
+            }
+            (_, _) => {}
+        }
     }
 
     // Private methods
@@ -1038,6 +1064,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
                     self.entity_enable_delegation(world, &entity, false);
+
+                    // send response
                     let message = EntityEventMessage::new_enable_delegation_response(
                         &self.global_world_manager,
                         &entity,
@@ -1057,7 +1085,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     panic!("Client should never receive an EntityReleaseAuthority event");
                 }
                 EntityResponseEvent::EntityUpdateAuthority(entity, new_auth_status) => {
-                    self.entity_update_authority(&entity, new_auth_status, false);
+                    self.entity_update_authority(&entity, new_auth_status);
+                }
+                EntityResponseEvent::EntityUpdateAuthorityResponse(_, _) => {
+                    panic!("Client should never receive an EntityUpdateAuthorityResponse event");
                 }
             }
         }

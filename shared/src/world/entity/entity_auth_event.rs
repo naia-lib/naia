@@ -3,9 +3,7 @@ use std::hash::Hash;
 use naia_derive::MessageInternal;
 use naia_serde::SerdeInternal;
 
-use crate::{
-    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityProperty, EntityResponseEvent,
-};
+use crate::{EntityAndGlobalEntityConverter, EntityAuthStatus, EntityProperty, EntityResponseEvent, HostEntity, RemoteEntity};
 
 #[derive(MessageInternal)]
 pub struct EntityEventMessage {
@@ -23,6 +21,7 @@ pub enum EntityEventMessageAction {
     RequestAuthority,
     ReleaseAuthority,
     UpdateAuthority(EntityAuthStatus),
+    UpdateAuthorityResponse(u16)
 }
 
 impl EntityEventMessageAction {
@@ -47,6 +46,9 @@ impl EntityEventMessageAction {
             }
             EntityEventMessageAction::UpdateAuthority(new_auth_status) => {
                 EntityResponseEvent::EntityUpdateAuthority(*entity, *new_auth_status)
+            }
+            EntityEventMessageAction::UpdateAuthorityResponse(remote_entity) => {
+                EntityResponseEvent::EntityUpdateAuthorityResponse(*entity, RemoteEntity::new(*remote_entity))
             }
         }
     }
@@ -131,6 +133,19 @@ impl EntityEventMessage {
             converter,
             entity,
             EntityEventMessageAction::UpdateAuthority(auth_status),
+        )
+    }
+
+    pub fn new_update_auth_response<E: Copy + Eq + Hash + Send + Sync>(
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        entity: &E,
+        host_entity: HostEntity,
+    ) -> Self {
+
+        Self::new(
+            converter,
+            entity,
+            EntityEventMessageAction::UpdateAuthorityResponse(host_entity.value()),
         )
     }
 

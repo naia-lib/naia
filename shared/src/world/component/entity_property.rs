@@ -245,6 +245,19 @@ impl EntityRelation {
             }
         }
     }
+
+    fn get_global_entity(&self) -> Option<GlobalEntity> {
+        match self {
+            EntityRelation::HostOwned(inner) => inner.global_entity,
+            EntityRelation::RemoteOwned(inner) => inner.global_entity,
+            EntityRelation::RemotePublic(inner) => inner.global_entity,
+            EntityRelation::Local(inner) => inner.global_entity,
+            EntityRelation::Delegated(inner) => inner.global_entity,
+            EntityRelation::RemoteWaiting(_) => {
+                None
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -485,38 +498,18 @@ impl EntityProperty {
         &mut self,
         accessor: &EntityAuthAccessor,
         mutator_index: u8,
-        mutator_opt: &Option<PropertyMutator>,
+        mutator: &PropertyMutator,
     ) {
+        let inner_value = self.inner.get_global_entity();
         match &mut self.inner {
-            EntityRelation::HostOwned(inner) => {
+            EntityRelation::HostOwned(_) | EntityRelation::RemoteOwned(_) | EntityRelation::RemotePublic(_) => {
                 // This is used by the Server when it transforms it's own Entities to Delegated
                 // and by the Client when it transforms it's own Entities to Delegated
                 self.inner = EntityRelation::Delegated(DelegatedRelation::new(
-                    inner.global_entity.clone(),
-                    accessor,
-                    inner.mutator.as_ref().unwrap(),
-                    inner.index,
-                ));
-            }
-            EntityRelation::RemoteOwned(inner) => {
-                // This is used by the Client when it is told to transform a Server entity to Delegated
-                let Some(mutator) = mutator_opt.as_ref() else {
-                    panic!("RemoteOwned Property should never enable delegation without a mutator.");
-                };
-                self.inner = EntityRelation::Delegated(DelegatedRelation::new(
-                    inner.global_entity.clone(),
+                    inner_value,
                     accessor,
                     mutator,
                     mutator_index,
-                ));
-            }
-            EntityRelation::RemotePublic(inner) => {
-                // This is used by the Server when it is told to transform a Client entity to Delegated
-                self.inner = EntityRelation::Delegated(DelegatedRelation::new(
-                    inner.global_entity.clone(),
-                    accessor,
-                    &inner.mutator,
-                    inner.index,
                 ));
             }
             EntityRelation::RemoteWaiting(inner) => {
@@ -979,18 +972,20 @@ impl DelegatedRelation {
     }
 
     pub fn read_none(mut self) -> Self {
-        if !self.can_read() {
-            panic!("Must not have Authority over Entity before performing this operation.");
+        if self.can_read() {
+            self.global_entity = None;
+            self.mutate();
         }
-        self.global_entity = None;
+
         self
     }
 
     pub fn read_some(mut self, global_entity: GlobalEntity) -> Self {
-        if !self.can_read() {
-            panic!("Must not have Authority over Entity before performing this operation.");
+        if self.can_read() {
+            self.global_entity = Some(global_entity);
+            self.mutate();
         }
-        self.global_entity = Some(global_entity);
+
         self
     }
 
@@ -1011,6 +1006,7 @@ impl DelegatedRelation {
         if !self.can_write() {
             panic!("Must have Authority over Entity before performing this operation.");
         }
+
         let Some(global_entity) = &self.global_entity else {
             false.ser(writer);
             return;

@@ -1,5 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
+use log::warn;
+
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::world::{
@@ -213,47 +215,15 @@ impl<T: Serde> Property<T> {
         &mut self,
         accessor: &EntityAuthAccessor,
         mutator_index: u8,
-        mutator_opt: &Option<PropertyMutator>,
+        mutator: &PropertyMutator,
     ) {
-        match &mut self.inner {
-            PropertyImpl::HostOwned(inner) => {
-                // This is used by the Server when it transforms it's own Entities to Delegated
-                // and by the Client when it transforms it's own Entities to Delegated
-                self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
-                    inner.inner.clone(),
-                    accessor,
-                    inner.mutator.as_ref().unwrap(),
-                    inner.index,
-                ));
-            }
-            PropertyImpl::RemoteOwned(inner) => {
-                // This is used by the Client when it is told to transform a Server entity to Delegated
-                let Some(mutator) = mutator_opt.as_ref() else {
-                    panic!("RemoteOwned Property should never enable delegation without a mutator.");
-                };
-                self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
-                    inner.inner.clone(),
-                    accessor,
-                    mutator,
-                    mutator_index,
-                ));
-            }
-            PropertyImpl::RemotePublic(inner) => {
-                // This is used by the Server when it is told to transform a Client entity to Delegated
-                self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
-                    inner.inner.clone(),
-                    accessor,
-                    &inner.mutator,
-                    inner.index,
-                ));
-            }
-            PropertyImpl::Local(_) => {
-                panic!("Local Property should never enable delegation.");
-            }
-            PropertyImpl::Delegated(_) => {
-                panic!("Delegated Property should never enable delegation twice.");
-            }
-        }
+        let value = self.inner();
+        self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
+            value.clone(),
+            accessor,
+            mutator,
+            mutator_index,
+        ));
     }
 
     /// Migrate Delegated Property to Host-Owned (Public) version
@@ -458,10 +428,15 @@ impl<T: Serde> DelegatedProperty<T> {
     }
 
     pub fn read(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
-        if !self.can_read() {
-            panic!("Should only read Delegated Property if we do not have authority.");
+        let value = Property::read_inner(reader)?;
+
+        if self.can_read() {
+            self.inner = value;
+            if self.can_mutate() {
+                self.mutate();
+            }
         }
-        self.inner = Property::read_inner(reader)?;
+
         Ok(())
     }
 

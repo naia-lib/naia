@@ -107,7 +107,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
     fn enable_delegation(
         &mut self,
         accessor: &EntityAuthAccessor,
-        mutator: &Option<PropertyMutator>,
+        mutator: &PropertyMutator,
     );
     /// Disable Delegation Replicate
     fn disable_delegation(&mut self);

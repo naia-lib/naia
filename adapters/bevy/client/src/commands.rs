@@ -4,7 +4,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{EntityAuthStatus, HostEntityAuthStatus, HostOwned, WorldMutType, WorldProxyMut};
 use naia_client::{Client as NaiaClient, ReplicationConfig};
 
 use crate::Client;
@@ -22,7 +22,7 @@ pub trait CommandsExt<'w, 's, 'a> {
     fn replication_config(&'a self, client: &Client) -> Option<ReplicationConfig>;
     fn request_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn release_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn authority(&'a self, client: &Client) -> Option<EntityAuthStatus>;
+    fn authority(&'a self, client: &Client) -> Option<HostEntityAuthStatus>;
 }
 
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
@@ -75,7 +75,7 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         return self;
     }
 
-    fn authority(&'a self, client: &Client) -> Option<EntityAuthStatus> {
+    fn authority(&'a self, client: &Client) -> Option<HostEntityAuthStatus> {
         client.entity_authority_status(&self.id())
     }
 }

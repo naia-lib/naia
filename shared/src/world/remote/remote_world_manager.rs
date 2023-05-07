@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use log::warn;
+use log::{info, warn};
 
 use crate::{
     world::{
@@ -112,7 +112,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                 EntityAction::SpawnEntity(local_entity, components) => {
                     // set up entity
                     let world_entity = world.spawn_entity();
-                    local_world_manager.insert_remote_entity(world_entity, local_entity);
+                    local_world_manager.insert_remote_entity(&world_entity, local_entity);
 
                     self.outgoing_events
                         .push(EntityEvent::<E>::SpawnEntity(world_entity));
@@ -300,6 +300,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             local_world_manager,
         );
         for (tick, world_entity, component_update) in incoming_updates.drain(..) {
+
+            info!("processing ready update!");
+
             let component_kind = component_update.kind;
 
             // split the component_update into the waiting and ready parts
@@ -332,6 +335,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     let mut waiting_entities = HashSet::new();
                     waiting_entities.insert(waiting_entity);
 
+                    info!("queuing waiting part of update");
                     let handle = self.entity_waitlist.queue(
                         &waiting_entities,
                         &mut self.update_waitlist_store,
@@ -392,6 +396,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             .collect_ready_items(&mut self.update_waitlist_store)
         {
             for (tick, world_entity, component_kind, ready_update) in list {
+
+                info!("processing waiting update!");
+
                 let component_key = (world_entity, component_kind);
                 let mut remove_entry = false;
                 if let Some(component_map) = self.update_waitlist_map.get_mut(&component_key) {

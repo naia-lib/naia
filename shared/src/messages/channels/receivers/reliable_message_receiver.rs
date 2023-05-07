@@ -1,3 +1,4 @@
+use log::warn;
 use naia_serde::{BitReader, SerdeErr};
 
 use crate::{
@@ -59,6 +60,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         };
 
         if let Some(entity_set) = full_message.relations_waiting() {
+            warn!("Queing waiting message!");
             entity_waitlist.queue(
                 &entity_set,
                 &mut self.waitlist_store,

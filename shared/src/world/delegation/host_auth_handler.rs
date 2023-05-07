@@ -1,9 +1,11 @@
 use std::{collections::HashMap, hash::Hash};
+use crate::HostType;
 
 use crate::world::delegation::{
     auth_channel::{EntityAuthAccessor, EntityAuthChannel, EntityAuthMutator},
     entity_auth_status::EntityAuthStatus,
 };
+use crate::world::delegation::entity_auth_status::HostEntityAuthStatus;
 
 pub struct HostAuthHandler<E: Copy + Eq + Hash> {
     auth_channels: HashMap<E, (EntityAuthMutator, EntityAuthAccessor)>,
@@ -16,12 +18,12 @@ impl<E: Copy + Eq + Hash> HostAuthHandler<E> {
         }
     }
 
-    pub fn register_entity(&mut self, entity: &E) -> EntityAuthAccessor {
+    pub fn register_entity(&mut self, host_type: HostType, entity: &E) -> EntityAuthAccessor {
         if self.auth_channels.contains_key(&entity) {
             panic!("Entity cannot register with Server more than once!");
         }
 
-        let (mutator, accessor) = EntityAuthChannel::new_channel();
+        let (mutator, accessor) = EntityAuthChannel::new_channel(host_type);
 
         self.auth_channels
             .insert(*entity, (mutator, accessor.clone()));
@@ -42,7 +44,7 @@ impl<E: Copy + Eq + Hash> HostAuthHandler<E> {
         receiver.clone()
     }
 
-    pub fn auth_status(&self, entity: &E) -> Option<EntityAuthStatus> {
+    pub fn auth_status(&self, entity: &E) -> Option<HostEntityAuthStatus> {
         if let Some((_, receiver)) = self.auth_channels.get(&entity) {
             return Some(receiver.auth_status());
         }

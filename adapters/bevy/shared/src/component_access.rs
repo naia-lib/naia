@@ -167,18 +167,15 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
     ) {
         if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
             let accessor = global_manager.get_entity_auth_accessor(entity);
-            let mutator_opt = {
-                if global_manager.entity_is_server_owned_and_remote(entity) {
-                    let component_kind = component_mut.kind();
-                    let diff_mask_size = component_mut.diff_mask_size();
-                    let mutator =
-                        global_manager.register_component(entity, &component_kind, diff_mask_size);
-                    Some(mutator)
-                } else {
-                    None
-                }
-            };
-            component_mut.enable_delegation(&accessor, &mutator_opt);
+            if global_manager.entity_is_server_owned_and_remote(entity) {
+                let component_kind = component_mut.kind();
+                let diff_mask_size = component_mut.diff_mask_size();
+                let mutator =
+                    global_manager.register_component(entity, &component_kind, diff_mask_size);
+                component_mut.enable_delegation(&accessor, &mutator);
+            } else {
+                todo!();
+            }
         }
     }
 

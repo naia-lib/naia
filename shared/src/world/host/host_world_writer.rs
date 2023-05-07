@@ -3,6 +3,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
 };
+use log::info;
 
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
@@ -390,6 +391,8 @@ impl HostWorldWriter {
     ) {
         let all_update_entities: Vec<E> = next_send_updates.keys().copied().collect();
 
+        info!("write_updates()");
+
         for entity in all_update_entities {
             // get LocalEntity
             let host_entity = local_world_manager.entity_to_host_entity(&entity).unwrap();
@@ -452,6 +455,8 @@ impl HostWorldWriter {
         host_manager: &mut HostWorldManager<E>,
         next_send_updates: &mut HashMap<E, HashSet<ComponentKind>>,
     ) {
+        info!("write_update()");
+
         let mut written_component_kinds = Vec::new();
         let component_kind_set = next_send_updates.get(entity).unwrap();
         for component_kind in component_kind_set {
@@ -460,7 +465,6 @@ impl HostWorldWriter {
                 .world_channel
                 .diff_handler
                 .diff_mask(entity, component_kind)
-                .expect("DiffHandler does not have registered Component!")
                 .clone();
 
             let mut converter = EntityConverterMut::new(global_world_manager, local_world_manager);
@@ -502,6 +506,7 @@ impl HostWorldWriter {
                 .component_of_kind(entity, component_kind)
                 .expect("Component does not exist in World")
                 .write_update(&diff_mask, writer, &mut converter);
+            info!("writing update!");
 
             written_component_kinds.push(*component_kind);
 

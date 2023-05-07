@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     time::Duration,
 };
+use log::warn;
 
 use naia_socket_shared::Instant;
 
@@ -82,6 +83,8 @@ impl EntityWaitlist {
         if self.ready_handles.is_empty() {
             return None;
         }
+
+        warn!("Collecting waiting message!");
         waitlist_store.collect_ready_items(&mut self.ready_handles)
     }
 

@@ -7,7 +7,7 @@ use bevy_ecs::{
 
 use naia_bevy_shared::{
     Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
-    GlobalEntity, Message, Tick,
+    GlobalEntity, Message, Tick, HostEntityAuthStatus,
 };
 use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError};
 
@@ -112,7 +112,7 @@ impl<'w> Client<'w> {
         self.client.entity_release_authority(entity);
     }
 
-    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {
+    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<HostEntityAuthStatus> {
         self.client.entity_authority_status(entity)
     }
 }

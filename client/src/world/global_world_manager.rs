@@ -4,11 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
-    HostAuthHandler, MutChannelType, PropertyMutator, Replicate,
-};
+use naia_shared::{BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostEntityAuthStatus, HostType, MutChannelType, PropertyMutator, Replicate};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -188,6 +184,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         record.replication_config = ReplicationConfig::Public;
     }
 
+    pub(crate) fn entity_is_delegated(&self, entity: &E) -> bool {
+        if let Some(record) = self.entity_records.get(entity) {
+            return record.replication_config == ReplicationConfig::Delegated;
+        }
+        return false;
+    }
+
     pub(crate) fn entity_register_auth_for_delegation(&mut self, entity: &E) {
         let Some(record) = self.entity_records.get_mut(entity) else {
             panic!("entity record does not exist!");
@@ -195,7 +198,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         if record.replication_config != ReplicationConfig::Public {
             panic!("Can only enable delegation on an Entity that is Public!");
         }
-        self.auth_handler.register_entity(entity);
+        self.auth_handler.register_entity(HostType::Client, entity);
     }
 
     pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
@@ -226,7 +229,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         self.auth_handler.deregister_entity(entity);
     }
 
-    pub(crate) fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
+    pub(crate) fn entity_authority_status(&self, entity: &E) -> Option<HostEntityAuthStatus> {
         self.auth_handler.auth_status(entity)
     }
 

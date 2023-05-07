@@ -1,4 +1,5 @@
 use naia_serde::SerdeInternal;
+use crate::HostType;
 
 #[derive(SerdeInternal, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum EntityAuthStatus {
@@ -10,6 +11,89 @@ pub enum EntityAuthStatus {
     Granted,
     // host has been denied authority over entity (another host has claimed it)
     Denied,
+}
+
+pub struct HostEntityAuthStatus {
+    host_type: HostType,
+    auth_status: EntityAuthStatus,
+}
+
+impl HostEntityAuthStatus {
+    pub fn new(host_type: HostType, auth_status: EntityAuthStatus) -> Self {
+        Self {
+            host_type,
+            auth_status,
+        }
+    }
+
+    pub fn can_request(&self) -> bool {
+        match (self.host_type, self.auth_status) {
+            (HostType::Client, EntityAuthStatus::Available) => true,
+            (HostType::Client, EntityAuthStatus::Requested) => false,
+            (HostType::Client, EntityAuthStatus::Granted) => false,
+            (HostType::Client, EntityAuthStatus::Denied) => false,
+            (HostType::Server, EntityAuthStatus::Available) => todo!(),
+            (HostType::Server, EntityAuthStatus::Requested) => todo!(),
+            (HostType::Server, EntityAuthStatus::Granted) => todo!(),
+            (HostType::Server, EntityAuthStatus::Denied) => todo!(),
+        }
+    }
+
+    pub fn can_release(&self) -> bool {
+        match (self.host_type, self.auth_status) {
+            (HostType::Client, EntityAuthStatus::Available) => false,
+            (HostType::Client, EntityAuthStatus::Requested) => true,
+            (HostType::Client, EntityAuthStatus::Granted) => true,
+            (HostType::Client, EntityAuthStatus::Denied) => false,
+            (HostType::Server, EntityAuthStatus::Available) => todo!(),
+            (HostType::Server, EntityAuthStatus::Requested) => todo!(),
+            (HostType::Server, EntityAuthStatus::Granted) => todo!(),
+            (HostType::Server, EntityAuthStatus::Denied) => todo!(),
+        }
+    }
+
+    pub fn can_mutate(&self) -> bool {
+        match (self.host_type, self.auth_status) {
+            (HostType::Client, EntityAuthStatus::Available) => false,
+            (HostType::Client, EntityAuthStatus::Requested) => true,
+            (HostType::Client, EntityAuthStatus::Granted) => true,
+            (HostType::Client, EntityAuthStatus::Denied) => false,
+            (HostType::Server, EntityAuthStatus::Available) => true,
+            (HostType::Server, EntityAuthStatus::Requested) => true,
+            (HostType::Server, EntityAuthStatus::Granted) => true,
+            (HostType::Server, EntityAuthStatus::Denied) => true,
+        }
+    }
+
+    pub fn can_read(&self) -> bool {
+        match (self.host_type, self.auth_status) {
+            (HostType::Client, EntityAuthStatus::Available) => true,
+            (HostType::Client, EntityAuthStatus::Requested) => false,
+            (HostType::Client, EntityAuthStatus::Granted) => false,
+            (HostType::Client, EntityAuthStatus::Denied) => true,
+            (HostType::Server, EntityAuthStatus::Available) => true,
+            (HostType::Server, EntityAuthStatus::Requested) => true,
+            (HostType::Server, EntityAuthStatus::Granted) => true,
+            (HostType::Server, EntityAuthStatus::Denied) => true,
+        }
+    }
+
+    pub fn can_write(&self) -> bool {
+        match (self.host_type, self.auth_status) {
+            (HostType::Client, EntityAuthStatus::Available) => false,
+            (HostType::Client, EntityAuthStatus::Requested) => false,
+            (HostType::Client, EntityAuthStatus::Granted) => true,
+            (HostType::Client, EntityAuthStatus::Denied) => false,
+            (HostType::Server, EntityAuthStatus::Available) => true,
+            (HostType::Server, EntityAuthStatus::Requested) => true,
+            (HostType::Server, EntityAuthStatus::Granted) => true,
+            (HostType::Server, EntityAuthStatus::Denied) => true,
+        }
+    }
+
+    pub fn status(&self) -> EntityAuthStatus {
+        self.auth_status
+    }
 }
 
 impl EntityAuthStatus {
@@ -27,50 +111,5 @@ impl EntityAuthStatus {
 
     pub fn is_denied(&self) -> bool {
         matches!(self, EntityAuthStatus::Denied)
-    }
-
-    pub fn can_request(&self) -> bool {
-        match self {
-            EntityAuthStatus::Available => true,
-            EntityAuthStatus::Requested => false,
-            EntityAuthStatus::Granted => false,
-            EntityAuthStatus::Denied => false,
-        }
-    }
-
-    pub fn can_release(&self) -> bool {
-        match self {
-            EntityAuthStatus::Available => false,
-            EntityAuthStatus::Requested => true,
-            EntityAuthStatus::Granted => true,
-            EntityAuthStatus::Denied => false,
-        }
-    }
-
-    pub fn can_mutate(&self) -> bool {
-        match self {
-            EntityAuthStatus::Available => false,
-            EntityAuthStatus::Requested => true,
-            EntityAuthStatus::Granted => true,
-            EntityAuthStatus::Denied => false,
-        }
-    }
-
-    pub fn can_read(&self) -> bool {
-        match self {
-            EntityAuthStatus::Available => true,
-            EntityAuthStatus::Requested => false,
-            EntityAuthStatus::Granted => false,
-            EntityAuthStatus::Denied => true,
-        }
-    }
-
-    pub fn can_write(&self) -> bool {
-        match self {
-            EntityAuthStatus::Available => false,
-            EntityAuthStatus::Requested => false,
-            EntityAuthStatus::Granted => true,
-            EntityAuthStatus::Denied => false,
-        }
     }
 }

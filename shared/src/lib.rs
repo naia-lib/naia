@@ -97,7 +97,7 @@ pub use world::{
         },
     },
     delegation::{
-        auth_channel::EntityAuthAccessor, entity_auth_status::EntityAuthStatus,
+        auth_channel::EntityAuthAccessor, entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus},
         host_auth_handler::HostAuthHandler,
     },
     entity::{

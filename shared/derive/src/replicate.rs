@@ -562,7 +562,7 @@ fn get_enable_delegation_method(
     }
 
     quote! {
-        fn enable_delegation(&mut self, accessor: &EntityAuthAccessor, mutator: &Option<PropertyMutator>) {
+        fn enable_delegation(&mut self, accessor: &EntityAuthAccessor, mutator: &PropertyMutator) {
             #output
         }
     }

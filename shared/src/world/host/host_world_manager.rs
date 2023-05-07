@@ -5,14 +5,11 @@ use std::{
     net::SocketAddr,
     time::Duration,
 };
+use log::info;
 
-use crate::{
-    sequence_list::SequenceList,
-    world::{
-        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-    },
-    ComponentKind, DiffMask, EntityAction, Instant, MessageIndex, PacketIndex,
-};
+use crate::{sequence_list::SequenceList, world::{
+    entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+}, ComponentKind, DiffMask, EntityAction, Instant, MessageIndex, PacketIndex, HostEntity};
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
 
@@ -114,14 +111,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         self.world_channel.entity_channel_is_open(entity)
     }
 
-    // used when Remote Entity becomes Delegated
-    pub fn track_remote_entity(&mut self, entity: &E, component_kinds: Vec<ComponentKind>) {
+    // used when Remote Entity gains Write Authority
+    pub fn track_remote_entity(&mut self, local_world_manager: &mut LocalWorldManager<E>, entity: &E, component_kinds: Vec<ComponentKind>) -> HostEntity {
         // add entity
-        self.world_channel.track_remote_entity(entity);
+        let new_host_entity = self.world_channel.track_remote_entity(local_world_manager, entity);
+
+        info!("--- tracking remote entity ---");
+
         // add components
         for component_kind in component_kinds {
             self.track_remote_component(entity, &component_kind);
         }
+
+        info!("--- ---------------------- ---");
+
+        new_host_entity
+    }
+
+    pub fn untrack_remote_entity(&mut self, local_world_manager: &mut LocalWorldManager<E>, entity: &E) {
+        self.world_channel.untrack_remote_entity(local_world_manager, entity);
     }
 
     pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
@@ -210,10 +218,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         }
     }
 
-    pub fn take_outgoing_events(&mut self, now: &Instant, rtt_millis: &f32) -> HostWorldEvents<E> {
+    pub fn take_outgoing_events(&mut self, now: &Instant, rtt_millis: &f32, is_client: bool) -> HostWorldEvents<E> {
         HostWorldEvents {
             next_send_actions: self.world_channel.take_next_actions(now, rtt_millis),
-            next_send_updates: self.world_channel.collect_next_updates(),
+            next_send_updates: self.world_channel.collect_next_updates(is_client),
         }
     }
 }

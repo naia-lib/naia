@@ -71,27 +71,20 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     pub(crate) fn insert_host_entity(&mut self, world_entity: E, host_entity: HostEntity) {
-        if self.entity_map.contains_world_entity(&world_entity) {
-            panic!("World Entity already exists!");
-        }
         if self.entity_map.contains_host_entity(&host_entity) {
             panic!("Local Entity already exists!");
         }
 
-        self.entity_map
-            .insert_with_host_entity(world_entity, host_entity);
+        self.entity_map.insert_with_host_entity(world_entity, host_entity);
     }
 
-    pub(crate) fn insert_remote_entity(&mut self, world_entity: E, remote_entity: RemoteEntity) {
-        if self.entity_map.contains_world_entity(&world_entity) {
-            panic!("World Entity already exists!");
-        }
+    pub fn insert_remote_entity(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
         if self.entity_map.contains_remote_entity(&remote_entity) {
             panic!("Local Entity already exists!");
         }
 
         self.entity_map
-            .insert_with_remote_entity(world_entity, remote_entity);
+            .insert_with_remote_entity(*world_entity, remote_entity);
     }
 
     pub(crate) fn remove_world_entity(&mut self, world_entity: &E) -> LocalEntityRecord {
@@ -100,7 +93,7 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             .expect("Attempting to despawn entity which does not exist!")
     }
 
-    pub(crate) fn remove_remote_entity(&mut self, remote_entity: &RemoteEntity) -> E {
+    pub fn remove_remote_entity(&mut self, remote_entity: &RemoteEntity) -> E {
         let world_entity = *(self
             .entity_map
             .world_entity_from_remote(remote_entity)
@@ -121,7 +114,7 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     // Remote entities
 
-    pub(crate) fn has_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {
+    pub fn has_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {
         self.entity_map.contains_remote_entity(remote_entity)
     }
 
@@ -142,6 +135,12 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             .filter(|(_, record)| record.is_only_remote())
             .map(|(world_entity, _)| *world_entity)
             .collect::<Vec<E>>()
+    }
+
+    // Misc
+
+    pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) {
+        self.entity_map.remove_redundant_remote_entity(world_entity);
     }
 
     pub fn get_user_key(&self) -> &u64 {

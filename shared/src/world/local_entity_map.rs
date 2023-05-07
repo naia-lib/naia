@@ -52,16 +52,24 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
         }
     }
 
-    pub fn insert_with_host_entity(&mut self, world: E, host: HostEntity) {
-        self.world_to_local
-            .insert(world, LocalEntityRecord::new_with_host(host));
-        self.host_to_world.insert(host, world);
+    pub fn insert_with_host_entity(&mut self, world_entity: E, host: HostEntity) {
+        if let Some(record) = self.world_to_local.get_mut(&world_entity) {
+            record.host = Some(host);
+        } else {
+            self.world_to_local
+                .insert(world_entity, LocalEntityRecord::new_with_host(host));
+        }
+        self.host_to_world.insert(host, world_entity);
     }
 
-    pub fn insert_with_remote_entity(&mut self, world: E, remote: RemoteEntity) {
-        self.world_to_local
-            .insert(world, LocalEntityRecord::new_with_remote(remote));
-        self.remote_to_world.insert(remote, world);
+    pub fn insert_with_remote_entity(&mut self, world_entity: E, remote: RemoteEntity) {
+        if let Some(record) = self.world_to_local.get_mut(&world_entity) {
+            record.remote = Some(remote);
+        } else {
+            self.world_to_local
+                .insert(world_entity, LocalEntityRecord::new_with_remote(remote));
+        }
+        self.remote_to_world.insert(remote, world_entity);
     }
 
     pub fn get_host_entity(&self, world: &E) -> Option<HostEntity> {
@@ -78,18 +86,18 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
             .flatten()
     }
 
+    // Converts World Entity to OwnedLocalEntity
+    // NOTE: If both Host and Remote are present, Remote is preferred
+    // that is because this is used for EntityProperties, and RemoteEntity will
+    // always be in scope for the receiver
     pub fn get_owned_entity(&self, world: &E) -> Option<OwnedLocalEntity> {
         self.world_to_local.get(world).map(|record| {
-            if record.remote.is_some() && record.host.is_some() {
-                panic!("Can't convert both here");
-            } else if record.remote.is_none() && record.host.is_none() {
-                panic!("Can't convert neither here");
-            } else if let Some(remote_entity) = record.remote {
+            if let Some(remote_entity) = record.remote {
                 remote_entity.copy_to_owned()
             } else if let Some(host_entity) = record.host {
                 host_entity.copy_to_owned()
             } else {
-                panic!("impossible");
+                panic!("can't convert because entity is neither host nor remote");
             }
         })
     }
@@ -113,6 +121,16 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
             }
         }
         record_opt
+    }
+
+    pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) {
+        if let Some(record) = self.world_to_local.get_mut(world_entity) {
+            if record.host.is_some() && record.remote.is_some() {
+                if let Some(remote_entity) = record.remote.take() {
+                    self.remote_to_world.remove(&remote_entity);
+                }
+            }
+        }
     }
 
     pub fn contains_world_entity(&self, world: &E) -> bool {

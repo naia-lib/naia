@@ -83,7 +83,7 @@ impl HostEntity {
         self.0
     }
 
-    pub fn to_reversed(self) -> RemoteEntity {
+    pub fn to_remote(self) -> RemoteEntity {
         RemoteEntity::new(self.0)
     }
 
@@ -113,7 +113,7 @@ impl RemoteEntity {
         self.0
     }
 
-    pub fn to_reversed(self) -> HostEntity {
+    pub fn to_host(self) -> HostEntity {
         HostEntity::new(self.0)
     }
 

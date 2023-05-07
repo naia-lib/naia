@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock};
+use crate::HostType;
 
-use crate::world::delegation::entity_auth_status::EntityAuthStatus;
+use crate::world::delegation::entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus};
 
 // EntityAuthChannel
 #[derive(Clone)]
@@ -9,9 +10,9 @@ pub(crate) struct EntityAuthChannel {
 }
 
 impl EntityAuthChannel {
-    pub(crate) fn new_channel() -> (EntityAuthMutator, EntityAuthAccessor) {
+    pub(crate) fn new_channel(host_type: HostType) -> (EntityAuthMutator, EntityAuthAccessor) {
         let channel = Self {
-            data: Arc::new(RwLock::new(EntityAuthData::new())),
+            data: Arc::new(RwLock::new(EntityAuthData::new(host_type))),
         };
 
         let sender = EntityAuthMutator::new(&channel);
@@ -20,7 +21,7 @@ impl EntityAuthChannel {
         (sender, receiver)
     }
 
-    fn auth_status(&self) -> EntityAuthStatus {
+    fn auth_status(&self) -> HostEntityAuthStatus {
         let data = self
             .data
             .as_ref()
@@ -41,18 +42,20 @@ impl EntityAuthChannel {
 
 // EntityAuthData
 struct EntityAuthData {
+    host_type: HostType,
     status: EntityAuthStatus,
 }
 
 impl EntityAuthData {
-    fn new() -> Self {
+    fn new(host_type: HostType) -> Self {
         Self {
+            host_type,
             status: EntityAuthStatus::Available,
         }
     }
 
-    fn auth_status(&self) -> EntityAuthStatus {
-        self.status
+    fn auth_status(&self) -> HostEntityAuthStatus {
+        HostEntityAuthStatus::new(self.host_type, self.status)
     }
 
     fn set_auth_status(&mut self, auth_status: EntityAuthStatus) {
@@ -73,7 +76,7 @@ impl EntityAuthAccessor {
         }
     }
 
-    pub(crate) fn auth_status(&self) -> EntityAuthStatus {
+    pub(crate) fn auth_status(&self) -> HostEntityAuthStatus {
         self.channel.auth_status()
     }
 }

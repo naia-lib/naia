@@ -11,14 +11,7 @@ use log::{info, warn};
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_shared::{
-    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
-    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
-    GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, Replicate, Serde,
-    SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer,
-    WorldMutType, WorldRefType,
-};
+use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalWorldManagerType, HostEntityAuthStatus, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -536,11 +529,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let Some(auth_status) = self.global_world_manager.entity_authority_status(entity) else {
                 panic!("Entity should have an Auth status if it is delegated..")
             };
-            if auth_status != EntityAuthStatus::Available {
+            if auth_status.status() != EntityAuthStatus::Available {
                 let message = EntityEventMessage::new_update_auth_status(
                     &self.global_world_manager,
                     entity,
-                    auth_status,
+                    auth_status.status(),
                 );
                 self.send_message::<SystemChannel, EntityEventMessage>(user_key, &message);
             }
@@ -548,8 +541,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
+    pub fn entity_authority_status(&self, entity: &E) -> Option<HostEntityAuthStatus> {
         self.global_world_manager.entity_authority_status(entity)
+    }
+
+    pub fn add_host_entity_to_remote(&mut self, user_key: &UserKey, host_world_entity: &E, remote_entity: RemoteEntity) {
+        if let Some(user) = self.users.get(user_key) {
+            let connection = self.user_connections.get_mut(&user.address).unwrap();
+            connection.base.local_world_manager.insert_remote_entity(host_world_entity, remote_entity);
+        }
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -566,7 +566,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // are in each User's scope
             let mut messages_to_send = Vec::new();
             for (user_key, user) in self.users.iter() {
-                let connection = self.user_connections.get(&user.address).unwrap();
+                let connection = self.user_connections.get_mut(&user.address).unwrap();
                 if connection.base.host_world_manager.host_has_entity(entity) {
                     let message = EntityEventMessage::new_update_auth_status(
                         &self.global_world_manager,
@@ -575,6 +575,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     );
                     messages_to_send.push((user_key, message));
                 }
+
+                // Clean up any remote entity that was mapped to the delegated host entity in this connection!
+                connection.base.local_world_manager.remove_redundant_remote_entity(entity);
             }
             for (user_key, message) in messages_to_send {
                 self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
@@ -878,8 +881,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // update in world manager
         self.global_world_manager
             .insert_component_record(entity, &component_kind);
-        self.global_world_manager
+        let prop_mutator = self.global_world_manager
             .insert_component_diff_handler(entity, component);
+
+        // if entity is delegated, convert over
+        if self.global_world_manager.entity_is_delegated(entity) {
+            let accessor = self.global_world_manager.get_entity_auth_accessor(entity);
+            component.enable_delegation(&accessor, &prop_mutator)
+        }
     }
 
     fn insert_new_component_into_entity_scopes(
@@ -1598,6 +1607,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
                 EntityResponseEvent::EntityUpdateAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");
+                }
+                EntityResponseEvent::EntityUpdateAuthorityResponse(host_world_entity, remote_entity) => {
+                    self.add_host_entity_to_remote(user_key, &host_world_entity, remote_entity);
                 }
             }
         }
