@@ -286,6 +286,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         })
     }
 
+    /// Sends a message to all connected users that contain the given entity in their scope using a given channel
+    pub fn broadcast_message_scoped<C: Channel, M: Message>(&mut self, entity: &E, message: &M) {
+        let cloned_message = M::clone_box(message);
+        self.broadcast_message_scoped_inner(entity, &ChannelKind::of::<C>(), cloned_message);
+    }
+
+    fn broadcast_message_scoped_inner(
+        &mut self,
+        entity: &E,
+        channel_kind: &ChannelKind,
+        message_box: Box<dyn Message>,
+    ) {
+        self.user_keys().iter().for_each(|user_key| {
+            if self.entity_scope_map.get(user_key, entity) {
+                self.send_message_inner(user_key, channel_kind, message_box.clone())
+            }
+        })
+    }
+
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
         let mut tick_buffer_messages = TickBufferMessages::new();
         for (_user_address, connection) in self.user_connections.iter_mut() {
@@ -1281,13 +1300,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 let currently_in_scope =
                                     connection.base.host_world_manager.host_has_entity(entity);
 
-                                let should_be_in_scope = if let Some(in_scope) =
-                                    self.entity_scope_map.get(user_key, entity)
-                                {
-                                    *in_scope
-                                } else {
-                                    false
-                                };
+                                let should_be_in_scope = self.entity_scope_map.get(user_key, entity);
 
                                 if should_be_in_scope {
                                     if !currently_in_scope {

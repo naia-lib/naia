@@ -20,13 +20,18 @@ impl<E: Copy + Eq + Hash> EntityScopeMap<E> {
         }
     }
 
-    pub fn get(&self, user_key: &UserKey, entity: &E) -> Option<&bool> {
+    pub fn get(&self, user_key: &UserKey, entity: &E) -> bool {
         let key = (*user_key, *entity);
 
-        self.main_map.get(&key)
+        self.main_map.get(&key).map(|k| *k).unwrap_or(false)
     }
 
     pub fn insert(&mut self, user_key: UserKey, entity: E, in_scope: bool) {
+        if self.main_map.contains_key(&(user_key, entity)) {
+            // Only need to update scope status
+            self.main_map.insert((user_key, entity), in_scope);
+            return;
+        }
         self.entities_of_user
             .entry(user_key)
             .or_insert_with(|| HashSet::new());
