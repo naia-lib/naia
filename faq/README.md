@@ -89,4 +89,3 @@ The structs that can be passed as messages/events need to implement `Replicate`.
 
 `Property<>` is a wrapper that enables change-detection. It is useful only for ECS replication, where `naia` uses it to perform delta-compression: if a component did not change, only 0 or 1 bit of data can be sent through the network.
 Messages/Event struct fields still need to have `Property<>`, even though it has no effect in that case.
-There are plans to change this and be able to pass any struct as a message.
