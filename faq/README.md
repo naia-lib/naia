@@ -15,8 +15,6 @@
   * [Message/Event passing](#messageevent-passing)
     * [Can any message be passed through a channel? Can I send any struct as an Event?](#can-any-message-be-passed-through-a-channel-can-i-send-any-struct-as-an-event)
     * [What is `Property<>`?](#what-is-property-)
-    * [What does `Protocolize` provide?](#what-does-protocolize-provide)
-    * [Can I have multiple `Protocolize` enums?](#can-i-have-multiple-protocolize-enums)
 <!-- TOC -->
 
 ## General question?
@@ -91,15 +89,3 @@ The structs that can be passed as messages/events need to implement `Replicate`.
 
 `Property<>` is a wrapper that enables change-detection. It is useful only for ECS replication, where `naia` uses it to perform delta-compression: if a component did not change, only 0 or 1 bit of data can be sent through the network.
 Messages/Event struct fields still need to have `Property<>`, even though it has no effect in that case.
-There are plans to change this and be able to pass any struct as a message.
-
-### What does `Protocolize` provide?
-
-`Protocolize` defines how your data will get serialized and passed through channels.
-It provides 2 main optimizations:
-- delta-compression for ECS replication via the `Replicate` and `Property` traits
-- bit-packing for smaller serialization
-
-### Can I have multiple `Protocolize` enums?
-
-This is not possible right now, but it is planned for future releases.
