@@ -26,7 +26,7 @@ impl<'b> BitReader<'b> {
         }
     }
 
-    pub(crate) fn read_bit(&mut self) -> Result<bool, SerdeErr> {
+    pub fn read_bit(&mut self) -> Result<bool, SerdeErr> {
         if self.state.scratch_index == 0 {
             if self.state.buffer_index == self.buffer.len() {
                 return Err(SerdeErr);
@@ -47,7 +47,7 @@ impl<'b> BitReader<'b> {
         Ok(value != 0)
     }
 
-    pub(crate) fn read_byte(&mut self) -> Result<u8, SerdeErr> {
+    pub fn read_byte(&mut self) -> Result<u8, SerdeErr> {
         let mut output = 0;
         for _ in 0..7 {
             if self.read_bit()? {
