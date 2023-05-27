@@ -4,7 +4,11 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostEntityAuthStatus, HostType, MutChannelType, PropertyMutator, Replicate};
+use naia_shared::{
+    BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus,
+    EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
+    HostAuthHandler, HostEntityAuthStatus, HostType, MutChannelType, PropertyMutator, Replicate,
+};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{

@@ -1,4 +1,5 @@
 use naia_serde::SerdeInternal;
+
 use crate::HostType;
 
 #[derive(SerdeInternal, Clone, Copy, Debug, PartialEq, Eq, Hash)]

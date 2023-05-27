@@ -10,7 +10,10 @@ use super::{
     entity_action_event::EntityActionEvent, host_world_manager::ActionId,
     user_diff_handler::UserDiffHandler,
 };
-use crate::{world::local_world_manager::LocalWorldManager, ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, GlobalWorldManagerType, Instant, ReliableSender, HostEntity};
+use crate::{
+    world::local_world_manager::LocalWorldManager, ChannelSender, ComponentKind, EntityAction,
+    EntityActionReceiver, GlobalWorldManagerType, HostEntity, Instant, ReliableSender,
+};
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
 
@@ -205,7 +208,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     // Track Remote Entities
 
-    pub fn track_remote_entity(&mut self, local_world_manager: &mut LocalWorldManager<E>, entity: &E) -> HostEntity {
+    pub fn track_remote_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+    ) -> HostEntity {
         if self.host_world.contains_key(entity) {
             panic!("World Channel: cannot track remote entity that already exists");
         }
@@ -222,7 +229,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         new_host_entity
     }
 
-    pub fn untrack_remote_entity(&mut self, local_world_manager: &mut LocalWorldManager<E>, entity: &E) {
+    pub fn untrack_remote_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+    ) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot untrack remote entity that doesn't exist");
         }
@@ -457,8 +468,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         local_world_manager: &mut LocalWorldManager<E>,
         world_entity: &E,
     ) -> HostEntity {
-        if let Some(host_entity) = local_world_manager
-            .remove_reserved_host_entity(world_entity) {
+        if let Some(host_entity) = local_world_manager.remove_reserved_host_entity(world_entity) {
             return host_entity;
         } else {
             let host_entity = local_world_manager.generate_host_entity();
@@ -545,7 +555,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.outgoing_actions.take_next_messages()
     }
 
-    pub fn collect_next_updates(&self, is_client: bool) -> HashMap<E, HashSet<ComponentKind>> {
+    pub fn collect_next_updates(&self) -> HashMap<E, HashSet<ComponentKind>> {
         let mut output = HashMap::new();
 
         for (entity, entity_channel) in self.entity_channels.iter() {

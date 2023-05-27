@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     time::Duration,
 };
+
 use log::warn;
 
 use naia_socket_shared::Instant;

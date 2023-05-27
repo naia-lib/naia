@@ -1,4 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
+
 use log::{info, warn};
 
 use crate::{
@@ -191,7 +192,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-
         loop {
             // read update continue bit
             let update_continue = bool::de(reader)?;
@@ -222,7 +222,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         reader: &mut BitReader,
         remote_entity: &RemoteEntity,
     ) -> Result<(), SerdeErr> {
-
         loop {
             // read update continue bit
             let component_continue = bool::de(reader)?;

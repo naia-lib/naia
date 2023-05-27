@@ -172,7 +172,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         let mut host_world_events = self
             .base
             .host_world_manager
-            .take_outgoing_events(now, &rtt_millis, true);
+            .take_outgoing_events(now, &rtt_millis);
 
         let mut any_sent = false;
         loop {

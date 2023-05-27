@@ -300,7 +300,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             local_world_manager,
         );
         for (tick, world_entity, component_update) in incoming_updates.drain(..) {
-
             info!("processing ready update!");
 
             let component_kind = component_update.kind;
@@ -396,7 +395,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             .collect_ready_items(&mut self.update_waitlist_store)
         {
             for (tick, world_entity, component_kind, ready_update) in list {
-
                 info!("processing waiting update!");
 
                 let component_key = (world_entity, component_kind);

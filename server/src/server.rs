@@ -11,7 +11,14 @@ use log::{info, warn};
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalWorldManagerType, HostEntityAuthStatus, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
+use naia_shared::{
+    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
+    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
+    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
+    GlobalEntity, GlobalWorldManagerType, HostEntityAuthStatus, Instant, Message, MessageContainer,
+    PacketType, Protocol, RemoteEntity, Replicate, Serde, SerdeErr, SharedGlobalWorldManager,
+    SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -545,10 +552,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.global_world_manager.entity_authority_status(entity)
     }
 
-    pub fn add_host_entity_to_remote(&mut self, user_key: &UserKey, host_world_entity: &E, remote_entity: RemoteEntity) {
+    pub fn add_host_entity_to_remote(
+        &mut self,
+        user_key: &UserKey,
+        host_world_entity: &E,
+        remote_entity: RemoteEntity,
+    ) {
         if let Some(user) = self.users.get(user_key) {
             let connection = self.user_connections.get_mut(&user.address).unwrap();
-            connection.base.local_world_manager.insert_remote_entity(host_world_entity, remote_entity);
+            connection
+                .base
+                .local_world_manager
+                .insert_remote_entity(host_world_entity, remote_entity);
         }
     }
 
@@ -577,7 +592,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
 
                 // Clean up any remote entity that was mapped to the delegated host entity in this connection!
-                connection.base.local_world_manager.remove_redundant_remote_entity(entity);
+                connection
+                    .base
+                    .local_world_manager
+                    .remove_redundant_remote_entity(entity);
             }
             for (user_key, message) in messages_to_send {
                 self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
@@ -881,7 +899,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // update in world manager
         self.global_world_manager
             .insert_component_record(entity, &component_kind);
-        let prop_mutator = self.global_world_manager
+        let prop_mutator = self
+            .global_world_manager
             .insert_component_diff_handler(entity, component);
 
         // if entity is delegated, convert over

@@ -1,11 +1,12 @@
 use std::{collections::HashMap, hash::Hash};
-use crate::HostType;
 
-use crate::world::delegation::{
-    auth_channel::{EntityAuthAccessor, EntityAuthChannel, EntityAuthMutator},
-    entity_auth_status::EntityAuthStatus,
+use crate::{
+    world::delegation::{
+        auth_channel::{EntityAuthAccessor, EntityAuthChannel, EntityAuthMutator},
+        entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus},
+    },
+    HostType,
 };
-use crate::world::delegation::entity_auth_status::HostEntityAuthStatus;
 
 pub struct HostAuthHandler<E: Copy + Eq + Hash> {
     auth_channels: HashMap<E, (EntityAuthMutator, EntityAuthAccessor)>,

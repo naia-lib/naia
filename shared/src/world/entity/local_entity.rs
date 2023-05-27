@@ -1,4 +1,3 @@
-
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedVariableInteger};
 
 use crate::{EntityDoesNotExistError, GlobalEntity, LocalEntityAndGlobalEntityConverter};

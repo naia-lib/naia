@@ -4,7 +4,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{EntityAuthStatus, HostEntityAuthStatus, HostOwned, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{HostEntityAuthStatus, HostOwned, WorldMutType, WorldProxyMut};
 use naia_client::{Client as NaiaClient, ReplicationConfig};
 
 use crate::Client;

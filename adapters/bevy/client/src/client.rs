@@ -6,8 +6,8 @@ use bevy_ecs::{
 };
 
 use naia_bevy_shared::{
-    Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
-    GlobalEntity, Message, Tick, HostEntityAuthStatus,
+    Channel, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity,
+    HostEntityAuthStatus, Message, Tick,
 };
 use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError};
 

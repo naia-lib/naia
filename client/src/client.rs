@@ -5,17 +5,16 @@ use log::{info, warn};
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-pub use naia_shared::{
-    BitReader, BitWriter, Channel, ChannelKind, ChannelKinds, ComponentKind, ConnectionConfig,
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
-    EntityConverter, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage,
-    EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message,
-    MessageContainer, PacketType, PingIndex, Protocol, Replicate, Serde, SharedGlobalWorldManager,
-    SocketConfig, StandardHeader, SystemChannel, Tick, Timer, Timestamp, WorldMutType,
-    WorldRefType,
+use naia_shared::{
+    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
+    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
+    HostEntityAuthStatus, Instant, Message, MessageContainer, PacketType, Protocol, Replicate,
+    Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick,
+    WorldMutType, WorldRefType,
 };
-use naia_shared::HostEntityAuthStatus;
 
+use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
     connection::{
         base_time_manager::BaseTimeManager,
@@ -30,8 +29,6 @@ use crate::{
     },
     ReplicationConfig,
 };
-
-use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
@@ -743,12 +740,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         entity: &E,
         new_auth_status: EntityAuthStatus,
     ) {
-        let old_auth_status = self.global_world_manager.entity_authority_status(entity).unwrap();
+        let old_auth_status = self
+            .global_world_manager
+            .entity_authority_status(entity)
+            .unwrap();
 
         self.global_world_manager
             .entity_update_authority(entity, new_auth_status);
 
-        info!("<-- Received Entity Update Authority message! {:?} -> {:?}", old_auth_status.status(), new_auth_status);
+        info!(
+            "<-- Received Entity Update Authority message! {:?} -> {:?}",
+            old_auth_status.status(),
+            new_auth_status
+        );
 
         // Updated Host Manager
         match (old_auth_status.status(), new_auth_status) {
@@ -761,10 +765,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     return;
                 };
                 let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
-                let new_host_entity = connection
-                    .base
-                    .host_world_manager
-                    .track_remote_entity(&mut connection.base.local_world_manager, entity, component_kinds);
+                let new_host_entity = connection.base.host_world_manager.track_remote_entity(
+                    &mut connection.base.local_world_manager,
+                    entity,
+                    component_kinds,
+                );
 
                 // send response
                 let message = EntityEventMessage::new_grant_auth_response(
@@ -787,17 +792,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .host_world_manager
                     .untrack_remote_entity(&mut connection.base.local_world_manager, entity);
             }
-            (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {},
-            (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {},
+            (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {}
+            (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {}
             (EntityAuthStatus::Releasing, EntityAuthStatus::Granted) => {
                 // granted auth response arrived while we are releasing auth!
-                self.global_world_manager.entity_update_authority(entity, EntityAuthStatus::Available);
+                self.global_world_manager
+                    .entity_update_authority(entity, EntityAuthStatus::Available);
             }
             (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
                 // auth was released before it was granted, continue as normal
             }
             (_, _) => {
-                panic!("-- Entity updated authority, not handled -- {:?} -> {:?}", old_auth_status.status(), new_auth_status);
+                panic!(
+                    "-- Entity updated authority, not handled -- {:?} -> {:?}",
+                    old_auth_status.status(),
+                    new_auth_status
+                );
             }
         }
     }

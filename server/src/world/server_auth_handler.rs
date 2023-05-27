@@ -3,7 +3,9 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{EntityAuthAccessor, EntityAuthStatus, HostAuthHandler, HostEntityAuthStatus, HostType};
+use naia_shared::{
+    EntityAuthAccessor, EntityAuthStatus, HostAuthHandler, HostEntityAuthStatus, HostType,
+};
 
 use crate::UserKey;
 
@@ -43,7 +45,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
     }
 
     pub fn register_entity(&mut self, entity: &E) {
-        self.host_auth_handler.register_entity(HostType::Server, entity);
+        self.host_auth_handler
+            .register_entity(HostType::Server, entity);
         self.entity_auth_map.insert(*entity, AuthOwner::None);
     }
 

@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use naia_shared::{EntityAuthStatus, HostEntityAuthStatus, ReplicaMutWrapper, Replicate, WorldMutType};
+use naia_shared::{HostEntityAuthStatus, ReplicaMutWrapper, Replicate, WorldMutType};
 
 use crate::{Client, ReplicationConfig};
 

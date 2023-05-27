@@ -1,7 +1,9 @@
 use std::sync::{Arc, RwLock};
-use crate::HostType;
 
-use crate::world::delegation::entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus};
+use crate::{
+    world::delegation::entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus},
+    HostType,
+};
 
 // EntityAuthChannel
 #[derive(Clone)]

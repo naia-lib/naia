@@ -8,7 +8,10 @@ use log::warn;
 use naia_socket_shared::Instant;
 
 use crate::{
-    world::{local_entity_map::{LocalEntityMap, LocalEntityRecord}, entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}},
+    world::{
+        entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+        local_entity_map::{LocalEntityMap, LocalEntityRecord},
+    },
     EntityAndLocalEntityConverter, EntityDoesNotExistError, KeyGenerator,
 };
 
@@ -75,7 +78,8 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             panic!("Local Entity already exists!");
         }
 
-        self.entity_map.insert_with_host_entity(world_entity, host_entity);
+        self.entity_map
+            .insert_with_host_entity(world_entity, host_entity);
     }
 
     pub fn insert_remote_entity(&mut self, world_entity: &E, remote_entity: RemoteEntity) {

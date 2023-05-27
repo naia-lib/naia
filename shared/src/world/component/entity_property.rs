@@ -5,12 +5,12 @@ use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::{
     world::entity::{
-        local_entity::OwnedLocalEntity,
         entity_converters::{
             EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
             LocalEntityAndGlobalEntityConverterMut,
         },
         global_entity::GlobalEntity,
+        local_entity::OwnedLocalEntity,
     },
     EntityAuthAccessor, PropertyMutator, RemoteEntity,
 };
@@ -253,9 +253,7 @@ impl EntityRelation {
             EntityRelation::RemotePublic(inner) => inner.global_entity,
             EntityRelation::Local(inner) => inner.global_entity,
             EntityRelation::Delegated(inner) => inner.global_entity,
-            EntityRelation::RemoteWaiting(_) => {
-                None
-            }
+            EntityRelation::RemoteWaiting(_) => None,
         }
     }
 }
@@ -361,8 +359,10 @@ impl EntityProperty {
             }
             (None, None, Some(local_entity), Some(Err(_))) => {
                 info!("1 setting inner to RemoteWaiting");
-                EntityRelation::RemoteWaiting(RemoteWaitingRelation::new(local_entity.take_remote())
-            )},
+                EntityRelation::RemoteWaiting(RemoteWaitingRelation::new(
+                    local_entity.take_remote(),
+                ))
+            }
             (None, None, Some(_), Some(Ok(global_entity))) => EntityRelation::RemoteOwned(
                 RemoteOwnedRelation::new_with_value(Some(global_entity)),
             ),
@@ -510,7 +510,9 @@ impl EntityProperty {
     ) {
         let inner_value = self.inner.get_global_entity();
         match &mut self.inner {
-            EntityRelation::HostOwned(_) | EntityRelation::RemoteOwned(_) | EntityRelation::RemotePublic(_) => {
+            EntityRelation::HostOwned(_)
+            | EntityRelation::RemoteOwned(_)
+            | EntityRelation::RemotePublic(_) => {
                 // This is used by the Server when it transforms it's own Entities to Delegated
                 // and by the Client when it transforms it's own Entities to Delegated
                 self.inner = EntityRelation::Delegated(DelegatedRelation::new(

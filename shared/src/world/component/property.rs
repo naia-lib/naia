@@ -1,7 +1,5 @@
 use std::ops::{Deref, DerefMut};
 
-use log::warn;
-
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::world::{

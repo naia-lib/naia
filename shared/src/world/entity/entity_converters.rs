@@ -2,13 +2,18 @@ use std::{
     hash::Hash,
     sync::{Arc, RwLock},
 };
+
 use log::warn;
 
 use crate::{
     bigmap::BigMapKey,
     world::{
         delegation::auth_channel::EntityAuthAccessor,
-        entity::{error::EntityDoesNotExistError, global_entity::GlobalEntity, local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}},
+        entity::{
+            error::EntityDoesNotExistError,
+            global_entity::GlobalEntity,
+            local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+        },
         host::mut_channel::MutChannelType,
     },
     ComponentKind, GlobalDiffHandler, LocalWorldManager, PropertyMutator,

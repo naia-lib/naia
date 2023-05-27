@@ -1,10 +1,13 @@
-use std::hash::Hash;
 use log::info;
+use std::hash::Hash;
 
 use naia_derive::MessageInternal;
 use naia_serde::SerdeInternal;
 
-use crate::{EntityAndGlobalEntityConverter, EntityAuthStatus, EntityProperty, EntityResponseEvent, HostEntity, RemoteEntity};
+use crate::{
+    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityProperty, EntityResponseEvent,
+    HostEntity, RemoteEntity,
+};
 
 #[derive(MessageInternal)]
 pub struct EntityEventMessage {
@@ -53,7 +56,10 @@ impl EntityEventMessageAction {
             }
             EntityEventMessageAction::GrantAuthResponse(remote_entity) => {
                 info!("received EntityGrantAuthResponse");
-                EntityResponseEvent::EntityGrantAuthResponse(*entity, RemoteEntity::new(*remote_entity))
+                EntityResponseEvent::EntityGrantAuthResponse(
+                    *entity,
+                    RemoteEntity::new(*remote_entity),
+                )
             }
         }
     }
@@ -146,7 +152,6 @@ impl EntityEventMessage {
         entity: &E,
         host_entity: HostEntity,
     ) -> Self {
-
         Self::new(
             converter,
             entity,
