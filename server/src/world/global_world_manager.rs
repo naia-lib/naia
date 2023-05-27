@@ -4,11 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use naia_shared::{
-    BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor,
-    EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
-    HostEntityAuthStatus, MutChannelType, PropertyMutator, Replicate,
-};
+use naia_shared::{BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -234,7 +230,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         self.auth_handler.deregister_entity(entity);
     }
 
-    pub(crate) fn entity_authority_status(&self, entity: &E) -> Option<HostEntityAuthStatus> {
+    pub(crate) fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.auth_handler.authority_status(entity)
     }
 

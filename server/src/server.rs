@@ -15,7 +15,7 @@ use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
     EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
     EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
-    GlobalEntity, GlobalWorldManagerType, HostEntityAuthStatus, Instant, Message, MessageContainer,
+    GlobalEntity, GlobalWorldManagerType, Instant, Message, MessageContainer,
     PacketType, Protocol, RemoteEntity, Replicate, Serde, SerdeErr, SharedGlobalWorldManager,
     SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
 };
@@ -536,11 +536,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let Some(auth_status) = self.global_world_manager.entity_authority_status(entity) else {
                 panic!("Entity should have an Auth status if it is delegated..")
             };
-            if auth_status.status() != EntityAuthStatus::Available {
+            if auth_status != EntityAuthStatus::Available {
                 let message = EntityEventMessage::new_update_auth_status(
                     &self.global_world_manager,
                     entity,
-                    auth_status.status(),
+                    auth_status,
                 );
                 self.send_message::<SystemChannel, EntityEventMessage>(user_key, &message);
             }
@@ -548,7 +548,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_authority_status(&self, entity: &E) -> Option<HostEntityAuthStatus> {
+    pub fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.global_world_manager.entity_authority_status(entity)
     }
 

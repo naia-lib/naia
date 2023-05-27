@@ -5,10 +5,7 @@ use bevy_ecs::{
     system::{ResMut, SystemParam},
 };
 
-use naia_bevy_shared::{
-    Channel, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity,
-    HostEntityAuthStatus, Message, Tick,
-};
+use naia_bevy_shared::{Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Tick};
 use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError};
 
 use crate::ReplicationConfig;
@@ -112,7 +109,7 @@ impl<'w> Client<'w> {
         self.client.entity_release_authority(entity);
     }
 
-    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<HostEntityAuthStatus> {
+    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {
         self.client.entity_authority_status(entity)
     }
 }

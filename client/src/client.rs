@@ -9,7 +9,7 @@ use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
     EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
-    HostEntityAuthStatus, Instant, Message, MessageContainer, PacketType, Protocol, Replicate,
+    Instant, Message, MessageContainer, PacketType, Protocol, Replicate,
     Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick,
     WorldMutType, WorldRefType,
 };
@@ -454,7 +454,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_authority_status(&self, entity: &E) -> Option<HostEntityAuthStatus> {
+    pub fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         self.check_client_authoritative_allowed();
 
         self.global_world_manager.entity_authority_status(entity)
@@ -750,12 +750,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         info!(
             "<-- Received Entity Update Authority message! {:?} -> {:?}",
-            old_auth_status.status(),
+            old_auth_status,
             new_auth_status
         );
 
         // Updated Host Manager
-        match (old_auth_status.status(), new_auth_status) {
+        match (old_auth_status, new_auth_status) {
             (EntityAuthStatus::Requested, EntityAuthStatus::Granted) => {
                 info!("-- Entity GAINED Authority --");
                 // Granted Authority
@@ -817,7 +817,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             (_, _) => {
                 panic!(
                     "-- Entity updated authority, not handled -- {:?} -> {:?}",
-                    old_auth_status.status(),
+                    old_auth_status,
                     new_auth_status
                 );
             }
