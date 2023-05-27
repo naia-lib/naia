@@ -11,7 +11,7 @@ use super::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RejectEvent,
         RemoveComponentEvents, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
-        UpdateComponentEvents,
+        UpdateComponentEvents, EntityAuthGrantedEvent, EntityAuthDeniedEvent, EntityAuthResetEvent,
     },
     systems::before_receive_events,
 };
@@ -70,6 +70,9 @@ impl PluginType for Plugin {
             .add_event::<DespawnEntityEvent>()
             .add_event::<PublishEntityEvent>()
             .add_event::<UnpublishEntityEvent>()
+            .add_event::<EntityAuthGrantedEvent>()
+            .add_event::<EntityAuthDeniedEvent>()
+            .add_event::<EntityAuthResetEvent>()
             .add_event::<InsertComponentEvents>()
             .add_event::<UpdateComponentEvents>()
             .add_event::<RemoveComponentEvents>()
