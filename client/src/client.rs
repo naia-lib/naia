@@ -485,18 +485,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // 1. Set local authority status for Entity
         let success = self.global_world_manager.entity_release_authority(entity);
         if success {
-
-            // 2. Remove Entity from Host connection
-            {
-                let Some(connection) = &mut self.server_connection else {
-                    return;
-                };
-                connection
-                    .base
-                    .host_world_manager
-                    .untrack_remote_entity(&mut connection.base.local_world_manager, entity);
-            }
-
             warn!(" --> Client sending authority RELEASE message!");
             // 3. Send request to Server
             let message =
@@ -789,9 +777,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             (EntityAuthStatus::Releasing, EntityAuthStatus::Available) => {
                 info!("-- Entity LOST Authority --");
                 // Lost Authority
+
+                // Remove Entity from Host connection
+                let Some(connection) = &mut self.server_connection else {
+                    return;
+                };
+                connection
+                    .base
+                    .host_world_manager
+                    .untrack_remote_entity(&mut connection.base.local_world_manager, entity);
             }
             (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {},
             (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {},
+            (EntityAuthStatus::Releasing, EntityAuthStatus::Granted) => {
+                // granted auth response arrived while we are releasing auth!
+                self.global_world_manager.entity_update_authority(entity, EntityAuthStatus::Available);
+            }
+            (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
+                // auth was released before it was granted, continue as normal
+            }
             (_, _) => {
                 panic!("-- Entity updated authority, not handled -- {:?} -> {:?}", old_auth_status.status(), new_auth_status);
             }
