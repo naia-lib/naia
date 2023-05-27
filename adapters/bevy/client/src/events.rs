@@ -74,6 +74,15 @@ pub struct PublishEntityEvent(pub Entity);
 // UnpublishEntityEvent
 pub struct UnpublishEntityEvent(pub Entity);
 
+// EntityAuthGrantedEvent
+pub struct EntityAuthGrantedEvent(pub Entity);
+
+// EntityAuthDeniedEvent
+pub struct EntityAuthDeniedEvent(pub Entity);
+
+// EntityAuthResetEvent
+pub struct EntityAuthResetEvent(pub Entity);
+
 // InsertComponentEvent
 pub struct InsertComponentEvents {
     inner: HashMap<ComponentKind, Vec<Entity>>,

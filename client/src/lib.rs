@@ -36,7 +36,7 @@ pub use error::NaiaClientError;
 pub use events::{
     ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events,
     InsertComponentEvent, MessageEvent, PublishEntityEvent, RejectEvent, RemoveComponentEvent,
-    ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
+    ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent, EntityAuthGrantedEvent, EntityAuthDeniedEvent, EntityAuthResetEvent,
 };
 pub use world::{
     entity_mut::EntityMut, entity_ref::EntityRef, replication_config::ReplicationConfig,

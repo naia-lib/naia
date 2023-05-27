@@ -778,6 +778,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     new_host_entity,
                 );
                 self.send_message::<SystemChannel, EntityEventMessage>(&message);
+
+                // push outgoing event
+                self.incoming_events.push_auth_grant(*entity);
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Available) => {
                 info!("-- Entity LOST Authority --");
@@ -791,9 +794,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .base
                     .host_world_manager
                     .untrack_remote_entity(&mut connection.base.local_world_manager, entity);
+
+                // push outgoing event
+                self.incoming_events.push_auth_reset(*entity);
             }
-            (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {}
-            (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {}
+            (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {
+                // push outgoing event
+                self.incoming_events.push_auth_deny(*entity);
+            }
+            (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {
+                // push outgoing event
+                self.incoming_events.push_auth_reset(*entity);
+            }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Granted) => {
                 // granted auth response arrived while we are releasing auth!
                 self.global_world_manager

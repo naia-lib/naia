@@ -19,6 +19,9 @@ pub struct Events<E: Copy> {
     despawns: Vec<E>,
     publishes: Vec<E>,
     unpublishes: Vec<E>,
+    auth_grants: Vec<E>,
+    auth_denies: Vec<E>,
+    auth_resets: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<E>>,
     removes: HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>,
     updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
@@ -45,6 +48,9 @@ impl<E: Copy> Events<E> {
             despawns: Vec::new(),
             publishes: Vec::new(),
             unpublishes: Vec::new(),
+            auth_grants: Vec::new(),
+            auth_denies: Vec::new(),
+            auth_resets: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
             updates: HashMap::new(),
@@ -177,6 +183,21 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
+    pub(crate) fn push_auth_grant(&mut self, entity: E) {
+        self.auth_grants.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_auth_deny(&mut self, entity: E) {
+        self.auth_denies.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_auth_reset(&mut self, entity: E) {
+        self.auth_resets.push(entity);
+        self.empty = false;
+    }
+
     pub(crate) fn push_insert(&mut self, entity: E, component_kind: ComponentKind) {
         if !self.inserts.contains_key(&component_kind) {
             self.inserts.insert(component_kind, Vec::new());
@@ -250,6 +271,9 @@ impl<E: Copy> Events<E> {
         self.despawns.clear();
         self.publishes.clear();
         self.unpublishes.clear();
+        self.auth_grants.clear();
+        self.auth_denies.clear();
+        self.auth_resets.clear();
         self.inserts.clear();
         self.removes.clear();
         self.updates.clear();
@@ -450,6 +474,51 @@ impl<E: Copy> Event<E> for UnpublishEntityEvent {
 
     fn has(events: &Events<E>) -> bool {
         !events.unpublishes.is_empty()
+    }
+}
+
+// Auth Grant Entity Event
+pub struct EntityAuthGrantedEvent;
+impl<E: Copy> Event<E> for EntityAuthGrantedEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.auth_grants);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.auth_grants.is_empty()
+    }
+}
+
+// Auth Reset Entity Event
+pub struct EntityAuthResetEvent;
+impl<E: Copy> Event<E> for EntityAuthResetEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.auth_resets);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.auth_resets.is_empty()
+    }
+}
+
+// Auth Deny Entity Event
+pub struct EntityAuthDeniedEvent;
+impl<E: Copy> Event<E> for EntityAuthDeniedEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.auth_denies);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.auth_denies.is_empty()
     }
 }
 
