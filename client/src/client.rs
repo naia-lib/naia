@@ -470,6 +470,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // 1. Set local authority status for Entity
         let success = self.global_world_manager.entity_request_authority(entity);
         if success {
+            warn!(" --> Client sending authority REQUEST message!");
             // 2. Send request to Server
             let message =
                 EntityEventMessage::new_request_authority(&self.global_world_manager, entity);
@@ -484,8 +485,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // 1. Set local authority status for Entity
         let success = self.global_world_manager.entity_release_authority(entity);
         if success {
+
+            // 2. Remove Entity from Host connection
+            {
+                let Some(connection) = &mut self.server_connection else {
+                    return;
+                };
+                connection
+                    .base
+                    .host_world_manager
+                    .untrack_remote_entity(&mut connection.base.local_world_manager, entity);
+            }
+
             warn!(" --> Client sending authority RELEASE message!");
-            // 2. Send request to Server
+            // 3. Send request to Server
             let message =
                 EntityEventMessage::new_release_authority(&self.global_world_manager, entity);
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
@@ -747,9 +760,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.global_world_manager
             .entity_update_authority(entity, new_auth_status);
 
+        info!("<-- Received Entity Update Authority message! {:?} -> {:?}", old_auth_status.status(), new_auth_status);
+
         // Updated Host Manager
-        match (old_auth_status.status() == EntityAuthStatus::Granted, new_auth_status == EntityAuthStatus::Granted) {
-            (false, true) => {
+        match (old_auth_status.status(), new_auth_status) {
+            (EntityAuthStatus::Requested, EntityAuthStatus::Granted) => {
                 info!("-- Entity GAINED Authority --");
                 // Granted Authority
 
@@ -764,27 +779,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .track_remote_entity(&mut connection.base.local_world_manager, entity, component_kinds);
 
                 // send response
-                let message = EntityEventMessage::new_update_auth_response(
+                let message = EntityEventMessage::new_grant_auth_response(
                     &self.global_world_manager,
                     &entity,
                     new_host_entity,
                 );
                 self.send_message::<SystemChannel, EntityEventMessage>(&message);
             }
-            (true, false) => {
+            (EntityAuthStatus::Releasing, EntityAuthStatus::Available) => {
                 info!("-- Entity LOST Authority --");
                 // Lost Authority
-
-                // Remove Entity from Host connection
-                let Some(connection) = &mut self.server_connection else {
-                    return;
-                };
-                connection
-                    .base
-                    .host_world_manager
-                    .untrack_remote_entity(&mut connection.base.local_world_manager, entity);
             }
-            (_, _) => {}
+            (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {},
+            (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {},
+            (_, _) => {
+                panic!("-- Entity updated authority, not handled -- {:?} -> {:?}", old_auth_status.status(), new_auth_status);
+            }
         }
     }
 
@@ -1087,8 +1097,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityResponseEvent::EntityUpdateAuthority(entity, new_auth_status) => {
                     self.entity_update_authority(&entity, new_auth_status);
                 }
-                EntityResponseEvent::EntityUpdateAuthorityResponse(_, _) => {
-                    panic!("Client should never receive an EntityUpdateAuthorityResponse event");
+                EntityResponseEvent::EntityGrantAuthResponse(_, _) => {
+                    panic!("Client should never receive an EntityGrantAuthResponse event");
                 }
             }
         }

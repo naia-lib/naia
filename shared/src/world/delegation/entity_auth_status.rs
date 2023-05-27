@@ -9,6 +9,8 @@ pub enum EntityAuthStatus {
     Requested,
     // host has been granted authority over entity
     Granted,
+    // host has released authority, but it has not yet completed
+    Releasing,
     // host has been denied authority over entity (another host has claimed it)
     Denied,
 }
@@ -31,10 +33,12 @@ impl HostEntityAuthStatus {
             (HostType::Client, EntityAuthStatus::Available) => true,
             (HostType::Client, EntityAuthStatus::Requested) => false,
             (HostType::Client, EntityAuthStatus::Granted) => false,
+            (HostType::Client, EntityAuthStatus::Releasing) => false,
             (HostType::Client, EntityAuthStatus::Denied) => false,
             (HostType::Server, EntityAuthStatus::Available) => todo!(),
             (HostType::Server, EntityAuthStatus::Requested) => todo!(),
             (HostType::Server, EntityAuthStatus::Granted) => todo!(),
+            (HostType::Server, EntityAuthStatus::Releasing) => todo!(),
             (HostType::Server, EntityAuthStatus::Denied) => todo!(),
         }
     }
@@ -44,10 +48,12 @@ impl HostEntityAuthStatus {
             (HostType::Client, EntityAuthStatus::Available) => false,
             (HostType::Client, EntityAuthStatus::Requested) => true,
             (HostType::Client, EntityAuthStatus::Granted) => true,
+            (HostType::Client, EntityAuthStatus::Releasing) => false,
             (HostType::Client, EntityAuthStatus::Denied) => false,
             (HostType::Server, EntityAuthStatus::Available) => todo!(),
             (HostType::Server, EntityAuthStatus::Requested) => todo!(),
             (HostType::Server, EntityAuthStatus::Granted) => todo!(),
+            (HostType::Server, EntityAuthStatus::Releasing) => todo!(),
             (HostType::Server, EntityAuthStatus::Denied) => todo!(),
         }
     }
@@ -57,10 +63,12 @@ impl HostEntityAuthStatus {
             (HostType::Client, EntityAuthStatus::Available) => false,
             (HostType::Client, EntityAuthStatus::Requested) => true,
             (HostType::Client, EntityAuthStatus::Granted) => true,
+            (HostType::Client, EntityAuthStatus::Releasing) => false,
             (HostType::Client, EntityAuthStatus::Denied) => false,
             (HostType::Server, EntityAuthStatus::Available) => true,
             (HostType::Server, EntityAuthStatus::Requested) => true,
             (HostType::Server, EntityAuthStatus::Granted) => true,
+            (HostType::Server, EntityAuthStatus::Releasing) => true,
             (HostType::Server, EntityAuthStatus::Denied) => true,
         }
     }
@@ -70,10 +78,12 @@ impl HostEntityAuthStatus {
             (HostType::Client, EntityAuthStatus::Available) => true,
             (HostType::Client, EntityAuthStatus::Requested) => false,
             (HostType::Client, EntityAuthStatus::Granted) => false,
+            (HostType::Client, EntityAuthStatus::Releasing) => true,
             (HostType::Client, EntityAuthStatus::Denied) => true,
             (HostType::Server, EntityAuthStatus::Available) => true,
             (HostType::Server, EntityAuthStatus::Requested) => true,
             (HostType::Server, EntityAuthStatus::Granted) => true,
+            (HostType::Server, EntityAuthStatus::Releasing) => true,
             (HostType::Server, EntityAuthStatus::Denied) => true,
         }
     }
@@ -83,10 +93,12 @@ impl HostEntityAuthStatus {
             (HostType::Client, EntityAuthStatus::Available) => false,
             (HostType::Client, EntityAuthStatus::Requested) => false,
             (HostType::Client, EntityAuthStatus::Granted) => true,
+            (HostType::Client, EntityAuthStatus::Releasing) => false,
             (HostType::Client, EntityAuthStatus::Denied) => false,
             (HostType::Server, EntityAuthStatus::Available) => true,
             (HostType::Server, EntityAuthStatus::Requested) => true,
             (HostType::Server, EntityAuthStatus::Granted) => true,
+            (HostType::Server, EntityAuthStatus::Releasing) => true,
             (HostType::Server, EntityAuthStatus::Denied) => true,
         }
     }
@@ -111,5 +123,9 @@ impl EntityAuthStatus {
 
     pub fn is_denied(&self) -> bool {
         matches!(self, EntityAuthStatus::Denied)
+    }
+
+    pub fn is_releasing(&self) -> bool {
+        matches!(self, EntityAuthStatus::Releasing)
     }
 }

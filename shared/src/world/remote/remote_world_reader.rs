@@ -1,5 +1,5 @@
 use std::{collections::HashMap, hash::Hash};
-use log::info;
+use log::{info, warn};
 
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
@@ -192,8 +192,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
 
-        info!("read_updates()");
-
         loop {
             // read update continue bit
             let update_continue = bool::de(reader)?;
@@ -224,7 +222,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         reader: &mut BitReader,
         remote_entity: &RemoteEntity,
     ) -> Result<(), SerdeErr> {
-        info!("read_updates()");
+
         loop {
             // read update continue bit
             let component_continue = bool::de(reader)?;
@@ -238,11 +236,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
             if local_world_manager.has_remote_entity(remote_entity) {
                 let world_entity = local_world_manager.world_entity_from_remote(remote_entity);
 
-                info!("pushed received update!");
+                info!("read_update(): pushed received update!");
                 self.received_updates
                     .push((*tick, world_entity, component_update));
             } else {
-                info!("SKIPPED READ UPDATE!");
+                warn!("read_update(): SKIPPED READ UPDATE!");
             }
         }
 

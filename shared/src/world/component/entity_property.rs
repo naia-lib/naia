@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use log::warn;
+use log::{info, warn};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::{
@@ -298,11 +298,16 @@ impl EntityProperty {
                     inner: EntityRelation::RemoteOwned(new_impl),
                 };
 
+                info!("EntityProperty set to RemoteOwned");
+
                 Ok(new_self)
             } else {
                 let OwnedLocalEntity::Remote(remote_entity_id) = local_entity else {
                     panic!("This should not be possible");
                 };
+
+                info!("EntityProperty set to RemoteWaiting");
+
                 let new_impl = RemoteWaitingRelation::new(RemoteEntity::new(remote_entity_id));
 
                 let new_self = Self {
@@ -354,9 +359,10 @@ impl EntityProperty {
             (None, None, None, None) => {
                 EntityRelation::RemoteOwned(RemoteOwnedRelation::new_empty())
             }
-            (None, None, Some(local_entity), Some(Err(_))) => EntityRelation::RemoteWaiting(
-                RemoteWaitingRelation::new(local_entity.take_remote()),
-            ),
+            (None, None, Some(local_entity), Some(Err(_))) => {
+                info!("1 setting inner to RemoteWaiting");
+                EntityRelation::RemoteWaiting(RemoteWaitingRelation::new(local_entity.take_remote())
+            )},
             (None, None, Some(_), Some(Ok(global_entity))) => EntityRelation::RemoteOwned(
                 RemoteOwnedRelation::new_with_value(Some(global_entity)),
             ),
@@ -364,6 +370,7 @@ impl EntityProperty {
                 RemotePublicRelation::new(None, public_relation.index, &public_relation.mutator),
             ),
             (Some(public_relation), None, Some(local_entity), Some(Err(_))) => {
+                info!("2 setting inner to RemoteWaiting");
                 EntityRelation::RemoteWaiting(RemoteWaitingRelation::new_public(
                     local_entity.take_remote(),
                     public_relation.index,
@@ -381,6 +388,7 @@ impl EntityProperty {
                 EntityRelation::Delegated(delegated_relation.read_none())
             }
             (None, Some(delegated_relation), Some(local_entity), Some(Err(_))) => {
+                info!("3 setting inner to RemoteWaiting");
                 EntityRelation::RemoteWaiting(RemoteWaitingRelation::new_delegated(
                     local_entity.take_remote(),
                     &delegated_relation.auth_accessor,

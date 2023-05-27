@@ -21,5 +21,5 @@ pub enum EntityResponseEvent<E: Copy> {
     EntityRequestAuthority(E),
     EntityReleaseAuthority(E),
     EntityUpdateAuthority(E, EntityAuthStatus),
-    EntityUpdateAuthorityResponse(E, RemoteEntity),
+    EntityGrantAuthResponse(E, RemoteEntity),
 }

@@ -57,55 +57,60 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
     }
 
     pub(crate) fn request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
-        if let Some(owner) = self.entity_auth_map.get_mut(entity) {
-            if *owner == AuthOwner::None {
-                match requester {
-                    AuthOwner::Server => {
-                        *owner = AuthOwner::Server;
-                        // If the Server is requesting Authority, grant the Server local Authority
-                        self.host_auth_handler
-                            .set_auth_status(entity, EntityAuthStatus::Granted);
-                    }
-                    AuthOwner::Client(user_key) => {
-                        *owner = AuthOwner::Client(*user_key);
-                        self.user_to_entity_map
-                            .entry(*user_key)
-                            .or_insert(HashSet::new())
-                            .insert(*entity);
-                        // If a Client is requesting Authority, restrict the Server's local Authority
-                        self.host_auth_handler
-                            .set_auth_status(entity, EntityAuthStatus::Denied);
-                    }
-                    AuthOwner::None => {}
+        let Some(owner) = self.entity_auth_map.get_mut(entity) else {
+            panic!("Entity not registered with ServerAuthHandler");
+        };
+        if *owner == AuthOwner::None {
+            match requester {
+                AuthOwner::Server => {
+                    *owner = AuthOwner::Server;
+                    // If the Server is requesting Authority, grant the Server local Authority
+                    self.host_auth_handler
+                        .set_auth_status(entity, EntityAuthStatus::Granted);
                 }
-
-                return true;
+                AuthOwner::Client(user_key) => {
+                    *owner = AuthOwner::Client(*user_key);
+                    self.user_to_entity_map
+                        .entry(*user_key)
+                        .or_insert(HashSet::new())
+                        .insert(*entity);
+                    // If a Client is requesting Authority, restrict the Server's local Authority
+                    self.host_auth_handler
+                        .set_auth_status(entity, EntityAuthStatus::Denied);
+                }
+                AuthOwner::None => {}
             }
+
+            return true;
+        } else {
+            return false;
         }
-        return false;
     }
 
     pub(crate) fn release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
-        if let Some(owner) = self.entity_auth_map.get_mut(entity) {
-            if owner == releaser {
-                if let AuthOwner::Client(user_key) = releaser {
-                    let mut remove_user = false;
-                    if let Some(entities) = self.user_to_entity_map.get_mut(user_key) {
-                        entities.remove(entity);
-                        remove_user = true;
-                    }
-                    if remove_user {
-                        self.user_to_entity_map.remove(user_key);
-                    }
-                }
+        let Some(owner) = self.entity_auth_map.get_mut(entity) else {
+            panic!("Entity not registered with ServerAuthHandler");
+        };
 
-                *owner = AuthOwner::None;
-                self.host_auth_handler
-                    .set_auth_status(entity, EntityAuthStatus::Available);
-                return true;
+        if owner == releaser {
+            if let AuthOwner::Client(user_key) = releaser {
+                let mut remove_user = false;
+                if let Some(entities) = self.user_to_entity_map.get_mut(user_key) {
+                    entities.remove(entity);
+                    remove_user = true;
+                }
+                if remove_user {
+                    self.user_to_entity_map.remove(user_key);
+                }
             }
+
+            *owner = AuthOwner::None;
+            self.host_auth_handler
+                .set_auth_status(entity, EntityAuthStatus::Available);
+            return true;
+        } else {
+            return false;
         }
-        return false;
     }
 
     pub(crate) fn user_all_owned_entities(&self, user_key: &UserKey) -> Option<&HashSet<E>> {

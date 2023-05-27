@@ -1,4 +1,4 @@
-use log::warn;
+use log::{info, warn};
 use naia_serde::{BitReader, SerdeErr};
 
 use crate::{
@@ -67,6 +67,8 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                 (first_index, full_message),
             );
             return;
+        } else {
+            info!("Received message!");
         }
 
         self.arranger

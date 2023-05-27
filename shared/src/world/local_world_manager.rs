@@ -80,20 +80,20 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     pub fn insert_remote_entity(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
         if self.entity_map.contains_remote_entity(&remote_entity) {
-            panic!("Local Entity already exists!");
+            panic!("Remote Entity already exists!");
         }
 
         self.entity_map
             .insert_with_remote_entity(*world_entity, remote_entity);
     }
 
-    pub(crate) fn remove_world_entity(&mut self, world_entity: &E) -> LocalEntityRecord {
+    pub(crate) fn remove_by_world_entity(&mut self, world_entity: &E) -> LocalEntityRecord {
         self.entity_map
             .remove_by_world_entity(world_entity)
             .expect("Attempting to despawn entity which does not exist!")
     }
 
-    pub fn remove_remote_entity(&mut self, remote_entity: &RemoteEntity) -> E {
+    pub fn remove_by_remote_entity(&mut self, remote_entity: &RemoteEntity) -> E {
         let world_entity = *(self
             .entity_map
             .world_entity_from_remote(remote_entity)
@@ -138,6 +138,10 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     // Misc
+
+    pub fn remove_redundant_host_entity(&mut self, world_entity: &E) -> HostEntity {
+        self.entity_map.remove_redundant_host_entity(world_entity)
+    }
 
     pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) {
         self.entity_map.remove_redundant_remote_entity(world_entity);

@@ -1,4 +1,5 @@
 use std::hash::Hash;
+use log::info;
 
 use naia_derive::MessageInternal;
 use naia_serde::SerdeInternal;
@@ -21,7 +22,7 @@ pub enum EntityEventMessageAction {
     RequestAuthority,
     ReleaseAuthority,
     UpdateAuthority(EntityAuthStatus),
-    UpdateAuthorityResponse(u16)
+    GrantAuthResponse(u16), //u16 here is new Host Entity
 }
 
 impl EntityEventMessageAction {
@@ -39,16 +40,20 @@ impl EntityEventMessageAction {
                 EntityResponseEvent::EnableDelegationEntity(*entity)
             }
             EntityEventMessageAction::RequestAuthority => {
+                info!("received EntityRequestAuthority");
                 EntityResponseEvent::EntityRequestAuthority(*entity)
             }
             EntityEventMessageAction::ReleaseAuthority => {
+                info!("received EntityReleaseAuthority");
                 EntityResponseEvent::EntityReleaseAuthority(*entity)
             }
             EntityEventMessageAction::UpdateAuthority(new_auth_status) => {
+                info!("received EntityUpdateAuthority");
                 EntityResponseEvent::EntityUpdateAuthority(*entity, *new_auth_status)
             }
-            EntityEventMessageAction::UpdateAuthorityResponse(remote_entity) => {
-                EntityResponseEvent::EntityUpdateAuthorityResponse(*entity, RemoteEntity::new(*remote_entity))
+            EntityEventMessageAction::GrantAuthResponse(remote_entity) => {
+                info!("received EntityGrantAuthResponse");
+                EntityResponseEvent::EntityGrantAuthResponse(*entity, RemoteEntity::new(*remote_entity))
             }
         }
     }
@@ -136,7 +141,7 @@ impl EntityEventMessage {
         )
     }
 
-    pub fn new_update_auth_response<E: Copy + Eq + Hash + Send + Sync>(
+    pub fn new_grant_auth_response<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
         host_entity: HostEntity,
@@ -145,7 +150,7 @@ impl EntityEventMessage {
         Self::new(
             converter,
             entity,
-            EntityEventMessageAction::UpdateAuthorityResponse(host_entity.value()),
+            EntityEventMessageAction::GrantAuthResponse(host_entity.value()),
         )
     }
 

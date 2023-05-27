@@ -1608,7 +1608,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::EntityUpdateAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");
                 }
-                EntityResponseEvent::EntityUpdateAuthorityResponse(host_world_entity, remote_entity) => {
+                EntityResponseEvent::EntityGrantAuthResponse(host_world_entity, remote_entity) => {
                     self.add_host_entity_to_remote(user_key, &host_world_entity, remote_entity);
                 }
             }

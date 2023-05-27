@@ -234,7 +234,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.remote_world.remove(entity);
         self.entity_channels.remove(entity).unwrap();
 
-        self.on_entity_channel_closed(local_world_manager, entity);
+        self.on_host_entity_channel_closed(local_world_manager, entity);
     }
 
     pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
@@ -327,7 +327,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                     .insert(*entity, EntityChannel::Despawning);
                 self.outgoing_actions
                     .send_message(EntityActionEvent::DespawnEntity(*entity));
-                self.on_entity_channel_closed(local_world_manager, entity);
+                self.on_remote_entity_channel_closed(local_world_manager, entity);
             }
         } else {
             panic!("World Channel: should only receive this event if entity channel is spawning");
@@ -347,7 +347,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         if let Some(EntityChannel::Despawning) = self.entity_channels.get(entity) {
             self.entity_channels.remove(entity);
-            self.on_entity_channel_closed(local_world_manager, entity);
+            self.on_remote_entity_channel_closed(local_world_manager, entity);
 
             // if entity is spawned in host, respawn entity channel
             if self.host_world.contains_key(entity) {
@@ -467,13 +467,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
-    fn on_entity_channel_closed(
+    fn on_remote_entity_channel_closed(
         &mut self,
         local_world_manager: &mut LocalWorldManager<E>,
         entity: &E,
     ) {
-        let local_record = local_world_manager.remove_world_entity(entity);
+        let local_record = local_world_manager.remove_by_world_entity(entity);
         local_world_manager.recycle_host_entity(local_record.host().unwrap());
+    }
+
+    fn on_host_entity_channel_closed(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+    ) {
+        let host_entity = local_world_manager.remove_redundant_host_entity(entity);
+        local_world_manager.recycle_host_entity(host_entity);
     }
 
     fn on_component_channel_opened(&mut self, entity: &E, component_kind: &ComponentKind) {

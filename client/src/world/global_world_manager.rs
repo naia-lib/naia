@@ -254,7 +254,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             return false;
         }
         self.auth_handler
-            .set_auth_status(entity, EntityAuthStatus::Available);
+            .set_auth_status(entity, EntityAuthStatus::Releasing);
         return true;
     }
 

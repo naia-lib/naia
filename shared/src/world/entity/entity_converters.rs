@@ -2,6 +2,7 @@ use std::{
     hash::Hash,
     sync::{Arc, RwLock},
 };
+use log::warn;
 
 use crate::{
     bigmap::BigMapKey,
@@ -327,6 +328,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
         if result.is_ok() {
             return result;
         }
+        warn!("get_or_reserve_entity(): entity is not owned by user, attempting to reserve");
         return Ok(self
             .local_world_manager
             .host_reserve_entity(&entity)

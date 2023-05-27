@@ -391,7 +391,9 @@ impl HostWorldWriter {
     ) {
         let all_update_entities: Vec<E> = next_send_updates.keys().copied().collect();
 
-        info!("write_updates()");
+        if !all_update_entities.is_empty() {
+            info!("write_updates()");
+        }
 
         for entity in all_update_entities {
             // get LocalEntity

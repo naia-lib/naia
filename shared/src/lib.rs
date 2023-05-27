@@ -5,6 +5,7 @@
 
 #[macro_use]
 extern crate cfg_if;
+extern crate core;
 
 cfg_if! {
     if #[cfg(all(target_arch = "wasm32", feature = "wbindgen", feature = "mquad"))]
