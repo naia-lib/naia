@@ -8,7 +8,7 @@ use naia_bevy_server::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, SpawnEntityEvent,
-        TickEvent, UpdateComponentEvents,
+        TickEvent, UpdateComponentEvents, UnpublishEntityEvent
     },
     CommandsExt, Random, ReplicationConfig, Server,
 };
@@ -19,7 +19,6 @@ use naia_bevy_demo_shared::{
     components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
 };
-use naia_bevy_server::events::UnpublishEntityEvent;
 
 use crate::resources::Global;
 

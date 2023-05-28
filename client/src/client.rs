@@ -708,8 +708,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         // this should happen BEFORE the world entity/component has been translated over to Delegated
-        self.global_world_manager
-            .entity_register_auth_for_delegation(&entity);
+        self.global_world_manager.entity_register_auth_for_delegation(&entity);
 
         world.entity_enable_delegation(&self.global_world_manager, &entity);
 
@@ -1099,6 +1098,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.incoming_events.push_unpublish(entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
+                    info!("Client received EnableDelegationEntity event");
                     self.entity_enable_delegation(world, &entity, false);
 
                     // send response

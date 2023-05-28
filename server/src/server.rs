@@ -433,7 +433,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
                         }
                         self.publish_entity(world, entity, true);
-                        self.entity_enable_delegation(world, entity);
+                        self.entity_enable_delegation(world, entity, true);
                     }
                 }
             }
@@ -456,7 +456,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             // The reasoning here is that the Client's ownership should be respected.
                             // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
                         }
-                        self.entity_enable_delegation(world, entity);
+                        self.entity_enable_delegation(world, entity, true);
                     }
                 }
             }
@@ -976,6 +976,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
         server_origin: bool,
     ) {
+        info!("server.publish_entity()");
         if server_origin {
             // send publish message to entity owner
             let entity_owner = self.global_world_manager.entity_owner(&entity);
@@ -1015,11 +1016,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         world: &mut W,
         entity: &E,
+        server_origin: bool,
     ) {
         // TODO: check that entity is eligible for delegation?
 
-        // for any users that have this entity in scope, send an `enable_delegation` message
-        {
+        if server_origin {
+            // for any users that have this entity in scope, send an `enable_delegation` message
+
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
             let mut messages_to_send = Vec::new();
@@ -1036,6 +1039,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             for (user_key, message) in messages_to_send {
                 self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
             }
+        } else {
+            todo!("migrate entity from remote to host side of the connection");
+            // despawn & cleanup from remote_world_manager
+            // store the pre-existing local remote entity key
+            // add to host_world_manager
         }
 
         self.global_world_manager.entity_enable_delegation(&entity);
@@ -1607,10 +1615,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.unpublish_entity(world, &entity, false);
                     self.incoming_events.push_unpublish(user_key, &entity);
                 }
-                EntityResponseEvent::EnableDelegationEntity(_entity) => {
-                    // yes, it should be possible for clients to enable delegation on their own public entities..
-                    // it will be a hard one!
-                    todo!();
+                EntityResponseEvent::EnableDelegationEntity(entity) => {
+                    info!("received enable delegation entity message!");
+                    self.entity_enable_delegation(world, &entity, false);
                 }
                 EntityResponseEvent::EnableDelegationEntityResponse(entity) => {
                     self.entity_enable_delegation_response(user_key, &entity);

@@ -43,19 +43,19 @@ impl EntityEventMessageAction {
                 EntityResponseEvent::EnableDelegationEntity(*entity)
             }
             EntityEventMessageAction::RequestAuthority => {
-                info!("received EntityRequestAuthority");
+                //info!("received EntityRequestAuthority");
                 EntityResponseEvent::EntityRequestAuthority(*entity)
             }
             EntityEventMessageAction::ReleaseAuthority => {
-                info!("received EntityReleaseAuthority");
+                //info!("received EntityReleaseAuthority");
                 EntityResponseEvent::EntityReleaseAuthority(*entity)
             }
             EntityEventMessageAction::UpdateAuthority(new_auth_status) => {
-                info!("received EntityUpdateAuthority");
+                //info!("received EntityUpdateAuthority");
                 EntityResponseEvent::EntityUpdateAuthority(*entity, *new_auth_status)
             }
             EntityEventMessageAction::GrantAuthResponse(remote_entity) => {
-                info!("received EntityGrantAuthResponse");
+                //info!("received EntityGrantAuthResponse");
                 EntityResponseEvent::EntityGrantAuthResponse(
                     *entity,
                     RemoteEntity::new(*remote_entity),
@@ -84,6 +84,7 @@ impl EntityEventMessage {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
     ) -> Self {
+        info!("new_enable_delegation message");
         Self::new(
             converter,
             entity,

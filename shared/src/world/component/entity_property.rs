@@ -296,15 +296,11 @@ impl EntityProperty {
                     inner: EntityRelation::RemoteOwned(new_impl),
                 };
 
-                info!("EntityProperty set to RemoteOwned");
-
                 Ok(new_self)
             } else {
                 let OwnedLocalEntity::Remote(remote_entity_id) = local_entity else {
                     panic!("This should not be possible");
                 };
-
-                info!("EntityProperty set to RemoteWaiting");
 
                 let new_impl = RemoteWaitingRelation::new(RemoteEntity::new(remote_entity_id));
 

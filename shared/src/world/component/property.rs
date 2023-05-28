@@ -75,7 +75,7 @@ impl<T: Serde> Property<T> {
                 inner.write(writer);
             }
             PropertyImpl::RemoteOwned(_) => {
-                panic!("Remote Property should never be written.");
+                panic!("Remote Private Property should never be written.");
             }
             PropertyImpl::RemotePublic(inner) => {
                 inner.write(writer);

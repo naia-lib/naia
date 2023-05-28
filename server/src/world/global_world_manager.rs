@@ -214,7 +214,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
         if record.owner.is_client() {
             record.owner = EntityOwner::Server;
-            todo!("Implement passing ownership to Server .. need to move Entity from remote_entity_manager to host_entity_manager");
+
+            // migrate entity's components to HostOwned
         }
     }
 

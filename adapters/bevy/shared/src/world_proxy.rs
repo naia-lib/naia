@@ -1,5 +1,7 @@
 use std::any::TypeId;
 
+use log::info;
+
 use bevy_ecs::{
     entity::Entity,
     world::{Mut, World},
@@ -165,6 +167,8 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn component_kinds(&mut self, entity: &Entity) -> Vec<ComponentKind> {
         let mut kinds = Vec::new();
 
+        let world_data = world_data(&self.world);
+
         let components = self.world.components();
 
         for component_id in self.world.entity(*entity).archetype().components() {
@@ -175,7 +179,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 .type_id()
                 .expect("Components need type_id to instantiate");
             let component_kind = ComponentKind::from(type_id);
-            kinds.push(component_kind);
+
+            if world_data.has_kind(&component_kind) {
+                kinds.push(component_kind);
+            }
         }
 
         kinds
@@ -212,10 +219,11 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     ) -> Result<(), SerdeErr> {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
-                if let Some(accessor) = data.component_access(component_kind) {
-                    if let Some(mut component) = accessor.component_mut(world, entity) {
-                        let _update_result = component.read_apply_update(converter, update);
-                    }
+                let Some(accessor) = data.component_access(component_kind) else {
+                    panic!("ComponentKind has not been registered?");
+                };
+                if let Some(mut component) = accessor.component_mut(world, entity) {
+                    let _update_result = component.read_apply_update(converter, update);
                 }
             });
         Ok(())
@@ -230,10 +238,11 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     ) -> Result<(), SerdeErr> {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
-                if let Some(accessor) = data.component_access(component_kind) {
-                    if let Some(mut component) = accessor.component_mut(world, entity) {
-                        let _update_result = component.read_apply_field_update(converter, update);
-                    }
+                let Some(accessor) = data.component_access(component_kind) else {
+                    panic!("ComponentKind has not been registered?");
+                };
+                if let Some(mut component) = accessor.component_mut(world, entity) {
+                    let _update_result = component.read_apply_field_update(converter, update);
                 }
             });
         Ok(())
@@ -258,9 +267,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     ) {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
-                if let Some(accessor) = data.component_access(component_kind) {
-                    accessor.mirror_components(world, mutable_entity, immutable_entity);
-                }
+                let Some(accessor) = data.component_access(component_kind) else {
+                    panic!("ComponentKind has not been registered?");
+                };
+                accessor.mirror_components(world, mutable_entity, immutable_entity);
             });
     }
 
@@ -273,9 +283,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         let component_kind = boxed_component.kind();
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
-                if let Some(accessor) = data.component_access(&component_kind) {
-                    accessor.insert_component(world, entity, boxed_component);
-                }
+                let Some(accessor) = data.component_access(&component_kind) else {
+                    panic!("ComponentKind has not been registered?");
+                };
+                accessor.insert_component(world, entity, boxed_component);
             });
     }
 
@@ -291,9 +302,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         let mut output: Option<Box<dyn Replicate>> = None;
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
-                if let Some(accessor) = data.component_access(component_kind) {
-                    output = accessor.remove_component(world, entity);
-                }
+                let Some(accessor) = data.component_access(component_kind) else {
+                    panic!("ComponentKind has not been registered?");
+                };
+                output = accessor.remove_component(world, entity);
             });
         output
     }
@@ -321,9 +333,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     ) {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
-                if let Some(accessor) = data.component_access(component_kind) {
-                    accessor.component_publish(global_world_manager, world, entity);
-                }
+                let Some(accessor) = data.component_access(component_kind) else {
+                    panic!("ComponentKind has not been registered?");
+                };
+                accessor.component_publish(global_world_manager, world, entity);
             });
     }
 
@@ -336,9 +349,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn component_unpublish(&mut self, entity: &Entity, component_kind: &ComponentKind) {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
-                if let Some(accessor) = data.component_access(component_kind) {
-                    accessor.component_unpublish(world, entity);
-                }
+                let Some(accessor) = data.component_access(component_kind) else {
+                    panic!("ComponentKind has not been registered?");
+                };
+                accessor.component_unpublish(world, entity);
             });
     }
 
@@ -363,12 +377,17 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         entity: &Entity,
         component_kind: &ComponentKind,
     ) {
-        self.world
-            .resource_scope(|world: &mut World, data: Mut<WorldData>| {
-                if let Some(accessor) = data.component_access(component_kind) {
-                    accessor.component_enable_delegation(global_world_manager, world, entity);
-                }
-            });
+        info!("world_proxy().component_enable_delegation(): 1");
+        self.world.resource_scope(|world: &mut World, data: Mut<WorldData>| {
+            info!("world_proxy().component_enable_delegation(): 2");
+            let Some(accessor) = data.component_access(component_kind) else {
+                panic!("ComponentKind has not been registered?");
+            };
+
+            info!("world_proxy().component_enable_delegation(): 3");
+            accessor.component_enable_delegation(global_world_manager, world, entity);
+
+        });
     }
 
     fn entity_disable_delegation(&mut self, entity: &Entity) {
@@ -380,9 +399,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn component_disable_delegation(&mut self, entity: &Entity, component_kind: &ComponentKind) {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {
-                if let Some(accessor) = data.component_access(component_kind) {
-                    accessor.component_disable_delegation(world, entity);
-                }
+                let Some(accessor) = data.component_access(component_kind) else {
+                    panic!("ComponentKind has not been registered?");
+                };
+                accessor.component_disable_delegation(world, entity);
             });
     }
 }
@@ -426,9 +446,10 @@ fn component_of_kind<'a>(
     component_kind: &ComponentKind,
 ) -> Option<ReplicaDynRefWrapper<'a>> {
     let world_data = world_data(world);
-    if let Some(component_access) = world_data.component_access(component_kind) {
-        return component_access.component(world, entity);
-    }
+    let Some(component_access) = world_data.component_access(component_kind) else {
+        panic!("ComponentKind has not been registered?");
+    };
+    return component_access.component(world, entity);
     None
 }
 

@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use log::info;
+
 use naia_shared::{
     BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus,
     EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
@@ -196,11 +198,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     pub(crate) fn entity_register_auth_for_delegation(&mut self, entity: &E) {
+        info!("entity_register_auth_for_delegation()");
         let Some(record) = self.entity_records.get_mut(entity) else {
             panic!("entity record does not exist!");
         };
         if record.replication_config != ReplicationConfig::Public {
-            panic!("Can only enable delegation on an Entity that is Public!");
+            panic!("Can only enable delegation on an Entity that is Public! Config: {:?}", record.replication_config);
         }
         self.auth_handler.register_entity(HostType::Client, entity);
     }
@@ -217,7 +220,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
         if record.owner.is_client() {
             record.owner = EntityOwner::Server;
-            todo!("Implement passing ownership to Server .. need to move Entity from remote_entity_manager to host_entity_manager");
+
+            // migrate entity's components to RemoteOwned
         }
     }
 
