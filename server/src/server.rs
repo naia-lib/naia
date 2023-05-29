@@ -552,10 +552,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.global_world_manager.entity_authority_status(entity)
     }
 
-    pub fn add_host_entity_to_remote(
+    fn add_redundant_remote_entity_to_host(
         &mut self,
         user_key: &UserKey,
-        host_world_entity: &E,
+        world_entity: &E,
         remote_entity: RemoteEntity,
     ) {
         if let Some(user) = self.users.get(user_key) {
@@ -563,8 +563,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             connection
                 .base
                 .local_world_manager
-                .insert_remote_entity(host_world_entity, remote_entity);
+                .insert_remote_entity(world_entity, remote_entity);
+            let component_kinds = self.global_world_manager.component_kinds(world_entity).unwrap();
+            connection.base.remote_world_reader.track_hosts_redundant_remote_entity(&remote_entity, component_kinds);
         }
+    }
+
+    fn remove_redundant_remote_entity_from_host(connection: &mut Connection<E>, world_entity: &E) {
+        let remote_entity = connection
+            .base
+            .local_world_manager
+            .remove_redundant_remote_entity(world_entity);
+        connection.base.remote_world_reader.untrack_hosts_redundant_remote_entity(&remote_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -592,10 +602,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
 
                 // Clean up any remote entity that was mapped to the delegated host entity in this connection!
-                connection
-                    .base
-                    .local_world_manager
-                    .remove_redundant_remote_entity(entity);
+                if connection.base.local_world_manager.has_both_host_and_remote_entity(entity) {
+                    Self::remove_redundant_remote_entity_from_host(connection, entity);
+                }
             }
             for (user_key, message) in messages_to_send {
                 self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
@@ -809,6 +818,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn despawn_entity_worldless(&mut self, entity: &E) {
+        if !self.global_world_manager.has_entity(entity) {
+            info!("attempting to despawn entity that does not exist, this can happen if a delegated entity is being despawned");
+            return;
+        }
         self.cleanup_entity_replication(entity);
         self.global_world_manager.remove_entity_record(entity);
     }
@@ -1623,12 +1636,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .on_entity_channel_opened(&local_entity);
                 }
                 EntityResponseEvent::DespawnEntity(entity) => {
-                    info!("Despawn Entity Response!");
                     if self
                         .global_world_manager
                         .entity_is_public_and_client_owned(&entity)
                         || self.global_world_manager.entity_is_delegated(&entity)
                     {
+                        // remove from host connection
+                        let user = self.users.get(user_key).unwrap();
+                        let connection = self.user_connections.get_mut(&user.address).unwrap();
+                        connection.base.host_world_manager.client_initiated_despawn(&entity);
+
                         self.despawn_entity_worldless(&entity);
                         info!("server process public EntityResponseEvent::DespawnEntity");
                     } else {
@@ -1710,7 +1727,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     panic!("Clients should not be able to update entity authority.");
                 }
                 EntityResponseEvent::EntityGrantAuthResponse(world_entity, remote_entity) => {
-                    self.add_host_entity_to_remote(user_key, &world_entity, remote_entity);
+                    self.add_redundant_remote_entity_to_host(user_key, &world_entity, remote_entity);
                 }
                 EntityResponseEvent::EntityMigrateResponse(_, _) => {
                     panic!("Clients should not be able to send this message");

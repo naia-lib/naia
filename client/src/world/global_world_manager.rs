@@ -211,7 +211,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     pub(crate) fn entity_register_auth_for_delegation(&mut self, entity: &E) {
-        info!("entity_register_auth_for_delegation()");
         let Some(record) = self.entity_records.get_mut(entity) else {
             panic!("entity record does not exist!");
         };

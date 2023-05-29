@@ -774,7 +774,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // Updated Host Manager
         match (old_auth_status, new_auth_status) {
             (EntityAuthStatus::Requested, EntityAuthStatus::Granted) => {
-                info!("-- Entity GAINED Authority --");
                 // Granted Authority
 
                 // Migrate Entity from Remote -> Host connection
@@ -800,7 +799,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 self.incoming_events.push_auth_grant(*entity);
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Available) => {
-                info!("-- Entity LOST Authority --");
                 // Lost Authority
 
                 // Remove Entity from Host connection
@@ -1115,7 +1113,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.incoming_events.push_unpublish(entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
-                    info!("Client received EnableDelegationEntity event");
                     self.entity_enable_delegation(world, &entity, false);
 
                     // send response

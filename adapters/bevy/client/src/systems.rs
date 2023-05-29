@@ -8,7 +8,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{HostSyncEvent, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxyMut};
 use naia_client::Client;
 
 mod naia_events {
@@ -180,8 +180,13 @@ pub fn before_receive_events(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Events<bevy_events::EntityAuthGrantedEvent>>()
                     .unwrap();
+                let mut auth_granted_entities = Vec::new();
                 for entity in events.read::<naia_events::EntityAuthGrantedEvent>() {
+                    auth_granted_entities.push(entity);
                     event_writer.send(bevy_events::EntityAuthGrantedEvent(entity));
+                }
+                for entity in auth_granted_entities {
+                    world.entity_mut(entity).insert(HostOwned);
                 }
             }
 
@@ -200,8 +205,13 @@ pub fn before_receive_events(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Events<bevy_events::EntityAuthResetEvent>>()
                     .unwrap();
+                let mut auth_reset_entities = Vec::new();
                 for entity in events.read::<naia_events::EntityAuthResetEvent>() {
+                    auth_reset_entities.push(entity);
                     event_writer.send(bevy_events::EntityAuthResetEvent(entity));
+                }
+                for entity in auth_reset_entities {
+                    world.entity_mut(entity).remove::<HostOwned>();
                 }
             }
 

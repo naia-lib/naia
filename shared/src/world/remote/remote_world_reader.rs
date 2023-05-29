@@ -39,6 +39,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         }
     }
 
+    pub fn track_hosts_redundant_remote_entity(&mut self, remote_entity: &RemoteEntity, component_kinds: Vec<ComponentKind>) {
+        self.receiver.track_hosts_redundant_remote_entity(remote_entity, component_kinds);
+    }
+
+    pub fn untrack_hosts_redundant_remote_entity(&mut self, remote_entity: &RemoteEntity) {
+        self.receiver.untrack_hosts_redundant_remote_entity(remote_entity);
+    }
+
     // Reading
 
     fn read_message_index(

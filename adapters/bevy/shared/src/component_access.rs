@@ -167,9 +167,7 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
         world: &mut World,
         entity: &Entity,
     ) {
-        info!("component_access().component_enable_delegation(): 1");
         if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
-            info!("component_access().component_enable_delegation(): 2");
             let accessor = global_manager.get_entity_auth_accessor(entity);
             if global_manager.entity_needs_mutator_for_delegation(entity) {
                 let component_kind = component_mut.kind();

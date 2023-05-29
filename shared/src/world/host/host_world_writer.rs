@@ -218,7 +218,6 @@ impl HostWorldWriter {
                 }
             }
             EntityActionEvent::DespawnEntity(world_entity) => {
-                info!("writing despawn entity message");
                 EntityActionType::DespawnEntity.ser(writer);
 
                 // write net entity

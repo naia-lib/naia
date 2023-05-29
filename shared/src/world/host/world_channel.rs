@@ -120,12 +120,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
     }
 
     pub fn host_despawn_entity(&mut self, entity: &E) {
-        info!("host_despawn_entity()");
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot despawn entity that doesn't exist");
         }
 
-        info!("removing entity from host world");
         self.host_world.remove(entity);
 
         let mut despawn = false;
@@ -145,7 +143,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             self.entity_channels.remove(entity);
             self.entity_channels
                 .insert(*entity, EntityChannel::Despawning);
-            info!("EntityActionEvent::DespawnEntity");
+
             self.outgoing_actions
                 .send_message(EntityActionEvent::DespawnEntity(*entity));
 
@@ -153,6 +151,32 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 self.on_component_channel_closing(entity, &component_kind);
             }
         }
+    }
+
+    pub fn client_initiated_despawn(&mut self, entity: &E) {
+        if !self.host_world.contains_key(entity) {
+            panic!("World Channel: cannot despawn entity that doesn't exist");
+        }
+
+        self.host_world.remove(entity);
+
+        let Some(EntityChannel::Spawned(component_channels)) = self.entity_channels.get(entity) else {
+            panic!("World Channel: cannot despawn entity that isn't spawned");
+        };
+
+        let mut removed_components = Vec::new();
+
+        for (component_kind, component_channel) in component_channels.iter() {
+            if let ComponentChannel::Inserted = component_channel {
+                removed_components.push(*component_kind);
+            }
+        }
+
+        for component_kind in removed_components {
+            self.on_component_channel_closing(entity, &component_kind);
+        }
+
+        self.entity_channels.remove(entity);
     }
 
     pub fn host_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
@@ -338,6 +362,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 // despawn entity
                 self.entity_channels
                     .insert(*entity, EntityChannel::Despawning);
+                info!("B");
                 self.outgoing_actions
                     .send_message(EntityActionEvent::DespawnEntity(*entity));
                 self.on_remote_entity_channel_closed(local_world_manager, entity);
@@ -352,6 +377,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         local_world_manager: &mut LocalWorldManager<E>,
         entity: &E,
     ) {
+        info!("on_remote_despawn_entity()");
         if !self.remote_world.contains_key(entity) {
             panic!(
                 "World Channel: should not be able to despawn non-existent entity in remote world"
@@ -493,6 +519,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         local_world_manager: &mut LocalWorldManager<E>,
         entity: &E,
     ) {
+        // this is only used by remote tracked entities
         let host_entity = local_world_manager.remove_redundant_host_entity(entity);
         local_world_manager.recycle_host_entity(host_entity);
     }

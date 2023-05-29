@@ -1,6 +1,7 @@
 // A Hashmap that can be queried by either key or value.
 
 use std::{collections::HashMap, hash::Hash};
+use log::info;
 
 use crate::world::entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
 
@@ -111,6 +112,7 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
     }
 
     pub fn remove_by_world_entity(&mut self, world: &E) -> Option<LocalEntityRecord> {
+        info!("removing entity");
         let record_opt = self.world_to_local.remove(world);
         if let Some(record) = &record_opt {
             if let Some(host) = record.host {
@@ -124,6 +126,7 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
     }
 
     pub fn remove_redundant_host_entity(&mut self, world_entity: &E) -> HostEntity {
+        info!("removing redundant host entity");
         if let Some(record) = self.world_to_local.get_mut(world_entity) {
             if record.host.is_some() && record.remote.is_some() {
                 if let Some(host_entity) = record.host.take() {
@@ -135,14 +138,26 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
         panic!("can't remove redundant host entity");
     }
 
-    pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) {
+    pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) -> RemoteEntity {
+        info!("removing redundant remote entity");
         if let Some(record) = self.world_to_local.get_mut(world_entity) {
             if record.host.is_some() && record.remote.is_some() {
                 if let Some(remote_entity) = record.remote.take() {
                     self.remote_to_world.remove(&remote_entity);
+                    return remote_entity;
                 }
             }
         }
+        panic!("can't remove redundant remote entity");
+    }
+
+    pub fn has_both_host_and_remote_entity(&self, world_entity: &E) -> bool {
+        if let Some(record) = self.world_to_local.get(world_entity) {
+            if record.host.is_some() && record.remote.is_some() {
+                return true;
+            }
+        }
+        return false;
     }
 
     pub fn contains_world_entity(&self, world: &E) -> bool {

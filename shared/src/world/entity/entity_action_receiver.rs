@@ -3,11 +3,9 @@ use std::{
     hash::Hash,
     marker::PhantomData,
 };
+use log::info;
 
-use crate::{
-    messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than,
-    world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex,
-};
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than, world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex, RemoteEntity, world};
 
 pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
     receiver: ReliableReceiver<EntityAction<E>>,
@@ -20,6 +18,19 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
             receiver: ReliableReceiver::new(),
             entity_channels: HashMap::default(),
         }
+    }
+
+    pub fn track_hosts_redundant_remote_entity(&mut self, entity: &E, component_kinds: Vec<ComponentKind>) {
+        let mut entity_channel = EntityChannel::new(*entity);
+        entity_channel.spawned = true;
+        for component_kind in component_kinds {
+            entity_channel.components.insert(component_kind, ComponentChannel::new(None));
+        }
+        self.entity_channels.insert(*entity, entity_channel);
+    }
+
+    pub fn untrack_hosts_redundant_remote_entity(&mut self, entity: &E) {
+        self.entity_channels.remove(entity);
     }
 
     /// Buffer a read [`EntityAction`] so that it can be processed later
@@ -43,6 +54,12 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
                 entity_channel.receive_action(action_index, action, &mut outgoing_actions);
             }
         }
+
+        // TODO: VERY IMPORTANT! You need to figure out how to remove EntityChannels after they've been despawned!
+        // keep in mind that you need to keep around entity channels to be able to receive messages for them still
+        // right now this is leaking memory!
+        // a TTL for these Entity Channels after they've been despawned is probably the way to go
+
         outgoing_actions
     }
 }

@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use log::warn;
+use log::{info, warn};
 use naia_socket_shared::Instant;
 
 use crate::{
@@ -143,12 +143,16 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     // Misc
 
+    pub fn has_both_host_and_remote_entity(&self, world_entity: &E) -> bool {
+        self.entity_map.has_both_host_and_remote_entity(world_entity)
+    }
+
     pub fn remove_redundant_host_entity(&mut self, world_entity: &E) -> HostEntity {
         self.entity_map.remove_redundant_host_entity(world_entity)
     }
 
-    pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) {
-        self.entity_map.remove_redundant_remote_entity(world_entity);
+    pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) -> RemoteEntity {
+        self.entity_map.remove_redundant_remote_entity(world_entity)
     }
 
     pub fn get_user_key(&self) -> &u64 {

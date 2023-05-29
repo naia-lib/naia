@@ -98,6 +98,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         self.world_channel.host_despawn_entity(entity);
     }
 
+    pub fn client_initiated_despawn(&mut self, entity: &E) {
+        self.world_channel.client_initiated_despawn(entity);
+    }
+
     pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
         self.world_channel
             .host_insert_component(entity, component_kind);

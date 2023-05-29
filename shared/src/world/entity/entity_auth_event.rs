@@ -92,7 +92,6 @@ impl EntityEventMessage {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
     ) -> Self {
-        info!("creating new outgoing enable_delegation message");
         Self::new(
             converter,
             entity,
