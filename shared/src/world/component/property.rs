@@ -15,6 +15,18 @@ enum PropertyImpl<T: Serde> {
     Local(LocalProperty<T>),
 }
 
+impl<T: Serde> PropertyImpl<T> {
+    fn name(&self) -> &str {
+        match self {
+            PropertyImpl::HostOwned(_) => { "HostOwned" }
+            PropertyImpl::RemoteOwned(_) => { "RemoteOwned" }
+            PropertyImpl::RemotePublic(_) => { "RemotePublic" }
+            PropertyImpl::Delegated(_) => { "Delegated" }
+            PropertyImpl::Local(_) => { "Local" }
+        }
+    }
+}
+
 /// A Property of an Component/Message, that contains data
 /// which must be tracked for updates
 #[derive(Clone)]
@@ -208,16 +220,47 @@ impl<T: Serde> Property<T> {
         }
     }
 
-    /// Migrate Host/RemotePublic Property to Delegated version
+    /// Migrate Property to Delegated version
     pub fn enable_delegation(
         &mut self,
         accessor: &EntityAuthAccessor,
-        mutator_index: u8,
-        mutator: &PropertyMutator,
+        mutator_opt: Option<(u8, &PropertyMutator)>,
     ) {
-        let value = self.inner();
+        let value = self.inner().clone();
+
+        let (mutator_index, mutator) = {
+            if let Some((mutator_index, mutator)) = mutator_opt {
+                match &mut self.inner {
+                    PropertyImpl::RemoteOwned(_) => {
+                        (mutator_index, mutator)
+                    }
+                    PropertyImpl::Local(_) | PropertyImpl::RemotePublic(_) | PropertyImpl::HostOwned(_) | PropertyImpl::Delegated(_) => {
+                        panic!(
+                            "Property of type `{:?}` should never enable delegation this way",
+                            self.inner.name()
+                        );
+                    }
+                }
+            } else {
+                match &mut self.inner {
+                    PropertyImpl::HostOwned(inner) => {
+                        (inner.index, inner.mutator.as_ref().expect("should have a mutator by now"))
+                    }
+                    PropertyImpl::RemotePublic(inner) => {
+                        (inner.index, &inner.mutator)
+                    }
+                    PropertyImpl::RemoteOwned(_) | PropertyImpl::Delegated(_) | PropertyImpl::Local(_) => {
+                        panic!(
+                            "Property of type `{:?}` should never enable delegation this way",
+                            self.inner.name()
+                        );
+                    }
+                }
+            }
+        };
+
         self.inner = PropertyImpl::Delegated(DelegatedProperty::new(
-            value.clone(),
+            value,
             accessor,
             mutator,
             mutator_index,

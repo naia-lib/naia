@@ -501,33 +501,53 @@ impl EntityProperty {
     pub fn enable_delegation(
         &mut self,
         accessor: &EntityAuthAccessor,
-        mutator_index: u8,
-        mutator: &PropertyMutator,
+        mutator_opt: Option<(u8, &PropertyMutator)>
     ) {
         let inner_value = self.inner.get_global_entity();
-        match &mut self.inner {
-            EntityRelation::HostOwned(_)
-            | EntityRelation::RemoteOwned(_)
-            | EntityRelation::RemotePublic(_) => {
-                // This is used by the Server when it transforms it's own Entities to Delegated
-                // and by the Client when it transforms it's own Entities to Delegated
-                self.inner = EntityRelation::Delegated(DelegatedRelation::new(
-                    inner_value,
-                    accessor,
-                    mutator,
-                    mutator_index,
-                ));
+
+        let (mutator_index, mutator) = {
+            if let Some((mutator_index, mutator)) = mutator_opt {
+                // with mutator
+                match &mut self.inner {
+                    EntityRelation::RemoteOwned(_) => {
+                        (mutator_index, mutator)
+                    }
+                    EntityRelation::RemoteWaiting(inner) => {
+                        inner.remote_delegate(accessor);
+                        return;
+                    }
+                    EntityRelation::Local(_) | EntityRelation::RemotePublic(_) | EntityRelation::HostOwned(_) | EntityRelation::Delegated(_) => {
+                        panic!(
+                            "EntityProperty of type `{:?}` should never enable delegation.",
+                            self.inner.name()
+                        );
+                    }
+                }
+            } else {
+                // without mutator
+                match &mut self.inner {
+                    EntityRelation::HostOwned(inner) => {
+                        (inner.index, inner.mutator.as_ref().expect("should have a mutator by now"))
+                    }
+                    | EntityRelation::RemotePublic(inner) => {
+                        (inner.index, &inner.mutator)
+                    }
+                    EntityRelation::Local(_) | EntityRelation::RemoteOwned(_) | EntityRelation::RemoteWaiting(_) | EntityRelation::Delegated(_) => {
+                        panic!(
+                            "EntityProperty of type `{:?}` should never enable delegation.",
+                            self.inner.name()
+                        );
+                    }
+                }
             }
-            EntityRelation::RemoteWaiting(inner) => {
-                inner.remote_delegate(accessor);
-            }
-            EntityRelation::Local(_) | EntityRelation::Delegated(_) => {
-                panic!(
-                    "EntityProperty of type `{:?}` should never enable delegation.",
-                    self.inner.name()
-                );
-            }
-        }
+        };
+
+        self.inner = EntityRelation::Delegated(DelegatedRelation::new(
+            inner_value,
+            accessor,
+            mutator,
+            mutator_index,
+        ));
     }
 
     /// Migrate Delegated Property to Host-Owned (Public) version

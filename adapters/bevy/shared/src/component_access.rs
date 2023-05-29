@@ -171,14 +171,14 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
         if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
             info!("component_access().component_enable_delegation(): 2");
             let accessor = global_manager.get_entity_auth_accessor(entity);
-            if global_manager.entity_is_server_owned_and_remote(entity) {
+            if global_manager.entity_needs_mutator_for_delegation(entity) {
                 let component_kind = component_mut.kind();
                 let diff_mask_size = component_mut.diff_mask_size();
                 let mutator =
                     global_manager.register_component(entity, &component_kind, diff_mask_size);
-                component_mut.enable_delegation(&accessor, &mutator);
+                component_mut.enable_delegation(&accessor, Some(&mutator));
             } else {
-                todo!();
+                component_mut.enable_delegation(&accessor, None);
             }
         }
     }

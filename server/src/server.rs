@@ -899,14 +899,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // update in world manager
         self.global_world_manager
             .insert_component_record(entity, &component_kind);
-        let prop_mutator = self
+        self
             .global_world_manager
             .insert_component_diff_handler(entity, component);
 
         // if entity is delegated, convert over
         if self.global_world_manager.entity_is_delegated(entity) {
             let accessor = self.global_world_manager.get_entity_auth_accessor(entity);
-            component.enable_delegation(&accessor, &prop_mutator)
+            component.enable_delegation(&accessor, None)
         }
     }
 
@@ -1020,8 +1020,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ) {
         // TODO: check that entity is eligible for delegation?
 
-        if server_origin {
-            // for any users that have this entity in scope, send an `enable_delegation` message
+        {
+            // For any users that have this entity in scope,
+            // Send an `enable_delegation` message
 
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
@@ -1039,15 +1040,55 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             for (user_key, message) in messages_to_send {
                 self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
             }
-        } else {
-            todo!("migrate entity from remote to host side of the connection");
-            // despawn & cleanup from remote_world_manager
-            // store the pre-existing local remote entity key
-            // add to host_world_manager
+        }
+
+        if !server_origin {
+            self.migrate_client_entity_to_server(entity);
         }
 
         self.global_world_manager.entity_enable_delegation(&entity);
         world.entity_enable_delegation(&self.global_world_manager, &entity);
+    }
+
+    pub(crate) fn migrate_client_entity_to_server(&mut self, entity: &E) {
+
+        let Some(entity_owner) = self.global_world_manager.entity_owner(entity) else {
+            panic!("entity should have an owner at this point");
+        };
+        let EntityOwner::ClientPublic(user_key) = entity_owner else {
+            panic!("entity should be owned by a public client at this point");
+        };
+        self.global_world_manager.migrate_entity_to_server(&entity);
+
+        // we set this to true immediately since it's already being replicated out to the remote
+        self.entity_scope_map.insert(user_key, *entity, true);
+
+        // Migrate Entity from Remote -> Host connection
+        let Some(user) = self.users.get(&user_key) else {
+            panic!("user should exist");
+        };
+        let Some(connection) = self.user_connections.get_mut(&user.address) else {
+            panic!("connection does not exist")
+        };
+        let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
+
+        // Add remote entity to Host World
+        let new_host_entity = connection.base.host_world_manager.track_remote_entity(
+            &mut connection.base.local_world_manager,
+            entity,
+            component_kinds,
+        );
+
+        // Remove remote entity from Remote World
+
+
+        // send response
+        let message = EntityEventMessage::new_entity_migrate_response(
+            &self.global_world_manager,
+            &entity,
+            new_host_entity,
+        );
+        self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
     }
 
     pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
@@ -1634,8 +1675,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::EntityUpdateAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");
                 }
-                EntityResponseEvent::EntityGrantAuthResponse(host_world_entity, remote_entity) => {
-                    self.add_host_entity_to_remote(user_key, &host_world_entity, remote_entity);
+                EntityResponseEvent::EntityGrantAuthResponse(world_entity, remote_entity) => {
+                    self.add_host_entity_to_remote(user_key, &world_entity, remote_entity);
+                }
+                EntityResponseEvent::EntityMigrateResponse(_, _) => {
+                    panic!("Clients should not be able to send this message");
                 }
             }
         }

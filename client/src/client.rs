@@ -5,14 +5,7 @@ use log::{info, warn};
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_shared::{
-    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
-    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
-    Instant, Message, MessageContainer, PacketType, Protocol, Replicate,
-    Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick,
-    WorldMutType, WorldRefType,
-};
+use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
@@ -1126,8 +1119,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityResponseEvent::EntityGrantAuthResponse(_, _) => {
                     panic!("Client should never receive an EntityGrantAuthResponse event");
                 }
+                EntityResponseEvent::EntityMigrateResponse(world_entity, remote_entity) => {
+                    self.add_host_entity_to_remote(&world_entity, remote_entity);
+                }
             }
         }
+    }
+
+    pub fn add_host_entity_to_remote(
+        &mut self,
+        world_entity: &E,
+        remote_entity: RemoteEntity,
+    ) {
+        let Some(connection) = self.server_connection.as_mut() else {
+            panic!("Client is disconnected!");
+        };
+
+        // Local World Manager now tracks the Entity by it's Remote Entity
+        connection
+            .base
+            .local_world_manager
+            .insert_remote_entity(world_entity, remote_entity);
     }
 }
 

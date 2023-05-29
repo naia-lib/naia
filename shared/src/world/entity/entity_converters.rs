@@ -33,7 +33,7 @@ pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConv
         diff_mask_length: u8,
     ) -> PropertyMutator;
     fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor;
-    fn entity_is_server_owned_and_remote(&self, entity: &E) -> bool;
+    fn entity_needs_mutator_for_delegation(&self, entity: &E) -> bool;
 }
 
 pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {
@@ -201,6 +201,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
                 .global_entity_converter
                 .entity_to_global_entity(&entity);
         }
+        warn!("host_entity_to_global_entity() failed!");
         return Err(EntityDoesNotExistError);
     }
 

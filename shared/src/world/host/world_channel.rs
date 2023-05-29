@@ -531,8 +531,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 EntityAction::DespawnEntity(entity) => {
                     self.on_remote_despawn_entity(local_world_manager, &entity);
                 }
-                EntityAction::InsertComponent(entity, component) => {
-                    self.on_remote_insert_component(&entity, &component);
+                EntityAction::InsertComponent(entity, component_kind) => {
+                    self.on_remote_insert_component(&entity, &component_kind);
                 }
                 EntityAction::RemoveComponent(entity, component) => {
                     self.on_remote_remove_component(&entity, &component);

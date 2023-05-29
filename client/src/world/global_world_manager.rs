@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use log::info;
+use log::{info, warn};
 
 use naia_shared::{
     BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus,
@@ -319,12 +319,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.auth_handler.get_accessor(entity)
     }
 
-    fn entity_is_server_owned_and_remote(&self, entity: &E) -> bool {
+    fn entity_needs_mutator_for_delegation(&self, entity: &E) -> bool {
         if let Some(record) = self.entity_records.get(entity) {
             let server_owned = record.owner == EntityOwner::Server;
-            let remote_owned = record.replication_config == ReplicationConfig::Public;
-            return server_owned && remote_owned;
+            let is_public = record.replication_config == ReplicationConfig::Public;
+
+            if !server_owned {
+                info!("entity_needs_mutator_for_delegation: entity is not server owned");
+            }
+            if !is_public {
+                info!("entity_needs_mutator_for_delegation: entity is not public");
+            }
+
+            return server_owned && is_public;
         }
+        info!("entity_needs_mutator_for_delegation: entity does not have record");
         return false;
     }
 }
@@ -347,6 +356,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E>
         if let Some(record) = self.entity_records.get(entity) {
             Ok(record.global_entity)
         } else {
+            warn!("global_world_manager failed entity_to_global_entity!");
             Err(EntityDoesNotExistError)
         }
     }

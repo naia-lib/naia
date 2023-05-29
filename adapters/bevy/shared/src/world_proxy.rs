@@ -450,7 +450,6 @@ fn component_of_kind<'a>(
         panic!("ComponentKind has not been registered?");
     };
     return component_access.component(world, entity);
-    None
 }
 
 fn world_data(world: &World) -> &WorldData {

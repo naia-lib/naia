@@ -1,3 +1,4 @@
+use log::info;
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedVariableInteger};
 
 use crate::{EntityDoesNotExistError, GlobalEntity, LocalEntityAndGlobalEntityConverter};
@@ -47,9 +48,11 @@ impl OwnedLocalEntity {
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         match self {
             OwnedLocalEntity::Host(host_entity) => {
+                info!("OwnedLocalEntity::Host() convert_to_global()");
                 converter.host_entity_to_global_entity(&HostEntity::new(*host_entity))
             }
             OwnedLocalEntity::Remote(remote_entity) => {
+                info!("OwnedLocalEntity::Remote() convert_to_global()");
                 converter.remote_entity_to_global_entity(&RemoteEntity::new(*remote_entity))
             }
         }

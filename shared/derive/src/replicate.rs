@@ -552,7 +552,7 @@ fn get_enable_delegation_method(
         let field_name = get_field_name(property, struct_type);
         let uppercase_variant_name = property.uppercase_variable_name();
         let new_output_right = quote! {
-                self.#field_name.enable_delegation(accessor, #enum_name::#uppercase_variant_name as u8, mutator);
+                self.#field_name.enable_delegation(accessor, mutator_opt.map(|mutator| (#enum_name::#uppercase_variant_name as u8, mutator)));
         };
         let new_output_result = quote! {
             #output
@@ -562,7 +562,7 @@ fn get_enable_delegation_method(
     }
 
     quote! {
-        fn enable_delegation(&mut self, accessor: &EntityAuthAccessor, mutator: &PropertyMutator) {
+        fn enable_delegation(&mut self, accessor: &EntityAuthAccessor, mutator_opt: Option<&PropertyMutator>) {
             #output
         }
     }

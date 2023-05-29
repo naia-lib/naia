@@ -3,6 +3,7 @@ use std::{
     hash::Hash,
     sync::{Arc, RwLock},
 };
+use log::info;
 
 use naia_shared::{BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate};
 
@@ -110,12 +111,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         &mut self,
         entity: &E,
         component: &mut dyn Replicate,
-    ) -> PropertyMutator {
+    ) {
         let kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
         let prop_mutator = self.register_component(entity, &kind, diff_mask_length);
         component.set_mutator(&prop_mutator);
-        prop_mutator
     }
 
     // Remove Component
@@ -211,11 +211,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
         record.replication_config = ReplicationConfig::Delegated;
         self.auth_handler.register_entity(entity);
+    }
+
+    pub(crate) fn migrate_entity_to_server(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
 
         if record.owner.is_client() {
             record.owner = EntityOwner::Server;
-
-            // migrate entity's components to HostOwned
+        } else {
+            panic!("Can only migrate an Entity that is owned by a Client!");
         }
     }
 
@@ -301,9 +307,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.auth_handler.get_accessor(entity)
     }
 
-    fn entity_is_server_owned_and_remote(&self, _entity: &E) -> bool {
-        // server cannot own an entity that is also remote
-        false
+    fn entity_needs_mutator_for_delegation(&self, _entity: &E) -> bool {
+        return false;
     }
 }
 

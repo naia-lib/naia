@@ -26,6 +26,7 @@ pub enum EntityEventMessageAction {
     ReleaseAuthority,
     UpdateAuthority(EntityAuthStatus),
     GrantAuthResponse(u16), //u16 here is new Host Entity
+    EntityMigrateResponse(u16) //u16 here is new Host Entity
 }
 
 impl EntityEventMessageAction {
@@ -61,6 +62,13 @@ impl EntityEventMessageAction {
                     RemoteEntity::new(*remote_entity),
                 )
             }
+            EntityEventMessageAction::EntityMigrateResponse(remote_entity) => {
+                info!("received EntityMigrateResponse");
+                EntityResponseEvent::EntityMigrateResponse(
+                    *entity,
+                    RemoteEntity::new(*remote_entity),
+                )
+            }
         }
     }
 }
@@ -84,7 +92,7 @@ impl EntityEventMessage {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
     ) -> Self {
-        info!("new_enable_delegation message");
+        info!("creating new outgoing enable_delegation message");
         Self::new(
             converter,
             entity,
@@ -157,6 +165,18 @@ impl EntityEventMessage {
             converter,
             entity,
             EntityEventMessageAction::GrantAuthResponse(host_entity.value()),
+        )
+    }
+
+    pub fn new_entity_migrate_response<E: Copy + Eq + Hash + Send + Sync>(
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        entity: &E,
+        host_entity: HostEntity,
+    ) -> Self {
+        Self::new(
+            converter,
+            entity,
+            EntityEventMessageAction::EntityMigrateResponse(host_entity.value()),
         )
     }
 
