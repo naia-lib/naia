@@ -5,7 +5,7 @@ use log::{info, warn};
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
@@ -626,6 +626,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // update in world manager
         self.global_world_manager
             .host_insert_component(entity, component);
+
+        // if entity is delegated, convert over
+        if self.global_world_manager.entity_is_delegated(entity) {
+            let accessor = self.global_world_manager.get_entity_auth_accessor(entity);
+            component.enable_delegation(&accessor, None)
+        }
     }
 
     /// Removes a Component from an Entity

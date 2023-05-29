@@ -976,7 +976,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         entity: &E,
         server_origin: bool,
     ) {
-        info!("server.publish_entity()");
         if server_origin {
             // send publish message to entity owner
             let entity_owner = self.global_world_manager.entity_owner(&entity);
@@ -1028,13 +1027,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // are in each User's scope
             let mut messages_to_send = Vec::new();
             for (user_key, user) in self.users.iter() {
-                let connection = self.user_connections.get(&user.address).unwrap();
-                if connection.base.host_world_manager.host_has_entity(entity) {
-                    let message = EntityEventMessage::new_enable_delegation(
-                        &self.global_world_manager,
-                        entity,
-                    );
-                    messages_to_send.push((user_key, message));
+                if let Some(connection) = self.user_connections.get(&user.address) {
+                    if connection.base.host_world_manager.host_has_entity(entity) {
+                        let message = EntityEventMessage::new_enable_delegation(
+                            &self.global_world_manager,
+                            entity,
+                        );
+                        messages_to_send.push((user_key, message));
+                    }
                 }
             }
             for (user_key, message) in messages_to_send {
@@ -1601,6 +1601,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         user_key: &UserKey,
         response_events: Vec<EntityResponseEvent<E>>,
     ) {
+        let mut deferred_events = Vec::new();
         for response_event in response_events {
             match response_event {
                 EntityResponseEvent::SpawnEntity(entity) => {
@@ -1621,7 +1622,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::DespawnEntity(entity) => {
                     if self
                         .global_world_manager
-                        .entity_is_public_and_client_owned(&entity)
+                        .entity_is_public_and_client_owned(&entity) || self.global_world_manager.entity_is_delegated(&entity)
                     {
                         self.despawn_entity_worldless(&entity);
                         info!("server process public EntityResponseEvent::DespawnEntity");
@@ -1634,7 +1635,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .insert_component_record(&entity, &component_kind);
                     if self
                         .global_world_manager
-                        .entity_is_public_and_client_owned(&entity)
+                        .entity_is_public_and_client_owned(&entity) || self.global_world_manager.entity_is_delegated(&entity)
                     {
                         world.component_publish(
                             &self.global_world_manager,
@@ -1642,13 +1643,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             &component_kind,
                         );
 
+                        if self.global_world_manager.entity_is_delegated(&entity) {
+                            world.component_enable_delegation(&self.global_world_manager,
+                                                              &entity,
+                                                              &component_kind);
+                        }
+
                         self.insert_new_component_into_entity_scopes(&entity, &component_kind);
                     }
                 }
                 EntityResponseEvent::RemoveComponent(entity, component_kind) => {
                     if self
                         .global_world_manager
-                        .entity_is_public_and_client_owned(&entity)
+                        .entity_is_public_and_client_owned(&entity) || self.global_world_manager.entity_is_delegated(&entity)
                     {
                         self.remove_component_worldless(&entity, &component_kind);
                         info!("server process public EntityResponseEvent::RemoveComponent");
@@ -1657,7 +1664,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             .remove_component_record(&entity, &component_kind);
                     }
                 }
+                _ => {
+                    deferred_events.push(response_event);
+                }
+            }
+        }
+        // The reason for deferring these events is that they depend on the operations to the world above
+        for response_event in deferred_events {
+            match response_event {
                 EntityResponseEvent::PublishEntity(entity) => {
+                    info!("received publish entity message!");
                     self.publish_entity(world, &entity, false);
                     self.incoming_events.push_publish(user_key, &entity);
                 }
@@ -1690,6 +1706,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::EntityMigrateResponse(_, _) => {
                     panic!("Clients should not be able to send this message");
                 }
+                _ => {}
             }
         }
     }

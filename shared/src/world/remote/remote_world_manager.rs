@@ -156,6 +156,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                         self.process_insert(world, world_entity, component, &component_kind);
                     } else {
                         // entity may have despawned on disconnect or something similar?
+                        warn!("received InsertComponent message for nonexistant entity");
                     }
                 }
                 EntityAction::RemoveComponent(remote_entity, component_kind) => {
