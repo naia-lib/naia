@@ -5,7 +5,10 @@ use bevy_ecs::{
     system::{ResMut, SystemParam},
 };
 
-use naia_bevy_shared::{Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Tick};
+use naia_bevy_shared::{
+    Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
+    GlobalEntity, Message, Tick,
+};
 use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError};
 
 use crate::ReplicationConfig;

@@ -1,11 +1,15 @@
+use log::info;
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
     sync::{Arc, RwLock},
 };
-use log::info;
 
-use naia_shared::{BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate};
+use naia_shared::{
+    BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor,
+    EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity,
+    GlobalWorldManagerType, MutChannelType, PropertyMutator, Replicate,
+};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -107,11 +111,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         component_kind_set.insert(*component_kind);
     }
 
-    pub fn insert_component_diff_handler(
-        &mut self,
-        entity: &E,
-        component: &mut dyn Replicate,
-    ) {
+    pub fn insert_component_diff_handler(&mut self, entity: &E, component: &mut dyn Replicate) {
         let kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
         let prop_mutator = self.register_component(entity, &kind, diff_mask_length);

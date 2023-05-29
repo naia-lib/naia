@@ -1,12 +1,10 @@
+use log::info;
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
 };
-use log::info;
 
-use naia_shared::{
-    EntityAuthAccessor, EntityAuthStatus, HostAuthHandler, HostType,
-};
+use naia_shared::{EntityAuthAccessor, EntityAuthStatus, HostAuthHandler, HostType};
 
 use crate::UserKey;
 
@@ -57,7 +55,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
     }
 
     pub(crate) fn authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
-        self.host_auth_handler.auth_status(entity).map(|host_status| host_status.status())
+        self.host_auth_handler
+            .auth_status(entity)
+            .map(|host_status| host_status.status())
     }
 
     pub(crate) fn request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {

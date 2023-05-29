@@ -216,7 +216,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             panic!("entity record does not exist!");
         };
         if record.replication_config != ReplicationConfig::Public {
-            panic!("Can only enable delegation on an Entity that is Public! Config: {:?}", record.replication_config);
+            panic!(
+                "Can only enable delegation on an Entity that is Public! Config: {:?}",
+                record.replication_config
+            );
         }
         self.auth_handler.register_entity(HostType::Client, entity);
     }
@@ -251,7 +254,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     pub(crate) fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
-        self.auth_handler.auth_status(entity).map(|host_status| host_status.status())
+        self.auth_handler
+            .auth_status(entity)
+            .map(|host_status| host_status.status())
     }
 
     pub(crate) fn entity_request_authority(&mut self, entity: &E) -> bool {

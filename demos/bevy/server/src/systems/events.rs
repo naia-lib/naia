@@ -8,7 +8,7 @@ use naia_bevy_server::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, SpawnEntityEvent,
-        TickEvent, UpdateComponentEvents, UnpublishEntityEvent
+        TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
     CommandsExt, Random, ReplicationConfig, Server,
 };

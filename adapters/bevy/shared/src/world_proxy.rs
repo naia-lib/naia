@@ -378,16 +378,16 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         component_kind: &ComponentKind,
     ) {
         info!("world_proxy().component_enable_delegation(): 1");
-        self.world.resource_scope(|world: &mut World, data: Mut<WorldData>| {
-            info!("world_proxy().component_enable_delegation(): 2");
-            let Some(accessor) = data.component_access(component_kind) else {
+        self.world
+            .resource_scope(|world: &mut World, data: Mut<WorldData>| {
+                info!("world_proxy().component_enable_delegation(): 2");
+                let Some(accessor) = data.component_access(component_kind) else {
                 panic!("ComponentKind has not been registered?");
             };
 
-            info!("world_proxy().component_enable_delegation(): 3");
-            accessor.component_enable_delegation(global_world_manager, world, entity);
-
-        });
+                info!("world_proxy().component_enable_delegation(): 3");
+                accessor.component_enable_delegation(global_world_manager, world, entity);
+            });
     }
 
     fn entity_disable_delegation(&mut self, entity: &Entity) {

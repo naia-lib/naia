@@ -25,8 +25,8 @@ pub enum EntityEventMessageAction {
     RequestAuthority,
     ReleaseAuthority,
     UpdateAuthority(EntityAuthStatus),
-    GrantAuthResponse(u16), //u16 here is new Host Entity
-    EntityMigrateResponse(u16) //u16 here is new Host Entity
+    GrantAuthResponse(u16),     //u16 here is new Host Entity
+    EntityMigrateResponse(u16), //u16 here is new Host Entity
 }
 
 impl EntityEventMessageAction {

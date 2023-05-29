@@ -5,7 +5,14 @@ use log::{info, warn};
 #[cfg(feature = "bevy_support")]
 use bevy_ecs::prelude::Resource;
 
-use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{
+    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
+    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
+    GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity,
+    Replicate, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick,
+    WorldMutType, WorldRefType,
+};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
@@ -569,7 +576,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub fn despawn_entity_worldless(&mut self, entity: &E) {
-
         info!("despawn_entity_worldless()");
 
         // check whether we have authority to despawn this entity
@@ -709,7 +715,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         client_is_origin: bool,
     ) {
         // this should happen BEFORE the world entity/component has been translated over to Delegated
-        self.global_world_manager.entity_register_auth_for_delegation(&entity);
+        self.global_world_manager
+            .entity_register_auth_for_delegation(&entity);
 
         world.entity_enable_delegation(&self.global_world_manager, &entity);
 
@@ -723,7 +730,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
 
             // immediately move auth status to "granted"
-            self.global_world_manager.entity_update_authority(entity, EntityAuthStatus::Granted);
+            self.global_world_manager
+                .entity_update_authority(entity, EntityAuthStatus::Granted);
         }
     }
 
@@ -760,8 +768,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         info!(
             "<-- Received Entity Update Authority message! {:?} -> {:?}",
-            old_auth_status,
-            new_auth_status
+            old_auth_status, new_auth_status
         );
 
         // Updated Host Manager
@@ -827,8 +834,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             (_, _) => {
                 panic!(
                     "-- Entity updated authority, not handled -- {:?} -> {:?}",
-                    old_auth_status,
-                    new_auth_status
+                    old_auth_status, new_auth_status
                 );
             }
         }
@@ -1144,11 +1150,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    pub fn add_host_entity_to_remote(
-        &mut self,
-        world_entity: &E,
-        remote_entity: RemoteEntity,
-    ) {
+    pub fn add_host_entity_to_remote(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
         let Some(connection) = self.server_connection.as_mut() else {
             panic!("Client is disconnected!");
         };

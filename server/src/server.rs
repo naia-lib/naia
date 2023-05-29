@@ -15,9 +15,9 @@ use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
     EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
     EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
-    GlobalEntity, GlobalWorldManagerType, Instant, Message, MessageContainer,
-    PacketType, Protocol, RemoteEntity, Replicate, Serde, SerdeErr, SharedGlobalWorldManager,
-    SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
+    GlobalEntity, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol,
+    RemoteEntity, Replicate, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig,
+    StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -899,8 +899,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // update in world manager
         self.global_world_manager
             .insert_component_record(entity, &component_kind);
-        self
-            .global_world_manager
+        self.global_world_manager
             .insert_component_diff_handler(entity, component);
 
         // if entity is delegated, convert over
@@ -1050,8 +1049,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
     }
 
-    pub(crate) fn enable_delegation_client_owned_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E, client_key: &UserKey) {
-
+    pub(crate) fn enable_delegation_client_owned_entity<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        entity: &E,
+        client_key: &UserKey,
+    ) {
         let Some(entity_owner) = self.global_world_manager.entity_owner(entity) else {
             panic!("entity should have an owner at this point");
         };
@@ -1623,7 +1626,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     info!("Despawn Entity Response!");
                     if self
                         .global_world_manager
-                        .entity_is_public_and_client_owned(&entity) || self.global_world_manager.entity_is_delegated(&entity)
+                        .entity_is_public_and_client_owned(&entity)
+                        || self.global_world_manager.entity_is_delegated(&entity)
                     {
                         self.despawn_entity_worldless(&entity);
                         info!("server process public EntityResponseEvent::DespawnEntity");
@@ -1636,7 +1640,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .insert_component_record(&entity, &component_kind);
                     if self
                         .global_world_manager
-                        .entity_is_public_and_client_owned(&entity) || self.global_world_manager.entity_is_delegated(&entity)
+                        .entity_is_public_and_client_owned(&entity)
+                        || self.global_world_manager.entity_is_delegated(&entity)
                     {
                         world.component_publish(
                             &self.global_world_manager,
@@ -1645,9 +1650,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         );
 
                         if self.global_world_manager.entity_is_delegated(&entity) {
-                            world.component_enable_delegation(&self.global_world_manager,
-                                                              &entity,
-                                                              &component_kind);
+                            world.component_enable_delegation(
+                                &self.global_world_manager,
+                                &entity,
+                                &component_kind,
+                            );
                         }
 
                         self.insert_new_component_into_entity_scopes(&entity, &component_kind);
@@ -1656,7 +1663,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::RemoveComponent(entity, component_kind) => {
                     if self
                         .global_world_manager
-                        .entity_is_public_and_client_owned(&entity) || self.global_world_manager.entity_is_delegated(&entity)
+                        .entity_is_public_and_client_owned(&entity)
+                        || self.global_world_manager.entity_is_delegated(&entity)
                     {
                         self.remove_component_worldless(&entity, &component_kind);
                         info!("server process public EntityResponseEvent::RemoveComponent");
