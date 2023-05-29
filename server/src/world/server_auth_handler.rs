@@ -2,6 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
 };
+use log::info;
 
 use naia_shared::{
     EntityAuthAccessor, EntityAuthStatus, HostAuthHandler, HostType,
@@ -17,7 +18,7 @@ pub enum AuthOwner {
 }
 
 impl AuthOwner {
-    pub fn from_user_key(user_key: &Option<UserKey>) -> Self {
+    pub fn from_user_key(user_key: Option<&UserKey>) -> Self {
         match user_key {
             Some(user_key) => AuthOwner::Client(*user_key),
             None => AuthOwner::Server,

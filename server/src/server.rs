@@ -433,7 +433,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
                         }
                         self.publish_entity(world, entity, true);
-                        self.entity_enable_delegation(world, entity, true);
+                        self.entity_enable_delegation(world, entity, None);
                     }
                 }
             }
@@ -456,7 +456,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             // The reasoning here is that the Client's ownership should be respected.
                             // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
                         }
-                        self.entity_enable_delegation(world, entity, true);
+                        self.entity_enable_delegation(world, entity, None);
                     }
                 }
             }
@@ -486,7 +486,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_request_authority(&mut self, origin_user: &Option<UserKey>, entity: &E) {
+    pub fn entity_request_authority(&mut self, origin_user: Option<&UserKey>, entity: &E) {
         let requester = AuthOwner::from_user_key(origin_user);
         let success = self
             .global_world_manager
@@ -568,7 +568,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_release_authority(&mut self, origin_user: &Option<UserKey>, entity: &E) {
+    pub fn entity_release_authority(&mut self, origin_user: Option<&UserKey>, entity: &E) {
         let releaser = AuthOwner::from_user_key(origin_user);
         let success = self
             .global_world_manager
@@ -1016,7 +1016,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         world: &mut W,
         entity: &E,
-        server_origin: bool,
+        client_origin: Option<UserKey>,
     ) {
         // TODO: check that entity is eligible for delegation?
 
@@ -1042,15 +1042,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             }
         }
 
-        if !server_origin {
-            self.migrate_client_entity_to_server(entity);
+        if let Some(client_key) = client_origin {
+            self.enable_delegation_client_owned_entity(world, entity, &client_key);
+        } else {
+            self.global_world_manager.entity_enable_delegation(&entity);
+            world.entity_enable_delegation(&self.global_world_manager, &entity);
         }
-
-        self.global_world_manager.entity_enable_delegation(&entity);
-        world.entity_enable_delegation(&self.global_world_manager, &entity);
     }
 
-    pub(crate) fn migrate_client_entity_to_server(&mut self, entity: &E) {
+    pub(crate) fn enable_delegation_client_owned_entity<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E, client_key: &UserKey) {
 
         let Some(entity_owner) = self.global_world_manager.entity_owner(entity) else {
             panic!("entity should have an owner at this point");
@@ -1079,9 +1079,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             component_kinds,
         );
 
-        // Remove remote entity from Remote World
-
-
         // send response
         let message = EntityEventMessage::new_entity_migrate_response(
             &self.global_world_manager,
@@ -1089,6 +1086,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             new_host_entity,
         );
         self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+
+        self.global_world_manager.entity_enable_delegation(&entity);
+        world.entity_enable_delegation(&self.global_world_manager, &entity);
+
+        // grant authority to user
+        let requester = AuthOwner::from_user_key(Some(client_key));
+        let success = self
+            .global_world_manager
+            .request_authority(&entity, &requester);
+        if !success {
+            panic!("failed to grant authority of client-owned delegated entity to creating user");
+        }
     }
 
     pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
@@ -1160,7 +1169,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             {
                 let copied_entities = all_owned_entities.clone();
                 for entity in copied_entities {
-                    self.entity_release_authority(&Some(*user_key), &entity);
+                    self.entity_release_authority(Some(user_key), &entity);
                 }
             }
         }
@@ -1658,7 +1667,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
                     info!("received enable delegation entity message!");
-                    self.entity_enable_delegation(world, &entity, false);
+                    self.entity_enable_delegation(world, &entity, Some(*user_key));
                 }
                 EntityResponseEvent::EnableDelegationEntityResponse(entity) => {
                     self.entity_enable_delegation_response(user_key, &entity);
@@ -1667,10 +1676,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     panic!("Clients should not be able to disable entity delegation.");
                 }
                 EntityResponseEvent::EntityRequestAuthority(entity) => {
-                    self.entity_request_authority(&Some(*user_key), &entity);
+                    self.entity_request_authority(Some(user_key), &entity);
                 }
                 EntityResponseEvent::EntityReleaseAuthority(entity) => {
-                    self.entity_release_authority(&Some(*user_key), &entity);
+                    self.entity_release_authority(Some(user_key), &entity);
                 }
                 EntityResponseEvent::EntityUpdateAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");

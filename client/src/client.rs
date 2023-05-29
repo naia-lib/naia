@@ -694,12 +694,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         entity: &E,
         client_is_origin: bool,
     ) {
-        if client_is_origin {
-            let message =
-                EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
-            self.send_message::<SystemChannel, EntityEventMessage>(&message);
-        }
-
         // this should happen BEFORE the world entity/component has been translated over to Delegated
         self.global_world_manager.entity_register_auth_for_delegation(&entity);
 
@@ -707,6 +701,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // this should happen AFTER the world entity/component has been translated over to Delegated
         self.global_world_manager.entity_enable_delegation(&entity);
+
+        if client_is_origin {
+            // send message to server
+            let message =
+                EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
+            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+
+            // immediately move auth status to "granted"
+            self.global_world_manager.entity_update_authority(entity, EntityAuthStatus::Granted);
+        }
     }
 
     pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(

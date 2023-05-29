@@ -76,13 +76,13 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn request_authority(&mut self) -> &mut Self {
-        self.server.entity_request_authority(&None, &self.entity);
+        self.server.entity_request_authority(None, &self.entity);
 
         self
     }
 
     pub fn release_authority(&mut self) -> &mut Self {
-        self.server.entity_release_authority(&None, &self.entity);
+        self.server.entity_release_authority(None, &self.entity);
 
         self
     }
