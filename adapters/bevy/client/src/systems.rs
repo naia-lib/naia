@@ -1,5 +1,7 @@
 use std::ops::DerefMut;
 
+use log::info;
+
 use bevy_ecs::{
     entity::Entity,
     event::Events,
@@ -49,6 +51,7 @@ pub fn before_receive_events(world: &mut World) {
                     client.remove_component_worldless(&entity, &component_kind);
                 }
                 HostSyncEvent::Despawn(entity) => {
+                    info!("HostSyncEvent::Despawn");
                     client.despawn_entity_worldless(&entity);
                 }
             }

@@ -1620,6 +1620,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .on_entity_channel_opened(&local_entity);
                 }
                 EntityResponseEvent::DespawnEntity(entity) => {
+                    info!("Despawn Entity Response!");
                     if self
                         .global_world_manager
                         .entity_is_public_and_client_owned(&entity) || self.global_world_manager.entity_is_delegated(&entity)

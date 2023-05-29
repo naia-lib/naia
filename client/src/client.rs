@@ -569,6 +569,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub fn despawn_entity_worldless(&mut self, entity: &E) {
+
+        info!("despawn_entity_worldless()");
+
+        // check whether we have authority to despawn this entity
+        if !self.global_world_manager.can_despawn_entity(entity) {
+            panic!("attempted to de-spawn entity that we do not have authority over");
+        }
+
         if let Some(connection) = &mut self.server_connection {
             //remove entity from server connection
             connection.base.host_world_manager.despawn_entity(entity);

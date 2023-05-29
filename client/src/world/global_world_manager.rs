@@ -88,6 +88,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         self.entity_records.remove(entity)
     }
 
+    pub fn can_despawn_entity(&self, entity: &E) -> bool {
+        let Some(owner) = self.entity_owner(entity) else {
+            return true;
+        };
+        if !owner.is_server() {
+            return true;
+        }
+        if !self.entity_is_delegated(entity) {
+            return false;
+        }
+        return self.entity_authority_status(entity) == Some(EntityAuthStatus::Granted);
+    }
+
     // Component Kinds
     pub fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>> {
         if !self.entity_records.contains_key(entity) {

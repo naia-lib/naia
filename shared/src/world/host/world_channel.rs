@@ -120,6 +120,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
     }
 
     pub fn host_despawn_entity(&mut self, entity: &E) {
+        info!("host_despawn_entity()");
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot despawn entity that doesn't exist");
         }
@@ -144,6 +145,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             self.entity_channels.remove(entity);
             self.entity_channels
                 .insert(*entity, EntityChannel::Despawning);
+            info!("EntityActionEvent::DespawnEntity");
             self.outgoing_actions
                 .send_message(EntityActionEvent::DespawnEntity(*entity));
 
