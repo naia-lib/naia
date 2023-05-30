@@ -144,7 +144,8 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     // Misc
 
     pub fn has_both_host_and_remote_entity(&self, world_entity: &E) -> bool {
-        self.entity_map.has_both_host_and_remote_entity(world_entity)
+        self.entity_map
+            .has_both_host_and_remote_entity(world_entity)
     }
 
     pub fn remove_redundant_host_entity(&mut self, world_entity: &E) -> HostEntity {

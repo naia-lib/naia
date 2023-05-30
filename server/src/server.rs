@@ -564,8 +564,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 .base
                 .local_world_manager
                 .insert_remote_entity(world_entity, remote_entity);
-            let component_kinds = self.global_world_manager.component_kinds(world_entity).unwrap();
-            connection.base.remote_world_reader.track_hosts_redundant_remote_entity(&remote_entity, component_kinds);
+            let component_kinds = self
+                .global_world_manager
+                .component_kinds(world_entity)
+                .unwrap();
+            connection
+                .base
+                .remote_world_reader
+                .track_hosts_redundant_remote_entity(&remote_entity, component_kinds);
         }
     }
 
@@ -574,7 +580,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             .base
             .local_world_manager
             .remove_redundant_remote_entity(world_entity);
-        connection.base.remote_world_reader.untrack_hosts_redundant_remote_entity(&remote_entity);
+        connection
+            .base
+            .remote_world_reader
+            .untrack_hosts_redundant_remote_entity(&remote_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -602,7 +611,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
 
                 // Clean up any remote entity that was mapped to the delegated host entity in this connection!
-                if connection.base.local_world_manager.has_both_host_and_remote_entity(entity) {
+                if connection
+                    .base
+                    .local_world_manager
+                    .has_both_host_and_remote_entity(entity)
+                {
                     Self::remove_redundant_remote_entity_from_host(connection, entity);
                 }
             }
@@ -1644,7 +1657,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         // remove from host connection
                         let user = self.users.get(user_key).unwrap();
                         let connection = self.user_connections.get_mut(&user.address).unwrap();
-                        connection.base.host_world_manager.client_initiated_despawn(&entity);
+                        connection
+                            .base
+                            .host_world_manager
+                            .client_initiated_despawn(&entity);
 
                         self.despawn_entity_worldless(&entity);
                         info!("server process public EntityResponseEvent::DespawnEntity");
@@ -1727,7 +1743,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     panic!("Clients should not be able to update entity authority.");
                 }
                 EntityResponseEvent::EntityGrantAuthResponse(world_entity, remote_entity) => {
-                    self.add_redundant_remote_entity_to_host(user_key, &world_entity, remote_entity);
+                    self.add_redundant_remote_entity_to_host(
+                        user_key,
+                        &world_entity,
+                        remote_entity,
+                    );
                 }
                 EntityResponseEvent::EntityMigrateResponse(_, _) => {
                     panic!("Clients should not be able to send this message");

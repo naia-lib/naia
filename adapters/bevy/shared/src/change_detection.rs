@@ -8,7 +8,7 @@ use bevy_ecs::{
 
 use naia_shared::{ComponentKind, Replicate};
 
-use crate::{HostOwned};
+use crate::HostOwned;
 
 pub enum HostSyncEvent {
     Insert(Entity, ComponentKind),

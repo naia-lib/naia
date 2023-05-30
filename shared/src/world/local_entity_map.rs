@@ -1,7 +1,7 @@
 // A Hashmap that can be queried by either key or value.
 
-use std::{collections::HashMap, hash::Hash};
 use log::info;
+use std::{collections::HashMap, hash::Hash};
 
 use crate::world::entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
 
