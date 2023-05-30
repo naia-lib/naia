@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIter};
 
-use log::{info, warn};
+use log::warn;
 
 use naia_shared::{
     Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, Message,

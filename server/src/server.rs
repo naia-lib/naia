@@ -954,7 +954,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         };
         // add component to connections already tracking entity
         for (addr, connection) in self.user_connections.iter_mut() {
-
             if let Some(exclude_addr) = excluding_addr_opt {
                 if addr == exclude_addr {
                     continue;
@@ -1684,7 +1683,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             .client_initiated_despawn(&entity);
 
                         self.despawn_entity_worldless(&entity);
-
                     } else {
                         self.global_world_manager.remove_entity_record(&entity);
                     }
@@ -1713,10 +1711,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             // track remote component on the originating connection for the time being
                             let addr = self.users.get(user_key).unwrap().address;
                             let connection = self.user_connections.get_mut(&addr).unwrap();
-                            connection.base.host_world_manager.track_remote_component(&entity, &component_kind);
+                            connection
+                                .base
+                                .host_world_manager
+                                .track_remote_component(&entity, &component_kind);
                         }
 
-                        self.insert_new_component_into_entity_scopes(&entity, &component_kind, Some(user_key));
+                        self.insert_new_component_into_entity_scopes(
+                            &entity,
+                            &component_kind,
+                            Some(user_key),
+                        );
                     }
                 }
                 EntityResponseEvent::RemoveComponent(entity, component_kind) => {
