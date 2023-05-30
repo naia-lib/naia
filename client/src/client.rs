@@ -1141,13 +1141,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     panic!("Client should never receive an EntityGrantAuthResponse event");
                 }
                 EntityResponseEvent::EntityMigrateResponse(world_entity, remote_entity) => {
-                    self.add_host_entity_to_remote(&world_entity, remote_entity);
+                    self.add_remote_entity_to_host(&world_entity, remote_entity);
+                    self.incoming_events.push_auth_grant(world_entity);
                 }
             }
         }
     }
 
-    pub fn add_host_entity_to_remote(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
+    pub fn add_remote_entity_to_host(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
         let Some(connection) = self.server_connection.as_mut() else {
             panic!("Client is disconnected!");
         };

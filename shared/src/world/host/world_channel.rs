@@ -305,7 +305,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             component_channels.insert(*component_kind, ComponentChannel::Inserted);
             self.on_component_channel_opened(entity, component_kind);
 
-            info!("Remote Delegated Entity now is Tracking Component");
+            info!("     --- Remote Delegated Entity now is Tracking Component");
         }
     }
 
