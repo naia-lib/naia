@@ -3,9 +3,8 @@ use std::{
     hash::Hash,
     marker::PhantomData,
 };
-use log::info;
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than, world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex, RemoteEntity, world};
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than, world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex};
 
 pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
     receiver: ReliableReceiver<EntityAction<E>>,

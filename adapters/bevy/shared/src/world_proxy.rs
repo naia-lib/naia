@@ -1,7 +1,5 @@
 use std::any::TypeId;
 
-use log::info;
-
 use bevy_ecs::{
     entity::Entity,
     world::{Mut, World},

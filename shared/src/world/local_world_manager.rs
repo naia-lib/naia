@@ -4,7 +4,7 @@ use std::{
     time::Duration,
 };
 
-use log::{info, warn};
+use log::warn;
 use naia_socket_shared::Instant;
 
 use crate::{

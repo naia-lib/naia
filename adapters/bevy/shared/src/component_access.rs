@@ -1,7 +1,5 @@
 use std::{any::Any, marker::PhantomData};
 
-use log::info;
-
 use bevy_app::App;
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs, world::World};
 
