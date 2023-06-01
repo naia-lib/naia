@@ -240,12 +240,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         self.auth_handler.authority_status(entity)
     }
 
-    pub(crate) fn request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
-        self.auth_handler.request_authority(entity, requester)
+    // returns whether or not any change to auth needed to be made
+    pub(crate) fn server_take_authority(&mut self, entity: &E) -> bool {
+        self.auth_handler.server_take_authority(entity)
     }
 
-    pub(crate) fn release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
-        self.auth_handler.release_authority(entity, releaser)
+    pub(crate) fn client_request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
+        self.auth_handler.client_request_authority(entity, requester)
+    }
+
+    pub(crate) fn client_release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
+        self.auth_handler.client_release_authority(entity, releaser)
     }
 
     pub(crate) fn user_all_owned_entities(&self, user_key: &UserKey) -> Option<&HashSet<E>> {

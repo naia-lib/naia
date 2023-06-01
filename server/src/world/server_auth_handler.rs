@@ -59,7 +59,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
             .map(|host_status| host_status.status())
     }
 
-    pub(crate) fn request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
+    pub(crate) fn client_request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
             panic!("Entity not registered with ServerAuthHandler");
         };
@@ -90,30 +90,56 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
         }
     }
 
-    pub(crate) fn release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
+    pub(crate) fn client_release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
             panic!("Entity not registered with ServerAuthHandler");
         };
 
         if owner == releaser {
-            if let AuthOwner::Client(user_key) = releaser {
-                let mut remove_user = false;
-                if let Some(entities) = self.user_to_entity_map.get_mut(user_key) {
-                    entities.remove(entity);
-                    remove_user = true;
-                }
-                if remove_user {
-                    self.user_to_entity_map.remove(user_key);
-                }
-            }
-
+            let previous_owner = *owner;
             *owner = AuthOwner::None;
-            self.host_auth_handler
-                .set_auth_status(entity, EntityAuthStatus::Available);
+            self.release_all_authority(entity, previous_owner);
+
             return true;
         } else {
             return false;
         }
+    }
+
+    // returns whether or not any change needed to be made
+    pub(crate) fn server_take_authority(&mut self, entity: &E) -> bool {
+        let Some(owner) = self.entity_auth_map.get_mut(entity) else {
+            panic!("Entity not registered with ServerAuthHandler");
+        };
+
+        let previous_owner = *owner;
+        *owner = AuthOwner::None;
+        let response = self.release_all_authority(entity, previous_owner);
+
+        response
+    }
+
+    fn release_all_authority(&mut self, entity: &E, owner: AuthOwner) -> bool {
+
+        if owner == AuthOwner::None {
+            // no change was made
+            return false;
+        }
+
+        if let AuthOwner::Client(user_key) = owner {
+            let mut remove_user = false;
+            if let Some(entities) = self.user_to_entity_map.get_mut(&user_key) {
+                entities.remove(entity);
+                remove_user = true;
+            }
+            if remove_user {
+                self.user_to_entity_map.remove(&user_key);
+            }
+        }
+
+        self.host_auth_handler.set_auth_status(entity, EntityAuthStatus::Available);
+
+        return true;
     }
 
     pub(crate) fn user_all_owned_entities(&self, user_key: &UserKey) -> Option<&HashSet<E>> {

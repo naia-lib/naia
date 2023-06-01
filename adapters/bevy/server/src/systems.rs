@@ -6,16 +6,16 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
+use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
 use naia_server::{EntityOwner, Server};
 
-use crate::ClientOwned;
+use crate::{ClientOwned, EntityAuthStatus};
 
 mod naia_events {
     pub use naia_server::{
         ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
         PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-        UnpublishEntityEvent, UpdateComponentEvent,
+        UnpublishEntityEvent, UpdateComponentEvent, DelegateEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
     };
 }
 
@@ -41,6 +41,10 @@ pub fn before_receive_events(world: &mut World) {
         for event in host_component_events {
             match event {
                 HostSyncEvent::Insert(entity, component_kind) => {
+                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                        // if auth status is denied, that means the client is performing this operation and it's already being handled
+                        continue;
+                    }
                     let mut world_proxy = world.proxy_mut();
                     let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
                         continue;
@@ -48,9 +52,17 @@ pub fn before_receive_events(world: &mut World) {
                     server.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
                 }
                 HostSyncEvent::Remove(entity, component_kind) => {
+                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                        // if auth status is denied, that means the client is performing this operation and it's already being handled
+                        continue;
+                    }
                     server.remove_component_worldless(&entity, &component_kind);
                 }
                 HostSyncEvent::Despawn(entity) => {
+                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                        // if auth status is denied, that means the client is performing this operation and it's already being handled
+                        continue;
+                    }
                     server.despawn_entity_worldless(&entity);
                 }
             }
@@ -163,6 +175,27 @@ pub fn before_receive_events(world: &mut World) {
                     .unwrap();
                 for (user_key, entity) in events.read::<naia_events::UnpublishEntityEvent>() {
                     event_writer.send(bevy_events::UnpublishEntityEvent(user_key, entity));
+                }
+            }
+
+            // Delegate Entity Event
+            if events.has::<naia_events::DelegateEntityEvent>() {
+                for (_, entity) in events.read::<naia_events::DelegateEntityEvent>() {
+                    world.entity_mut(entity).insert(HostOwned);
+                }
+            }
+
+            // Entity Auth Given Event
+            if events.has::<naia_events::EntityAuthGrantEvent>() {
+                for (_, entity) in events.read::<naia_events::EntityAuthGrantEvent>() {
+                    world.entity_mut(entity).remove::<HostOwned>();
+                }
+            }
+
+            // Entity Auth Reset Event
+            if events.has::<naia_events::EntityAuthResetEvent>() {
+                for entity in events.read::<naia_events::EntityAuthResetEvent>() {
+                    world.entity_mut(entity).insert(HostOwned);
                 }
             }
 

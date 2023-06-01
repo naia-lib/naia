@@ -4,8 +4,8 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{HostOwned, WorldProxyMut};
-use naia_server::{ReplicationConfig, Server as NaiaServer};
+use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldProxyMut};
+use naia_server::{ReplicationConfig, Server as NaiaServer, UserKey};
 
 use crate::Server;
 
@@ -19,6 +19,9 @@ pub trait CommandsExt<'w, 's, 'a> {
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn replication_config(&'a self, server: &Server) -> Option<ReplicationConfig>;
+    fn give_authority(&'a mut self, server: &mut Server, user_key: &UserKey) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn take_authority(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn authority(&'a self, server: &Server) -> Option<EntityAuthStatus>;
 }
 
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
@@ -50,6 +53,19 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
 
     fn replication_config(&'a self, server: &Server) -> Option<ReplicationConfig> {
         server.replication_config(&self.id())
+    }
+
+    fn give_authority(&'a mut self, server: &mut Server, user_key: &UserKey) -> &'a mut EntityCommands<'w, 's, 'a> {
+        todo!()
+    }
+
+    fn take_authority(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a> {
+        server.entity_take_authority(&self.id());
+        return self;
+    }
+
+    fn authority(&'a self, server: &Server) -> Option<EntityAuthStatus> {
+        todo!()
     }
 }
 

@@ -144,6 +144,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             self.entity_channels
                 .insert(*entity, EntityChannel::Despawning);
 
+            warn!("Sending Despawn Message A!");
             self.outgoing_actions
                 .send_message(EntityActionEvent::DespawnEntity(*entity));
 
@@ -362,7 +363,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 // despawn entity
                 self.entity_channels
                     .insert(*entity, EntityChannel::Despawning);
-                info!("B");
+                warn!("Sending Despawn Message B!");
                 self.outgoing_actions
                     .send_message(EntityActionEvent::DespawnEntity(*entity));
                 self.on_remote_entity_channel_closed(local_world_manager, entity);
