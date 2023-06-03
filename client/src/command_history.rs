@@ -26,6 +26,7 @@ impl<T: Clone> CommandHistory<T> {
             output.push((*tick, command.clone()));
         }
 
+        output.reverse();
         output
     }
 
