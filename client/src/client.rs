@@ -1094,7 +1094,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .on_entity_channel_opened(&local_entity);
                 }
                 EntityResponseEvent::DespawnEntity(entity) => {
-                    self.global_world_manager.remote_despawn_entity(&entity);
+                    self.global_world_manager.remove_entity_record(&entity);
                 }
                 EntityResponseEvent::InsertComponent(entity, component_kind) => {
                     self.global_world_manager
@@ -1141,14 +1141,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     panic!("Client should never receive an EntityGrantAuthResponse event");
                 }
                 EntityResponseEvent::EntityMigrateResponse(world_entity, remote_entity) => {
-                    self.add_remote_entity_to_host(&world_entity, remote_entity);
+                    self.add_redundant_remote_entity_to_host(&world_entity, remote_entity);
                     self.incoming_events.push_auth_grant(world_entity);
                 }
             }
         }
     }
 
-    pub fn add_remote_entity_to_host(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
+    pub fn add_redundant_remote_entity_to_host(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
         let Some(connection) = self.server_connection.as_mut() else {
             panic!("Client is disconnected!");
         };
@@ -1158,6 +1158,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .base
             .local_world_manager
             .insert_remote_entity(world_entity, remote_entity);
+
+        // Remote world reader needs to track remote entity too
+        let component_kinds = self
+            .global_world_manager
+            .component_kinds(world_entity)
+            .unwrap();
+        connection
+            .base
+            .remote_world_reader
+            .track_hosts_redundant_remote_entity(&remote_entity, component_kinds);
     }
 }
 

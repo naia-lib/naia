@@ -65,7 +65,7 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
 
         // TODO: VERY IMPORTANT! You need to figure out how to remove EntityChannels after they've been despawned!
         // keep in mind that you need to keep around entity channels to be able to receive messages for them still
-        // right now this is leaking memory!
+        // RIGHT NOW THIS IS LEAKING MEMORY!
         // a TTL for these Entity Channels after they've been despawned is probably the way to go
 
         outgoing_actions

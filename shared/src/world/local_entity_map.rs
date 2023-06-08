@@ -112,7 +112,6 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
     }
 
     pub fn remove_by_world_entity(&mut self, world: &E) -> Option<LocalEntityRecord> {
-        info!("removing entity");
         let record_opt = self.world_to_local.remove(world);
         if let Some(record) = &record_opt {
             if let Some(host) = record.host {

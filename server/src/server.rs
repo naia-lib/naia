@@ -602,10 +602,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ) {
         if let Some(user) = self.users.get(user_key) {
             let connection = self.user_connections.get_mut(&user.address).unwrap();
+
+            // Local World Manager now tracks the Entity by it's Remote Entity
             connection
                 .base
                 .local_world_manager
                 .insert_remote_entity(world_entity, remote_entity);
+
+            // Remote world reader needs to track remote entity too
             let component_kinds = self
                 .global_world_manager
                 .component_kinds(world_entity)

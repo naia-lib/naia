@@ -155,7 +155,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         );
     }
 
-    pub fn remote_despawn_entity(&mut self, entity: &E) {
+    pub fn remove_entity_record(&mut self, entity: &E) {
         let record = self
             .entity_records
             .remove(entity)

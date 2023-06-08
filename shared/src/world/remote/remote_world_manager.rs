@@ -140,7 +140,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     }
 
                     world.despawn_entity(&world_entity);
+
                     self.on_entity_channel_closing(&remote_entity);
+
                     self.outgoing_events
                         .push(EntityEvent::<E>::DespawnEntity(world_entity));
                 }
