@@ -120,7 +120,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
     }
 
     fn release_all_authority(&mut self, entity: &E, owner: AuthOwner) -> bool {
-
         if owner == AuthOwner::None {
             // no change was made
             return false;
@@ -137,7 +136,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
             }
         }
 
-        self.host_auth_handler.set_auth_status(entity, EntityAuthStatus::Available);
+        self.host_auth_handler
+            .set_auth_status(entity, EntityAuthStatus::Available);
 
         return true;
     }

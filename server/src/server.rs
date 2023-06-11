@@ -542,27 +542,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // are in each User's scope
             let mut messages_to_send = Vec::new();
             for (user_key, user) in self.users.iter() {
-                let connection = self.user_connections.get(&user.address).unwrap();
-                if connection.base.host_world_manager.host_has_entity(entity) {
-                    let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
-                    if let Some(new_owner_user) = origin_user {
-                        if *new_owner_user == user_key {
-                            new_status = EntityAuthStatus::Granted;
+                if let Some(connection) = self.user_connections.get(&user.address) {
+                    if connection.base.host_world_manager.host_has_entity(entity) {
+                        let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
+                        if let Some(new_owner_user) = origin_user {
+                            if *new_owner_user == user_key {
+                                new_status = EntityAuthStatus::Granted;
+                            }
                         }
+
+                        // if new_status == EntityAuthStatus::Denied {
+                        //     warn!("Denying status of entity to user: `{:?}`", user_key);
+                        // } else {
+                        //     warn!("Granting status of entity to user: `{:?}`", user_key);
+                        // }
+
+                        let message = EntityEventMessage::new_update_auth_status(
+                            &self.global_world_manager,
+                            entity,
+                            new_status,
+                        );
+                        messages_to_send.push((user_key, message));
                     }
-
-                    // if new_status == EntityAuthStatus::Denied {
-                    //     warn!("Denying status of entity to user: `{:?}`", user_key);
-                    // } else {
-                    //     warn!("Granting status of entity to user: `{:?}`", user_key);
-                    // }
-
-                    let message = EntityEventMessage::new_update_auth_status(
-                        &self.global_world_manager,
-                        entity,
-                        new_status,
-                    );
-                    messages_to_send.push((user_key, message));
                 }
             }
             for (user_key, message) in messages_to_send {
@@ -1799,7 +1800,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         &world_entity,
                         remote_entity,
                     );
-                    self.incoming_events.push_auth_grant(user_key, &world_entity);
+                    self.incoming_events
+                        .push_auth_grant(user_key, &world_entity);
                 }
                 EntityResponseEvent::EntityMigrateResponse(_, _) => {
                     panic!("Clients should not be able to send this message");

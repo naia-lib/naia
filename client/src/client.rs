@@ -1148,7 +1148,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    pub fn add_redundant_remote_entity_to_host(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
+    pub fn add_redundant_remote_entity_to_host(
+        &mut self,
+        world_entity: &E,
+        remote_entity: RemoteEntity,
+    ) {
         let Some(connection) = self.server_connection.as_mut() else {
             panic!("Client is disconnected!");
         };

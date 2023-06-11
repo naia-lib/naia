@@ -19,7 +19,11 @@ pub trait CommandsExt<'w, 's, 'a> {
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn replication_config(&'a self, server: &Server) -> Option<ReplicationConfig>;
-    fn give_authority(&'a mut self, server: &mut Server, user_key: &UserKey) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn give_authority(
+        &'a mut self,
+        server: &mut Server,
+        user_key: &UserKey,
+    ) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn take_authority(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn authority(&'a self, server: &Server) -> Option<EntityAuthStatus>;
 }
@@ -55,7 +59,11 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         server.replication_config(&self.id())
     }
 
-    fn give_authority(&'a mut self, server: &mut Server, user_key: &UserKey) -> &'a mut EntityCommands<'w, 's, 'a> {
+    fn give_authority(
+        &'a mut self,
+        server: &mut Server,
+        user_key: &UserKey,
+    ) -> &'a mut EntityCommands<'w, 's, 'a> {
         todo!()
     }
 

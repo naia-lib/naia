@@ -13,9 +13,10 @@ use crate::{ClientOwned, EntityAuthStatus};
 
 mod naia_events {
     pub use naia_server::{
-        ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent,
+        ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
+        EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvent,
         PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-        UnpublishEntityEvent, UpdateComponentEvent, DelegateEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
+        UnpublishEntityEvent, UpdateComponentEvent,
     };
 }
 

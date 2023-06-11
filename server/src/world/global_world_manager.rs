@@ -246,7 +246,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     pub(crate) fn client_request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
-        self.auth_handler.client_request_authority(entity, requester)
+        self.auth_handler
+            .client_request_authority(entity, requester)
     }
 
     pub(crate) fn client_release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
