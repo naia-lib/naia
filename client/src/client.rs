@@ -578,6 +578,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn despawn_entity_worldless(&mut self, entity: &E) {
         info!("despawn_entity_worldless()");
 
+        if !self.global_world_manager.has_entity(entity) {
+            info!("attempting to despawn entity that has already been despawned?");
+            return;
+        }
+
         // check whether we have authority to despawn this entity
         if !self.global_world_manager.can_despawn_entity(entity) {
             panic!("attempted to de-spawn entity that we do not have authority over");
@@ -798,7 +803,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // push outgoing event
                 self.incoming_events.push_auth_grant(*entity);
             }
-            (EntityAuthStatus::Releasing, EntityAuthStatus::Available) => {
+            (EntityAuthStatus::Releasing, EntityAuthStatus::Available) | (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
                 // Lost Authority
 
                 // Remove Entity from Host connection

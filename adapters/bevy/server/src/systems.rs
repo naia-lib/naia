@@ -196,7 +196,9 @@ pub fn before_receive_events(world: &mut World) {
             // Entity Auth Reset Event
             if events.has::<naia_events::EntityAuthResetEvent>() {
                 for entity in events.read::<naia_events::EntityAuthResetEvent>() {
-                    world.entity_mut(entity).insert(HostOwned);
+                    if let Some(mut entity_mut) = world.get_entity_mut(entity) {
+                        entity_mut.insert(HostOwned);
+                    }
                 }
             }
 
