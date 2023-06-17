@@ -19,6 +19,14 @@ impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8>
         self.inner
     }
 
+    pub fn set<T: Into<i128>>(&mut self, value: T) {
+        self.inner = value.into();
+    }
+
+    pub fn to<T: SerdeIntegerConversion<SIGNED, VARIABLE, BITS>>(&self) -> T {
+        T::from(self)
+    }
+
     pub fn new<T: Into<i128>>(value: T) -> Self {
         let inner = Into::<i128>::into(value);
 
@@ -209,6 +217,25 @@ impl<const SIGNED: bool, const BITS: u8> ConstBitLength for SerdeInteger<SIGNED,
 
         output
     }
+}
+
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: Into<i128>> From<T> for SerdeInteger<SIGNED, VARIABLE, BITS> {
+    fn from(value: T) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: TryFrom<i128>> SerdeIntegerConversion<SIGNED, VARIABLE, BITS> for T {
+    fn from(value: &SerdeInteger<SIGNED, VARIABLE, BITS>) -> Self {
+        let Ok(t_value) = T::try_from(value.inner) else {
+            panic!("SerdeInteger's value is out of range to convert to this type.");
+        };
+        t_value
+    }
+}
+
+pub trait SerdeIntegerConversion<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> {
+    fn from(value: &SerdeInteger<SIGNED, VARIABLE, BITS>) -> Self;
 }
 
 // Tests
