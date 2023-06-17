@@ -383,6 +383,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.despawn_entity_worldless(entity);
     }
 
+    pub fn pause_entity_replication(&mut self, entity: &E) {
+        todo!();
+    }
+
+    pub fn resume_entity_replication(&mut self, entity: &E) {
+        todo!();
+    }
+
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
         self.global_world_manager.entity_replication_config(entity)
@@ -406,23 +414,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // are in each User's scope
         let mut messages_to_send = Vec::new();
         for (user_key, user) in self.users.iter() {
-            let connection = self.user_connections.get_mut(&user.address).unwrap();
-            if connection.base.host_world_manager.host_has_entity(entity) {
-                let message = EntityEventMessage::new_update_auth_status(
-                    &self.global_world_manager,
-                    entity,
-                    EntityAuthStatus::Available,
-                );
-                messages_to_send.push((user_key, message));
-            }
+            if let Some(connection) = self.user_connections.get_mut(&user.address) {
+                if connection.base.host_world_manager.host_has_entity(entity) {
+                    let message = EntityEventMessage::new_update_auth_status(
+                        &self.global_world_manager,
+                        entity,
+                        EntityAuthStatus::Available,
+                    );
+                    messages_to_send.push((user_key, message));
+                }
 
-            // Clean up any remote entity that was mapped to the delegated host entity in this connection!
-            if connection
-                .base
-                .local_world_manager
-                .has_both_host_and_remote_entity(entity)
-            {
-                Self::remove_redundant_remote_entity_from_host(connection, entity);
+                // Clean up any remote entity that was mapped to the delegated host entity in this connection!
+                if connection
+                    .base
+                    .local_world_manager
+                    .has_both_host_and_remote_entity(entity)
+                {
+                    Self::remove_redundant_remote_entity_from_host(connection, entity);
+                }
             }
         }
         for (user_key, message) in messages_to_send {

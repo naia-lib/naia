@@ -26,6 +26,8 @@ pub trait CommandsExt<'w, 's, 'a> {
     ) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn take_authority(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn authority(&'a self, server: &Server) -> Option<EntityAuthStatus>;
+    fn pause_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn resume_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a>;
 }
 
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
@@ -74,6 +76,16 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
 
     fn authority(&'a self, server: &Server) -> Option<EntityAuthStatus> {
         todo!()
+    }
+
+    fn pause_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a> {
+        server.pause_replication(&self.id());
+        return self;
+    }
+
+    fn resume_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a> {
+        server.resume_replication(&self.id());
+        return self;
     }
 }
 

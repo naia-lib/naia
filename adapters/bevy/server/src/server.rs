@@ -139,6 +139,14 @@ impl<'w> Server<'w> {
         self.server.disable_entity_replication(entity);
     }
 
+    pub(crate) fn pause_replication(&mut self, entity: &Entity) {
+        self.server.pause_entity_replication(entity);
+    }
+
+    pub(crate) fn resume_replication(&mut self, entity: &Entity) {
+        self.server.resume_entity_replication(entity);
+    }
+
     pub(crate) fn replication_config(&self, entity: &Entity) -> Option<ReplicationConfig> {
         self.server.entity_replication_config(entity)
     }

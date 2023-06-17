@@ -15,7 +15,7 @@ extern crate cfg_if;
 
 pub mod transport;
 pub mod shared {
-    pub use naia_shared::{default_channels, Random, SocketConfig};
+    pub use naia_shared::{default_channels, Random, SocketConfig, BitWrite, SerdeErr, BitReader, Serde, BitWriter};
 }
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};

@@ -23,6 +23,7 @@ enum EntityRelation {
     RemotePublic(RemotePublicRelation),
     Delegated(DelegatedRelation),
     Local(LocalRelation),
+    Invalid,
 }
 
 impl EntityRelation {
@@ -46,6 +47,7 @@ impl EntityRelation {
             EntityRelation::RemotePublic(_) => "RemotePublic",
             EntityRelation::Delegated(_) => "Delegated",
             EntityRelation::Local(_) => "Local",
+            EntityRelation::Invalid => "Invalid",
         }
     }
     fn write(
@@ -65,7 +67,7 @@ impl EntityRelation {
             }
             EntityRelation::RemoteOwned(_)
             | EntityRelation::RemoteWaiting(_)
-            | EntityRelation::Local(_) => {
+            | EntityRelation::Local(_) | EntityRelation::Invalid => {
                 panic!(
                     "EntityProperty of inner type: `{:}` should never be written.",
                     self.name()
@@ -82,7 +84,7 @@ impl EntityRelation {
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
-            | EntityRelation::Delegated(_) => {
+            | EntityRelation::Delegated(_) | EntityRelation::Invalid => {
                 panic!(
                     "EntityProperty of inner type: `{:}` cannot call set_mutator()",
                     self.name()
@@ -97,7 +99,7 @@ impl EntityRelation {
             EntityRelation::RemotePublic(inner) => inner.bit_length(converter),
             EntityRelation::RemoteOwned(_)
             | EntityRelation::RemoteWaiting(_)
-            | EntityRelation::Local(_) => {
+            | EntityRelation::Local(_) | EntityRelation::Invalid => {
                 panic!(
                     "EntityProperty of inner type: `{:}` should never be written, so no need for their bit length.", self.name()
                 );
@@ -114,7 +116,7 @@ impl EntityRelation {
             EntityRelation::RemotePublic(inner) => inner.get(converter),
             EntityRelation::Local(inner) => inner.get(converter),
             EntityRelation::Delegated(inner) => inner.get(converter),
-            EntityRelation::RemoteWaiting(_) => {
+            EntityRelation::RemoteWaiting(_) | EntityRelation::Invalid => {
                 panic!("Not ready to get RemoteWaiting EntityProperty value!");
             }
         }
@@ -136,7 +138,7 @@ impl EntityRelation {
             }
             EntityRelation::RemoteOwned(_)
             | EntityRelation::RemoteWaiting(_)
-            | EntityRelation::RemotePublic(_) => {
+            | EntityRelation::RemotePublic(_) | EntityRelation::Invalid => {
                 panic!("Remote EntityProperty should never be set manually.");
             }
         }
@@ -162,6 +164,9 @@ impl EntityRelation {
                 EntityRelation::RemoteWaiting(_) => {
                     inner.mirror_waiting();
                 }
+                EntityRelation::Invalid => {
+                    panic!("Invalid EntityProperty should never be mirrored.");
+                }
             },
             EntityRelation::Local(inner) => match &other.inner {
                 EntityRelation::HostOwned(other_inner) => {
@@ -181,6 +186,9 @@ impl EntityRelation {
                 }
                 EntityRelation::RemoteWaiting(_) => {
                     inner.mirror_waiting();
+                }
+                EntityRelation::Invalid => {
+                    panic!("Invalid EntityProperty should never be mirrored.");
                 }
             },
             EntityRelation::Delegated(inner) => match &other.inner {
@@ -202,11 +210,17 @@ impl EntityRelation {
                 EntityRelation::RemoteWaiting(_) => {
                     inner.mirror_waiting();
                 }
+                EntityRelation::Invalid => {
+                    panic!("Invalid EntityProperty should never be mirrored.");
+                }
             },
             EntityRelation::RemoteOwned(_)
             | EntityRelation::RemoteWaiting(_)
             | EntityRelation::RemotePublic(_) => {
                 panic!("Remote EntityProperty should never be set manually.");
+            }
+            EntityRelation::Invalid => {
+                panic!("Invalid EntityProperty should never be set manually.");
             }
         }
     }
@@ -216,7 +230,7 @@ impl EntityRelation {
             | EntityRelation::RemoteOwned(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
-            | EntityRelation::Delegated(_) => None,
+            | EntityRelation::Delegated(_) | EntityRelation::Invalid => None,
             EntityRelation::RemoteWaiting(inner) => Some(inner.remote_entity),
         }
     }
@@ -237,7 +251,7 @@ impl EntityRelation {
             }
             EntityRelation::HostOwned(_)
             | EntityRelation::RemoteWaiting(_)
-            | EntityRelation::Local(_) => {
+            | EntityRelation::Local(_) | EntityRelation::Invalid => {
                 panic!(
                     "This type of EntityProperty: `{:?}` can't use this method",
                     self.name()
@@ -253,7 +267,7 @@ impl EntityRelation {
             EntityRelation::RemotePublic(inner) => inner.global_entity,
             EntityRelation::Local(inner) => inner.global_entity,
             EntityRelation::Delegated(inner) => inner.global_entity,
-            EntityRelation::RemoteWaiting(_) => None,
+            EntityRelation::RemoteWaiting(_) | EntityRelation::Invalid => None,
         }
     }
 }
@@ -298,17 +312,18 @@ impl EntityProperty {
 
                 Ok(new_self)
             } else {
-                let OwnedLocalEntity::Remote(remote_entity_id) = local_entity else {
-                    panic!("This should not be possible");
-                };
+                if let OwnedLocalEntity::Remote(remote_entity_id) = local_entity {
 
-                let new_impl = RemoteWaitingRelation::new(RemoteEntity::new(remote_entity_id));
+                    let new_impl = RemoteWaitingRelation::new(RemoteEntity::new(remote_entity_id));
 
-                let new_self = Self {
-                    inner: EntityRelation::RemoteWaiting(new_impl),
-                };
+                    let new_self = Self {
+                        inner: EntityRelation::RemoteWaiting(new_impl),
+                    };
 
-                Ok(new_self)
+                    Ok(new_self)
+                } else {
+                    Ok(Self { inner: EntityRelation::Invalid })
+                }
             }
         } else {
             let mut new_impl = RemoteOwnedRelation::new_empty();
@@ -441,8 +456,8 @@ impl EntityProperty {
             | EntityRelation::RemoteOwned(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
-            | EntityRelation::Delegated(_) => {
-                panic!("Can't complete a RemoteOwned, HostOwned, or Delegated EntityProperty!");
+            | EntityRelation::Delegated(_) | EntityRelation::Invalid => {
+                panic!("Can't complete a RemoteOwned, HostOwned, Delegated, or Invalid EntityProperty!");
             }
         }
     }
@@ -464,7 +479,7 @@ impl EntityProperty {
             EntityRelation::HostOwned(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
-            | EntityRelation::Delegated(_) => {
+            | EntityRelation::Delegated(_) | EntityRelation::Invalid => {
                 panic!(
                     "EntityProperty of type: `{:?}` should never be made public twice.",
                     self.inner.name()
@@ -488,7 +503,7 @@ impl EntityProperty {
             EntityRelation::HostOwned(_)
             | EntityRelation::RemoteOwned(_)
             | EntityRelation::Local(_)
-            | EntityRelation::Delegated(_) => {
+            | EntityRelation::Delegated(_) | EntityRelation::Invalid => {
                 panic!(
                     "EntityProperty of type: `{:?}` should never be unpublished.",
                     self.inner.name()
@@ -517,7 +532,7 @@ impl EntityProperty {
                     EntityRelation::Local(_)
                     | EntityRelation::RemotePublic(_)
                     | EntityRelation::HostOwned(_)
-                    | EntityRelation::Delegated(_) => {
+                    | EntityRelation::Delegated(_) | EntityRelation::Invalid => {
                         panic!(
                             "EntityProperty of type `{:?}` should never enable delegation.",
                             self.inner.name()
@@ -538,7 +553,7 @@ impl EntityProperty {
                     EntityRelation::Local(_)
                     | EntityRelation::RemoteOwned(_)
                     | EntityRelation::RemoteWaiting(_)
-                    | EntityRelation::Delegated(_) => {
+                    | EntityRelation::Delegated(_) | EntityRelation::Invalid => {
                         panic!(
                             "EntityProperty of type `{:?}` should never enable delegation.",
                             self.inner.name()
@@ -572,7 +587,7 @@ impl EntityProperty {
             EntityRelation::HostOwned(_)
             | EntityRelation::RemoteOwned(_)
             | EntityRelation::RemotePublic(_)
-            | EntityRelation::Local(_) => {
+            | EntityRelation::Local(_) | EntityRelation::Invalid => {
                 panic!(
                     "EntityProperty of type: `{:?}` should never disable delegation.",
                     self.inner.name()
@@ -595,7 +610,7 @@ impl EntityProperty {
             EntityRelation::RemoteOwned(_)
             | EntityRelation::RemotePublic(_)
             | EntityRelation::RemoteWaiting(_)
-            | EntityRelation::Local(_) => {
+            | EntityRelation::Local(_) | EntityRelation::Invalid => {
                 panic!(
                     "EntityProperty of type: `{:?}` should never be made local.",
                     self.inner.name()
