@@ -384,11 +384,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn pause_entity_replication(&mut self, entity: &E) {
-        todo!();
+        self.global_world_manager.pause_entity_replication(entity);
     }
 
     pub fn resume_entity_replication(&mut self, entity: &E) {
-        todo!();
+        self.global_world_manager.resume_entity_replication(entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!

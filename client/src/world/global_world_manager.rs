@@ -353,6 +353,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         info!("entity_needs_mutator_for_delegation: entity does not have record");
         return false;
     }
+
+    fn entity_is_replicating(&self, entity: &E) -> bool {
+        let Some(record) = self.entity_records.get(entity) else {
+            panic!("entity does not have record");
+        };
+        return record.is_replicating;
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E>

@@ -9,6 +9,7 @@ pub struct GlobalEntityRecord {
     pub component_kinds: HashSet<ComponentKind>,
     pub owner: EntityOwner,
     pub replication_config: ReplicationConfig,
+    pub is_replicating: bool,
 }
 
 impl GlobalEntityRecord {
@@ -28,6 +29,7 @@ impl GlobalEntityRecord {
             component_kinds: HashSet::new(),
             owner,
             replication_config,
+            is_replicating: true,
         }
     }
 }

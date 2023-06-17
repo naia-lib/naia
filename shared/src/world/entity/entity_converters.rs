@@ -34,6 +34,7 @@ pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConv
     ) -> PropertyMutator;
     fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor;
     fn entity_needs_mutator_for_delegation(&self, entity: &E) -> bool;
+    fn entity_is_replicating(&self, entity: &E) -> bool;
 }
 
 pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {

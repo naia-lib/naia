@@ -257,6 +257,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     pub(crate) fn user_all_owned_entities(&self, user_key: &UserKey) -> Option<&HashSet<E>> {
         self.auth_handler.user_all_owned_entities(user_key)
     }
+
+    pub(crate) fn pause_entity_replication(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        record.is_replicating = false;
+    }
+
+    pub(crate) fn resume_entity_replication(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        record.is_replicating = true;
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorldManager<E> {
@@ -314,6 +328,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
 
     fn entity_needs_mutator_for_delegation(&self, _entity: &E) -> bool {
         return false;
+    }
+
+    fn entity_is_replicating(&self, entity: &E) -> bool {
+        let Some(record) = self.entity_records.get(entity) else {
+            panic!("entity record does not exist!");
+        };
+        return record.is_replicating;
     }
 }
 
