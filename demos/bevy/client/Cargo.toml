@@ -22,7 +22,7 @@ crate-type = ["cdylib", "rlib"]
 naia-bevy-client = { path = "../../../adapters/bevy/client", features = ["transport_webrtc"] }
 naia-bevy-demo-shared = { path = "../shared" }
 
-bevy = { version = "0.10.1", default_features = false, features = [ "bevy_asset", "bevy_winit", "bevy_core_pipeline", "bevy_render", "bevy_sprite", "x11"] }
+bevy = { version = "0.11.0", default_features = false, features = [ "bevy_asset", "bevy_winit", "bevy_core_pipeline", "bevy_render", "bevy_sprite", "x11"] }
 
 cfg-if = { version = "1.0" }
 
