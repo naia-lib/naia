@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
-use bevy_ecs::entity::Entity;
+use bevy_ecs::{entity::Entity, prelude::Event};
 
 use naia_client::{Events, NaiaClientError};
 
@@ -9,18 +9,23 @@ use naia_bevy_shared::{
 };
 
 // ConnectEvent
+#[derive(Event)]
 pub struct ConnectEvent;
 
 // DisconnectEvent
+#[derive(Event)]
 pub struct DisconnectEvent;
 
 // RejectEvent
+#[derive(Event)]
 pub struct RejectEvent;
 
 // ErrorEvent
+#[derive(Event)]
 pub struct ErrorEvent(pub NaiaClientError);
 
 // MessageEvents
+#[derive(Event)]
 pub struct MessageEvents {
     inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
 }
@@ -57,18 +62,23 @@ impl MessageEvents {
 }
 
 // ClientTickEvent
+#[derive(Event)]
 pub struct ClientTickEvent(pub Tick);
 
 // ServerTickEvent
+#[derive(Event)]
 pub struct ServerTickEvent(pub Tick);
 
 // SpawnEntityEvent
+#[derive(Event)]
 pub struct SpawnEntityEvent(pub Entity);
 
 // DespawnEntityEvent
+#[derive(Event)]
 pub struct DespawnEntityEvent(pub Entity);
 
 // InsertComponentEvent
+#[derive(Event)]
 pub struct InsertComponentEvents {
     inner: HashMap<ComponentKind, Vec<Entity>>,
 }
@@ -88,6 +98,7 @@ impl InsertComponentEvents {
 }
 
 // UpdateComponentEvents
+#[derive(Event)]
 pub struct UpdateComponentEvents {
     inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>,
 }
@@ -108,6 +119,7 @@ impl UpdateComponentEvents {
 }
 
 // RemoveComponentEvents
+#[derive(Event)]
 pub struct RemoveComponentEvents {
     inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>,
 }

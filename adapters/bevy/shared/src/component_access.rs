@@ -1,6 +1,6 @@
 use std::{any::Any, marker::PhantomData};
 
-use bevy_app::App;
+use bevy_app::{App, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs, world::World};
 
 use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
@@ -51,6 +51,7 @@ impl<R: Replicate> ComponentAccessor<R> {
 impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
     fn add_systems(&self, app: &mut App) {
         app.add_systems(
+            Update,
             (on_component_added::<R>, on_component_removed::<R>)
                 .chain()
                 .in_set(HostSyncChangeTracking),
@@ -97,6 +98,7 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
     ) {
         let mut query = world.query::<&mut R>();
         unsafe {
+            let world = world.as_unsafe_world_cell();
             if let Ok(immutable_component) = query.get_unchecked(world, *immutable_entity) {
                 if let Ok(mut mutable_component) = query.get_unchecked(world, *mutable_entity) {
                     let some_r: &R = &immutable_component;

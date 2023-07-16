@@ -59,7 +59,7 @@ impl DuplicateComponents {
 }
 
 impl BevyCommand for DuplicateComponents {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         WorldMutType::<Entity>::duplicate_components(
             &mut world.proxy_mut(),
             &self.mutable_entity,

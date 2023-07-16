@@ -27,7 +27,7 @@ transport_udp = [ "local_ipaddress" ]
 [dependencies]
 naia-shared = { version = "0.21", path = "../shared" }
 naia-client-socket = { version = "0.20", path = "../socket/client", optional = true }
-bevy_ecs = { version = "0.10", default_features = false, optional = true }
+bevy_ecs = { version = "0.11", default_features = false, optional = true }
 local_ipaddress = { version = "0.1", optional = true }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
