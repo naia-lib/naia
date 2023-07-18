@@ -7,8 +7,9 @@ pub use naia_shared::{
     LocalEntityAndGlobalEntityConverterMut, MessageBevy as Message, MessageBuilder,
     MessageContainer, MessageKind, MessageKinds, Named, OwnedBitReader, Property, PropertyMutate,
     PropertyMutator, Random, ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef,
-    ReplicateBevy as Replicate, ReplicateBuilder, SerdeBevy as Serde, SerdeErr, Tick,
-    TickBufferSettings, UnsignedInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, UnsignedVariableInteger, SignedInteger, SignedVariableInteger, SerdeIntegerConversion
+    ReplicateBevy as Replicate, ReplicateBuilder, SerdeBevy as Serde, SerdeErr,
+    SerdeIntegerConversion, SignedInteger, SignedVariableInteger, Tick, TickBufferSettings,
+    UnsignedInteger, UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 mod change_detection;

@@ -25,8 +25,8 @@ pub use naia_derive::{
 };
 pub use naia_serde::{
     BitReader, BitWrite, BitWriter, ConstBitLength, OutgoingPacket, OwnedBitReader, Serde,
-    SerdeBevy, SerdeErr, SerdeHecs, SerdeInternal, UnsignedInteger, UnsignedVariableInteger, SignedVariableInteger, SignedInteger,
-    MTU_SIZE_BITS, MTU_SIZE_BYTES, SerdeIntegerConversion
+    SerdeBevy, SerdeErr, SerdeHecs, SerdeIntegerConversion, SerdeInternal, SignedInteger,
+    SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
     link_condition_logic, Instant, LinkConditionerConfig, Random, SocketConfig, TimeQueue,

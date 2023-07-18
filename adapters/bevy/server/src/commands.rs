@@ -63,8 +63,8 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
 
     fn give_authority(
         &'a mut self,
-        server: &mut Server,
-        user_key: &UserKey,
+        _server: &mut Server,
+        _user_key: &UserKey,
     ) -> &'a mut EntityCommands<'w, 's, 'a> {
         todo!()
     }
@@ -74,7 +74,7 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         return self;
     }
 
-    fn authority(&'a self, server: &Server) -> Option<EntityAuthStatus> {
+    fn authority(&'a self, _server: &Server) -> Option<EntityAuthStatus> {
         todo!()
     }
 

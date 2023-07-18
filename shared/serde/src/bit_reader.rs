@@ -19,6 +19,10 @@ impl<'b> BitReader<'b> {
         }
     }
 
+    pub fn bytes_len(&self) -> usize {
+        self.buffer.len()
+    }
+
     pub fn to_owned(&self) -> OwnedBitReader {
         OwnedBitReader {
             state: self.state,

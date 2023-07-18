@@ -585,15 +585,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.outgoing_actions.take_next_messages()
     }
 
-    pub fn collect_next_updates(&self, global_world_manager: &dyn GlobalWorldManagerType<E>) -> HashMap<E, HashSet<ComponentKind>> {
+    pub fn collect_next_updates(
+        &self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+    ) -> HashMap<E, HashSet<ComponentKind>> {
         let mut output = HashMap::new();
 
         for (entity, entity_channel) in self.entity_channels.iter() {
             if let EntityChannel::Spawned(component_channels) = entity_channel {
                 for (component, component_channel) in component_channels.iter() {
                     if *component_channel == ComponentChannel::Inserted {
-                        if global_world_manager.entity_is_replicating(entity) && !self.diff_handler.diff_mask_is_clear(entity, component) {
-
+                        if global_world_manager.entity_is_replicating(entity)
+                            && !self.diff_handler.diff_mask_is_clear(entity, component)
+                        {
                             if !output.contains_key(entity) {
                                 output.insert(*entity, HashSet::new());
                             }

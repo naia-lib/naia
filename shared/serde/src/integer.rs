@@ -219,13 +219,17 @@ impl<const SIGNED: bool, const BITS: u8> ConstBitLength for SerdeInteger<SIGNED,
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: Into<i128>> From<T> for SerdeInteger<SIGNED, VARIABLE, BITS> {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: Into<i128>> From<T>
+    for SerdeInteger<SIGNED, VARIABLE, BITS>
+{
     fn from(value: T) -> Self {
         Self::new(value)
     }
 }
 
-impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: TryFrom<i128>> SerdeIntegerConversion<SIGNED, VARIABLE, BITS> for T {
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, T: TryFrom<i128>>
+    SerdeIntegerConversion<SIGNED, VARIABLE, BITS> for T
+{
     fn from(value: &SerdeInteger<SIGNED, VARIABLE, BITS>) -> Self {
         let Ok(t_value) = T::try_from(value.inner) else {
             panic!("SerdeInteger's value is out of range to convert to this type.");

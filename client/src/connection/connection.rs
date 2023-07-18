@@ -168,10 +168,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,
         );
-        let mut host_world_events = self
-            .base
-            .host_world_manager
-            .take_outgoing_events(global_world_manager, now, &rtt_millis);
+        let mut host_world_events = self.base.host_world_manager.take_outgoing_events(
+            global_world_manager,
+            now,
+            &rtt_millis,
+        );
 
         let mut any_sent = false;
         loop {

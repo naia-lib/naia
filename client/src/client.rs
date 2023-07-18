@@ -803,7 +803,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // push outgoing event
                 self.incoming_events.push_auth_grant(*entity);
             }
-            (EntityAuthStatus::Releasing, EntityAuthStatus::Available) | (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
+            (EntityAuthStatus::Releasing, EntityAuthStatus::Available)
+            | (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
                 // Lost Authority
 
                 // Remove Entity from Host connection

@@ -239,10 +239,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         }
     }
 
-    pub fn take_outgoing_events(&mut self, global_world_manager: &dyn GlobalWorldManagerType<E>, now: &Instant, rtt_millis: &f32) -> HostWorldEvents<E> {
+    pub fn take_outgoing_events(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        now: &Instant,
+        rtt_millis: &f32,
+    ) -> HostWorldEvents<E> {
         HostWorldEvents {
             next_send_actions: self.world_channel.take_next_actions(now, rtt_millis),
-            next_send_updates: self.world_channel.collect_next_updates(global_world_manager),
+            next_send_updates: self
+                .world_channel
+                .collect_next_updates(global_world_manager),
         }
     }
 }
