@@ -16,6 +16,28 @@ pub enum EntityAuthStatus {
     Denied,
 }
 
+impl EntityAuthStatus {
+    pub fn is_available(&self) -> bool {
+        matches!(self, EntityAuthStatus::Available)
+    }
+
+    pub fn is_requested(&self) -> bool {
+        matches!(self, EntityAuthStatus::Requested)
+    }
+
+    pub fn is_granted(&self) -> bool {
+        matches!(self, EntityAuthStatus::Granted)
+    }
+
+    pub fn is_denied(&self) -> bool {
+        matches!(self, EntityAuthStatus::Denied)
+    }
+
+    pub fn is_releasing(&self) -> bool {
+        matches!(self, EntityAuthStatus::Releasing)
+    }
+}
+
 pub struct HostEntityAuthStatus {
     host_type: HostType,
     auth_status: EntityAuthStatus,
@@ -106,27 +128,5 @@ impl HostEntityAuthStatus {
 
     pub fn status(&self) -> EntityAuthStatus {
         self.auth_status
-    }
-}
-
-impl EntityAuthStatus {
-    pub fn is_available(&self) -> bool {
-        matches!(self, EntityAuthStatus::Available)
-    }
-
-    pub fn is_requested(&self) -> bool {
-        matches!(self, EntityAuthStatus::Requested)
-    }
-
-    pub fn is_granted(&self) -> bool {
-        matches!(self, EntityAuthStatus::Granted)
-    }
-
-    pub fn is_denied(&self) -> bool {
-        matches!(self, EntityAuthStatus::Denied)
-    }
-
-    pub fn is_releasing(&self) -> bool {
-        matches!(self, EntityAuthStatus::Releasing)
     }
 }
