@@ -758,6 +758,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.despawn_entity_worldless(entity)
     }
 
+    pub(crate) fn entity_grant_authority_init(
+        &mut self,
+        entity: &E,
+    ) {
+        info!(
+            "<-- Received Entity Grant Authority Init message!",
+        );
+
+        // Granted Authority
+
+        // Migrate Entity from Remote -> Host connection
+        let Some(connection) = &mut self.server_connection else {
+            return;
+        };
+        let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
+        let new_host_entity = connection.base.host_world_manager.track_remote_entity(
+            &mut connection.base.local_world_manager,
+            entity,
+            component_kinds,
+        );
+
+        // send response
+        let message = EntityEventMessage::new_grant_auth_response(
+            &self.global_world_manager,
+            &entity,
+            new_host_entity,
+        );
+        self.send_message::<SystemChannel, EntityEventMessage>(&message);
+    }
+
     pub(crate) fn entity_update_authority(
         &mut self,
         entity: &E,
@@ -780,25 +810,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         match (old_auth_status, new_auth_status) {
             (EntityAuthStatus::Requested, EntityAuthStatus::Granted) => {
                 // Granted Authority
-
-                // Migrate Entity from Remote -> Host connection
-                let Some(connection) = &mut self.server_connection else {
-                    return;
-                };
-                let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
-                let new_host_entity = connection.base.host_world_manager.track_remote_entity(
-                    &mut connection.base.local_world_manager,
-                    entity,
-                    component_kinds,
-                );
-
-                // send response
-                let message = EntityEventMessage::new_grant_auth_response(
-                    &self.global_world_manager,
-                    &entity,
-                    new_host_entity,
-                );
-                self.send_message::<SystemChannel, EntityEventMessage>(&message);
 
                 // push outgoing event
                 self.incoming_events.push_auth_grant(*entity);
@@ -1142,6 +1153,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityResponseEvent::EntityUpdateAuthority(entity, new_auth_status) => {
                     self.entity_update_authority(&entity, new_auth_status);
+                }
+                EntityResponseEvent::EntityGrantAuthInit(entity) => {
+                    self.entity_grant_authority_init(&entity);
                 }
                 EntityResponseEvent::EntityGrantAuthResponse(_, _) => {
                     panic!("Client should never receive an EntityGrantAuthResponse event");

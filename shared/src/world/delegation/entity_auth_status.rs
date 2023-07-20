@@ -116,7 +116,7 @@ impl HostEntityAuthStatus {
             (HostType::Client, EntityAuthStatus::Available) => false,
             (HostType::Client, EntityAuthStatus::Requested) => false,
             (HostType::Client, EntityAuthStatus::Granted) => true,
-            (HostType::Client, EntityAuthStatus::Releasing) => false,
+            (HostType::Client, EntityAuthStatus::Releasing) => true,
             (HostType::Client, EntityAuthStatus::Denied) => false,
             (HostType::Server, EntityAuthStatus::Available) => true,
             (HostType::Server, EntityAuthStatus::Requested) => true,

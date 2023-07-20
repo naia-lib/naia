@@ -566,11 +566,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         //     warn!("Granting status of entity to user: `{:?}`", user_key);
                         // }
 
-                        let message = EntityEventMessage::new_update_auth_status(
-                            &self.global_world_manager,
-                            entity,
-                            new_status,
-                        );
+                        let message = match new_status {
+                            EntityAuthStatus::Granted => {
+                                EntityEventMessage::new_grant_auth_init(
+                                    &self.global_world_manager,
+                                    entity,
+                                )
+                            }
+                            EntityAuthStatus::Denied => {
+                                EntityEventMessage::new_update_auth_status(
+                                    &self.global_world_manager,
+                                    entity,
+                                    new_status,
+                                )
+                            }
+                            _ => { panic!("invalid") }
+                        };
+
                         messages_to_send.push((user_key, message));
                     }
                 }
@@ -1712,6 +1724,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                         self.despawn_entity_worldless(&entity);
                     } else {
+                        info!(":: server processing EntityResponseEvent::DespawnEntity");
                         self.global_world_manager.remove_entity_record(&entity);
                     }
                 }
@@ -1803,12 +1816,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::EntityUpdateAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");
                 }
+                EntityResponseEvent::EntityGrantAuthInit(entity) => {
+                    panic!("Clients should not be able to send this message");
+                }
                 EntityResponseEvent::EntityGrantAuthResponse(world_entity, remote_entity) => {
                     self.add_redundant_remote_entity_to_host(
                         user_key,
                         &world_entity,
                         remote_entity,
                     );
+
+                    let message = EntityEventMessage::new_update_auth_status(
+                        &self.global_world_manager,
+                        &world_entity,
+                        EntityAuthStatus::Granted,
+                    );
+                    self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
+
                     self.incoming_events
                         .push_auth_grant(user_key, &world_entity);
                 }

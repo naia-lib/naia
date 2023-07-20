@@ -119,7 +119,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                         panic!("Received unknown message over SystemChannel!");
                     };
                     let Some(entity) = event_message.entity.get(global_world_manager) else {
-                        panic!("Received message with no Entity over SystemChannel!");
+                        let action = event_message.action;
+                        panic!("Received {:?} with no Entity over SystemChannel!", action);
                     };
                     response_events.push(event_message.action.to_response_event(&entity));
                 }
