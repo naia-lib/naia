@@ -4,8 +4,6 @@ use std::{
     hash::Hash,
 };
 
-use log::info;
-
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     sequence_list::SequenceList,
@@ -392,10 +390,6 @@ impl HostWorldWriter {
     ) {
         let all_update_entities: Vec<E> = next_send_updates.keys().copied().collect();
 
-        if !all_update_entities.is_empty() {
-            info!("write_updates()");
-        }
-
         for entity in all_update_entities {
             // get LocalEntity
             let host_entity = local_world_manager.entity_to_host_entity(&entity).unwrap();
@@ -458,8 +452,6 @@ impl HostWorldWriter {
         host_manager: &mut HostWorldManager<E>,
         next_send_updates: &mut HashMap<E, HashSet<ComponentKind>>,
     ) {
-        info!("write_update()");
-
         let mut written_component_kinds = Vec::new();
         let component_kind_set = next_send_updates.get(entity).unwrap();
         for component_kind in component_kind_set {
@@ -509,7 +501,6 @@ impl HostWorldWriter {
                 .component_of_kind(entity, component_kind)
                 .expect("Component does not exist in World")
                 .write_update(&diff_mask, writer, &mut converter);
-            info!("writing update!");
 
             written_component_kinds.push(*component_kind);
 

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use log::{info, warn};
+use log::warn;
 
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
@@ -249,7 +249,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
             if local_world_manager.has_remote_entity(remote_entity) {
                 let world_entity = local_world_manager.world_entity_from_remote(remote_entity);
 
-                info!("read_update(): pushed received update!");
                 self.received_updates
                     .push((*tick, world_entity, component_update));
             } else {
