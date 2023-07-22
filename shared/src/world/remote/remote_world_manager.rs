@@ -260,7 +260,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                         global_world_manager.to_global_entity_converter(),
                         local_world_manager,
                     );
-                    component.relations_complete(&converter);
+                    let result = component.relations_complete(&converter);
+                    if let Err(_error) = result {
+                        panic!("Can't map remote entity to global entity. For component: `{:?}`", component.name());
+                    }
                 }
                 self.finish_insert(world, world_entity, component, &component_kind);
             }

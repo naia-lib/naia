@@ -6,7 +6,7 @@ pub use naia_shared::{
     MessageHecs as Message, MessageKind, MessageKinds, Named, OwnedBitReader, OwnedLocalEntity,
     Property, PropertyMutate, PropertyMutator, Random, ReliableSettings, RemoteEntity,
     ReplicaDynMut, ReplicaDynRef, ReplicateBuilder, ReplicateHecs as Replicate, SerdeErr,
-    SerdeHecs as Serde, TickBufferSettings, UnsignedInteger,
+    SerdeHecs as Serde, TickBufferSettings, UnsignedInteger, WaitingCompleteError
 };
 
 mod component_access;

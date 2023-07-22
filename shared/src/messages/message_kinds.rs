@@ -7,7 +7,7 @@ use crate::{LocalEntityAndGlobalEntityConverter, Message, MessageBuilder, Messag
 type NetId = u16;
 
 /// MessageKind - should be one unique value for each type of Message
-#[derive(Eq, Hash, Copy, Clone, PartialEq)]
+#[derive(Eq, Hash, Copy, Clone, PartialEq, Debug)]
 pub struct MessageKind {
     type_id: TypeId,
 }

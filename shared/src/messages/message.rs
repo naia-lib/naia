@@ -2,14 +2,10 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::{
-    messages::{
-        message_kinds::{MessageKind, MessageKinds},
-        named::Named,
-    },
-    world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
-    LocalEntityAndGlobalEntityConverter, MessageContainer, RemoteEntity,
-};
+use crate::{messages::{
+    message_kinds::{MessageKind, MessageKinds},
+    named::Named,
+}, world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut, LocalEntityAndGlobalEntityConverter, MessageContainer, RemoteEntity, WaitingCompleteError};
 
 // MessageBuilder
 pub trait MessageBuilder: Send + Sync {
@@ -41,7 +37,7 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
     /// Returns a list of LocalEntities contained within the Message's EntityProperty fields, which are waiting to be converted to GlobalEntities
     fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
     /// Converts any LocalEntities contained within the Message's EntityProperty fields to GlobalEntities
-    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
+    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<(), WaitingCompleteError>;
     // /// Returns whether has any EntityRelations
     // fn has_entity_relations(&self) -> bool;
     // /// Returns a list of Entities contained within the Message's EntityRelation fields

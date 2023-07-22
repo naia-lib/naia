@@ -32,6 +32,7 @@ pub struct EntityChannel {
     state: EntityChannelState,
     release_auth: ReleaseAuthState,
     messages_in_progress: u8,
+    despawn_after_spawned: bool,
 }
 
 impl EntityChannel {
@@ -41,6 +42,7 @@ impl EntityChannel {
             state: EntityChannelState::Spawning,
             release_auth: ReleaseAuthState::None,
             messages_in_progress: 0,
+            despawn_after_spawned: false,
         }
     }
 
@@ -51,6 +53,7 @@ impl EntityChannel {
             state: EntityChannelState::Spawned,
             release_auth: ReleaseAuthState::None,
             messages_in_progress: 0,
+            despawn_after_spawned: false,
         }
     }
 
@@ -89,7 +92,12 @@ impl EntityChannel {
         return false;
     }
 
-    pub(crate) fn spawning_complete(&mut self) {
+    pub(crate) fn queue_despawn_after_spawned(&mut self) {
+        self.despawn_after_spawned = true;
+    }
+
+    // returns true if entity should be immediately despawned
+    pub(crate) fn spawning_complete(&mut self) -> bool {
         if self.state != EntityChannelState::Spawning {
             panic!("EntityChannel::spawning_complete() called on non-spawning entity");
         }
@@ -98,6 +106,8 @@ impl EntityChannel {
         if self.components.len() > 0 {
             panic!("Newly spawned entity should not have any components yet..");
         }
+
+        return self.despawn_after_spawned;
     }
 
     pub(crate) fn despawn(&mut self) {

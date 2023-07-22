@@ -41,7 +41,8 @@ pub fn message_impl(
             pub use std::{any::Any, collections::HashSet};
             pub use #shared_crate_name::{
                 Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
-                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer, RemoteEntity
+                EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer, RemoteEntity,
+                WaitingCompleteError,
             };
             use super::*;
 
@@ -206,7 +207,7 @@ fn get_relations_complete_method(fields: &[Field], struct_type: &StructType) -> 
         if let Field::EntityProperty(_) = field {
             let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
-                self.#field_name.waiting_complete(converter);
+                self.#field_name.waiting_complete(converter)?;
             };
             let new_body = quote! {
                 #body
@@ -217,8 +218,9 @@ fn get_relations_complete_method(fields: &[Field], struct_type: &StructType) -> 
     }
 
     quote! {
-        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<(), WaitingCompleteError> {
             #body
+            Ok(())
         }
     }
 }

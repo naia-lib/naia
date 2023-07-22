@@ -2,21 +2,17 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::{
-    messages::named::Named,
-    world::{
-        component::{
-            component_kinds::{ComponentKind, ComponentKinds},
-            component_update::ComponentUpdate,
-            diff_mask::DiffMask,
-            property_mutate::PropertyMutator,
-            replica_ref::{ReplicaDynMut, ReplicaDynRef},
-        },
-        delegation::auth_channel::EntityAuthAccessor,
-        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+use crate::{messages::named::Named, world::{
+    component::{
+        component_kinds::{ComponentKind, ComponentKinds},
+        component_update::ComponentUpdate,
+        diff_mask::DiffMask,
+        property_mutate::PropertyMutator,
+        replica_ref::{ReplicaDynMut, ReplicaDynRef},
     },
-    ComponentFieldUpdate, LocalEntityAndGlobalEntityConverterMut, RemoteEntity,
-};
+    delegation::auth_channel::EntityAuthAccessor,
+    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+}, ComponentFieldUpdate, LocalEntityAndGlobalEntityConverterMut, RemoteEntity, WaitingCompleteError};
 
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream
@@ -98,7 +94,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
     /// Returns a list of LocalEntities contained within the Component's EntityProperty fields, which are waiting to be converted to GlobalEntities
     fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
     /// Converts any LocalEntities contained within the Component's EntityProperty fields to GlobalEntities
-    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
+    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<(), WaitingCompleteError>;
     /// Publish Replicate
     fn publish(&mut self, mutator: &PropertyMutator);
     /// Unpublish Replicate

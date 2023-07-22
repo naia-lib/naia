@@ -15,6 +15,8 @@ use crate::{
     EntityAuthAccessor, PropertyMutator, RemoteEntity,
 };
 
+pub struct WaitingCompleteError;
+
 #[derive(Clone)]
 enum EntityRelation {
     HostOwned(HostOwnedRelation),
@@ -425,7 +427,7 @@ impl EntityProperty {
         Ok(())
     }
 
-    pub fn waiting_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+    pub fn waiting_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<(), WaitingCompleteError> {
         match &mut self.inner {
             EntityRelation::RemoteWaiting(inner) => {
                 if let Ok(global_entity) =
@@ -456,7 +458,7 @@ impl EntityProperty {
                         self.inner = EntityRelation::RemoteOwned(new_impl);
                     }
                 } else {
-                    panic!("Could not find Global Entity from Local Entity! Should only call `waiting_complete` when it is known the converter will not fail!");
+                    return Err(WaitingCompleteError);
                 }
             }
             EntityRelation::HostOwned(_)
@@ -468,6 +470,8 @@ impl EntityProperty {
                 panic!("Can't complete a RemoteOwned, HostOwned, Delegated, or Invalid EntityProperty!");
             }
         }
+
+        Ok(())
     }
 
     /// Migrate Remote Property to Public version

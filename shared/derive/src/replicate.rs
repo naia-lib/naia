@@ -102,6 +102,7 @@ pub fn replicate_impl(
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, EntityAuthAccessor, RemoteEntity,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
+                WaitingCompleteError,
             };
             use super::*;
 
@@ -1245,7 +1246,7 @@ fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) 
         if let Property::Entity(_) = field {
             let field_name = get_field_name(field, struct_type);
             let body_add_right = quote! {
-                self.#field_name.waiting_complete(converter);
+                self.#field_name.waiting_complete(converter)?;
             };
             let new_body = quote! {
                 #body
@@ -1256,8 +1257,9 @@ fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) 
     }
 
     quote! {
-        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<(), WaitingCompleteError> {
             #body
+            Ok(())
         }
     }
 }

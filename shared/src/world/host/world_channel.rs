@@ -132,14 +132,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             panic!("World Channel: cannot despawn entity that doesn't exist");
         }
 
-        self.host_world.remove(entity);
-
         let Some(entity_channel) = self.entity_channels.get_mut(entity) else {
             panic!("World Channel: cannot despawn entity that doesn't have channel")
         };
-        if !entity_channel.is_spawned() {
-            panic!("World Channel: cannot despawn entity that isn't spawned");
+        if entity_channel.is_spawning() {
+            entity_channel.queue_despawn_after_spawned();
+            return;
         }
+        if entity_channel.is_despawning() {
+            panic!("World Channel: cannot despawn entity twice!");
+        }
+
+        self.host_world.remove(entity);
 
         let removing_components = entity_channel.inserted_components();
 
@@ -325,7 +329,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         if !entity_channel.is_spawning() {
             panic!("World Channel: should only receive this event if entity channel is spawning");
         }
-        entity_channel.spawning_complete();
+        let should_despawn = entity_channel.spawning_complete();
 
         self.remote_world.insert(*entity, CheckedSet::new());
 
@@ -359,6 +363,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             // receive inserted components
             for component_kind in inserted_component_kinds {
                 self.on_remote_insert_component(entity, component_kind);
+            }
+
+            if should_despawn {
+                warn!("complete queued despawn");
+                self.host_despawn_entity(entity);
             }
         } else {
             // despawn entity

@@ -2,12 +2,9 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::BitWrite;
 
-use crate::{
-    world::entity::{
-        entity_converters::LocalEntityAndGlobalEntityConverterMut, local_entity::RemoteEntity,
-    },
-    LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds,
-};
+use crate::{world::entity::{
+    entity_converters::LocalEntityAndGlobalEntityConverterMut, local_entity::RemoteEntity,
+}, LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds};
 
 #[derive(Clone)]
 pub struct MessageContainer {
@@ -72,6 +69,9 @@ impl MessageContainer {
     }
 
     pub fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
-        self.inner.relations_complete(converter);
+        let result = self.inner.relations_complete(converter);
+        if let Err(_e) = result {
+            panic!("Error completing relation: `{:?}`", self.name());
+        }
     }
 }
