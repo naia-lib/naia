@@ -537,7 +537,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn client_request_authority(&mut self, origin_user: &UserKey, world_entity: &E, remote_entity: &RemoteEntity) {
+    pub fn client_request_authority(
+        &mut self,
+        origin_user: &UserKey,
+        world_entity: &E,
+        remote_entity: &RemoteEntity,
+    ) {
         let requester = AuthOwner::Client(*origin_user);
         let success = self
             .global_world_manager
@@ -545,11 +550,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if success {
             // entity authority was granted for origin user
 
-            self.add_redundant_remote_entity_to_host(
-                origin_user,
-                world_entity,
-                remote_entity,
-            );
+            self.add_redundant_remote_entity_to_host(origin_user, world_entity, remote_entity);
 
             // for any users that have this entity in scope, send an `update_authority_status` message
 
@@ -558,7 +559,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let mut messages_to_send = Vec::new();
             for (user_key, user) in self.users.iter() {
                 if let Some(connection) = self.user_connections.get(&user.address) {
-                    if connection.base.host_world_manager.host_has_entity(world_entity) {
+                    if connection
+                        .base
+                        .host_world_manager
+                        .host_has_entity(world_entity)
+                    {
                         let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
                         if *origin_user == user_key {
                             new_status = EntityAuthStatus::Granted;
@@ -586,7 +591,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
             self.incoming_events
                 .push_auth_grant(origin_user, &world_entity);
-
         } else {
             panic!("Failed to request authority for entity");
         }

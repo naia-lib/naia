@@ -42,7 +42,10 @@ impl EntityEventMessageAction {
                 EntityResponseEvent::EnableDelegationEntity(*entity)
             }
             EntityEventMessageAction::RequestAuthority(remote_entity) => {
-                EntityResponseEvent::EntityRequestAuthority(*entity, RemoteEntity::new(*remote_entity))
+                EntityResponseEvent::EntityRequestAuthority(
+                    *entity,
+                    RemoteEntity::new(*remote_entity),
+                )
             }
             EntityEventMessageAction::ReleaseAuthority => {
                 EntityResponseEvent::EntityReleaseAuthority(*entity)

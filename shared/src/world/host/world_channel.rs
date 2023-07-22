@@ -88,7 +88,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             let output = entity_channel.release_authority();
             if !output {
                 self.outstanding_release_auth_messages += 1;
-                info!("Outstanding release auth messages: {:?}", self.outstanding_release_auth_messages);
+                info!(
+                    "Outstanding release auth messages: {:?}",
+                    self.outstanding_release_auth_messages
+                );
             }
             return output;
         } else {
@@ -327,7 +330,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.remote_world.insert(*entity, CheckedSet::new());
 
         if self.host_world.contains_key(entity) {
-
             // initialize component channels
             let host_components = self.host_world.get(entity).unwrap();
 
@@ -419,7 +421,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
             if !entity_channel.is_spawned() {
-                panic!("World Channel: should only receive this event if entity channel is spawned");
+                panic!(
+                    "World Channel: should only receive this event if entity channel is spawned"
+                );
             }
             if !entity_channel.component_is_inserting(component_kind) {
                 panic!("World Channel: cannot insert component if component channel has not been initialized");
@@ -434,7 +438,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 entity_channel.component_insertion_complete(component_kind);
             if send_entity_auth_release_message {
                 self.outstanding_release_auth_messages -= 1;
-                info!("Outstanding release auth messages: {:?}", self.outstanding_release_auth_messages);
+                info!(
+                    "Outstanding release auth messages: {:?}",
+                    self.outstanding_release_auth_messages
+                );
                 self.outgoing_release_auth_messages.push(*entity);
             }
 
@@ -466,7 +473,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
             if !entity_channel.is_spawned() {
-                panic!("World Channel: should only receive this event if entity channel is spawned");
+                panic!(
+                    "World Channel: should only receive this event if entity channel is spawned"
+                );
             }
             if !entity_channel.component_is_removing(component_kind) {
                 panic!("World Channel: cannot remove component if component channel has not initiated removal");
@@ -475,7 +484,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 entity_channel.component_removal_complete(component_kind);
             if send_auth_release_message {
                 self.outstanding_release_auth_messages -= 1;
-                info!("Outstanding release auth messages: {:?}", self.outstanding_release_auth_messages);
+                info!(
+                    "Outstanding release auth messages: {:?}",
+                    self.outstanding_release_auth_messages
+                );
                 self.outgoing_release_auth_messages.push(*entity);
             }
 
@@ -624,7 +636,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         if self.outgoing_release_auth_messages.is_empty() {
             return None;
         }
-        warn!("World Channel is delivering {:?} auth release messages", self.outgoing_release_auth_messages.len());
+        warn!(
+            "World Channel is delivering {:?} auth release messages",
+            self.outgoing_release_auth_messages.len()
+        );
         Some(std::mem::take(&mut self.outgoing_release_auth_messages))
     }
 }

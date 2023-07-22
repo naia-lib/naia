@@ -207,9 +207,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .world_channel
                     .collect_auth_release_messages()
                 {
-                    info!("Queued release messages! Prev: {:?}, new: {:?}", self.queued_entity_auth_release_messages.len(), entities.len());
-                    self.queued_entity_auth_release_messages.append(&mut entities);
-                    info!("For a total of: {:?} messages", self.queued_entity_auth_release_messages.len());
+                    info!(
+                        "Queued release messages! Prev: {:?}, new: {:?}",
+                        self.queued_entity_auth_release_messages.len(),
+                        entities.len()
+                    );
+                    self.queued_entity_auth_release_messages
+                        .append(&mut entities);
+                    info!(
+                        "For a total of: {:?} messages",
+                        self.queued_entity_auth_release_messages.len()
+                    );
                 }
 
                 // send packets
@@ -492,11 +500,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             let Some(connection) = &mut self.server_connection else {
                 return;
             };
-            let new_host_entity = connection.base.local_world_manager.host_reserve_entity(entity);
+            let new_host_entity = connection
+                .base
+                .local_world_manager
+                .host_reserve_entity(entity);
 
             // 2. Send request to Server
-            let message =
-                EntityEventMessage::new_request_authority(&self.global_world_manager, entity, new_host_entity);
+            let message = EntityEventMessage::new_request_authority(
+                &self.global_world_manager,
+                entity,
+                new_host_entity,
+            );
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
         }
     }
@@ -867,7 +881,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 let Some(connection) = &mut self.server_connection else {
                     return;
                 };
-                connection.base.local_world_manager.remove_reserved_host_entity(entity);
+                connection
+                    .base
+                    .local_world_manager
+                    .remove_reserved_host_entity(entity);
             }
             (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
                 // auth was released before it was granted, continue as normal
