@@ -75,18 +75,6 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.server.entity_authority_status(&self.entity)
     }
 
-    pub fn request_authority(&mut self) -> &mut Self {
-        self.server.entity_request_authority(None, &self.entity);
-
-        self
-    }
-
-    pub fn release_authority(&mut self) -> &mut Self {
-        self.server.entity_release_authority(None, &self.entity);
-
-        self
-    }
-
     // Rooms
 
     pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {

@@ -18,10 +18,8 @@ pub enum EntityResponseEvent<E: Copy> {
     EnableDelegationEntity(E),
     EnableDelegationEntityResponse(E),
     DisableDelegationEntity(E),
-    EntityRequestAuthority(E),
+    EntityRequestAuthority(E, RemoteEntity),
     EntityReleaseAuthority(E),
     EntityUpdateAuthority(E, EntityAuthStatus),
-    EntityGrantAuthInit(E),
-    EntityGrantAuthResponse(E, RemoteEntity),
     EntityMigrateResponse(E, RemoteEntity),
 }

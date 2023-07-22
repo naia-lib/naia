@@ -136,7 +136,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             panic!("World Channel: cannot despawn entity that isn't spawned");
         }
 
-        let mut removing_components = entity_channel.inserted_components();
+        let removing_components = entity_channel.inserted_components();
 
         entity_channel.despawn();
 

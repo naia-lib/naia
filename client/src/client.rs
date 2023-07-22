@@ -487,9 +487,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let success = self.global_world_manager.entity_request_authority(entity);
         if success {
             warn!(" --> Client sending authority REQUEST message!");
+
+            // Reserve Host Entity
+            let Some(connection) = &mut self.server_connection else {
+                return;
+            };
+            let new_host_entity = connection.base.local_world_manager.host_reserve_entity(entity);
+
             // 2. Send request to Server
             let message =
-                EntityEventMessage::new_request_authority(&self.global_world_manager, entity);
+                EntityEventMessage::new_request_authority(&self.global_world_manager, entity, new_host_entity);
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
         }
     }
@@ -788,24 +795,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // Despawn Entity in Host connection
         self.despawn_entity_worldless(entity)
-    }
-
-    pub(crate) fn entity_grant_authority_init(&mut self, entity: &E) {
-        info!("<-- Received Entity Grant Authority Init message!",);
-
-        // Reserve Host Entity
-        let Some(connection) = &mut self.server_connection else {
-            return;
-        };
-        let new_host_entity = connection.base.local_world_manager.host_reserve_entity(entity);
-
-        // send response
-        let message = EntityEventMessage::new_grant_auth_response(
-            &self.global_world_manager,
-            &entity,
-            new_host_entity,
-        );
-        self.send_message::<SystemChannel, EntityEventMessage>(&message);
     }
 
     pub(crate) fn entity_update_authority(
@@ -1176,7 +1165,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 EntityResponseEvent::DisableDelegationEntity(entity) => {
                     self.entity_disable_delegation(world, &entity, false);
                 }
-                EntityResponseEvent::EntityRequestAuthority(_entity) => {
+                EntityResponseEvent::EntityRequestAuthority(_entity, _remote_entity) => {
                     panic!("Client should never receive an EntityRequestAuthority event");
                 }
                 EntityResponseEvent::EntityReleaseAuthority(_entity) => {
@@ -1184,12 +1173,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityResponseEvent::EntityUpdateAuthority(entity, new_auth_status) => {
                     self.entity_update_authority(&entity, new_auth_status);
-                }
-                EntityResponseEvent::EntityGrantAuthInit(entity) => {
-                    self.entity_grant_authority_init(&entity);
-                }
-                EntityResponseEvent::EntityGrantAuthResponse(_, _) => {
-                    panic!("Client should never receive an EntityGrantAuthResponse event");
                 }
                 EntityResponseEvent::EntityMigrateResponse(world_entity, remote_entity) => {
                     info!("received EntityMigrateResponse");

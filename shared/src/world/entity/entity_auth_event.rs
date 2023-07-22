@@ -21,11 +21,9 @@ pub enum EntityEventMessageAction {
     EnableDelegation,
     EnableDelegationResponse,
     DisableDelegation,
-    RequestAuthority,
+    RequestAuthority(u16),
     ReleaseAuthority,
     UpdateAuthority(EntityAuthStatus),
-    GrantAuthInit,
-    GrantAuthResponse(u16),     //u16 here is new Host Entity
     EntityMigrateResponse(u16), //u16 here is new Host Entity
 }
 
@@ -43,26 +41,14 @@ impl EntityEventMessageAction {
             EntityEventMessageAction::DisableDelegation => {
                 EntityResponseEvent::EnableDelegationEntity(*entity)
             }
-            EntityEventMessageAction::RequestAuthority => {
-                //info!("received EntityRequestAuthority");
-                EntityResponseEvent::EntityRequestAuthority(*entity)
+            EntityEventMessageAction::RequestAuthority(remote_entity) => {
+                EntityResponseEvent::EntityRequestAuthority(*entity, RemoteEntity::new(*remote_entity))
             }
             EntityEventMessageAction::ReleaseAuthority => {
-                //info!("received EntityReleaseAuthority");
                 EntityResponseEvent::EntityReleaseAuthority(*entity)
             }
             EntityEventMessageAction::UpdateAuthority(new_auth_status) => {
-                //info!("received EntityUpdateAuthority");
                 EntityResponseEvent::EntityUpdateAuthority(*entity, *new_auth_status)
-            }
-            EntityEventMessageAction::GrantAuthInit => {
-                EntityResponseEvent::EntityGrantAuthInit(*entity)
-            }
-            EntityEventMessageAction::GrantAuthResponse(remote_entity) => {
-                EntityResponseEvent::EntityGrantAuthResponse(
-                    *entity,
-                    RemoteEntity::new(*remote_entity),
-                )
             }
             EntityEventMessageAction::EntityMigrateResponse(remote_entity) => {
                 EntityResponseEvent::EntityMigrateResponse(
@@ -125,11 +111,12 @@ impl EntityEventMessage {
     pub fn new_request_authority<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
+        host_entity: HostEntity,
     ) -> Self {
         Self::new(
             converter,
             entity,
-            EntityEventMessageAction::RequestAuthority,
+            EntityEventMessageAction::RequestAuthority(host_entity.value()),
         )
     }
 
@@ -153,25 +140,6 @@ impl EntityEventMessage {
             converter,
             entity,
             EntityEventMessageAction::UpdateAuthority(auth_status),
-        )
-    }
-
-    pub fn new_grant_auth_init<E: Copy + Eq + Hash + Send + Sync>(
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
-    ) -> Self {
-        Self::new(converter, entity, EntityEventMessageAction::GrantAuthInit)
-    }
-
-    pub fn new_grant_auth_response<E: Copy + Eq + Hash + Send + Sync>(
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
-        host_entity: HostEntity,
-    ) -> Self {
-        Self::new(
-            converter,
-            entity,
-            EntityEventMessageAction::GrantAuthResponse(host_entity.value()),
         )
     }
 

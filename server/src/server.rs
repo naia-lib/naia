@@ -537,13 +537,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_request_authority(&mut self, origin_user: Option<&UserKey>, entity: &E) {
-        let requester = AuthOwner::from_user_key(origin_user);
+    pub fn client_request_authority(&mut self, origin_user: &UserKey, world_entity: &E, remote_entity: &RemoteEntity) {
+        let requester = AuthOwner::Client(*origin_user);
         let success = self
             .global_world_manager
-            .client_request_authority(&entity, &requester);
+            .client_request_authority(&world_entity, &requester);
         if success {
             // entity authority was granted for origin user
+
+            self.add_redundant_remote_entity_to_host(
+                origin_user,
+                world_entity,
+                remote_entity,
+            );
 
             // for any users that have this entity in scope, send an `update_authority_status` message
 
@@ -552,12 +558,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let mut messages_to_send = Vec::new();
             for (user_key, user) in self.users.iter() {
                 if let Some(connection) = self.user_connections.get(&user.address) {
-                    if connection.base.host_world_manager.host_has_entity(entity) {
+                    if connection.base.host_world_manager.host_has_entity(world_entity) {
                         let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
-                        if let Some(new_owner_user) = origin_user {
-                            if *new_owner_user == user_key {
-                                new_status = EntityAuthStatus::Granted;
-                            }
+                        if *origin_user == user_key {
+                            new_status = EntityAuthStatus::Granted;
                         }
 
                         // if new_status == EntityAuthStatus::Denied {
@@ -566,20 +570,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         //     warn!("Granting status of entity to user: `{:?}`", user_key);
                         // }
 
-                        let message = match new_status {
-                            EntityAuthStatus::Granted => EntityEventMessage::new_grant_auth_init(
-                                &self.global_world_manager,
-                                entity,
-                            ),
-                            EntityAuthStatus::Denied => EntityEventMessage::new_update_auth_status(
-                                &self.global_world_manager,
-                                entity,
-                                new_status,
-                            ),
-                            _ => {
-                                panic!("invalid")
-                            }
-                        };
+                        let message = EntityEventMessage::new_update_auth_status(
+                            &self.global_world_manager,
+                            world_entity,
+                            new_status,
+                        );
 
                         messages_to_send.push((user_key, message));
                     }
@@ -588,6 +583,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             for (user_key, message) in messages_to_send {
                 self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
             }
+
+            self.incoming_events
+                .push_auth_grant(origin_user, &world_entity);
+
         } else {
             panic!("Failed to request authority for entity");
         }
@@ -618,7 +617,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         &mut self,
         user_key: &UserKey,
         world_entity: &E,
-        remote_entity: RemoteEntity,
+        remote_entity: &RemoteEntity,
     ) {
         if let Some(user) = self.users.get(user_key) {
             let connection = self.user_connections.get_mut(&user.address).unwrap();
@@ -627,7 +626,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             connection
                 .base
                 .local_world_manager
-                .insert_remote_entity(world_entity, remote_entity);
+                .insert_remote_entity(world_entity, *remote_entity);
 
             // Remote world reader needs to track remote entity too
             let component_kinds = self
@@ -637,7 +636,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             connection
                 .base
                 .remote_world_reader
-                .track_hosts_redundant_remote_entity(&remote_entity, component_kinds);
+                .track_hosts_redundant_remote_entity(remote_entity, component_kinds);
         }
     }
 
@@ -1804,8 +1803,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::DisableDelegationEntity(_) => {
                     panic!("Clients should not be able to disable entity delegation.");
                 }
-                EntityResponseEvent::EntityRequestAuthority(entity) => {
-                    self.entity_request_authority(Some(user_key), &entity);
+                EntityResponseEvent::EntityRequestAuthority(world_entity, remote_entity) => {
+                    self.client_request_authority(user_key, &world_entity, &remote_entity);
                 }
                 EntityResponseEvent::EntityReleaseAuthority(entity) => {
                     info!("received release auth entity message!");
@@ -1814,26 +1813,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
                 EntityResponseEvent::EntityUpdateAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");
-                }
-                EntityResponseEvent::EntityGrantAuthInit(_) => {
-                    panic!("Clients should not be able to send this message");
-                }
-                EntityResponseEvent::EntityGrantAuthResponse(world_entity, remote_entity) => {
-                    self.add_redundant_remote_entity_to_host(
-                        user_key,
-                        &world_entity,
-                        remote_entity,
-                    );
-
-                    let message = EntityEventMessage::new_update_auth_status(
-                        &self.global_world_manager,
-                        &world_entity,
-                        EntityAuthStatus::Granted,
-                    );
-                    self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
-
-                    self.incoming_events
-                        .push_auth_grant(user_key, &world_entity);
                 }
                 EntityResponseEvent::EntityMigrateResponse(_, _) => {
                     panic!("Clients should not be able to send this message");
