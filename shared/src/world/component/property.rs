@@ -1,5 +1,5 @@
-use std::ops::{Deref, DerefMut};
 use log::warn;
+use std::ops::{Deref, DerefMut};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 

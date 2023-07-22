@@ -99,19 +99,22 @@ impl EntityChannel {
     }
 
     pub(crate) fn insert_component(&mut self, component_kind: &ComponentKind) {
-        self.components.insert(*component_kind, ComponentChannel::Inserting);
+        self.components
+            .insert(*component_kind, ComponentChannel::Inserting);
         self.send_message();
     }
 
     pub(crate) fn insert_remote_component(&mut self, component_kind: &ComponentKind) {
-        self.components.insert(*component_kind, ComponentChannel::Inserted);
+        self.components
+            .insert(*component_kind, ComponentChannel::Inserted);
     }
 
     pub(crate) fn remove_component(&mut self, component_kind: &ComponentKind) -> bool {
         match self.components.get(component_kind) {
             Some(ComponentChannel::Inserted) => {
                 self.components.remove(component_kind);
-                self.components.insert(*component_kind, ComponentChannel::Removing);
+                self.components
+                    .insert(*component_kind, ComponentChannel::Removing);
                 self.send_message();
                 return true;
             }
@@ -159,7 +162,7 @@ impl EntityChannel {
 
         if self.messages_in_progress == 0 && self.release_auth == ReleaseAuthState::Waiting {
             self.release_auth = ReleaseAuthState::Complete;
-            info!("Entity Channel Auth Release message was waiting, but is now ready");
+            warn!("Entity Channel Auth Release message was waiting, but is now ready");
             return true;
         }
 

@@ -567,20 +567,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         // }
 
                         let message = match new_status {
-                            EntityAuthStatus::Granted => {
-                                EntityEventMessage::new_grant_auth_init(
-                                    &self.global_world_manager,
-                                    entity,
-                                )
+                            EntityAuthStatus::Granted => EntityEventMessage::new_grant_auth_init(
+                                &self.global_world_manager,
+                                entity,
+                            ),
+                            EntityAuthStatus::Denied => EntityEventMessage::new_update_auth_status(
+                                &self.global_world_manager,
+                                entity,
+                                new_status,
+                            ),
+                            _ => {
+                                panic!("invalid")
                             }
-                            EntityAuthStatus::Denied => {
-                                EntityEventMessage::new_update_auth_status(
-                                    &self.global_world_manager,
-                                    entity,
-                                    new_status,
-                                )
-                            }
-                            _ => { panic!("invalid") }
                         };
 
                         messages_to_send.push((user_key, message));

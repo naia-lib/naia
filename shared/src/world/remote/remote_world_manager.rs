@@ -303,7 +303,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             local_world_manager,
         );
         for (tick, world_entity, component_update) in incoming_updates.drain(..) {
-
             let component_kind = component_update.kind;
 
             // split the component_update into the waiting and ready parts

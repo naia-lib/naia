@@ -1,4 +1,3 @@
-
 use std::hash::Hash;
 
 use naia_derive::MessageInternal;
@@ -161,11 +160,7 @@ impl EntityEventMessage {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
     ) -> Self {
-        Self::new(
-            converter,
-            entity,
-            EntityEventMessageAction::GrantAuthInit,
-        )
+        Self::new(converter, entity, EntityEventMessageAction::GrantAuthInit)
     }
 
     pub fn new_grant_auth_response<E: Copy + Eq + Hash + Send + Sync>(

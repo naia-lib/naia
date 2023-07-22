@@ -11,8 +11,9 @@ use super::{
     user_diff_handler::UserDiffHandler,
 };
 use crate::{
-    world::{local_world_manager::LocalWorldManager, host::entity_channel::EntityChannel}, ChannelSender, ComponentKind, EntityAction,
-    EntityActionReceiver, GlobalWorldManagerType, HostEntity, Instant, ReliableSender,
+    world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager},
+    ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, GlobalWorldManagerType,
+    HostEntity, Instant, ReliableSender,
 };
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
@@ -134,7 +135,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         if despawn {
             self.entity_channels.remove(entity);
-            self.entity_channels.insert(*entity, EntityChannel::new_despawning());
+            self.entity_channels
+                .insert(*entity, EntityChannel::new_despawning());
 
             warn!("Sending Despawn Message A!");
             self.outgoing_actions
@@ -230,7 +232,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.remote_world.insert(*entity, CheckedSet::new());
 
         // spawn entity
-        self.entity_channels.insert(*entity, EntityChannel::new_spawned());
+        self.entity_channels
+            .insert(*entity, EntityChannel::new_spawned());
 
         let new_host_entity = self.on_entity_channel_opening(local_world_manager, entity);
 
@@ -347,7 +350,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             }
         } else {
             // despawn entity
-            self.entity_channels.insert(*entity, EntityChannel::new_despawning());
+            self.entity_channels
+                .insert(*entity, EntityChannel::new_despawning());
             warn!("Sending Despawn Message B!");
             self.outgoing_actions
                 .send_message(EntityActionEvent::DespawnEntity(*entity));
@@ -379,7 +383,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         // if entity is spawned in host, respawn entity channel
         if self.host_world.contains_key(entity) {
             // spawn entity
-            self.entity_channels.insert(*entity, EntityChannel::new_spawning());
+            self.entity_channels
+                .insert(*entity, EntityChannel::new_spawning());
             self.outgoing_actions
                 .send_message(EntityActionEvent::SpawnEntity(
                     *entity,
@@ -405,14 +410,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
             if entity_channel.component_is_inserting(component_kind) {
-
                 let host_has_component = self
                     .host_world
                     .get(entity)
                     .unwrap()
                     .contains(component_kind);
 
-                let send_entity_auth_release_message = entity_channel.component_insertion_complete(component_kind);
+                let send_entity_auth_release_message =
+                    entity_channel.component_insertion_complete(component_kind);
                 if send_entity_auth_release_message {
                     self.outgoing_release_auth_messages.push(*entity);
                 }
@@ -448,8 +453,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
             if entity_channel.component_is_removing(component_kind) {
-
-                let send_auth_release_message = entity_channel.component_removal_complete(component_kind);
+                let send_auth_release_message =
+                    entity_channel.component_removal_complete(component_kind);
                 if send_auth_release_message {
                     self.outgoing_release_auth_messages.push(*entity);
                 }
@@ -582,7 +587,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             if entity_channel.is_spawned() {
                 for component_kind in entity_channel.inserted_components() {
                     if global_world_manager.entity_is_replicating(entity)
-                        && !self.diff_handler.diff_mask_is_clear(entity, &component_kind)
+                        && !self
+                            .diff_handler
+                            .diff_mask_is_clear(entity, &component_kind)
                     {
                         if !output.contains_key(entity) {
                             output.insert(*entity, HashSet::new());
