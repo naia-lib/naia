@@ -862,6 +862,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // granted auth response arrived while we are releasing auth!
                 self.global_world_manager
                     .entity_update_authority(entity, EntityAuthStatus::Available);
+
+                // get rid of reserved host entity
+                let Some(connection) = &mut self.server_connection else {
+                    return;
+                };
+                connection.base.local_world_manager.remove_reserved_host_entity(entity);
             }
             (EntityAuthStatus::Available, EntityAuthStatus::Available) => {
                 // auth was released before it was granted, continue as normal

@@ -65,7 +65,7 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         }
     }
 
-    pub(crate) fn remove_reserved_host_entity(&mut self, world_entity: &E) -> Option<HostEntity> {
+    pub fn remove_reserved_host_entity(&mut self, world_entity: &E) -> Option<HostEntity> {
         self.reserved_entities.remove(world_entity)
     }
 

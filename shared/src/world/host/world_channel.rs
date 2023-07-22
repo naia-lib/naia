@@ -84,15 +84,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     // returns whether auth release message should be sent
     pub fn entity_release_authority(&mut self, entity: &E) -> bool {
-        let Some(entity_channel) = self.entity_channels.get_mut(entity) else {
-            panic!("World Channel: cannot release authority of entity that doesn't exist");
-        };
-        let output = entity_channel.release_authority();
-        if !output {
-            self.outstanding_release_auth_messages += 1;
-            info!("Outstanding release auth messages: {:?}", self.outstanding_release_auth_messages);
+        if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
+            let output = entity_channel.release_authority();
+            if !output {
+                self.outstanding_release_auth_messages += 1;
+                info!("Outstanding release auth messages: {:?}", self.outstanding_release_auth_messages);
+            }
+            return output;
+        } else {
+            // request may have not yet come back, that's okay
+            return true;
         }
-        return output;
     }
 
     // Host Updates
