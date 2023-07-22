@@ -36,21 +36,19 @@ pub struct EntityChannel {
 
 impl EntityChannel {
     pub fn new_spawning() -> Self {
-        Self::new(EntityChannelState::Spawning)
-    }
-
-    pub fn new_spawned() -> Self {
-        Self::new(EntityChannelState::Spawned)
-    }
-
-    pub fn new_despawning() -> Self {
-        Self::new(EntityChannelState::Despawning)
-    }
-
-    fn new(state: EntityChannelState) -> Self {
         Self {
             components: CheckedMap::new(),
-            state,
+            state: EntityChannelState::Spawning,
+            release_auth: ReleaseAuthState::None,
+            messages_in_progress: 1,
+        }
+    }
+
+    // this may be used for tracking remote entities which are sure to be spawned on the remote already
+    pub fn new_spawned() -> Self {
+        Self {
+            components: CheckedMap::new(),
+            state: EntityChannelState::Spawned,
             release_auth: ReleaseAuthState::None,
             messages_in_progress: 0,
         }
@@ -91,6 +89,27 @@ impl EntityChannel {
         return false;
     }
 
+    pub(crate) fn spawning_complete(&mut self) {
+        if self.state != EntityChannelState::Spawning {
+            panic!("EntityChannel::spawning_complete() called on non-spawning entity");
+        }
+        self.state = EntityChannelState::Spawned;
+
+        if self.components.len() > 0 {
+            panic!("Newly spawned entity should not have any components yet..");
+        }
+
+        self.message_delivered();
+    }
+
+    pub(crate) fn despawn(&mut self) {
+        if self.state != EntityChannelState::Spawned {
+            panic!("EntityChannel::despawn() called on non-spawned entity");
+        }
+        self.state = EntityChannelState::Despawning;
+        self.components.clear();
+    }
+
     pub(crate) fn component_is_removing(&self, component_kind: &ComponentKind) -> bool {
         if let Some(component_channel) = self.components.get(component_kind) {
             return *component_channel == ComponentChannel::Removing;
@@ -98,10 +117,13 @@ impl EntityChannel {
         return false;
     }
 
-    pub(crate) fn insert_component(&mut self, component_kind: &ComponentKind) {
+    pub(crate) fn insert_component(&mut self, component_kind: &ComponentKind, after_spawn: bool) {
+        if self.state != EntityChannelState::Spawned {
+            panic!("should only be inserting components into spawned entities");
+        }
         self.components
             .insert(*component_kind, ComponentChannel::Inserting);
-        self.send_message();
+        self.send_message(after_spawn);
     }
 
     pub(crate) fn insert_remote_component(&mut self, component_kind: &ComponentKind) {
@@ -115,7 +137,7 @@ impl EntityChannel {
                 self.components.remove(component_kind);
                 self.components
                     .insert(*component_kind, ComponentChannel::Removing);
-                self.send_message();
+                self.send_message(false);
                 return true;
             }
             Some(ComponentChannel::Inserting) => {
@@ -149,8 +171,8 @@ impl EntityChannel {
         }
     }
 
-    fn send_message(&mut self) {
-        if self.release_auth == ReleaseAuthState::None {
+    fn send_message(&mut self, after_spawn: bool) {
+        if self.release_auth == ReleaseAuthState::None || after_spawn {
             self.messages_in_progress += 1;
         } else {
             panic!("Entity channel should be blocked right now, as auth has been released");
@@ -177,6 +199,14 @@ impl EntityChannel {
             self.release_auth = ReleaseAuthState::Waiting;
             warn!("Entity Channel Auth Release message must wait");
             return false;
+        }
+    }
+}
+
+impl Drop for EntityChannel {
+    fn drop(&mut self) {
+        if self.release_auth == ReleaseAuthState::Waiting {
+            panic!("Entity Channel Auth Release message was waiting, but is now dropped");
         }
     }
 }
