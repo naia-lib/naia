@@ -207,8 +207,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .world_channel
                     .collect_auth_release_messages()
                 {
-                    self.queued_entity_auth_release_messages
-                        .append(&mut entities);
+                    info!("Queued release messages! Prev: {:?}, new: {:?}", self.queued_entity_auth_release_messages.len(), entities.len());
+                    self.queued_entity_auth_release_messages.append(&mut entities);
+                    info!("For a total of: {:?} messages", self.queued_entity_auth_release_messages.len());
                 }
 
                 // send packets
@@ -792,18 +793,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub(crate) fn entity_grant_authority_init(&mut self, entity: &E) {
         info!("<-- Received Entity Grant Authority Init message!",);
 
-        // Granted Authority
-
-        // Migrate Entity from Remote -> Host connection
+        // Reserve Host Entity
         let Some(connection) = &mut self.server_connection else {
             return;
         };
-        let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
-        let new_host_entity = connection.base.host_world_manager.track_remote_entity(
-            &mut connection.base.local_world_manager,
-            entity,
-            component_kinds,
-        );
+        let new_host_entity = connection.base.local_world_manager.host_reserve_entity(entity);
 
         // send response
         let message = EntityEventMessage::new_grant_auth_response(
@@ -836,6 +830,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         match (old_auth_status, new_auth_status) {
             (EntityAuthStatus::Requested, EntityAuthStatus::Granted) => {
                 // Granted Authority
+
+                let Some(connection) = &mut self.server_connection else {
+                    return;
+                };
+                // Migrate Entity from Remote -> Host connection
+                let component_kinds = self.global_world_manager.component_kinds(entity).unwrap();
+                connection.base.host_world_manager.track_remote_entity(
+                    &mut connection.base.local_world_manager,
+                    entity,
+                    component_kinds,
+                );
 
                 // push outgoing event
                 self.incoming_events.push_auth_grant(*entity);

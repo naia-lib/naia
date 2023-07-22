@@ -38,7 +38,7 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     // Host entities
 
-    pub(crate) fn host_reserve_entity(&mut self, world_entity: &E) -> HostEntity {
+    pub fn host_reserve_entity(&mut self, world_entity: &E) -> HostEntity {
         self.process_reserved_entity_timeouts();
 
         if self.reserved_entities.contains_key(world_entity) {

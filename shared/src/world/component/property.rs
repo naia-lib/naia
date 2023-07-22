@@ -490,7 +490,7 @@ impl<T: Serde> DelegatedProperty<T> {
 
     pub fn write(&self, writer: &mut dyn BitWrite) {
         if !self.can_write() {
-            panic!("Must have Authority over Entity before performing this operation.");
+            panic!("Must have Authority over Entity before performing this operation. Current Authority: {:?}", self.auth_accessor.auth_status());
         }
         self.inner.ser(writer);
     }

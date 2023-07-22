@@ -38,6 +38,7 @@ pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
     pub diff_handler: UserDiffHandler<E>,
 
     outgoing_release_auth_messages: Vec<E>,
+    outstanding_release_auth_messages: usize,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
@@ -56,6 +57,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             diff_handler: UserDiffHandler::new(global_world_manager),
 
             outgoing_release_auth_messages: Vec::new(),
+            outstanding_release_auth_messages: 0,
         }
     }
 
@@ -85,7 +87,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         let Some(entity_channel) = self.entity_channels.get_mut(entity) else {
             panic!("World Channel: cannot release authority of entity that doesn't exist");
         };
-        return entity_channel.release_authority();
+        let output = entity_channel.release_authority();
+        if !output {
+            self.outstanding_release_auth_messages += 1;
+            info!("Outstanding release auth messages: {:?}", self.outstanding_release_auth_messages);
+        }
+        return output;
     }
 
     // Host Updates
@@ -424,6 +431,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             let send_entity_auth_release_message =
                 entity_channel.component_insertion_complete(component_kind);
             if send_entity_auth_release_message {
+                self.outstanding_release_auth_messages -= 1;
+                info!("Outstanding release auth messages: {:?}", self.outstanding_release_auth_messages);
                 self.outgoing_release_auth_messages.push(*entity);
             }
 
@@ -463,6 +472,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             let send_auth_release_message =
                 entity_channel.component_removal_complete(component_kind);
             if send_auth_release_message {
+                self.outstanding_release_auth_messages -= 1;
+                info!("Outstanding release auth messages: {:?}", self.outstanding_release_auth_messages);
                 self.outgoing_release_auth_messages.push(*entity);
             }
 
@@ -611,6 +622,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         if self.outgoing_release_auth_messages.is_empty() {
             return None;
         }
+        warn!("World Channel is delivering {:?} auth release messages", self.outgoing_release_auth_messages.len());
         Some(std::mem::take(&mut self.outgoing_release_auth_messages))
     }
 }

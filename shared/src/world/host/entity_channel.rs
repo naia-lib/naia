@@ -40,7 +40,7 @@ impl EntityChannel {
             components: CheckedMap::new(),
             state: EntityChannelState::Spawning,
             release_auth: ReleaseAuthState::None,
-            messages_in_progress: 1,
+            messages_in_progress: 0,
         }
     }
 
@@ -98,8 +98,6 @@ impl EntityChannel {
         if self.components.len() > 0 {
             panic!("Newly spawned entity should not have any components yet..");
         }
-
-        self.message_delivered();
     }
 
     pub(crate) fn despawn(&mut self) {
@@ -182,7 +180,7 @@ impl EntityChannel {
     fn message_delivered(&mut self) -> bool {
         self.messages_in_progress -= 1;
 
-        if self.messages_in_progress == 0 && self.release_auth == ReleaseAuthState::Waiting {
+        if self.ready_to_release() && self.release_auth == ReleaseAuthState::Waiting {
             self.release_auth = ReleaseAuthState::Complete;
             warn!("Entity Channel Auth Release message was waiting, but is now ready");
             return true;
@@ -192,7 +190,7 @@ impl EntityChannel {
     }
 
     pub(crate) fn release_authority(&mut self) -> bool {
-        if self.messages_in_progress == 0 {
+        if self.ready_to_release() {
             self.release_auth = ReleaseAuthState::Complete;
             return true;
         } else {
@@ -200,6 +198,10 @@ impl EntityChannel {
             warn!("Entity Channel Auth Release message must wait");
             return false;
         }
+    }
+
+    fn ready_to_release(&self) -> bool {
+        self.messages_in_progress == 0 && self.state == EntityChannelState::Spawned
     }
 }
 

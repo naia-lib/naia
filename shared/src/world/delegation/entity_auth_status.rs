@@ -38,6 +38,7 @@ impl EntityAuthStatus {
     }
 }
 
+#[derive(Debug)]
 pub struct HostEntityAuthStatus {
     host_type: HostType,
     auth_status: EntityAuthStatus,
