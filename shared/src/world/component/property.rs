@@ -1,4 +1,5 @@
 use std::ops::{Deref, DerefMut};
+use log::warn;
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
@@ -378,7 +379,8 @@ impl<T: Serde> HostOwnedProperty<T> {
 
     pub fn mutate(&mut self) {
         let Some(mutator) = &mut self.mutator else {
-            panic!("Host Property should have a mutator immediately after creation.");
+            warn!("Host Property should have a mutator immediately after creation.");
+            return;
         };
         mutator.mutate(self.index);
     }

@@ -1,4 +1,4 @@
-use log::info;
+
 use std::hash::Hash;
 
 use naia_derive::MessageInternal;
@@ -60,14 +60,12 @@ impl EntityEventMessageAction {
                 EntityResponseEvent::EntityGrantAuthInit(*entity)
             }
             EntityEventMessageAction::GrantAuthResponse(remote_entity) => {
-                //info!("received EntityGrantAuthResponse");
                 EntityResponseEvent::EntityGrantAuthResponse(
                     *entity,
                     RemoteEntity::new(*remote_entity),
                 )
             }
             EntityEventMessageAction::EntityMigrateResponse(remote_entity) => {
-                info!("received EntityMigrateResponse");
                 EntityResponseEvent::EntityMigrateResponse(
                     *entity,
                     RemoteEntity::new(*remote_entity),

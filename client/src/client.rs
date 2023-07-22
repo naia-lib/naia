@@ -482,11 +482,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // 1. Set local authority status for Entity
         let success = self.global_world_manager.entity_release_authority(entity);
         if success {
-            warn!(" --> Client sending authority RELEASE message!");
-            // 3. Send request to Server
-            let message =
-                EntityEventMessage::new_release_authority(&self.global_world_manager, entity);
-            self.send_message::<SystemChannel, EntityEventMessage>(&message);
+
+            let Some(connection) = &mut self.server_connection else {
+                return;
+            };
+            connection
+                .base
+                .host_world_manager
+                .world_channel
+                .entity_release_authority(entity);
         }
     }
 
@@ -1161,6 +1165,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     panic!("Client should never receive an EntityGrantAuthResponse event");
                 }
                 EntityResponseEvent::EntityMigrateResponse(world_entity, remote_entity) => {
+                    info!("received EntityMigrateResponse");
                     self.add_redundant_remote_entity_to_host(&world_entity, remote_entity);
                     self.incoming_events.push_auth_grant(world_entity);
                 }

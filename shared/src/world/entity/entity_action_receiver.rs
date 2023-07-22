@@ -73,8 +73,7 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
 }
 
 // Entity Channel
-
-pub struct EntityChannel<E: Copy + Hash + Eq> {
+struct EntityChannel<E: Copy + Hash + Eq> {
     entity: E,
     last_canonical_index: Option<ActionIndex>,
     spawned: bool,

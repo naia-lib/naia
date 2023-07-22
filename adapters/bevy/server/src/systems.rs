@@ -6,6 +6,8 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
+use log::warn;
+
 use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
 use naia_server::{EntityOwner, Server};
 
@@ -48,6 +50,7 @@ pub fn before_receive_events(world: &mut World) {
                     }
                     let mut world_proxy = world.proxy_mut();
                     let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
+                        warn!("could not find Component in World which has just been inserted!");
                         continue;
                     };
                     server.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));

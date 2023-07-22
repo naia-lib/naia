@@ -1810,13 +1810,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.entity_request_authority(Some(user_key), &entity);
                 }
                 EntityResponseEvent::EntityReleaseAuthority(entity) => {
+                    info!("received release auth entity message!");
                     self.entity_release_authority(Some(user_key), &entity);
                     self.incoming_events.push_auth_reset(&entity);
                 }
                 EntityResponseEvent::EntityUpdateAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");
                 }
-                EntityResponseEvent::EntityGrantAuthInit(entity) => {
+                EntityResponseEvent::EntityGrantAuthInit(_) => {
                     panic!("Clients should not be able to send this message");
                 }
                 EntityResponseEvent::EntityGrantAuthResponse(world_entity, remote_entity) => {

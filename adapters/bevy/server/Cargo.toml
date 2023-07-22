@@ -21,3 +21,4 @@ naia-server = { version = "0.21", path = "../../../server", features = ["bevy_su
 naia-bevy-shared = { version = "0.21", path = "../shared" }
 bevy_app = { version = "0.10", default-features=false }
 bevy_ecs = { version = "0.10", default-features=false }
+log = { version = "0.4" }

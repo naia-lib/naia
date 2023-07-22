@@ -116,11 +116,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         self.world_channel.host_has_entity(entity)
     }
 
-    pub fn entity_channel_is_open(&self, entity: &E) -> bool {
-        self.world_channel.entity_channel_is_open(entity)
-    }
-
-    // used when Remote Entity gains Write Authority
+    // used when Remote Entity gains Write Authority (delegation)
     pub fn track_remote_entity(
         &mut self,
         local_world_manager: &mut LocalWorldManager<E>,

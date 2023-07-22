@@ -273,7 +273,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
     pub(crate) fn entity_release_authority(&mut self, entity: &E) -> bool {
         let Some(auth_status) = self.auth_handler.auth_status(entity) else {
-            panic!("Can only releas authority for an Entity that is Delegated!");
+            panic!("Can only release authority for an Entity that is Delegated!");
         };
         if !auth_status.can_release() {
             return false;
