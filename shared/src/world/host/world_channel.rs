@@ -35,6 +35,8 @@ pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
 
     address: Option<SocketAddr>,
     pub diff_handler: UserDiffHandler<E>,
+
+    outgoing_release_auth_messages: Vec<E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
@@ -51,6 +53,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
             address: *address,
             diff_handler: UserDiffHandler::new(global_world_manager),
+
+            outgoing_release_auth_messages: Vec::new(),
         }
     }
 
@@ -73,6 +77,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         } else {
             Vec::new()
         }
+    }
+
+    // returns whether auth release message should be sent
+    pub fn entity_release_authority(&mut self, entity: &E) -> bool {
+        let Some(entity_channel) = self.entity_channels.get_mut(entity) else {
+            panic!("World Channel: cannot release authority of entity that doesn't exist");
+        };
+        return entity_channel.release_authority();
     }
 
     // Host Updates
@@ -400,7 +412,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                     .unwrap()
                     .contains(component_kind);
 
-                entity_channel.component_insertion_complete(component_kind);
+                let send_entity_auth_release_message = entity_channel.component_insertion_complete(component_kind);
+                if send_entity_auth_release_message {
+                    self.outgoing_release_auth_messages.push(*entity);
+                }
 
                 if host_has_component {
                     // if component exist in host, finalize channel state
@@ -433,7 +448,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
             if entity_channel.component_is_removing(component_kind) {
-                entity_channel.component_removal_complete(component_kind);
+
+                let send_auth_release_message = entity_channel.component_removal_complete(component_kind);
+                if send_auth_release_message {
+                    self.outgoing_release_auth_messages.push(*entity);
+                }
 
                 // if component exists in host, start insertion
                 let host_has_component = self
@@ -575,6 +594,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             }
         }
         output
+    }
+
+    pub fn collect_auth_release_messages(&mut self) -> Option<Vec<E>> {
+        if self.outgoing_release_auth_messages.is_empty() {
+            return None;
+        }
+        Some(std::mem::take(&mut self.outgoing_release_auth_messages))
     }
 }
 

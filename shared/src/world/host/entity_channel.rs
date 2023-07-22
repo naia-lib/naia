@@ -1,3 +1,4 @@
+use log::warn;
 
 use crate::{world::host::world_channel::CheckedMap, ComponentKind};
 
@@ -19,30 +20,39 @@ enum EntityChannelState {
     Despawning,
 }
 
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum ReleaseAuthState {
+    None,
+    Waiting,
+    Complete,
+}
+
 pub struct EntityChannel {
     components: CheckedMap<ComponentKind, ComponentChannel>,
     state: EntityChannelState,
+    release_auth: ReleaseAuthState,
+    messages_in_progress: u8,
 }
 
 impl EntityChannel {
     pub fn new_spawning() -> Self {
-        Self {
-            components: CheckedMap::new(),
-            state: EntityChannelState::Spawning,
-        }
+        Self::new(EntityChannelState::Spawning)
     }
 
     pub fn new_spawned() -> Self {
-        Self {
-            components: CheckedMap::new(),
-            state: EntityChannelState::Spawned,
-        }
+        Self::new(EntityChannelState::Spawned)
     }
 
     pub fn new_despawning() -> Self {
+        Self::new(EntityChannelState::Despawning)
+    }
+
+    fn new(state: EntityChannelState) -> Self {
         Self {
             components: CheckedMap::new(),
-            state: EntityChannelState::Despawning,
+            state,
+            release_auth: ReleaseAuthState::None,
+            messages_in_progress: 0,
         }
     }
 
@@ -74,8 +84,23 @@ impl EntityChannel {
         return self.components.contains_key(component_kind);
     }
 
+    pub(crate) fn component_is_inserting(&self, component_kind: &ComponentKind) -> bool {
+        if let Some(component_channel) = self.components.get(component_kind) {
+            return *component_channel == ComponentChannel::Inserting;
+        }
+        return false;
+    }
+
+    pub(crate) fn component_is_removing(&self, component_kind: &ComponentKind) -> bool {
+        if let Some(component_channel) = self.components.get(component_kind) {
+            return *component_channel == ComponentChannel::Removing;
+        }
+        return false;
+    }
+
     pub(crate) fn insert_component(&mut self, component_kind: &ComponentKind) {
         self.components.insert(*component_kind, ComponentChannel::Inserting);
+        self.send_message();
     }
 
     pub(crate) fn insert_remote_component(&mut self, component_kind: &ComponentKind) {
@@ -87,6 +112,7 @@ impl EntityChannel {
             Some(ComponentChannel::Inserted) => {
                 self.components.remove(component_kind);
                 self.components.insert(*component_kind, ComponentChannel::Removing);
+                self.send_message();
                 return true;
             }
             Some(ComponentChannel::Inserting) => {
@@ -98,33 +124,56 @@ impl EntityChannel {
         }
     }
 
-    pub(crate) fn component_is_inserting(&self, component_kind: &ComponentKind) -> bool {
-        if let Some(component_channel) = self.components.get(component_kind) {
-            return *component_channel == ComponentChannel::Inserting;
-        }
-        return false;
-    }
-
-    pub(crate) fn component_insertion_complete(&mut self, component_kind: &ComponentKind) {
+    // returns whether auth release message should be sent
+    pub(crate) fn component_insertion_complete(&mut self, component_kind: &ComponentKind) -> bool {
         if let Some(component_channel) = self.components.get_mut(component_kind) {
             if *component_channel == ComponentChannel::Inserting {
                 *component_channel = ComponentChannel::Inserted;
+                return self.message_delivered();
             }
+        }
+
+        panic!("component_insertion_complete called on non-inserting component?");
+    }
+
+    // returns whether auth release message should be sent
+    pub(crate) fn component_removal_complete(&mut self, component_kind: &ComponentKind) -> bool {
+        if self.components.get(component_kind) == Some(&ComponentChannel::Removing) {
+            self.components.remove(component_kind);
+            return self.message_delivered();
+        } else {
+            panic!("component_removal_complete called on non-removing component");
         }
     }
 
-    pub(crate) fn component_is_removing(&self, component_kind: &ComponentKind) -> bool {
-        if let Some(component_channel) = self.components.get(component_kind) {
-            return *component_channel == ComponentChannel::Removing;
+    fn send_message(&mut self) {
+        if self.release_auth == ReleaseAuthState::None {
+            self.messages_in_progress += 1;
+        } else {
+            panic!("Entity channel should be blocked right now, as auth has been released");
         }
+    }
+
+    fn message_delivered(&mut self) -> bool {
+        self.messages_in_progress -= 1;
+
+        if self.messages_in_progress == 0 && self.release_auth == ReleaseAuthState::Waiting {
+            self.release_auth = ReleaseAuthState::Complete;
+            info!("Entity Channel Auth Release message was waiting, but is now ready");
+            return true;
+        }
+
         return false;
     }
 
-    pub(crate) fn component_removal_complete(&mut self, component_kind: &ComponentKind) {
-        if self.components.get(component_kind) == Some(&ComponentChannel::Removing) {
-            self.components.remove(component_kind);
+    pub(crate) fn release_authority(&mut self) -> bool {
+        if self.messages_in_progress == 0 {
+            self.release_auth = ReleaseAuthState::Complete;
+            return true;
         } else {
-            panic!("component_removal_complete called on non-removing component");
+            self.release_auth = ReleaseAuthState::Waiting;
+            warn!("Entity Channel Auth Release message must wait");
+            return false;
         }
     }
 }

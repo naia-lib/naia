@@ -47,6 +47,8 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     global_world_manager: GlobalWorldManager<E>,
     // Events
     incoming_events: Events<E>,
+    // Hacky
+    queued_entity_auth_release_messages: Vec<E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
@@ -80,6 +82,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             global_world_manager: GlobalWorldManager::new(),
             // Events
             incoming_events: Events::new(),
+            // Hacky
+            queued_entity_auth_release_messages: Vec::new(),
         }
     }
 
@@ -149,6 +153,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // until none left
         self.maintain_socket();
 
+        self.send_queued_auth_release_messages();
+
         let mut response_events = None;
 
         // all other operations
@@ -194,6 +200,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // send outgoing packets
                 let now = Instant::now();
 
+                // collect waiting auth release messages
+                if let Some(mut entities) = connection.base.host_world_manager.world_channel.collect_auth_release_messages() {
+                    self.queued_entity_auth_release_messages.append(&mut entities);
+                }
+
+                // send packets
                 connection.send_packets(
                     &self.protocol,
                     &now,
@@ -486,12 +498,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             let Some(connection) = &mut self.server_connection else {
                 return;
             };
-            connection
+            let send_release_message = connection
                 .base
                 .host_world_manager
                 .world_channel
                 .entity_release_authority(entity);
+            if send_release_message {
+                self.send_entity_release_auth_message(entity);
+            }
         }
+    }
+
+    fn send_entity_release_auth_message(&mut self, entity: &E) {
+        warn!(" --> Client sending authority RELEASE message!");
+        // 3. Send request to Server
+        let message =
+            EntityEventMessage::new_release_authority(&self.global_world_manager, entity);
+        self.send_message::<SystemChannel, EntityEventMessage>(&message);
     }
 
     // Connection
@@ -1197,6 +1220,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .base
             .remote_world_reader
             .track_hosts_redundant_remote_entity(&remote_entity, component_kinds);
+    }
+
+    fn send_queued_auth_release_messages(&mut self) {
+        if self.queued_entity_auth_release_messages.is_empty() {
+            return;
+        }
+        let entities = std::mem::take(&mut self.queued_entity_auth_release_messages);
+        for entity in entities {
+            self.send_entity_release_auth_message(&entity);
+        }
     }
 }
 
