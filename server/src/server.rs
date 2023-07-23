@@ -1754,7 +1754,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .entity_is_public_and_client_owned(&entity)
                         || self.global_world_manager.entity_is_delegated(&entity)
                     {
-                        info!(":: server process public EntityResponseEvent::RemoveComponent");
                         self.remove_component_worldless(&entity, &component_kind);
                     } else {
                         self.global_world_manager
@@ -1772,7 +1771,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for response_event in deferred_events {
             match response_event {
                 EntityResponseEvent::PublishEntity(entity) => {
-                    info!("received publish entity message!");
+                    // info!("received publish entity message!");
                     self.publish_entity(world, &entity, false);
                     self.incoming_events.push_publish(user_key, &entity);
                 }
@@ -1781,7 +1780,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.incoming_events.push_unpublish(user_key, &entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
-                    info!("received enable delegation entity message!");
+                    // info!("received enable delegation entity message!");
                     self.entity_enable_delegation(world, &entity, Some(*user_key));
                     self.incoming_events.push_delegate(user_key, &entity);
                 }
@@ -1795,7 +1794,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.client_request_authority(user_key, &world_entity, &remote_entity);
                 }
                 EntityResponseEvent::EntityReleaseAuthority(entity) => {
-                    info!("received release auth entity message!");
+                    // info!("received release auth entity message!");
                     self.entity_release_authority(Some(user_key), &entity);
                     self.incoming_events.push_auth_reset(&entity);
                 }
@@ -1814,14 +1813,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for response_event in extra_deferred_events {
             match response_event {
                 EntityResponseEvent::DespawnEntity(entity) => {
-                    info!("received despawn entity message!");
+
                     if self
                         .global_world_manager
                         .entity_is_public_and_client_owned(&entity)
                         || self.global_world_manager.entity_is_delegated(&entity)
                     {
-                        info!(":: server process public EntityResponseEvent::DespawnEntity");
-
                         // remove from host connection
                         let user = self.users.get(user_key).unwrap();
                         let connection = self.user_connections.get_mut(&user.address).unwrap();
@@ -1832,7 +1829,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                         self.despawn_entity_worldless(&entity);
                     } else {
-                        info!(":: server processing EntityResponseEvent::DespawnEntity");
                         self.global_world_manager.remove_entity_record(&entity);
                     }
                 }

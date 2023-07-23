@@ -6,8 +6,6 @@ use std::{
     time::Duration,
 };
 
-use log::info;
-
 use crate::{
     sequence_list::SequenceList,
     world::{
@@ -128,14 +126,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             .world_channel
             .track_remote_entity(local_world_manager, entity);
 
-        info!("--- tracking remote entity ---");
+        // info!("--- tracking remote entity ---");
 
         // add components
         for component_kind in component_kinds {
             self.track_remote_component(entity, &component_kind);
         }
 
-        info!("--- ---------------------- ---");
+        // info!("--- ---------------------- ---");
 
         new_host_entity
     }

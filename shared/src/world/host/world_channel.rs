@@ -4,7 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use log::{info, warn};
+use log::warn;
 
 use super::{
     entity_action_event::EntityActionEvent, host_world_manager::ActionId,
@@ -140,7 +140,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         entity_channel.despawn();
 
-        warn!("Sending Despawn Message A!");
         self.outgoing_actions
             .send_message(EntityActionEvent::DespawnEntity(*entity));
 
@@ -298,7 +297,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             entity_channel.insert_remote_component(component_kind);
             self.on_component_channel_opened(entity, component_kind);
 
-            info!("     --- Remote Delegated Entity now is Tracking Component");
+            // info!("     --- Remote Delegated Entity now is Tracking Component");
         }
     }
 
@@ -363,7 +362,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         } else {
             // despawn entity
             entity_channel.despawn();
-            warn!("Sending Despawn Message B!");
+
             self.outgoing_actions
                 .send_message(EntityActionEvent::DespawnEntity(*entity));
             self.on_remote_entity_channel_closed(local_world_manager, entity);
@@ -375,7 +374,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         local_world_manager: &mut LocalWorldManager<E>,
         entity: &E,
     ) {
-        info!("on_remote_despawn_entity()");
         if !self.remote_world.contains_key(entity) {
             panic!(
                 "World Channel: should not be able to despawn non-existent entity in remote world"
@@ -630,10 +628,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         if self.outgoing_release_auth_messages.is_empty() {
             return None;
         }
-        warn!(
-            "World Channel is delivering {:?} auth release messages",
-            self.outgoing_release_auth_messages.len()
-        );
         Some(std::mem::take(&mut self.outgoing_release_auth_messages))
     }
 }

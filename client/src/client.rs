@@ -207,17 +207,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .world_channel
                     .collect_auth_release_messages()
                 {
-                    info!(
-                        "Queued release messages! Prev: {:?}, new: {:?}",
-                        self.queued_entity_auth_release_messages.len(),
-                        entities.len()
-                    );
                     self.queued_entity_auth_release_messages
                         .append(&mut entities);
-                    info!(
-                        "For a total of: {:?} messages",
-                        self.queued_entity_auth_release_messages.len()
-                    );
                 }
 
                 // send packets
@@ -494,7 +485,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // 1. Set local authority status for Entity
         let success = self.global_world_manager.entity_request_authority(entity);
         if success {
-            warn!(" --> Client sending authority REQUEST message!");
 
             // Reserve Host Entity
             let Some(connection) = &mut self.server_connection else {
@@ -537,7 +527,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     fn send_entity_release_auth_message(&mut self, entity: &E) {
-        warn!(" --> Client sending authority RELEASE message!");
+
         // 3. Send request to Server
         let message = EntityEventMessage::new_release_authority(&self.global_world_manager, entity);
         self.send_message::<SystemChannel, EntityEventMessage>(&message);
@@ -629,7 +619,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub fn despawn_entity_worldless(&mut self, entity: &E) {
-        info!("despawn_entity_worldless()");
 
         if !self.global_world_manager.has_entity(entity) {
             warn!("attempting to despawn entity that has already been despawned?");
@@ -837,10 +826,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.global_world_manager
             .entity_update_authority(entity, new_auth_status);
 
-        info!(
-            "<-- Received Entity Update Authority message! {:?} -> {:?}",
-            old_auth_status, new_auth_status
-        );
+        // info!(
+        //     "<-- Received Entity Update Authority message! {:?} -> {:?}",
+        //     old_auth_status, new_auth_status
+        // );
 
         // Updated Host Manager
         match (old_auth_status, new_auth_status) {
@@ -1211,7 +1200,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.entity_update_authority(&entity, new_auth_status);
                 }
                 EntityResponseEvent::EntityMigrateResponse(world_entity, remote_entity) => {
-                    info!("received EntityMigrateResponse");
                     self.entity_complete_delegation(world, &world_entity);
                     self.add_redundant_remote_entity_to_host(&world_entity, remote_entity);
 

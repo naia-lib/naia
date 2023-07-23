@@ -1,4 +1,3 @@
-use log::warn;
 
 use crate::{world::host::world_channel::CheckedMap, ComponentKind};
 
@@ -192,7 +191,6 @@ impl EntityChannel {
 
         if self.ready_to_release() && self.release_auth == ReleaseAuthState::Waiting {
             self.release_auth = ReleaseAuthState::Complete;
-            warn!("Entity Channel Auth Release message was waiting, but is now ready");
             return true;
         }
 
@@ -205,7 +203,6 @@ impl EntityChannel {
             return true;
         } else {
             self.release_auth = ReleaseAuthState::Waiting;
-            warn!("Entity Channel Auth Release message must wait");
             return false;
         }
     }

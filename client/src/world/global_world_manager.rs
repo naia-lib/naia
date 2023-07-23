@@ -326,13 +326,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
             let server_owned = record.owner == EntityOwner::Server;
             let is_public = record.replication_config == ReplicationConfig::Public;
 
-            if !server_owned {
-                info!("entity_needs_mutator_for_delegation: entity is not server owned");
-            }
-            if !is_public {
-                info!("entity_needs_mutator_for_delegation: entity is not public");
-            }
-
             return server_owned && is_public;
         }
         info!("entity_needs_mutator_for_delegation: entity does not have record");
