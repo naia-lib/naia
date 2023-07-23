@@ -3,8 +3,6 @@ use std::{
     time::Duration,
 };
 
-use log::warn;
-
 use naia_socket_shared::Instant;
 
 use crate::{KeyGenerator, RemoteEntity};
@@ -66,8 +64,7 @@ impl EntityWaitlist {
         }
 
         self.handle_ttls.push_back((Instant::now(), new_handle));
-        self.handle_to_required_entities
-            .insert(new_handle, entities.clone());
+        self.handle_to_required_entities.insert(new_handle, entities.clone());
 
         waitlist_store.queue(new_handle, item);
 
@@ -85,7 +82,6 @@ impl EntityWaitlist {
             return None;
         }
 
-        warn!("Collecting waiting message!");
         waitlist_store.collect_ready_items(&mut self.ready_handles)
     }
 

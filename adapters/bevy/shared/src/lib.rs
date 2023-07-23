@@ -9,7 +9,7 @@ pub use naia_shared::{
     PropertyMutator, Random, ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef,
     ReplicateBevy as Replicate, ReplicateBuilder, SerdeBevy as Serde, SerdeErr,
     SerdeIntegerConversion, SignedInteger, SignedVariableInteger, Tick, TickBufferSettings,
-    UnsignedInteger, UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, WaitingCompleteError,
+    UnsignedInteger, UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 mod change_detection;

@@ -69,9 +69,6 @@ impl MessageContainer {
     }
 
     pub fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
-        let result = self.inner.relations_complete(converter);
-        if let Err(_e) = result {
-            panic!("Error completing relation: `{:?}`", self.name());
-        }
+        self.inner.relations_complete(converter);
     }
 }

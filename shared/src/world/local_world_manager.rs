@@ -4,7 +4,6 @@ use std::{
     time::Duration,
 };
 
-use log::warn;
 use naia_socket_shared::Instant;
 
 use crate::{
@@ -60,8 +59,9 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
                 break;
             }
             let (_, world_entity) = self.reserved_entities_ttls.pop_front().unwrap();
-            self.reserved_entities.remove(&world_entity);
-            warn!("A Entity reserved for spawning on the Remote Connection just timed out. Check that the reserved Entity is able to replicate to the Remote Connection.");
+            let Some(_) = self.reserved_entities.remove(&world_entity) else {
+                panic!("Reserved Entity does not exist!");
+            };
         }
     }
 

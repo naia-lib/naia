@@ -38,7 +38,6 @@ pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
     pub diff_handler: UserDiffHandler<E>,
 
     outgoing_release_auth_messages: Vec<E>,
-    outstanding_release_auth_messages: usize,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
@@ -57,7 +56,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             diff_handler: UserDiffHandler::new(global_world_manager),
 
             outgoing_release_auth_messages: Vec::new(),
-            outstanding_release_auth_messages: 0,
         }
     }
 
@@ -86,13 +84,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
     pub fn entity_release_authority(&mut self, entity: &E) -> bool {
         if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
             let output = entity_channel.release_authority();
-            if !output {
-                self.outstanding_release_auth_messages += 1;
-                info!(
-                    "Outstanding release auth messages: {:?}",
-                    self.outstanding_release_auth_messages
-                );
-            }
             return output;
         } else {
             // request may have not yet come back, that's okay
@@ -428,45 +419,46 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         components.insert(*component_kind);
 
-        if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
-            if !entity_channel.is_spawned() {
-                panic!(
-                    "World Channel: should only receive this event if entity channel is spawned"
-                );
-            }
-            if !entity_channel.component_is_inserting(component_kind) {
-                panic!("World Channel: cannot insert component if component channel has not been initialized");
-            }
-            let host_has_component = self
-                .host_world
-                .get(entity)
-                .unwrap()
-                .contains(component_kind);
-
-            let send_entity_auth_release_message =
-                entity_channel.component_insertion_complete(component_kind);
-            if send_entity_auth_release_message {
-                self.outstanding_release_auth_messages -= 1;
-                info!(
-                    "Outstanding release auth messages: {:?}",
-                    self.outstanding_release_auth_messages
-                );
-                self.outgoing_release_auth_messages.push(*entity);
-            }
-
-            if host_has_component {
-                // if component exist in host, finalize channel state
-                self.on_component_channel_opened(entity, component_kind);
-            } else {
-                // if component doesn't exist in host, start removal
-                entity_channel.remove_component(component_kind);
-                self.outgoing_actions
-                    .send_message(EntityActionEvent::RemoveComponent(*entity, *component_kind));
-                self.on_component_channel_closing(entity, component_kind);
-            }
-        } else {
+        let Some(entity_channel) = self.entity_channels.get_mut(entity) else {
             // entity channel may be despawning, which is okay at this point
             // TODO: enforce this check
+            // info!("World Channel: received insert component message for entity without initialized channel, ignoring");
+            return;
+        };
+        if entity_channel.is_despawning() {
+            // entity channel may be despawning, which is okay at this point
+            // info!("World Channel: received insert component message for despawning entity, ignoring");
+            return;
+        }
+        if !entity_channel.is_spawned() {
+            panic!(
+                "World Channel: should only receive this event if entity channel is spawned"
+            );
+        }
+        if !entity_channel.component_is_inserting(component_kind) {
+            panic!("World Channel: cannot insert component if component channel has not been initialized");
+        }
+        let host_has_component = self
+            .host_world
+            .get(entity)
+            .unwrap()
+            .contains(component_kind);
+
+        let send_entity_auth_release_message =
+            entity_channel.component_insertion_complete(component_kind);
+        if send_entity_auth_release_message {
+            self.outgoing_release_auth_messages.push(*entity);
+        }
+
+        if host_has_component {
+            // if component exist in host, finalize channel state
+            self.on_component_channel_opened(entity, component_kind);
+        } else {
+            // if component doesn't exist in host, start removal
+            entity_channel.remove_component(component_kind);
+            self.outgoing_actions
+                .send_message(EntityActionEvent::RemoveComponent(*entity, *component_kind));
+            self.on_component_channel_closing(entity, component_kind);
         }
     }
 
@@ -492,11 +484,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             let send_auth_release_message =
                 entity_channel.component_removal_complete(component_kind);
             if send_auth_release_message {
-                self.outstanding_release_auth_messages -= 1;
-                info!(
-                    "Outstanding release auth messages: {:?}",
-                    self.outstanding_release_auth_messages
-                );
                 self.outgoing_release_auth_messages.push(*entity);
             }
 

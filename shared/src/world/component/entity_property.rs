@@ -15,8 +15,6 @@ use crate::{
     EntityAuthAccessor, PropertyMutator, RemoteEntity,
 };
 
-pub struct WaitingCompleteError;
-
 #[derive(Clone)]
 enum EntityRelation {
     HostOwned(HostOwnedRelation),
@@ -121,8 +119,11 @@ impl EntityRelation {
             EntityRelation::RemotePublic(inner) => inner.get(converter),
             EntityRelation::Local(inner) => inner.get(converter),
             EntityRelation::Delegated(inner) => inner.get(converter),
-            EntityRelation::RemoteWaiting(_) | EntityRelation::Invalid => {
-                panic!("Not ready to get RemoteWaiting EntityProperty value!");
+            EntityRelation::Invalid => {
+                panic!("Invalid EntityProperty should never call get()");
+            }
+            EntityRelation::RemoteWaiting(_) => {
+                panic!("RemoteWaiting EntityProperty should never call get()");
             }
         }
     }
@@ -427,38 +428,41 @@ impl EntityProperty {
         Ok(())
     }
 
-    pub fn waiting_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<(), WaitingCompleteError> {
+    pub fn waiting_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
         match &mut self.inner {
             EntityRelation::RemoteWaiting(inner) => {
-                if let Ok(global_entity) =
-                    converter.remote_entity_to_global_entity(&inner.remote_entity)
-                {
-                    if let Some((index, mutator)) = &inner.will_publish {
-                        if let Some(accesor) = &inner.will_delegate {
-                            // will publish and delegate
-                            let mut new_impl = DelegatedRelation::new(
-                                Some(global_entity),
-                                accesor,
-                                mutator,
-                                *index,
-                            );
-                            new_impl.global_entity = Some(global_entity);
-                            self.inner = EntityRelation::Delegated(new_impl);
-                        } else {
-                            // will publish but not delegate
-                            let mut new_impl =
-                                RemotePublicRelation::new(Some(global_entity), *index, mutator);
-                            new_impl.global_entity = Some(global_entity);
-                            self.inner = EntityRelation::RemotePublic(new_impl);
-                        }
+                let new_global_entity = {
+                    if let Ok(global_entity) =
+                        converter.remote_entity_to_global_entity(&inner.remote_entity)
+                    {
+                        Some(global_entity)
                     } else {
-                        // will not publish or delegate
-                        let mut new_impl = RemoteOwnedRelation::new_empty();
-                        new_impl.global_entity = Some(global_entity);
-                        self.inner = EntityRelation::RemoteOwned(new_impl);
+                        panic!("Error completing waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity!");
+                    }
+                };
+
+                if let Some((index, mutator)) = &inner.will_publish {
+                    if let Some(accessor) = &inner.will_delegate {
+                        // will publish and delegate
+                        let mut new_impl = DelegatedRelation::new(
+                            new_global_entity,
+                            accessor,
+                            mutator,
+                            *index,
+                        );
+                        new_impl.global_entity = new_global_entity;
+                        self.inner = EntityRelation::Delegated(new_impl);
+                    } else {
+                        // will publish but not delegate
+                        let new_impl =
+                            RemotePublicRelation::new(new_global_entity, *index, mutator);
+                        self.inner = EntityRelation::RemotePublic(new_impl);
                     }
                 } else {
-                    return Err(WaitingCompleteError);
+                    // will not publish or delegate
+                    let mut new_impl = RemoteOwnedRelation::new_empty();
+                    new_impl.global_entity = new_global_entity;
+                    self.inner = EntityRelation::RemoteOwned(new_impl);
                 }
             }
             EntityRelation::HostOwned(_)
@@ -470,8 +474,6 @@ impl EntityProperty {
                 panic!("Can't complete a RemoteOwned, HostOwned, Delegated, or Invalid EntityProperty!");
             }
         }
-
-        Ok(())
     }
 
     /// Migrate Remote Property to Public version

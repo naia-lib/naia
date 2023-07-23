@@ -258,7 +258,6 @@ impl<E: Copy> Events<E> {
                     response_events.push(EntityResponseEvent::SpawnEntity(entity));
                 }
                 EntityEvent::DespawnEntity(entity) => {
-                    warn!("Received DespawnEntity message");
                     self.push_despawn(user_key, &entity);
                     response_events.push(EntityResponseEvent::DespawnEntity(entity));
                 }

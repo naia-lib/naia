@@ -12,7 +12,7 @@ use crate::{messages::named::Named, world::{
     },
     delegation::auth_channel::EntityAuthAccessor,
     entity::entity_converters::LocalEntityAndGlobalEntityConverter,
-}, ComponentFieldUpdate, LocalEntityAndGlobalEntityConverterMut, RemoteEntity, WaitingCompleteError};
+}, ComponentFieldUpdate, LocalEntityAndGlobalEntityConverterMut, RemoteEntity};
 
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream
@@ -94,7 +94,7 @@ pub trait Replicate: ReplicateInner + Named + Any {
     /// Returns a list of LocalEntities contained within the Component's EntityProperty fields, which are waiting to be converted to GlobalEntities
     fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
     /// Converts any LocalEntities contained within the Component's EntityProperty fields to GlobalEntities
-    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<(), WaitingCompleteError>;
+    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
     /// Publish Replicate
     fn publish(&mut self, mutator: &PropertyMutator);
     /// Unpublish Replicate

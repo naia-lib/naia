@@ -50,9 +50,13 @@ struct EntityAuthData {
 
 impl EntityAuthData {
     fn new(host_type: HostType) -> Self {
+        let status = match host_type {
+            HostType::Server => EntityAuthStatus::Available,
+            HostType::Client => EntityAuthStatus::Requested,
+        };
         Self {
             host_type,
-            status: EntityAuthStatus::Available,
+            status,
         }
     }
 

@@ -127,8 +127,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                         .map(|boxed_m| *boxed_m) else {
                         panic!("Received unknown message over SystemChannel!");
                     };
-                    if let Some(entity) = event_message.entity.get(global_world_manager) {
-                        response_events.push(event_message.action.to_response_event(&entity));
+                    match event_message.entity.get(global_world_manager) {
+                        Some(entity) => {
+                            response_events.push(event_message.action.to_response_event(&entity));
+                        }
+                        None => {
+                            panic!("System Event message has no entity... `{:?}`", event_message.action);
+                        }
                     };
                 }
             } else {

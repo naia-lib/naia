@@ -653,6 +653,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             .base
             .remote_world_reader
             .untrack_hosts_redundant_remote_entity(&remote_entity);
+        connection
+            .base
+            .remote_world_manager
+            .on_entity_channel_closing(&remote_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -1707,28 +1711,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         .remote_world_manager
                         .on_entity_channel_opened(&local_entity);
                 }
-                EntityResponseEvent::DespawnEntity(entity) => {
-                    if self
-                        .global_world_manager
-                        .entity_is_public_and_client_owned(&entity)
-                        || self.global_world_manager.entity_is_delegated(&entity)
-                    {
-                        info!(":: server process public EntityResponseEvent::DespawnEntity");
-
-                        // remove from host connection
-                        let user = self.users.get(user_key).unwrap();
-                        let connection = self.user_connections.get_mut(&user.address).unwrap();
-                        connection
-                            .base
-                            .host_world_manager
-                            .client_initiated_despawn(&entity);
-
-                        self.despawn_entity_worldless(&entity);
-                    } else {
-                        info!(":: server processing EntityResponseEvent::DespawnEntity");
-                        self.global_world_manager.remove_entity_record(&entity);
-                    }
-                }
                 EntityResponseEvent::InsertComponent(entity, component_kind) => {
                     self.global_world_manager
                         .insert_component_record(&entity, &component_kind);
@@ -1784,6 +1766,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
             }
         }
+
+        let mut extra_deferred_events = Vec::new();
         // The reason for deferring these events is that they depend on the operations to the world above
         for response_event in deferred_events {
             match response_event {
@@ -1821,7 +1805,40 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 EntityResponseEvent::EntityMigrateResponse(_, _) => {
                     panic!("Clients should not be able to send this message");
                 }
-                _ => {}
+                _ => {
+                    extra_deferred_events.push(response_event);
+                }
+            }
+        }
+
+        for response_event in extra_deferred_events {
+            match response_event {
+                EntityResponseEvent::DespawnEntity(entity) => {
+                    info!("received despawn entity message!");
+                    if self
+                        .global_world_manager
+                        .entity_is_public_and_client_owned(&entity)
+                        || self.global_world_manager.entity_is_delegated(&entity)
+                    {
+                        info!(":: server process public EntityResponseEvent::DespawnEntity");
+
+                        // remove from host connection
+                        let user = self.users.get(user_key).unwrap();
+                        let connection = self.user_connections.get_mut(&user.address).unwrap();
+                        connection
+                            .base
+                            .host_world_manager
+                            .client_initiated_despawn(&entity);
+
+                        self.despawn_entity_worldless(&entity);
+                    } else {
+                        info!(":: server processing EntityResponseEvent::DespawnEntity");
+                        self.global_world_manager.remove_entity_record(&entity);
+                    }
+                }
+                _ => {
+                    panic!("shouldn't happen");
+                }
             }
         }
     }

@@ -138,10 +138,11 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
     }
 
     pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) -> RemoteEntity {
-        info!("removing redundant remote entity");
+
         if let Some(record) = self.world_to_local.get_mut(world_entity) {
             if record.host.is_some() && record.remote.is_some() {
                 if let Some(remote_entity) = record.remote.take() {
+                    // info!("removing redundant remote entity: {:?}", remote_entity);
                     self.remote_to_world.remove(&remote_entity);
                     return remote_entity;
                 }

@@ -44,7 +44,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         self.entity_waitlist.add_entity(remote_entity);
     }
 
-    fn on_entity_channel_closing(&mut self, remote_entity: &RemoteEntity) {
+    pub fn on_entity_channel_closing(&mut self, remote_entity: &RemoteEntity) {
         self.entity_waitlist.remove_entity(remote_entity);
     }
 
@@ -109,10 +109,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         // execute the action and emit an event
         for action in incoming_actions {
             match action {
-                EntityAction::SpawnEntity(local_entity, components) => {
+                EntityAction::SpawnEntity(remote_entity, components) => {
                     // set up entity
                     let world_entity = world.spawn_entity();
-                    local_world_manager.insert_remote_entity(&world_entity, local_entity);
+                    local_world_manager.insert_remote_entity(&world_entity, remote_entity);
 
                     self.outgoing_events
                         .push(EntityEvent::<E>::SpawnEntity(world_entity));
@@ -120,7 +120,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     // read component list
                     for component_kind in components {
                         let component = incoming_components
-                            .remove(&(local_entity, component_kind))
+                            .remove(&(remote_entity, component_kind))
                             .unwrap();
 
                         self.process_insert(world, world_entity, component, &component_kind);
@@ -260,10 +260,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                         global_world_manager.to_global_entity_converter(),
                         local_world_manager,
                     );
-                    let result = component.relations_complete(&converter);
-                    if let Err(_error) = result {
-                        panic!("Can't map remote entity to global entity. For component: `{:?}`", component.name());
-                    }
+                    component.relations_complete(&converter);
                 }
                 self.finish_insert(world, world_entity, component, &component_kind);
             }
@@ -338,7 +335,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     let mut waiting_entities = HashSet::new();
                     waiting_entities.insert(waiting_entity);
 
-                    info!("queuing waiting part of update");
                     let handle = self.entity_waitlist.queue(
                         &waiting_entities,
                         &mut self.update_waitlist_store,

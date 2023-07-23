@@ -13,7 +13,7 @@ pub enum ComponentChannel {
 
 // EntityChannel
 
-#[derive(PartialEq, Eq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum EntityChannelState {
     Spawning,
     Spawned,

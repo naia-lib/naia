@@ -85,7 +85,7 @@ pub use world::{
         component_kinds::{ComponentKind, ComponentKinds},
         component_update::{ComponentFieldUpdate, ComponentUpdate},
         diff_mask::DiffMask,
-        entity_property::{EntityProperty, WaitingCompleteError},
+        entity_property::EntityProperty,
         property::Property,
         property_mutate::{PropertyMutate, PropertyMutator},
         replica_ref::{
