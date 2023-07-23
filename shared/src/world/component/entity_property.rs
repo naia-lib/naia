@@ -444,12 +444,8 @@ impl EntityProperty {
                 if let Some((index, mutator)) = &inner.will_publish {
                     if let Some(accessor) = &inner.will_delegate {
                         // will publish and delegate
-                        let mut new_impl = DelegatedRelation::new(
-                            new_global_entity,
-                            accessor,
-                            mutator,
-                            *index,
-                        );
+                        let mut new_impl =
+                            DelegatedRelation::new(new_global_entity, accessor, mutator, *index);
                         new_impl.global_entity = new_global_entity;
                         self.inner = EntityRelation::Delegated(new_impl);
                     } else {

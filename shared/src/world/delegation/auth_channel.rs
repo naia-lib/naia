@@ -54,10 +54,7 @@ impl EntityAuthData {
             HostType::Server => EntityAuthStatus::Available,
             HostType::Client => EntityAuthStatus::Requested,
         };
-        Self {
-            host_type,
-            status,
-        }
+        Self { host_type, status }
     }
 
     fn auth_status(&self) -> HostEntityAuthStatus {

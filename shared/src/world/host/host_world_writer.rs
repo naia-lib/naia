@@ -236,8 +236,9 @@ impl HostWorldWriter {
             }
             EntityActionEvent::InsertComponent(world_entity, component) => {
                 if !host_manager
-                        .world_channel
-                        .entity_channel_is_open(world_entity) || !world.has_component_of_kind(world_entity, component)
+                    .world_channel
+                    .entity_channel_is_open(world_entity)
+                    || !world.has_component_of_kind(world_entity, component)
                 {
                     EntityActionType::Noop.ser(writer);
 

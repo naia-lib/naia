@@ -642,7 +642,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 if !self.global_world_manager.entity_is_delegated(entity) {
                     panic!("attempting to despawn entity that is not yet delegated. Delegation needs some time to be confirmed by the Server, so check that a despawn is possible by calling `commands.entity(..).replication_config(..).is_delegated()` first.");
                 }
-                if self.global_world_manager.entity_authority_status(entity) != Some(EntityAuthStatus::Granted) {
+                if self.global_world_manager.entity_authority_status(entity)
+                    != Some(EntityAuthStatus::Granted)
+                {
                     panic!("attempting to despawn entity that we do not have authority over");
                 }
             }
@@ -782,7 +784,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         client_is_origin: bool,
     ) {
         // this should happen BEFORE the world entity/component has been translated over to Delegated
-        self.global_world_manager.entity_register_auth_for_delegation(entity);
+        self.global_world_manager
+            .entity_register_auth_for_delegation(entity);
 
         if client_is_origin {
             // send message to server
@@ -791,15 +794,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
         } else {
             self.entity_complete_delegation(world, entity);
-            self.global_world_manager.entity_update_authority(entity, EntityAuthStatus::Available);
+            self.global_world_manager
+                .entity_update_authority(entity, EntityAuthStatus::Available);
         }
     }
 
-    fn entity_complete_delegation<W: WorldMutType<E>>(
-        &mut self,
-        world: &mut W,
-        entity: &E,
-    ) {
+    fn entity_complete_delegation<W: WorldMutType<E>>(&mut self, world: &mut W, entity: &E) {
         world.entity_enable_delegation(&self.global_world_manager, &entity);
 
         // this should happen AFTER the world entity/component has been translated over to Delegated
@@ -1215,7 +1215,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.entity_complete_delegation(world, &world_entity);
                     self.add_redundant_remote_entity_to_host(&world_entity, remote_entity);
 
-                    self.global_world_manager.entity_update_authority(&world_entity, EntityAuthStatus::Granted);
+                    self.global_world_manager
+                        .entity_update_authority(&world_entity, EntityAuthStatus::Granted);
 
                     self.incoming_events.push_auth_grant(world_entity);
                 }

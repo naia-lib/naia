@@ -431,9 +431,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             return;
         }
         if !entity_channel.is_spawned() {
-            panic!(
-                "World Channel: should only receive this event if entity channel is spawned"
-            );
+            panic!("World Channel: should only receive this event if entity channel is spawned");
         }
         if !entity_channel.component_is_inserting(component_kind) {
             panic!("World Channel: cannot insert component if component channel has not been initialized");

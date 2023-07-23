@@ -132,7 +132,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                             response_events.push(event_message.action.to_response_event(&entity));
                         }
                         None => {
-                            panic!("System Event message has no entity... `{:?}`", event_message.action);
+                            panic!(
+                                "System Event message has no entity... `{:?}`",
+                                event_message.action
+                            );
                         }
                     };
                 }

@@ -2,10 +2,14 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::{messages::{
-    message_kinds::{MessageKind, MessageKinds},
-    named::Named,
-}, world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut, LocalEntityAndGlobalEntityConverter, MessageContainer, RemoteEntity};
+use crate::{
+    messages::{
+        message_kinds::{MessageKind, MessageKinds},
+        named::Named,
+    },
+    world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
+    LocalEntityAndGlobalEntityConverter, MessageContainer, RemoteEntity,
+};
 
 // MessageBuilder
 pub trait MessageBuilder: Send + Sync {
