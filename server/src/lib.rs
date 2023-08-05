@@ -17,12 +17,14 @@ pub mod transport;
 pub mod shared {
     pub use naia_shared::{
         default_channels, BitReader, BitWrite, BitWriter, Random, Serde, SerdeErr, SignedInteger,
-        SignedVariableInteger, SocketConfig, UnsignedInteger, UnsignedVariableInteger,
+        SignedVariableInteger, SocketConfig, UnsignedInteger, UnsignedVariableInteger, ConstBitLength,
     };
 }
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};
 }
+
+pub use naia_shared::SerdeBevyServer as SerdeBevy;
 
 mod cache_map;
 mod connection;

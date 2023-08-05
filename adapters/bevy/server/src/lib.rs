@@ -1,9 +1,10 @@
 pub use naia_bevy_shared::{EntityAuthStatus, Random, ReceiveEvents, Tick};
 pub use naia_server::{
     shared::{
-        BitReader, BitWrite, BitWriter, Serde, SerdeErr, SignedInteger, SignedVariableInteger,
-        UnsignedInteger, UnsignedVariableInteger,
+        BitReader, BitWrite, BitWriter, SerdeErr, SignedInteger, SignedVariableInteger,
+        UnsignedInteger, UnsignedVariableInteger, ConstBitLength,
     },
+    SerdeBevy as Serde,
     transport, ReplicationConfig, RoomKey, ServerConfig, UserKey,
 };
 

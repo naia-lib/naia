@@ -1,4 +1,4 @@
-pub use naia_serde_derive::{Serde, SerdeBevy, SerdeHecs, SerdeInternal};
+pub use naia_serde_derive::{Serde, SerdeBevyShared, SerdeBevyServer, SerdeBevyClient, SerdeHecs, SerdeInternal};
 
 mod bit_counter;
 mod bit_reader;
@@ -21,5 +21,5 @@ pub use integer::{
 };
 pub use outgoing_packet::OutgoingPacket;
 pub use serde::{
-    ConstBitLength, Serde, Serde as SerdeInternal, Serde as SerdeBevy, Serde as SerdeHecs,
+    ConstBitLength, Serde, Serde as SerdeInternal, Serde as SerdeBevyShared, Serde as SerdeBevyClient, Serde as SerdeBevyServer, Serde as SerdeHecs,
 };

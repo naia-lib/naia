@@ -16,9 +16,21 @@ pub fn derive_serde_internal(input: proc_macro::TokenStream) -> proc_macro::Toke
     derive_serde_common(input, serde_crate_name)
 }
 
-#[proc_macro_derive(SerdeBevy)]
-pub fn derive_serde_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+#[proc_macro_derive(SerdeBevyShared)]
+pub fn derive_serde_bevy_shared(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let serde_crate_name = quote! { naia_bevy_shared };
+    derive_serde_common(input, serde_crate_name)
+}
+
+#[proc_macro_derive(SerdeBevyServer)]
+pub fn derive_serde_bevy_server(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let serde_crate_name = quote! { naia_bevy_server };
+    derive_serde_common(input, serde_crate_name)
+}
+
+#[proc_macro_derive(SerdeBevyClient)]
+pub fn derive_serde_bevy_client(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let serde_crate_name = quote! { naia_bevy_client };
     derive_serde_common(input, serde_crate_name)
 }
 
