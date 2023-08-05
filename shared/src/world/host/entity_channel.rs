@@ -1,4 +1,3 @@
-
 use crate::{world::host::world_channel::CheckedMap, ComponentKind};
 
 // ComponentChannel

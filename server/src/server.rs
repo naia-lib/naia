@@ -1813,7 +1813,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for response_event in extra_deferred_events {
             match response_event {
                 EntityResponseEvent::DespawnEntity(entity) => {
-
                     if self
                         .global_world_manager
                         .entity_is_public_and_client_owned(&entity)

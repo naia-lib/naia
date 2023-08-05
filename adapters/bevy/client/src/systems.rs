@@ -1,5 +1,7 @@
 use std::ops::DerefMut;
 
+use log::warn;
+
 use bevy_ecs::{
     entity::Entity,
     event::Events,
@@ -183,7 +185,11 @@ pub fn before_receive_events(world: &mut World) {
                     event_writer.send(bevy_events::EntityAuthGrantedEvent(entity));
                 }
                 for entity in auth_granted_entities {
-                    world.entity_mut(entity).insert(HostOwned);
+                    if world.get_entity(entity).is_some() {
+                        world.entity_mut(entity).insert(HostOwned);
+                    } else {
+                        warn!("Granted auth to an entity that no longer exists! {:?}", entity);
+                    }
                 }
             }
 
@@ -208,7 +214,11 @@ pub fn before_receive_events(world: &mut World) {
                     event_writer.send(bevy_events::EntityAuthResetEvent(entity));
                 }
                 for entity in auth_reset_entities {
-                    world.entity_mut(entity).remove::<HostOwned>();
+                    if world.get_entity(entity).is_some() {
+                        world.entity_mut(entity).remove::<HostOwned>();
+                    } else {
+                        warn!("Reset auth to an entity that no longer exists! {:?}", entity);
+                    }
                 }
             }
 

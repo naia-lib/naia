@@ -485,7 +485,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // 1. Set local authority status for Entity
         let success = self.global_world_manager.entity_request_authority(entity);
         if success {
-
             // Reserve Host Entity
             let Some(connection) = &mut self.server_connection else {
                 return;
@@ -527,7 +526,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     fn send_entity_release_auth_message(&mut self, entity: &E) {
-
         // 3. Send request to Server
         let message = EntityEventMessage::new_release_authority(&self.global_world_manager, entity);
         self.send_message::<SystemChannel, EntityEventMessage>(&message);
@@ -619,7 +617,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     pub fn despawn_entity_worldless(&mut self, entity: &E) {
-
         if !self.global_world_manager.has_entity(entity) {
             warn!("attempting to despawn entity that has already been despawned?");
             return;
