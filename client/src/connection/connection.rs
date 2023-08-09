@@ -4,9 +4,9 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds,
-    ConnectionConfig, EntityEventMessage, EntityResponseEvent, HostType, HostWorldEvents, Instant,
-    OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick,
-    WorldMutType, WorldRefType,
+    ConnectionConfig, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType,
+    HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
+    StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -132,6 +132,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                             response_events.push(event_message.action.to_response_event(&entity));
                         }
                         None => {
+                            match &event_message.action {
+                                EntityEventMessageAction::UpdateAuthority(auth_status) => {
+                                    warn!("Received UpdateAuthority({:?}) message for unknown entity.", auth_status);
+                                    continue;
+                                }
+                                _ => {}
+                            }
                             panic!(
                                 "System Event message has no entity... `{:?}`",
                                 event_message.action

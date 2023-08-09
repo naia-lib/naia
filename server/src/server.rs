@@ -965,6 +965,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn insert_component_worldless(&mut self, entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
 
+        if self
+            .global_world_manager
+            .has_component_record(entity, &component_kind)
+        {
+            warn!(
+                "Attempted to add component `{:?}` to entity that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
+                component.name());
+            return;
+        }
+
         self.insert_new_component_into_entity_scopes(entity, &component_kind, None);
 
         // update in world manager

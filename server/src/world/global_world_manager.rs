@@ -110,6 +110,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         component_kind_set.insert(*component_kind);
     }
 
+    pub fn has_component_record(&self, entity: &E, component_kind: &ComponentKind) -> bool {
+        if !self.entity_records.contains_key(entity) {
+            return false;
+        }
+        let component_kind_set = &self.entity_records.get(entity).unwrap().component_kinds;
+        return component_kind_set.contains(component_kind);
+    }
+
     pub fn insert_component_diff_handler(&mut self, entity: &E, component: &mut dyn Replicate) {
         let kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
