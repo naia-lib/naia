@@ -123,7 +123,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                             response_events.push(event_message.action.to_response_event(&entity));
                         }
                         None => {
-                            panic!(
+                            warn!(
                                 "Received `{:?}` with no Entity over SystemChannel!",
                                 event_message.action
                             );
