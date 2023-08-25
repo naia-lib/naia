@@ -1,7 +1,7 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy_app::{App, Plugin as PluginType};
-use bevy_ecs::{entity::Entity, schedule::IntoSystemConfig};
+use bevy_app::{App, Plugin as PluginType, Update};
+use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
 use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin};
 use naia_server::{Server, ServerConfig};
@@ -54,7 +54,7 @@ impl PluginType for Plugin {
 
         app
             // SHARED PLUGIN //
-            .add_plugin(SharedPlugin)
+            .add_plugins(SharedPlugin)
             // RESOURCES //
             .insert_resource(server)
             // EVENTS //
@@ -72,6 +72,6 @@ impl PluginType for Plugin {
             .add_event::<UpdateComponentEvents>()
             .add_event::<RemoveComponentEvents>()
             // SYSTEMS //
-            .add_system(before_receive_events.in_set(BeforeReceiveEvents));
+            .add_systems(Update, before_receive_events.in_set(BeforeReceiveEvents));
     }
 }

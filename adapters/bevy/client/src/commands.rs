@@ -96,7 +96,7 @@ impl LocalDuplicateComponents {
 }
 
 impl BevyCommand for LocalDuplicateComponents {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         WorldMutType::<Entity>::local_duplicate_components(
             &mut world.proxy_mut(),
             &self.mutable_entity,
@@ -118,7 +118,7 @@ impl ConfigureReplicationCommand {
 }
 
 impl BevyCommand for ConfigureReplicationCommand {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         world.resource_scope(|world, mut client: Mut<NaiaClient<Entity>>| {
             client.configure_entity_replication(&mut world.proxy_mut(), &self.entity, self.config);
         });

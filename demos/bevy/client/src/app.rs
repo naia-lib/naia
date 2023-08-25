@@ -1,6 +1,6 @@
 use bevy::{
     prelude::{
-        App, ClearColor, Color, IntoSystemConfig, IntoSystemConfigs, IntoSystemSetConfig, SystemSet,
+        App, ClearColor, Color, IntoSystemConfigs, IntoSystemSetConfig, SystemSet, Startup, Update,
     },
     DefaultPlugins,
 };
@@ -21,13 +21,14 @@ pub fn run() {
         // Bevy Plugins
         .add_plugins(DefaultPlugins)
         // Add Naia Client Plugin
-        .add_plugin(ClientPlugin::new(ClientConfig::default(), protocol()))
+        .add_plugins(ClientPlugin::new(ClientConfig::default(), protocol()))
         // Background Color
         .insert_resource(ClearColor(Color::BLACK))
         // Startup System
-        .add_startup_system(init)
+        .add_systems(Startup, init)
         // Receive Client Events
         .add_systems(
+            Update,
             (
                 events::connect_events,
                 events::disconnect_events,
@@ -45,11 +46,12 @@ pub fn run() {
                 .in_set(ReceiveEvents),
         )
         // Tick Event
-        .configure_set(Tick.after(ReceiveEvents))
-        .add_system(events::tick_events.in_set(Tick))
+        .configure_set(Update, Tick.after(ReceiveEvents))
+        .add_systems(Update, events::tick_events.in_set(Tick))
         // Realtime Gameplay Loop
-        .configure_set(MainLoop.after(Tick))
+        .configure_set(Update, MainLoop.after(Tick))
         .add_systems(
+            Update,
             (
                 input::key_input,
                 input::cursor_input,
