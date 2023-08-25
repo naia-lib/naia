@@ -49,7 +49,7 @@ pub fn cursor_input(
 }
 
 fn window_relative_mouse_position(window: &Window) -> Option<Vec2> {
-    let Some(mut cursor_pos) = window.cursor_position() else {
+    let Some(cursor_pos) = window.cursor_position() else {
         return None
     };
 
