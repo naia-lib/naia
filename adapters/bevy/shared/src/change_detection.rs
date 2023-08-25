@@ -1,6 +1,7 @@
 use bevy_ecs::{
     entity::Entity,
     event::EventWriter,
+    prelude::Event,
     query::{Added, With},
     removal_detection::RemovedComponents,
     system::Query,
@@ -10,6 +11,7 @@ use naia_shared::{ComponentKind, Replicate};
 
 use crate::HostOwned;
 
+#[derive(Event)]
 pub enum HostSyncEvent {
     Insert(Entity, ComponentKind),
     Remove(Entity, ComponentKind),
