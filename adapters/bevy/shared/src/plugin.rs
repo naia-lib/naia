@@ -1,6 +1,5 @@
 use bevy_app::{App, Plugin as PluginType, Update};
-use bevy_ecs::schedule::IntoSystemConfigs;
-use bevy_ecs::schedule::IntoSystemSetConfig;
+use bevy_ecs::schedule::{IntoSystemConfigs, IntoSystemSetConfig};
 
 use crate::{
     change_detection::{on_despawn, HostSyncEvent},
