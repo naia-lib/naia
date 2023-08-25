@@ -1,5 +1,5 @@
-use bevy_app::{App, Plugin as PluginType};
-use bevy_ecs::schedule::{IntoSystemConfig, IntoSystemSetConfig};
+use bevy_app::{App, Plugin as PluginType, Update};
+use bevy_ecs::schedule::{IntoSystemConfigs, IntoSystemSetConfig};
 
 use crate::{
     change_detection::{on_despawn, HostSyncEvent},
@@ -15,9 +15,9 @@ impl PluginType for SharedPlugin {
             // EVENTS //
             .add_event::<HostSyncEvent>()
             // SYSTEM SETS //
-            .configure_set(HostSyncChangeTracking.before(BeforeReceiveEvents))
-            .configure_set(BeforeReceiveEvents.before(ReceiveEvents))
+            .configure_set(Update, HostSyncChangeTracking.before(BeforeReceiveEvents))
+            .configure_set(Update, BeforeReceiveEvents.before(ReceiveEvents))
             // SYSTEMS //
-            .add_system(on_despawn.in_set(HostSyncChangeTracking));
+            .add_systems(Update, on_despawn.in_set(HostSyncChangeTracking));
     }
 }
