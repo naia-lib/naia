@@ -102,7 +102,7 @@ impl ConfigureReplicationCommand {
 }
 
 impl BevyCommand for ConfigureReplicationCommand {
-    fn write(self, world: &mut World) {
+    fn apply(self, world: &mut World) {
         world.resource_scope(|world, mut server: Mut<NaiaServer<Entity>>| {
             server.configure_entity_replication(&mut world.proxy_mut(), &self.entity, self.config);
         });

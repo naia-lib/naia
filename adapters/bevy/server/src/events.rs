@@ -102,9 +102,11 @@ pub struct SpawnEntityEvent(pub UserKey, pub Entity);
 pub struct DespawnEntityEvent(pub UserKey, pub Entity);
 
 // PublishEntityEvent
+#[derive(Event)]
 pub struct PublishEntityEvent(pub UserKey, pub Entity);
 
 // UnpublishEntityEvent
+#[derive(Event)]
 pub struct UnpublishEntityEvent(pub UserKey, pub Entity);
 
 // InsertComponentEvent

@@ -78,18 +78,23 @@ pub struct SpawnEntityEvent(pub Entity);
 pub struct DespawnEntityEvent(pub Entity);
 
 // PublishEntityEvent
+#[derive(Event)]
 pub struct PublishEntityEvent(pub Entity);
 
 // UnpublishEntityEvent
+#[derive(Event)]
 pub struct UnpublishEntityEvent(pub Entity);
 
 // EntityAuthGrantedEvent
+#[derive(Event)]
 pub struct EntityAuthGrantedEvent(pub Entity);
 
 // EntityAuthDeniedEvent
+#[derive(Event)]
 pub struct EntityAuthDeniedEvent(pub Entity);
 
 // EntityAuthResetEvent
+#[derive(Event)]
 pub struct EntityAuthResetEvent(pub Entity);
 
 // InsertComponentEvent
