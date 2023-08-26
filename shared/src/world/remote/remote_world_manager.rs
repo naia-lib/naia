@@ -251,17 +251,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             .entity_waitlist
             .collect_ready_items(&mut self.insert_waitlist_store)
         {
+            let converter = EntityConverter::new(
+                global_world_manager.to_global_entity_converter(),
+                local_world_manager,
+            );
+
             for (world_entity, mut component) in list {
+
                 let component_kind = component.kind();
+
                 self.insert_waitlist_map
                     .remove(&(world_entity, component_kind));
+
                 {
-                    let converter = EntityConverter::new(
-                        global_world_manager.to_global_entity_converter(),
-                        local_world_manager,
-                    );
                     component.relations_complete(&converter);
                 }
+
                 self.finish_insert(world, world_entity, component, &component_kind);
             }
         }

@@ -391,7 +391,6 @@ impl EntityProperty {
                 RemotePublicRelation::new(None, public_relation.index, &public_relation.mutator),
             ),
             (Some(public_relation), None, Some(local_entity), Some(Err(_))) => {
-                info!("2 setting inner to RemoteWaiting");
                 EntityRelation::RemoteWaiting(RemoteWaitingRelation::new_public(
                     local_entity.take_remote(),
                     public_relation.index,
@@ -430,6 +429,12 @@ impl EntityProperty {
 
     pub fn waiting_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
         match &mut self.inner {
+            EntityRelation::RemoteOwned(_) | EntityRelation::RemotePublic(_) | EntityRelation::Delegated(_) => {
+                // already complete! this is intended behavior:
+                // waiting Component/Message only sets EntityProperty to RemoteWaiting if it doesn't have an entity in-scope
+                // but the entire Component/Message is put on the waitlist if even one of it's EntityProperties is RemoteWaiting
+                // and `waiting_complete` is called on all of them, so we skip the already in-scope ones here
+            }
             EntityRelation::RemoteWaiting(inner) => {
                 let new_global_entity = {
                     if let Ok(global_entity) =
@@ -462,12 +467,9 @@ impl EntityProperty {
                 }
             }
             EntityRelation::HostOwned(_)
-            | EntityRelation::RemoteOwned(_)
-            | EntityRelation::RemotePublic(_)
             | EntityRelation::Local(_)
-            | EntityRelation::Delegated(_)
             | EntityRelation::Invalid => {
-                panic!("Can't complete a RemoteOwned, HostOwned, Delegated, or Invalid EntityProperty!");
+                panic!("Can't complete EntityProperty of type: `{:?}`!", self.inner.name());
             }
         }
     }
