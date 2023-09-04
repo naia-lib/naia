@@ -257,7 +257,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             );
 
             for (world_entity, mut component) in list {
-
                 let component_kind = component.kind();
 
                 self.insert_waitlist_map
