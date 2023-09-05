@@ -5,7 +5,6 @@ pub struct FileBitWriter {
     scratch: u8,
     scratch_index: u8,
     buffer: Vec<u8>,
-    buffer_index: usize,
 }
 
 impl FileBitWriter {
@@ -15,21 +14,19 @@ impl FileBitWriter {
             scratch: 0,
             scratch_index: 0,
             buffer: Vec::new(),
-            buffer_index: 0,
         }
     }
 
     fn finalize(&mut self) {
         if self.scratch_index > 0 {
-            self.buffer[self.buffer_index] =
-                (self.scratch << (8 - self.scratch_index)).reverse_bits();
-            self.buffer_index += 1;
+            let value = (self.scratch << (8 - self.scratch_index)).reverse_bits();
+            self.buffer.push(value);
         }
     }
 
     pub fn to_bytes(mut self) -> Box<[u8]> {
         self.finalize();
-        Box::from(&self.buffer[0..self.buffer_index])
+        Box::from(self.buffer)
     }
 }
 
@@ -45,9 +42,8 @@ impl BitWrite for FileBitWriter {
         self.scratch_index += 1;
 
         if self.scratch_index >= 8 {
-            self.buffer[self.buffer_index] = self.scratch.reverse_bits();
-
-            self.buffer_index += 1;
+            let value = self.scratch.reverse_bits();
+            self.buffer.push(value);
             self.scratch_index -= 8;
             self.scratch = 0;
         }
