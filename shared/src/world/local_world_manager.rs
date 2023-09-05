@@ -9,7 +9,7 @@ use naia_socket_shared::Instant;
 use crate::{
     world::{
         entity::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
-        local_entity_map::{LocalEntityMap, LocalEntityRecord},
+        local_entity_map::LocalEntityMap,
     },
     EntityAndLocalEntityConverter, EntityDoesNotExistError, KeyGenerator,
 };
@@ -91,10 +91,12 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             .insert_with_remote_entity(*world_entity, remote_entity);
     }
 
-    pub(crate) fn remove_by_world_entity(&mut self, world_entity: &E) -> LocalEntityRecord {
-        self.entity_map
+    pub(crate) fn remove_by_world_entity(&mut self, world_entity: &E) {
+        let record = self.entity_map
             .remove_by_world_entity(world_entity)
-            .expect("Attempting to despawn entity which does not exist!")
+            .expect("Attempting to despawn entity which does not exist!");
+        let host_entity = record.host().unwrap();
+        self.recycle_host_entity(host_entity);
     }
 
     pub fn remove_by_remote_entity(&mut self, remote_entity: &RemoteEntity) -> E {
@@ -102,9 +104,12 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             .entity_map
             .world_entity_from_remote(remote_entity)
             .expect("Attempting to despawn entity which does not exist!"));
-        self.entity_map
+        let record = self.entity_map
             .remove_by_world_entity(&world_entity)
             .expect("Attempting to despawn entity which does not exist!");
+        if let Some(host_entity) = record.host() {
+            self.recycle_host_entity(host_entity);
+        }
         world_entity
     }
 
@@ -148,8 +153,13 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             .has_both_host_and_remote_entity(world_entity)
     }
 
-    pub fn remove_redundant_host_entity(&mut self, world_entity: &E) -> HostEntity {
-        self.entity_map.remove_redundant_host_entity(world_entity)
+    pub fn has_world_entity(&self, world_entity: &E) -> bool {
+        self.entity_map.contains_world_entity(world_entity)
+    }
+
+    pub fn remove_redundant_host_entity(&mut self, world_entity: &E) {
+        let host_entity = self.entity_map.remove_redundant_host_entity(world_entity);
+        self.recycle_host_entity(host_entity);
     }
 
     pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) -> RemoteEntity {

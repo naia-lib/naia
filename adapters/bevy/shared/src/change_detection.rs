@@ -27,6 +27,7 @@ pub fn on_despawn(
         if let Ok(_) = query.get(entity) {
             // Entity is still alive, expected if Auth is reset on Delegated Entity
         } else {
+            // info!("despawn on HostOwned entity: {:?}", entity);
             events.send(HostSyncEvent::Despawn(entity));
         }
     }

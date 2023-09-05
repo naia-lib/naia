@@ -524,8 +524,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         local_world_manager: &mut LocalWorldManager<E>,
         entity: &E,
     ) {
-        let local_record = local_world_manager.remove_by_world_entity(entity);
-        local_world_manager.recycle_host_entity(local_record.host().unwrap());
+        local_world_manager.remove_by_world_entity(entity);
     }
 
     fn on_host_entity_channel_closed(
@@ -534,8 +533,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         entity: &E,
     ) {
         // this is only used by remote tracked entities
-        let host_entity = local_world_manager.remove_redundant_host_entity(entity);
-        local_world_manager.recycle_host_entity(host_entity);
+        if local_world_manager.has_world_entity(entity) {
+            local_world_manager.remove_redundant_host_entity(entity);
+        }
     }
 
     fn on_component_channel_opened(&mut self, entity: &E, component_kind: &ComponentKind) {

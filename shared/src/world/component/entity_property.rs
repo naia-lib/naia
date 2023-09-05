@@ -113,19 +113,18 @@ impl EntityRelation {
         &self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
     ) -> Option<E> {
-        match self {
-            EntityRelation::HostOwned(inner) => inner.get(converter),
-            EntityRelation::RemoteOwned(inner) => inner.get(converter),
-            EntityRelation::RemotePublic(inner) => inner.get(converter),
-            EntityRelation::Local(inner) => inner.get(converter),
-            EntityRelation::Delegated(inner) => inner.get(converter),
-            EntityRelation::Invalid => {
-                panic!("Invalid EntityProperty should never call get()");
-            }
-            EntityRelation::RemoteWaiting(_) => {
-                panic!("RemoteWaiting EntityProperty should never call get()");
+        let inner_global_entity = self.get_global_entity();
+
+        if let Some(global_entity) = inner_global_entity {
+            if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
+                return Some(world_entity);
+            } else {
+                warn!("Could not find World Entity from Global Entity `{:?}`, in order to get the EntityRelation value!", global_entity);
+                return None;
             }
         }
+        warn!("Could not get EntityRelation value, because EntityRelation has no GlobalEntity!");
+        return None;
     }
     fn set<E: Copy + Eq + Hash>(
         &mut self,
@@ -429,7 +428,9 @@ impl EntityProperty {
 
     pub fn waiting_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
         match &mut self.inner {
-            EntityRelation::RemoteOwned(_) | EntityRelation::RemotePublic(_) | EntityRelation::Delegated(_) => {
+            EntityRelation::RemoteOwned(_)
+            | EntityRelation::RemotePublic(_)
+            | EntityRelation::Delegated(_) => {
                 // already complete! this is intended behavior:
                 // waiting Component/Message only sets EntityProperty to RemoteWaiting if it doesn't have an entity in-scope
                 // but the entire Component/Message is put on the waitlist if even one of it's EntityProperties is RemoteWaiting
@@ -466,10 +467,11 @@ impl EntityProperty {
                     self.inner = EntityRelation::RemoteOwned(new_impl);
                 }
             }
-            EntityRelation::HostOwned(_)
-            | EntityRelation::Local(_)
-            | EntityRelation::Invalid => {
-                panic!("Can't complete EntityProperty of type: `{:?}`!", self.inner.name());
+            EntityRelation::HostOwned(_) | EntityRelation::Local(_) | EntityRelation::Invalid => {
+                panic!(
+                    "Can't complete EntityProperty of type: `{:?}`!",
+                    self.inner.name()
+                );
             }
         }
     }
@@ -747,21 +749,6 @@ impl HostOwnedRelation {
         return bit_counter.bits_needed();
     }
 
-    pub fn get<E: Copy + Eq + Hash>(
-        &self,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-    ) -> Option<E> {
-        if let Some(global_entity) = self.global_entity {
-            if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                return Some(world_entity);
-            } else {
-                warn!("Could not find World Entity from Global Entity, in order to get the EntityRelation value!");
-                return None;
-            }
-        }
-        return None;
-    }
-
     pub fn set<E: Copy + Eq + Hash>(
         &mut self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
@@ -808,21 +795,6 @@ impl RemoteOwnedRelation {
 
     fn new_with_value(global_entity: Option<GlobalEntity>) -> Self {
         Self { global_entity }
-    }
-
-    pub fn get<E: Copy + Eq + Hash>(
-        &self,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-    ) -> Option<E> {
-        if let Some(global_entity) = self.global_entity {
-            if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                return Some(world_entity);
-            } else {
-                warn!("Could not find World Entity from Global Entity, in order to get the EntityRelation value!");
-                return None;
-            }
-        }
-        return None;
     }
 
     pub fn write_local_entity(
@@ -910,21 +882,6 @@ impl RemotePublicRelation {
         }
     }
 
-    pub fn get<E: Copy + Eq + Hash>(
-        &self,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-    ) -> Option<E> {
-        if let Some(global_entity) = self.global_entity {
-            if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                return Some(world_entity);
-            } else {
-                warn!("Could not find World Entity from Global Entity, in order to get the EntityRelation value!");
-                return None;
-            }
-        }
-        return None;
-    }
-
     pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
         let mut bit_counter = BitCounter::new(0, 0, u32::MAX);
         self.write(&mut bit_counter, converter);
@@ -995,21 +952,6 @@ impl DelegatedRelation {
             mutator: mutator.clone_new(),
             index,
         }
-    }
-
-    pub fn get<E: Copy + Eq + Hash>(
-        &self,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-    ) -> Option<E> {
-        if let Some(global_entity) = self.global_entity {
-            if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                return Some(world_entity);
-            } else {
-                warn!("Could not find World Entity from Global Entity, in order to get the EntityRelation value!");
-                return None;
-            }
-        }
-        return None;
     }
 
     pub fn set<E: Copy + Eq + Hash>(
@@ -1136,21 +1078,6 @@ struct LocalRelation {
 impl LocalRelation {
     pub fn new(global_entity: Option<GlobalEntity>) -> Self {
         Self { global_entity }
-    }
-
-    pub fn get<E: Copy + Eq + Hash>(
-        &self,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
-    ) -> Option<E> {
-        if let Some(global_entity) = self.global_entity {
-            if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
-                return Some(world_entity);
-            } else {
-                warn!("Could not find World Entity from Global Entity, in order to get the EntityRelation value!");
-                return None;
-            }
-        }
-        return None;
     }
 
     pub fn set<E: Copy + Eq + Hash>(

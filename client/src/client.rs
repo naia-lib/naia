@@ -1153,6 +1153,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .on_entity_channel_opened(&local_entity);
                 }
                 EntityResponseEvent::DespawnEntity(entity) => {
+                    if self.global_world_manager.entity_is_delegated(&entity) {
+                        if let Some(status) = self.global_world_manager.entity_authority_status(&entity) {
+                            if status != EntityAuthStatus::Available {
+                                self.entity_update_authority(&entity, EntityAuthStatus::Available);
+                            }
+                        }
+                    }
                     self.global_world_manager.remove_entity_record(&entity);
                 }
                 EntityResponseEvent::InsertComponent(entity, component_kind) => {
