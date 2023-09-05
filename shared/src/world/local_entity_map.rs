@@ -127,28 +127,30 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
         let Some(record) = self.world_to_local.get_mut(world_entity) else {
             panic!("no record exists for entity");
         };
-            if record.host.is_some() && record.remote.is_some() {
-                let Some(host_entity) = record.host.take() else {
-                    panic!("record does not have host entity");
-            };
-                    self.host_to_world.remove(&host_entity);
-                    return host_entity;
-            } else {
-                panic!("record does not have dual host and remote entity");
-            }
+        if record.host.is_some() && record.remote.is_some() {
+            let Some(host_entity) = record.host.take() else {
+                panic!("record does not have host entity");
+        };
+                self.host_to_world.remove(&host_entity);
+                return host_entity;
+        } else {
+            panic!("record does not have dual host and remote entity");
+        }
     }
 
     pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) -> RemoteEntity {
-        if let Some(record) = self.world_to_local.get_mut(world_entity) {
+        let Some(record) = self.world_to_local.get_mut(world_entity) else {
+            panic!("no record exists for entity");
+        };
             if record.host.is_some() && record.remote.is_some() {
-                if let Some(remote_entity) = record.remote.take() {
-                    // info!("removing redundant remote entity: {:?}", remote_entity);
+                let Some(remote_entity) = record.remote.take() else {
+                    panic!("record does not have remote entity");
+                };
                     self.remote_to_world.remove(&remote_entity);
                     return remote_entity;
-                }
+            } else {
+                panic!("record does not have dual host and remote entity");
             }
-        }
-        panic!("can't remove redundant remote entity");
     }
 
     pub fn has_both_host_and_remote_entity(&self, world_entity: &E) -> bool {

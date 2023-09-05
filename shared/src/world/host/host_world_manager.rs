@@ -124,7 +124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         // add entity
         let new_host_entity = self
             .world_channel
-            .track_remote_entity(local_world_manager, entity);
+            .track_remote_entity(local_world_manager, entity, &component_kinds);
 
         // info!("--- tracking remote entity ---");
 

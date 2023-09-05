@@ -84,7 +84,7 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
 
     pub fn insert_remote_entity(&mut self, world_entity: &E, remote_entity: RemoteEntity) {
         if self.entity_map.contains_remote_entity(&remote_entity) {
-            panic!("Remote Entity already exists!");
+            panic!("Remote Entity `{:?}` already exists!", remote_entity);
         }
 
         self.entity_map

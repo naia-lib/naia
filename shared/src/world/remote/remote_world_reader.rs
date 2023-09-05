@@ -42,7 +42,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
     pub fn track_hosts_redundant_remote_entity(
         &mut self,
         remote_entity: &RemoteEntity,
-        component_kinds: Vec<ComponentKind>,
+        component_kinds: &Vec<ComponentKind>,
     ) {
         self.receiver
             .track_hosts_redundant_remote_entity(remote_entity, component_kinds);

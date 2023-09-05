@@ -25,14 +25,14 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
     pub fn track_hosts_redundant_remote_entity(
         &mut self,
         entity: &E,
-        component_kinds: Vec<ComponentKind>,
+        component_kinds: &Vec<ComponentKind>,
     ) {
         let mut entity_channel = EntityChannel::new(*entity);
         entity_channel.spawned = true;
         for component_kind in component_kinds {
             entity_channel
                 .components
-                .insert(component_kind, ComponentChannel::new(None));
+                .insert(*component_kind, ComponentChannel::new(None));
         }
         self.entity_channels.insert(*entity, entity_channel);
     }

@@ -640,7 +640,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             connection
                 .base
                 .remote_world_reader
-                .track_hosts_redundant_remote_entity(remote_entity, component_kinds);
+                .track_hosts_redundant_remote_entity(remote_entity, &component_kinds);
         }
     }
 

@@ -228,6 +228,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         &mut self,
         local_world_manager: &mut LocalWorldManager<E>,
         entity: &E,
+        component_kinds: &Vec<ComponentKind>,
     ) -> HostEntity {
         if self.host_world.contains_key(entity) {
             panic!("World Channel: cannot track remote entity that already exists");
@@ -241,6 +242,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             .insert(*entity, EntityChannel::new_spawned());
 
         let new_host_entity = self.on_entity_channel_opening(local_world_manager, entity);
+
+        self.delivered_actions.track_hosts_redundant_remote_entity(entity, component_kinds);
 
         new_host_entity
     }
@@ -261,7 +264,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.remote_world.remove(entity);
         self.entity_channels.remove(entity).unwrap();
 
-        self.on_host_entity_channel_closed(local_world_manager, entity);
+        local_world_manager.remove_redundant_host_entity(entity);
+
+        self.delivered_actions.untrack_hosts_redundant_remote_entity(entity);
     }
 
     pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
@@ -305,7 +310,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn on_remote_spawn_entity(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
         entity: &E,
         inserted_component_kinds: &HashSet<ComponentKind>,
     ) {
@@ -365,7 +369,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
             self.outgoing_actions
                 .send_message(EntityActionEvent::DespawnEntity(*entity));
-            self.on_remote_entity_channel_closed(local_world_manager, entity);
         }
     }
 
@@ -527,17 +530,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         local_world_manager.remove_by_world_entity(entity);
     }
 
-    fn on_host_entity_channel_closed(
-        &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
-    ) {
-        // this is only used by remote tracked entities
-        if local_world_manager.has_world_entity(entity) {
-            local_world_manager.remove_redundant_host_entity(entity);
-        }
-    }
-
     fn on_component_channel_opened(&mut self, entity: &E, component_kind: &ComponentKind) {
         self.diff_handler
             .register_component(&self.address, entity, component_kind);
@@ -569,7 +561,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 EntityAction::SpawnEntity(entity, components) => {
                     let component_set: HashSet<ComponentKind> =
                         components.iter().copied().collect();
-                    self.on_remote_spawn_entity(local_world_manager, &entity, &component_set);
+                    self.on_remote_spawn_entity(&entity, &component_set);
                 }
                 EntityAction::DespawnEntity(entity) => {
                     self.on_remote_despawn_entity(local_world_manager, &entity);
