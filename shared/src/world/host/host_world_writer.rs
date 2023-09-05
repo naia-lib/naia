@@ -157,8 +157,8 @@ impl HostWorldWriter {
         }
 
         // Finish actions by writing false ActionContinue bit
-        false.ser(writer);
         writer.release_bits(1);
+        false.ser(writer);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -428,13 +428,13 @@ impl HostWorldWriter {
             );
 
             // write ComponentContinue finish bit, release
-            false.ser(writer);
             writer.release_bits(1);
+            false.ser(writer);
         }
 
         // write EntityContinue finish bit, release
-        false.ser(writer);
         writer.release_bits(1);
+        false.ser(writer);
     }
 
     /// For a given entity, write component value updates into a packet

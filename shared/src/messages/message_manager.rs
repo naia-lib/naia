@@ -261,8 +261,8 @@ impl MessageManager {
         }
 
         // write ChannelContinue finish bit, release
-        false.ser(writer);
         writer.release_bits(1);
+        false.ser(writer);
     }
 
     // Incoming Messages

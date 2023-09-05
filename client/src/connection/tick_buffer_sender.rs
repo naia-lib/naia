@@ -112,13 +112,13 @@ impl TickBufferSender {
             }
 
             // write MessageContinue finish bit, release
-            false.ser(writer);
             writer.release_bits(1);
+            false.ser(writer);
         }
 
         // write ChannelContinue finish bit, release
-        false.ser(writer);
         writer.release_bits(1);
+        false.ser(writer);
     }
 }
 
