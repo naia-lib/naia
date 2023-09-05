@@ -11,6 +11,7 @@ mod impls;
 mod integer;
 mod outgoing_packet;
 mod serde;
+mod file_bit_writer;
 
 pub use bit_counter::BitCounter;
 pub use bit_reader::{BitReader, OwnedBitReader};
@@ -26,3 +27,4 @@ pub use serde::{
     ConstBitLength, Serde, Serde as SerdeInternal, Serde as SerdeBevyShared,
     Serde as SerdeBevyClient, Serde as SerdeBevyServer, Serde as SerdeHecs,
 };
+pub use file_bit_writer::FileBitWriter;

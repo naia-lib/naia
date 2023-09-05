@@ -24,7 +24,7 @@ pub use naia_derive::{
     Channel, Message, MessageBevy, MessageHecs, Replicate, ReplicateBevy, ReplicateHecs,
 };
 pub use naia_serde::{
-    BitReader, BitWrite, BitWriter, ConstBitLength, OutgoingPacket, OwnedBitReader, Serde,
+    BitReader, BitWrite, BitWriter, FileBitWriter, ConstBitLength, OutgoingPacket, OwnedBitReader, Serde,
     SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeHecs, SerdeIntegerConversion,
     SerdeInternal, SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger,
     MTU_SIZE_BITS, MTU_SIZE_BYTES,
