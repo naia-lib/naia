@@ -10,11 +10,7 @@ use super::{
     entity_action_event::EntityActionEvent, host_world_manager::ActionId,
     user_diff_handler::UserDiffHandler,
 };
-use crate::{
-    world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager},
-    ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, GlobalWorldManagerType,
-    HostEntity, Instant, ReliableSender,
-};
+use crate::{world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager}, ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, GlobalWorldManagerType, HostEntity, Instant, ReliableSender, WorldRefType};
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
 
@@ -590,8 +586,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.outgoing_actions.take_next_messages()
     }
 
-    pub fn collect_next_updates(
+    pub fn collect_next_updates<W: WorldRefType<E>>(
         &self,
+        world: &W,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
     ) -> HashMap<E, HashSet<ComponentKind>> {
         let mut output = HashMap::new();
@@ -602,7 +599,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                     if global_world_manager.entity_is_replicating(entity)
                         && !self
                             .diff_handler
-                            .diff_mask_is_clear(entity, &component_kind)
+                            .diff_mask_is_clear(entity, &component_kind) && world.has_component_of_kind(entity, &component_kind)
                     {
                         if !output.contains_key(entity) {
                             output.insert(*entity, HashSet::new());

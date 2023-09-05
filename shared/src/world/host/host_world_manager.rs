@@ -6,13 +6,9 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    sequence_list::SequenceList,
-    world::{
-        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-    },
-    ComponentKind, DiffMask, EntityAction, HostEntity, Instant, MessageIndex, PacketIndex,
-};
+use crate::{sequence_list::SequenceList, world::{
+    entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+}, ComponentKind, DiffMask, EntityAction, HostEntity, Instant, MessageIndex, PacketIndex, WorldRefType};
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
 
@@ -233,8 +229,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         }
     }
 
-    pub fn take_outgoing_events(
+    pub fn take_outgoing_events<W: WorldRefType<E>>(
         &mut self,
+        world: &W,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         now: &Instant,
         rtt_millis: &f32,
@@ -243,7 +240,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
             next_send_actions: self.world_channel.take_next_actions(now, rtt_millis),
             next_send_updates: self
                 .world_channel
-                .collect_next_updates(global_world_manager),
+                .collect_next_updates(world, global_world_manager),
         }
     }
 }

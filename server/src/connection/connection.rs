@@ -176,6 +176,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         let rtt_millis = self.ping_manager.rtt_average;
         self.base.collect_messages(now, &rtt_millis);
         let mut host_world_events = self.base.host_world_manager.take_outgoing_events(
+            world,
             global_world_manager,
             now,
             &rtt_millis,
