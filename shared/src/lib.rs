@@ -24,10 +24,10 @@ pub use naia_derive::{
     Channel, Message, MessageBevy, MessageHecs, Replicate, ReplicateBevy, ReplicateHecs,
 };
 pub use naia_serde::{
-    BitReader, BitWrite, BitWriter, FileBitWriter, ConstBitLength, OutgoingPacket, OwnedBitReader, Serde,
-    SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeHecs, SerdeIntegerConversion,
-    SerdeInternal, SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger,
-    MTU_SIZE_BITS, MTU_SIZE_BYTES,
+    BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
+    Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeHecs,
+    SerdeIntegerConversion, SerdeInternal, SignedInteger, SignedVariableInteger, UnsignedInteger,
+    UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
     link_condition_logic, Instant, LinkConditionerConfig, Random, SocketConfig, TimeQueue,

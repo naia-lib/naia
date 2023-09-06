@@ -1154,7 +1154,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityResponseEvent::DespawnEntity(entity) => {
                     if self.global_world_manager.entity_is_delegated(&entity) {
-                        if let Some(status) = self.global_world_manager.entity_authority_status(&entity) {
+                        if let Some(status) =
+                            self.global_world_manager.entity_authority_status(&entity)
+                        {
                             if status != EntityAuthStatus::Available {
                                 self.entity_update_authority(&entity, EntityAuthStatus::Available);
                             }

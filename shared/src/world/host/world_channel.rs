@@ -10,7 +10,11 @@ use super::{
     entity_action_event::EntityActionEvent, host_world_manager::ActionId,
     user_diff_handler::UserDiffHandler,
 };
-use crate::{world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager}, ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, GlobalWorldManagerType, HostEntity, Instant, ReliableSender, WorldRefType};
+use crate::{
+    world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager},
+    ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, GlobalWorldManagerType,
+    HostEntity, Instant, ReliableSender, WorldRefType,
+};
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
 
@@ -239,7 +243,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         let new_host_entity = self.on_entity_channel_opening(local_world_manager, entity);
 
-        self.delivered_actions.track_hosts_redundant_remote_entity(entity, component_kinds);
+        self.delivered_actions
+            .track_hosts_redundant_remote_entity(entity, component_kinds);
 
         new_host_entity
     }
@@ -262,7 +267,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
         local_world_manager.remove_redundant_host_entity(entity);
 
-        self.delivered_actions.untrack_hosts_redundant_remote_entity(entity);
+        self.delivered_actions
+            .untrack_hosts_redundant_remote_entity(entity);
     }
 
     pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
@@ -599,7 +605,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                     if global_world_manager.entity_is_replicating(entity)
                         && !self
                             .diff_handler
-                            .diff_mask_is_clear(entity, &component_kind) && world.has_component_of_kind(entity, &component_kind)
+                            .diff_mask_is_clear(entity, &component_kind)
+                        && world.has_component_of_kind(entity, &component_kind)
                     {
                         if !output.contains_key(entity) {
                             output.insert(*entity, HashSet::new());

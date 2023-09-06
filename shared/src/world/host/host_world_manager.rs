@@ -6,9 +6,14 @@ use std::{
     time::Duration,
 };
 
-use crate::{sequence_list::SequenceList, world::{
-    entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-}, ComponentKind, DiffMask, EntityAction, HostEntity, Instant, MessageIndex, PacketIndex, WorldRefType};
+use crate::{
+    sequence_list::SequenceList,
+    world::{
+        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+    },
+    ComponentKind, DiffMask, EntityAction, HostEntity, Instant, MessageIndex, PacketIndex,
+    WorldRefType,
+};
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
 
@@ -118,9 +123,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         component_kinds: Vec<ComponentKind>,
     ) -> HostEntity {
         // add entity
-        let new_host_entity = self
-            .world_channel
-            .track_remote_entity(local_world_manager, entity, &component_kinds);
+        let new_host_entity =
+            self.world_channel
+                .track_remote_entity(local_world_manager, entity, &component_kinds);
 
         // info!("--- tracking remote entity ---");
 

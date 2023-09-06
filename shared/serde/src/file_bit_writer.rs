@@ -32,7 +32,6 @@ impl FileBitWriter {
 
 impl BitWrite for FileBitWriter {
     fn write_bit(&mut self, bit: bool) {
-
         self.scratch <<= 1;
 
         if bit {

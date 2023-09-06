@@ -7,17 +7,18 @@ mod bit_reader;
 mod bit_writer;
 mod constants;
 mod error;
+mod file_bit_writer;
 mod impls;
 mod integer;
 mod outgoing_packet;
 mod serde;
-mod file_bit_writer;
 
 pub use bit_counter::BitCounter;
 pub use bit_reader::{BitReader, OwnedBitReader};
 pub use bit_writer::{BitWrite, BitWriter};
 pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
 pub use error::SerdeErr;
+pub use file_bit_writer::FileBitWriter;
 pub use integer::{
     SerdeIntegerConversion, SignedInteger, SignedVariableInteger, UnsignedInteger,
     UnsignedVariableInteger,
@@ -27,4 +28,3 @@ pub use serde::{
     ConstBitLength, Serde, Serde as SerdeInternal, Serde as SerdeBevyShared,
     Serde as SerdeBevyClient, Serde as SerdeBevyServer, Serde as SerdeHecs,
 };
-pub use file_bit_writer::FileBitWriter;

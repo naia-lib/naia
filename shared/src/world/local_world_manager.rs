@@ -92,7 +92,8 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     pub(crate) fn remove_by_world_entity(&mut self, world_entity: &E) {
-        let record = self.entity_map
+        let record = self
+            .entity_map
             .remove_by_world_entity(world_entity)
             .expect("Attempting to despawn entity which does not exist!");
         let host_entity = record.host().unwrap();
@@ -104,7 +105,8 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
             .entity_map
             .world_entity_from_remote(remote_entity)
             .expect("Attempting to despawn entity which does not exist!"));
-        let record = self.entity_map
+        let record = self
+            .entity_map
             .remove_by_world_entity(&world_entity)
             .expect("Attempting to despawn entity which does not exist!");
         if let Some(host_entity) = record.host() {
