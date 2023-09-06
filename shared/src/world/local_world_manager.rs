@@ -119,10 +119,6 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
         self.host_entity_generator.recycle_key(&host_entity.value());
     }
 
-    pub(crate) fn has_host_entity(&self, host_entity: &HostEntity) -> bool {
-        self.entity_map.contains_host_entity(host_entity)
-    }
-
     // Remote entities
 
     pub fn has_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {

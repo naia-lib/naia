@@ -28,10 +28,6 @@ impl LocalEntityRecord {
         self.host
     }
 
-    pub(crate) fn remote(&self) -> Option<RemoteEntity> {
-        self.remote
-    }
-
     pub(crate) fn is_only_remote(&self) -> bool {
         self.host.is_none() && self.remote.is_some()
     }
@@ -172,19 +168,6 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
 
     pub fn contains_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {
         self.remote_to_world.contains_key(remote_entity)
-    }
-
-    pub fn len(&self) -> usize {
-        self.world_to_local.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.world_to_local.is_empty()
-    }
-
-    pub fn clear(&mut self) {
-        self.world_to_local.clear();
-        self.host_to_world.clear();
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&E, &LocalEntityRecord)> {
