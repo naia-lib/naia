@@ -1,4 +1,4 @@
-pub use naia_bevy_shared::{EntityAuthStatus, Random, ReceiveEvents, Tick};
+pub use naia_bevy_shared::{EntityAuthStatus, Random, ReceiveEvents, Tick, Replicate};
 pub use naia_server::{
     shared::{
         BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, SerdeErr,
