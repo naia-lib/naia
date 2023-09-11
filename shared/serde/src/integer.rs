@@ -7,7 +7,7 @@ pub type SignedInteger<const BITS: u8> = SerdeInteger<true, false, BITS>;
 pub type UnsignedVariableInteger<const BITS: u8> = SerdeInteger<false, true, BITS>;
 pub type SignedVariableInteger<const BITS: u8> = SerdeInteger<true, true, BITS>;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct SerdeInteger<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> {
     inner: i128,
 }
