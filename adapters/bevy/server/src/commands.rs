@@ -74,8 +74,8 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         return self;
     }
 
-    fn authority(&'a self, _server: &Server) -> Option<EntityAuthStatus> {
-        todo!()
+    fn authority(&'a self, server: &Server) -> Option<EntityAuthStatus> {
+        server.entity_authority_status(&self.id())
     }
 
     fn pause_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a> {

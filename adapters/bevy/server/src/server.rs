@@ -11,7 +11,8 @@ use naia_server::{
 };
 
 use naia_bevy_shared::{
-    Channel, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, Message, Tick,
+    Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
+    GlobalEntity, Message, Tick,
 };
 
 // Server
@@ -153,6 +154,10 @@ impl<'w> Server<'w> {
 
     pub(crate) fn entity_take_authority(&mut self, entity: &Entity) {
         self.server.entity_take_authority(entity);
+    }
+
+    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {
+        self.server.entity_authority_status(entity)
     }
 }
 

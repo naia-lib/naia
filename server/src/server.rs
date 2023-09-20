@@ -1403,6 +1403,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         iter.into_iter().flatten()
     }
 
+    pub(crate) fn room_entities(&self, room_key: &RoomKey) -> impl Iterator<Item = &E> {
+        let iter = if let Some(room) = self.rooms.get(room_key) {
+            Some(room.entities())
+        } else {
+            None
+        };
+        iter.into_iter().flatten()
+    }
+
     /// Sends a message to all connected users in a given Room using a given channel
     pub(crate) fn room_broadcast_message(
         &mut self,

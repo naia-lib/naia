@@ -138,6 +138,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
     pub fn entities_count(&self) -> usize {
         self.server.room_entities_count(&self.key)
     }
+
+    pub fn entities(&self) -> impl Iterator<Item = &E> {
+        self.server.room_entities(&self.key)
+    }
 }
 
 // RoomMut
