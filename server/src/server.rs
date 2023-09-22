@@ -1968,11 +1968,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         // TODO: evaluate whether the Entity really needs to be despawned!
                         // What if the Entity shares another Room with this User? It shouldn't be despawned!
 
-                        //remove entity from user connection
-                        connection
+                        // check if host has entity, because it may have been removed from room before despawning, and we don't want to double despawn
+                        if connection
                             .base
                             .host_world_manager
-                            .despawn_entity(&removed_entity);
+                            .host_has_entity(&removed_entity)
+                        {
+                            //remove entity from user connection
+                            connection
+                                .base
+                                .host_world_manager
+                                .despawn_entity(&removed_entity);
+                        }
                     }
                 }
             }

@@ -156,8 +156,9 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     pub fn remove_redundant_host_entity(&mut self, world_entity: &E) {
-        let host_entity = self.entity_map.remove_redundant_host_entity(world_entity);
-        self.recycle_host_entity(host_entity);
+        if let Some(host_entity) = self.entity_map.remove_redundant_host_entity(world_entity) {
+            self.recycle_host_entity(host_entity);
+        }
     }
 
     pub fn remove_redundant_remote_entity(&mut self, world_entity: &E) -> RemoteEntity {

@@ -600,7 +600,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         let mut output = HashMap::new();
 
         for (entity, entity_channel) in self.entity_channels.iter() {
-            if entity_channel.is_spawned() {
+            if entity_channel.is_spawned() && world.has_entity(entity) {
                 for component_kind in entity_channel.inserted_components() {
                     if global_world_manager.entity_is_replicating(entity)
                         && !self
