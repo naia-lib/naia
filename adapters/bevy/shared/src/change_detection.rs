@@ -22,7 +22,7 @@ pub fn on_despawn(
     mut events: EventWriter<HostSyncEvent>,
     mut removals: RemovedComponents<HostOwned>,
 ) {
-    for entity in removals.iter() {
+    for entity in removals.read() {
         events.send(HostSyncEvent::Despawn(entity));
     }
 }
@@ -41,7 +41,7 @@ pub fn on_component_removed<R: Replicate>(
     query: Query<Entity, With<HostOwned>>,
     mut removals: RemovedComponents<R>,
 ) {
-    for removal_entity in removals.iter() {
+    for removal_entity in removals.read() {
         if let Ok(entity) = query.get(removal_entity) {
             events.send(HostSyncEvent::Remove(entity, ComponentKind::of::<R>()));
         }
