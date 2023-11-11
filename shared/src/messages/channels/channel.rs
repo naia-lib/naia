@@ -51,6 +51,7 @@ impl ChannelSettings {
 
 #[derive(Clone)]
 pub struct ReliableSettings {
+    /// Resend un-ACK'd messages after (rtt_resend_factor * currently_measured_round_trip_time).
     pub rtt_resend_factor: f32,
 }
 
@@ -77,14 +78,39 @@ impl TickBufferSettings {
     }
 }
 
-// ChannelMode
 #[derive(Clone)]
 pub enum ChannelMode {
+    /// Messages can be dropped, duplicated and/or arrive in any order.
+    /// Resend=no, Dedupe=no, Order=no
     UnorderedUnreliable,
+
+    /// Like SequencedReliable, but messages may not arrive at all. Received old
+    /// messages are not delivered.
+    /// Resend=no, Dedupe=yes, Order=yes
     SequencedUnreliable,
+
+    /// Messages arrive without duplicates, but in any order.
+    /// Resend=yes, Dedupe=yes, Order=no
     UnorderedReliable(ReliableSettings),
+
+    /// Messages arrive without duplicates and in order, but only the most recent gets
+    /// delivered. For example, given messages sent A->B->C and received in order A->C->B,
+    /// only A->C gets delivered. B gets dropped because it is not the most recent.
+    /// Resend=yes, Dedupe=yes, Order=yes
     SequencedReliable(ReliableSettings),
+
+    /// Messages arrive in order and without duplicates.
+    /// Resend=yes, Dedupe=yes, Order=yes
     OrderedReliable(ReliableSettings),
+
+    /// Per-tick message buffering, useful for predictive client applications. The Client
+    /// ticks "ahead in the future" of the Server and dilates its clock such that the
+    /// Server should always have a buffer of messages to read from for each player on
+    /// each and every Tick. Messages for which the Client hasn't received an ACK are
+    /// pro-actively sent every single Tick until receiving that receipt or it is measured
+    /// that the Tick has passed on the Server. This avoids typical resend latency in the
+    /// event of dropped packets, but also means messages can be lost in the worst case.
+    /// Note: can only be sent from client-to-server
     TickBuffered(TickBufferSettings),
 }
 
