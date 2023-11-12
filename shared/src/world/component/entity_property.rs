@@ -149,6 +149,27 @@ impl EntityRelation {
             }
         }
     }
+    fn set_to_none(
+        &mut self,
+    ) {
+        match self {
+            EntityRelation::HostOwned(inner) => {
+                inner.set_to_none();
+            }
+            EntityRelation::Local(inner) => {
+                inner.set_to_none();
+            }
+            EntityRelation::Delegated(inner) => {
+                inner.set_to_none();
+            }
+            EntityRelation::RemoteOwned(_)
+            | EntityRelation::RemoteWaiting(_)
+            | EntityRelation::RemotePublic(_)
+            | EntityRelation::Invalid => {
+                panic!("Remote EntityProperty should never be set manually.");
+            }
+        }
+    }
     fn mirror(&mut self, other: &EntityProperty) {
         match self {
             EntityRelation::HostOwned(inner) => match &other.inner {
@@ -674,6 +695,12 @@ impl EntityProperty {
         self.inner.set(converter, entity);
     }
 
+    pub fn set_to_none(
+        &mut self,
+    ) {
+        self.inner.set_to_none();
+    }
+
     pub fn mirror(&mut self, other: &EntityProperty) {
         self.inner.mirror(other);
     }
@@ -761,6 +788,13 @@ impl HostOwnedRelation {
             warn!("Could not find Global Entity from World Entity, in order to set the EntityRelation value!");
             return;
         }
+    }
+
+    pub fn set_to_none(
+        &mut self,
+    ) {
+        self.global_entity = None;
+        self.mutate();
     }
 
     pub fn mirror_waiting(&mut self) {
@@ -968,6 +1002,13 @@ impl DelegatedRelation {
         }
     }
 
+    pub fn set_to_none(
+        &mut self,
+    ) {
+        self.global_entity = None;
+        self.mutate();
+    }
+
     pub fn set_global_entity(&mut self, other_global_entity: &Option<GlobalEntity>) {
         self.global_entity = other_global_entity.clone();
         self.mutate();
@@ -1091,6 +1132,12 @@ impl LocalRelation {
             warn!("Could not find Global Entity from World Entity, in order to set the EntityRelation value!");
             return;
         }
+    }
+
+    pub fn set_to_none(
+        &mut self,
+    ) {
+        self.global_entity = None;
     }
 
     pub fn mirror_waiting(&mut self) {
