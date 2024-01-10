@@ -133,15 +133,15 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         self.world.entities.insert(component_map)
     }
 
-    fn duplicate_entity(&mut self, entity: &Entity) -> Entity {
+    fn local_duplicate_entity(&mut self, entity: &Entity) -> Entity {
         let new_entity = self.spawn_entity();
 
-        self.duplicate_components(&new_entity, entity);
+        self.local_duplicate_components(&new_entity, entity);
 
         new_entity
     }
 
-    fn duplicate_components(&mut self, new_entity: &Entity, old_entity: &Entity) {
+    fn local_duplicate_components(&mut self, new_entity: &Entity, old_entity: &Entity) {
         for component_kind in self.component_kinds(old_entity) {
             let mut boxed_option: Option<Box<dyn Replicate>> = None;
             if let Some(component) = self.component_of_kind(old_entity, &component_kind) {

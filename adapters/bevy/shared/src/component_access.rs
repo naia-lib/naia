@@ -3,7 +3,7 @@ use std::{any::Any, marker::PhantomData};
 use bevy_app::{App, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs, world::World};
 
-use naia_shared::{ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
+use naia_shared::{GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::{
     change_detection::{on_component_added, on_component_removed},
@@ -33,6 +33,20 @@ pub trait ComponentAccess: Send + Sync {
         entity: &Entity,
         boxed_component: Box<dyn Replicate>,
     );
+    fn component_publish(
+        &self,
+        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        world: &mut World,
+        entity: &Entity,
+    );
+    fn component_unpublish(&self, world: &mut World, entity: &Entity);
+    fn component_enable_delegation(
+        &self,
+        global_manager: &dyn GlobalWorldManagerType<Entity>,
+        world: &mut World,
+        entity: &Entity,
+    );
+    fn component_disable_delegation(&self, world: &mut World, entity: &Entity);
 }
 
 pub struct ComponentAccessor<R: Replicate> {
@@ -124,5 +138,52 @@ impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
             phantom_r: PhantomData,
         };
         Box::new(new_me)
+    }
+
+    fn component_publish(
+        &self,
+        global_manager: &dyn GlobalWorldManagerType<Entity>,
+        world: &mut World,
+        entity: &Entity,
+    ) {
+        if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
+            let component_kind = component_mut.kind();
+            let diff_mask_size = component_mut.diff_mask_size();
+            let mutator =
+                global_manager.register_component(entity, &component_kind, diff_mask_size);
+            component_mut.publish(&mutator);
+        }
+    }
+
+    fn component_unpublish(&self, world: &mut World, entity: &Entity) {
+        if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
+            component_mut.unpublish();
+        }
+    }
+
+    fn component_enable_delegation(
+        &self,
+        global_manager: &dyn GlobalWorldManagerType<Entity>,
+        world: &mut World,
+        entity: &Entity,
+    ) {
+        if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
+            let accessor = global_manager.get_entity_auth_accessor(entity);
+            if global_manager.entity_needs_mutator_for_delegation(entity) {
+                let component_kind = component_mut.kind();
+                let diff_mask_size = component_mut.diff_mask_size();
+                let mutator =
+                    global_manager.register_component(entity, &component_kind, diff_mask_size);
+                component_mut.enable_delegation(&accessor, Some(&mutator));
+            } else {
+                component_mut.enable_delegation(&accessor, None);
+            }
+        }
+    }
+
+    fn component_disable_delegation(&self, world: &mut World, entity: &Entity) {
+        if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
+            component_mut.disable_delegation();
+        }
     }
 }

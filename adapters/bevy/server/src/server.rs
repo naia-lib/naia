@@ -6,12 +6,13 @@ use bevy_ecs::{
 };
 
 use naia_server::{
-    shared::SocketConfig, transport::Socket, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
-    TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
+    shared::SocketConfig, transport::Socket, ReplicationConfig, RoomKey, RoomMut, RoomRef,
+    Server as NaiaServer, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
 use naia_bevy_shared::{
-    Channel, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, Message, Tick,
+    Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
+    GlobalEntity, Message, Tick,
 };
 
 // Server
@@ -131,12 +132,32 @@ impl<'w> Server<'w> {
 
     // Entity Replication
 
-    pub fn enable_replication(&mut self, entity: &Entity) {
-        self.server.enable_replication(entity);
+    pub(crate) fn enable_replication(&mut self, entity: &Entity) {
+        self.server.enable_entity_replication(entity);
     }
 
-    pub fn disable_replication(&mut self, entity: &Entity) {
-        self.server.disable_replication(entity);
+    pub(crate) fn disable_replication(&mut self, entity: &Entity) {
+        self.server.disable_entity_replication(entity);
+    }
+
+    pub(crate) fn pause_replication(&mut self, entity: &Entity) {
+        self.server.pause_entity_replication(entity);
+    }
+
+    pub(crate) fn resume_replication(&mut self, entity: &Entity) {
+        self.server.resume_entity_replication(entity);
+    }
+
+    pub(crate) fn replication_config(&self, entity: &Entity) -> Option<ReplicationConfig> {
+        self.server.entity_replication_config(entity)
+    }
+
+    pub(crate) fn entity_take_authority(&mut self, entity: &Entity) {
+        self.server.entity_take_authority(entity);
+    }
+
+    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {
+        self.server.entity_authority_status(entity)
     }
 }
 

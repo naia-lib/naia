@@ -1,8 +1,8 @@
 use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, EntityEvent, Message, MessageContainer, MessageKind,
-    Replicate, Tick,
+    Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, Message,
+    MessageContainer, MessageKind, Replicate, Tick,
 };
 
 use crate::NaiaClientError;
@@ -17,6 +17,11 @@ pub struct Events<E: Copy> {
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
     spawns: Vec<E>,
     despawns: Vec<E>,
+    publishes: Vec<E>,
+    unpublishes: Vec<E>,
+    auth_grants: Vec<E>,
+    auth_denies: Vec<E>,
+    auth_resets: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<E>>,
     removes: HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>,
     updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
@@ -41,6 +46,11 @@ impl<E: Copy> Events<E> {
             messages: HashMap::new(),
             spawns: Vec::new(),
             despawns: Vec::new(),
+            publishes: Vec::new(),
+            unpublishes: Vec::new(),
+            auth_grants: Vec::new(),
+            auth_denies: Vec::new(),
+            auth_resets: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
             updates: HashMap::new(),
@@ -163,6 +173,31 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
+    pub(crate) fn push_publish(&mut self, entity: E) {
+        self.publishes.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_unpublish(&mut self, entity: E) {
+        self.unpublishes.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_auth_grant(&mut self, entity: E) {
+        self.auth_grants.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_auth_deny(&mut self, entity: E) {
+        self.auth_denies.push(entity);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_auth_reset(&mut self, entity: E) {
+        self.auth_resets.push(entity);
+        self.empty = false;
+    }
+
     pub(crate) fn push_insert(&mut self, entity: E, component_kind: ComponentKind) {
         if !self.inserts.contains_key(&component_kind) {
             self.inserts.insert(component_kind, Vec::new());
@@ -191,26 +226,37 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn receive_world_events(&mut self, entity_events: Vec<EntityEvent<E>>) {
+    pub(crate) fn receive_world_events(
+        &mut self,
+        entity_events: Vec<EntityEvent<E>>,
+    ) -> Vec<EntityResponseEvent<E>> {
+        let mut response_events = Vec::new();
         for event in entity_events {
             match event {
                 EntityEvent::SpawnEntity(entity) => {
                     self.push_spawn(entity);
+                    response_events.push(EntityResponseEvent::SpawnEntity(entity));
                 }
                 EntityEvent::DespawnEntity(entity) => {
                     self.push_despawn(entity);
+                    response_events.push(EntityResponseEvent::DespawnEntity(entity));
                 }
                 EntityEvent::InsertComponent(entity, component_kind) => {
                     self.push_insert(entity, component_kind);
+                    response_events
+                        .push(EntityResponseEvent::InsertComponent(entity, component_kind));
                 }
                 EntityEvent::RemoveComponent(entity, component_box) => {
+                    let kind = component_box.kind();
                     self.push_remove(entity, component_box);
+                    response_events.push(EntityResponseEvent::RemoveComponent(entity, kind));
                 }
                 EntityEvent::UpdateComponent(tick, entity, component_kind) => {
                     self.push_update(tick, entity, component_kind);
                 }
             }
         }
+        response_events
     }
 
     pub(crate) fn clear(&mut self) {
@@ -223,6 +269,11 @@ impl<E: Copy> Events<E> {
         self.messages.clear();
         self.spawns.clear();
         self.despawns.clear();
+        self.publishes.clear();
+        self.unpublishes.clear();
+        self.auth_grants.clear();
+        self.auth_denies.clear();
+        self.auth_resets.clear();
         self.inserts.clear();
         self.removes.clear();
         self.updates.clear();
@@ -366,7 +417,7 @@ impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
     }
 }
 
-// Spawn Event
+// Spawn Entity Event
 pub struct SpawnEntityEvent;
 impl<E: Copy> Event<E> for SpawnEntityEvent {
     type Iter = IntoIter<E>;
@@ -381,7 +432,7 @@ impl<E: Copy> Event<E> for SpawnEntityEvent {
     }
 }
 
-// Despawn Event
+// Despawn Entity Event
 pub struct DespawnEntityEvent;
 impl<E: Copy> Event<E> for DespawnEntityEvent {
     type Iter = IntoIter<E>;
@@ -396,7 +447,82 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
     }
 }
 
-// Insert Event
+// Publish Entity Event
+pub struct PublishEntityEvent;
+impl<E: Copy> Event<E> for PublishEntityEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.publishes);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.publishes.is_empty()
+    }
+}
+
+// Unpublish Entity Event
+pub struct UnpublishEntityEvent;
+impl<E: Copy> Event<E> for UnpublishEntityEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.unpublishes);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.unpublishes.is_empty()
+    }
+}
+
+// Auth Grant Entity Event
+pub struct EntityAuthGrantedEvent;
+impl<E: Copy> Event<E> for EntityAuthGrantedEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.auth_grants);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.auth_grants.is_empty()
+    }
+}
+
+// Auth Reset Entity Event
+pub struct EntityAuthResetEvent;
+impl<E: Copy> Event<E> for EntityAuthResetEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.auth_resets);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.auth_resets.is_empty()
+    }
+}
+
+// Auth Deny Entity Event
+pub struct EntityAuthDeniedEvent;
+impl<E: Copy> Event<E> for EntityAuthDeniedEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.auth_denies);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.auth_denies.is_empty()
+    }
+}
+
+// Insert Component Event
 pub struct InsertComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -418,7 +544,7 @@ impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
     }
 }
 
-// Update Event
+// Update Component Event
 pub struct UpdateComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -440,7 +566,7 @@ impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
     }
 }
 
-// Remove Event
+// Remove Component Event
 pub struct RemoveComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }

@@ -66,33 +66,40 @@ impl MutReceiver {
         }
     }
 
-    pub fn mask(&self) -> Option<RwLockReadGuard<DiffMask>> {
-        self.mask.as_ref().read().ok()
+    pub fn mask(&self) -> RwLockReadGuard<DiffMask> {
+        let Ok(mask) = self.mask.as_ref().read() else {
+            panic!("Mask held on current thread");
+        };
+
+        mask
     }
 
     pub fn diff_mask_is_clear(&self) -> bool {
-        if let Ok(mask) = self.mask.as_ref().read() {
-            return mask.is_clear();
-        }
-        true
+        let Ok(mask) = self.mask.as_ref().read() else {
+            panic!("Mask held on current thread");
+        };
+        return mask.is_clear();
     }
 
     pub fn mutate(&self, diff: u8) {
-        if let Ok(mut mask) = self.mask.as_ref().write() {
-            mask.set_bit(diff, true);
-        }
+        let Ok(mut mask) = self.mask.as_ref().write() else {
+            panic!("Mask held on current thread");
+        };
+        mask.set_bit(diff, true);
     }
 
     pub fn or_mask(&self, other_mask: &DiffMask) {
-        if let Ok(mut mask) = self.mask.as_ref().write() {
-            mask.or(other_mask);
-        }
+        let Ok(mut mask) = self.mask.as_ref().write() else {
+            panic!("Mask held on current thread");
+        };
+        mask.or(other_mask);
     }
 
     pub fn clear_mask(&self) {
-        if let Ok(mut mask) = self.mask.as_ref().write() {
-            mask.clear();
-        }
+        let Ok(mut mask) = self.mask.as_ref().write() else {
+            panic!("Mask held on current thread");
+        };
+        mask.clear();
     }
 }
 

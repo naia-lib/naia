@@ -10,7 +10,7 @@ impl EntityAssignment {
     pub fn new(assign: bool) -> Self {
         Self {
             assign,
-            entity: EntityProperty::new(),
+            entity: EntityProperty::new_local(),
         }
     }
 }

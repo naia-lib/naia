@@ -1,15 +1,18 @@
 use naia_serde::SerdeErr;
 
-use crate::world::{
-    component::{
-        component_kinds::ComponentKind,
-        component_update::{ComponentFieldUpdate, ComponentUpdate},
-        replica_ref::{
-            ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+use crate::{
+    world::{
+        component::{
+            component_kinds::ComponentKind,
+            component_update::{ComponentFieldUpdate, ComponentUpdate},
+            replica_ref::{
+                ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+            },
+            replicate::Replicate,
         },
-        replicate::Replicate,
+        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
     },
-    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+    GlobalWorldManagerType,
 };
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
@@ -45,9 +48,9 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// spawn an entity
     fn spawn_entity(&mut self) -> E;
     /// duplicate an entity
-    fn duplicate_entity(&mut self, entity: &E) -> E;
+    fn local_duplicate_entity(&mut self, entity: &E) -> E;
     /// make it so one entity has all the same components as another
-    fn duplicate_components(&mut self, mutable_entity: &E, immutable_entity: &E);
+    fn local_duplicate_components(&mut self, mutable_entity: &E, immutable_entity: &E);
     /// despawn an entity
     fn despawn_entity(&mut self, entity: &E);
 
@@ -104,4 +107,35 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         entity: &E,
         component_kind: &ComponentKind,
     ) -> Option<Box<dyn Replicate>>;
+
+    /// publish entity
+    fn entity_publish(&mut self, global_world_manager: &dyn GlobalWorldManagerType<E>, entity: &E);
+    /// publish component
+    fn component_publish(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        entity: &E,
+        component_kind: &ComponentKind,
+    );
+    /// unpublish entity
+    fn entity_unpublish(&mut self, entity: &E);
+    /// unpublish component
+    fn component_unpublish(&mut self, entity: &E, component_kind: &ComponentKind);
+    /// enable delegation on entity
+    fn entity_enable_delegation(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        entity: &E,
+    );
+    /// enable delegation on component
+    fn component_enable_delegation(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        entity: &E,
+        component_kind: &ComponentKind,
+    );
+    /// disable delegation on entity
+    fn entity_disable_delegation(&mut self, entity: &E);
+    /// disable delegation on component
+    fn component_disable_delegation(&mut self, entity: &E, component_kind: &ComponentKind);
 }

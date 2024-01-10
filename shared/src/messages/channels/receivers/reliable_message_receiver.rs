@@ -59,12 +59,15 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         };
 
         if let Some(entity_set) = full_message.relations_waiting() {
+            //warn!("Queing waiting message!");
             entity_waitlist.queue(
                 &entity_set,
                 &mut self.waitlist_store,
                 (first_index, full_message),
             );
             return;
+        } else {
+            //info!("Received message!");
         }
 
         self.arranger

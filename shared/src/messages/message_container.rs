@@ -3,7 +3,9 @@ use std::{any::Any, collections::HashSet};
 use naia_serde::BitWrite;
 
 use crate::{
-    world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut, LocalEntity,
+    world::entity::{
+        entity_converters::LocalEntityAndGlobalEntityConverterMut, local_entity::RemoteEntity,
+    },
     LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds,
 };
 
@@ -65,7 +67,7 @@ impl MessageContainer {
         return self.inner.kind();
     }
 
-    pub fn relations_waiting(&self) -> Option<HashSet<LocalEntity>> {
+    pub fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
         return self.inner.relations_waiting();
     }
 

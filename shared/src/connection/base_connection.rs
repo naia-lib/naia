@@ -1,6 +1,6 @@
 use std::{hash::Hash, net::SocketAddr};
 
-use naia_serde::{BitWriter, Serde};
+use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{
@@ -13,7 +13,7 @@ use crate::{
         local_world_manager::LocalWorldManager,
         remote::remote_world_reader::RemoteWorldReader,
     },
-    EntityEvent, HostWorldManager, Protocol, RemoteWorldManager, WorldMutType, WorldRefType,
+    HostWorldManager, Protocol, RemoteWorldManager, Tick, WorldRefType,
 };
 
 use super::{
@@ -105,7 +105,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     /// Given a packet payload, start tracking the packet via it's index, attach
     /// the appropriate header, and return the packet's resulting underlying
     /// bytes
-    pub fn write_outgoing_header(&mut self, packet_type: PacketType, writer: &mut BitWriter) {
+    pub fn write_header(&mut self, packet_type: PacketType, writer: &mut BitWriter) {
         // Add header onto message!
         self.ack_manager
             .next_outgoing_packet_header(packet_type)
@@ -117,9 +117,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         self.ack_manager.next_sender_packet_index()
     }
 
-    pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
-        self.host_world_manager
-            .collect_outgoing_messages(rtt_millis);
+    pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+        self.host_world_manager.handle_dropped_packets(rtt_millis);
         self.message_manager
             .collect_outgoing_messages(now, rtt_millis);
     }
@@ -143,7 +142,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         );
     }
 
-    pub fn write_outgoing_packet<W: WorldRefType<E>>(
+    pub fn write_packet<W: WorldRefType<E>>(
         &mut self,
         protocol: &Protocol,
         now: &Instant,
@@ -156,20 +155,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         host_world_events: &mut HostWorldEvents<E>,
     ) {
         // write messages
-        {
-            self.write_messages(
-                &protocol,
-                global_world_manager,
-                writer,
-                packet_index,
-                has_written,
-            );
+        self.write_messages(
+            &protocol,
+            global_world_manager,
+            writer,
+            packet_index,
+            has_written,
+        );
 
-            // finish messages
-            false.ser(writer);
-            writer.release_bits(1);
-        }
-
+        // write world events
         if write_world_events {
             HostWorldWriter::write_into_packet(
                 &protocol.component_kinds,
@@ -186,34 +180,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         }
     }
 
-    pub fn despawn_all_remote_entities<W: WorldMutType<E>>(
+    pub fn read_packet(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
-        world: &mut W,
-    ) -> Vec<EntityEvent<E>> {
-        let mut output = Vec::new();
+        protocol: &Protocol,
+        client_tick: &Tick,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        read_world_events: bool,
+        reader: &mut BitReader,
+    ) -> Result<(), SerdeErr> {
+        // read messages
+        self.message_manager.read_messages(
+            protocol,
+            &mut self.remote_world_manager.entity_waitlist,
+            global_world_manager.to_global_entity_converter(),
+            &self.local_world_manager,
+            reader,
+        )?;
 
-        let remote_entities = self.local_world_manager.remote_entities();
-
-        for entity in remote_entities {
-            // Generate remove event for each component, handing references off just in
-            // case
-            for component_kind in world.component_kinds(&entity) {
-                if let Some(component) = world.remove_component_of_kind(&entity, &component_kind) {
-                    output.push(EntityEvent::<E>::RemoveComponent(entity, component));
-                }
-            }
-
-            // Despawn from global world manager
-            global_world_manager.remote_despawn_entity(&entity);
-
-            // Generate despawn event
-            output.push(EntityEvent::DespawnEntity(entity));
-
-            // Despawn entity
-            world.despawn_entity(&entity);
+        // read world events
+        if read_world_events {
+            self.remote_world_reader.read_world_events(
+                global_world_manager,
+                &mut self.local_world_manager,
+                protocol,
+                client_tick,
+                reader,
+            )?;
         }
 
-        output
+        Ok(())
+    }
+
+    pub fn remote_entities(&self) -> Vec<E> {
+        self.local_world_manager.remote_entities()
     }
 }

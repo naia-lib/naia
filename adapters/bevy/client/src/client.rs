@@ -6,9 +6,12 @@ use bevy_ecs::{
 };
 
 use naia_bevy_shared::{
-    Channel, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, Message, Tick,
+    Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
+    GlobalEntity, Message, Tick,
 };
 use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError};
+
+use crate::ReplicationConfig;
 
 // Client
 #[derive(SystemParam)]
@@ -89,12 +92,28 @@ impl<'w> Client<'w> {
 
     // Entity Registration
 
-    pub fn enable_replication(&mut self, entity: &Entity) {
-        self.client.enable_replication(entity);
+    pub(crate) fn enable_replication(&mut self, entity: &Entity) {
+        self.client.enable_entity_replication(entity);
     }
 
-    pub fn disable_replication(&mut self, entity: &Entity) {
-        self.client.disable_replication(entity);
+    pub(crate) fn disable_replication(&mut self, entity: &Entity) {
+        self.client.disable_entity_replication(entity);
+    }
+
+    pub(crate) fn replication_config(&self, entity: &Entity) -> Option<ReplicationConfig> {
+        self.client.entity_replication_config(entity)
+    }
+
+    pub(crate) fn entity_request_authority(&mut self, entity: &Entity) {
+        self.client.entity_request_authority(entity);
+    }
+
+    pub(crate) fn entity_release_authority(&mut self, entity: &Entity) {
+        self.client.entity_release_authority(entity);
+    }
+
+    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {
+        self.client.entity_authority_status(entity)
     }
 }
 

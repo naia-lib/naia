@@ -3,8 +3,8 @@ use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIte
 use log::warn;
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, EntityEvent, Message, MessageContainer, MessageKind,
-    Replicate, Tick,
+    Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, Message,
+    MessageContainer, MessageKind, Replicate, Tick,
 };
 
 use super::user::{User, UserKey};
@@ -20,6 +20,11 @@ pub struct Events<E: Copy> {
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
     spawns: Vec<(UserKey, E)>,
     despawns: Vec<(UserKey, E)>,
+    publishes: Vec<(UserKey, E)>,
+    unpublishes: Vec<(UserKey, E)>,
+    delegates: Vec<(UserKey, E)>,
+    auth_grants: Vec<(UserKey, E)>,
+    auth_resets: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<(UserKey, E)>>,
     removes: HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>,
     updates: HashMap<ComponentKind, Vec<(UserKey, E)>>,
@@ -37,6 +42,11 @@ impl<E: Copy> Events<E> {
             messages: HashMap::new(),
             spawns: Vec::new(),
             despawns: Vec::new(),
+            publishes: Vec::new(),
+            unpublishes: Vec::new(),
+            delegates: Vec::new(),
+            auth_grants: Vec::new(),
+            auth_resets: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
             updates: HashMap::new(),
@@ -166,6 +176,31 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
+    pub(crate) fn push_publish(&mut self, user_key: &UserKey, entity: &E) {
+        self.publishes.push((*user_key, *entity));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_unpublish(&mut self, user_key: &UserKey, entity: &E) {
+        self.unpublishes.push((*user_key, *entity));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_delegate(&mut self, user_key: &UserKey, entity: &E) {
+        self.delegates.push((*user_key, *entity));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_auth_grant(&mut self, user_key: &UserKey, entity: &E) {
+        self.auth_grants.push((*user_key, *entity));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_auth_reset(&mut self, entity: &E) {
+        self.auth_resets.push(*entity);
+        self.empty = false;
+    }
+
     pub(crate) fn push_insert(
         &mut self,
         user_key: &UserKey,
@@ -214,26 +249,34 @@ impl<E: Copy> Events<E> {
         &mut self,
         user_key: &UserKey,
         entity_events: Vec<EntityEvent<E>>,
-    ) {
+    ) -> Vec<EntityResponseEvent<E>> {
+        let mut response_events = Vec::new();
         for event in entity_events {
             match event {
                 EntityEvent::SpawnEntity(entity) => {
                     self.push_spawn(user_key, &entity);
+                    response_events.push(EntityResponseEvent::SpawnEntity(entity));
                 }
                 EntityEvent::DespawnEntity(entity) => {
                     self.push_despawn(user_key, &entity);
+                    response_events.push(EntityResponseEvent::DespawnEntity(entity));
                 }
                 EntityEvent::InsertComponent(entity, component_kind) => {
                     self.push_insert(user_key, &entity, &component_kind);
+                    response_events
+                        .push(EntityResponseEvent::InsertComponent(entity, component_kind));
                 }
                 EntityEvent::RemoveComponent(entity, component_box) => {
+                    let kind = component_box.kind();
                     self.push_remove(user_key, &entity, component_box);
+                    response_events.push(EntityResponseEvent::RemoveComponent(entity, kind));
                 }
                 EntityEvent::UpdateComponent(_tick, entity, component_kind) => {
                     self.push_update(user_key, &entity, &component_kind);
                 }
             }
         }
+        response_events
     }
 }
 
@@ -241,6 +284,12 @@ impl<E: Copy> Drop for Events<E> {
     fn drop(&mut self) {
         if !self.spawns.is_empty() {
             warn!("Dropped Server Spawn Event(s)! Make sure to handle these through `events.read::<SpawnEntityEvent>()`, and note that this may be an attack vector.");
+        }
+        if !self.publishes.is_empty() {
+            warn!("Dropped Server Publish Entity Event(s)! Make sure to handle these through `events.read::<PublishEntityEvent>()`, and note that this may be an attack vector.");
+        }
+        if !self.unpublishes.is_empty() {
+            warn!("Dropped Server Unpublish Entity Event(s)! Make sure to handle these through `events.read::<UnpublishEntityEvent>()`, and note that this may be an attack vector.");
         }
         if !self.inserts.is_empty() {
             warn!("Dropped Server Insert Event(s)! Make sure to handle these through `events.read::<InsertComponentEvent<Component>>()`, and note that this may be an attack vector.");
@@ -413,7 +462,7 @@ pub(crate) fn push_message(
     list.push((*user_key, message));
 }
 
-// Spawn Event
+// Spawn Entity Event
 pub struct SpawnEntityEvent;
 impl<E: Copy> Event<E> for SpawnEntityEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -428,7 +477,7 @@ impl<E: Copy> Event<E> for SpawnEntityEvent {
     }
 }
 
-// Despawn Event
+// Despawn Entity Event
 pub struct DespawnEntityEvent;
 impl<E: Copy> Event<E> for DespawnEntityEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -443,7 +492,82 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
     }
 }
 
-// Insert Event
+// Publish Entity Event
+pub struct PublishEntityEvent;
+impl<E: Copy> Event<E> for PublishEntityEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.publishes);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.publishes.is_empty()
+    }
+}
+
+// Unpublish Entity Event
+pub struct UnpublishEntityEvent;
+impl<E: Copy> Event<E> for UnpublishEntityEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.unpublishes);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.unpublishes.is_empty()
+    }
+}
+
+// Delegate Entity Event
+pub struct DelegateEntityEvent;
+impl<E: Copy> Event<E> for DelegateEntityEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.delegates);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.delegates.is_empty()
+    }
+}
+
+// Entity Auth Given Event
+pub struct EntityAuthGrantEvent;
+impl<E: Copy> Event<E> for EntityAuthGrantEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.auth_grants);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.auth_grants.is_empty()
+    }
+}
+
+// Entity Auth Reset Event
+pub struct EntityAuthResetEvent;
+impl<E: Copy> Event<E> for EntityAuthResetEvent {
+    type Iter = IntoIter<E>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.auth_resets);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        !events.auth_resets.is_empty()
+    }
+}
+
+// Insert Component Event
 pub struct InsertComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -465,7 +589,7 @@ impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
     }
 }
 
-// Update Event
+// Update Component Event
 pub struct UpdateComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -487,7 +611,7 @@ impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
     }
 }
 
-// Remove Event
+// Remove Component Event
 pub struct RemoveComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }

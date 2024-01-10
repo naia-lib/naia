@@ -3,14 +3,14 @@ use std::{any::TypeId, collections::HashMap};
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
 
 use crate::{
-    ComponentFieldUpdate, ComponentUpdate, LocalEntity, LocalEntityAndGlobalEntityConverter,
+    ComponentFieldUpdate, ComponentUpdate, LocalEntityAndGlobalEntityConverter, RemoteEntity,
     Replicate, ReplicateBuilder,
 };
 
 type NetId = u16;
 
 /// ComponentKind - should be one unique value for each type of Component
-#[derive(Eq, Hash, Copy, Clone, PartialEq)]
+#[derive(Eq, Hash, Copy, Clone, PartialEq, Debug)]
 pub struct ComponentKind {
     type_id: TypeId,
 }
@@ -101,7 +101,7 @@ impl ComponentKinds {
         update: ComponentUpdate,
     ) -> Result<
         (
-            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
             Option<ComponentUpdate>,
         ),
         SerdeErr,

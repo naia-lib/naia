@@ -1,8 +1,8 @@
 use naia_serde::{BitReader, OwnedBitReader, SerdeErr};
 
 use crate::{
-    world::component::component_kinds::ComponentKind, ComponentKinds, LocalEntity,
-    LocalEntityAndGlobalEntityConverter,
+    world::component::component_kinds::ComponentKind, ComponentKinds,
+    LocalEntityAndGlobalEntityConverter, RemoteEntity,
 };
 
 pub struct ComponentUpdate {
@@ -25,7 +25,7 @@ impl ComponentUpdate {
         component_kinds: &ComponentKinds,
     ) -> Result<
         (
-            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
             Option<Self>,
         ),
         SerdeErr,

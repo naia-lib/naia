@@ -1,22 +1,40 @@
 use bevy_ecs::{
     entity::Entity,
     system::{Command as BevyCommand, EntityCommands},
-    world::World,
+    world::{Mut, World},
 };
 
-use naia_bevy_shared::{HostOwned, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldMutType, WorldProxyMut};
+use naia_client::{Client as NaiaClient, ReplicationConfig};
 
 use crate::Client;
 
 // Bevy Commands Extension
 pub trait CommandsExt<'w, 's, 'a> {
+    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
     fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
     fn disable_replication(&'a mut self, client: &mut Client)
         -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
+    fn configure_replication(
+        &'a mut self,
+        config: ReplicationConfig,
+    ) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn replication_config(&'a self, client: &Client) -> Option<ReplicationConfig>;
+    fn request_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn release_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn authority(&'a self, client: &Client) -> Option<EntityAuthStatus>;
 }
 
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
+    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {
+        let old_entity = self.id();
+        let commands = self.commands();
+        let new_entity = commands.spawn_empty().id();
+        let command = LocalDuplicateComponents::new(new_entity, old_entity);
+        commands.add(command);
+        commands.entity(new_entity)
+    }
+
     fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.enable_replication(&self.id());
         self.insert(HostOwned);
@@ -32,24 +50,43 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         return self;
     }
 
-    fn duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {
-        let old_entity = self.id();
+    fn configure_replication(
+        &'a mut self,
+        config: ReplicationConfig,
+    ) -> &'a mut EntityCommands<'w, 's, 'a> {
+        let entity = self.id();
         let commands = self.commands();
-        let new_entity = commands.spawn_empty().id();
-        let command = DuplicateComponents::new(new_entity, old_entity);
+        let command = ConfigureReplicationCommand::new(entity, config);
         commands.add(command);
-        commands.entity(new_entity)
+        return self;
+    }
+
+    fn replication_config(&'a self, client: &Client) -> Option<ReplicationConfig> {
+        client.replication_config(&self.id())
+    }
+
+    fn request_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+        client.entity_request_authority(&self.id());
+        return self;
+    }
+
+    fn release_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+        client.entity_release_authority(&self.id());
+        return self;
+    }
+
+    fn authority(&'a self, client: &Client) -> Option<EntityAuthStatus> {
+        client.entity_authority_status(&self.id())
     }
 }
 
-//// DuplicateComponents Command ////
-
-pub(crate) struct DuplicateComponents {
+//// LocalDuplicateComponents Command ////
+pub(crate) struct LocalDuplicateComponents {
     mutable_entity: Entity,
     immutable_entity: Entity,
 }
 
-impl DuplicateComponents {
+impl LocalDuplicateComponents {
     pub fn new(new_entity: Entity, old_entity: Entity) -> Self {
         Self {
             mutable_entity: new_entity,
@@ -58,12 +95,32 @@ impl DuplicateComponents {
     }
 }
 
-impl BevyCommand for DuplicateComponents {
+impl BevyCommand for LocalDuplicateComponents {
     fn apply(self, world: &mut World) {
-        WorldMutType::<Entity>::duplicate_components(
+        WorldMutType::<Entity>::local_duplicate_components(
             &mut world.proxy_mut(),
             &self.mutable_entity,
             &self.immutable_entity,
         );
+    }
+}
+
+//// ConfigureReplicationCommand Command ////
+pub(crate) struct ConfigureReplicationCommand {
+    entity: Entity,
+    config: ReplicationConfig,
+}
+
+impl ConfigureReplicationCommand {
+    pub fn new(entity: Entity, config: ReplicationConfig) -> Self {
+        Self { entity, config }
+    }
+}
+
+impl BevyCommand for ConfigureReplicationCommand {
+    fn apply(self, world: &mut World) {
+        world.resource_scope(|world, mut client: Mut<NaiaClient<Entity>>| {
+            client.configure_entity_replication(&mut world.proxy_mut(), &self.entity, self.config);
+        });
     }
 }

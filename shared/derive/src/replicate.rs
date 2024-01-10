@@ -78,13 +78,17 @@ pub fn replicate_impl(
     let clone_method = get_clone_method(&replica_name, &properties, &struct_type);
     let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type);
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
+    let publish_method = get_publish_method(&enum_name, &properties, &struct_type);
+    let unpublish_method = get_unpublish_method(&properties, &struct_type);
+    let enable_delegation_method =
+        get_enable_delegation_method(&enum_name, &properties, &struct_type);
+    let disable_delegation_method = get_disable_delegation_method(&properties, &struct_type);
+    let localize_method = get_localize_method(&properties, &struct_type);
     let read_apply_update_method = get_read_apply_update_method(&properties, &struct_type);
     let read_apply_field_update_method =
         get_read_apply_field_update_method(&properties, &struct_type);
     let write_method = get_write_method(&properties, &struct_type);
     let write_update_method = get_write_update_method(&enum_name, &properties, &struct_type);
-    // let has_entity_properties = get_has_entity_properties_method(&properties);
-    // let entities = get_entities_method(&properties, &struct_type);
     let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
     let split_update_method = get_split_update_method(&replica_name, &properties);
@@ -96,7 +100,7 @@ pub fn replicate_impl(
             use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
-                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, LocalEntity,
+                BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, EntityAuthAccessor, RemoteEntity,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
             };
             use super::*;
@@ -144,6 +148,11 @@ pub fn replicate_impl(
                 #dyn_ref_method
                 #dyn_mut_method
                 #mirror_method
+                #publish_method
+                #unpublish_method
+                #enable_delegation_method
+                #disable_delegation_method
+                #localize_method
                 #set_mutator_method
                 #write_method
                 #write_update_method
@@ -483,6 +492,126 @@ fn get_set_mutator_method(properties: &[Property], struct_type: &StructType) -> 
     }
 }
 
+fn get_publish_method(
+    enum_name: &Ident,
+    properties: &[Property],
+    struct_type: &StructType,
+) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let uppercase_variant_name = property.uppercase_variable_name();
+        let new_output_right = quote! {
+                self.#field_name.remote_publish(#enum_name::#uppercase_variant_name as u8, mutator);
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn publish(&mut self, mutator: &PropertyMutator) {
+            #output
+        }
+    }
+}
+
+fn get_unpublish_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let new_output_right = quote! {
+                self.#field_name.remote_unpublish();
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn unpublish(&mut self) {
+            #output
+        }
+    }
+}
+
+fn get_enable_delegation_method(
+    enum_name: &Ident,
+    properties: &[Property],
+    struct_type: &StructType,
+) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let uppercase_variant_name = property.uppercase_variable_name();
+        let new_output_right = quote! {
+                self.#field_name.enable_delegation(accessor, mutator_opt.map(|mutator| (#enum_name::#uppercase_variant_name as u8, mutator)));
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn enable_delegation(&mut self, accessor: &EntityAuthAccessor, mutator_opt: Option<&PropertyMutator>) {
+            #output
+        }
+    }
+}
+
+fn get_disable_delegation_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let new_output_right = quote! {
+                self.#field_name.disable_delegation();
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn disable_delegation(&mut self) {
+            #output
+        }
+    }
+}
+
+fn get_localize_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let new_output_right = quote! {
+                self.#field_name.localize();
+        };
+        let new_output_result = quote! {
+            #output
+            #new_output_right
+        };
+        output = new_output_result;
+    }
+
+    quote! {
+        fn localize(&mut self) {
+            #output
+        }
+    }
+}
+
 pub fn get_new_complete_method(
     replica_name: &Ident,
     enum_name: &Ident,
@@ -555,12 +684,12 @@ pub fn get_new_complete_method(
                 match *struct_type {
                     StructType::Struct => {
                         quote! {
-                             #field_name: EntityProperty::with_mutator(#enum_name::#uppercase_variant_name as u8)
+                             #field_name: EntityProperty::host_owned(#enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     StructType::TupleStruct => {
                         quote! {
-                            EntityProperty::with_mutator(#enum_name::#uppercase_variant_name as u8)
+                            EntityProperty::host_owned(#enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     _ => {
@@ -796,7 +925,7 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
 
                             // property is waiting on waiting_entity, write into the waiting_writer
                             let mut waiting_writer = BitWriter::new();
-                            waiting_entity.owned_ser(&mut waiting_writer);
+                            waiting_entity.copy_to_owned().ser(&mut waiting_writer);
                             waiting_updates.push((waiting_entity, ComponentFieldUpdate::new(#index, waiting_writer.to_owned_reader())));
                         } else {
                             ready_did_write = true;
@@ -829,14 +958,14 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
             converter: &dyn LocalEntityAndGlobalEntityConverter,
             update: ComponentUpdate
         ) -> Result<(
-            Option<Vec<(LocalEntity, ComponentFieldUpdate)>>,
+            Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
             Option<ComponentUpdate>
         ), SerdeErr> {
             let component_kind = ComponentKind::of::<#replica_name>();
             let reader = &mut update.reader();
 
             let mut waiting_did_write = false;
-            let mut waiting_updates: Vec<(LocalEntity, ComponentFieldUpdate)> = Vec::new();
+            let mut waiting_updates: Vec<(RemoteEntity, ComponentFieldUpdate)> = Vec::new();
 
             let mut ready_writer = BitWriter::new();
             let mut ready_did_write = false;
@@ -1098,7 +1227,7 @@ fn get_relations_waiting_method(fields: &[Property], struct_type: &StructType) -
     }
 
     quote! {
-        fn relations_waiting(&self) -> Option<HashSet<LocalEntity>> {
+        fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
             let mut output = HashSet::new();
             #body
             if output.is_empty() {

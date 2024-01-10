@@ -34,7 +34,7 @@ impl<P: Send + Sync> ReliableSender<P> {
         }
     }
 
-    pub fn cleanup_sent_messages(&mut self) {
+    fn cleanup_sent_messages(&mut self) {
         // keep popping off Nones from the front of the Vec
         loop {
             let mut pop = false;

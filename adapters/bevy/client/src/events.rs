@@ -77,8 +77,28 @@ pub struct SpawnEntityEvent(pub Entity);
 #[derive(Event)]
 pub struct DespawnEntityEvent(pub Entity);
 
-// InsertComponentEvent
+// PublishEntityEvent
 #[derive(Event)]
+pub struct PublishEntityEvent(pub Entity);
+
+// UnpublishEntityEvent
+#[derive(Event)]
+pub struct UnpublishEntityEvent(pub Entity);
+
+// EntityAuthGrantedEvent
+#[derive(Event)]
+pub struct EntityAuthGrantedEvent(pub Entity);
+
+// EntityAuthDeniedEvent
+#[derive(Event)]
+pub struct EntityAuthDeniedEvent(pub Entity);
+
+// EntityAuthResetEvent
+#[derive(Event)]
+pub struct EntityAuthResetEvent(pub Entity);
+
+// InsertComponentEvent
+#[derive(Event, Clone)]
 pub struct InsertComponentEvents {
     inner: HashMap<ComponentKind, Vec<Entity>>,
 }
@@ -98,7 +118,7 @@ impl InsertComponentEvents {
 }
 
 // UpdateComponentEvents
-#[derive(Event)]
+#[derive(Event, Clone)]
 pub struct UpdateComponentEvents {
     inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>,
 }
@@ -127,6 +147,22 @@ pub struct RemoveComponentEvents {
 impl RemoveComponentEvents {
     pub fn new(inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>) -> Self {
         Self { inner }
+    }
+
+    pub fn clone_new(&self) -> RemoveComponentEvents {
+        let mut output = HashMap::new();
+
+        for (key, value) in self.inner.iter() {
+            let mut list = Vec::new();
+
+            for item in value {
+                list.push((item.0, item.1.copy_to_box()));
+            }
+
+            output.insert(*key, list);
+        }
+
+        Self::new(output)
     }
 
     pub fn read<C: Replicate>(&self) -> Vec<(Entity, C)> {

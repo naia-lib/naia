@@ -25,11 +25,7 @@ impl ChannelTickBufferSender {
         }
     }
 
-    pub fn collect_outgoing_messages(
-        &mut self,
-        client_sending_tick: &Tick,
-        server_receivable_tick: &Tick,
-    ) {
+    pub fn collect_messages(&mut self, client_sending_tick: &Tick, server_receivable_tick: &Tick) {
         if sequence_greater_than(*client_sending_tick, self.last_sent) || self.never_sent {
             // Remove messages that would never be able to reach the Server
             self.sending_messages
@@ -81,6 +77,9 @@ impl ChannelTickBufferSender {
 
             // check that we can write the next message
             let mut counter = writer.counter();
+            // write MessageContinue bit
+            true.ser(&mut counter);
+            // write data
             self.write_message(
                 message_kinds,
                 converter,
@@ -104,7 +103,6 @@ impl ChannelTickBufferSender {
 
             // write MessageContinue bit
             true.ser(writer);
-
             // write data
             let message_indices = self.write_message(
                 message_kinds,

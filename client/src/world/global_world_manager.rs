@@ -4,16 +4,24 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use log::{info, warn};
+
 use naia_shared::{
-    BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityDoesNotExistError,
-    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, MutChannelType, PropertyMutator,
-    Replicate,
+    BigMap, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus,
+    EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType,
+    HostAuthHandler, HostType, MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
-use crate::world::{entity_owner::EntityOwner, mut_channel::MutChannelData};
+use crate::{
+    world::{entity_owner::EntityOwner, mut_channel::MutChannelData},
+    ReplicationConfig,
+};
 
 pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
+    /// Manages authorization to mutate delegated Entities
+    auth_handler: HostAuthHandler<E>,
+    /// Manages mutation of individual Component properties
     diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
     /// Information about entities in the internal ECS World
     entity_records: HashMap<E, GlobalEntityRecord>,
@@ -24,6 +32,7 @@ pub struct GlobalWorldManager<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     pub fn new() -> Self {
         Self {
+            auth_handler: HostAuthHandler::new(),
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             entity_records: HashMap::default(),
             global_entity_map: BigMap::new(),
@@ -39,6 +48,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
 
         output
+    }
+
+    pub fn has_entity(&self, entity: &E) -> bool {
+        self.entity_records.contains_key(entity)
     }
 
     pub fn entity_owner(&self, entity: &E) -> Option<EntityOwner> {
@@ -96,14 +109,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
         component_kind_set.insert(component_kind);
 
-        let mut_sender = self
-            .diff_handler
-            .as_ref()
-            .write()
-            .expect("DiffHandler should be initialized")
-            .register_component(self, entity, &component_kind, diff_mask_length);
-
-        let prop_mutator = PropertyMutator::new(mut_sender);
+        let prop_mutator = self.register_component(entity, &component_kind, diff_mask_length);
 
         component.set_mutator(&prop_mutator);
     }
@@ -123,6 +129,147 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
             .write()
             .expect("Haven't initialized DiffHandler")
             .deregister_component(entity, component_kind);
+    }
+
+    pub fn remote_spawn_entity(&mut self, entity: &E) {
+        if self.entity_records.contains_key(entity) {
+            panic!("entity already initialized!");
+        }
+        let global_entity = self.global_entity_map.insert(*entity);
+        self.entity_records.insert(
+            *entity,
+            GlobalEntityRecord::new(global_entity, EntityOwner::Server),
+        );
+    }
+
+    pub fn remove_entity_record(&mut self, entity: &E) {
+        let record = self
+            .entity_records
+            .remove(entity)
+            .expect("Cannot despawn non-existant entity!");
+        let global_entity = record.global_entity;
+        self.global_entity_map.remove(&global_entity);
+    }
+
+    pub fn remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
+        component_kind_set.insert(*component_kind);
+    }
+
+    pub fn remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        if !self.entity_records.contains_key(entity) {
+            panic!("entity does not exist!");
+        }
+        let component_kind_set = &mut self.entity_records.get_mut(entity).unwrap().component_kinds;
+        if !component_kind_set.remove(component_kind) {
+            panic!("component does not exist!");
+        }
+    }
+
+    pub(crate) fn entity_replication_config(&self, entity: &E) -> Option<ReplicationConfig> {
+        if let Some(record) = self.entity_records.get(entity) {
+            return Some(record.replication_config);
+        }
+        return None;
+    }
+
+    pub(crate) fn entity_publish(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        record.replication_config = ReplicationConfig::Public;
+    }
+
+    pub(crate) fn entity_unpublish(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        record.replication_config = ReplicationConfig::Public;
+    }
+
+    pub(crate) fn entity_is_delegated(&self, entity: &E) -> bool {
+        if let Some(record) = self.entity_records.get(entity) {
+            return record.replication_config == ReplicationConfig::Delegated;
+        }
+        return false;
+    }
+
+    pub(crate) fn entity_register_auth_for_delegation(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Public {
+            panic!(
+                "Can only enable delegation on an Entity that is Public! Config: {:?}",
+                record.replication_config
+            );
+        }
+        self.auth_handler.register_entity(HostType::Client, entity);
+    }
+
+    pub(crate) fn entity_enable_delegation(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Public {
+            panic!("Can only enable delegation on an Entity that is Public!");
+        }
+
+        record.replication_config = ReplicationConfig::Delegated;
+
+        if record.owner.is_client() {
+            record.owner = EntityOwner::Server;
+        }
+    }
+
+    pub(crate) fn entity_disable_delegation(&mut self, entity: &E) {
+        let Some(record) = self.entity_records.get_mut(entity) else {
+            panic!("entity record does not exist!");
+        };
+        if record.replication_config != ReplicationConfig::Delegated {
+            panic!("Can only disable delegation on an Entity that is Delegated!");
+        }
+
+        record.replication_config = ReplicationConfig::Public;
+        self.auth_handler.deregister_entity(entity);
+    }
+
+    pub(crate) fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
+        self.auth_handler
+            .auth_status(entity)
+            .map(|host_status| host_status.status())
+    }
+
+    pub(crate) fn entity_request_authority(&mut self, entity: &E) -> bool {
+        let Some(auth_status) = self.auth_handler.auth_status(entity)  else {
+            panic!("Can only request authority for an Entity that is Delegated!");
+        };
+        if !auth_status.can_request() {
+            // Cannot request authority for an Entity that is not Available!
+            return false;
+        }
+        self.auth_handler
+            .set_auth_status(entity, EntityAuthStatus::Requested);
+        return true;
+    }
+
+    pub(crate) fn entity_release_authority(&mut self, entity: &E) -> bool {
+        let Some(auth_status) = self.auth_handler.auth_status(entity) else {
+            panic!("Can only release authority for an Entity that is Delegated!");
+        };
+        if !auth_status.can_release() {
+            return false;
+        }
+        self.auth_handler
+            .set_auth_status(entity, EntityAuthStatus::Releasing);
+        return true;
+    }
+
+    pub(crate) fn entity_update_authority(&self, entity: &E, new_auth_status: EntityAuthStatus) {
+        self.auth_handler.set_auth_status(entity, new_auth_status);
     }
 }
 
@@ -154,24 +301,42 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManagerType<E> for GlobalWorl
         self.diff_handler.clone()
     }
 
-    fn remote_spawn_entity(&mut self, entity: &E, _user_key: &u64) {
-        if self.entity_records.contains_key(entity) {
-            panic!("entity already initialized!");
-        }
-        let global_entity = self.global_entity_map.insert(*entity);
-        self.entity_records.insert(
-            *entity,
-            GlobalEntityRecord::new(global_entity, EntityOwner::Server),
-        );
+    fn register_component(
+        &self,
+        entity: &E,
+        component_kind: &ComponentKind,
+        diff_mask_length: u8,
+    ) -> PropertyMutator {
+        let mut_sender = self
+            .diff_handler
+            .as_ref()
+            .write()
+            .expect("DiffHandler should be initialized")
+            .register_component(self, entity, &component_kind, diff_mask_length);
+
+        PropertyMutator::new(mut_sender)
     }
 
-    fn remote_despawn_entity(&mut self, entity: &E) {
-        let record = self
-            .entity_records
-            .remove(entity)
-            .expect("Cannot despawn non-existant entity!");
-        let global_entity = record.global_entity;
-        self.global_entity_map.remove(&global_entity);
+    fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor {
+        self.auth_handler.get_accessor(entity)
+    }
+
+    fn entity_needs_mutator_for_delegation(&self, entity: &E) -> bool {
+        if let Some(record) = self.entity_records.get(entity) {
+            let server_owned = record.owner == EntityOwner::Server;
+            let is_public = record.replication_config == ReplicationConfig::Public;
+
+            return server_owned && is_public;
+        }
+        info!("entity_needs_mutator_for_delegation: entity does not have record");
+        return false;
+    }
+
+    fn entity_is_replicating(&self, entity: &E) -> bool {
+        let Some(record) = self.entity_records.get(entity) else {
+            panic!("entity does not have record");
+        };
+        return record.is_replicating;
     }
 }
 
@@ -193,6 +358,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E>
         if let Some(record) = self.entity_records.get(entity) {
             Ok(record.global_entity)
         } else {
+            warn!("global_world_manager failed entity_to_global_entity!");
             Err(EntityDoesNotExistError)
         }
     }

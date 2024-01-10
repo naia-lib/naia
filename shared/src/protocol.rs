@@ -9,12 +9,14 @@ use crate::{
             channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
             channel_kinds::ChannelKinds,
             default_channels::DefaultChannelsPlugin,
+            system_channel::SystemChannel,
         },
         fragment::FragmentedMessage,
         message::Message,
         message_kinds::MessageKinds,
     },
     world::component::{component_kinds::ComponentKinds, replicate::Replicate},
+    EntityEventMessage, ReliableSettings,
 };
 
 // Protocol Plugin
@@ -42,8 +44,16 @@ impl Default for Protocol {
     fn default() -> Self {
         let mut message_kinds = MessageKinds::new();
         message_kinds.add_message::<FragmentedMessage>();
+        message_kinds.add_message::<EntityEventMessage>();
+
+        let mut channel_kinds = ChannelKinds::new();
+        channel_kinds.add_channel::<SystemChannel>(ChannelSettings::new(
+            ChannelMode::OrderedReliable(ReliableSettings::default()),
+            ChannelDirection::Bidirectional,
+        ));
+
         Self {
-            channel_kinds: ChannelKinds::new(),
+            channel_kinds,
             message_kinds,
             component_kinds: ComponentKinds::new(),
             socket: SocketConfig::new(None, None),

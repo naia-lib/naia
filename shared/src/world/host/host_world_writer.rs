@@ -11,8 +11,9 @@ use crate::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
     },
     BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength, EntityAction,
-    EntityActionType, EntityConverterMut, HostWorldEvents, HostWorldManager, Instant,
-    LocalEntityConverter, MessageIndex, PacketIndex, Serde, UnsignedVariableInteger, WorldRefType,
+    EntityActionType, EntityAndLocalEntityConverter, EntityConverterMut, HostWorldEvents,
+    HostWorldManager, Instant, MessageIndex, PacketIndex, Serde, UnsignedVariableInteger,
+    WorldRefType,
 };
 
 use super::entity_action_event::EntityActionEvent;
@@ -44,44 +45,32 @@ impl HostWorldWriter {
         world_events: &mut HostWorldEvents<E>,
     ) {
         // write entity updates
-        {
-            Self::write_updates(
-                component_kinds,
-                now,
-                writer,
-                &packet_index,
-                world,
-                global_world_manager,
-                local_world_manager,
-                has_written,
-                host_manager,
-                &mut world_events.next_send_updates,
-            );
-
-            // finish updates
-            false.ser(writer);
-            writer.release_bits(1);
-        }
+        Self::write_updates(
+            component_kinds,
+            now,
+            writer,
+            &packet_index,
+            world,
+            global_world_manager,
+            local_world_manager,
+            has_written,
+            host_manager,
+            &mut world_events.next_send_updates,
+        );
 
         // write entity actions
-        {
-            Self::write_actions(
-                component_kinds,
-                now,
-                writer,
-                &packet_index,
-                world,
-                global_world_manager,
-                local_world_manager,
-                has_written,
-                host_manager,
-                &mut world_events.next_send_actions,
-            );
-
-            // finish actions
-            false.ser(writer);
-            writer.release_bits(1);
-        }
+        Self::write_actions(
+            component_kinds,
+            now,
+            writer,
+            &packet_index,
+            world,
+            global_world_manager,
+            local_world_manager,
+            has_written,
+            host_manager,
+            &mut world_events.next_send_actions,
+        );
     }
 
     fn write_actions<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -106,6 +95,9 @@ impl HostWorldWriter {
 
             // check that we can write the next message
             let mut counter = writer.counter();
+            // write ActionContinue bit
+            true.ser(&mut counter);
+            // write data
             Self::write_action(
                 component_kinds,
                 world,
@@ -118,14 +110,12 @@ impl HostWorldWriter {
                 host_manager,
                 next_send_actions,
             );
-
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
                 if !*has_written {
                     Self::warn_overflow_action(
                         component_kinds,
-                        global_world_manager,
                         counter.bits_needed(),
                         writer.bits_free(),
                         next_send_actions,
@@ -135,9 +125,6 @@ impl HostWorldWriter {
             }
 
             *has_written = true;
-
-            // write ActionContinue bit
-            true.ser(writer);
 
             // optimization
             if !host_manager
@@ -149,6 +136,8 @@ impl HostWorldWriter {
                     .insert_scan_from_back(*packet_index, (now.clone(), Vec::new()));
             }
 
+            // write ActionContinue bit
+            true.ser(writer);
             // write data
             Self::write_action(
                 component_kinds,
@@ -166,6 +155,10 @@ impl HostWorldWriter {
             // pop action we've written
             next_send_actions.pop_front();
         }
+
+        // Finish actions by writing false ActionContinue bit
+        writer.release_bits(1);
+        false.ser(writer);
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -187,27 +180,21 @@ impl HostWorldWriter {
         Self::write_action_id(writer, last_written_id, action_id);
 
         match action {
-            EntityActionEvent::SpawnEntity(world_entity) => {
+            EntityActionEvent::SpawnEntity(world_entity, component_kind_list) => {
                 EntityActionType::SpawnEntity.ser(writer);
 
                 // write net entity
                 local_world_manager
-                    .entity_to_local_entity(world_entity)
+                    .entity_to_host_entity(world_entity)
                     .unwrap()
-                    .host_ser(writer);
-
-                // get component list
-                let component_kind_list = match global_world_manager.component_kinds(world_entity) {
-                    Some(kind_list) => kind_list,
-                    None => Vec::new(),
-                };
+                    .ser(writer);
 
                 // write number of components
                 let components_num =
                     UnsignedVariableInteger::<3>::new(component_kind_list.len() as i128);
                 components_num.ser(writer);
 
-                for component_kind in &component_kind_list {
+                for component_kind in component_kind_list {
                     let mut converter =
                         EntityConverterMut::new(global_world_manager, local_world_manager);
 
@@ -224,7 +211,7 @@ impl HostWorldWriter {
                         &mut host_manager.sent_action_packets,
                         packet_index,
                         action_id,
-                        EntityAction::SpawnEntity(*world_entity, component_kind_list),
+                        EntityAction::SpawnEntity(*world_entity, component_kind_list.clone()),
                     );
                 }
             }
@@ -233,9 +220,9 @@ impl HostWorldWriter {
 
                 // write net entity
                 local_world_manager
-                    .entity_to_local_entity(world_entity)
+                    .entity_to_host_entity(world_entity)
                     .unwrap()
-                    .host_ser(writer);
+                    .ser(writer);
 
                 // if we are writing to this packet, add it to record
                 if is_writing {
@@ -248,10 +235,10 @@ impl HostWorldWriter {
                 }
             }
             EntityActionEvent::InsertComponent(world_entity, component) => {
-                if !world.has_component_of_kind(world_entity, component)
-                    || !host_manager
-                        .world_channel
-                        .entity_channel_is_open(world_entity)
+                if !host_manager
+                    .world_channel
+                    .entity_channel_is_open(world_entity)
+                    || !world.has_component_of_kind(world_entity, component)
                 {
                     EntityActionType::Noop.ser(writer);
 
@@ -270,9 +257,9 @@ impl HostWorldWriter {
 
                     // write net entity
                     local_world_manager
-                        .entity_to_local_entity(world_entity)
+                        .entity_to_host_entity(world_entity)
                         .unwrap()
-                        .host_ser(writer);
+                        .ser(writer);
 
                     let mut converter =
                         EntityConverterMut::new(global_world_manager, local_world_manager);
@@ -317,9 +304,9 @@ impl HostWorldWriter {
 
                     // write net entity
                     local_world_manager
-                        .entity_to_local_entity(world_entity)
+                        .entity_to_host_entity(world_entity)
                         .unwrap()
-                        .host_ser(writer);
+                        .ser(writer);
 
                     // write component kind
                     component_kind.ser(component_kinds, writer);
@@ -351,7 +338,6 @@ impl HostWorldWriter {
 
     fn warn_overflow_action<E: Copy + Eq + Hash + Send + Sync>(
         component_kinds: &ComponentKinds,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
         bits_needed: u32,
         bits_free: u32,
         next_send_actions: &VecDeque<(ActionId, EntityActionEvent<E>)>,
@@ -359,16 +345,11 @@ impl HostWorldWriter {
         let (_action_id, action) = next_send_actions.front().unwrap();
 
         match action {
-            EntityActionEvent::SpawnEntity(entity) => {
-                let component_kind_list = match global_world_manager.component_kinds(entity) {
-                    Some(kind_list) => kind_list,
-                    None => Vec::new(),
-                };
-
+            EntityActionEvent::SpawnEntity(_entity, component_kind_list) => {
                 let mut component_names = "".to_owned();
                 let mut added = false;
 
-                for component_kind in &component_kind_list {
+                for component_kind in component_kind_list {
                     if added {
                         component_names.push(',');
                     } else {
@@ -410,29 +391,27 @@ impl HostWorldWriter {
         let all_update_entities: Vec<E> = next_send_updates.keys().copied().collect();
 
         for entity in all_update_entities {
+            // get LocalEntity
+            let host_entity = local_world_manager.entity_to_host_entity(&entity).unwrap();
+
             // check that we can at least write a LocalEntity and a ComponentContinue bit
             let mut counter = writer.counter();
-
-            // get LocalEntity
-            let local_entity = local_world_manager.entity_to_local_entity(&entity).unwrap();
-
+            // reserve ComponentContinue bit
+            counter.write_bit(true);
+            // write UpdateContinue bit
+            counter.write_bit(true);
             // write LocalEntity
-            local_entity.host_ser(&mut counter);
-            counter.write_bit(false);
-
+            host_entity.ser(&mut counter);
             if counter.overflowed() {
                 break;
             }
 
-            // write UpdateContinue bit
-            true.ser(writer);
-
             // reserve ComponentContinue bit
             writer.reserve_bits(1);
-
-            // write LocalEntity
-            local_entity.host_ser(writer);
-
+            // write UpdateContinue bit
+            true.ser(writer);
+            // write HostEntity
+            host_entity.ser(writer);
             // write Components
             Self::write_update(
                 component_kinds,
@@ -449,9 +428,13 @@ impl HostWorldWriter {
             );
 
             // write ComponentContinue finish bit, release
-            false.ser(writer);
             writer.release_bits(1);
+            false.ser(writer);
         }
+
+        // write EntityContinue finish bit, release
+        writer.release_bits(1);
+        false.ser(writer);
     }
 
     /// For a given entity, write component value updates into a packet
@@ -477,19 +460,21 @@ impl HostWorldWriter {
                 .world_channel
                 .diff_handler
                 .diff_mask(entity, component_kind)
-                .expect("DiffHandler does not have registered Component!")
                 .clone();
 
             let mut converter = EntityConverterMut::new(global_world_manager, local_world_manager);
 
             // check that we can write the next component update
             let mut counter = writer.counter();
+            // write ComponentContinue bit
+            true.ser(&mut counter);
+            // write component kind
             counter.write_bits(<ComponentKind as ConstBitLength>::const_bit_length());
+            // write data
             world
                 .component_of_kind(entity, component_kind)
                 .expect("Component does not exist in World")
                 .write_update(&diff_mask, &mut counter, &mut converter);
-
             if counter.overflowed() {
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
@@ -509,10 +494,8 @@ impl HostWorldWriter {
 
             // write ComponentContinue bit
             true.ser(writer);
-
             // write component kind
             component_kind.ser(component_kinds, writer);
-
             // write data
             world
                 .component_of_kind(entity, component_kind)

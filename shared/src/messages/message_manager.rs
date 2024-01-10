@@ -33,8 +33,8 @@ use crate::{
         entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
         remote::entity_waitlist::EntityWaitlist,
     },
-    EntityAndGlobalEntityConverter, EntityConverter, LocalEntityAndGlobalEntityConverter,
-    LocalEntityConverter, MessageKinds, Protocol,
+    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds,
+    Protocol,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -228,22 +228,22 @@ impl MessageManager {
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
             let mut counter = writer.counter();
-            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
+            // reserve MessageContinue bit
             counter.write_bit(false);
-
+            // write ChannelContinue bit
+            counter.write_bit(false);
+            // write ChannelIndex
+            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
             if counter.overflowed() {
                 break;
             }
 
-            // write ChannelContinue bit
-            true.ser(writer);
-
             // reserve MessageContinue bit
             writer.reserve_bits(1);
-
+            // write ChannelContinue bit
+            true.ser(writer);
             // write ChannelIndex
             channel_kind.ser(&protocol.channel_kinds, writer);
-
             // write Messages
             if let Some(message_indices) =
                 channel.write_messages(&protocol.message_kinds, converter, writer, has_written)
@@ -256,20 +256,26 @@ impl MessageManager {
             }
 
             // write MessageContinue finish bit, release
-            false.ser(writer);
             writer.release_bits(1);
+            false.ser(writer);
         }
+
+        // write ChannelContinue finish bit, release
+        writer.release_bits(1);
+        false.ser(writer);
     }
 
     // Incoming Messages
 
-    pub fn read_messages(
+    pub fn read_messages<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         protocol: &Protocol,
         entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        global_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        local_converter: &dyn EntityAndLocalEntityConverter<E>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
+        let converter = EntityConverter::new(global_converter, local_converter);
         loop {
             let message_continue = bool::de(reader)?;
             if !message_continue {
@@ -281,7 +287,7 @@ impl MessageManager {
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(&protocol.message_kinds, entity_waitlist, converter, reader)?;
+            channel.read_messages(&protocol.message_kinds, entity_waitlist, &converter, reader)?;
         }
 
         Ok(())
@@ -291,7 +297,7 @@ impl MessageManager {
     pub fn receive_messages<E: Eq + Copy + Hash>(
         &mut self,
         global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
-        local_entity_converter: &dyn LocalEntityConverter<E>,
+        local_entity_converter: &dyn EntityAndLocalEntityConverter<E>,
         entity_waitlist: &mut EntityWaitlist,
     ) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let entity_converter =

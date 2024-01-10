@@ -1,6 +1,6 @@
 use bevy::{
     prelude::{
-        App, ClearColor, Color, IntoSystemConfigs, IntoSystemSetConfig, SystemSet, Startup, Update,
+        App, ClearColor, Color, IntoSystemConfigs, IntoSystemSetConfigs, Startup, SystemSet, Update,
     },
     DefaultPlugins,
 };
@@ -35,6 +35,8 @@ pub fn run() {
                 events::reject_events,
                 events::spawn_entity_events,
                 events::despawn_entity_events,
+                events::publish_entity_events,
+                events::unpublish_entity_events,
                 events::insert_component_events,
                 events::update_component_events,
                 events::remove_component_events,
@@ -44,10 +46,10 @@ pub fn run() {
                 .in_set(ReceiveEvents),
         )
         // Tick Event
-        .configure_set(Update, Tick.after(ReceiveEvents))
+        .configure_sets(Update, Tick.after(ReceiveEvents))
         .add_systems(Update, events::tick_events.in_set(Tick))
         // Realtime Gameplay Loop
-        .configure_set(Update, MainLoop.after(Tick))
+        .configure_sets(Update, MainLoop.after(Tick))
         .add_systems(
             Update,
             (

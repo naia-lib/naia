@@ -68,10 +68,12 @@ impl<E: Copy + Eq + Hash> Room<E> {
         self.entities.insert(*entity);
     }
 
-    pub(crate) fn remove_entity(&mut self, entity: &E) -> bool {
+    pub(crate) fn remove_entity(&mut self, entity: &E, entity_is_despawned: bool) -> bool {
         if self.entities.remove(entity) {
-            for user_key in self.users.iter() {
-                self.entity_removal_queue.push_back((*user_key, *entity));
+            if !entity_is_despawned {
+                for user_key in self.users.iter() {
+                    self.entity_removal_queue.push_back((*user_key, *entity));
+                }
             }
             true
         } else {
@@ -135,6 +137,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
 
     pub fn entities_count(&self) -> usize {
         self.server.room_entities_count(&self.key)
+    }
+
+    pub fn entities(&self) -> impl Iterator<Item = &E> {
+        self.server.room_entities(&self.key)
     }
 }
 

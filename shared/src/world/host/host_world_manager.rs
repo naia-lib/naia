@@ -11,7 +11,8 @@ use crate::{
     world::{
         entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
     },
-    ComponentKind, DiffMask, EntityAction, Instant, MessageIndex, PacketIndex,
+    ComponentKind, DiffMask, EntityAction, HostEntity, Instant, MessageIndex, PacketIndex,
+    WorldRefType,
 };
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
@@ -67,7 +68,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
     // World
 
-    // used for
+    // used when Entity first comes into Connection's scope
     pub fn init_entity(
         &mut self,
         world_manager: &mut LocalWorldManager<E>,
@@ -75,19 +76,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         component_kinds: Vec<ComponentKind>,
     ) {
         // add entity
-        self.spawn_entity(world_manager, entity);
+        self.spawn_entity(world_manager, entity, &component_kinds);
         // add components
         for component_kind in component_kinds {
             self.insert_component(entity, &component_kind);
         }
     }
 
-    pub fn spawn_entity(&mut self, world_manager: &mut LocalWorldManager<E>, entity: &E) {
-        self.world_channel.host_spawn_entity(world_manager, entity);
+    pub fn spawn_entity(
+        &mut self,
+        world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+        component_kinds: &Vec<ComponentKind>,
+    ) {
+        self.world_channel
+            .host_spawn_entity(world_manager, entity, component_kinds);
     }
 
     pub fn despawn_entity(&mut self, entity: &E) {
         self.world_channel.host_despawn_entity(entity);
+    }
+
+    pub fn client_initiated_despawn(&mut self, entity: &E) {
+        self.world_channel.client_initiated_despawn(entity);
     }
 
     pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
@@ -104,20 +115,54 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         self.world_channel.host_has_entity(entity)
     }
 
-    pub fn entity_channel_is_open(&self, entity: &E) -> bool {
-        self.world_channel.entity_channel_is_open(entity)
+    // used when Remote Entity gains Write Authority (delegation)
+    pub fn track_remote_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+        component_kinds: Vec<ComponentKind>,
+    ) -> HostEntity {
+        // add entity
+        let new_host_entity =
+            self.world_channel
+                .track_remote_entity(local_world_manager, entity, &component_kinds);
+
+        // info!("--- tracking remote entity ---");
+
+        // add components
+        for component_kind in component_kinds {
+            self.track_remote_component(entity, &component_kind);
+        }
+
+        // info!("--- ---------------------- ---");
+
+        new_host_entity
+    }
+
+    pub fn untrack_remote_entity(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager<E>,
+        entity: &E,
+    ) {
+        self.world_channel
+            .untrack_remote_entity(local_world_manager, entity);
+    }
+
+    pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+        self.world_channel
+            .track_remote_component(entity, component_kind);
     }
 
     // Messages
 
-    pub fn collect_outgoing_messages(&mut self, rtt_millis: &f32) {
-        self.collect_dropped_update_packets(rtt_millis);
-        self.collect_dropped_action_packets();
+    pub fn handle_dropped_packets(&mut self, rtt_millis: &f32) {
+        self.handle_dropped_update_packets(rtt_millis);
+        self.handle_dropped_action_packets();
     }
 
     // Collecting
 
-    fn collect_dropped_action_packets(&mut self) {
+    fn handle_dropped_action_packets(&mut self) {
         let mut pop = false;
 
         loop {
@@ -136,7 +181,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         }
     }
 
-    fn collect_dropped_update_packets(&mut self, rtt_millis: &f32) {
+    fn handle_dropped_update_packets(&mut self, rtt_millis: &f32) {
         let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
 
         {
@@ -189,10 +234,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         }
     }
 
-    pub fn take_outgoing_events(&mut self, now: &Instant, rtt_millis: &f32) -> HostWorldEvents<E> {
+    pub fn take_outgoing_events<W: WorldRefType<E>>(
+        &mut self,
+        world: &W,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        now: &Instant,
+        rtt_millis: &f32,
+    ) -> HostWorldEvents<E> {
         HostWorldEvents {
             next_send_actions: self.world_channel.take_next_actions(now, rtt_millis),
-            next_send_updates: self.world_channel.collect_next_updates(),
+            next_send_updates: self
+                .world_channel
+                .collect_next_updates(world, global_world_manager),
         }
     }
 }

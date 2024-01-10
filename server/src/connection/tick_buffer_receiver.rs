@@ -1,14 +1,15 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
-    BitReader, ChannelKind, ChannelKinds, ChannelMode, LocalEntityAndGlobalEntityConverter,
-    MessageContainer, Protocol, Serde, SerdeErr, Tick,
+    BitReader, ChannelKind, ChannelKinds, ChannelMode, EntityAndGlobalEntityConverter,
+    EntityAndLocalEntityConverter, EntityConverter, MessageContainer, Protocol, Serde, SerdeErr,
+    Tick,
 };
 
-use crate::connection::channel_tick_buffer_receiver::ChannelTickBufferReceiver;
+use crate::connection::tick_buffer_receiver_channel::TickBufferReceiverChannel;
 
 pub struct TickBufferReceiver {
-    channel_receivers: HashMap<ChannelKind, ChannelTickBufferReceiver>,
+    channel_receivers: HashMap<ChannelKind, TickBufferReceiverChannel>,
 }
 
 impl TickBufferReceiver {
@@ -19,7 +20,7 @@ impl TickBufferReceiver {
             if let ChannelMode::TickBuffered(settings) = channel_settings.mode {
                 channel_receivers.insert(
                     channel_kind,
-                    ChannelTickBufferReceiver::new(settings.clone()),
+                    TickBufferReceiverChannel::new(settings.clone()),
                 );
             }
         }
@@ -30,14 +31,16 @@ impl TickBufferReceiver {
     // Incoming Messages
 
     /// Read incoming packet data and store in a buffer
-    pub fn read_messages(
+    pub fn read_messages<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         protocol: &Protocol,
         host_tick: &Tick,
         remote_tick: &Tick,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        global_world_manager: &dyn EntityAndGlobalEntityConverter<E>,
+        local_world_manager: &dyn EntityAndLocalEntityConverter<E>,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
+        let converter = EntityConverter::new(global_world_manager, local_world_manager);
         loop {
             let channel_continue = bool::de(reader)?;
             if !channel_continue {
@@ -50,7 +53,7 @@ impl TickBufferReceiver {
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
             channel.read_messages(
-                converter,
+                &converter,
                 &protocol.message_kinds,
                 host_tick,
                 remote_tick,

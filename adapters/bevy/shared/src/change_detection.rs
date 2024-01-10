@@ -20,10 +20,16 @@ pub enum HostSyncEvent {
 
 pub fn on_despawn(
     mut events: EventWriter<HostSyncEvent>,
+    query: Query<Entity>,
     mut removals: RemovedComponents<HostOwned>,
 ) {
-    for entity in removals.iter() {
-        events.send(HostSyncEvent::Despawn(entity));
+    for entity in removals.read() {
+        if let Ok(_) = query.get(entity) {
+            // Entity is still alive, expected if Auth is reset on Delegated Entity
+        } else {
+            // info!("despawn on HostOwned entity: {:?}", entity);
+            events.send(HostSyncEvent::Despawn(entity));
+        }
     }
 }
 
@@ -41,8 +47,8 @@ pub fn on_component_removed<R: Replicate>(
     query: Query<Entity, With<HostOwned>>,
     mut removals: RemovedComponents<R>,
 ) {
-    for removal_entity in removals.iter() {
-        if let Ok(entity) = query.get(removal_entity) {
+    for entity in removals.read() {
+        if let Ok(_) = query.get(entity) {
             events.send(HostSyncEvent::Remove(entity, ComponentKind::of::<R>()));
         }
     }

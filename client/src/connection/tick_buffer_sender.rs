@@ -1,12 +1,13 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
     BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength,
-    LocalEntityAndGlobalEntityConverterMut, MessageContainer, PacketIndex, PacketNotifiable,
+    EntityConverterMut, LocalWorldManager, MessageContainer, PacketIndex, PacketNotifiable,
     Protocol, Serde, ShortMessageIndex, Tick,
 };
 
 use super::channel_tick_buffer_sender::ChannelTickBufferSender;
+use crate::world::global_world_manager::GlobalWorldManager;
 
 pub struct TickBufferSender {
     channel_senders: HashMap<ChannelKind, ChannelTickBufferSender>,
@@ -44,17 +45,13 @@ impl TickBufferSender {
         }
     }
 
-    pub fn collect_outgoing_messages(
-        &mut self,
-        client_sending_tick: &Tick,
-        server_receivable_tick: &Tick,
-    ) {
+    pub fn collect_messages(&mut self, client_sending_tick: &Tick, server_receivable_tick: &Tick) {
         for channel in self.channel_senders.values_mut() {
-            channel.collect_outgoing_messages(client_sending_tick, server_receivable_tick);
+            channel.collect_messages(client_sending_tick, server_receivable_tick);
         }
     }
 
-    pub fn has_outgoing_messages(&self) -> bool {
+    pub fn has_messages(&self) -> bool {
         for channel in self.channel_senders.values() {
             if channel.has_messages() {
                 return true;
@@ -63,15 +60,18 @@ impl TickBufferSender {
         false
     }
 
-    pub fn write_messages(
+    pub fn write_messages<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         protocol: &Protocol,
-        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        global_world_manager: &GlobalWorldManager<E>,
+        local_world_manager: &mut LocalWorldManager<E>,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         host_tick: &Tick,
         has_written: &mut bool,
     ) {
+        let mut converter = EntityConverterMut::new(global_world_manager, local_world_manager);
+
         for (channel_kind, channel) in &mut self.channel_senders {
             if !channel.has_messages() {
                 continue;
@@ -79,26 +79,27 @@ impl TickBufferSender {
 
             // check that we can at least write a ChannelIndex and a MessageContinue bit
             let mut counter = writer.counter();
+            // reserve MessageContinue bit
+            true.ser(&mut counter);
+            // write ChannelContinue bit
+            true.ser(&mut counter);
+            // write ChannelIndex
             counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
-            counter.write_bit(false);
 
             if counter.overflowed() {
                 break;
             }
 
-            // write ChannelContinue bit
-            true.ser(writer);
-
             // reserve MessageContinue bit
             writer.reserve_bits(1);
-
+            // write ChannelContinue bit
+            true.ser(writer);
             // write ChannelIndex
             channel_kind.ser(&protocol.channel_kinds, writer);
-
             // write Messages
             if let Some(message_indices) = channel.write_messages(
                 &protocol.message_kinds,
-                converter,
+                &mut converter,
                 writer,
                 host_tick,
                 has_written,
@@ -111,9 +112,13 @@ impl TickBufferSender {
             }
 
             // write MessageContinue finish bit, release
-            false.ser(writer);
             writer.release_bits(1);
+            false.ser(writer);
         }
+
+        // write ChannelContinue finish bit, release
+        writer.release_bits(1);
+        false.ser(writer);
     }
 }
 

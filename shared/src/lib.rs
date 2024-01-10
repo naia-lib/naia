@@ -5,6 +5,7 @@
 
 #[macro_use]
 extern crate cfg_if;
+extern crate core;
 
 cfg_if! {
     if #[cfg(all(target_arch = "wasm32", feature = "wbindgen", feature = "mquad"))]
@@ -23,9 +24,10 @@ pub use naia_derive::{
     Channel, Message, MessageBevy, MessageHecs, Replicate, ReplicateBevy, ReplicateHecs,
 };
 pub use naia_serde::{
-    BitReader, BitWrite, BitWriter, ConstBitLength, OutgoingPacket, OwnedBitReader, Serde,
-    SerdeBevy, SerdeErr, SerdeHecs, SerdeInternal, UnsignedInteger, UnsignedVariableInteger,
-    MTU_SIZE_BITS, MTU_SIZE_BYTES,
+    BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
+    Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeHecs,
+    SerdeIntegerConversion, SerdeInternal, SignedInteger, SignedVariableInteger, UnsignedInteger,
+    UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
     link_condition_logic, Instant, LinkConditionerConfig, Random, SocketConfig, TimeQueue,
@@ -67,7 +69,11 @@ pub use messages::{
             channel_receiver::ChannelReceiver, ordered_reliable_receiver::OrderedReliableReceiver,
             unordered_reliable_receiver::UnorderedReliableReceiver,
         },
-        senders::{channel_sender::ChannelSender, reliable_sender::ReliableSender},
+        senders::{
+            channel_sender::{ChannelSender, MessageChannelSender},
+            reliable_sender::ReliableSender,
+        },
+        system_channel::SystemChannel,
     },
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_container::MessageContainer,
@@ -92,19 +98,24 @@ pub use world::{
             Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
         },
     },
+    delegation::{
+        auth_channel::EntityAuthAccessor,
+        entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus},
+        host_auth_handler::HostAuthHandler,
+    },
     entity::{
         entity_action::EntityAction,
         entity_action_receiver::EntityActionReceiver,
         entity_action_type::EntityActionType,
+        entity_auth_event::{EntityEventMessage, EntityEventMessageAction},
         entity_converters::{
-            EntityAndGlobalEntityConverter, EntityConverter, EntityConverterMut,
-            FakeEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
-            LocalEntityAndGlobalEntityConverterMut, LocalEntityConverter,
+            EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter,
+            EntityConverterMut, FakeEntityConverter, GlobalWorldManagerType,
+            LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
         },
-        entity_ref::EntityRef,
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
-        local_entity::LocalEntity,
+        local_entity::{HostEntity, RemoteEntity},
     },
     host::{
         global_diff_handler::GlobalDiffHandler,
@@ -113,9 +124,11 @@ pub use world::{
     },
     local_world_manager::LocalWorldManager,
     remote::{
-        entity_action_event::EntityActionEvent, entity_event::EntityEvent,
+        entity_action_event::EntityActionEvent,
+        entity_event::{EntityEvent, EntityResponseEvent},
         remote_world_manager::RemoteWorldManager,
     },
+    shared_global_world_manager::SharedGlobalWorldManager,
     world_type::{WorldMutType, WorldRefType},
 };
 

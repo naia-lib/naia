@@ -6,3 +6,4 @@ pub mod user_diff_handler;
 pub mod world_channel;
 
 mod entity_action_event;
+mod entity_channel;

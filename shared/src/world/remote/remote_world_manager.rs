@@ -3,10 +3,11 @@ use std::{
     hash::Hash,
 };
 
-use log::warn;
+use log::{info, warn};
 
 use crate::{
     world::{
+        entity::local_entity::RemoteEntity,
         local_world_manager::LocalWorldManager,
         remote::{
             entity_event::EntityEvent,
@@ -15,7 +16,7 @@ use crate::{
         },
     },
     ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction,
-    EntityConverter, GlobalWorldManagerType, LocalEntity, Replicate, Tick, WorldMutType,
+    EntityConverter, GlobalWorldManagerType, Replicate, Tick, WorldMutType,
 };
 
 pub struct RemoteWorldManager<E: Copy + Eq + Hash + Send + Sync> {
@@ -39,17 +40,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         }
     }
 
-    fn on_entity_channel_opened(&mut self, local_entity: &LocalEntity) {
-        self.entity_waitlist.add_entity(local_entity);
+    pub fn on_entity_channel_opened(&mut self, remote_entity: &RemoteEntity) {
+        self.entity_waitlist.add_entity(remote_entity);
     }
 
-    fn on_entity_channel_closing(&mut self, local_entity: &LocalEntity) {
-        self.entity_waitlist.remove_entity(local_entity);
+    pub fn on_entity_channel_closing(&mut self, remote_entity: &RemoteEntity) {
+        self.entity_waitlist.remove_entity(remote_entity);
     }
 
     pub fn process_world_events<W: WorldMutType<E>>(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
@@ -79,11 +80,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
     /// Store
     pub fn process_actions<W: WorldMutType<E>>(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
-        incoming_actions: Vec<EntityAction<LocalEntity>>,
-        incoming_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
+        incoming_actions: Vec<EntityAction<RemoteEntity>>,
+        incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     ) {
         self.process_ready_actions(
             global_world_manager,
@@ -99,22 +100,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
     /// execute it and emit a corresponding event.
     fn process_ready_actions<W: WorldMutType<E>>(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
-        incoming_actions: Vec<EntityAction<LocalEntity>>,
-        mut incoming_components: HashMap<(LocalEntity, ComponentKind), Box<dyn Replicate>>,
+        incoming_actions: Vec<EntityAction<RemoteEntity>>,
+        mut incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     ) {
         // execute the action and emit an event
         for action in incoming_actions {
             match action {
-                EntityAction::SpawnEntity(local_entity, components) => {
+                EntityAction::SpawnEntity(remote_entity, components) => {
                     // set up entity
                     let world_entity = world.spawn_entity();
-                    local_world_manager.remote_spawn_entity(&world_entity, &local_entity);
-                    global_world_manager
-                        .remote_spawn_entity(&world_entity, local_world_manager.get_user_key());
-                    self.on_entity_channel_opened(&local_entity);
+                    local_world_manager.insert_remote_entity(&world_entity, remote_entity);
 
                     self.outgoing_events
                         .push(EntityEvent::<E>::SpawnEntity(world_entity));
@@ -122,38 +120,49 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
                     // read component list
                     for component_kind in components {
                         let component = incoming_components
-                            .remove(&(local_entity, component_kind))
+                            .remove(&(remote_entity, component_kind))
                             .unwrap();
 
                         self.process_insert(world, world_entity, component, &component_kind);
                     }
                 }
-                EntityAction::DespawnEntity(local_entity) => {
-                    let world_entity = local_world_manager.remote_despawn_entity(&local_entity);
-                    global_world_manager.remote_despawn_entity(&world_entity);
+                EntityAction::DespawnEntity(remote_entity) => {
+                    let world_entity = local_world_manager.remove_by_remote_entity(&remote_entity);
 
                     // Generate event for each component, handing references off just in
                     // case
-                    for component_kind in world.component_kinds(&world_entity) {
-                        self.process_remove(world, world_entity, component_kind);
+                    if let Some(component_kinds) =
+                        global_world_manager.component_kinds(&world_entity)
+                    {
+                        for component_kind in component_kinds {
+                            self.process_remove(world, world_entity, component_kind);
+                        }
                     }
 
                     world.despawn_entity(&world_entity);
-                    self.on_entity_channel_closing(&local_entity);
+
+                    self.on_entity_channel_closing(&remote_entity);
+
                     self.outgoing_events
                         .push(EntityEvent::<E>::DespawnEntity(world_entity));
                 }
-                EntityAction::InsertComponent(local_entity, component_kind) => {
+                EntityAction::InsertComponent(remote_entity, component_kind) => {
                     let component = incoming_components
-                        .remove(&(local_entity, component_kind))
+                        .remove(&(remote_entity, component_kind))
                         .unwrap();
 
-                    let world_entity = local_world_manager.get_world_entity(&local_entity);
+                    if local_world_manager.has_remote_entity(&remote_entity) {
+                        let world_entity =
+                            local_world_manager.world_entity_from_remote(&remote_entity);
 
-                    self.process_insert(world, world_entity, component, &component_kind);
+                        self.process_insert(world, world_entity, component, &component_kind);
+                    } else {
+                        // entity may have despawned on disconnect or something similar?
+                        warn!("received InsertComponent message for nonexistant entity");
+                    }
                 }
-                EntityAction::RemoveComponent(local_entity, component_kind) => {
-                    let world_entity = local_world_manager.get_world_entity(&local_entity);
+                EntityAction::RemoveComponent(remote_entity, component_kind) => {
+                    let world_entity = local_world_manager.world_entity_from_remote(&remote_entity);
                     self.process_remove(world, world_entity, component_kind);
                 }
                 EntityAction::Noop => {
@@ -179,13 +188,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             self.insert_waitlist_map
                 .insert((world_entity, *component_kind), handle);
         } else {
-            world.insert_boxed_component(&world_entity, component);
-
-            self.outgoing_events.push(EntityEvent::<E>::InsertComponent(
-                world_entity,
-                *component_kind,
-            ));
+            self.finish_insert(world, world_entity, component, component_kind);
         }
+    }
+
+    fn finish_insert<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        world_entity: E,
+        component: Box<dyn Replicate>,
+        component_kind: &ComponentKind,
+    ) {
+        world.insert_boxed_component(&world_entity, component);
+
+        self.outgoing_events.push(EntityEvent::<E>::InsertComponent(
+            world_entity,
+            *component_kind,
+        ));
     }
 
     fn process_remove<W: WorldMutType<E>>(
@@ -224,30 +243,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
 
     fn process_waitlist_actions<W: WorldMutType<E>>(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
     ) {
-        let converter = EntityConverter::new(
-            global_world_manager.to_global_entity_converter(),
-            local_world_manager,
-        );
-
         if let Some(list) = self
             .entity_waitlist
             .collect_ready_items(&mut self.insert_waitlist_store)
         {
+            let converter = EntityConverter::new(
+                global_world_manager.to_global_entity_converter(),
+                local_world_manager,
+            );
+
             for (world_entity, mut component) in list {
                 let component_kind = component.kind();
+
                 self.insert_waitlist_map
                     .remove(&(world_entity, component_kind));
-                component.relations_complete(&converter);
-                world.insert_boxed_component(&world_entity, component);
 
-                self.outgoing_events.push(EntityEvent::<E>::InsertComponent(
-                    world_entity,
-                    component_kind,
-                ));
+                {
+                    component.relations_complete(&converter);
+                }
+
+                self.finish_insert(world, world_entity, component, &component_kind);
             }
         }
     }
@@ -258,7 +277,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
     /// Store
     pub fn process_updates<W: WorldMutType<E>>(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
@@ -277,7 +296,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
     /// Process component updates from raw bits for a given entity
     fn process_ready_updates<W: WorldMutType<E>>(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
@@ -367,7 +386,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
 
     fn process_waitlist_updates<W: WorldMutType<E>>(
         &mut self,
-        global_world_manager: &mut dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &LocalWorldManager<E>,
         world: &mut W,
     ) {
@@ -380,6 +399,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             .collect_ready_items(&mut self.update_waitlist_store)
         {
             for (tick, world_entity, component_kind, ready_update) in list {
+                info!("processing waiting update!");
+
                 let component_key = (world_entity, component_kind);
                 let mut remove_entry = false;
                 if let Some(component_map) = self.update_waitlist_map.get_mut(&component_key) {

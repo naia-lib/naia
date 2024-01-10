@@ -101,8 +101,16 @@ pub struct SpawnEntityEvent(pub UserKey, pub Entity);
 #[derive(Event)]
 pub struct DespawnEntityEvent(pub UserKey, pub Entity);
 
-// InsertComponentEvent
+// PublishEntityEvent
 #[derive(Event)]
+pub struct PublishEntityEvent(pub UserKey, pub Entity);
+
+// UnpublishEntityEvent
+#[derive(Event)]
+pub struct UnpublishEntityEvent(pub UserKey, pub Entity);
+
+// InsertComponentEvent
+#[derive(Event, Clone)]
 pub struct InsertComponentEvents {
     inner: HashMap<ComponentKind, Vec<(UserKey, Entity)>>,
 }

@@ -8,9 +8,10 @@ use naia_client::{Client, ClientConfig};
 
 use super::{
     events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, MessageEvents, RejectEvent, RemoveComponentEvents, ServerTickEvent,
-        SpawnEntityEvent, UpdateComponentEvents,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
+        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvents,
+        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, ServerTickEvent,
+        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
     systems::before_receive_events,
 };
@@ -67,6 +68,11 @@ impl PluginType for Plugin {
             .add_event::<MessageEvents>()
             .add_event::<SpawnEntityEvent>()
             .add_event::<DespawnEntityEvent>()
+            .add_event::<PublishEntityEvent>()
+            .add_event::<UnpublishEntityEvent>()
+            .add_event::<EntityAuthGrantedEvent>()
+            .add_event::<EntityAuthDeniedEvent>()
+            .add_event::<EntityAuthResetEvent>()
             .add_event::<InsertComponentEvents>()
             .add_event::<UpdateComponentEvents>()
             .add_event::<RemoveComponentEvents>()

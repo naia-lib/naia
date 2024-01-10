@@ -22,6 +22,25 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
         }
     }
 
+    pub fn track_hosts_redundant_remote_entity(
+        &mut self,
+        entity: &E,
+        component_kinds: &Vec<ComponentKind>,
+    ) {
+        let mut entity_channel = EntityChannel::new(*entity);
+        entity_channel.spawned = true;
+        for component_kind in component_kinds {
+            entity_channel
+                .components
+                .insert(*component_kind, ComponentChannel::new(None));
+        }
+        self.entity_channels.insert(*entity, entity_channel);
+    }
+
+    pub fn untrack_hosts_redundant_remote_entity(&mut self, entity: &E) {
+        self.entity_channels.remove(entity);
+    }
+
     /// Buffer a read [`EntityAction`] so that it can be processed later
     pub fn buffer_action(&mut self, action_index: ActionIndex, action: EntityAction<E>) {
         self.receiver.buffer_message(action_index, action);
@@ -43,13 +62,18 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
                 entity_channel.receive_action(action_index, action, &mut outgoing_actions);
             }
         }
+
+        // TODO: VERY IMPORTANT! You need to figure out how to remove EntityChannels after they've been despawned!
+        // keep in mind that you need to keep around entity channels to be able to receive messages for them still
+        // RIGHT NOW THIS IS LEAKING MEMORY!
+        // a TTL for these Entity Channels after they've been despawned is probably the way to go
+
         outgoing_actions
     }
 }
 
 // Entity Channel
-
-pub struct EntityChannel<E: Copy + Hash + Eq> {
+struct EntityChannel<E: Copy + Hash + Eq> {
     entity: E,
     last_canonical_index: Option<ActionIndex>,
     spawned: bool,
@@ -123,6 +147,12 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
         components: Vec<ComponentKind>,
         outgoing_actions: &mut Vec<EntityAction<E>>,
     ) {
+        // this is the problem:
+        // the point of the receiver is to de-dup a given event, like a Spawn Action here
+        // we only only convert the NEWEST spawn packet into a SpawnAction
+        // so the problem we're running into is that: Two Spawn Packets are sent, 1 with components A, B, and 1 with components A, B, C
+        // action_index will be the same for both, however ...
+
         // do not process any spawn OLDER than last received spawn index / despawn index
         if let Some(last_index) = self.last_canonical_index {
             if sequence_less_than(action_index, last_index) {

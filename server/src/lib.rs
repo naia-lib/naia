@@ -15,11 +15,17 @@ extern crate cfg_if;
 
 pub mod transport;
 pub mod shared {
-    pub use naia_shared::{default_channels, EntityRef, Random, SocketConfig};
+    pub use naia_shared::{
+        default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
+        FileBitWriter, Random, Serde, SerdeErr, SignedInteger, SignedVariableInteger, SocketConfig,
+        UnsignedInteger, UnsignedVariableInteger,
+    };
 }
 pub mod internal {
     pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};
 }
+
+pub use naia_shared::SerdeBevyServer as SerdeBevy;
 
 mod cache_map;
 mod connection;
@@ -36,14 +42,16 @@ mod world;
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;
 pub use events::{
-    AuthEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, Events,
-    InsertComponentEvent, MessageEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-    UpdateComponentEvent,
+    AuthEvent, ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
+    EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, Events, InsertComponentEvent,
+    MessageEvent, PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
+    UnpublishEntityEvent, UpdateComponentEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::{User, UserKey, UserMut, UserRef};
 pub use user_scope::UserScopeMut;
-pub use world::entity_mut::EntityMut;
-pub use world::entity_owner::EntityOwner;
+pub use world::{
+    entity_mut::EntityMut, entity_owner::EntityOwner, replication_config::ReplicationConfig,
+};

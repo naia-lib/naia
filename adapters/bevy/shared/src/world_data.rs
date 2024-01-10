@@ -87,4 +87,8 @@ impl WorldData {
         self.kind_to_accessor_map
             .insert(*component_kind, ComponentAccessor::<R>::create());
     }
+
+    pub(crate) fn has_kind(&self, component_kind: &ComponentKind) -> bool {
+        self.kind_to_accessor_map.contains_key(component_kind)
+    }
 }

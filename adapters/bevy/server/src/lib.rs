@@ -1,5 +1,11 @@
-pub use naia_bevy_shared::{Random, ReceiveEvents, Tick};
-pub use naia_server::{transport, RoomKey, ServerConfig, UserKey};
+pub use naia_bevy_shared::{EntityAuthStatus, Random, ReceiveEvents, Replicate, Tick};
+pub use naia_server::{
+    shared::{
+        BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, SerdeErr,
+        SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger,
+    },
+    transport, ReplicationConfig, RoomKey, SerdeBevy as Serde, ServerConfig, UserKey,
+};
 
 pub mod events;
 

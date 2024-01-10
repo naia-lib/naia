@@ -7,10 +7,10 @@ use bevy_log::info;
 use naia_bevy_server::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, RemoveComponentEvents, SpawnEntityEvent, TickEvent,
-        UpdateComponentEvents,
+        InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, SpawnEntityEvent,
+        TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
-    CommandsExt, Random, Server,
+    CommandsExt, Random, ReplicationConfig, Server,
 };
 
 use naia_bevy_demo_shared::{
@@ -23,7 +23,7 @@ use naia_bevy_demo_shared::{
 use crate::resources::Global;
 
 pub fn auth_events(mut server: Server, mut event_reader: EventReader<AuthEvents>) {
-    for events in event_reader.iter() {
+    for events in event_reader.read() {
         for (user_key, auth) in events.read::<Auth>() {
             if auth.username == "charlie" && auth.password == "12345" {
                 // Accept incoming connection
@@ -42,7 +42,7 @@ pub fn connect_events(
     mut global: ResMut<Global>,
     mut event_reader: EventReader<ConnectEvent>,
 ) {
-    for ConnectEvent(user_key) in event_reader.iter() {
+    for ConnectEvent(user_key) in event_reader.read() {
         let address = server
             .user_mut(user_key)
             // Add User to the main Room
@@ -52,41 +52,26 @@ pub fn connect_events(
 
         info!("Naia Server connected to: {}", address);
 
-        // Create components for Entity to represent new player
-
-        // Position component
-        let position = {
-            let x = 16 * ((Random::gen_range_u32(0, 40) as i16) - 20);
-            let y = 16 * ((Random::gen_range_u32(0, 30) as i16) - 15);
-            Position::new(x, y)
-        };
-
-        // Color component
-        let color = {
-            let color_value = match server.users_count() % 4 {
-                0 => ColorValue::Yellow,
-                1 => ColorValue::Red,
-                2 => ColorValue::Blue,
-                _ => ColorValue::Green,
-            };
-            Color::new(color_value)
-        };
-
-        // Shape component
-        let shape = Shape::new(ShapeValue::Square);
-
-        // Spawn entity
+        // Spawn Entity to represent new player
         let entity = commands
             // Spawn new Entity
             .spawn_empty()
             // MUST call this to begin replication
             .enable_replication(&mut server)
             // Insert Position component
-            .insert(position)
+            .insert(Position::new(
+                16 * ((Random::gen_range_u32(0, 40) as i16) - 20),
+                16 * ((Random::gen_range_u32(0, 30) as i16) - 15),
+            ))
             // Insert Color component
-            .insert(color)
+            .insert(Color::new(match server.users_count() % 4 {
+                0 => ColorValue::Yellow,
+                1 => ColorValue::Red,
+                2 => ColorValue::Blue,
+                _ => ColorValue::Green,
+            }))
             // Insert Shape component
-            .insert(shape)
+            .insert(Shape::new(ShapeValue::Square))
             // return Entity id
             .id();
 
@@ -103,38 +88,46 @@ pub fn connect_events(
             user_key,
             &assignment_message,
         );
+
+        // Create a new delegated Entity
+        info!("Spawn Delegated Entity on Connect");
+        let delegated_entity = commands
+            // Spawn new Entity
+            .spawn_empty()
+            // MUST call this to begin replication
+            .enable_replication(&mut server)
+            .configure_replication(ReplicationConfig::Delegated)
+            // Insert Position component
+            .insert(Position::new(
+                16 * ((Random::gen_range_u32(0, 40) as i16) - 20),
+                16 * ((Random::gen_range_u32(0, 30) as i16) - 15),
+            ))
+            // return Entity id
+            .id();
+        // Add to room
+        server
+            .room_mut(&global.main_room_key)
+            .add_entity(&delegated_entity);
     }
 }
 
 pub fn disconnect_events(
     mut commands: Commands,
-    mut server: Server,
     mut global: ResMut<Global>,
     mut event_reader: EventReader<DisconnectEvent>,
 ) {
-    for DisconnectEvent(user_key, user) in event_reader.iter() {
+    for DisconnectEvent(user_key, user) in event_reader.read() {
         info!("Naia Server disconnected from: {:?}", user.address);
 
         if let Some(entity) = global.user_to_square_map.remove(user_key) {
             global.square_to_user_map.remove(&entity);
             commands.entity(entity).despawn();
-            server
-                .room_mut(&global.main_room_key)
-                .remove_entity(&entity);
-        }
-        if let Some(client_entity) = global.user_to_cursor_map.remove(user_key) {
-            if let Some(server_entity) = global.client_to_server_cursor_map.remove(&client_entity) {
-                commands.entity(server_entity).despawn();
-                server
-                    .room_mut(&global.main_room_key)
-                    .remove_entity(&server_entity);
-            }
         }
     }
 }
 
 pub fn error_events(mut event_reader: EventReader<ErrorEvent>) {
-    for ErrorEvent(error) in event_reader.iter() {
+    for ErrorEvent(error) in event_reader.read() {
         info!("Naia Server Error: {:?}", error);
     }
 }
@@ -146,7 +139,7 @@ pub fn tick_events(
 ) {
     let mut has_ticked = false;
 
-    for TickEvent(server_tick) in tick_reader.iter() {
+    for TickEvent(server_tick) in tick_reader.read() {
         has_ticked = true;
 
         // All game logic should happen here, on a tick event
@@ -178,98 +171,85 @@ pub fn tick_events(
     }
 }
 
-pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
-    for SpawnEntityEvent(_, _) in event_reader.iter() {
-        info!("spawned client entity");
+pub fn spawn_entity_events(
+    mut commands: Commands,
+    mut server: Server,
+    global: ResMut<Global>,
+    mut event_reader: EventReader<SpawnEntityEvent>,
+) {
+    for SpawnEntityEvent(_user_key, client_entity) in event_reader.read() {
+        info!("spawned client entity, publish");
+
+        // make public to other clients as well
+        commands
+            .entity(*client_entity)
+            .configure_replication(ReplicationConfig::Public);
+
+        server
+            .room_mut(&global.main_room_key)
+            .add_entity(client_entity);
     }
 }
 
 pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) {
-    for DespawnEntityEvent(_, _) in event_reader.iter() {
+    for DespawnEntityEvent(_, _) in event_reader.read() {
         info!("despawned client entity");
     }
 }
 
-pub fn insert_component_events(
-    mut commands: Commands,
+pub fn publish_entity_events(
     mut server: Server,
-    mut global: ResMut<Global>,
-    mut event_reader: EventReader<InsertComponentEvents>,
-    position_query: Query<&Position>,
+    global: ResMut<Global>,
+    mut event_reader: EventReader<PublishEntityEvent>,
 ) {
-    for events in event_reader.iter() {
-        for (user_key, client_entity) in events.read::<Position>() {
-            info!("insert component into client entity");
+    for PublishEntityEvent(_user_key, client_entity) in event_reader.read() {
+        info!("client entity has been made public");
 
-            if let Ok(client_position) = position_query.get(client_entity) {
-                // New Position Component
-                let server_position = Position::new(*client_position.x, *client_position.y);
+        // Add newly public entity to the main Room
+        server
+            .room_mut(&global.main_room_key)
+            .add_entity(client_entity);
+    }
+}
 
-                // New Color component
-                let color = {
-                    let color_value = match server.users_count() % 4 {
-                        0 => ColorValue::Yellow,
-                        1 => ColorValue::Red,
-                        2 => ColorValue::Blue,
-                        _ => ColorValue::Green,
-                    };
-                    Color::new(color_value)
-                };
+pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent>) {
+    for UnpublishEntityEvent(_user_key, _client_entity) in event_reader.read() {
+        info!("client entity has been unpublished");
+    }
+}
 
-                // New Shape component
-                let shape = Shape::new(ShapeValue::Circle);
-
-                // Spawn entity
-                let server_entity = commands
-                    // Spawn new Square Entity
-                    .spawn_empty()
-                    // MUST call this to begin replication
-                    .enable_replication(&mut server)
-                    // Insert Position component
-                    .insert(server_position)
-                    // Insert Color component
-                    .insert(color)
-                    // Insert Shape component
-                    .insert(shape)
-                    // return Entity id
-                    .id();
-
-                server
-                    .room_mut(&global.main_room_key)
-                    .add_entity(&server_entity);
-
-                global.user_to_cursor_map.insert(user_key, client_entity);
-                global
-                    .client_to_server_cursor_map
-                    .insert(client_entity, server_entity);
-            }
+pub fn insert_component_events(mut event_reader: EventReader<InsertComponentEvents>) {
+    for events in event_reader.read() {
+        for (_user_key, _client_entity) in events.read::<Position>() {
+            info!("insert Position component into client entity");
+        }
+        for (_user_key, _client_entity) in events.read::<Color>() {
+            info!("insert Color component into client entity");
+        }
+        for (_user_key, _client_entity) in events.read::<Shape>() {
+            info!("insert Shape component into client entity");
         }
     }
 }
 
-pub fn update_component_events(
-    global: ResMut<Global>,
-    mut event_reader: EventReader<UpdateComponentEvents>,
-    mut position_query: Query<&mut Position>,
-) {
-    for events in event_reader.iter() {
-        for (_user_key, client_entity) in events.read::<Position>() {
-            if let Some(server_entity) = global.client_to_server_cursor_map.get(&client_entity) {
-                if let Ok([client_position, mut server_position]) =
-                    position_query.get_many_mut([client_entity, *server_entity])
-                {
-                    server_position.x.mirror(&client_position.x);
-                    server_position.y.mirror(&client_position.y);
-                }
-            }
+pub fn update_component_events(mut event_reader: EventReader<UpdateComponentEvents>) {
+    for events in event_reader.read() {
+        for (_user_key, _client_entity) in events.read::<Position>() {
+            // info!("update component in client entity");
         }
     }
 }
 
 pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
-    for events in event_reader.iter() {
+    for events in event_reader.read() {
         for (_user_key, _entity, _component) in events.read::<Position>() {
             info!("removed Position component from client entity");
+        }
+        for (_user_key, _entity, _component) in events.read::<Color>() {
+            info!("removed Color component from client entity");
+        }
+        for (_user_key, _entity, _component) in events.read::<Shape>() {
+            info!("removed Shape component from client entity");
         }
     }
 }
