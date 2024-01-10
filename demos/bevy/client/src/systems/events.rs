@@ -36,7 +36,7 @@ pub fn connect_events(
     mut global: ResMut<Global>,
     mut event_reader: EventReader<ConnectEvent>,
 ) {
-    for _ in event_reader.iter() {
+    for _ in event_reader.read() {
         let Ok(server_address) = client.server_address() else {
             panic!("Shouldn't happen");
         };
@@ -69,13 +69,13 @@ pub fn connect_events(
 }
 
 pub fn reject_events(mut event_reader: EventReader<RejectEvent>) {
-    for _ in event_reader.iter() {
+    for _ in event_reader.read() {
         info!("Client rejected from connecting to Server");
     }
 }
 
 pub fn disconnect_events(mut event_reader: EventReader<DisconnectEvent>) {
-    for _ in event_reader.iter() {
+    for _ in event_reader.read() {
         info!("Client disconnected from Server");
     }
 }
@@ -88,7 +88,7 @@ pub fn message_events(
     position_query: Query<&Position>,
     color_query: Query<&Color>,
 ) {
-    for events in event_reader.iter() {
+    for events in event_reader.read() {
         for message in events.read::<EntityAssignmentChannel, EntityAssignment>() {
             let assign = message.assign;
 
@@ -164,25 +164,25 @@ pub fn message_events(
 }
 
 pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
-    for SpawnEntityEvent(_entity) in event_reader.iter() {
+    for SpawnEntityEvent(_entity) in event_reader.read() {
         info!("spawned entity");
     }
 }
 
 pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) {
-    for DespawnEntityEvent(_entity) in event_reader.iter() {
+    for DespawnEntityEvent(_entity) in event_reader.read() {
         info!("despawned entity");
     }
 }
 
 pub fn publish_entity_events(mut event_reader: EventReader<PublishEntityEvent>) {
-    for PublishEntityEvent(_entity) in event_reader.iter() {
+    for PublishEntityEvent(_entity) in event_reader.read() {
         info!("client demo: publish entity event");
     }
 }
 
 pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent>) {
-    for UnpublishEntityEvent(_entity) in event_reader.iter() {
+    for UnpublishEntityEvent(_entity) in event_reader.read() {
         info!("client demo: unpublish entity event");
     }
 }
@@ -194,7 +194,7 @@ pub fn insert_component_events(
     sprite_query: Query<(&Shape, &Color)>,
     position_query: Query<&Position>,
 ) {
-    for events in event_reader.iter() {
+    for events in event_reader.read() {
         for entity in events.read::<Color>() {
             // When we receive a replicated Color component for a given Entity,
             // use that value to also insert a local-only SpriteBundle component into this entity
@@ -290,7 +290,7 @@ pub fn update_component_events(
         let server_entity = owned_entity.confirmed;
         let client_entity = owned_entity.predicted;
 
-        for events in event_reader.iter() {
+        for events in event_reader.read() {
             // Update square position
             for (server_tick, updated_entity) in events.read::<Position>() {
                 // If entity is owned
@@ -329,7 +329,7 @@ pub fn update_component_events(
 }
 
 pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
-    for events in event_reader.iter() {
+    for events in event_reader.read() {
         for (_entity, _component) in events.read::<Position>() {
             info!("removed Position component from entity");
         }
@@ -357,7 +357,7 @@ pub fn tick_events(
         return;
     };
 
-    for ClientTickEvent(client_tick) in tick_reader.iter() {
+    for ClientTickEvent(client_tick) in tick_reader.read() {
         if !global.command_history.can_insert(client_tick) {
             // History is full
             continue;

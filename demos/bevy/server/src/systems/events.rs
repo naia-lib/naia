@@ -23,7 +23,7 @@ use naia_bevy_demo_shared::{
 use crate::resources::Global;
 
 pub fn auth_events(mut server: Server, mut event_reader: EventReader<AuthEvents>) {
-    for events in event_reader.iter() {
+    for events in event_reader.read() {
         for (user_key, auth) in events.read::<Auth>() {
             if auth.username == "charlie" && auth.password == "12345" {
                 // Accept incoming connection
@@ -42,7 +42,7 @@ pub fn connect_events(
     mut global: ResMut<Global>,
     mut event_reader: EventReader<ConnectEvent>,
 ) {
-    for ConnectEvent(user_key) in event_reader.iter() {
+    for ConnectEvent(user_key) in event_reader.read() {
         let address = server
             .user_mut(user_key)
             // Add User to the main Room
@@ -116,7 +116,7 @@ pub fn disconnect_events(
     mut global: ResMut<Global>,
     mut event_reader: EventReader<DisconnectEvent>,
 ) {
-    for DisconnectEvent(user_key, user) in event_reader.iter() {
+    for DisconnectEvent(user_key, user) in event_reader.read() {
         info!("Naia Server disconnected from: {:?}", user.address);
 
         if let Some(entity) = global.user_to_square_map.remove(user_key) {
@@ -127,7 +127,7 @@ pub fn disconnect_events(
 }
 
 pub fn error_events(mut event_reader: EventReader<ErrorEvent>) {
-    for ErrorEvent(error) in event_reader.iter() {
+    for ErrorEvent(error) in event_reader.read() {
         info!("Naia Server Error: {:?}", error);
     }
 }
@@ -139,7 +139,7 @@ pub fn tick_events(
 ) {
     let mut has_ticked = false;
 
-    for TickEvent(server_tick) in tick_reader.iter() {
+    for TickEvent(server_tick) in tick_reader.read() {
         has_ticked = true;
 
         // All game logic should happen here, on a tick event
@@ -177,7 +177,7 @@ pub fn spawn_entity_events(
     global: ResMut<Global>,
     mut event_reader: EventReader<SpawnEntityEvent>,
 ) {
-    for SpawnEntityEvent(_user_key, client_entity) in event_reader.iter() {
+    for SpawnEntityEvent(_user_key, client_entity) in event_reader.read() {
         info!("spawned client entity, publish");
 
         // make public to other clients as well
@@ -192,7 +192,7 @@ pub fn spawn_entity_events(
 }
 
 pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) {
-    for DespawnEntityEvent(_, _) in event_reader.iter() {
+    for DespawnEntityEvent(_, _) in event_reader.read() {
         info!("despawned client entity");
     }
 }
@@ -202,7 +202,7 @@ pub fn publish_entity_events(
     global: ResMut<Global>,
     mut event_reader: EventReader<PublishEntityEvent>,
 ) {
-    for PublishEntityEvent(_user_key, client_entity) in event_reader.iter() {
+    for PublishEntityEvent(_user_key, client_entity) in event_reader.read() {
         info!("client entity has been made public");
 
         // Add newly public entity to the main Room
@@ -213,13 +213,13 @@ pub fn publish_entity_events(
 }
 
 pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent>) {
-    for UnpublishEntityEvent(_user_key, _client_entity) in event_reader.iter() {
+    for UnpublishEntityEvent(_user_key, _client_entity) in event_reader.read() {
         info!("client entity has been unpublished");
     }
 }
 
 pub fn insert_component_events(mut event_reader: EventReader<InsertComponentEvents>) {
-    for events in event_reader.iter() {
+    for events in event_reader.read() {
         for (_user_key, _client_entity) in events.read::<Position>() {
             info!("insert Position component into client entity");
         }
@@ -233,7 +233,7 @@ pub fn insert_component_events(mut event_reader: EventReader<InsertComponentEven
 }
 
 pub fn update_component_events(mut event_reader: EventReader<UpdateComponentEvents>) {
-    for events in event_reader.iter() {
+    for events in event_reader.read() {
         for (_user_key, _client_entity) in events.read::<Position>() {
             // info!("update component in client entity");
         }
@@ -241,7 +241,7 @@ pub fn update_component_events(mut event_reader: EventReader<UpdateComponentEven
 }
 
 pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
-    for events in event_reader.iter() {
+    for events in event_reader.read() {
         for (_user_key, _entity, _component) in events.read::<Position>() {
             info!("removed Position component from client entity");
         }

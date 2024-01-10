@@ -11,6 +11,6 @@ publish = false
 
 [dependencies]
 naia-bevy-shared = { path = "../../../adapters/bevy/shared" }
-bevy_ecs = { version = "0.11.2", default-features=false}
+bevy_ecs = { version = "0.12.1", default-features=false}
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }

@@ -23,7 +23,7 @@ pub fn on_despawn(
     query: Query<Entity>,
     mut removals: RemovedComponents<HostOwned>,
 ) {
-    for entity in removals.iter() {
+    for entity in removals.read() {
         if let Ok(_) = query.get(entity) {
             // Entity is still alive, expected if Auth is reset on Delegated Entity
         } else {
@@ -47,7 +47,7 @@ pub fn on_component_removed<R: Replicate>(
     query: Query<Entity, With<HostOwned>>,
     mut removals: RemovedComponents<R>,
 ) {
-    for entity in removals.iter() {
+    for entity in removals.read() {
         if let Ok(_) = query.get(entity) {
             events.send(HostSyncEvent::Remove(entity, ComponentKind::of::<R>()));
         }
