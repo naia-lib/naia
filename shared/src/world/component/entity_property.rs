@@ -149,9 +149,7 @@ impl EntityRelation {
             }
         }
     }
-    fn set_to_none(
-        &mut self,
-    ) {
+    fn set_to_none(&mut self) {
         match self {
             EntityRelation::HostOwned(inner) => {
                 inner.set_to_none();
@@ -695,9 +693,7 @@ impl EntityProperty {
         self.inner.set(converter, entity);
     }
 
-    pub fn set_to_none(
-        &mut self,
-    ) {
+    pub fn set_to_none(&mut self) {
         self.inner.set_to_none();
     }
 
@@ -790,9 +786,7 @@ impl HostOwnedRelation {
         }
     }
 
-    pub fn set_to_none(
-        &mut self,
-    ) {
+    pub fn set_to_none(&mut self) {
         self.global_entity = None;
         self.mutate();
     }
@@ -1002,9 +996,7 @@ impl DelegatedRelation {
         }
     }
 
-    pub fn set_to_none(
-        &mut self,
-    ) {
+    pub fn set_to_none(&mut self) {
         self.global_entity = None;
         self.mutate();
     }
@@ -1134,9 +1126,7 @@ impl LocalRelation {
         }
     }
 
-    pub fn set_to_none(
-        &mut self,
-    ) {
+    pub fn set_to_none(&mut self) {
         self.global_entity = None;
     }
 
