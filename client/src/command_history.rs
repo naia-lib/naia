@@ -26,6 +26,7 @@ impl<T: Clone> CommandHistory<T> {
             output.push((*tick, command.clone()));
         }
 
+        output.reverse();
         output
     }
 
@@ -63,5 +64,24 @@ impl<T: Clone> CommandHistory<T> {
             }
         }
         true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::CommandHistory;
+    #[test]
+    fn replay_order() {
+        let mut command_history: CommandHistory<&str> = CommandHistory::default();
+
+        command_history.insert(1u16, "turn left!");
+        command_history.insert(2u16, "go straight!");
+
+        let commands = command_history.replays(&0u16);
+
+        assert_eq!(commands[0].0, 1u16);
+        assert_eq!(commands[0].1, "turn left!");
+        assert_eq!(commands[1].0, 2u16);
+        assert_eq!(commands[1].1, "go straight!");
     }
 }
