@@ -108,24 +108,32 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
             if byte == b'\r' {
                 continue;
             } else if byte == b'\n' {
-                let mut str = String::from_utf8(line.clone())
-                    .expect("unable to parse string from UTF-8 bytes");
-                line.clear();
-
-                if rtc_url_match {
-                    if str.to_lowercase().starts_with("content-length: ") {
-                        let (_, last) = str.split_at(16);
-                        str = last.to_string();
-                        content_length = str.parse::<usize>().ok();
-                    } else if str.is_empty() {
-                        headers_read = true;
-                    }
-                } else if str.starts_with(
-                    RTC_URL_PATH
-                        .get()
-                        .expect("unable to retrieve URL path, was it not configured?"),
-                ) {
-                    rtc_url_match = true;
+                match String::from_utf8(line.clone()) {
+                    Ok(mut str) => {
+                        line.clear();
+                        if rtc_url_match {
+                            if str.to_lowercase().starts_with("content-length: ") {
+                                let (_, last) = str.split_at(16);
+                                str = last.to_string();
+                                content_length = str.parse::<usize>().ok();
+                            } else if str.is_empty() {
+                                headers_read = true;
+                            }
+                        } else if str.starts_with(
+                            RTC_URL_PATH
+                                .get()
+                                .expect("unable to retrieve URL path, was it not configured?"),
+                        ) {
+                            rtc_url_match = true;
+                        }
+                    },
+                    Err(err) => {
+                        info!(
+                            "Invalid WebRTC session request from {}. Error: {}",
+                            remote_addr, err
+                        );
+                        break;
+                    },
                 }
             } else {
                 line.push(byte);
