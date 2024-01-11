@@ -51,7 +51,7 @@ impl<'b> BitReader<'b> {
         Ok(value != 0)
     }
 
-    pub(crate) fn read_byte(&mut self) -> Result<u8, SerdeErr> {
+    pub fn read_byte(&mut self) -> Result<u8, SerdeErr> {
         let mut output = 0;
         for _ in 0..7 {
             if self.read_bit()? {
