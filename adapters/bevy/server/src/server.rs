@@ -58,6 +58,10 @@ impl<'w> Server<'w> {
         self.server.broadcast_message::<C, M>(message);
     }
 
+    pub fn broadcast_message_scoped<C: Channel, M: Message>(&mut self, entity: &Entity, message: &M) {
+        self.server.broadcast_message_scoped::<C, M>(entity, message);
+    }
+
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
         self.server.receive_tick_buffer_messages(tick)
     }
