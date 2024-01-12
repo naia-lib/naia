@@ -6,7 +6,9 @@ const naia_socket = {
     unique_js_id: 0,
 
     plugin: function (importObject) {
+        importObject.env.naia_is_connected = function () { return naia_socket.is_connected(); };
         importObject.env.naia_connect = function (address, rtc_path) { naia_socket.connect(address, rtc_path); };
+        importObject.env.naia_disconnect = function () { naia_socket.disconnect(); };
         importObject.env.naia_send = function (message) { return naia_socket.send(message); };
         importObject.env.naia_create_string = function (buf, max_len) { return naia_socket.js_create_string(buf, max_len); };
         importObject.env.naia_unwrap_to_str = function (js_object, buf, max_len) { naia_socket.js_unwrap_to_str(js_object, buf, max_len); };
@@ -17,6 +19,14 @@ const naia_socket = {
         importObject.env.naia_free_object = function (js_object) { naia_socket.js_free_object(js_object); };
         importObject.env.naia_random = function () { return Math.random(); };
         importObject.env.naia_now = function () { return Date.now(); };
+    },
+
+    is_connected: function() {
+        if (this.channel) {
+            return true;
+        } else {
+            return false;
+        }
     },
 
     connect: function (server_socket_address, rtc_path) {
@@ -89,6 +99,12 @@ const naia_socket = {
         }).catch(function(err) {
             naia_socket.error("error during 'createOffer'", err);
         });
+    },
+
+    disconnect: function() {
+        if (this.channel) {
+            this.channel = null;
+        }
     },
 
     error: function (desc, err) {

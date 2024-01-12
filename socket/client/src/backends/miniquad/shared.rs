@@ -18,7 +18,9 @@ pub static mut SERVER_ADDR: ServerAddr = ServerAddr::Finding;
 
 // Javascript methods
 extern "C" {
+    pub fn naia_is_connected() -> bool;
     pub fn naia_connect(server_socket_address: JsObject, rtc_path: JsObject);
+    pub fn naia_disconnect();
     pub fn naia_send(message: JsObject) -> bool;
     pub fn naia_free_object(js_object: JsObjectWeak);
     pub fn naia_create_string(buf: *const u8, max_len: u32) -> JsObject;

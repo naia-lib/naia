@@ -10,6 +10,7 @@ use super::{addr_cell::AddrCell, data_port::DataPort};
 pub struct PacketSenderImpl {
     message_port: MessagePort,
     server_addr: AddrCell,
+    connected: bool,
 }
 
 impl PacketSenderImpl {
@@ -18,6 +19,7 @@ impl PacketSenderImpl {
         PacketSenderImpl {
             message_port: data_port.message_port(),
             server_addr: addr_cell.clone(),
+            connected: true,
         }
     }
 }
@@ -25,16 +27,31 @@ impl PacketSenderImpl {
 impl PacketSender for PacketSenderImpl {
     /// Send a Packet to the Server
     fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
-        let uarray: Uint8Array = payload.into();
-        self.message_port
-            .post_message(&uarray)
-            .expect("Failed to send message");
-        Ok(())
+        if self.connected {
+            let uarray: Uint8Array = payload.into();
+            self.message_port
+                .post_message(&uarray)
+                .expect("Failed to send message");
+            Ok(())
+        } else {
+            Err(NaiaClientSocketError::SendError)
+        }
     }
 
     /// Get the Server's Socket address
     fn server_addr(&self) -> ServerAddr {
         self.server_addr.get()
+    }
+
+    fn connected(&self) -> bool {
+        self.connected
+    }
+
+    fn disconnect(&mut self) {
+        if self.connected {
+            self.connected = false;
+            self.message_port.close();
+        }
     }
 }
 

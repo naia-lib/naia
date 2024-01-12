@@ -32,7 +32,7 @@ impl Socket {
         get_runtime().spawn(async move { socket.connect(&server_session_string).await });
 
         // Setup Packet Sender
-        let packet_sender_impl = PacketSenderImpl::new(io.addr_cell.clone(), io.to_server_sender);
+        let packet_sender_impl = PacketSenderImpl::new(io.addr_cell.clone(), io.to_server_sender, io.to_server_disconnect_sender);
         let packet_sender: Box<dyn PacketSender> = Box::new(packet_sender_impl);
 
         // Setup Packet Receiver
