@@ -733,8 +733,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn user_keys(&self) -> Vec<UserKey> {
         let mut output = Vec::new();
 
-        for (user_key, _) in self.users.iter() {
-            output.push(user_key);
+        for (user_key, user) in self.users.iter() {
+            if self.user_connections.contains_key(&user.address) {
+                output.push(user_key);
+            }
         }
 
         output
