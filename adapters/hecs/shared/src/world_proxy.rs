@@ -1,10 +1,6 @@
 use hecs::{Entity, World};
 
-use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentUpdate, LocalEntityAndGlobalEntityConverter,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
-    SerdeErr, WorldMutType, WorldRefType,
-};
+use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -272,6 +268,38 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
             return accessor.remove_component(self.world, entity);
         }
         None
+    }
+
+    fn entity_publish(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity) {
+        todo!()
+    }
+
+    fn component_publish(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity, _component_kind: &ComponentKind) {
+        todo!()
+    }
+
+    fn entity_unpublish(&mut self, _entity: &Entity) {
+        todo!()
+    }
+
+    fn component_unpublish(&mut self, _entity: &Entity, _component_kind: &ComponentKind) {
+        todo!()
+    }
+
+    fn entity_enable_delegation(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity) {
+        todo!()
+    }
+
+    fn component_enable_delegation(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity, _component_kind: &ComponentKind) {
+        todo!()
+    }
+
+    fn entity_disable_delegation(&mut self, _entity: &Entity) {
+        todo!()
+    }
+
+    fn component_disable_delegation(&mut self, _entity: &Entity, _component_kind: &ComponentKind) {
+        todo!()
     }
 }
 

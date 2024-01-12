@@ -129,7 +129,7 @@ impl App {
     }
 
     fn receive_events(&mut self) {
-        if self.client.is_disconnected() {
+        if !self.client.connection_status().is_connected() {
             return;
         }
 
@@ -300,7 +300,7 @@ impl App {
     fn draw(&mut self) {
         clear_background(BLACK);
 
-        if !self.client.is_connected() {
+        if !self.client.connection_status().is_connected() {
             return;
         }
 

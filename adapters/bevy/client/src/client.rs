@@ -9,7 +9,7 @@ use naia_bevy_shared::{
     Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
     GlobalEntity, Message, Tick,
 };
-use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError};
+use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError, ConnectionStatus};
 
 use crate::ReplicationConfig;
 
@@ -36,12 +36,8 @@ impl<'w> Client<'w> {
         self.client.disconnect();
     }
 
-    pub fn is_connected(&self) -> bool {
-        self.client.is_connected()
-    }
-
-    pub fn is_connecting(&self) -> bool {
-        self.client.is_connecting()
+    pub fn connection_status(&self) -> ConnectionStatus {
+        self.client.connection_status()
     }
 
     pub fn server_address(&self) -> Result<SocketAddr, NaiaClientError> {

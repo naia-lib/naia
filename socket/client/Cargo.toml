@@ -34,7 +34,7 @@ tinyjson = { version = "2.3", optional = true }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-webrtc-unreliable-client = { version = "0.2" }
+webrtc-unreliable-client = { path = "../../../webrtc-unreliable-client/client" }
 tokio = { version = "1.15", features = ["full"] }
 once_cell = { version = "1.4.1" }
 

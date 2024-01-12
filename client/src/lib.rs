@@ -31,7 +31,7 @@ mod error;
 mod events;
 mod world;
 
-pub use client::Client;
+pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;
 pub use command_history::CommandHistory;
 pub use error::NaiaClientError;

@@ -106,18 +106,32 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.io.load(packet_sender, packet_receiver);
     }
 
+    /// Returns client's current connection status
+    pub fn connection_status(&self) -> ConnectionStatus {
+        if self.is_disconnected() {
+            return ConnectionStatus::Disconnected;
+        }
+        if self.is_connecting() {
+            return ConnectionStatus::Connecting;
+        }
+        if self.is_connected() {
+            return ConnectionStatus::Connected;
+        }
+        return ConnectionStatus::Disconnecting;
+    }
+
     /// Returns whether or not the client is disconnected
-    pub fn is_disconnected(&self) -> bool {
+    fn is_disconnected(&self) -> bool {
         !self.io.is_loaded()
     }
 
     /// Returns whether or not a connection is being established with the Server
-    pub fn is_connecting(&self) -> bool {
+    fn is_connecting(&self) -> bool {
         self.io.is_loaded()
     }
 
     /// Returns whether or not a connection has been established with the Server
-    pub fn is_connected(&self) -> bool {
+    fn is_connected(&self) -> bool {
         self.server_connection.is_some()
     }
 
@@ -1272,5 +1286,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Cl
 
     fn entity_to_global_entity(&self, entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.global_world_manager.entity_to_global_entity(entity)
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum ConnectionStatus {
+    Disconnected,
+    Connecting,
+    Connected,
+    Disconnecting,
+}
+
+impl ConnectionStatus {
+    pub fn is_disconnected(&self) -> bool {
+        self == &ConnectionStatus::Disconnected
+    }
+
+    pub fn is_connecting(&self) -> bool {
+        self == &ConnectionStatus::Connecting
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self == &ConnectionStatus::Connected
+    }
+
+    pub fn is_disconnecting(&self) -> bool {
+        self == &ConnectionStatus::Disconnecting
     }
 }

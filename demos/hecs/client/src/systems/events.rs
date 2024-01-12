@@ -9,7 +9,7 @@ use naia_hecs_demo_shared::{Marker, Name, Position};
 use crate::app::App;
 
 pub fn process_events(app: &mut App) {
-    if app.client.is_disconnected() {
+    if !app.client.connection_status().is_connected() {
         return;
     }
 
