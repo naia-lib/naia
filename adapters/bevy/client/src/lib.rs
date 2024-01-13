@@ -2,7 +2,7 @@ pub use naia_bevy_shared::{
     sequence_greater_than, EntityAuthStatus, Random, ReceiveEvents, Replicate, Tick,
 };
 pub use naia_client::{
-    shared::Instant, transport, ClientConfig, CommandHistory, ReplicationConfig,
+    shared::{Instant, default_channels}, transport, ClientConfig, CommandHistory, ReplicationConfig,
 };
 
 pub mod events;

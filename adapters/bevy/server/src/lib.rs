@@ -2,7 +2,7 @@ pub use naia_bevy_shared::{EntityAuthStatus, Random, ReceiveEvents, Replicate, T
 pub use naia_server::{
     shared::{
         BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, SerdeErr,
-        SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger,
+        SignedInteger, SignedVariableInteger, UnsignedInteger, UnsignedVariableInteger, default_channels,
     },
     transport, ReplicationConfig, RoomKey, SerdeBevy as Serde, ServerConfig, UserKey,
 };
