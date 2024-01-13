@@ -469,7 +469,7 @@ impl HostWorldWriter {
             // write ComponentContinue bit
             true.ser(&mut counter);
             // write component kind
-            counter.write_bits(<ComponentKind as ConstBitLength>::const_bit_length());
+            counter.count_bits(<ComponentKind as ConstBitLength>::const_bit_length());
             // write data
             world
                 .component_of_kind(entity, component_kind)

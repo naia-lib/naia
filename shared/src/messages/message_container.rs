@@ -49,7 +49,7 @@ impl MessageContainer {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
         if writer.is_counter() {
-            writer.write_bits(self.bit_length());
+            writer.count_bits(self.bit_length());
         } else {
             self.inner.write(message_kinds, writer, converter);
         }

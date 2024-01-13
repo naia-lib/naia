@@ -94,7 +94,7 @@ impl BitWrite for FragmentWriter {
         }
     }
 
-    fn write_bits(&mut self, _bits: u32) {
+    fn count_bits(&mut self, _bits: u32) {
         panic!("This method should only be used by BitCounter");
     }
 

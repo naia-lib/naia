@@ -32,7 +32,7 @@ impl BitWrite for BitCounter {
     fn write_byte(&mut self, _: u8) {
         self.current_bits += 8;
     }
-    fn write_bits(&mut self, bits: u32) {
+    fn count_bits(&mut self, bits: u32) {
         self.current_bits += bits;
     }
     fn is_counter(&self) -> bool {

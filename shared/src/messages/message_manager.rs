@@ -233,7 +233,7 @@ impl MessageManager {
             // write ChannelContinue bit
             counter.write_bit(false);
             // write ChannelIndex
-            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
+            counter.count_bits(<ChannelKind as ConstBitLength>::const_bit_length());
             if counter.overflowed() {
                 break;
             }

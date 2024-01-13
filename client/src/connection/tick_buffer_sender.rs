@@ -84,7 +84,7 @@ impl TickBufferSender {
             // write ChannelContinue bit
             true.ser(&mut counter);
             // write ChannelIndex
-            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
+            counter.count_bits(<ChannelKind as ConstBitLength>::const_bit_length());
 
             if counter.overflowed() {
                 break;

@@ -56,7 +56,7 @@ impl BitWrite for FileBitWriter {
         }
     }
 
-    fn write_bits(&mut self, _: u32) {
+    fn count_bits(&mut self, _: u32) {
         panic!("This method should not be called for FileBitWriter!");
     }
 
