@@ -108,21 +108,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Returns client's current connection status
     pub fn connection_status(&self) -> ConnectionStatus {
-        if self.is_disconnected() {
-            return ConnectionStatus::Disconnected;
-        }
-        if self.is_connecting() {
-            return ConnectionStatus::Connecting;
-        }
         if self.is_connected() {
-            return ConnectionStatus::Connected;
+            if self.is_disconnecting() {
+                return ConnectionStatus::Disconnecting;
+            } else {
+                return ConnectionStatus::Connected;
+            }
+        } else {
+            if self.is_disconnected() {
+                return ConnectionStatus::Disconnected;
+            }
+            if self.is_connecting() {
+                return ConnectionStatus::Connecting;
+            }
+            panic!("Client is in an unknown connection state!");
         }
-        return ConnectionStatus::Disconnecting;
-    }
-
-    /// Returns whether or not the client is disconnected
-    fn is_disconnected(&self) -> bool {
-        !self.io.is_loaded()
     }
 
     /// Returns whether or not a connection is being established with the Server
@@ -133,6 +133,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Returns whether or not a connection has been established with the Server
     fn is_connected(&self) -> bool {
         self.server_connection.is_some()
+    }
+
+    /// Returns whether or not the client is disconnecting
+    fn is_disconnecting(&self) -> bool {
+        if let Some(connection) = &self.server_connection {
+            connection.base.should_drop() || self.manual_disconnect
+        } else {
+            false
+        }
+    }
+
+    /// Returns whether or not the client is disconnected
+    fn is_disconnected(&self) -> bool {
+        !self.io.is_loaded()
     }
 
     /// Disconnect from Server
@@ -172,12 +186,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let mut response_events = None;
 
         // all other operations
-        if let Some(connection) = &mut self.server_connection {
-            if connection.base.should_drop() || self.manual_disconnect {
-                self.disconnect_with_events(&mut world);
-                return std::mem::take(&mut self.incoming_events);
-            }
+        if self.is_disconnecting() {
+            self.disconnect_with_events(&mut world);
+            return std::mem::take(&mut self.incoming_events);
+        }
 
+        if let Some(connection) = &mut self.server_connection {
             let (receiving_tick_happened, sending_tick_happened) =
                 connection.time_manager.collect_ticks();
 
