@@ -59,7 +59,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
 
         app
             // SHARED PLUGIN //
-            .add_plugins(SharedPlugin)
+            .add_plugins(SharedPlugin::<T>::new())
             // RESOURCES //
             .insert_resource(client)
             // EVENTS //

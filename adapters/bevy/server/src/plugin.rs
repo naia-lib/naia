@@ -30,6 +30,8 @@ impl PluginConfig {
     }
 }
 
+pub struct Singleton;
+
 pub struct Plugin {
     config: Mutex<Option<PluginConfig>>,
 }
@@ -56,7 +58,7 @@ impl PluginType for Plugin {
 
         app
             // SHARED PLUGIN //
-            .add_plugins(SharedPlugin)
+            .add_plugins(SharedPlugin::<Singleton>::new())
             // RESOURCES //
             .insert_resource(server)
             // EVENTS //
