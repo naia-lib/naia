@@ -2,9 +2,6 @@ use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::{info, warn};
 
-#[cfg(feature = "bevy_support")]
-use bevy_ecs::prelude::Resource;
-
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
@@ -32,7 +29,6 @@ use crate::{
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
-#[cfg_attr(feature = "bevy_support", derive(Resource))]
 pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     client_config: ClientConfig,

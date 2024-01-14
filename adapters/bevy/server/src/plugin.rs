@@ -13,6 +13,7 @@ use super::{
         SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
     systems::before_receive_events,
+    server::ServerWrapper,
 };
 
 struct PluginConfig {
@@ -51,6 +52,7 @@ impl PluginType for Plugin {
         app.insert_resource(world_data);
 
         let server = Server::<Entity>::new(config.server_config, config.protocol.into());
+        let server = ServerWrapper(server);
 
         app
             // SHARED PLUGIN //

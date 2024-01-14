@@ -8,9 +8,6 @@ use std::{
 
 use log::{info, warn};
 
-#[cfg(feature = "bevy_support")]
-use bevy_ecs::prelude::Resource;
-
 use naia_shared::{
     BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
     EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
@@ -49,7 +46,6 @@ use super::{
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-#[cfg_attr(feature = "bevy_support", derive(Resource))]
 pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     server_config: ServerConfig,

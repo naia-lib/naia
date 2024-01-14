@@ -1,7 +1,6 @@
 use std::ops::DerefMut;
 
 use bevy_ecs::{
-    entity::Entity,
     event::Events,
     world::{Mut, World},
 };
@@ -9,9 +8,9 @@ use bevy_ecs::{
 use log::warn;
 
 use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
-use naia_server::{EntityOwner, Server};
+use naia_server::EntityOwner;
 
-use crate::{ClientOwned, EntityAuthStatus};
+use crate::{ClientOwned, EntityAuthStatus, server::ServerWrapper};
 
 mod naia_events {
     pub use naia_server::{
@@ -31,8 +30,8 @@ mod bevy_events {
 }
 
 pub fn before_receive_events(world: &mut World) {
-    world.resource_scope(|world, mut server: Mut<Server<Entity>>| {
-        if !server.is_listening() {
+    world.resource_scope(|world, mut server: Mut<ServerWrapper>| {
+        if !server.0.is_listening() {
             return;
         }
 
@@ -44,7 +43,7 @@ pub fn before_receive_events(world: &mut World) {
         for event in host_component_events {
             match event {
                 HostSyncEvent::Insert(entity, component_kind) => {
-                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                    if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
@@ -53,28 +52,28 @@ pub fn before_receive_events(world: &mut World) {
                         warn!("could not find Component in World which has just been inserted!");
                         continue;
                     };
-                    server.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+                    server.0.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
                 }
                 HostSyncEvent::Remove(entity, component_kind) => {
-                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                    if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
-                    server.remove_component_worldless(&entity, &component_kind);
+                    server.0.remove_component_worldless(&entity, &component_kind);
                 }
                 HostSyncEvent::Despawn(entity) => {
-                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                    if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
-                    server.despawn_entity_worldless(&entity);
+                    server.0.despawn_entity_worldless(&entity);
                 }
             }
         }
 
         // Receive Events
         let mut did_tick = false;
-        let mut events = server.receive(world.proxy_mut());
+        let mut events = server.0.receive(world.proxy_mut());
         if !events.is_empty() {
 
             // Connect Event
@@ -145,7 +144,7 @@ pub fn before_receive_events(world: &mut World) {
                     event_writer.send(bevy_events::SpawnEntityEvent(user_key, entity));
                 }
                 for entity in spawned_entities {
-                    let EntityOwner::Client(user_key) = server.entity_owner(&entity) else {
+                    let EntityOwner::Client(user_key) = server.0.entity_owner(&entity) else {
                         panic!("spawned entity that doesn't belong to a client ... shouldn't be possible.");
                     };
                     world.entity_mut(entity).insert(ClientOwned(user_key));
@@ -235,7 +234,7 @@ pub fn before_receive_events(world: &mut World) {
             }
 
             if did_tick {
-                server.send_all_updates(world.proxy());
+                server.0.send_all_updates(world.proxy());
             }
         }
     });

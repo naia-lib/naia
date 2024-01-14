@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap};
+use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use bevy_ecs::{entity::Entity, prelude::Event};
 
@@ -10,35 +10,79 @@ use naia_bevy_shared::{
 
 // ConnectEvent
 #[derive(Event)]
-pub struct ConnectEvent;
-
-// DisconnectEvent
-#[derive(Event)]
-pub struct DisconnectEvent;
-
-// RejectEvent
-#[derive(Event)]
-pub struct RejectEvent;
-
-// ErrorEvent
-#[derive(Event)]
-pub struct ErrorEvent(pub NaiaClientError);
-
-// MessageEvents
-#[derive(Event)]
-pub struct MessageEvents {
-    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
+pub struct ConnectEvent<T> {
+    phantom_t: PhantomData<T>,
 }
 
-impl From<&mut Events<Entity>> for MessageEvents {
-    fn from(events: &mut Events<Entity>) -> Self {
+impl<T> ConnectEvent<T> {
+    pub fn new() -> Self {
         Self {
-            inner: events.take_messages(),
+            phantom_t: PhantomData,
         }
     }
 }
 
-impl MessageEvents {
+// DisconnectEvent
+#[derive(Event)]
+pub struct DisconnectEvent<T> {
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> DisconnectEvent<T> {
+    pub fn new() -> Self {
+        Self {
+            phantom_t: PhantomData,
+        }
+    }
+}
+
+// RejectEvent
+#[derive(Event)]
+pub struct RejectEvent<T> {
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> RejectEvent<T> {
+    pub fn new() -> Self {
+        Self {
+            phantom_t: PhantomData,
+        }
+    }
+}
+
+// ErrorEvent
+#[derive(Event)]
+pub struct ErrorEvent<T> {
+    pub err: NaiaClientError,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> ErrorEvent<T> {
+    pub fn new(err: NaiaClientError) -> Self {
+        Self {
+            err,
+            phantom_t: PhantomData,
+        }
+    }
+}
+
+// MessageEvents
+#[derive(Event)]
+pub struct MessageEvents<T> {
+    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> From<&mut Events<Entity>> for MessageEvents<T> {
+    fn from(events: &mut Events<Entity>) -> Self {
+        Self {
+            inner: events.take_messages(),
+            phantom_t: PhantomData,
+        }
+    }
+}
+
+impl<T> MessageEvents<T> {
     pub fn read<C: Channel, M: Message>(&self) -> Vec<M> {
         let mut output = Vec::new();
 
@@ -63,49 +107,158 @@ impl MessageEvents {
 
 // ClientTickEvent
 #[derive(Event)]
-pub struct ClientTickEvent(pub Tick);
+pub struct ClientTickEvent<T> {
+    pub tick: Tick,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> ClientTickEvent<T> {
+    pub fn new(tick: Tick) -> Self {
+        Self {
+            tick,
+            phantom_t: PhantomData,
+        }
+    }
+}
 
 // ServerTickEvent
 #[derive(Event)]
-pub struct ServerTickEvent(pub Tick);
+pub struct ServerTickEvent<T> {
+    pub tick: Tick,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> ServerTickEvent<T> {
+    pub fn new(tick: Tick) -> Self {
+        Self {
+            tick,
+            phantom_t: PhantomData,
+        }
+    }
+}
 
 // SpawnEntityEvent
 #[derive(Event)]
-pub struct SpawnEntityEvent(pub Entity);
+pub struct SpawnEntityEvent<T> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> SpawnEntityEvent<T> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+        }
+    }
+}
 
 // DespawnEntityEvent
 #[derive(Event)]
-pub struct DespawnEntityEvent(pub Entity);
+pub struct DespawnEntityEvent<T> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> DespawnEntityEvent<T> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+        }
+    }
+}
 
 // PublishEntityEvent
 #[derive(Event)]
-pub struct PublishEntityEvent(pub Entity);
+pub struct PublishEntityEvent<T> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> PublishEntityEvent<T> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+        }
+    }
+}
 
 // UnpublishEntityEvent
 #[derive(Event)]
-pub struct UnpublishEntityEvent(pub Entity);
+pub struct UnpublishEntityEvent<T> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> UnpublishEntityEvent<T> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+        }
+    }
+}
 
 // EntityAuthGrantedEvent
 #[derive(Event)]
-pub struct EntityAuthGrantedEvent(pub Entity);
+pub struct EntityAuthGrantedEvent<T> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> EntityAuthGrantedEvent<T> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+        }
+    }
+}
 
 // EntityAuthDeniedEvent
 #[derive(Event)]
-pub struct EntityAuthDeniedEvent(pub Entity);
+pub struct EntityAuthDeniedEvent<T> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> EntityAuthDeniedEvent<T> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+        }
+    }
+}
 
 // EntityAuthResetEvent
 #[derive(Event)]
-pub struct EntityAuthResetEvent(pub Entity);
+pub struct EntityAuthResetEvent<T> {
+    pub entity: Entity,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> EntityAuthResetEvent<T> {
+    pub fn new(entity: Entity) -> Self {
+        Self {
+            entity,
+            phantom_t: PhantomData,
+        }
+    }
+}
 
 // InsertComponentEvent
 #[derive(Event, Clone)]
-pub struct InsertComponentEvents {
+pub struct InsertComponentEvents<T> {
     inner: HashMap<ComponentKind, Vec<Entity>>,
+    phantom_t: PhantomData<T>,
 }
 
-impl InsertComponentEvents {
+impl<T> InsertComponentEvents<T> {
     pub fn new(inner: HashMap<ComponentKind, Vec<Entity>>) -> Self {
-        Self { inner }
+        Self { inner, phantom_t: PhantomData }
     }
     pub fn read<C: Replicate>(&self) -> Vec<Entity> {
         let component_kind = ComponentKind::of::<C>();
@@ -119,13 +272,14 @@ impl InsertComponentEvents {
 
 // UpdateComponentEvents
 #[derive(Event, Clone)]
-pub struct UpdateComponentEvents {
+pub struct UpdateComponentEvents<T> {
     inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>,
+    phantom_t: PhantomData<T>,
 }
 
-impl UpdateComponentEvents {
+impl<T> UpdateComponentEvents<T> {
     pub fn new(inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>) -> Self {
-        Self { inner }
+        Self { inner, phantom_t: PhantomData }
     }
 
     pub fn read<C: Replicate>(&self) -> Vec<(Tick, Entity)> {
@@ -140,16 +294,17 @@ impl UpdateComponentEvents {
 
 // RemoveComponentEvents
 #[derive(Event)]
-pub struct RemoveComponentEvents {
+pub struct RemoveComponentEvents<T> {
     inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>,
+    phantom_t: PhantomData<T>,
 }
 
-impl RemoveComponentEvents {
+impl<T> RemoveComponentEvents<T> {
     pub fn new(inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>) -> Self {
-        Self { inner }
+        Self { inner, phantom_t: PhantomData }
     }
 
-    pub fn clone_new(&self) -> RemoveComponentEvents {
+    pub fn clone_new(&self) -> Self {
         let mut output = HashMap::new();
 
         for (key, value) in self.inner.iter() {
