@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
-use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin};
+use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin, WorldData};
 use naia_client::{Client, ClientConfig};
 
 use super::{
@@ -50,8 +50,13 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
     fn build(&self, app: &mut App) {
         let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
 
-        let world_data = config.protocol.take_world_data();
+        let mut world_data = config.protocol.take_world_data();
         world_data.add_systems::<T>(app);
+
+        if let Some(old_world_data) = app.world.remove_resource::<WorldData>() {
+            world_data.merge(old_world_data);
+        }
+
         app.insert_resource(world_data);
 
         let client = Client::<Entity>::new(config.client_config, config.protocol.into());

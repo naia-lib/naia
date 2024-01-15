@@ -12,7 +12,6 @@ mod commands;
 mod components;
 mod plugin;
 mod systems;
-mod protocol;
 
 pub use client::Client;
 pub use commands::CommandsExt;

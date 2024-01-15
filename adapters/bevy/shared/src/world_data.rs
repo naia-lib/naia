@@ -13,7 +13,7 @@ use bevy_ecs::{
 
 use naia_shared::{ComponentKind, Replicate};
 
-use super::component_access::{ComponentAccess, ComponentAccessor};
+use super::component_access::{ComponentAccess, ComponentAccessor, AppTag};
 
 #[derive(Resource)]
 pub struct WorldData {
@@ -41,7 +41,14 @@ impl WorldData {
         }
     }
 
-    pub fn add_systems(&self, app: &mut App) {
+    pub fn merge(&mut self, other: Self) {
+        if !self.entities.is_empty() || !other.entities.is_empty() {
+            panic!("merging world data with non-empty entities");
+        }
+        self.kind_to_accessor_map.extend(other.kind_to_accessor_map);
+    }
+
+    pub fn add_systems<T: Send + Sync + 'static>(&self, app: &mut App) {
         for (_kind, accessor_any) in &self.kind_to_accessor_map {
             let accessor = accessor_any
                 .downcast_ref::<Box<dyn ComponentAccess>>()

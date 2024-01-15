@@ -5,7 +5,7 @@ use naia_server::UserKey;
 
 use crate::plugin::Singleton;
 
-pub type ServerOwned = HostOwned<Singleton>;
+pub type ServerOwned = HostOwned;
 
 #[derive(Component)]
 pub struct ClientOwned(pub UserKey);

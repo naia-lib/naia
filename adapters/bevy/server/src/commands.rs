@@ -34,7 +34,7 @@ pub trait CommandsExt<'w, 's, 'a> {
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a> {
         server.enable_replication(&self.id());
-        self.insert(HostOwned::<Singleton>::new());
+        self.insert(HostOwned::new::<Singleton>());
         return self;
     }
 
@@ -43,7 +43,7 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         server: &mut Server,
     ) -> &'a mut EntityCommands<'w, 's, 'a> {
         server.disable_replication(&self.id());
-        self.remove::<HostOwned<Singleton>>();
+        self.remove::<HostOwned>();
         return self;
     }
 
