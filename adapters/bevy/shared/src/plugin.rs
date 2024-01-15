@@ -33,6 +33,6 @@ impl<T: Send + Sync + 'static> PluginType for SharedPlugin<T> {
             .configure_sets(Update, HostSyncChangeTracking.before(BeforeReceiveEvents))
             .configure_sets(Update, BeforeReceiveEvents.before(ReceiveEvents))
             // SYSTEMS //
-            .add_systems(Update, on_despawn.in_set(HostSyncChangeTracking));
+            .add_systems(Update, on_despawn::<T>.in_set(HostSyncChangeTracking));
     }
 }

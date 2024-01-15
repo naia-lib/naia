@@ -38,7 +38,7 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
 
     fn enable_replication<T: Send + Sync + 'static>(&'a mut self, client: &mut Client<T>) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.enable_replication(&self.id());
-        self.insert(HostOwned);
+        self.insert(HostOwned::<T>::new());
         return self;
     }
 
@@ -47,7 +47,7 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         client: &mut Client<T>,
     ) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.disable_replication(&self.id());
-        self.remove::<HostOwned>();
+        self.remove::<HostOwned<T>>();
         return self;
     }
 

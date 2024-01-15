@@ -18,10 +18,10 @@ pub enum HostSyncEvent {
     Despawn(Entity),
 }
 
-pub fn on_despawn(
+pub fn on_despawn<T: Send + Sync + 'static>(
     mut events: EventWriter<HostSyncEvent>,
     query: Query<Entity>,
-    mut removals: RemovedComponents<HostOwned>,
+    mut removals: RemovedComponents<HostOwned<T>>,
 ) {
     for entity in removals.read() {
         if let Ok(_) = query.get(entity) {
@@ -33,18 +33,18 @@ pub fn on_despawn(
     }
 }
 
-pub fn on_component_added<R: Replicate>(
+pub fn on_component_added<T: Send + Sync + 'static, R: Replicate>(
     mut events: EventWriter<HostSyncEvent>,
-    query: Query<Entity, (Added<R>, With<HostOwned>)>,
+    query: Query<Entity, (Added<R>, With<HostOwned<T>>)>,
 ) {
     for entity in query.iter() {
         events.send(HostSyncEvent::Insert(entity, ComponentKind::of::<R>()));
     }
 }
 
-pub fn on_component_removed<R: Replicate>(
+pub fn on_component_removed<T: Send + Sync + 'static, R: Replicate>(
     mut events: EventWriter<HostSyncEvent>,
-    query: Query<Entity, With<HostOwned>>,
+    query: Query<Entity, With<HostOwned<T>>>,
     mut removals: RemovedComponents<R>,
 ) {
     for entity in removals.read() {

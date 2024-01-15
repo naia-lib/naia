@@ -51,7 +51,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
         let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
 
         let world_data = config.protocol.take_world_data();
-        world_data.add_systems(app);
+        world_data.add_systems::<T>(app);
         app.insert_resource(world_data);
 
         let client = Client::<Entity>::new(config.client_config, config.protocol.into());

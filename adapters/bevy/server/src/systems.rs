@@ -11,6 +11,7 @@ use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, World
 use naia_server::EntityOwner;
 
 use crate::{ClientOwned, EntityAuthStatus, server::ServerWrapper};
+use crate::plugin::Singleton;
 
 mod naia_events {
     pub use naia_server::{
@@ -184,14 +185,14 @@ pub fn before_receive_events(world: &mut World) {
             // Delegate Entity Event
             if events.has::<naia_events::DelegateEntityEvent>() {
                 for (_, entity) in events.read::<naia_events::DelegateEntityEvent>() {
-                    world.entity_mut(entity).insert(HostOwned);
+                    world.entity_mut(entity).insert(HostOwned::<Singleton>::new());
                 }
             }
 
             // Entity Auth Given Event
             if events.has::<naia_events::EntityAuthGrantEvent>() {
                 for (_, entity) in events.read::<naia_events::EntityAuthGrantEvent>() {
-                    world.entity_mut(entity).remove::<HostOwned>();
+                    world.entity_mut(entity).remove::<HostOwned<Singleton>>();
                 }
             }
 
@@ -199,7 +200,7 @@ pub fn before_receive_events(world: &mut World) {
             if events.has::<naia_events::EntityAuthResetEvent>() {
                 for entity in events.read::<naia_events::EntityAuthResetEvent>() {
                     if let Some(mut entity_mut) = world.get_entity_mut(entity) {
-                        entity_mut.insert(HostOwned);
+                        entity_mut.insert(HostOwned::<Singleton>::new());
                     }
                 }
             }

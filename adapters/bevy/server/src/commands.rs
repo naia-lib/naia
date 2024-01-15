@@ -8,6 +8,7 @@ use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldProxyMut};
 use naia_server::{ReplicationConfig, UserKey};
 
 use crate::{Server, server::ServerWrapper};
+use crate::plugin::Singleton;
 
 // Bevy Commands Extension
 pub trait CommandsExt<'w, 's, 'a> {
@@ -33,7 +34,7 @@ pub trait CommandsExt<'w, 's, 'a> {
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'w, 's, 'a> {
         server.enable_replication(&self.id());
-        self.insert(HostOwned);
+        self.insert(HostOwned::<Singleton>::new());
         return self;
     }
 
@@ -42,7 +43,7 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         server: &mut Server,
     ) -> &'a mut EntityCommands<'w, 's, 'a> {
         server.disable_replication(&self.id());
-        self.remove::<HostOwned>();
+        self.remove::<HostOwned<Singleton>>();
         return self;
     }
 

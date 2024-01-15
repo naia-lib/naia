@@ -3,7 +3,7 @@ use std::{ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
-use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin};
+use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin, HostSyncChangeTracking, AppTag, ComponentAccess};
 use naia_server::{Server, ServerConfig};
 
 use super::{
@@ -30,7 +30,23 @@ impl PluginConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct Singleton;
+
+impl AppTag for Singleton {
+    fn add_systems(boxed_component: Box<dyn ComponentAccess>, app: &mut App) {
+        boxed_component.add_systems(app);
+
+        // or
+
+        app.add_systems(
+            Update,
+            (on_component_added::<Self, R>, on_component_removed::<Self, R>)
+                .chain()
+                .in_set(HostSyncChangeTracking),
+        );
+    }
+}
 
 pub struct Plugin {
     config: Mutex<Option<PluginConfig>>,
@@ -50,7 +66,7 @@ impl PluginType for Plugin {
         let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
 
         let world_data = config.protocol.take_world_data();
-        world_data.add_systems(app);
+        world_data.add_systems::<Singleton>(Singleton, app);
         app.insert_resource(world_data);
 
         let server = Server::<Entity>::new(config.server_config, config.protocol.into());

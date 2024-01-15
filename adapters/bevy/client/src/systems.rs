@@ -184,7 +184,7 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
                 }
                 for entity in auth_granted_entities {
                     if world.get_entity(entity).is_some() {
-                        world.entity_mut(entity).insert(HostOwned);
+                        world.entity_mut(entity).insert(HostOwned::<T>::new());
                     } else {
                         warn!("Granted auth to an entity that no longer exists! {:?}", entity);
                     }
@@ -213,7 +213,7 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
                 }
                 for entity in auth_reset_entities {
                     if world.get_entity(entity).is_some() {
-                        world.entity_mut(entity).remove::<HostOwned>();
+                        world.entity_mut(entity).remove::<HostOwned<T>>();
                     } else {
                         warn!("Reset auth to an entity that no longer exists! {:?}", entity);
                     }
