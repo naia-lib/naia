@@ -1,8 +1,9 @@
+use std::time::Duration;
+
 use bevy_app::{App, ScheduleRunnerPlugin, Startup, Update};
 use bevy_core::{FrameCountPlugin, TaskPoolPlugin, TypeRegistrationPlugin};
 use bevy_ecs::schedule::IntoSystemConfigs;
 use bevy_log::{info, LogPlugin};
-use std::time::Duration;
 
 use naia_bevy_demo_shared::protocol;
 use naia_bevy_server::{Plugin as ServerPlugin, ReceiveEvents, ServerConfig};
