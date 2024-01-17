@@ -1,5 +1,5 @@
 pub use naia_bevy_shared::{
-    sequence_greater_than, EntityAuthStatus, Random, ReceiveEvents, Replicate, Tick,
+    sequence_greater_than, EntityAuthStatus, Random, ReceiveEvents, Replicate, Tick, Timer
 };
 pub use naia_client::{
     shared::{default_channels, Instant, Message},
