@@ -7,6 +7,7 @@ use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin, WorldData};
 use naia_client::{Client, ClientConfig};
 
 use super::{
+    client::ClientWrapper,
     events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
         EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvents,
@@ -14,7 +15,6 @@ use super::{
         SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
     systems::before_receive_events,
-    client::ClientWrapper,
 };
 
 struct PluginConfig {
@@ -86,6 +86,9 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_event::<UpdateComponentEvents<T>>()
             .add_event::<RemoveComponentEvents<T>>()
             // SYSTEMS //
-            .add_systems(Update, before_receive_events::<T>.in_set(BeforeReceiveEvents));
+            .add_systems(
+                Update,
+                before_receive_events::<T>.in_set(BeforeReceiveEvents),
+            );
     }
 }

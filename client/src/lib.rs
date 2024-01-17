@@ -16,7 +16,8 @@ extern crate cfg_if;
 pub mod transport;
 pub mod shared {
     pub use naia_shared::{
-        default_channels, sequence_greater_than, Instant, Random, SocketConfig, Tick, Message, Protocol,
+        default_channels, sequence_greater_than, Instant, Message, Protocol, Random, SocketConfig,
+        Tick,
     };
 }
 pub mod internal {

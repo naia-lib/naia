@@ -24,11 +24,11 @@ mod world_data;
 mod world_proxy;
 
 pub use change_detection::HostSyncEvent;
-pub use component_access::{ComponentAccess, ComponentAccessor, AppTag};
+pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
 pub use components::{HostOwned, HostOwnedMap};
 pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
-pub use system_set::{BeforeReceiveEvents, ReceiveEvents, HostSyncChangeTracking};
+pub use system_set::{BeforeReceiveEvents, HostSyncChangeTracking, ReceiveEvents};
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};

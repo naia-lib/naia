@@ -1,15 +1,18 @@
-use std::{net::SocketAddr, marker::PhantomData};
+use std::{marker::PhantomData, net::SocketAddr};
 
 use bevy_ecs::{
     entity::Entity,
-    system::{Resource, ResMut, SystemParam},
+    system::{ResMut, Resource, SystemParam},
 };
 
 use naia_bevy_shared::{
     Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
     GlobalEntity, Message, Tick,
 };
-use naia_client::{shared::SocketConfig, transport::Socket, Client as NaiaClient, NaiaClientError, ConnectionStatus};
+use naia_client::{
+    shared::SocketConfig, transport::Socket, Client as NaiaClient, ConnectionStatus,
+    NaiaClientError,
+};
 
 use crate::ReplicationConfig;
 
@@ -78,7 +81,9 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
     }
 
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
-        self.client.client.send_tick_buffer_message::<C, M>(tick, message);
+        self.client
+            .client
+            .send_tick_buffer_message::<C, M>(tick, message);
     }
 
     //// Ticks ////

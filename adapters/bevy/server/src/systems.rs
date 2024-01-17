@@ -10,8 +10,8 @@ use log::warn;
 use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
 use naia_server::EntityOwner;
 
-use crate::{ClientOwned, EntityAuthStatus, server::ServerWrapper};
 use crate::plugin::Singleton;
+use crate::{server::ServerWrapper, ClientOwned, EntityAuthStatus};
 
 mod naia_events {
     pub use naia_server::{
@@ -43,7 +43,7 @@ pub fn before_receive_events(world: &mut World) {
         let host_component_events: Vec<HostSyncEvent> = host_component_event_reader.drain().collect();
         for event in host_component_events {
             match event {
-                HostSyncEvent::Insert(host_id, entity, component_kind) => {
+                HostSyncEvent::Insert(_host_id, entity, component_kind) => {
                     if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
@@ -55,14 +55,14 @@ pub fn before_receive_events(world: &mut World) {
                     };
                     server.0.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
                 }
-                HostSyncEvent::Remove(host_id, entity, component_kind) => {
+                HostSyncEvent::Remove(_host_id, entity, component_kind) => {
                     if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
                     server.0.remove_component_worldless(&entity, &component_kind);
                 }
-                HostSyncEvent::Despawn(host_id, entity) => {
+                HostSyncEvent::Despawn(_host_id, entity) => {
                     if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;

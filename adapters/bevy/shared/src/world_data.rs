@@ -13,7 +13,7 @@ use bevy_ecs::{
 
 use naia_shared::{ComponentKind, Replicate};
 
-use super::component_access::{ComponentAccess, ComponentAccessor, AppTag};
+use super::component_access::{ComponentAccess, ComponentAccessor};
 
 #[derive(Resource)]
 pub struct WorldData {

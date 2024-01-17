@@ -1,17 +1,17 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
-use bevy_ecs::{entity::Entity, component::Component, system::Resource};
+use bevy_ecs::{component::Component, entity::Entity, system::Resource};
 
 #[derive(Component, Clone, Copy)]
 pub struct HostOwned {
-    type_id: TypeId
+    type_id: TypeId,
 }
 
 impl HostOwned {
     pub fn new<T: Any>() -> Self {
         Self {
-            type_id: TypeId::of::<T>()
+            type_id: TypeId::of::<T>(),
         }
     }
 

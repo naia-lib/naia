@@ -27,10 +27,9 @@ mod bevy_events {
     };
 }
 
-use crate::{ServerOwned, client::ClientWrapper};
+use crate::{client::ClientWrapper, ServerOwned};
 
 pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
-
     let host_id = TypeId::of::<T>();
 
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {

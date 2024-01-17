@@ -1,6 +1,8 @@
 use crate::{error::NaiaClientSocketError, packet_sender::PacketSender, ServerAddr};
 
-use super::shared::{naia_create_u8_array, naia_send, naia_disconnect, naia_is_connected, SERVER_ADDR};
+use super::shared::{
+    naia_create_u8_array, naia_disconnect, naia_is_connected, naia_send, SERVER_ADDR,
+};
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone, Default)]

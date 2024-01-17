@@ -258,7 +258,10 @@ pub struct InsertComponentEvents<T> {
 
 impl<T> InsertComponentEvents<T> {
     pub fn new(inner: HashMap<ComponentKind, Vec<Entity>>) -> Self {
-        Self { inner, phantom_t: PhantomData }
+        Self {
+            inner,
+            phantom_t: PhantomData,
+        }
     }
     pub fn read<C: Replicate>(&self) -> Vec<Entity> {
         let component_kind = ComponentKind::of::<C>();
@@ -279,7 +282,10 @@ pub struct UpdateComponentEvents<T> {
 
 impl<T> UpdateComponentEvents<T> {
     pub fn new(inner: HashMap<ComponentKind, Vec<(Tick, Entity)>>) -> Self {
-        Self { inner, phantom_t: PhantomData }
+        Self {
+            inner,
+            phantom_t: PhantomData,
+        }
     }
 
     pub fn read<C: Replicate>(&self) -> Vec<(Tick, Entity)> {
@@ -301,7 +307,10 @@ pub struct RemoveComponentEvents<T> {
 
 impl<T> RemoveComponentEvents<T> {
     pub fn new(inner: HashMap<ComponentKind, Vec<(Entity, Box<dyn Replicate>)>>) -> Self {
-        Self { inner, phantom_t: PhantomData }
+        Self {
+            inner,
+            phantom_t: PhantomData,
+        }
     }
 
     pub fn clone_new(&self) -> Self {

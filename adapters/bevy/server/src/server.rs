@@ -1,11 +1,10 @@
-
 use std::time::Duration;
 
+use bevy_ecs::prelude::Resource;
 use bevy_ecs::{
     entity::Entity,
     system::{ResMut, SystemParam},
 };
-use bevy_ecs::prelude::Resource;
 
 use naia_server::{
     shared::SocketConfig, transport::Socket, ReplicationConfig, RoomKey, RoomMut, RoomRef,

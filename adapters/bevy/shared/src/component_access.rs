@@ -1,10 +1,9 @@
 use std::{any::Any, marker::PhantomData};
-use std::any::TypeId;
 
 use bevy_app::{App, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs, world::World};
 
-use naia_shared::{ComponentKind, GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
+use naia_shared::{GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::{
     change_detection::{on_component_added, on_component_removed},
@@ -59,7 +58,6 @@ pub struct ComponentAccessor<R: Replicate> {
 }
 
 impl<R: Replicate> ComponentAccessor<R> {
-
     fn new() -> Self {
         Self {
             phantom_r: PhantomData::<R>,

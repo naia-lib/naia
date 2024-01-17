@@ -3,7 +3,7 @@ use std::{ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
-use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin, HostSyncChangeTracking, AppTag, ComponentAccess};
+use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin};
 use naia_server::{Server, ServerConfig};
 
 use super::{
@@ -12,8 +12,8 @@ use super::{
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
         SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
-    systems::before_receive_events,
     server::ServerWrapper,
+    systems::before_receive_events,
 };
 
 struct PluginConfig {

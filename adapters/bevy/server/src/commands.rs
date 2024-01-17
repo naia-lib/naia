@@ -7,8 +7,8 @@ use bevy_ecs::{
 use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldProxyMut};
 use naia_server::{ReplicationConfig, UserKey};
 
-use crate::{Server, server::ServerWrapper};
 use crate::plugin::Singleton;
+use crate::{server::ServerWrapper, Server};
 
 // Bevy Commands Extension
 pub trait CommandsExt<'w, 's, 'a> {
@@ -105,7 +105,11 @@ impl ConfigureReplicationCommand {
 impl BevyCommand for ConfigureReplicationCommand {
     fn apply(self, world: &mut World) {
         world.resource_scope(|world, mut server: Mut<ServerWrapper>| {
-            server.0.configure_entity_replication(&mut world.proxy_mut(), &self.entity, self.config);
+            server.0.configure_entity_replication(
+                &mut world.proxy_mut(),
+                &self.entity,
+                self.config,
+            );
         });
     }
 }

@@ -1,6 +1,10 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_shared::{BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
+use naia_shared::{
+    BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
+    LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -296,11 +300,20 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         None
     }
 
-    fn entity_publish(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity) {
+    fn entity_publish(
+        &mut self,
+        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _entity: &Entity,
+    ) {
         todo!()
     }
 
-    fn component_publish(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity, _component_kind: &ComponentKind) {
+    fn component_publish(
+        &mut self,
+        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _entity: &Entity,
+        _component_kind: &ComponentKind,
+    ) {
         todo!()
     }
 
@@ -312,11 +325,20 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         todo!()
     }
 
-    fn entity_enable_delegation(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity) {
+    fn entity_enable_delegation(
+        &mut self,
+        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _entity: &Entity,
+    ) {
         todo!()
     }
 
-    fn component_enable_delegation(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity, _component_kind: &ComponentKind) {
+    fn component_enable_delegation(
+        &mut self,
+        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _entity: &Entity,
+        _component_kind: &ComponentKind,
+    ) {
         todo!()
     }
 

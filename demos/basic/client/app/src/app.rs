@@ -6,7 +6,13 @@ cfg_if! {
     }
 }
 
-use naia_client::{shared::{default_channels::UnorderedReliableChannel, SocketConfig}, transport::webrtc, Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent, ConnectionStatus};
+use naia_client::{
+    shared::{default_channels::UnorderedReliableChannel, SocketConfig},
+    transport::webrtc,
+    Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent, ConnectionStatus,
+    DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent,
+    RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
+};
 
 use naia_demo_world::{Entity, World};
 

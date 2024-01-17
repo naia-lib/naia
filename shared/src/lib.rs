@@ -115,7 +115,7 @@ pub use world::{
         },
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
-        local_entity::{HostEntity, RemoteEntity, OwnedLocalEntity},
+        local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
     },
     host::{
         global_diff_handler::GlobalDiffHandler,

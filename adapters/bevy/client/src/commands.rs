@@ -1,4 +1,4 @@
-use std::{any::Any, marker::PhantomData};
+use std::marker::PhantomData;
 
 use bevy_ecs::{
     entity::Entity,
@@ -9,7 +9,7 @@ use bevy_ecs::{
 use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldMutType, WorldProxyMut};
 use naia_client::ReplicationConfig;
 
-use crate::{Client, client::ClientWrapper};
+use crate::{client::ClientWrapper, Client};
 
 // Bevy Commands Extension
 pub trait CommandsExt<'w, 's, 'a> {
@@ -18,13 +18,30 @@ pub trait CommandsExt<'w, 's, 'a> {
         &'a mut self,
         config: ReplicationConfig,
     ) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn enable_replication<T: Send + Sync + 'static>(&'a mut self, client: &mut Client<T>) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn disable_replication<T: Send + Sync + 'static>(&'a mut self, client: &mut Client<T>)
-        -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn replication_config<T: Send + Sync + 'static>(&'a self, client: &Client<T>) -> Option<ReplicationConfig>;
-    fn request_authority<T: Send + Sync + 'static>(&'a mut self, client: &mut Client<T>) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn release_authority<T: Send + Sync + 'static>(&'a mut self, client: &mut Client<T>) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn authority<T: Send + Sync + 'static>(&'a self, client: &Client<T>) -> Option<EntityAuthStatus>;
+    fn enable_replication<T: Send + Sync + 'static>(
+        &'a mut self,
+        client: &mut Client<T>,
+    ) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn disable_replication<T: Send + Sync + 'static>(
+        &'a mut self,
+        client: &mut Client<T>,
+    ) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn replication_config<T: Send + Sync + 'static>(
+        &'a self,
+        client: &Client<T>,
+    ) -> Option<ReplicationConfig>;
+    fn request_authority<T: Send + Sync + 'static>(
+        &'a mut self,
+        client: &mut Client<T>,
+    ) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn release_authority<T: Send + Sync + 'static>(
+        &'a mut self,
+        client: &mut Client<T>,
+    ) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn authority<T: Send + Sync + 'static>(
+        &'a self,
+        client: &Client<T>,
+    ) -> Option<EntityAuthStatus>;
 }
 
 impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
@@ -37,7 +54,10 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         commands.entity(new_entity)
     }
 
-    fn enable_replication<T: Send + Sync + 'static>(&'a mut self, client: &mut Client<T>) -> &'a mut EntityCommands<'w, 's, 'a> {
+    fn enable_replication<T: Send + Sync + 'static>(
+        &'a mut self,
+        client: &mut Client<T>,
+    ) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.enable_replication(&self.id());
         self.insert(HostOwned::new::<T>());
         return self;
@@ -63,21 +83,33 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         return self;
     }
 
-    fn replication_config<T: Send + Sync + 'static>(&'a self, client: &Client<T>) -> Option<ReplicationConfig> {
+    fn replication_config<T: Send + Sync + 'static>(
+        &'a self,
+        client: &Client<T>,
+    ) -> Option<ReplicationConfig> {
         client.replication_config(&self.id())
     }
 
-    fn request_authority<T: Send + Sync + 'static>(&'a mut self, client: &mut Client<T>) -> &'a mut EntityCommands<'w, 's, 'a> {
+    fn request_authority<T: Send + Sync + 'static>(
+        &'a mut self,
+        client: &mut Client<T>,
+    ) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.entity_request_authority(&self.id());
         return self;
     }
 
-    fn release_authority<T: Send + Sync + 'static>(&'a mut self, client: &mut Client<T>) -> &'a mut EntityCommands<'w, 's, 'a> {
+    fn release_authority<T: Send + Sync + 'static>(
+        &'a mut self,
+        client: &mut Client<T>,
+    ) -> &'a mut EntityCommands<'w, 's, 'a> {
         client.entity_release_authority(&self.id());
         return self;
     }
 
-    fn authority<T: Send + Sync + 'static>(&'a self, client: &Client<T>) -> Option<EntityAuthStatus> {
+    fn authority<T: Send + Sync + 'static>(
+        &'a self,
+        client: &Client<T>,
+    ) -> Option<EntityAuthStatus> {
         client.entity_authority_status(&self.id())
     }
 }
@@ -116,14 +148,22 @@ pub(crate) struct ConfigureReplicationCommand<T: Send + Sync + 'static> {
 
 impl<T: Send + Sync + 'static> ConfigureReplicationCommand<T> {
     pub fn new(entity: Entity, config: ReplicationConfig) -> Self {
-        Self { entity, config, phantom_t: PhantomData }
+        Self {
+            entity,
+            config,
+            phantom_t: PhantomData,
+        }
     }
 }
 
 impl<T: Send + Sync + 'static> BevyCommand for ConfigureReplicationCommand<T> {
     fn apply(self, world: &mut World) {
         world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
-            client.client.configure_entity_replication(&mut world.proxy_mut(), &self.entity, self.config);
+            client.client.configure_entity_replication(
+                &mut world.proxy_mut(),
+                &self.entity,
+                self.config,
+            );
         });
     }
 }

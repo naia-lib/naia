@@ -4,7 +4,7 @@ use bevy_ecs::{
     entity::Entity,
     event::EventWriter,
     prelude::Event,
-    query::{Added, With, Changed},
+    query::{Added, Changed},
     removal_detection::RemovedComponents,
     system::{Query, ResMut},
 };
@@ -63,7 +63,11 @@ pub fn on_component_added<R: Replicate>(
     query: Query<(Entity, &HostOwned), Added<R>>,
 ) {
     for (entity, host_owned) in query.iter() {
-        events.send(HostSyncEvent::Insert(host_owned.type_id(), entity, ComponentKind::of::<R>()));
+        events.send(HostSyncEvent::Insert(
+            host_owned.type_id(),
+            entity,
+            ComponentKind::of::<R>(),
+        ));
     }
 }
 
@@ -74,7 +78,11 @@ pub fn on_component_removed<R: Replicate>(
 ) {
     for entity in removals.read() {
         if let Ok(host_owned) = query.get(entity) {
-            events.send(HostSyncEvent::Remove(host_owned.type_id(), entity, ComponentKind::of::<R>()));
+            events.send(HostSyncEvent::Remove(
+                host_owned.type_id(),
+                entity,
+                ComponentKind::of::<R>(),
+            ));
         }
     }
 }
