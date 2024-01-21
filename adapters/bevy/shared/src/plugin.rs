@@ -3,11 +3,10 @@ use std::marker::PhantomData;
 use bevy_app::{App, Plugin as PluginType, Update};
 use bevy_ecs::schedule::{IntoSystemConfigs, IntoSystemSetConfigs};
 
-use log::warn;
+use log::info;
 
-use crate::change_detection::on_host_owned_added;
 use crate::{
-    change_detection::{on_despawn, HostSyncEvent},
+    change_detection::{on_despawn, on_host_owned_added, HostSyncEvent},
     system_set::{BeforeHostSyncChangeTracking, HostSyncChangeTracking},
     BeforeReceiveEvents, HostOwnedMap, ReceiveEvents,
 };
@@ -26,7 +25,10 @@ impl<T: Send + Sync + 'static> SharedPlugin<T> {
 
 impl<T: Send + Sync + 'static> PluginType for SharedPlugin<T> {
     fn build(&self, app: &mut App) {
-        warn!("FIX THIS NOW CONNOR! shouldn't run this plugin twice! inspect app.world to see if this needs to happen!");
+        if app.is_plugin_added::<Self>() {
+            info!("attempted to add SharedPlugin twice to App");
+            return;
+        }
         app
             // RESOURCES //
             .init_resource::<HostOwnedMap>()
