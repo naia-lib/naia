@@ -80,6 +80,7 @@ pub use messages::{
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     named::Named,
+    request::{Request, Response, ResponseReceiveKey, ResponseSendKey},
 };
 pub use world::{
     component::{

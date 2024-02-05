@@ -5,17 +5,11 @@ use std::{
     panic,
     time::Duration,
 };
+use std::any::{Any};
 
 use log::{info, warn};
 
-use naia_shared::{
-    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
-    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
-    GlobalEntity, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol,
-    RemoteEntity, Replicate, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig,
-    StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
-};
+use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -285,6 +279,113 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             self.send_message_inner(user_key, channel_kind, message_box.clone())
         })
     }
+
+    //
+    pub fn send_request<C: Channel, Q: Request>(&mut self, user_key: &UserKey, request: &Q) -> Option<ResponseReceiveKey<Q::Response>> {
+
+        let cloned_request = Q::clone_box(request);
+        // let response_type_id = TypeId::of::<Q::Response>();
+        let Some(id) = self.send_request_inner(user_key, &ChannelKind::of::<C>(), cloned_request) else {
+            return None;
+        };
+        Some(ResponseReceiveKey::new(id))
+    }
+
+    fn send_request_inner(
+        &mut self,
+        user_key: &UserKey,
+        channel_kind: &ChannelKind,
+        // response_type_id: TypeId,
+        request_box: Box<dyn Message>,
+    ) -> Option<u64> {
+
+        let channel_settings = self.protocol.channel_kinds.channel(&channel_kind);
+
+        if !channel_settings.can_request_and_respond() {
+            panic!("Requests can only be sent over Bidirectional, Reliable Channels");
+        }
+
+        let request_id = self.global_request_manager.create_request_id(user_key, channel_kind);
+
+        let Some(user) = self.users.get(user_key) else {
+            warn!("user does not exist");
+            return None;
+        };
+        let Some(connection) = self.user_connections.get_mut(&user.address) else {
+            warn!("currently not connected to user");
+            return None;
+        };
+        let mut converter = EntityConverterMut::new(
+            &self.global_world_manager,
+            &mut connection.base.local_world_manager,
+        );
+
+        let message = MessageContainer::from_write(request_box, &mut converter);
+        connection.base.message_manager.send_request(
+            &self.protocol.message_kinds,
+            &mut converter,
+            channel_kind,
+            request_id,
+            message,
+        );
+
+        return Some(request_id);
+    }
+
+    /// Sends a Response for a given Request. Returns whether or not was successful.
+    pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
+
+        let request_id = response_key.request_id();
+        let Some((user_key, channel_kind)) = self.global_request_manager.destroy_request_id(&request_id) else {
+            return false;
+        };
+
+        let cloned_response = S::clone_box(response);
+
+        self.send_response_inner(user_key, channel_kind, request_id, cloned_response)
+    }
+
+    // returns whether was successful
+    fn send_response_inner(
+        &mut self,
+        user_key: &UserKey,
+        channel_kind: &ChannelKind,
+        request_id: u64,
+        response_box: Box<dyn Message>,
+    ) -> bool {
+        let Some(user) = self.users.get(user_key) else {
+            return false;
+        };
+        let Some(connection) = self.user_connections.get_mut(&user.address) else {
+            return false;
+        };
+        let mut converter = EntityConverterMut::new(
+            &self.global_world_manager,
+            &mut connection.base.local_world_manager,
+        );
+        let message = MessageContainer::from_write(response_box, &mut converter);
+        connection.base.message_manager.send_response(
+            &self.protocol.message_kinds,
+            &mut converter,
+            channel_kind,
+            request_id,
+            message,
+        );
+        return true;
+    }
+
+    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<S> {
+        let response_id = response_key.response_id();
+        let Some(container) = self.global_response_manager.destroy_response_id(&response_id) else {
+            return None;
+        };
+        let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
+            .ok()
+            .map(|boxed_m| *boxed_m)
+            .unwrap();
+        return Some(response);
+    }
+    //
 
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
         let mut tick_buffer_messages = TickBufferMessages::new();

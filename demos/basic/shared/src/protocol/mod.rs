@@ -5,10 +5,12 @@ use naia_shared::{LinkConditionerConfig, Protocol};
 mod auth;
 mod character;
 mod string_message;
+mod basic_request;
 
 pub use auth::Auth;
 pub use character::Character;
 pub use string_message::StringMessage;
+pub use basic_request::{BasicRequest, BasicResponse};
 
 // Protocol Build
 pub fn protocol() -> Protocol {
@@ -21,6 +23,8 @@ pub fn protocol() -> Protocol {
         // Messages
         .add_message::<Auth>()
         .add_message::<StringMessage>()
+        // Requests
+        .add_request::<BasicRequest>()
         // Components
         .add_component::<Character>()
         // Build Protocol

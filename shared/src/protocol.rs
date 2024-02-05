@@ -2,22 +2,17 @@ use std::time::Duration;
 
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
-use crate::{
-    connection::compression_config::CompressionConfig,
-    messages::{
-        channels::{
-            channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
-            channel_kinds::ChannelKinds,
-            default_channels::DefaultChannelsPlugin,
-            system_channel::SystemChannel,
-        },
-        fragment::FragmentedMessage,
-        message::Message,
-        message_kinds::MessageKinds,
+use crate::{connection::compression_config::CompressionConfig, messages::{
+    channels::{
+        channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
+        channel_kinds::ChannelKinds,
+        default_channels::DefaultChannelsPlugin,
+        system_channel::SystemChannel,
     },
-    world::component::{component_kinds::ComponentKinds, replicate::Replicate},
-    EntityEventMessage, ReliableSettings,
-};
+    fragment::FragmentedMessage,
+    message::Message,
+    message_kinds::MessageKinds,
+}, world::component::{component_kinds::ComponentKinds, replicate::Replicate}, EntityEventMessage, ReliableSettings, Request};
 
 // Protocol Plugin
 pub trait ProtocolPlugin {
@@ -127,6 +122,14 @@ impl Protocol {
     pub fn add_message<M: Message>(&mut self) -> &mut Self {
         self.check_lock();
         self.message_kinds.add_message::<M>();
+        self
+    }
+
+    pub fn add_request<Q: Request>(&mut self) -> &mut Self {
+        self.check_lock();
+        // Requests and Responses are handled just like Messages
+        self.message_kinds.add_message::<Q>();
+        self.message_kinds.add_message::<Q::Response>();
         self
     }
 
