@@ -4,38 +4,31 @@ use std::hash::Hash;
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{
-    constants::FRAGMENTATION_LIMIT_BITS,
-    messages::{
-        channels::{
-            channel::ChannelMode,
-            channel::ChannelSettings,
-            channel_kinds::{ChannelKind, ChannelKinds},
-            receivers::{
-                channel_receiver::MessageChannelReceiver,
-                ordered_reliable_receiver::OrderedReliableReceiver,
-                sequenced_reliable_receiver::SequencedReliableReceiver,
-                sequenced_unreliable_receiver::SequencedUnreliableReceiver,
-                unordered_reliable_receiver::UnorderedReliableReceiver,
-                unordered_unreliable_receiver::UnorderedUnreliableReceiver,
-            },
-            senders::{
-                channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
-                reliable_sender::ReliableSender,
-                sequenced_unreliable_sender::SequencedUnreliableSender,
-                unordered_unreliable_sender::UnorderedUnreliableSender,
-            },
+use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
+    channels::{
+        channel::ChannelMode,
+        channel::ChannelSettings,
+        channel_kinds::{ChannelKind, ChannelKinds},
+        receivers::{
+            channel_receiver::MessageChannelReceiver,
+            ordered_reliable_receiver::OrderedReliableReceiver,
+            sequenced_reliable_receiver::SequencedReliableReceiver,
+            sequenced_unreliable_receiver::SequencedUnreliableReceiver,
+            unordered_reliable_receiver::UnorderedReliableReceiver,
+            unordered_unreliable_receiver::UnorderedUnreliableReceiver,
         },
-        message_container::MessageContainer,
+        senders::{
+            channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
+            reliable_sender::ReliableSender,
+            sequenced_unreliable_sender::SequencedUnreliableSender,
+            unordered_unreliable_sender::UnorderedUnreliableSender,
+        },
     },
-    types::{HostType, MessageIndex, PacketIndex},
-    world::{
-        entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
-        remote::entity_waitlist::EntityWaitlist,
-    },
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds,
-    Protocol,
-};
+    message_container::MessageContainer,
+}, types::{HostType, MessageIndex, PacketIndex}, world::{
+    entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
+    remote::entity_waitlist::EntityWaitlist,
+}, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds, Protocol};
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -45,6 +38,30 @@ pub struct MessageManager {
     channel_settings: HashMap<ChannelKind, ChannelSettings>,
     packet_to_message_map: HashMap<PacketIndex, Vec<(ChannelKind, Vec<MessageIndex>)>>,
     message_fragmenter: MessageFragmenter,
+}
+
+impl MessageManager {
+    pub fn send_request(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        channel_kind: &ChannelKind,
+        request_id: u64,
+        request: MessageContainer
+    ) {
+        todo!()
+    }
+
+    pub fn send_response(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        channel_kind: &ChannelKind,
+        request_id: u64,
+        response: MessageContainer
+    ) {
+        todo!()
+    }
 }
 
 impl MessageManager {

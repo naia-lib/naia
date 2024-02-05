@@ -31,6 +31,7 @@ mod connection;
 mod error;
 mod events;
 mod world;
+mod request;
 
 pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;

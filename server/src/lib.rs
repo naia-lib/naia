@@ -38,6 +38,7 @@ mod time_manager;
 mod user;
 mod user_scope;
 mod world;
+mod request;
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;

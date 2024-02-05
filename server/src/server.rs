@@ -4,8 +4,8 @@ use std::{
     net::SocketAddr,
     panic,
     time::Duration,
+    any::Any,
 };
-use std::any::{Any};
 
 use log::{info, warn};
 
@@ -27,6 +27,7 @@ use crate::{
     },
     ReplicationConfig,
 };
+use crate::request::{GlobalRequestManager, GlobalResponseManager};
 
 use super::{
     error::NaiaServerError,
@@ -61,6 +62,9 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     global_world_manager: GlobalWorldManager<E>,
     // Events
     incoming_events: Events<E>,
+    // Requests/Responses
+    global_request_manager: GlobalRequestManager,
+    global_response_manager: GlobalResponseManager,
     // Ticks
     time_manager: TimeManager,
 }
@@ -100,6 +104,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             global_world_manager: GlobalWorldManager::new(),
             // Events
             incoming_events: Events::new(),
+            // Requests/Responses
+            global_request_manager: GlobalRequestManager::new(),
+            global_response_manager: GlobalResponseManager::new(),
             // Ticks
             time_manager,
         }
@@ -342,7 +349,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         let cloned_response = S::clone_box(response);
 
-        self.send_response_inner(user_key, channel_kind, request_id, cloned_response)
+        self.send_response_inner(&user_key, &channel_kind, request_id, cloned_response)
     }
 
     // returns whether was successful

@@ -19,6 +19,7 @@ use crate::{
         global_world_manager::GlobalWorldManager,
     },
     ReplicationConfig,
+    request::{GlobalRequestManager, GlobalResponseManager},
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
@@ -35,6 +36,9 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
     global_world_manager: GlobalWorldManager<E>,
+    // Request/Response
+    global_request_manager: GlobalRequestManager,
+    global_response_manager: GlobalResponseManager,
     // Events
     incoming_events: Events<E>,
     // Hacky
@@ -70,6 +74,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             waitlist_messages: VecDeque::new(),
             // World
             global_world_manager: GlobalWorldManager::new(),
+            // Requests
+            global_request_manager: GlobalRequestManager::new(),
+            global_response_manager: GlobalResponseManager::new(),
             // Events
             incoming_events: Events::new(),
             // Hacky
@@ -354,7 +361,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let cloned_response = S::clone_box(response);
 
-        self.send_response_inner(channel_kind, request_id, cloned_response)
+        self.send_response_inner(&channel_kind, request_id, cloned_response)
     }
 
     // returns whether was successful
