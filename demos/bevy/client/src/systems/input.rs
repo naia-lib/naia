@@ -3,10 +3,10 @@ use bevy::prelude::{Commands, Input, KeyCode, Query, Res, ResMut, Vec2, Window};
 use naia_bevy_client::{Client, CommandsExt, ReplicationConfig};
 use naia_bevy_demo_shared::{components::Position, messages::KeyCommand};
 
-use crate::resources::Global;
+use crate::{resources::Global, app::Main};
 
 pub fn key_input(
-    client: Client,
+    client: Client<Main>,
     mut commands: Commands,
     mut global: ResMut<Global>,
     keyboard_input: Res<Input<KeyCode>>,
@@ -42,7 +42,7 @@ pub fn key_input(
                 if prev_config != ReplicationConfig::Private {
                     commands
                         .entity(entity)
-                        .configure_replication(ReplicationConfig::Private);
+                        .configure_replication::<Main>(ReplicationConfig::Private);
                 }
             }
         }

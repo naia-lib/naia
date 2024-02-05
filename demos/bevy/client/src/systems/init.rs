@@ -1,15 +1,16 @@
-use bevy::prelude::{
-    info, shape, Assets, Camera2dBundle, Color, ColorMaterial, Commands, Mesh, ResMut,
-};
+
+use bevy::{prelude::{
+    shape, Assets, Camera2dBundle, Color, ColorMaterial, Commands, Mesh, ResMut,
+}, log::info};
 
 use naia_bevy_client::{transport::webrtc, Client};
 use naia_bevy_demo_shared::messages::Auth;
 
-use crate::resources::Global;
+use crate::{app::Main, resources::Global};
 
 pub fn init(
     mut commands: Commands,
-    mut client: Client,
+    mut client: Client<Main>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {

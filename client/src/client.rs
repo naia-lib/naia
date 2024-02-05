@@ -1149,9 +1149,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         );
 
         self.manual_disconnect = false;
-        self.waitlist_messages = VecDeque::new();
         self.global_world_manager = GlobalWorldManager::new();
-        self.incoming_events = Events::new();
         self.queued_entity_auth_release_messages = Vec::new();
     }
 

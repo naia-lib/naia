@@ -3,10 +3,10 @@ use bevy::prelude::{Query, Transform, With};
 use naia_bevy_client::Client;
 use naia_bevy_demo_shared::components::Position;
 
-use crate::components::{Confirmed, Interp, LocalCursor, Predicted};
+use crate::{app::Main, components::{Confirmed, Interp, LocalCursor, Predicted}};
 
 pub fn sync_clientside_sprites(
-    client: Client,
+    client: Client<Main>,
     mut query: Query<(&Position, &mut Interp, &mut Transform), With<Predicted>>,
 ) {
     for (position, mut interp, mut transform) in query.iter_mut() {
@@ -22,7 +22,7 @@ pub fn sync_clientside_sprites(
 }
 
 pub fn sync_serverside_sprites(
-    client: Client,
+    client: Client<Main>,
     mut query: Query<(&Position, &mut Interp, &mut Transform), With<Confirmed>>,
 ) {
     for (position, mut interp, mut transform) in query.iter_mut() {

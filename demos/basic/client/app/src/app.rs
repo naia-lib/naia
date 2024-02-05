@@ -9,7 +9,7 @@ cfg_if! {
 use naia_client::{
     shared::{default_channels::UnorderedReliableChannel, SocketConfig},
     transport::webrtc,
-    Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent, ConnectionStatus,
+    Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent,
     DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent,
     RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
@@ -51,7 +51,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        if self.client.connection_status() != ConnectionStatus::Connected {
+        if self.client.connection_status().is_disconnected() {
             return;
         }
 

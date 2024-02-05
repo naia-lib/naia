@@ -1,8 +1,9 @@
 use std::default::Default;
 
 use bevy::{
+    log::info,
     prelude::{
-        info, Color as BevyColor, Commands, EventReader, Query, Res, ResMut, Sprite, SpriteBundle,
+        Color as BevyColor, Commands, EventReader, Query, Res, ResMut, Sprite, SpriteBundle,
         Transform, Vec2,
     },
     sprite::MaterialMesh2dBundle,
@@ -25,16 +26,16 @@ use naia_bevy_demo_shared::{
 
 use crate::{
     components::{Confirmed, Interp, LocalCursor, Predicted},
-    resources::{Global, OwnedEntity},
+    resources::{Global, OwnedEntity}, app::Main,
 };
 
 const SQUARE_SIZE: f32 = 32.0;
 
 pub fn connect_events(
     mut commands: Commands,
-    mut client: Client,
+    mut client: Client<Main>,
     mut global: ResMut<Global>,
-    mut event_reader: EventReader<ConnectEvent>,
+    mut event_reader: EventReader<ConnectEvent<Main>>,
 ) {
     for _ in event_reader.read() {
         let Ok(server_address) = client.server_address() else {
@@ -68,13 +69,13 @@ pub fn connect_events(
     }
 }
 
-pub fn reject_events(mut event_reader: EventReader<RejectEvent>) {
+pub fn reject_events(mut event_reader: EventReader<RejectEvent<Main>>) {
     for _ in event_reader.read() {
         info!("Client rejected from connecting to Server");
     }
 }
 
-pub fn disconnect_events(mut event_reader: EventReader<DisconnectEvent>) {
+pub fn disconnect_events(mut event_reader: EventReader<DisconnectEvent<Main>>) {
     for _ in event_reader.read() {
         info!("Client disconnected from Server");
     }
@@ -82,9 +83,9 @@ pub fn disconnect_events(mut event_reader: EventReader<DisconnectEvent>) {
 
 pub fn message_events(
     mut commands: Commands,
-    client: Client,
+    client: Client<Main>,
     mut global: ResMut<Global>,
-    mut event_reader: EventReader<MessageEvents>,
+    mut event_reader: EventReader<MessageEvents<Main>>,
     position_query: Query<&Position>,
     color_query: Query<&Color>,
 ) {
@@ -163,33 +164,33 @@ pub fn message_events(
     }
 }
 
-pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent>) {
-    for SpawnEntityEvent(_entity) in event_reader.read() {
+pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent<Main>>) {
+    for _event in event_reader.read() {
         info!("spawned entity");
     }
 }
 
-pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent>) {
-    for DespawnEntityEvent(_entity) in event_reader.read() {
+pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent<Main>>) {
+    for _event in event_reader.read() {
         info!("despawned entity");
     }
 }
 
-pub fn publish_entity_events(mut event_reader: EventReader<PublishEntityEvent>) {
-    for PublishEntityEvent(_entity) in event_reader.read() {
+pub fn publish_entity_events(mut event_reader: EventReader<PublishEntityEvent<Main>>) {
+    for _event in event_reader.read() {
         info!("client demo: publish entity event");
     }
 }
 
-pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent>) {
-    for UnpublishEntityEvent(_entity) in event_reader.read() {
+pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent<Main>>) {
+    for _event in event_reader.read() {
         info!("client demo: unpublish entity event");
     }
 }
 
 pub fn insert_component_events(
     mut commands: Commands,
-    mut event_reader: EventReader<InsertComponentEvents>,
+    mut event_reader: EventReader<InsertComponentEvents<Main>>,
     global: Res<Global>,
     sprite_query: Query<(&Shape, &Color)>,
     position_query: Query<&Position>,
@@ -278,7 +279,7 @@ pub fn insert_component_events(
 
 pub fn update_component_events(
     mut global: ResMut<Global>,
-    mut event_reader: EventReader<UpdateComponentEvents>,
+    mut event_reader: EventReader<UpdateComponentEvents<Main>>,
     mut position_query: Query<&mut Position>,
 ) {
     // When we receive a new Position update for the Player's Entity,
@@ -328,7 +329,7 @@ pub fn update_component_events(
     }
 }
 
-pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents>) {
+pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents<Main>>) {
     for events in event_reader.read() {
         for (_entity, _component) in events.read::<Position>() {
             info!("removed Position component from entity");
@@ -340,9 +341,9 @@ pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEven
 }
 
 pub fn tick_events(
-    mut client: Client,
+    mut client: Client<Main>,
     mut global: ResMut<Global>,
-    mut tick_reader: EventReader<ClientTickEvent>,
+    mut tick_reader: EventReader<ClientTickEvent<Main>>,
     mut position_query: Query<&mut Position>,
 ) {
     let Some(predicted_entity) = global
@@ -357,17 +358,18 @@ pub fn tick_events(
         return;
     };
 
-    for ClientTickEvent(client_tick) in tick_reader.read() {
-        if !global.command_history.can_insert(client_tick) {
+    for event in tick_reader.read() {
+        let client_tick = event.tick;
+        if !global.command_history.can_insert(&client_tick) {
             // History is full
             continue;
         }
 
         // Record command
-        global.command_history.insert(*client_tick, command.clone());
+        global.command_history.insert(client_tick, command.clone());
 
         // Send command
-        client.send_tick_buffer_message::<PlayerCommandChannel, KeyCommand>(client_tick, &command);
+        client.send_tick_buffer_message::<PlayerCommandChannel, KeyCommand>(&client_tick, &command);
 
         if let Ok(mut position) = position_query.get_mut(predicted_entity) {
             // Apply command
