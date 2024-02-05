@@ -23,7 +23,7 @@ mod bevy_events {
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
         EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvents,
         MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, ServerTickEvent,
-        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents, RequestEvents,
     };
 }
 
@@ -142,6 +142,14 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
                     .get_resource_mut::<Events<bevy_events::MessageEvents<T>>>()
                     .unwrap();
                 event_writer.send(bevy_events::MessageEvents::from(&mut events));
+            }
+
+            // Request Event
+            if events.has_requests() {
+                let mut event_writer = world
+                    .get_resource_mut::<Events<bevy_events::RequestEvents<T>>>()
+                    .unwrap();
+                event_writer.send(bevy_events::RequestEvents::from(&mut events));
             }
 
             // Spawn Entity Event

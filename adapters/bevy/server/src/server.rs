@@ -10,10 +10,7 @@ use naia_server::{
     Server as NaiaServer, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
 };
 
-use naia_bevy_shared::{
-    Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
-    GlobalEntity, Message, Tick,
-};
+use naia_bevy_shared::{Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick};
 
 #[derive(Resource)]
 pub struct ServerWrapper(pub NaiaServer<Entity>);
@@ -63,6 +60,20 @@ impl<'w> Server<'w> {
 
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
         self.server.0.receive_tick_buffer_messages(tick)
+    }
+
+
+    /// Requests ///
+    pub fn send_request<C: Channel, Q: Request>(&mut self, user_key: &UserKey, request: &Q) -> Option<ResponseReceiveKey<Q::Response>> {
+        self.server.0.send_request::<C, Q>(user_key, request)
+    }
+
+    pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
+        self.server.0.send_response(response_key, response)
+    }
+
+    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<S> {
+        self.server.0.receive_response(response_key)
     }
 
     //// Updates ////

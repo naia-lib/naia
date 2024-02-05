@@ -7,7 +7,7 @@ use bevy_ecs::{
 
 use naia_bevy_shared::{
     Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
-    GlobalEntity, Message, Tick,
+    GlobalEntity, Message, Tick, Request, Response, ResponseReceiveKey, ResponseSendKey,
 };
 use naia_client::{
     shared::SocketConfig, transport::Socket, Client as NaiaClient, ConnectionStatus,
@@ -84,6 +84,19 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
         self.client
             .client
             .send_tick_buffer_message::<C, M>(tick, message);
+    }
+
+    /// Requests ///
+    pub fn send_request<C: Channel, Q: Request>(&mut self, request: &Q) -> Option<ResponseReceiveKey<Q::Response>> {
+        self.client.client.send_request::<C, Q>(request)
+    }
+
+    pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
+        self.client.client.send_response(response_key, response)
+    }
+
+    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<S> {
+        self.client.client.receive_response(response_key)
     }
 
     //// Ticks ////

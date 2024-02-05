@@ -5,6 +5,7 @@ use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
 use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin, WorldData};
 use naia_client::{Client, ClientConfig};
+use crate::events::RequestEvents;
 
 use super::{
     client::ClientWrapper,
@@ -73,6 +74,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_event::<RejectEvent<T>>()
             .add_event::<ErrorEvent<T>>()
             .add_event::<MessageEvents<T>>()
+            .add_event::<RequestEvents<T>>()
             .add_event::<ClientTickEvent<T>>()
             .add_event::<ServerTickEvent<T>>()
             .add_event::<SpawnEntityEvent<T>>()

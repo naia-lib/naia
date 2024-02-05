@@ -1,9 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{
-    Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig,
-    LinkConditionerConfig, Message, Protocol as InnerProtocol, Replicate,
-};
+use naia_shared::{Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig, LinkConditionerConfig, Message, Protocol as InnerProtocol, Replicate, Request};
 
 use crate::{ProtocolPlugin, WorldData};
 
@@ -77,6 +74,11 @@ impl Protocol {
 
     pub fn add_message<M: Message>(&mut self) -> &mut Self {
         self.inner.add_message::<M>();
+        self
+    }
+
+    pub fn add_request<Q: Request>(&mut self) -> &mut Self {
+        self.inner.add_request::<Q>();
         self
     }
 

@@ -4,14 +4,12 @@ use bevy_ecs::{
     event::Events,
     world::{Mut, World},
 };
-
 use log::warn;
 
 use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
 use naia_server::EntityOwner;
 
-use crate::plugin::Singleton;
-use crate::{server::ServerWrapper, ClientOwned, EntityAuthStatus};
+use crate::{plugin::Singleton, server::ServerWrapper, ClientOwned, EntityAuthStatus};
 
 mod naia_events {
     pub use naia_server::{
@@ -26,7 +24,7 @@ mod bevy_events {
     pub use crate::events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
-        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents, RequestEvents,
     };
 }
 
@@ -124,6 +122,14 @@ pub fn before_receive_events(world: &mut World) {
                     .get_resource_mut::<Events<bevy_events::MessageEvents>>()
                     .unwrap();
                 event_writer.send(bevy_events::MessageEvents::from(&mut events));
+            }
+
+            // Request Event
+            if events.has_requests() {
+                let mut event_writer = world
+                    .get_resource_mut::<Events<bevy_events::RequestEvents>>()
+                    .unwrap();
+                event_writer.send(bevy_events::RequestEvents::from(&mut events));
             }
 
             // Auth Event

@@ -19,6 +19,9 @@ use naia_bevy_demo_shared::{
     components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{Auth, EntityAssignment, KeyCommand},
 };
+use naia_bevy_demo_shared::channels::RequestChannel;
+use naia_bevy_demo_shared::messages::BasicRequest;
+use naia_bevy_server::events::RequestEvents;
 
 use crate::resources::Global;
 
@@ -167,6 +170,16 @@ pub fn tick_events(
 
             // And call this if Entity should NOT be in this scope.
             // server.user_scope(..).exclude(..);
+        }
+    }
+}
+
+pub fn request_events(
+    mut event_reader: EventReader<RequestEvents>,
+) {
+    for events in event_reader.read() {
+        for (user_key, response_send_key, basic_request) in events.read::<RequestChannel, BasicRequest>() {
+
         }
     }
 }

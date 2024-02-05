@@ -44,6 +44,7 @@ pub fn run() {
                 events::update_component_events,
                 events::remove_component_events,
                 events::message_events,
+                events::request_events,
             )
                 .chain()
                 .in_set(ReceiveEvents),

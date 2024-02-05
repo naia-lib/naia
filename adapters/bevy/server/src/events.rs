@@ -2,9 +2,7 @@ use std::{any::Any, collections::HashMap};
 
 use bevy_ecs::{entity::Entity, prelude::Event};
 
-use naia_bevy_shared::{
-    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick,
-};
+use naia_bevy_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
 use naia_server::{Events, NaiaServerError, User, UserKey};
 
 // ConnectEvent
@@ -91,6 +89,35 @@ fn convert_messages<M: Message>(
     }
 
     output_list
+}
+
+// RequestEvents
+#[derive(Event)]
+pub struct RequestEvents {
+    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
+}
+
+impl<E: Copy> From<&mut Events<E>> for RequestEvents {
+    fn from(events: &mut Events<E>) -> Self {
+        Self {
+            inner: events.take_requests(),
+        }
+    }
+}
+
+impl RequestEvents {
+    pub fn read<C: Channel, Q: Request>(&self) -> Vec<(UserKey, ResponseSendKey<Q::Response>, Q)> {
+        let channel_kind = ChannelKind::of::<C>();
+        if let Some(message_map) = self.inner.get(&channel_kind) {
+            let message_kind = MessageKind::of::<Q>();
+            if let Some(messages) = message_map.get(&message_kind) {
+                // return convert_messages(messages);
+                todo!()
+            }
+        }
+
+        Vec::new()
+    }
 }
 
 // SpawnEntityEvent

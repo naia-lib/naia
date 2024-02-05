@@ -17,12 +17,15 @@ use naia_bevy_client::{
     },
     sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
 };
+use naia_bevy_client::events::RequestEvents;
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel},
     components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{EntityAssignment, KeyCommand},
 };
+use naia_bevy_demo_shared::channels::RequestChannel;
+use naia_bevy_demo_shared::messages::BasicRequest;
 
 use crate::{
     components::{Confirmed, Interp, LocalCursor, Predicted},
@@ -160,6 +163,16 @@ pub fn message_events(
                     global.owned_entity = None;
                 }
             }
+        }
+    }
+}
+
+pub fn request_events(
+    mut event_reader: EventReader<RequestEvents<Main>>,
+) {
+    for events in event_reader.read() {
+        for (response_send_key, basic_request) in events.read::<RequestChannel, BasicRequest>() {
+
         }
     }
 }

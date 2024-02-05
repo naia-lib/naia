@@ -10,7 +10,7 @@ use super::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
-        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents, RequestEvents,
     },
     server::ServerWrapper,
     systems::before_receive_events,
@@ -68,6 +68,7 @@ impl PluginType for Plugin {
             .add_event::<ErrorEvent>()
             .add_event::<TickEvent>()
             .add_event::<MessageEvents>()
+            .add_event::<RequestEvents>()
             .add_event::<AuthEvents>()
             .add_event::<SpawnEntityEvent>()
             .add_event::<DespawnEntityEvent>()

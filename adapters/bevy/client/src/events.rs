@@ -4,9 +4,7 @@ use bevy_ecs::{entity::Entity, prelude::Event};
 
 use naia_client::{Events, NaiaClientError};
 
-use naia_bevy_shared::{
-    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Tick,
-};
+use naia_bevy_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
 
 // ConnectEvent
 #[derive(Event)]
@@ -97,6 +95,46 @@ impl<T> MessageEvents<T> {
                         .map(|boxed_m| *boxed_m)
                         .unwrap();
                     output.push(message);
+                }
+            }
+        }
+
+        output
+    }
+}
+
+// RequestEvents
+#[derive(Event)]
+pub struct RequestEvents<T> {
+    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
+    phantom_t: PhantomData<T>,
+}
+
+impl<T> From<&mut Events<Entity>> for RequestEvents<T> {
+    fn from(events: &mut Events<Entity>) -> Self {
+        Self {
+            inner: events.take_requests(),
+            phantom_t: PhantomData,
+        }
+    }
+}
+
+impl<T> RequestEvents<T> {
+    pub fn read<C: Channel, Q: Request>(&self) -> Vec<(ResponseSendKey<Q::Response>, Q)> {
+        let mut output = Vec::new();
+
+        let channel_kind = ChannelKind::of::<C>();
+        if let Some(message_map) = self.inner.get(&channel_kind) {
+            let message_kind = MessageKind::of::<Q>();
+            if let Some(messages) = message_map.get(&message_kind) {
+                for boxed_message in messages {
+                    let boxed_any = boxed_message.clone().to_boxed_any();
+                    let message: Q = Box::<dyn Any + 'static>::downcast::<Q>(boxed_any)
+                        .ok()
+                        .map(|boxed_m| *boxed_m)
+                        .unwrap();
+                    // output.push(message);
+                    todo!();
                 }
             }
         }
