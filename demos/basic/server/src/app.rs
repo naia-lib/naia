@@ -2,13 +2,13 @@ use std::{thread::sleep, time::Duration};
 
 use naia_server::{
     shared::default_channels::UnorderedReliableChannel, transport::webrtc, AuthEvent, ConnectEvent,
-    DisconnectEvent, ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerConfig,
+    DisconnectEvent, ErrorEvent, MessageEvent, RequestEvent, RoomKey, Server as NaiaServer, ServerConfig,
     TickEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldRefType};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage};
+use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage, BasicRequest};
 
 type Server = NaiaServer<Entity>;
 
@@ -120,17 +120,19 @@ impl App {
                 // All game logic should happen here, on a tick event
 
                 // Message sending
-                for user_key in self.server.user_keys() {
-                    let new_message_contents = format!("Server Message ({})", self.tick_count);
-                    info!(
-                        "Server send to   ({}) -> {}",
-                        self.server.user(&user_key).address(),
-                        new_message_contents
-                    );
+                if self.tick_count % 10 == 0 {
+                    for user_key in self.server.user_keys() {
+                        let new_message_contents = format!("Server Message ({})", self.tick_count);
+                        info!(
+                            "Server send to   ({}) -> {}",
+                            self.server.user(&user_key).address(),
+                            new_message_contents
+                        );
 
-                    let new_message = StringMessage::new(new_message_contents);
-                    self.server
-                        .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message);
+                        let new_message = StringMessage::new(new_message_contents);
+                        self.server
+                            .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message);
+                    }
                 }
 
                 // Iterate through Characters, marching them from (0,0) to (20, N)
@@ -169,6 +171,9 @@ impl App {
             }
             for error in events.read::<ErrorEvent>() {
                 info!("Naia Server Error: {}", error);
+            }
+            for (user_key, response_key, request) in events.read::<RequestEvent<UnorderedReliableChannel, BasicRequest>>() {
+
             }
         }
     }

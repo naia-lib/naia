@@ -41,7 +41,7 @@ pub use events::{
     ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
     EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, Events, InsertComponentEvent,
     MessageEvent, PublishEntityEvent, RejectEvent, RemoveComponentEvent, ServerTickEvent,
-    SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
+    SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent, RequestEvent,
 };
 pub use world::{
     entity_mut::EntityMut, entity_ref::EntityRef, replication_config::ReplicationConfig,

@@ -10,13 +10,13 @@ use naia_client::{
     shared::{default_channels::UnorderedReliableChannel, SocketConfig},
     transport::webrtc,
     Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent,
-    DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent,
+    DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RequestEvent, RejectEvent,
     RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage};
+use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage, BasicRequest};
 
 type Client = NaiaClient<Entity>;
 
@@ -90,46 +90,46 @@ impl App {
             self.message_count += 1;
         }
         for entity in events.read::<SpawnEntityEvent>() {
-            if let Some(character) = self
+            if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
                 .component::<Character>()
             {
-                info!(
-                    "creation of Character - x: {}, y: {}, name: {} {}",
-                    *character.x,
-                    *character.y,
-                    (*character.fullname).first,
-                    (*character.fullname).last,
-                );
+                // info!(
+                //     "creation of Character - x: {}, y: {}, name: {} {}",
+                //     *character.x,
+                //     *character.y,
+                //     (*character.fullname).first,
+                //     (*character.fullname).last,
+                // );
             }
         }
         for _ in events.read::<DespawnEntityEvent>() {
-            info!("deletion of Character entity");
+            // info!("deletion of Character entity");
         }
         for (_, entity) in events.read::<UpdateComponentEvent<Character>>() {
-            if let Some(character) = self
+            if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
                 .component::<Character>()
             {
-                info!(
-                    "update of Character - x: {}, y: {}, name: {} {}",
-                    *character.x,
-                    *character.y,
-                    (*character.fullname).first,
-                    (*character.fullname).last,
-                );
+                // info!(
+                //     "update of Character - x: {}, y: {}, name: {} {}",
+                //     *character.x,
+                //     *character.y,
+                //     (*character.fullname).first,
+                //     (*character.fullname).last,
+                // );
             }
         }
-        for (_, character) in events.read::<RemoveComponentEvent<Character>>() {
-            info!(
-                "data delete of Character - x: {}, y: {}, name: {} {}",
-                *character.x,
-                *character.y,
-                (*character.fullname).first,
-                (*character.fullname).last,
-            );
+        for (_, _character) in events.read::<RemoveComponentEvent<Character>>() {
+            // info!(
+            //     "data delete of Character - x: {}, y: {}, name: {} {}",
+            //     *character.x,
+            //     *character.y,
+            //     (*character.fullname).first,
+            //     (*character.fullname).last,
+            // );
         }
         for _ in events.read::<ClientTickEvent>() {
             //info!("tick event");
@@ -137,6 +137,9 @@ impl App {
         for error in events.read::<ErrorEvent>() {
             info!("Client Error: {}", error);
             return;
+        }
+        for (response_send_key, message) in events.read::<RequestEvent<UnorderedReliableChannel, BasicRequest>>() {
+
         }
     }
 }
