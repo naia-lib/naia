@@ -6,18 +6,16 @@ use naia_serde::BitReader;
 
 use crate::{
     messages::fragment::{FragmentId, FragmentedMessage},
-    LocalEntityAndGlobalEntityConverter, MessageContainer, MessageIndex, MessageKinds,
+    LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKinds,
 };
 
 pub struct FragmentReceiver {
-    current_index: MessageIndex,
     map: HashMap<FragmentId, (u32, Vec<Box<[u8]>>)>,
 }
 
 impl FragmentReceiver {
     pub fn new() -> Self {
         Self {
-            current_index: 0,
             map: HashMap::new(),
         }
     }
@@ -27,14 +25,10 @@ impl FragmentReceiver {
         message_kinds: &MessageKinds,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         message: MessageContainer,
-    ) -> Option<(MessageIndex, MessageContainer)> {
-        // returns a new index, 1 per full message
+    ) -> Option<MessageContainer> {
 
-        // Pass right through if not a fragment
         if !message.is_fragment() {
-            let output = Some((self.current_index, message));
-            self.current_index = self.current_index.wrapping_add(1);
-            return output;
+            panic!("Received non-fragmented message in FragmentReceiver!");
         }
 
         // Message is a fragment, need to process
@@ -67,10 +61,6 @@ impl FragmentReceiver {
             panic!("Cannot read fragmented message!");
         }
         let full_message = full_message_result.unwrap();
-        let output = Some((self.current_index, full_message));
-        self.current_index = self.current_index.wrapping_add(1);
-        output
+        Some(full_message)
     }
 }
-
-impl FragmentReceiver {}

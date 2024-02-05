@@ -41,30 +41,6 @@ pub struct MessageManager {
 }
 
 impl MessageManager {
-    pub fn send_request(
-        &mut self,
-        message_kinds: &MessageKinds,
-        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-        channel_kind: &ChannelKind,
-        request_id: u64,
-        request: MessageContainer
-    ) {
-        todo!()
-    }
-
-    pub fn send_response(
-        &mut self,
-        message_kinds: &MessageKinds,
-        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-        channel_kind: &ChannelKind,
-        request_id: u64,
-        response: MessageContainer
-    ) {
-        todo!()
-    }
-}
-
-impl MessageManager {
     /// Creates a new MessageManager
     pub fn new(host_type: HostType, channel_kinds: &ChannelKinds) -> Self {
         // initialize all reliable channels
@@ -211,6 +187,28 @@ impl MessageManager {
         } else {
             channel.send_message(message);
         }
+    }
+
+    pub fn send_request(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        channel_kind: &ChannelKind,
+        global_request_id: u64,
+        request: MessageContainer
+    ) {
+        todo!()
+    }
+
+    pub fn send_response(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        channel_kind: &ChannelKind,
+        global_request_id: u64,
+        response: MessageContainer
+    ) {
+        todo!()
     }
 
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {

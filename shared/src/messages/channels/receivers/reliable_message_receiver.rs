@@ -32,6 +32,7 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     arranger: A,
     fragment_receiver: FragmentReceiver,
     waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>,
+    current_index: MessageIndex,
 }
 
 impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
@@ -42,6 +43,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             arranger,
             fragment_receiver: FragmentReceiver::new(),
             waitlist_store: WaitlistStore::new(),
+            current_index: 0,
         }
     }
 
@@ -52,14 +54,22 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         message: MessageContainer,
     ) {
-        let Some((first_index, full_message)) =
-            self.fragment_receiver
-                .receive(message_kinds, converter, message) else {
+        let Some(full_message) = ({
+            if message.is_fragment() {
+                self.fragment_receiver
+                    .receive(message_kinds, converter, message)
+            } else {
+                Some(message)
+            }
+        }) else {
             return;
         };
 
+        let first_index = self.current_index;
+        self.current_index = self.current_index.wrapping_add(1);
+
         if let Some(entity_set) = full_message.relations_waiting() {
-            //warn!("Queing waiting message!");
+            //warn!("Queuing waiting message!");
             entity_waitlist.queue(
                 &entity_set,
                 &mut self.waitlist_store,
