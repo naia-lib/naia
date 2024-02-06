@@ -312,7 +312,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("Requests can only be sent over Bidirectional, Reliable Channels");
         }
 
-        let request_id = self.global_request_manager.create_request_id(user_key, channel_kind);
+        let request_id = self.global_request_manager.create_request_id(user_key);
 
         let Some(user) = self.users.get(user_key) else {
             warn!("user does not exist");

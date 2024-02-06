@@ -42,7 +42,7 @@ pub struct ResponseReceiveKey<S: Response> {
 impl<S: Response> ResponseReceiveKey<S> {
     pub fn new(request_id: GlobalRequestId) -> Self {
         Self {
-            request_id: request_id,
+            request_id,
             phantom_s: PhantomData,
         }
     }
@@ -57,7 +57,23 @@ pub struct GlobalRequestId {
     id: u64,
 }
 
+impl GlobalRequestId {
+    pub fn new(id: u64) -> Self {
+        Self {
+            id,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct GlobalResponseId {
     id: u64,
+}
+
+impl GlobalResponseId {
+    pub fn new(id: u64) -> Self {
+        Self {
+            id,
+        }
+    }
 }

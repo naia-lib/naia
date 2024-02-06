@@ -329,7 +329,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut connection.base.local_world_manager,
         );
 
-        let request_id = connection.global_request_manager.create_request_id(channel_kind);
+        let request_id = connection.global_request_manager.create_request_id();
         let message = MessageContainer::from_write(request_box, &mut converter);
         connection.base.message_manager.send_request(
             &self.protocol.message_kinds,
