@@ -1,4 +1,4 @@
-use naia_shared::{ChannelKind, GlobalRequestId, GlobalResponseId, LocalResponseId, MessageContainer, MessageKind};
+use naia_shared::{ChannelKind, GlobalRequestId, GlobalResponseId, LocalRequestResponseId, MessageContainer, MessageKind};
 
 use crate::UserKey;
 
@@ -35,7 +35,7 @@ impl GlobalResponseManager {
         }
     }
 
-    pub(crate) fn create_response_id(&mut self, channel_kind: &ChannelKind, message_kind: &MessageKind, local_request_id: &LocalResponseId) -> GlobalResponseId {
+    pub(crate) fn create_response_id(&mut self, channel_kind: &ChannelKind, message_kind: &MessageKind, local_req_res_id: &LocalRequestResponseId) -> GlobalResponseId {
         todo!()
     }
 

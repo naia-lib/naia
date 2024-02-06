@@ -1,4 +1,4 @@
-use naia_shared::{ChannelKind, GlobalRequestId, GlobalResponseId, LocalResponseId, MessageContainer, MessageKind};
+use naia_shared::{ChannelKind, GlobalRequestId, GlobalResponseId, LocalRequestResponseId, MessageContainer, MessageKind};
 
 // GlobalRequestManager
 pub struct GlobalRequestManager {
@@ -33,7 +33,7 @@ impl GlobalResponseManager {
         }
     }
 
-    pub(crate) fn create_response_id(&mut self, channel_kind: &ChannelKind, message_kind: &MessageKind, local_response_id: &LocalResponseId) -> GlobalResponseId {
+    pub(crate) fn create_response_id(&mut self, channel_kind: &ChannelKind, message_kind: &MessageKind, local_req_res_id: &LocalRequestResponseId) -> GlobalResponseId {
         todo!()
     }
 

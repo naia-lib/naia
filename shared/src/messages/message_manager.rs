@@ -17,6 +17,7 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter,
             unordered_unreliable_receiver::UnorderedUnreliableReceiver,
         },
         senders::{
+            request_sender::LocalRequestResponseId,
             channel_sender::MessageChannelSender,
             message_fragmenter::MessageFragmenter, reliable_message_sender::ReliableMessageSender,
             sequenced_unreliable_sender::SequencedUnreliableSender,
@@ -28,7 +29,6 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter,
     entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     remote::entity_waitlist::EntityWaitlist,
 }};
-use crate::messages::channels::senders::request_sender::LocalRequestId;
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -333,7 +333,7 @@ impl MessageManager {
     /// Retrieve all requests from the channel buffers
     pub fn receive_requests(
         &mut self,
-    ) -> Vec<(ChannelKind, Vec<(MessageKind, LocalRequestId, MessageContainer)>)> {
+    ) -> Vec<(ChannelKind, Vec<(MessageKind, LocalRequestResponseId, MessageContainer)>)> {
         let mut output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {
             let requests = channel.receive_requests();

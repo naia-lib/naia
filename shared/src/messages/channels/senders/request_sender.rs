@@ -33,8 +33,8 @@ impl RequestSender {
 }
 
 pub struct RequestSenderChannel {
-    local_key_generator: KeyGenerator<LocalRequestId>,
-    local_to_global_ids: HashMap<LocalRequestId, GlobalRequestId>,
+    local_key_generator: KeyGenerator<LocalRequestResponseId>,
+    local_to_global_ids: HashMap<LocalRequestResponseId, GlobalRequestId>,
 }
 
 impl RequestSenderChannel {
@@ -59,56 +59,54 @@ impl RequestSenderChannel {
         let mut writer = BitWriter::with_max_capacity();
         request.write(message_kinds, &mut writer, converter);
         let request_bytes = writer.to_bytes();
-        let request_message = RequestMessage::new(request_key, request_bytes);
+        let request_message = RequestOrResponse::new(request_key, request_bytes);
         MessageContainer::from_write(Box::new(request_message), converter)
     }
 }
 
 #[derive(MessageRequest)]
-pub struct RequestMessage {
-    request_id: LocalRequestId,
+pub struct RequestOrResponse {
+    id: LocalRequestResponseId,
     bytes: Box<[u8]>,
 }
 
-impl RequestMessage {
-    pub fn new(request_id: LocalRequestId, bytes: Box<[u8]>) -> Self {
+impl RequestOrResponse {
+    pub fn new(request_id: LocalRequestResponseId, bytes: Box<[u8]>) -> Self {
         Self {
-            request_id,
+            id: request_id,
             bytes,
         }
     }
 
-    pub(crate) fn to_id_and_bytes(self) -> (LocalRequestId, Box<[u8]>) {
-        (self.request_id, self.bytes)
+    pub(crate) fn to_id_and_bytes(self) -> (LocalRequestResponseId, Box<[u8]>) {
+        (self.id, self.bytes)
     }
 }
 
-pub type LocalResponseId = LocalRequestId;
-
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
-pub struct LocalRequestId {
+pub struct LocalRequestResponseId {
     id: u8,
 }
 
-impl LocalRequestId {
+impl LocalRequestResponseId {
     pub(crate) fn new(id: u8) -> Self {
         Self { id }
     }
 }
 
-impl From<u16> for LocalRequestId {
+impl From<u16> for LocalRequestResponseId {
     fn from(id: u16) -> Self {
         Self { id: id as u8 }
     }
 }
 
-impl Into<u16> for LocalRequestId {
+impl Into<u16> for LocalRequestResponseId {
     fn into(self) -> u16 {
         self.id as u16
     }
 }
 
-impl Serde for LocalRequestId {
+impl Serde for LocalRequestResponseId {
     fn ser(&self, writer: &mut dyn BitWrite) {
         self.id.ser(writer)
     }

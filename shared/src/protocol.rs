@@ -12,7 +12,7 @@ use crate::{connection::compression_config::CompressionConfig, messages::{
     fragment::FragmentedMessage,
     message::Message,
     message_kinds::MessageKinds,
-}, world::component::{component_kinds::ComponentKinds, replicate::Replicate}, EntityEventMessage, ReliableSettings, Request, RequestMessage};
+}, world::component::{component_kinds::ComponentKinds, replicate::Replicate}, EntityEventMessage, ReliableSettings, Request, RequestOrResponse};
 
 // Protocol Plugin
 pub trait ProtocolPlugin {
@@ -39,7 +39,7 @@ impl Default for Protocol {
     fn default() -> Self {
         let mut message_kinds = MessageKinds::new();
         message_kinds.add_message::<FragmentedMessage>();
-        message_kinds.add_message::<RequestMessage>();
+        message_kinds.add_message::<RequestOrResponse>();
         message_kinds.add_message::<EntityEventMessage>();
 
         let mut channel_kinds = ChannelKinds::new();

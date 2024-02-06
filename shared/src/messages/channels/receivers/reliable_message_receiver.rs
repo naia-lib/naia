@@ -1,15 +1,14 @@
 use naia_serde::{BitReader, SerdeErr};
 
 use crate::{LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKind, messages::{
-    channels::receivers::{
+    channels::{receivers::{
         channel_receiver::{ChannelReceiver, MessageChannelReceiver},
         fragment_receiver::FragmentReceiver,
         indexed_message_reader::IndexedMessageReader,
         reliable_receiver::ReliableReceiver,
-    },
+    }, senders::request_sender::LocalRequestResponseId},
     message_kinds::MessageKinds,
-}, RequestMessage, types::MessageIndex, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}};
-use crate::messages::channels::senders::request_sender::LocalRequestId;
+}, RequestOrResponse, types::MessageIndex, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}};
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
@@ -28,7 +27,7 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     fragment_receiver: FragmentReceiver,
     waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>,
     current_index: MessageIndex,
-    incoming_requests: Vec<(MessageKind, LocalRequestId, MessageContainer)>,
+    incoming_requests: Vec<(MessageKind, LocalRequestResponseId, MessageContainer)>,
 }
 
 impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
@@ -110,7 +109,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             // it is! cast it
             let request_container = message_container
                 .to_boxed_any()
-                .downcast::<RequestMessage>()
+                .downcast::<RequestOrResponse>()
                 .unwrap();
             let (local_request_id, request_bytes) = request_container.to_id_and_bytes();
             let mut reader = BitReader::new(&request_bytes);
@@ -167,7 +166,7 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
         Ok(())
     }
 
-    fn receive_requests(&mut self) -> Vec<(MessageKind, LocalRequestId, MessageContainer)> {
+    fn receive_requests(&mut self) -> Vec<(MessageKind, LocalRequestResponseId, MessageContainer)> {
         std::mem::take(&mut self.incoming_requests)
     }
 }
