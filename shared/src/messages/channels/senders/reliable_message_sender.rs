@@ -2,7 +2,7 @@
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::{LocalEntityAndGlobalEntityConverterMut, messages::{
+use crate::{LocalEntityAndGlobalEntityConverterMut, LocalResponseId, messages::{
     channels::senders::{
         channel_sender::{ChannelSender, MessageChannelSender},
         indexed_message_writer::IndexedMessageWriter,
@@ -10,7 +10,7 @@ use crate::{LocalEntityAndGlobalEntityConverterMut, messages::{
     message_container::MessageContainer,
     message_kinds::MessageKinds,
 }, ReliableSender, types::MessageIndex};
-use crate::messages::channels::senders::request_sender::RequestSender;
+use crate::messages::channels::senders::request_sender::{LocalRequestId, RequestSender};
 use crate::messages::request::GlobalRequestId;
 
 // Sender
@@ -63,7 +63,7 @@ impl MessageChannelSender for ReliableMessageSender {
         )
     }
 
-    fn send_request(
+    fn send_outgoing_request(
         &mut self,
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
@@ -77,5 +77,19 @@ impl MessageChannelSender for ReliableMessageSender {
             request,
         );
         self.send_message(processed_request);
+    }
+
+    fn send_outgoing_response(&mut self, message_kinds: &MessageKinds, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut, local_response_id: LocalResponseId, response: MessageContainer) {
+        let processed_response = self.request_sender.process_outgoing_response(
+            message_kinds,
+            converter,
+            local_response_id,
+            response,
+        );
+        self.send_message(processed_response);
+    }
+
+    fn process_incoming_response(&mut self, local_request_id: &LocalRequestId) -> Option<GlobalRequestId> {
+        self.request_sender.process_incoming_response(local_request_id)
     }
 }

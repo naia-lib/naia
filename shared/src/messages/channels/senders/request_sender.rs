@@ -3,42 +3,15 @@ use std::{time::Duration, collections::HashMap};
 use naia_derive::MessageRequest;
 use naia_serde::{BitWriter, SerdeInternal};
 
-use crate::{KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKind, MessageKinds};
+use crate::{KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKinds};
 use crate::messages::request::GlobalRequestId;
 
 pub struct RequestSender {
-    channels: HashMap<MessageKind, RequestSenderChannel>,
-}
-
-impl RequestSender {
-    pub fn new() -> Self {
-        Self {
-            channels: HashMap::new(),
-        }
-    }
-
-    pub(crate) fn process_outgoing_request(
-        &mut self,
-        message_kinds: &MessageKinds,
-        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-        global_request_id: GlobalRequestId,
-        request: MessageContainer
-    ) -> MessageContainer {
-        let message_kind = request.kind();
-        if !self.channels.contains_key(&message_kind) {
-            self.channels.insert(message_kind.clone(), RequestSenderChannel::new());
-        }
-        let channel = self.channels.get_mut(&message_kind).unwrap();
-        channel.process_outgoing_request(message_kinds, converter, global_request_id, request)
-    }
-}
-
-pub struct RequestSenderChannel {
     local_key_generator: KeyGenerator<LocalRequestId>,
     local_to_global_ids: HashMap<LocalRequestId, GlobalRequestId>,
 }
 
-impl RequestSenderChannel {
+impl RequestSender {
     pub fn new() -> Self {
         Self {
             local_key_generator: KeyGenerator::new(Duration::from_secs(60)),
@@ -54,14 +27,34 @@ impl RequestSenderChannel {
         request: MessageContainer
     ) -> MessageContainer {
 
-        let local_id = self.local_key_generator.generate();
-        self.local_to_global_ids.insert(local_id, global_request_id);
+        let local_request_id = self.local_key_generator.generate();
+        self.local_to_global_ids.insert(local_request_id, global_request_id);
 
         let mut writer = BitWriter::with_max_capacity();
         request.write(message_kinds, &mut writer, converter);
         let request_bytes = writer.to_bytes();
-        let request_message = RequestOrResponse::request(local_id, request_bytes);
+        let request_message = RequestOrResponse::request(local_request_id, request_bytes);
         MessageContainer::from_write(Box::new(request_message), converter)
+    }
+
+    pub(crate) fn process_outgoing_response(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        local_response_id: LocalResponseId,
+        response: MessageContainer
+    ) -> MessageContainer {
+
+        let mut writer = BitWriter::with_max_capacity();
+        response.write(message_kinds, &mut writer, converter);
+        let response_bytes = writer.to_bytes();
+        let response_message = RequestOrResponse::response(local_response_id, response_bytes);
+        MessageContainer::from_write(Box::new(response_message), converter)
+    }
+
+    pub(crate) fn process_incoming_response(&mut self, local_request_id: &LocalRequestId) -> Option<GlobalRequestId> {
+        self.local_key_generator.recycle_key(local_request_id);
+        self.local_to_global_ids.remove(local_request_id)
     }
 }
 

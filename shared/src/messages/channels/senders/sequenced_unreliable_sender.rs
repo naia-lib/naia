@@ -10,7 +10,8 @@ use crate::{messages::{
     },
     message_container::MessageContainer,
     message_kinds::MessageKinds,
-}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut};
+}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut, LocalResponseId};
+use crate::messages::channels::senders::request_sender::LocalRequestId;
 use crate::messages::request::GlobalRequestId;
 
 pub struct SequencedUnreliableSender {
@@ -68,7 +69,15 @@ impl MessageChannelSender for SequencedUnreliableSender {
         )
     }
 
-    fn send_request(&mut self, _: &MessageKinds, _: &mut dyn LocalEntityAndGlobalEntityConverterMut, _: GlobalRequestId, _: MessageContainer) {
+    fn send_outgoing_request(&mut self, _: &MessageKinds, _: &mut dyn LocalEntityAndGlobalEntityConverterMut, _: GlobalRequestId, _: MessageContainer) {
+        panic!("SequencedUnreliable channel does not support requests");
+    }
+
+    fn send_outgoing_response(&mut self, _: &MessageKinds, _: &mut dyn LocalEntityAndGlobalEntityConverterMut, _: LocalResponseId, _: MessageContainer) {
+        panic!("SequencedUnreliable channel does not support requests");
+    }
+
+    fn process_incoming_response(&mut self, _: &LocalRequestId) -> Option<GlobalRequestId> {
         panic!("SequencedUnreliable channel does not support requests");
     }
 }

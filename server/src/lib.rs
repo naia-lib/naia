@@ -18,7 +18,7 @@ pub mod shared {
     pub use naia_shared::{
         default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
         FileBitWriter, Random, Serde, SerdeErr, SignedInteger, SignedVariableInteger, SocketConfig,
-        UnsignedInteger, UnsignedVariableInteger,
+        UnsignedInteger, UnsignedVariableInteger, GlobalResponseId,
     };
 }
 pub mod internal {

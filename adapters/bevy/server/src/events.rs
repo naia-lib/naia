@@ -3,7 +3,7 @@ use std::{any::Any, collections::HashMap};
 use bevy_ecs::{entity::Entity, prelude::Event};
 
 use naia_bevy_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
-use naia_server::{shared::GlobalRequestResponseId, Events, NaiaServerError, User, UserKey};
+use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, User, UserKey};
 
 // ConnectEvent
 #[derive(Event)]
@@ -94,7 +94,7 @@ fn convert_messages<M: Message>(
 // RequestEvents
 #[derive(Event)]
 pub struct RequestEvents {
-    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalRequestResponseId, MessageContainer)>>>,
+    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>,
 }
 
 impl<E: Copy> From<&mut Events<E>> for RequestEvents {

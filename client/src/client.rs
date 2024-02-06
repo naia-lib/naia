@@ -18,7 +18,6 @@ use crate::{
         global_world_manager::GlobalWorldManager,
     },
     ReplicationConfig,
-    request::{GlobalRequestManager, GlobalResponseManager},
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
@@ -346,11 +345,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Sends a Response for a given Request. Returns whether or not was successful.
     pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
 
-        let response_id = &response_key.response_id();
+        let response_id = response_key.response_id();
 
         let cloned_response = S::clone_box(response);
 
-        self.send_response_inner(response_id, cloned_response)
+        self.send_response_inner(&response_id, cloned_response)
     }
 
     // returns whether was successful
@@ -362,7 +361,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let Some(connection) = &mut self.server_connection else {
             return false;
         };
-        let Some((channel_kind, message_kind, local_response_id)) = connection.global_response_manager.destroy_response_id(response_id) else {
+        let Some((channel_kind, local_response_id)) = connection.global_response_manager.destroy_response_id(response_id) else {
             return false;
         };
         let mut converter = EntityConverterMut::new(

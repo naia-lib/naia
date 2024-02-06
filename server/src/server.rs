@@ -9,7 +9,7 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
+use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -304,7 +304,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         channel_kind: &ChannelKind,
         // response_type_id: TypeId,
         request_box: Box<dyn Message>,
-    ) -> Option<u64> {
+    ) -> Option<GlobalRequestId> {
 
         let channel_settings = self.protocol.channel_kinds.channel(&channel_kind);
 
@@ -342,25 +342,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Sends a Response for a given Request. Returns whether or not was successful.
     pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
 
-        let request_id = response_key.response_id();
-        let Some((user_key, channel_kind)) = self.global_request_manager.destroy_request_id(&request_id) else {
-            return false;
-        };
+        let response_id = response_key.response_id();
 
         let cloned_response = S::clone_box(response);
 
-        self.send_response_inner(&user_key, &channel_kind, request_id, cloned_response)
+        self.send_response_inner(&response_id, cloned_response)
     }
 
     // returns whether was successful
     fn send_response_inner(
         &mut self,
-        user_key: &UserKey,
-        channel_kind: &ChannelKind,
-        request_id: u64,
+        response_id: &GlobalResponseId,
         response_box: Box<dyn Message>,
     ) -> bool {
-        let Some(user) = self.users.get(user_key) else {
+        let Some((user_key, channel_kind, local_response_id)) = self.global_response_manager.destroy_response_id(&response_id) else {
+            return false;
+        };
+        let Some(user) = self.users.get(&user_key) else {
             return false;
         };
         let Some(connection) = self.user_connections.get_mut(&user.address) else {
@@ -370,27 +368,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             &self.global_world_manager,
             &mut connection.base.local_world_manager,
         );
-        let message = MessageContainer::from_write(response_box, &mut converter);
+        let response = MessageContainer::from_write(response_box, &mut converter);
         connection.base.message_manager.send_response(
             &self.protocol.message_kinds,
             &mut converter,
-            channel_kind,
-            request_id,
-            message,
+            &channel_kind,
+            local_response_id,
+            response,
         );
         return true;
     }
 
-    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<S> {
-        let response_id = response_key.request_id();
-        let Some(container) = self.global_response_manager.destroy_response_id(&response_id) else {
+    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<(UserKey, S)> {
+        let request_id = response_key.request_id();
+        let Some((user_key, container)) = self.global_request_manager.destroy_request_id(&request_id) else {
             return None;
         };
         let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
             .ok()
-            .map(|boxed_m| *boxed_m)
+            .map(|boxed_s| *boxed_s)
             .unwrap();
-        return Some(response);
+        return Some((user_key, response));
     }
     //
 
@@ -1804,6 +1802,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 connection.process_packets(
                     &self.protocol,
                     &mut self.global_world_manager,
+                    &mut self.global_request_manager,
                     &mut self.global_response_manager,
                     world,
                     &mut self.incoming_events,

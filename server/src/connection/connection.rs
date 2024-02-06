@@ -14,7 +14,7 @@ use crate::{
     user::UserKey,
     world::global_world_manager::GlobalWorldManager,
 };
-use crate::request::GlobalResponseManager;
+use crate::request::{GlobalRequestManager, GlobalResponseManager};
 
 use super::ping_manager::PingManager;
 
@@ -97,6 +97,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         &mut self,
         protocol: &Protocol,
         global_world_manager: &mut GlobalWorldManager<E>,
+        global_request_manager: &mut GlobalRequestManager,
         global_response_manager: &mut GlobalResponseManager,
         world: &mut W,
         incoming_events: &mut Events<E>,
@@ -136,13 +137,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
         }
 
-        // Receive Request Events
-        let requests = self.base.message_manager.receive_requests_or_responses();
+        // Receive Request and Response Events
+        let (requests, responses) = self.base.message_manager.receive_requests_and_responses();
+        // Requests
         for (channel_kind, requests) in requests {
-            for (message_kind, local_response_id, request) in requests {
-                let global_response_id = global_response_manager.create_response_id(&channel_kind, &message_kind, local_response_id);
+            for (local_response_id, request) in requests {
+                let global_response_id = global_response_manager.create_response_id(&self.user_key, &channel_kind, &local_response_id);
                 incoming_events.push_request(&self.user_key, &channel_kind, global_response_id, request);
             }
+        }
+        // Responses
+        for (global_request_id, response) in responses {
+            global_request_manager.receive_response(&global_request_id, response);
         }
 
         // Receive World Events

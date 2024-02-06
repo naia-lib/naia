@@ -3,7 +3,7 @@ use std::{collections::HashMap, hash::Hash};
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKind, MessageKinds, messages::{
+use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds, messages::{
     channels::{
         channel::ChannelMode,
         channel::ChannelSettings,
@@ -17,7 +17,6 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter,
             unordered_unreliable_receiver::UnorderedUnreliableReceiver,
         },
         senders::{
-            request_sender::LocalRequestOrResponseId,
             channel_sender::MessageChannelSender,
             message_fragmenter::MessageFragmenter, reliable_message_sender::ReliableMessageSender,
             sequenced_unreliable_sender::SequencedUnreliableSender,
@@ -202,7 +201,7 @@ impl MessageManager {
         let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
             panic!("Channel not configured correctly! Cannot send message.");
         };
-        channel.send_request(message_kinds, converter, global_request_id, request);
+        channel.send_outgoing_request(message_kinds, converter, global_request_id, request);
     }
 
     pub fn send_response(
@@ -213,7 +212,10 @@ impl MessageManager {
         local_response_id: LocalResponseId,
         response: MessageContainer
     ) {
-        todo!()
+        let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
+            panic!("Channel not configured correctly! Cannot send message.");
+        };
+        channel.send_outgoing_response(message_kinds, converter, local_response_id, response);
     }
 
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
@@ -333,15 +335,22 @@ impl MessageManager {
     }
 
     /// Retrieve all requests from the channel buffers
-    pub fn receive_requests_or_responses(
+    pub fn receive_requests_and_responses(
         &mut self,
-    ) -> Vec<(ChannelKind, Vec<(MessageKind, LocalRequestOrResponseId, MessageContainer)>)> {
-        let mut output = Vec::new();
+    ) -> (Vec<(ChannelKind, Vec<(LocalResponseId, MessageContainer)>)>, Vec<(GlobalRequestId, MessageContainer)>) {
+        let mut request_output = Vec::new();
+        let mut response_output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {
-            let requests_or_responses = channel.receive_requests_and_responses();
-            output.push((channel_kind.clone(), requests_or_responses));
+            let (requests, responses) = channel.receive_requests_and_responses();
+            request_output.push((channel_kind.clone(), requests));
+
+            let channel_sender = self.channel_senders.get_mut(channel_kind).unwrap();
+            for (local_request_id, response) in responses {
+                let global_request_id = channel_sender.process_incoming_response(&local_request_id).unwrap();
+                response_output.push((global_request_id, response));
+            }
         }
-        output
+        (request_output, response_output)
     }
 }
 

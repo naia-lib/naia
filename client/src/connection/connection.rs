@@ -2,7 +2,7 @@ use std::{any::Any, hash::Hash};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType, HostWorldEvents, Instant, LocalRequestOrResponseId, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType, HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use crate::{
     request::GlobalResponseManager,
@@ -156,26 +156,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
         }
 
-        // Receive Request or Response Events
-        let requests_or_responses = self.base.message_manager.receive_requests_or_responses();
-        for (channel_kind, requests_or_responses) in requests_or_responses {
-            for (message_kind, local_id, request_or_response) in requests_or_responses {
-                match local_id {
-                    LocalRequestOrResponseId::Request(local_request_id) => {
-                        // we have received an incoming request, need to generate a response id for it
-                        let request = request_or_response;
-                        let local_response_id = local_request_id.receive_from_remote();
-                        let global_response_id = self.global_response_manager.create_response_id(&channel_kind, &message_kind, &local_response_id);
-                        incoming_events.push_request(&channel_kind, global_response_id, request);
-                    }
-                    LocalRequestOrResponseId::Response(local_response_id) => {
-                        // we have received an incoming response, need to match it to the original request
-                        let response = request_or_response;
-                        let local_request_id = local_response_id.receive_from_remote();
-                        todo!();
-                    }
-                }
+        // Receive Request and Response Events
+        let (requests, responses) = self.base.message_manager.receive_requests_and_responses();
+        // Requests
+        for (channel_kind, requests) in requests {
+            for (local_response_id, request) in requests {
+                let global_response_id = self.global_response_manager.create_response_id(&channel_kind, &local_response_id);
+                incoming_events.push_request(&channel_kind, global_response_id, request);
             }
+        }
+        // Responses
+        for (global_request_id, response) in responses {
+            self.global_request_manager.receive_response(&global_request_id, response);
         }
 
         // Receive World Events

@@ -1,6 +1,6 @@
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{GlobalRequestId, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageKind, messages::{channels::senders::request_sender::LocalRequestOrResponseId, message_container::MessageContainer, message_kinds::MessageKinds}, world::remote::entity_waitlist::EntityWaitlist};
+use crate::{LocalEntityAndGlobalEntityConverter, LocalResponseId, messages::{message_container::MessageContainer, message_kinds::MessageKinds}, world::remote::entity_waitlist::EntityWaitlist};
 use crate::messages::channels::senders::request_sender::LocalRequestId;
 
 pub trait ChannelReceiver<P>: Send + Sync {
@@ -23,5 +23,5 @@ pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr>;
 
-    fn receive_requests_and_responses(&mut self) -> (Vec<(MessageKind, LocalResponseId, MessageContainer)>, Vec<(LocalRequestId, MessageContainer)>);
+    fn receive_requests_and_responses(&mut self) -> (Vec<(LocalResponseId, MessageContainer)>, Vec<(LocalRequestId, MessageContainer)>);
 }

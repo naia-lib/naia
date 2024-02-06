@@ -1,6 +1,6 @@
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{GlobalRequestId, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, MessageKind, messages::{
+use crate::{LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, messages::{
     channels::{receivers::{
         channel_receiver::{ChannelReceiver, MessageChannelReceiver},
         fragment_receiver::FragmentReceiver,
@@ -28,7 +28,7 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     fragment_receiver: FragmentReceiver,
     waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>,
     current_index: MessageIndex,
-    incoming_requests: Vec<(MessageKind, LocalResponseId, MessageContainer)>,
+    incoming_requests: Vec<(LocalResponseId, MessageContainer)>,
     incoming_responses: Vec<(LocalRequestId, MessageContainer)>,
 }
 
@@ -129,7 +129,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                     let request = request_or_response;
                     let local_response_id = local_request_id.receive_from_remote();
                     self.incoming_requests
-                        .push((request_or_response.kind(), local_response_id, request));
+                        .push((local_response_id, request));
                 }
                 LocalRequestOrResponseId::Response(local_response_id) => {
                     let response = request_or_response;
@@ -181,7 +181,7 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
         Ok(())
     }
 
-    fn receive_requests_and_responses(&mut self) -> (Vec<(MessageKind, LocalResponseId, MessageContainer)>, Vec<(LocalRequestId, MessageContainer)>) {
+    fn receive_requests_and_responses(&mut self) -> (Vec<(LocalResponseId, MessageContainer)>, Vec<(LocalRequestId, MessageContainer)>) {
         (std::mem::take(&mut self.incoming_requests), std::mem::take(&mut self.incoming_responses))
     }
 }

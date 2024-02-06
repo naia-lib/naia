@@ -72,7 +72,7 @@ impl<'w> Server<'w> {
         self.server.0.send_response(response_key, response)
     }
 
-    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<S> {
+    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<(UserKey, S)> {
         self.server.0.receive_response(response_key)
     }
 
