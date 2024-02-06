@@ -288,23 +288,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     //
-    pub fn send_request<C: Channel, Q: Request>(&mut self, user_key: &UserKey, request: &Q) -> Option<ResponseReceiveKey<Q::Response>> {
+    pub fn send_request<C: Channel, Q: Request>(&mut self, user_key: &UserKey, request: &Q) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
 
         let cloned_request = Q::clone_box(request);
-        // let response_type_id = TypeId::of::<Q::Response>();
-        let Some(id) = self.send_request_inner(user_key, &ChannelKind::of::<C>(), cloned_request) else {
-            return None;
-        };
-        Some(ResponseReceiveKey::new(id))
+        let id = self.send_request_inner(user_key, &ChannelKind::of::<C>(), cloned_request)?;
+        Ok(ResponseReceiveKey::new(id))
     }
 
     fn send_request_inner(
         &mut self,
         user_key: &UserKey,
         channel_kind: &ChannelKind,
-        // response_type_id: TypeId,
         request_box: Box<dyn Message>,
-    ) -> Option<GlobalRequestId> {
+    ) -> Result<GlobalRequestId, NaiaServerError> {
 
         let channel_settings = self.protocol.channel_kinds.channel(&channel_kind);
 
@@ -316,11 +312,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         let Some(user) = self.users.get(user_key) else {
             warn!("user does not exist");
-            return None;
+            return Err(NaiaServerError::Message("user does not exist".to_string()));
         };
         let Some(connection) = self.user_connections.get_mut(&user.address) else {
             warn!("currently not connected to user");
-            return None;
+            return Err(NaiaServerError::Message("currently not connected to user".to_string()));
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
@@ -336,7 +332,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             message,
         );
 
-        return Some(request_id);
+        return Ok(request_id);
     }
 
     /// Sends a Response for a given Request. Returns whether or not was successful.

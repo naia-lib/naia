@@ -1,5 +1,7 @@
 use std::{collections::HashMap, hash::Hash};
 
+use log::info;
+
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
@@ -49,6 +51,7 @@ impl MessageManager {
         // initialize senders
         let mut channel_senders = HashMap::<ChannelKind, Box<dyn MessageChannelSender>>::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
+            info!("initialize senders for channel: {:?}", channel_kind);
             match &host_type {
                 HostType::Server => {
                     if !channel_settings.can_send_to_client() {
@@ -342,12 +345,18 @@ impl MessageManager {
         let mut response_output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {
             let (requests, responses) = channel.receive_requests_and_responses();
-            request_output.push((channel_kind.clone(), requests));
+            if !requests.is_empty() {
+                request_output.push((channel_kind.clone(), requests));
+            }
 
-            let channel_sender = self.channel_senders.get_mut(channel_kind).unwrap();
-            for (local_request_id, response) in responses {
-                let global_request_id = channel_sender.process_incoming_response(&local_request_id).unwrap();
-                response_output.push((global_request_id, response));
+            if !responses.is_empty() {
+                let Some(channel_sender) = self.channel_senders.get_mut(channel_kind) else {
+                    panic!("Channel not configured correctly! Cannot send message on channel: {:?}", channel_kind);
+                };
+                for (local_request_id, response) in responses {
+                    let global_request_id = channel_sender.process_incoming_response(&local_request_id).unwrap();
+                    response_output.push((global_request_id, response));
+                }
             }
         }
         (request_output, response_output)

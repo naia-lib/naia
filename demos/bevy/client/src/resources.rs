@@ -1,9 +1,9 @@
-use std::default::Default;
+use std::{collections::HashSet, default::Default};
 
 use bevy::prelude::{ColorMaterial, Entity, Handle, Mesh, Resource};
 
-use naia_bevy_client::CommandHistory;
-use naia_bevy_demo_shared::messages::KeyCommand;
+use naia_bevy_client::{CommandHistory, ResponseReceiveKey};
+use naia_bevy_demo_shared::messages::{BasicResponse, KeyCommand};
 
 pub struct OwnedEntity {
     pub confirmed: Entity,
@@ -34,6 +34,8 @@ pub struct Global {
     pub orange: Handle<ColorMaterial>,
     pub aqua: Handle<ColorMaterial>,
     pub circle: Handle<Mesh>,
+    pub response_keys: HashSet<ResponseReceiveKey<BasicResponse>>,
+    pub request_index: u8,
 }
 
 impl Default for Global {
@@ -52,6 +54,8 @@ impl Default for Global {
             purple: Handle::default(),
             orange: Handle::default(),
             aqua: Handle::default(),
+            response_keys: HashSet::new(),
+            request_index: 0,
         }
     }
 }

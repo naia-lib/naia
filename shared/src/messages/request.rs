@@ -9,7 +9,6 @@ pub trait Request: Message {
 
 // Response
 pub trait Response: Message {
-    type Request: Request;
 }
 
 // ResponseSendKey
@@ -33,7 +32,7 @@ impl<S: Response> ResponseSendKey<S> {
 }
 
 // ResponseReceiveKey
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Copy)]
 pub struct ResponseReceiveKey<S: Response> {
     request_id: GlobalRequestId,
     phantom_s: PhantomData<S>,

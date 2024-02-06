@@ -8,20 +8,17 @@ use naia_bevy_server::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, SpawnEntityEvent,
-        TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        TickEvent, UnpublishEntityEvent, UpdateComponentEvents, RequestEvents,
     },
     CommandsExt, Random, ReplicationConfig, Server,
 };
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
-    channels::{EntityAssignmentChannel, PlayerCommandChannel},
+    channels::{RequestChannel, EntityAssignmentChannel, PlayerCommandChannel},
     components::{Color, ColorValue, Position, Shape, ShapeValue},
-    messages::{Auth, EntityAssignment, KeyCommand},
+    messages::{Auth, EntityAssignment, KeyCommand, BasicRequest, BasicResponse},
 };
-use naia_bevy_demo_shared::channels::RequestChannel;
-use naia_bevy_demo_shared::messages::BasicRequest;
-use naia_bevy_server::events::RequestEvents;
 
 use crate::resources::Global;
 
@@ -138,6 +135,7 @@ pub fn error_events(mut event_reader: EventReader<ErrorEvent>) {
 pub fn tick_events(
     mut server: Server,
     mut position_query: Query<&mut Position>,
+    mut global: ResMut<Global>,
     mut tick_reader: EventReader<TickEvent>,
 ) {
     let mut has_ticked = false;
@@ -157,6 +155,22 @@ pub fn tick_events(
             };
             shared_behavior::process_command(&key_command, &mut position);
         }
+
+        // Send a request to all clients
+        if server_tick % 100 == 0 {
+
+            for user_key in server.user_keys() {
+                let request = BasicRequest::new("ServerRequest".to_string(), global.request_index);
+                global.request_index = global.request_index.wrapping_add(1);
+                let user = server.user(&user_key);
+                info!("Server sending Request -> Client ({}): {:?}", user.address(), request);
+                let Ok(response_key) = server.send_request::<RequestChannel, _>(&user_key, &request) else {
+                    info!("Failed to send request to user: {:?}", user_key);
+                    continue;
+                };
+                global.response_keys.insert(response_key);
+            }
+        }
     }
 
     if has_ticked {
@@ -175,12 +189,34 @@ pub fn tick_events(
 }
 
 pub fn request_events(
+    mut server: Server,
     mut event_reader: EventReader<RequestEvents>,
 ) {
     for events in event_reader.read() {
-        for (user_key, response_send_key, basic_request) in events.read::<RequestChannel, BasicRequest>() {
-            todo!()
+        for (user_key, response_send_key, request) in events.read::<RequestChannel, BasicRequest>() {
+            let user = server.user(&user_key);
+            info!("Server received Request <- Client({}): {:?}", user.address(), request);
+            let response = BasicResponse::new("ServerResponse".to_string(), request.index);
+            info!("Server sending Response -> Client({}): {:?}", user.address(), response);
+            server.send_response(&response_send_key, &response);
         }
+    }
+}
+
+pub fn response_events(
+    mut server: Server,
+    mut global: ResMut<Global>,
+) {
+    let mut finished_response_keys = Vec::new();
+    for response_key in &global.response_keys {
+        if let Some((user_key, response)) = server.receive_response(response_key) {
+            let user = server.user(&user_key);
+            info!("Server received Response <- Client({:?}): {:?}", user.address(), response);
+            finished_response_keys.push(response_key.clone());
+        }
+    }
+    for response_key in finished_response_keys {
+        global.response_keys.remove(&response_key);
     }
 }
 

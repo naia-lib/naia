@@ -13,19 +13,16 @@ use naia_bevy_client::{
     events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
         MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, SpawnEntityEvent,
-        UnpublishEntityEvent, UpdateComponentEvents,
+        UnpublishEntityEvent, UpdateComponentEvents, RequestEvents,
     },
     sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
 };
-use naia_bevy_client::events::RequestEvents;
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
-    channels::{EntityAssignmentChannel, PlayerCommandChannel},
+    channels::{RequestChannel, EntityAssignmentChannel, PlayerCommandChannel},
     components::{Color, ColorValue, Position, Shape, ShapeValue},
-    messages::{EntityAssignment, KeyCommand},
+    messages::{BasicRequest, BasicResponse, EntityAssignment, KeyCommand},
 };
-use naia_bevy_demo_shared::channels::RequestChannel;
-use naia_bevy_demo_shared::messages::BasicRequest;
 
 use crate::{
     components::{Confirmed, Interp, LocalCursor, Predicted},
@@ -168,12 +165,32 @@ pub fn message_events(
 }
 
 pub fn request_events(
+    mut client: Client<Main>,
     mut event_reader: EventReader<RequestEvents<Main>>,
 ) {
     for events in event_reader.read() {
-        for (response_send_key, basic_request) in events.read::<RequestChannel, BasicRequest>() {
-
+        for (response_send_key, request) in events.read::<RequestChannel, BasicRequest>() {
+            info!("Client received Request <- Server: {:?}", request);
+            let response = BasicResponse::new("ClientResponse".to_string(), request.index);
+            info!("Client sending Response -> Server: {:?}", response);
+            client.send_response(&response_send_key, &response);
         }
+    }
+}
+
+pub fn response_events(
+    mut client: Client<Main>,
+    mut global: ResMut<Global>,
+) {
+    let mut finished_response_keys = Vec::new();
+    for response_key in &global.response_keys {
+        if let Some(response) = client.receive_response(response_key) {
+            info!("Client received Response <- Server: {:?}", response);
+            finished_response_keys.push(response_key.clone());
+        }
+    }
+    for response_key in finished_response_keys {
+        global.response_keys.remove(&response_key);
     }
 }
 
@@ -373,6 +390,21 @@ pub fn tick_events(
 
     for event in tick_reader.read() {
         let client_tick = event.tick;
+
+        // Send a request to server
+        if client_tick % 100 == 0 {
+            let request = BasicRequest::new("ClientRequest".to_string(), global.request_index);
+            global.request_index = global.request_index.wrapping_add(1);
+
+            info!("Client sending Request -> Server: {:?}", request);
+            let Ok(response_key) = client.send_request::<RequestChannel, _>(&request) else {
+                info!("Failed to send request to server");
+                return;
+            };
+            global.response_keys.insert(response_key);
+        }
+
+        // Command History
         if !global.command_history.can_insert(&client_tick) {
             // History is full
             continue;

@@ -297,14 +297,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     //
-    pub fn send_request<C: Channel, Q: Request>(&mut self, request: &Q) -> Option<ResponseReceiveKey<Q::Response>> {
+    pub fn send_request<C: Channel, Q: Request>(&mut self, request: &Q) -> Result<ResponseReceiveKey<Q::Response>, NaiaClientError> {
 
         let cloned_request = Q::clone_box(request);
         // let response_type_id = TypeId::of::<Q::Response>();
-        let Some(id) = self.send_request_inner(&ChannelKind::of::<C>(), cloned_request) else {
-            return None;
-        };
-        Some(ResponseReceiveKey::new(id))
+        let id = self.send_request_inner(&ChannelKind::of::<C>(), cloned_request)?;
+        Ok(ResponseReceiveKey::new(id))
     }
 
     fn send_request_inner(
@@ -312,7 +310,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         channel_kind: &ChannelKind,
         // response_type_id: TypeId,
         request_box: Box<dyn Message>,
-    ) -> Option<GlobalRequestId> {
+    ) -> Result<GlobalRequestId, NaiaClientError> {
 
         let channel_settings = self.protocol.channel_kinds.channel(&channel_kind);
 
@@ -322,7 +320,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let Some(connection) = &mut self.server_connection else {
             warn!("currently not connected to server");
-            return None;
+            return Err(NaiaClientError::Message("currently not connected to server".to_string()));
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
@@ -339,7 +337,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             message,
         );
 
-        return Some(request_id);
+        return Ok(request_id);
     }
 
     /// Sends a Response for a given Request. Returns whether or not was successful.

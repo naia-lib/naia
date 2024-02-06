@@ -3,7 +3,7 @@ pub use naia_server::{
     shared::{
         default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
         FileBitWriter, SerdeErr, SignedInteger, SignedVariableInteger, UnsignedInteger,
-        UnsignedVariableInteger,
+        UnsignedVariableInteger, ResponseReceiveKey,
     },
     transport, ReplicationConfig, RoomKey, SerdeBevy as Serde, ServerConfig, UserKey,
 };

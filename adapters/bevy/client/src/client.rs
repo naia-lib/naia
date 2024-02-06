@@ -87,7 +87,7 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
     }
 
     /// Requests ///
-    pub fn send_request<C: Channel, Q: Request>(&mut self, request: &Q) -> Option<ResponseReceiveKey<Q::Response>> {
+    pub fn send_request<C: Channel, Q: Request>(&mut self, request: &Q) -> Result<ResponseReceiveKey<Q::Response>, NaiaClientError> {
         self.client.client.send_request::<C, Q>(request)
     }
 

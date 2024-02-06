@@ -17,7 +17,7 @@ pub mod transport;
 pub mod shared {
     pub use naia_shared::{
         default_channels, sequence_greater_than, Instant, Message, Protocol, Random, SocketConfig,
-        Tick, GlobalRequestId, GlobalResponseId,
+        Tick, GlobalRequestId, GlobalResponseId, ResponseReceiveKey
     };
 }
 pub mod internal {

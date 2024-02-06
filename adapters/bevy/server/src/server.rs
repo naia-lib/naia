@@ -5,10 +5,7 @@ use bevy_ecs::{
     system::{ResMut, SystemParam, Resource},
 };
 
-use naia_server::{
-    shared::SocketConfig, transport::Socket, ReplicationConfig, RoomKey, RoomMut, RoomRef,
-    Server as NaiaServer, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
-};
+use naia_server::{shared::SocketConfig, transport::Socket, ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut, NaiaServerError};
 
 use naia_bevy_shared::{Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick};
 
@@ -64,7 +61,7 @@ impl<'w> Server<'w> {
 
 
     /// Requests ///
-    pub fn send_request<C: Channel, Q: Request>(&mut self, user_key: &UserKey, request: &Q) -> Option<ResponseReceiveKey<Q::Response>> {
+    pub fn send_request<C: Channel, Q: Request>(&mut self, user_key: &UserKey, request: &Q) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
         self.server.0.send_request::<C, Q>(user_key, request)
     }
 

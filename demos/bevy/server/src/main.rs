@@ -48,6 +48,7 @@ fn main() {
                 events::update_component_events,
                 events::remove_component_events,
                 events::request_events,
+                events::response_events,
             )
                 .chain()
                 .in_set(ReceiveEvents),
