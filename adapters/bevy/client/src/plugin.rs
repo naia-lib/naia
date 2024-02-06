@@ -52,7 +52,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
         let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
 
         let mut world_data = config.protocol.take_world_data();
-        world_data.add_systems::<T>(app);
+        world_data.add_systems(app);
 
         if let Some(old_world_data) = app.world.remove_resource::<WorldData>() {
             world_data.merge(old_world_data);

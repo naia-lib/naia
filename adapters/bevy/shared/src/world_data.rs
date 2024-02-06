@@ -48,7 +48,7 @@ impl WorldData {
         self.kind_to_accessor_map.extend(other.kind_to_accessor_map);
     }
 
-    pub fn add_systems<T: Send + Sync + 'static>(&self, app: &mut App) {
+    pub fn add_systems(&self, app: &mut App) {
         for (_kind, accessor_any) in &self.kind_to_accessor_map {
             let accessor = accessor_any
                 .downcast_ref::<Box<dyn ComponentAccess>>()
