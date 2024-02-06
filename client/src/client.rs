@@ -1,9 +1,8 @@
-use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
-use std::any::Any;
+use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::{info, warn};
 
-use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalRequestId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
@@ -205,7 +204,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // receive packets, process into events
                 response_events = Some(connection.process_packets(
                     &mut self.global_world_manager,
-                    &self.protocol.component_kinds,
+                    &mut self.global_response_manager,
+                    &self.protocol,
                     &mut world,
                     &mut self.incoming_events,
                 ));
@@ -320,7 +320,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         channel_kind: &ChannelKind,
         // response_type_id: TypeId,
         request_box: Box<dyn Message>,
-    ) -> Option<u64> {
+    ) -> Option<GlobalRequestId> {
 
         let channel_settings = self.protocol.channel_kinds.channel(&channel_kind);
 

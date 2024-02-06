@@ -3,13 +3,14 @@ use std::{any::Any, hash::Hash};
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds,
+    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds,
     ConnectionConfig, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType,
     HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
     StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
+    request::GlobalResponseManager,
     connection::{
         io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
         time_manager::TimeManager,
@@ -108,13 +109,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn process_packets<W: WorldMutType<E>>(
         &mut self,
         global_world_manager: &mut GlobalWorldManager<E>,
-        component_kinds: &ComponentKinds,
+        global_response_manager: &mut GlobalResponseManager,
+        protocol: &Protocol,
         world: &mut W,
         incoming_events: &mut Events<E>,
     ) -> Vec<EntityResponseEvent<E>> {
         let mut response_events = Vec::new();
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
+            &protocol.message_kinds,
             global_world_manager,
             &self.base.local_world_manager,
             &mut self.base.remote_world_manager.entity_waitlist,
@@ -153,12 +156,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
         }
 
+        // Receive Request Events
+        let requests = self.base.message_manager.receive_requests();
+        for (channel_kind, requests) in requests {
+            for (message_kind, local_response_id, request) in requests {
+                let global_response_id = global_response_manager.create_response_id(&channel_kind, &message_kind, &local_response_id);
+                incoming_events.push_request(&channel_kind, global_response_id, request);
+            }
+        }
+
         // Receive World Events
         let remote_events = self.base.remote_world_reader.take_incoming_events();
         let world_events = self.base.remote_world_manager.process_world_events(
             global_world_manager,
             &mut self.base.local_world_manager,
-            component_kinds,
+            &protocol.component_kinds,
             world,
             remote_events,
         );

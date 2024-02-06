@@ -1,6 +1,6 @@
 use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
-use naia_shared::{Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
+use naia_shared::{Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
 
 use crate::NaiaClientError;
 
@@ -12,7 +12,7 @@ pub struct Events<E: Copy> {
     server_ticks: Vec<Tick>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
-    requests: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
+    requests: HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalResponseId, MessageContainer)>>>,
     spawns: Vec<E>,
     despawns: Vec<E>,
     publishes: Vec<E>,
@@ -85,7 +85,7 @@ impl<E: Copy> Events<E> {
     }
     pub fn take_requests(
         &mut self,
-    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>> {
+    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalResponseId, MessageContainer)>>> {
         mem::take(&mut self.requests)
     }
 
@@ -157,18 +157,24 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_request(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
+    pub(crate) fn push_request(
+        &mut self,
+        channel_kind: &ChannelKind,
+        global_response_id: GlobalResponseId,
+        request: MessageContainer,
+    ) {
         if !self.requests.contains_key(&channel_kind) {
             self.requests.insert(*channel_kind, HashMap::new());
         }
         let channel_map = self.requests.get_mut(&channel_kind).unwrap();
 
-        let message_kind: MessageKind = message.kind();
+        let message_kind: MessageKind = request.kind();
         if !channel_map.contains_key(&message_kind) {
             channel_map.insert(message_kind, Vec::new());
         }
         let list = channel_map.get_mut(&message_kind).unwrap();
-        list.push(message);
+        list.push((global_response_id, request));
+
         self.empty = false;
     }
 
@@ -452,21 +458,23 @@ impl<E: Copy, C: Channel, Q: Request> Event<E> for RequestEvent<C, Q> {
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
-        if let Some(channel_map) = events.requests.get_mut(&channel_kind) {
-            let message_kind: MessageKind = MessageKind::of::<Q>();
-            if let Some(boxed_list) = channel_map.remove(&message_kind) {
-                let mut output_list: Vec<Q> = Vec::new();
+        let Some(channel_map) = events.requests.get_mut(&channel_kind) else {
+            return IntoIterator::into_iter(Vec::new());
+        };
+        let message_kind: MessageKind = MessageKind::of::<Q>();
+        let Some(requests) = channel_map.remove(&message_kind) else {
+            return IntoIterator::into_iter(Vec::new());
+        };
+        let mut output_list = Vec::new();
 
-                for boxed_message in boxed_list {
-                    let boxed_any = boxed_message.to_boxed_any();
-                    let message = boxed_any.downcast::<Q>().unwrap();
-                    output_list.push(*message);
-                }
-
-                todo!()
-            }
+        for (global_response_id, boxed_request) in requests {
+            let boxed_any = boxed_request.to_boxed_any();
+            let request = boxed_any.downcast::<Q>().unwrap();
+            let response_send_key = ResponseSendKey::<Q::Response>::new(global_response_id);
+            output_list.push((response_send_key, *request));
         }
-        return IntoIterator::into_iter(Vec::new());
+
+        return IntoIterator::into_iter(output_list);
     }
 
     fn has(events: &Events<E>) -> bool {

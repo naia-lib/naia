@@ -1,10 +1,10 @@
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::{hash::Hash, collections::HashMap};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
+    local_request_sender::LocalRequestId,
     channels::{
         channel::ChannelMode,
         channel::ChannelSettings,
@@ -18,17 +18,17 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
             unordered_unreliable_receiver::UnorderedUnreliableReceiver,
         },
         senders::{
+            reliable_message_sender::ReliableMessageSender,
             channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
-            reliable_sender::ReliableSender,
             sequenced_unreliable_sender::SequencedUnreliableSender,
             unordered_unreliable_sender::UnorderedUnreliableSender,
         },
     },
     message_container::MessageContainer,
-}, types::{HostType, MessageIndex, PacketIndex}, world::{
+}, types::{GlobalRequestId, HostType, MessageIndex, PacketIndex}, world::{
     entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     remote::entity_waitlist::EntityWaitlist,
-}, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds, Protocol};
+}, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds, Protocol, MessageKind};
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -75,7 +75,7 @@ impl MessageManager {
                 | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         channel_kind,
-                        Box::new(ReliableSender::<MessageContainer>::new(
+                        Box::new(ReliableMessageSender::new(
                             settings.rtt_resend_factor,
                         )),
                     );
@@ -145,7 +145,7 @@ impl MessageManager {
             channel_settings_map.insert(channel_kind.clone(), channel_settings);
         }
 
-        MessageManager {
+        Self {
             channel_senders,
             channel_receivers,
             channel_settings: channel_settings_map,
@@ -194,10 +194,13 @@ impl MessageManager {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         channel_kind: &ChannelKind,
-        global_request_id: u64,
+        global_request_id: GlobalRequestId,
         request: MessageContainer
     ) {
-        todo!()
+        let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
+            panic!("Channel not configured correctly! Cannot send message.");
+        };
+        channel.send_request(message_kinds, converter, global_request_id, request);
     }
 
     pub fn send_response(
@@ -205,7 +208,7 @@ impl MessageManager {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         channel_kind: &ChannelKind,
-        global_request_id: u64,
+        global_request_id: GlobalRequestId,
         response: MessageContainer
     ) {
         todo!()
@@ -311,6 +314,7 @@ impl MessageManager {
     /// Retrieve all messages from the channel buffers
     pub fn receive_messages<E: Eq + Copy + Hash>(
         &mut self,
+        message_kinds: &MessageKinds,
         global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         local_entity_converter: &dyn EntityAndLocalEntityConverter<E>,
         entity_waitlist: &mut EntityWaitlist,
@@ -320,8 +324,20 @@ impl MessageManager {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
-            let messages = channel.receive_messages(entity_waitlist, &entity_converter);
+            let messages = channel.receive_messages(message_kinds, entity_waitlist, &entity_converter);
             output.push((channel_kind.clone(), messages));
+        }
+        output
+    }
+
+    /// Retrieve all requests from the channel buffers
+    pub fn receive_requests(
+        &mut self,
+    ) -> Vec<(ChannelKind, Vec<(MessageKind, LocalRequestId, MessageContainer)>)> {
+        let mut output = Vec::new();
+        for (channel_kind, channel) in &mut self.channel_receivers {
+            let requests = channel.receive_requests();
+            output.push((channel_kind.clone(), requests));
         }
         output
     }

@@ -81,6 +81,7 @@ pub use messages::{
     message_manager::MessageManager,
     named::Named,
     request::{Request, Response, ResponseReceiveKey, ResponseSendKey},
+    local_request_sender::{RequestMessage, LocalResponseId},
 };
 pub use world::{
     component::{
@@ -137,5 +138,5 @@ pub use bigmap::{BigMap, BigMapKey};
 pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
 pub use protocol::{Protocol, ProtocolPlugin};
-pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
+pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick, GlobalRequestId, GlobalResponseId};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

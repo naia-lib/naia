@@ -46,6 +46,10 @@ impl BitWriter {
         }
     }
 
+    pub fn with_max_capacity() -> Self {
+        Self::with_capacity(u32::MAX)
+    }
+
     fn finalize(&mut self) {
         if self.scratch_index > 0 {
             self.buffer[self.buffer_index] =

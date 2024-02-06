@@ -1,27 +1,18 @@
 use std::{collections::VecDeque, mem, time::Duration};
 
-use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::{
-    messages::{
-        channels::senders::{
-            channel_sender::{ChannelSender, MessageChannelSender},
-            indexed_message_writer::IndexedMessageWriter,
-        },
-        message_container::MessageContainer,
-        message_kinds::MessageKinds,
-    },
-    types::MessageIndex,
-    LocalEntityAndGlobalEntityConverterMut,
-};
+use crate::{messages::
+    channels::senders::
+        channel_sender::ChannelSender,
+ types::MessageIndex};
 
 // Sender
 pub struct ReliableSender<P: Send + Sync> {
     rtt_resend_factor: f32,
     sending_messages: VecDeque<Option<(MessageIndex, Option<Instant>, P)>>,
     next_send_message_index: MessageIndex,
-    outgoing_messages: VecDeque<(MessageIndex, P)>,
+    pub(crate) outgoing_messages: VecDeque<(MessageIndex, P)>,
 }
 
 impl<P: Send + Sync> ReliableSender<P> {
@@ -122,23 +113,5 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
 
     fn notify_message_delivered(&mut self, message_index: &MessageIndex) {
         self.deliver_message(message_index);
-    }
-}
-
-impl MessageChannelSender for ReliableSender<MessageContainer> {
-    fn write_messages(
-        &mut self,
-        message_kinds: &MessageKinds,
-        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-        writer: &mut BitWriter,
-        has_written: &mut bool,
-    ) -> Option<Vec<MessageIndex>> {
-        IndexedMessageWriter::write_messages(
-            message_kinds,
-            &mut self.outgoing_messages,
-            converter,
-            writer,
-            has_written,
-        )
     }
 }

@@ -1,38 +1,34 @@
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{
-    messages::{
-        channels::receivers::{
-            channel_receiver::{ChannelReceiver, MessageChannelReceiver},
-            fragment_receiver::FragmentReceiver,
-            indexed_message_reader::IndexedMessageReader,
-            reliable_receiver::ReliableReceiver,
-        },
-        message_kinds::MessageKinds,
+use crate::{messages::{
+    local_request_sender::LocalRequestId,
+    channels::receivers::{
+        channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+        fragment_receiver::FragmentReceiver,
+        indexed_message_reader::IndexedMessageReader,
+        reliable_receiver::ReliableReceiver,
     },
-    types::MessageIndex,
-    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
-    LocalEntityAndGlobalEntityConverter, MessageContainer,
-};
+    message_kinds::MessageKinds,
+}, types::MessageIndex, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}, LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKind, RequestMessage};
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, MessageContainer)>,
         message_index: MessageIndex,
         message: MessageContainer,
-    );
+    ) -> Vec<(MessageIndex, MessageContainer)>;
 }
 
 // Reliable Receiver
 pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     reliable_receiver: ReliableReceiver<MessageContainer>,
-    incoming_messages: Vec<(MessageIndex, MessageContainer)>,
+    incoming_messages: Vec<MessageContainer>,
     arranger: A,
     fragment_receiver: FragmentReceiver,
     waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>,
     current_index: MessageIndex,
+    incoming_requests: Vec<(MessageKind, LocalRequestId, MessageContainer)>,
 }
 
 impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
@@ -44,6 +40,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             fragment_receiver: FragmentReceiver::new(),
             waitlist_store: WaitlistStore::new(),
             current_index: 0,
+            incoming_requests: Vec::new(),
         }
     }
 
@@ -80,8 +77,10 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             //info!("Received message!");
         }
 
-        self.arranger
-            .process(&mut self.incoming_messages, first_index, full_message);
+        let incoming_messages = self.arranger.process(first_index, full_message);
+        for (_, message) in incoming_messages {
+            self.receive_message(message_kinds, converter, message);
+        }
     }
 
     pub fn buffer_message(
@@ -100,34 +99,56 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         }
     }
 
-    pub fn receive_messages(
+    fn receive_message(
         &mut self,
-        entity_waitlist: &mut EntityWaitlist,
+        message_kinds: &MessageKinds,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-    ) -> Vec<(MessageIndex, MessageContainer)> {
-        if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
-            for (first_index, mut full_message) in list {
-                full_message.relations_complete(converter);
-                self.arranger
-                    .process(&mut self.incoming_messages, first_index, full_message);
+        message_container: MessageContainer
+    ) {
+        // look at message, see if it's a request
+        if message_container.is_request() {
+            // it is! cast it
+            let request_container = message_container
+                .to_boxed_any()
+                .downcast::<RequestMessage>()
+                .unwrap();
+            let (local_request_id, request_bytes) = request_container.to_id_and_bytes();
+            let mut reader = BitReader::new(&request_bytes);
+            let request_result = message_kinds.read(&mut reader, converter);
+            if request_result.is_err() {
+                // TODO: bubble up error instead of panicking here
+                panic!("Cannot read request message!");
             }
+            let request = request_result.unwrap();
+            // add it to incoming requests
+            self.incoming_requests
+                .push((request.kind(), local_request_id, request));
+        } else {
+            // it's not a request, just add it to incoming messages
+            self.incoming_messages.push(message_container);
         }
-
-        // return buffer
-        std::mem::take(&mut self.incoming_messages)
     }
 }
 
 impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageReceiver<A> {
     fn receive_messages(
         &mut self,
+        message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
-        self.receive_messages(entity_waitlist, converter)
-            .drain(..)
-            .map(|(_, message)| message)
-            .collect()
+        if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
+            for (first_index, mut full_message) in list {
+                full_message.relations_complete(converter);
+                let incoming_messages = self.arranger.process(first_index, full_message);
+                for (_, message) in incoming_messages {
+                    self.receive_message(message_kinds, converter, message);
+                }
+            }
+        }
+
+        // return buffer
+        std::mem::take(&mut self.incoming_messages)
     }
 }
 
@@ -144,5 +165,9 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
             self.buffer_message(message_kinds, entity_waitlist, converter, id, message);
         }
         Ok(())
+    }
+
+    fn receive_requests(&mut self) -> Vec<(MessageKind, LocalRequestId, MessageContainer)> {
+        std::mem::take(&mut self.incoming_requests)
     }
 }

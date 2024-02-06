@@ -3,7 +3,7 @@ use std::{any::Any, collections::HashMap};
 use bevy_ecs::{entity::Entity, prelude::Event};
 
 use naia_bevy_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
-use naia_server::{Events, NaiaServerError, User, UserKey};
+use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, User, UserKey};
 
 // ConnectEvent
 #[derive(Event)]
@@ -94,7 +94,7 @@ fn convert_messages<M: Message>(
 // RequestEvents
 #[derive(Event)]
 pub struct RequestEvents {
-    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
+    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>,
 }
 
 impl<E: Copy> From<&mut Events<E>> for RequestEvents {
@@ -108,15 +108,28 @@ impl<E: Copy> From<&mut Events<E>> for RequestEvents {
 impl RequestEvents {
     pub fn read<C: Channel, Q: Request>(&self) -> Vec<(UserKey, ResponseSendKey<Q::Response>, Q)> {
         let channel_kind = ChannelKind::of::<C>();
-        if let Some(message_map) = self.inner.get(&channel_kind) {
-            let message_kind = MessageKind::of::<Q>();
-            if let Some(messages) = message_map.get(&message_kind) {
-                // return convert_messages(messages);
-                todo!()
-            }
-        }
+        let Some(request_map) = self.inner.get(&channel_kind) else {
+            return Vec::new();
+        };
+        let message_kind = MessageKind::of::<Q>();
+        let Some(requests) = request_map.get(&message_kind) else {
+            return Vec::new();
+        };
 
-        Vec::new()
+            let mut output_list: Vec<(UserKey, ResponseSendKey<Q::Response>, Q)> = Vec::new();
+
+            for (user_key, global_response_id, request) in requests {
+                let message: Q = Box::<dyn Any + 'static>::downcast::<Q>(request.clone().to_boxed_any())
+                    .ok()
+                    .map(|boxed_m| *boxed_m)
+                    .unwrap();
+
+                let response_send_key = ResponseSendKey::new(*global_response_id);
+
+                output_list.push((*user_key, response_send_key, message));
+            }
+
+            return output_list;
     }
 }
 

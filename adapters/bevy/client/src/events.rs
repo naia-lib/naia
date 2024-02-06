@@ -2,7 +2,7 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use bevy_ecs::{entity::Entity, prelude::Event};
 
-use naia_client::{Events, NaiaClientError};
+use naia_client::{shared::GlobalResponseId, Events, NaiaClientError};
 
 use naia_bevy_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
 
@@ -106,7 +106,7 @@ impl<T> MessageEvents<T> {
 // RequestEvents
 #[derive(Event)]
 pub struct RequestEvents<T> {
-    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
+    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalResponseId, MessageContainer)>>>,
     phantom_t: PhantomData<T>,
 }
 
@@ -124,19 +124,21 @@ impl<T> RequestEvents<T> {
         let mut output = Vec::new();
 
         let channel_kind = ChannelKind::of::<C>();
-        if let Some(message_map) = self.inner.get(&channel_kind) {
-            let message_kind = MessageKind::of::<Q>();
-            if let Some(messages) = message_map.get(&message_kind) {
-                for boxed_message in messages {
-                    let boxed_any = boxed_message.clone().to_boxed_any();
-                    let message: Q = Box::<dyn Any + 'static>::downcast::<Q>(boxed_any)
-                        .ok()
-                        .map(|boxed_m| *boxed_m)
-                        .unwrap();
-                    // output.push(message);
-                    todo!();
-                }
-            }
+        let Some(request_map) = self.inner.get(&channel_kind) else {
+            return Vec::new();
+        };
+        let message_kind = MessageKind::of::<Q>();
+        let Some(requests) = request_map.get(&message_kind) else {
+            return Vec::new();
+        };
+        for (global_response_id, boxed_message) in requests {
+            let boxed_any = boxed_message.clone().to_boxed_any();
+            let request: Q = Box::<dyn Any + 'static>::downcast::<Q>(boxed_any)
+                .ok()
+                .map(|boxed_m| *boxed_m)
+                .unwrap();
+            let response_send_key = ResponseSendKey::new(*global_response_id);
+            output.push((response_send_key, request));
         }
 
         output

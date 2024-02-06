@@ -3,18 +3,14 @@ use std::collections::VecDeque;
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::{
-    messages::{
-        channels::senders::{
-            channel_sender::{ChannelSender, MessageChannelSender},
-            indexed_message_writer::IndexedMessageWriter,
-        },
-        message_container::MessageContainer,
-        message_kinds::MessageKinds,
+use crate::{messages::{
+    channels::senders::{
+        channel_sender::{ChannelSender, MessageChannelSender},
+        indexed_message_writer::IndexedMessageWriter,
     },
-    types::MessageIndex,
-    LocalEntityAndGlobalEntityConverterMut,
-};
+    message_container::MessageContainer,
+    message_kinds::MessageKinds,
+}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut, GlobalRequestId};
 
 pub struct SequencedUnreliableSender {
     /// Buffer of the next messages to send along with their MessageKind
@@ -69,5 +65,9 @@ impl MessageChannelSender for SequencedUnreliableSender {
             writer,
             has_written,
         )
+    }
+
+    fn send_request(&mut self, _: &MessageKinds, _: &mut dyn LocalEntityAndGlobalEntityConverterMut, _: GlobalRequestId, _: MessageContainer) {
+        panic!("SequencedUnreliable channel does not support requests");
     }
 }

@@ -1804,6 +1804,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 connection.process_packets(
                     &self.protocol,
                     &mut self.global_world_manager,
+                    &mut self.global_response_manager,
                     world,
                     &mut self.incoming_events,
                 ),

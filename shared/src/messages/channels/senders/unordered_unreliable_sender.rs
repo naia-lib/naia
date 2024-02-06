@@ -3,15 +3,11 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::{
-    messages::{
-        channels::senders::channel_sender::{ChannelSender, MessageChannelSender},
-        message_container::MessageContainer,
-        message_kinds::MessageKinds,
-    },
-    types::MessageIndex,
-    LocalEntityAndGlobalEntityConverterMut,
-};
+use crate::{messages::{
+    channels::senders::channel_sender::{ChannelSender, MessageChannelSender},
+    message_container::MessageContainer,
+    message_kinds::MessageKinds,
+}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut, GlobalRequestId};
 
 pub struct UnorderedUnreliableSender {
     outgoing_messages: VecDeque<MessageContainer>,
@@ -102,5 +98,9 @@ impl MessageChannelSender for UnorderedUnreliableSender {
             self.outgoing_messages.pop_front();
         }
         None
+    }
+
+    fn send_request(&mut self, _: &MessageKinds, _: &mut dyn LocalEntityAndGlobalEntityConverterMut, _: GlobalRequestId, _: MessageContainer) {
+        panic!("UnorderedUnreliable channel does not support requests");
     }
 }

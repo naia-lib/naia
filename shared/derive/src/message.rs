@@ -8,6 +8,7 @@ pub fn message_impl(
     input: proc_macro::TokenStream,
     shared_crate_name: TokenStream,
     is_fragment: bool,
+    is_request: bool,
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -34,6 +35,7 @@ pub fn message_impl(
     let create_builder_method = get_create_builder_method(&builder_name);
     let read_method = get_read_method(&struct_name, &fields, &struct_type);
     let is_fragment_method = get_is_fragment_method(is_fragment);
+    let is_request_method = get_is_request_method(is_request);
 
     let gen = quote! {
         mod #module_name {
@@ -58,6 +60,7 @@ pub fn message_impl(
                     self
                 }
                 #is_fragment_method
+                #is_request_method
                 #bit_length_method
                 #create_builder_method
                 #relations_waiting_method
@@ -88,6 +91,21 @@ fn get_is_fragment_method(is_fragment: bool) -> TokenStream {
     };
     quote! {
         fn is_fragment(&self) -> bool {
+            #value
+        }
+    }
+}
+
+fn get_is_request_method(is_request: bool) -> TokenStream {
+    let value = {
+        if is_request {
+            quote! { true }
+        } else {
+            quote! { false }
+        }
+    };
+    quote! {
+        fn is_request(&self) -> bool {
             #value
         }
     }

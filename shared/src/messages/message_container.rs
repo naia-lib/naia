@@ -59,6 +59,10 @@ impl MessageContainer {
         return self.inner.is_fragment();
     }
 
+    pub fn is_request(&self) -> bool {
+        return self.inner.is_request();
+    }
+
     pub fn to_boxed_any(self) -> Box<dyn Any> {
         return self.inner.to_boxed_any();
     }

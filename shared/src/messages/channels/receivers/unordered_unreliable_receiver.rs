@@ -2,14 +2,10 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, Serde, SerdeErr};
 
-use crate::{
-    messages::{
-        channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
-        message_kinds::MessageKinds,
-    },
-    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
-    LocalEntityAndGlobalEntityConverter, MessageContainer,
-};
+use crate::{messages::{local_request_sender::LocalRequestId,
+    channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+    message_kinds::MessageKinds,
+}, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}, LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKind};
 
 pub struct UnorderedUnreliableReceiver {
     incoming_messages: VecDeque<MessageContainer>,
@@ -47,6 +43,7 @@ impl UnorderedUnreliableReceiver {
 impl ChannelReceiver<MessageContainer> for UnorderedUnreliableReceiver {
     fn receive_messages(
         &mut self,
+        _message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
@@ -80,5 +77,9 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
         }
 
         Ok(())
+    }
+
+    fn receive_requests(&mut self) -> Vec<(MessageKind, LocalRequestId, MessageContainer)> {
+        panic!("UnorderedUnreliable channels do not support requests");
     }
 }

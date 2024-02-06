@@ -2,11 +2,7 @@ use std::{any::Any, hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityEventMessage, EntityResponseEvent, HostType, HostWorldEvents, Instant, PacketType,
-    Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
-};
+use naia_shared::{BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig, EntityEventMessage, EntityResponseEvent, HostType, HostWorldEvents, Instant, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use crate::{
     connection::{
@@ -18,6 +14,7 @@ use crate::{
     user::UserKey,
     world::global_world_manager::GlobalWorldManager,
 };
+use crate::request::GlobalResponseManager;
 
 use super::ping_manager::PingManager;
 
@@ -100,12 +97,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         &mut self,
         protocol: &Protocol,
         global_world_manager: &mut GlobalWorldManager<E>,
+        global_response_manager: &mut GlobalResponseManager,
         world: &mut W,
         incoming_events: &mut Events<E>,
     ) -> Vec<EntityResponseEvent<E>> {
         let mut response_events = Vec::new();
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
+            &protocol.message_kinds,
             global_world_manager,
             &self.base.local_world_manager,
             &mut self.base.remote_world_manager.entity_waitlist,
@@ -134,6 +133,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 for message in messages {
                     incoming_events.push_message(&self.user_key, &channel_kind, message);
                 }
+            }
+        }
+
+        // Receive Request Events
+        let requests = self.base.message_manager.receive_requests();
+        for (channel_kind, requests) in requests {
+            for (message_kind, local_request_id, request) in requests {
+                let global_response_id = global_response_manager.create_response_id(&channel_kind, &message_kind, &local_request_id);
+                incoming_events.push_request(&self.user_key, &channel_kind, global_response_id, request);
             }
         }
 
