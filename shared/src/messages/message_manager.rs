@@ -1,10 +1,9 @@
-use std::{hash::Hash, collections::HashMap};
+use std::{collections::HashMap, hash::Hash};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
-    local_request_sender::LocalRequestId,
+use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKind, MessageKinds, messages::{
     channels::{
         channel::ChannelMode,
         channel::ChannelSettings,
@@ -18,17 +17,18 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::{
             unordered_unreliable_receiver::UnorderedUnreliableReceiver,
         },
         senders::{
-            reliable_message_sender::ReliableMessageSender,
-            channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
+            channel_sender::MessageChannelSender,
+            message_fragmenter::MessageFragmenter, reliable_message_sender::ReliableMessageSender,
             sequenced_unreliable_sender::SequencedUnreliableSender,
             unordered_unreliable_sender::UnorderedUnreliableSender,
         },
     },
     message_container::MessageContainer,
-}, types::{GlobalRequestId, HostType, MessageIndex, PacketIndex}, world::{
+}, Protocol, types::{GlobalRequestId, HostType, MessageIndex, PacketIndex}, world::{
     entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     remote::entity_waitlist::EntityWaitlist,
-}, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds, Protocol, MessageKind};
+}};
+use crate::messages::channels::senders::request_sender::LocalRequestId;
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host

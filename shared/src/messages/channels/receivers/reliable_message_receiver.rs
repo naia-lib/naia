@@ -1,7 +1,6 @@
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{messages::{
-    local_request_sender::LocalRequestId,
+use crate::{LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKind, messages::{
     channels::receivers::{
         channel_receiver::{ChannelReceiver, MessageChannelReceiver},
         fragment_receiver::FragmentReceiver,
@@ -9,7 +8,8 @@ use crate::{messages::{
         reliable_receiver::ReliableReceiver,
     },
     message_kinds::MessageKinds,
-}, types::MessageIndex, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}, LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKind, RequestMessage};
+}, RequestMessage, types::MessageIndex, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}};
+use crate::messages::channels::senders::request_sender::LocalRequestId;
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {

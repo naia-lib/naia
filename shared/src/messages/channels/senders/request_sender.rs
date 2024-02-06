@@ -5,11 +5,11 @@ use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
 use crate::{types::GlobalRequestId, KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKind, MessageKinds};
 
-pub struct LocalRequestSender {
-    channels: HashMap<MessageKind, LocalRequestSenderChannel>,
+pub struct RequestSender {
+    channels: HashMap<MessageKind, RequestSenderChannel>,
 }
 
-impl LocalRequestSender {
+impl RequestSender {
     pub fn new() -> Self {
         Self {
             channels: HashMap::new(),
@@ -25,19 +25,19 @@ impl LocalRequestSender {
     ) -> MessageContainer {
         let key = request.kind();
         if !self.channels.contains_key(&key) {
-            self.channels.insert(key.clone(), LocalRequestSenderChannel::new());
+            self.channels.insert(key.clone(), RequestSenderChannel::new());
         }
         let channel = self.channels.get_mut(&key).unwrap();
         channel.process_request(message_kinds, converter, global_request_id, request)
     }
 }
 
-pub struct LocalRequestSenderChannel {
+pub struct RequestSenderChannel {
     local_key_generator: KeyGenerator<LocalRequestId>,
     local_to_global_ids: HashMap<LocalRequestId, GlobalRequestId>,
 }
 
-impl LocalRequestSenderChannel {
+impl RequestSenderChannel {
     pub fn new() -> Self {
         Self {
             local_key_generator: KeyGenerator::new(Duration::from_secs(60)),

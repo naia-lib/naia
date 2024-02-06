@@ -5,3 +5,4 @@ pub mod reliable_sender;
 pub mod reliable_message_sender;
 pub mod sequenced_unreliable_sender;
 pub mod unordered_unreliable_sender;
+pub mod request_sender;

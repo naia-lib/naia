@@ -2,10 +2,11 @@ use std::{collections::VecDeque, mem};
 
 use naia_serde::{BitReader, Serde, SerdeErr};
 
-use crate::{messages::{local_request_sender::LocalRequestId,
+use crate::{LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKind, messages::{
     channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
     message_kinds::MessageKinds,
-}, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}, LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKind};
+}, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}};
+use crate::messages::channels::senders::request_sender::LocalRequestId;
 
 pub struct UnorderedUnreliableReceiver {
     incoming_messages: VecDeque<MessageContainer>,

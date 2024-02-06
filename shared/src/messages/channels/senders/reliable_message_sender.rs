@@ -2,27 +2,27 @@
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::{messages::{
-    local_request_sender::LocalRequestSender,
+use crate::{GlobalRequestId, LocalEntityAndGlobalEntityConverterMut, messages::{
     channels::senders::{
         channel_sender::{ChannelSender, MessageChannelSender},
         indexed_message_writer::IndexedMessageWriter,
     },
     message_container::MessageContainer,
     message_kinds::MessageKinds,
-}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut, GlobalRequestId, ReliableSender};
+}, ReliableSender, types::MessageIndex};
+use crate::messages::channels::senders::request_sender::RequestSender;
 
 // Sender
 pub struct ReliableMessageSender {
     reliable_sender: ReliableSender<MessageContainer>,
-    request_sender: LocalRequestSender,
+    request_sender: RequestSender,
 }
 
 impl ReliableMessageSender {
     pub fn new(rtt_resend_factor: f32) -> Self {
         Self {
             reliable_sender: ReliableSender::new(rtt_resend_factor),
-            request_sender: LocalRequestSender::new(),
+            request_sender: RequestSender::new(),
         }
     }
 }
