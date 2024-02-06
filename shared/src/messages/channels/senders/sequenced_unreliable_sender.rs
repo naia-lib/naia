@@ -10,7 +10,8 @@ use crate::{messages::{
     },
     message_container::MessageContainer,
     message_kinds::MessageKinds,
-}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut, GlobalRequestId};
+}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut};
+use crate::messages::request::GlobalRequestId;
 
 pub struct SequencedUnreliableSender {
     /// Buffer of the next messages to send along with their MessageKind

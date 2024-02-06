@@ -1,4 +1,4 @@
-use naia_shared::{ChannelKind, GlobalRequestId, GlobalResponseId, LocalRequestResponseId, MessageContainer, MessageKind};
+use naia_shared::{ChannelKind, GlobalRequestId, GlobalResponseId, LocalRequestOrResponseId, LocalResponseId, MessageContainer, MessageKind};
 
 use crate::UserKey;
 
@@ -18,7 +18,7 @@ impl GlobalRequestManager {
         todo!()
     }
 
-    pub(crate) fn destroy_request_id(&self, request_id: &GlobalRequestId) -> Option<(UserKey, ChannelKind)> {
+    pub(crate) fn destroy_request_id(&self, global_request_id: &GlobalRequestId) -> Option<(UserKey, ChannelKind)> {
         todo!()
     }
 }
@@ -35,11 +35,11 @@ impl GlobalResponseManager {
         }
     }
 
-    pub(crate) fn create_response_id(&mut self, channel_kind: &ChannelKind, message_kind: &MessageKind, local_req_res_id: &LocalRequestResponseId) -> GlobalResponseId {
+    pub(crate) fn create_response_id(&mut self, channel_kind: &ChannelKind, message_kind: &MessageKind, local_response_id: LocalResponseId) -> GlobalResponseId {
         todo!()
     }
 
-    pub(crate) fn destroy_response_id(&self, response_id: &GlobalResponseId) -> Option<MessageContainer> {
+    pub(crate) fn destroy_response_id(&self, global_response_id: &GlobalResponseId) -> Option<MessageContainer> {
         todo!()
     }
 }

@@ -1,14 +1,15 @@
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{LocalEntityAndGlobalEntityConverter, MessageContainer, MessageKind, messages::{
+use crate::{GlobalRequestId, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, MessageKind, messages::{
     channels::{receivers::{
         channel_receiver::{ChannelReceiver, MessageChannelReceiver},
         fragment_receiver::FragmentReceiver,
         indexed_message_reader::IndexedMessageReader,
         reliable_receiver::ReliableReceiver,
-    }, senders::request_sender::LocalRequestResponseId},
+    }, senders::request_sender::LocalRequestOrResponseId},
     message_kinds::MessageKinds,
 }, RequestOrResponse, types::MessageIndex, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}};
+use crate::messages::channels::senders::request_sender::LocalRequestId;
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
@@ -27,7 +28,8 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     fragment_receiver: FragmentReceiver,
     waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>,
     current_index: MessageIndex,
-    incoming_requests: Vec<(MessageKind, LocalRequestResponseId, MessageContainer)>,
+    incoming_requests: Vec<(MessageKind, LocalResponseId, MessageContainer)>,
+    incoming_responses: Vec<(LocalRequestId, MessageContainer)>,
 }
 
 impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
@@ -40,6 +42,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             waitlist_store: WaitlistStore::new(),
             current_index: 0,
             incoming_requests: Vec::new(),
+            incoming_responses: Vec::new(),
         }
     }
 
@@ -104,24 +107,36 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         message_container: MessageContainer
     ) {
-        // look at message, see if it's a request
-        if message_container.is_request() {
+        // look at message, see if it's a request or response
+        if message_container.is_request_or_response() {
             // it is! cast it
-            let request_container = message_container
+            let request_or_response_container = message_container
                 .to_boxed_any()
                 .downcast::<RequestOrResponse>()
                 .unwrap();
-            let (local_request_id, request_bytes) = request_container.to_id_and_bytes();
+            let (local_id, request_bytes) = request_or_response_container.to_id_and_bytes();
             let mut reader = BitReader::new(&request_bytes);
-            let request_result = message_kinds.read(&mut reader, converter);
-            if request_result.is_err() {
+            let request_or_response_result = message_kinds.read(&mut reader, converter);
+            if request_or_response_result.is_err() {
                 // TODO: bubble up error instead of panicking here
-                panic!("Cannot read request message!");
+                panic!("Cannot read request or response message!");
             }
-            let request = request_result.unwrap();
-            // add it to incoming requests
-            self.incoming_requests
-                .push((request.kind(), local_request_id, request));
+            let request_or_response = request_or_response_result.unwrap();
+
+            // add it to incoming requests or responses
+            match local_id {
+                LocalRequestOrResponseId::Request(local_request_id) => {
+                    let request = request_or_response;
+                    let local_response_id = local_request_id.receive_from_remote();
+                    self.incoming_requests
+                        .push((request_or_response.kind(), local_response_id, request));
+                }
+                LocalRequestOrResponseId::Response(local_response_id) => {
+                    let response = request_or_response;
+                    let local_request_id = local_response_id.receive_from_remote();
+                    self.incoming_responses.push((local_request_id, response));
+                }
+            }
         } else {
             // it's not a request, just add it to incoming messages
             self.incoming_messages.push(message_container);
@@ -166,7 +181,7 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
         Ok(())
     }
 
-    fn receive_requests(&mut self) -> Vec<(MessageKind, LocalRequestResponseId, MessageContainer)> {
-        std::mem::take(&mut self.incoming_requests)
+    fn receive_requests_and_responses(&mut self) -> (Vec<(MessageKind, LocalResponseId, MessageContainer)>, Vec<(LocalRequestId, MessageContainer)>) {
+        (std::mem::take(&mut self.incoming_requests), std::mem::take(&mut self.incoming_responses))
     }
 }

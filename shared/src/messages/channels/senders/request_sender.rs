@@ -1,9 +1,10 @@
 use std::{time::Duration, collections::HashMap};
 
 use naia_derive::MessageRequest;
-use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+use naia_serde::{BitWriter, SerdeInternal};
 
-use crate::{types::GlobalRequestId, KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKind, MessageKinds};
+use crate::{KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKind, MessageKinds};
+use crate::messages::request::GlobalRequestId;
 
 pub struct RequestSender {
     channels: HashMap<MessageKind, RequestSenderChannel>,
@@ -16,25 +17,25 @@ impl RequestSender {
         }
     }
 
-    pub(crate) fn process_request(
+    pub(crate) fn process_outgoing_request(
         &mut self,
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         global_request_id: GlobalRequestId,
         request: MessageContainer
     ) -> MessageContainer {
-        let key = request.kind();
-        if !self.channels.contains_key(&key) {
-            self.channels.insert(key.clone(), RequestSenderChannel::new());
+        let message_kind = request.kind();
+        if !self.channels.contains_key(&message_kind) {
+            self.channels.insert(message_kind.clone(), RequestSenderChannel::new());
         }
-        let channel = self.channels.get_mut(&key).unwrap();
-        channel.process_request(message_kinds, converter, global_request_id, request)
+        let channel = self.channels.get_mut(&message_kind).unwrap();
+        channel.process_outgoing_request(message_kinds, converter, global_request_id, request)
     }
 }
 
 pub struct RequestSenderChannel {
-    local_key_generator: KeyGenerator<LocalRequestResponseId>,
-    local_to_global_ids: HashMap<LocalRequestResponseId, GlobalRequestId>,
+    local_key_generator: KeyGenerator<LocalRequestId>,
+    local_to_global_ids: HashMap<LocalRequestId, GlobalRequestId>,
 }
 
 impl RequestSenderChannel {
@@ -45,7 +46,7 @@ impl RequestSenderChannel {
         }
     }
 
-    pub(crate) fn process_request(
+    pub(crate) fn process_outgoing_request(
         &mut self,
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
@@ -53,70 +54,117 @@ impl RequestSenderChannel {
         request: MessageContainer
     ) -> MessageContainer {
 
-        let request_key = self.local_key_generator.generate();
-        self.local_to_global_ids.insert(request_key, global_request_id);
+        let local_id = self.local_key_generator.generate();
+        self.local_to_global_ids.insert(local_id, global_request_id);
 
         let mut writer = BitWriter::with_max_capacity();
         request.write(message_kinds, &mut writer, converter);
         let request_bytes = writer.to_bytes();
-        let request_message = RequestOrResponse::new(request_key, request_bytes);
+        let request_message = RequestOrResponse::request(local_id, request_bytes);
         MessageContainer::from_write(Box::new(request_message), converter)
     }
 }
 
 #[derive(MessageRequest)]
 pub struct RequestOrResponse {
-    id: LocalRequestResponseId,
+    id: LocalRequestOrResponseId,
     bytes: Box<[u8]>,
 }
 
 impl RequestOrResponse {
-    pub fn new(request_id: LocalRequestResponseId, bytes: Box<[u8]>) -> Self {
+    pub fn request(id: LocalRequestId, bytes: Box<[u8]>) -> Self {
         Self {
-            id: request_id,
+            id: id.to_req_res_id(),
             bytes,
         }
     }
 
-    pub(crate) fn to_id_and_bytes(self) -> (LocalRequestResponseId, Box<[u8]>) {
+    pub fn response(id: LocalResponseId, bytes: Box<[u8]>) -> Self {
+        Self {
+            id: id.to_req_res_id(),
+            bytes,
+        }
+    }
+
+    pub(crate) fn to_id_and_bytes(self) -> (LocalRequestOrResponseId, Box<[u8]>) {
         (self.id, self.bytes)
     }
 }
 
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
-pub struct LocalRequestResponseId {
-    id: u8,
+#[derive(Clone, PartialEq, Eq, SerdeInternal)]
+pub enum LocalRequestOrResponseId {
+    Request(LocalRequestId),
+    Response(LocalResponseId),
 }
 
-impl LocalRequestResponseId {
-    pub(crate) fn new(id: u8) -> Self {
-        Self { id }
+impl LocalRequestOrResponseId {
+    pub fn is_request(&self) -> bool {
+        match self {
+            LocalRequestOrResponseId::Request(_) => true,
+            LocalRequestOrResponseId::Response(_) => false,
+        }
+    }
+
+    pub fn is_response(&self) -> bool {
+        match self {
+            LocalRequestOrResponseId::Request(_) => false,
+            LocalRequestOrResponseId::Response(_) => true,
+        }
+    }
+
+    pub fn to_request_id(&self) -> LocalRequestId {
+        match self {
+            LocalRequestOrResponseId::Request(id) => *id,
+            LocalRequestOrResponseId::Response(_) => panic!("LocalRequestOrResponseId is a response"),
+        }
+    }
+
+    pub fn to_response_id(&self) -> LocalResponseId {
+        match self {
+            LocalRequestOrResponseId::Request(_) => panic!("LocalRequestOrResponseId is a request"),
+            LocalRequestOrResponseId::Response(id) => *id,
+        }
     }
 }
 
-impl From<u16> for LocalRequestResponseId {
+#[derive(Clone, Copy, Eq, Hash, PartialEq, SerdeInternal)]
+pub struct LocalRequestId {
+    id: u8,
+}
+
+impl LocalRequestId {
+    pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
+        LocalRequestOrResponseId::Request(*self)
+    }
+
+    pub fn receive_from_remote(&self) -> LocalResponseId {
+        LocalResponseId { id: self.id }
+    }
+}
+
+impl From<u16> for LocalRequestId {
     fn from(id: u16) -> Self {
         Self { id: id as u8 }
     }
 }
 
-impl Into<u16> for LocalRequestResponseId {
+impl Into<u16> for LocalRequestId {
     fn into(self) -> u16 {
         self.id as u16
     }
 }
 
-impl Serde for LocalRequestResponseId {
-    fn ser(&self, writer: &mut dyn BitWrite) {
-        self.id.ser(writer)
+#[derive(Clone, Copy, Eq, Hash, PartialEq, SerdeInternal)]
+pub struct LocalResponseId {
+    id: u8,
+}
+
+impl LocalResponseId {
+    pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
+        LocalRequestOrResponseId::Response(*self)
     }
 
-    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let id = u8::de(reader)?;
-        Ok(Self { id })
-    }
-
-    fn bit_length(&self) -> u32 {
-        self.id.bit_length()
+    pub fn receive_from_remote(&self) -> LocalRequestId {
+        LocalRequestId { id: self.id }
     }
 }

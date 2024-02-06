@@ -20,7 +20,9 @@ pub struct BasicResponse {
     pub contents: String,
 }
 
-impl Response for BasicResponse {}
+impl Response for BasicResponse {
+    type Request = BasicRequest;
+}
 
 impl BasicResponse {
     pub fn new(contents: String) -> Self {

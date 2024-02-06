@@ -2,7 +2,7 @@ use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::{info, warn};
 
-use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalRequestId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
@@ -35,9 +35,6 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
     global_world_manager: GlobalWorldManager<E>,
-    // Request/Response
-    global_request_manager: GlobalRequestManager,
-    global_response_manager: GlobalResponseManager,
     // Events
     incoming_events: Events<E>,
     // Hacky
@@ -73,9 +70,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             waitlist_messages: VecDeque::new(),
             // World
             global_world_manager: GlobalWorldManager::new(),
-            // Requests
-            global_request_manager: GlobalRequestManager::new(),
-            global_response_manager: GlobalResponseManager::new(),
             // Events
             incoming_events: Events::new(),
             // Hacky
@@ -204,7 +198,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // receive packets, process into events
                 response_events = Some(connection.process_packets(
                     &mut self.global_world_manager,
-                    &mut self.global_response_manager,
                     &self.protocol,
                     &mut world,
                     &mut self.incoming_events,
@@ -328,8 +321,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             std::panic!("Requests can only be sent over Bidirectional, Reliable Channels");
         }
 
-        let request_id = self.global_request_manager.create_request_id(channel_kind);
-
         let Some(connection) = &mut self.server_connection else {
             warn!("currently not connected to server");
             return None;
@@ -339,6 +330,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut connection.base.local_world_manager,
         );
 
+        let request_id = connection.global_request_manager.create_request_id(channel_kind);
         let message = MessageContainer::from_write(request_box, &mut converter);
         connection.base.message_manager.send_request(
             &self.protocol.message_kinds,
@@ -354,49 +346,52 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Sends a Response for a given Request. Returns whether or not was successful.
     pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
 
-        let request_id = response_key.request_id();
-        let Some(channel_kind) = self.global_request_manager.destroy_request_id(&request_id) else {
-            return false;
-        };
+        let response_id = &response_key.response_id();
 
         let cloned_response = S::clone_box(response);
 
-        self.send_response_inner(&channel_kind, request_id, cloned_response)
+        self.send_response_inner(response_id, cloned_response)
     }
 
     // returns whether was successful
     fn send_response_inner(
         &mut self,
-        channel_kind: &ChannelKind,
-        request_id: u64,
+        response_id: &GlobalResponseId,
         response_box: Box<dyn Message>,
     ) -> bool {
         let Some(connection) = &mut self.server_connection else {
+            return false;
+        };
+        let Some((channel_kind, message_kind, local_response_id)) = connection.global_response_manager.destroy_response_id(response_id) else {
             return false;
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
             &mut connection.base.local_world_manager,
         );
-        let message = MessageContainer::from_write(response_box, &mut converter);
+
+        let response = MessageContainer::from_write(response_box, &mut converter);
         connection.base.message_manager.send_response(
             &self.protocol.message_kinds,
             &mut converter,
-            channel_kind,
-            request_id,
-            message,
+            &channel_kind,
+            local_response_id,
+            response,
         );
         return true;
     }
 
     pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<S> {
-        let response_id = response_key.response_id();
-        let Some(container) = self.global_response_manager.destroy_response_id(&response_id) else {
+        let Some(connection) = &mut self.server_connection else {
+            return None;
+        };
+        let request_id = response_key.request_id();
+        let Some(container) = connection.global_request_manager.destroy_request_id(&request_id) else {
             return None;
         };
         let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
             .ok()
-            .map(|boxed_m| *boxed_m)
+            .map(|boxed_s| *boxed_s)
             .unwrap();
         return Some(response);
     }

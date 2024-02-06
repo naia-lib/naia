@@ -7,7 +7,8 @@ use crate::{messages::{
     channels::senders::channel_sender::{ChannelSender, MessageChannelSender},
     message_container::MessageContainer,
     message_kinds::MessageKinds,
-}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut, GlobalRequestId};
+}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut};
+use crate::messages::request::GlobalRequestId;
 
 pub struct UnorderedUnreliableSender {
     outgoing_messages: VecDeque<MessageContainer>,

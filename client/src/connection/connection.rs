@@ -2,12 +2,7 @@ use std::{any::Any, hash::Hash};
 
 use log::warn;
 
-use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds,
-    ConnectionConfig, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType,
-    HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
-    StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
-};
+use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType, HostWorldEvents, Instant, LocalRequestOrResponseId, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use crate::{
     request::GlobalResponseManager,
@@ -18,6 +13,7 @@ use crate::{
     events::Events,
     world::global_world_manager::GlobalWorldManager,
 };
+use crate::request::GlobalRequestManager;
 
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub base: BaseConnection<E>,
@@ -26,6 +22,9 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
     jitter_buffer: TickQueue<OwnedBitReader>,
+    // Request/Response
+    pub global_request_manager: GlobalRequestManager,
+    pub global_response_manager: GlobalResponseManager,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
@@ -37,7 +36,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     ) -> Self {
         let tick_buffer = TickBufferSender::new(channel_kinds);
 
-        let mut connection = Connection {
+        let mut connection = Self {
             base: BaseConnection::new(
                 &None,
                 HostType::Client,
@@ -49,6 +48,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             time_manager,
             tick_buffer,
             jitter_buffer: TickQueue::new(),
+            global_request_manager: GlobalRequestManager::new(),
+            global_response_manager: GlobalResponseManager::new(),
         };
 
         let existing_entities = global_world_manager.entities();
@@ -109,7 +110,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn process_packets<W: WorldMutType<E>>(
         &mut self,
         global_world_manager: &mut GlobalWorldManager<E>,
-        global_response_manager: &mut GlobalResponseManager,
         protocol: &Protocol,
         world: &mut W,
         incoming_events: &mut Events<E>,
@@ -156,12 +156,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
         }
 
-        // Receive Request Events
-        let requests = self.base.message_manager.receive_requests();
-        for (channel_kind, requests) in requests {
-            for (message_kind, local_response_id, request) in requests {
-                let global_response_id = global_response_manager.create_response_id(&channel_kind, &message_kind, &local_response_id);
-                incoming_events.push_request(&channel_kind, global_response_id, request);
+        // Receive Request or Response Events
+        let requests_or_responses = self.base.message_manager.receive_requests_or_responses();
+        for (channel_kind, requests_or_responses) in requests_or_responses {
+            for (message_kind, local_id, request_or_response) in requests_or_responses {
+                match local_id {
+                    LocalRequestOrResponseId::Request(local_request_id) => {
+                        // we have received an incoming request, need to generate a response id for it
+                        let request = request_or_response;
+                        let local_response_id = local_request_id.receive_from_remote();
+                        let global_response_id = self.global_response_manager.create_response_id(&channel_kind, &message_kind, &local_response_id);
+                        incoming_events.push_request(&channel_kind, global_response_id, request);
+                    }
+                    LocalRequestOrResponseId::Response(local_response_id) => {
+                        // we have received an incoming response, need to match it to the original request
+                        let response = request_or_response;
+                        let local_request_id = local_response_id.receive_from_remote();
+                        todo!();
+                    }
+                }
             }
         }
 

@@ -342,7 +342,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Sends a Response for a given Request. Returns whether or not was successful.
     pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
 
-        let request_id = response_key.request_id();
+        let request_id = response_key.response_id();
         let Some((user_key, channel_kind)) = self.global_request_manager.destroy_request_id(&request_id) else {
             return false;
         };
@@ -382,7 +382,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<S> {
-        let response_id = response_key.response_id();
+        let response_id = response_key.request_id();
         let Some(container) = self.global_response_manager.destroy_response_id(&response_id) else {
             return None;
         };

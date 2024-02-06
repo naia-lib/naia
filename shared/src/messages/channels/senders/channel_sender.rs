@@ -1,7 +1,8 @@
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::{messages::{message_container::MessageContainer, message_kinds::MessageKinds}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut, GlobalRequestId};
+use crate::{messages::{message_container::MessageContainer, message_kinds::MessageKinds}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut};
+use crate::messages::request::GlobalRequestId;
 
 pub trait ChannelSender<P>: Send + Sync {
     /// Queues a Message to be transmitted to the remote host into an internal buffer

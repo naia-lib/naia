@@ -137,10 +137,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
 
         // Receive Request Events
-        let requests = self.base.message_manager.receive_requests();
+        let requests = self.base.message_manager.receive_requests_or_responses();
         for (channel_kind, requests) in requests {
-            for (message_kind, local_request_id, request) in requests {
-                let global_response_id = global_response_manager.create_response_id(&channel_kind, &message_kind, &local_request_id);
+            for (message_kind, local_response_id, request) in requests {
+                let global_response_id = global_response_manager.create_response_id(&channel_kind, &message_kind, local_response_id);
                 incoming_events.push_request(&self.user_key, &channel_kind, global_response_id, request);
             }
         }

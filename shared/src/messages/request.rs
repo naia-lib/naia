@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{Message, types::GlobalRequestId};
+use crate::Message;
 
 // Request
 pub trait Request: Message {
@@ -8,19 +8,41 @@ pub trait Request: Message {
 }
 
 // Response
-pub trait Response: Message {}
+pub trait Response: Message {
+    type Request: Request;
+}
 
 // ResponseSendKey
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct ResponseSendKey<S: Response> {
-    request_id: GlobalRequestId,
+    response_id: GlobalResponseId,
     phantom_s: PhantomData<S>,
 }
 
 impl<S: Response> ResponseSendKey<S> {
-    pub fn new(id: GlobalRequestId) -> Self {
+    pub fn new(id: GlobalResponseId) -> Self {
         Self {
-            request_id: id,
+            response_id: id,
+            phantom_s: PhantomData,
+        }
+    }
+
+    pub fn response_id(&self) -> GlobalResponseId {
+        self.response_id
+    }
+}
+
+// ResponseReceiveKey
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct ResponseReceiveKey<S: Response> {
+    request_id: GlobalRequestId,
+    phantom_s: PhantomData<S>,
+}
+
+impl<S: Response> ResponseReceiveKey<S> {
+    pub fn new(request_id: GlobalRequestId) -> Self {
+        Self {
+            request_id: request_id,
             phantom_s: PhantomData,
         }
     }
@@ -30,22 +52,12 @@ impl<S: Response> ResponseSendKey<S> {
     }
 }
 
-// ResponseReceiveKey
-#[derive(Clone, Eq, PartialEq, Hash)]
-pub struct ResponseReceiveKey<S: Response> {
-    response_id: GlobalRequestId,
-    phantom_s: PhantomData<S>,
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct GlobalRequestId {
+    id: u64,
 }
 
-impl<S: Response> ResponseReceiveKey<S> {
-    pub fn new(request_id: GlobalRequestId) -> Self {
-        Self {
-            response_id: request_id,
-            phantom_s: PhantomData,
-        }
-    }
-
-    pub fn response_id(&self) -> GlobalRequestId {
-        self.response_id
-    }
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct GlobalResponseId {
+    id: u64,
 }

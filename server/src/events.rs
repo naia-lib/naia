@@ -2,7 +2,7 @@ use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIte
 
 use log::warn;
 
-use naia_shared::{Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
+use naia_shared::{Channel, ChannelKind, ComponentKind, EntityEvent, GlobalResponseId, EntityResponseEvent, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
 
 use super::user::{User, UserKey};
 use crate::NaiaServerError;

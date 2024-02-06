@@ -59,7 +59,7 @@ impl MessageContainer {
         return self.inner.is_fragment();
     }
 
-    pub fn is_request(&self) -> bool {
+    pub fn is_request_or_response(&self) -> bool {
         return self.inner.is_request();
     }
 

@@ -2,7 +2,7 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use bevy_ecs::{entity::Entity, prelude::Event};
 
-use naia_client::{shared::GlobalResponseId, Events, NaiaClientError};
+use naia_client::{shared::GlobalRequestResponseId, Events, NaiaClientError};
 
 use naia_bevy_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
 
@@ -106,7 +106,7 @@ impl<T> MessageEvents<T> {
 // RequestEvents
 #[derive(Event)]
 pub struct RequestEvents<T> {
-    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalResponseId, MessageContainer)>>>,
+    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalRequestResponseId, MessageContainer)>>>,
     phantom_t: PhantomData<T>,
 }
 

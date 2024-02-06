@@ -17,7 +17,7 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter,
             unordered_unreliable_receiver::UnorderedUnreliableReceiver,
         },
         senders::{
-            request_sender::LocalRequestResponseId,
+            request_sender::LocalRequestOrResponseId,
             channel_sender::MessageChannelSender,
             message_fragmenter::MessageFragmenter, reliable_message_sender::ReliableMessageSender,
             sequenced_unreliable_sender::SequencedUnreliableSender,
@@ -25,10 +25,12 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter,
         },
     },
     message_container::MessageContainer,
-}, Protocol, types::{GlobalRequestId, HostType, MessageIndex, PacketIndex}, world::{
+}, Protocol, types::{HostType, MessageIndex, PacketIndex}, world::{
     entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     remote::entity_waitlist::EntityWaitlist,
 }};
+use crate::messages::channels::senders::request_sender::LocalResponseId;
+use crate::messages::request::GlobalRequestId;
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -208,7 +210,7 @@ impl MessageManager {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         channel_kind: &ChannelKind,
-        global_request_id: GlobalRequestId,
+        local_response_id: LocalResponseId,
         response: MessageContainer
     ) {
         todo!()
@@ -331,13 +333,13 @@ impl MessageManager {
     }
 
     /// Retrieve all requests from the channel buffers
-    pub fn receive_requests(
+    pub fn receive_requests_or_responses(
         &mut self,
-    ) -> Vec<(ChannelKind, Vec<(MessageKind, LocalRequestResponseId, MessageContainer)>)> {
+    ) -> Vec<(ChannelKind, Vec<(MessageKind, LocalRequestOrResponseId, MessageContainer)>)> {
         let mut output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {
-            let requests = channel.receive_requests();
-            output.push((channel_kind.clone(), requests));
+            let requests_or_responses = channel.receive_requests_and_responses();
+            output.push((channel_kind.clone(), requests_or_responses));
         }
         output
     }

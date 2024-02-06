@@ -2,7 +2,7 @@
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::{GlobalRequestId, LocalEntityAndGlobalEntityConverterMut, messages::{
+use crate::{LocalEntityAndGlobalEntityConverterMut, messages::{
     channels::senders::{
         channel_sender::{ChannelSender, MessageChannelSender},
         indexed_message_writer::IndexedMessageWriter,
@@ -11,6 +11,7 @@ use crate::{GlobalRequestId, LocalEntityAndGlobalEntityConverterMut, messages::{
     message_kinds::MessageKinds,
 }, ReliableSender, types::MessageIndex};
 use crate::messages::channels::senders::request_sender::RequestSender;
+use crate::messages::request::GlobalRequestId;
 
 // Sender
 pub struct ReliableMessageSender {
@@ -69,7 +70,7 @@ impl MessageChannelSender for ReliableMessageSender {
         global_request_id: GlobalRequestId,
         request: MessageContainer
     ) {
-        let processed_request = self.request_sender.process_request(
+        let processed_request = self.request_sender.process_outgoing_request(
             message_kinds,
             converter,
             global_request_id,

@@ -72,6 +72,7 @@ pub use messages::{
         senders::{
             channel_sender::{ChannelSender, MessageChannelSender},
             reliable_sender::ReliableSender,
+            request_sender::LocalResponseId,
         },
         system_channel::SystemChannel,
     },
@@ -80,7 +81,7 @@ pub use messages::{
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     named::Named,
-    request::{Request, Response, ResponseReceiveKey, ResponseSendKey},
+    request::{Request, Response, ResponseReceiveKey, ResponseSendKey, GlobalResponseId, GlobalRequestId},
 };
 pub use world::{
     component::{
@@ -136,7 +137,7 @@ pub use world::{
 pub use bigmap::{BigMap, BigMapKey};
 pub use game_time::{GAME_TIME_LIMIT, GameDuration, GameInstant};
 pub use key_generator::KeyGenerator;
-pub use messages::channels::senders::request_sender::{LocalRequestResponseId, RequestOrResponse};
+pub use messages::channels::senders::request_sender::{LocalRequestOrResponseId, RequestOrResponse};
 pub use protocol::{Protocol, ProtocolPlugin};
-pub use types::{GlobalRequestId, GlobalResponseId, HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
+pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
