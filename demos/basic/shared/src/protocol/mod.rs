@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{LinkConditionerConfig, Protocol};
+use naia_shared::{LinkConditionerConfig, Protocol, Serde};
 
 mod auth;
 mod character;
@@ -12,6 +12,7 @@ pub use character::Character;
 pub use string_message::StringMessage;
 pub use basic_request::{BasicRequest, BasicResponse};
 
+#[derive(Serde, PartialEq, Clone)]
 pub struct MyMarker;
 
 // Protocol Build

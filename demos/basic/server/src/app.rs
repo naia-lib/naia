@@ -129,7 +129,7 @@ impl App {
                             new_message_contents
                         );
 
-                        let new_message = StringMessage::<MyMarker>::new(new_message_contents);
+                        let new_message = StringMessage::<MyMarker>::new(new_message_contents, MyMarker);
                         self.server
                             .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message);
                     }

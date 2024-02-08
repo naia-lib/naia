@@ -1,14 +1,14 @@
 
-use naia_shared::Message;
+use naia_shared::{Message, Serde};
 
 #[derive(Message)]
-pub struct StringMessage<T: Send + Sync + 'static> {
+pub struct StringMessage<T: Send + Sync + 'static + Serde> {
     pub contents: String,
-    phantom_t: std::marker::PhantomData<T>,
+    something: T,
 }
 
-impl<T: Send + Sync> StringMessage<T> {
-    pub fn new(contents: String) -> Self {
-        Self { contents, phantom_t: std::marker::PhantomData }
+impl<T: Send + Sync + 'static + Serde> StringMessage<T> {
+    pub fn new(contents: String, something: T) -> Self {
+        Self { contents, something }
     }
 }
