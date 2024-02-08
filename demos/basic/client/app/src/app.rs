@@ -16,7 +16,7 @@ use naia_client::{
 
 use naia_demo_world::{Entity, World};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage, BasicRequest};
+use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage, BasicRequest, MyMarker};
 
 type Client = NaiaClient<Entity>;
 
@@ -76,7 +76,7 @@ impl App {
         for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
         }
-        for message in events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>() {
+        for message in events.read::<MessageEvent<UnorderedReliableChannel, StringMessage<MyMarker>>>() {
             let message_contents = &(*message.contents);
             info!("Client recv <- {}", message_contents);
 
@@ -137,9 +137,6 @@ impl App {
         for error in events.read::<ErrorEvent>() {
             info!("Client Error: {}", error);
             return;
-        }
-        for (response_send_key, message) in events.read::<RequestEvent<UnorderedReliableChannel, BasicRequest>>() {
-
         }
     }
 }

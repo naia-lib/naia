@@ -12,6 +12,8 @@ pub use character::Character;
 pub use string_message::StringMessage;
 pub use basic_request::{BasicRequest, BasicResponse};
 
+pub struct MyMarker;
+
 // Protocol Build
 pub fn protocol() -> Protocol {
     Protocol::builder()
@@ -22,7 +24,7 @@ pub fn protocol() -> Protocol {
         .add_default_channels()
         // Messages
         .add_message::<Auth>()
-        .add_message::<StringMessage>()
+        .add_message::<StringMessage<MyMarker>>()
         // Requests
         .add_request::<BasicRequest>()
         // Components

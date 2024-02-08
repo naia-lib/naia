@@ -51,7 +51,7 @@ impl MessageManager {
         // initialize senders
         let mut channel_senders = HashMap::<ChannelKind, Box<dyn MessageChannelSender>>::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
-            info!("initialize senders for channel: {:?}", channel_kind);
+            //info!("initialize senders for channel: {:?}", channel_kind);
             match &host_type {
                 HostType::Server => {
                     if !channel_settings.can_send_to_client() {
@@ -344,6 +344,11 @@ impl MessageManager {
         let mut request_output = Vec::new();
         let mut response_output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {
+
+            if !self.channel_settings.get(channel_kind).unwrap().can_request_and_respond() {
+                continue;
+            }
+
             let (requests, responses) = channel.receive_requests_and_responses();
             if !requests.is_empty() {
                 request_output.push((channel_kind.clone(), requests));
