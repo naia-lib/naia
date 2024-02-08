@@ -59,7 +59,7 @@ impl App {
                 count += 1;
 
                 // Create a Character
-                let character = Character::<MyMarker>::new((count * 4) as u8, 0, first, last);
+                let character = Character::<MyMarker>::new(MyMarker, (count * 4) as u8, 0, first, last);
                 let character_key = server
                     .spawn_entity(world.proxy_mut())
                     .insert_component(character)
