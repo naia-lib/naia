@@ -29,7 +29,7 @@ pub fn protocol() -> Protocol {
         // Requests
         .add_request::<BasicRequest>()
         // Components
-        .add_component::<Character>()
+        .add_component::<Character<MyMarker>>()
         // Build Protocol
         .build()
 }

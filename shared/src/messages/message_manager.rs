@@ -1,11 +1,10 @@
 use std::{collections::HashMap, hash::Hash};
 
-use log::info;
-
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds, messages::{
+    request::GlobalRequestId,
     channels::{
         channel::ChannelMode,
         channel::ChannelSettings,
@@ -19,6 +18,7 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter,
             unordered_unreliable_receiver::UnorderedUnreliableReceiver,
         },
         senders::{
+            request_sender::LocalResponseId,
             channel_sender::MessageChannelSender,
             message_fragmenter::MessageFragmenter, reliable_message_sender::ReliableMessageSender,
             sequenced_unreliable_sender::SequencedUnreliableSender,
@@ -30,8 +30,6 @@ use crate::{constants::FRAGMENTATION_LIMIT_BITS, EntityAndGlobalEntityConverter,
     entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     remote::entity_waitlist::EntityWaitlist,
 }};
-use crate::messages::channels::senders::request_sender::LocalResponseId;
-use crate::messages::request::GlobalRequestId;
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host

@@ -2,13 +2,13 @@ use std::{thread::sleep, time::Duration};
 
 use naia_server::{
     shared::default_channels::UnorderedReliableChannel, transport::webrtc, AuthEvent, ConnectEvent,
-    DisconnectEvent, ErrorEvent, MessageEvent, RequestEvent, RoomKey, Server as NaiaServer, ServerConfig,
+    DisconnectEvent, ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerConfig,
     TickEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldRefType};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage, BasicRequest, MyMarker};
+use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage, MyMarker};
 
 type Server = NaiaServer<Entity>;
 
@@ -59,7 +59,7 @@ impl App {
                 count += 1;
 
                 // Create a Character
-                let character = Character::new((count * 4) as u8, 0, first, last);
+                let character = Character::<MyMarker>::new((count * 4) as u8, 0, first, last);
                 let character_key = server
                     .spawn_entity(world.proxy_mut())
                     .insert_component(character)
@@ -140,7 +140,7 @@ impl App {
                     if let Some(mut character) = self
                         .server
                         .entity_mut(self.world.proxy_mut(), &entity)
-                        .component::<Character>()
+                        .component::<Character<MyMarker>>()
                     {
                         character.step();
                     }
@@ -151,7 +151,7 @@ impl App {
                     let server = &mut self.server;
                     let world = &self.world;
                     for (_, user_key, entity) in server.scope_checks() {
-                        if let Some(character) = world.proxy().component::<Character>(&entity) {
+                        if let Some(character) = world.proxy().component::<Character<MyMarker>>(&entity) {
                             let x = *character.x;
                             if (5..=15).contains(&x) {
                                 server.user_scope(&user_key).include(&entity);

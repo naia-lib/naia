@@ -5,7 +5,7 @@ use syn::{
     PathArguments, Type,
 };
 
-use crate::shared::{get_struct_type, StructType};
+use crate::{message::get_builder_new_method, shared::{get_struct_type, StructType, get_generics, get_builder_generic_fields}};
 
 const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
 
@@ -43,10 +43,11 @@ pub fn replicate_impl(
     // Helper Properties
     let properties = get_properties(&input);
     let struct_type = get_struct_type(&input);
+    let (untyped_generics, typed_generics, turbofish) = get_generics(&input);
 
     // Names
     let replica_name = input.ident.clone();
-    let replica_name_str = LitStr::new(&replica_name.to_string(), replica_name.span());
+    let replica_name_str = LitStr::new(format!("{}{}", &replica_name.to_string(), &untyped_generics.to_string()).as_str(), replica_name.span());
     let lowercase_replica_name = Ident::new(
         replica_name.to_string().to_lowercase().as_str(),
         Span::call_site(),
@@ -54,29 +55,31 @@ pub fn replicate_impl(
     let module_name = format_ident!("define_{}", lowercase_replica_name);
     let enum_name = format_ident!("{}Property", replica_name);
     let builder_name = format_ident!("{}Builder", replica_name);
+    let builder_generic_fields = get_builder_generic_fields(&input.generics);
 
     // Definitions
     let property_enum_definition = get_property_enum_definition(&enum_name, &properties);
-    let diff_mask_size = {
+    let diff_mask_size: u8 = {
         let len = properties.len();
         if len == 0 {
-            0
+            0_u8
         } else {
-            ((len - 1) / 8) + 1
+            (((len - 1) / 8) + 1) as u8
         }
-    } as u8;
+    };
 
     // Methods
     let new_complete_method =
-        get_new_complete_method(&replica_name, &enum_name, &properties, &struct_type);
-    let create_builder_method = get_create_builder_method(&builder_name);
-    let read_method = get_read_method(&replica_name, &properties, &struct_type);
-    let read_create_update_method = get_read_create_update_method(&replica_name, &properties);
+        get_new_complete_method(&enum_name, &properties, &struct_type);
+    let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
+    let builder_new_method = get_builder_new_method(&typed_generics, &builder_name, &untyped_generics, &input.generics);
+    let builder_read_method = get_builder_read_method(&replica_name, &properties, &struct_type, &turbofish);
+    let read_create_update_method = get_read_create_update_method(&replica_name, &properties, &untyped_generics);
 
     let dyn_ref_method = get_dyn_ref_method();
     let dyn_mut_method = get_dyn_mut_method();
-    let clone_method = get_clone_method(&replica_name, &properties, &struct_type);
-    let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type);
+    let clone_method = get_clone_method(&properties, &struct_type);
+    let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type, &untyped_generics);
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
     let publish_method = get_publish_method(&enum_name, &properties, &struct_type);
     let unpublish_method = get_unpublish_method(&properties, &struct_type);
@@ -91,7 +94,7 @@ pub fn replicate_impl(
     let write_update_method = get_write_update_method(&enum_name, &properties, &struct_type);
     let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
-    let split_update_method = get_split_update_method(&replica_name, &properties);
+    let split_update_method = get_split_update_method(&replica_name, &properties, &untyped_generics);
 
     let gen = quote! {
         mod #module_name {
@@ -107,29 +110,30 @@ pub fn replicate_impl(
 
             #property_enum_definition
 
-            struct #builder_name;
-            impl ReplicateBuilder for #builder_name {
-                #read_method
+            struct #builder_name #typed_generics #builder_generic_fields
+            #builder_new_method
+            impl #typed_generics ReplicateBuilder for #builder_name #untyped_generics {
+                #builder_read_method
                 #read_create_update_method
                 #split_update_method
             }
-            impl Named for #builder_name {
+            impl #typed_generics Named for #builder_name #untyped_generics {
                 fn name(&self) -> String {
                     return #replica_name_str.to_string();
                 }
             }
 
-            impl #replica_name {
+            impl #typed_generics #replica_name #untyped_generics {
                 #new_complete_method
             }
-            impl Named for #replica_name {
+            impl #typed_generics Named for #replica_name #untyped_generics {
                 fn name(&self) -> String {
                     return #replica_name_str.to_string();
                 }
             }
-            impl Replicate for #replica_name {
+            impl #typed_generics Replicate for #replica_name #untyped_generics {
                 fn kind(&self) -> ComponentKind {
-                    ComponentKind::of::<#replica_name>()
+                    ComponentKind::of::<#replica_name #untyped_generics>()
                 }
                 fn to_any(&self) -> &dyn Any {
                     self
@@ -144,7 +148,7 @@ pub fn replicate_impl(
                     Box::new(self.clone())
                 }
                 fn diff_mask_size(&self) -> u8 { #diff_mask_size }
-                #create_builder_method
+                #builder_create_method
                 #dyn_ref_method
                 #dyn_mut_method
                 #mirror_method
@@ -161,7 +165,7 @@ pub fn replicate_impl(
                 #relations_waiting_method
                 #relations_complete_method
             }
-            impl Clone for #replica_name {
+            impl #typed_generics Clone for #replica_name #untyped_generics {
                 #clone_method
             }
         }
@@ -388,7 +392,6 @@ pub fn get_dyn_mut_method() -> TokenStream {
 }
 
 fn get_clone_method(
-    replica_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
 ) -> TokenStream {
@@ -432,8 +435,8 @@ fn get_clone_method(
     }
 
     quote! {
-        fn clone(&self) -> #replica_name {
-            let mut new_clone = #replica_name::new_complete(#output);
+        fn clone(&self) -> Self {
+            let mut new_clone = Self::new_complete(#output);
             #entity_property_output
             return new_clone;
         }
@@ -444,6 +447,7 @@ fn get_mirror_method(
     replica_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
+    untyped_generics: &TokenStream,
 ) -> TokenStream {
     let mut output = quote! {};
 
@@ -461,7 +465,7 @@ fn get_mirror_method(
 
     quote! {
         fn mirror(&mut self, other: &dyn Replicate) {
-            if let Some(replica) = other.to_any().downcast_ref::<#replica_name>() {
+            if let Some(replica) = other.to_any().downcast_ref::<#replica_name #untyped_generics>() {
                 #output
             } else {
                 panic!("cannot mirror: other Component is of another type!");
@@ -613,7 +617,6 @@ fn get_localize_method(properties: &[Property], struct_type: &StructType) -> Tok
 }
 
 pub fn get_new_complete_method(
-    replica_name: &Ident,
     enum_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
@@ -727,44 +730,50 @@ pub fn get_new_complete_method(
     let fn_inner = match *struct_type {
         StructType::Struct => {
             quote! {
-                #replica_name {
+                Self {
                     #fields
                 }
             }
         }
         StructType::TupleStruct => {
             quote! {
-                #replica_name (
+                Self (
                     #fields
                 )
             }
         }
         StructType::UnitStruct => {
             quote! {
-                #replica_name
+                Self
             }
         }
     };
 
     quote! {
-        pub fn new_complete(#args) -> #replica_name {
+        pub fn new_complete(#args) -> Self {
             #fn_inner
         }
     }
 }
 
-pub fn get_create_builder_method(builder_name: &Ident) -> TokenStream {
+pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
+
+    let builder_new = quote! {
+        #builder_name #turbofish::new()
+    };
+
     quote! {
         fn create_builder() -> Box<dyn ReplicateBuilder> where Self:Sized {
-            Box::new(#builder_name)
+            Box::new(#builder_new)
         }
     }
 }
 
-pub fn get_read_method(
+pub fn get_builder_read_method(
     replica_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
+    turbofish: &TokenStream,
 ) -> TokenStream {
     let mut prop_names = quote! {};
     for property in properties.iter() {
@@ -813,14 +822,14 @@ pub fn get_read_method(
     let replica_build = match *struct_type {
         StructType::Struct => {
             quote! {
-                #replica_name {
+                #replica_name #turbofish {
                     #prop_names
                 }
             }
         }
         StructType::TupleStruct => {
             quote! {
-                #replica_name (
+                #replica_name #turbofish (
                     #prop_names
                 )
             }
@@ -841,7 +850,7 @@ pub fn get_read_method(
     }
 }
 
-pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
+pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Property], untyped_generics: &TokenStream) -> TokenStream {
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {
@@ -889,12 +898,12 @@ pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Propert
 
             let owned_reader = update_writer.to_owned_reader();
 
-            return Ok(ComponentUpdate::new(ComponentKind::of::<#replica_name>(), owned_reader));
+            return Ok(ComponentUpdate::new(ComponentKind::of::<#replica_name #untyped_generics>(), owned_reader));
         }
     }
 }
 
-fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> TokenStream {
+fn get_split_update_method(replica_name: &Ident, properties: &[Property], untyped_generics: &TokenStream) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter() {
@@ -961,7 +970,7 @@ fn get_split_update_method(replica_name: &Ident, properties: &[Property]) -> Tok
             Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
             Option<ComponentUpdate>
         ), SerdeErr> {
-            let component_kind = ComponentKind::of::<#replica_name>();
+            let component_kind = ComponentKind::of::<#replica_name #untyped_generics>();
             let reader = &mut update.reader();
 
             let mut waiting_did_write = false;

@@ -2,7 +2,7 @@ use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Index, LitStr, Member, Type, Generics, GenericParam};
 
-use super::shared::{get_struct_type, StructType};
+use super::shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType};
 
 pub fn message_impl(
     input: proc_macro::TokenStream,
@@ -34,7 +34,7 @@ pub fn message_impl(
     let relations_complete_method = get_relations_complete_method(&fields, &struct_type);
     let bit_length_method = get_bit_length_method(&fields, &struct_type);
     let write_method = get_write_method(&fields, &struct_type);
-    let create_builder_method = get_create_builder_method(&builder_name, &turbofish);
+    let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
     let builder_new_method = get_builder_new_method(&typed_generics, &builder_name, &untyped_generics, &input.generics);
     let builder_read_method = get_builder_read_method(&struct_name, &fields, &struct_type, &turbofish);
     let is_fragment_method = get_is_fragment_method(is_fragment);
@@ -66,7 +66,7 @@ pub fn message_impl(
                 #is_fragment_method
                 #is_request_method
                 #bit_length_method
-                #create_builder_method
+                #builder_create_method
                 #relations_waiting_method
                 #relations_complete_method
                 #write_method
@@ -388,7 +388,7 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
     }
 }
 
-pub fn get_create_builder_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
+pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
 
     let builder_new = quote! {
         #builder_name #turbofish::new()
@@ -473,55 +473,6 @@ fn get_field_name(field: &Field, index: usize, struct_type: &StructType) -> Memb
         _ => {
             panic!("The struct should not have any fields")
         }
-    }
-}
-
-fn get_generics(input: &DeriveInput) -> (TokenStream, TokenStream, TokenStream) {
-    let generics = &input.generics;
-    if generics.lt_token.is_none() {
-        return (quote! {}, quote! {}, quote! {});
-    }
-
-    let (impl_generics, ty_generics, _) = generics.split_for_impl();
-    let typed_generics = quote! {
-        #impl_generics
-    };
-    let untyped_generics = quote! {
-        #ty_generics
-    };
-    let tf_generics = ty_generics.as_turbofish();
-    let turbofish = quote! {
-        #tf_generics
-    };
-    (untyped_generics, typed_generics, turbofish)
-}
-
-fn get_builder_generic_fields(generics: &Generics) -> TokenStream {
-    if generics.gt_token.is_none() {
-        return quote! { ; };
-    }
-
-    let mut output = quote! {};
-
-    for param in generics.params.iter() {
-        let GenericParam::Type(type_param) = param else {
-            panic!("Only type parameters are supported for now");
-        };
-
-        let uppercase_letter = &type_param.ident;
-        let field_name = format_ident!("phantom_{}", type_param.ident.to_string().to_lowercase());
-        let new_output_right = quote! {
-            #field_name: std::marker::PhantomData<#uppercase_letter>,
-        };
-        let new_output_result = quote! {
-            #output
-            #new_output_right
-        };
-        output = new_output_result;
-    }
-
-    quote! {
-        { #output }
     }
 }
 

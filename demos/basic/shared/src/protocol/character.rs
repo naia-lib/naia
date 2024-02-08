@@ -1,3 +1,4 @@
+
 use naia_shared::{Property, Replicate, Serde};
 
 /// Here's an example of a Custom Property
@@ -10,15 +11,17 @@ pub struct FullName {
 }
 
 #[derive(Replicate)]
-pub struct Character {
+pub struct Character<T: 'static + Send + Sync> {
+    phantom_t: std::marker::PhantomData<T>,
     pub x: Property<u8>,
     pub y: Property<u8>,
     pub fullname: Property<FullName>,
 }
 
-impl Character {
+impl<T: 'static + Send + Sync> Character<T> {
     pub fn new(x: u8, y: u8, first: &str, last: &str) -> Self {
         Self::new_complete(
+            std::marker::PhantomData,
             x,
             y,
             FullName {

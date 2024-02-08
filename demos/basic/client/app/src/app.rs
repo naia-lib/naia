@@ -10,13 +10,13 @@ use naia_client::{
     shared::{default_channels::UnorderedReliableChannel, SocketConfig},
     transport::webrtc,
     Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent,
-    DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RequestEvent, RejectEvent,
+    DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent,
     RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage, BasicRequest, MyMarker};
+use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage, MyMarker};
 
 type Client = NaiaClient<Entity>;
 
@@ -93,7 +93,7 @@ impl App {
             if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
-                .component::<Character>()
+                .component::<Character<MyMarker>>()
             {
                 // info!(
                 //     "creation of Character - x: {}, y: {}, name: {} {}",
@@ -107,11 +107,11 @@ impl App {
         for _ in events.read::<DespawnEntityEvent>() {
             // info!("deletion of Character entity");
         }
-        for (_, entity) in events.read::<UpdateComponentEvent<Character>>() {
+        for (_, entity) in events.read::<UpdateComponentEvent<Character<MyMarker>>>() {
             if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
-                .component::<Character>()
+                .component::<Character<MyMarker>>()
             {
                 // info!(
                 //     "update of Character - x: {}, y: {}, name: {} {}",
@@ -122,7 +122,7 @@ impl App {
                 // );
             }
         }
-        for (_, _character) in events.read::<RemoveComponentEvent<Character>>() {
+        for (_, _character) in events.read::<RemoveComponentEvent<Character<MyMarker>>>() {
             // info!(
             //     "data delete of Character - x: {}, y: {}, name: {} {}",
             //     *character.x,
