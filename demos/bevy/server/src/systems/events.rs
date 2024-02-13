@@ -88,26 +88,6 @@ pub fn connect_events(
             user_key,
             &assignment_message,
         );
-
-        // Create a new delegated Entity
-        info!("Spawn Delegated Entity on Connect");
-        let delegated_entity = commands
-            // Spawn new Entity
-            .spawn_empty()
-            // MUST call this to begin replication
-            .enable_replication(&mut server)
-            .configure_replication(ReplicationConfig::Delegated)
-            // Insert Position component
-            .insert(Position::new(
-                16 * ((Random::gen_range_u32(0, 40) as i16) - 20),
-                16 * ((Random::gen_range_u32(0, 30) as i16) - 15),
-            ))
-            // return Entity id
-            .id();
-        // Add to room
-        server
-            .room_mut(&global.main_room_key)
-            .add_entity(&delegated_entity);
     }
 }
 

@@ -1258,7 +1258,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("entity should have an owner at this point");
         };
         let EntityOwner::ClientPublic(user_key) = entity_owner else {
-            panic!("entity should be owned by a public client at this point");
+            panic!("entity should be owned by a public client at this point. Owner is: {:?}", entity_owner);
         };
         self.global_world_manager.migrate_entity_to_server(&entity);
 
