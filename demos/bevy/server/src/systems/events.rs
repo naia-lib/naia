@@ -159,11 +159,13 @@ pub fn tick_events(
             // You'd normally do whatever checks you need to in here..
             // to determine whether each Entity should be in scope or not.
 
-            // This indicates the Entity should be in this scope.
-            server.user_scope(&user_key).include(&entity);
+            if !server.user_scope(&user_key).has(&entity) {
+                // This indicates the Entity should be in this scope.
+                server.user_scope_mut(&user_key).include(&entity);
+            }
 
             // And call this if Entity should NOT be in this scope.
-            // server.user_scope(..).exclude(..);
+            // server.user_scope_mut(..).exclude(..);
         }
     }
 }

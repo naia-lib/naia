@@ -153,10 +153,14 @@ impl App {
                     for (_, user_key, entity) in server.scope_checks() {
                         if let Some(character) = world.proxy().component::<Character<MyMarker>>(&entity) {
                             let x = *character.x;
-                            if (5..=15).contains(&x) {
-                                server.user_scope(&user_key).include(&entity);
-                            } else {
-                                server.user_scope(&user_key).exclude(&entity);
+                            let should_be_in_scope = (5..=15).contains(&x);
+                            let is_in_scope = server.user_scope(&user_key).has(&entity);
+                            if should_be_in_scope != is_in_scope {
+                                if should_be_in_scope {
+                                    server.user_scope_mut(&user_key).include(&entity);
+                                } else {
+                                    server.user_scope_mut(&user_key).exclude(&entity);
+                                }
                             }
                         }
                     }

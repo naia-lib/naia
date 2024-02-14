@@ -26,16 +26,15 @@ use crate::{
         server_auth_handler::AuthOwner,
     },
     ReplicationConfig,
+    request::{GlobalRequestManager, GlobalResponseManager},
 };
-use crate::request::{GlobalRequestManager, GlobalResponseManager};
-
 use super::{
     error::NaiaServerError,
     events::Events,
     room::{Room, RoomKey, RoomMut, RoomRef},
     server_config::ServerConfig,
     user::{User, UserKey, UserMut, UserRef},
-    user_scope::UserScopeMut,
+    user_scope::{UserScopeRef, UserScopeMut},
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -82,7 +81,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             &protocol.compression,
         );
 
-        Server {
+        Self {
             // Config
             server_config: server_config.clone(),
             protocol,
@@ -845,9 +844,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.users.len()
     }
 
+    /// Returns a UserScopeRef, which is used to query whether a given user has
+    pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<E> {
+        if self.users.contains_key(user_key) {
+            return UserScopeRef::new(self, user_key);
+        }
+        panic!("No User exists for given Key!");
+    }
+
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
-    pub fn user_scope(&mut self, user_key: &UserKey) -> UserScopeMut<E> {
+    pub fn user_scope_mut(&mut self, user_key: &UserKey) -> UserScopeMut<E> {
         if self.users.contains_key(user_key) {
             return UserScopeMut::new(self, user_key);
         }
@@ -1028,6 +1035,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ) {
         self.entity_scope_map
             .insert(*user_key, *entity, is_contained);
+    }
+
+    pub(crate) fn user_scope_has_entity(
+        &self,
+        user_key: &UserKey,
+        entity: &E,
+    ) -> bool {
+        if let Some(in_scope) =
+            self.entity_scope_map.get(user_key, entity)
+        {
+            *in_scope
+        } else {
+            false
+        }
     }
 
     //// Components

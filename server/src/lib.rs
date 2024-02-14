@@ -52,7 +52,7 @@ pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::Server;
 pub use server_config::ServerConfig;
 pub use user::{User, UserKey, UserMut, UserRef};
-pub use user_scope::UserScopeMut;
+pub use user_scope::{UserScopeMut, UserScopeRef};
 pub use world::{
     entity_mut::EntityMut, entity_owner::EntityOwner, replication_config::ReplicationConfig,
 };
