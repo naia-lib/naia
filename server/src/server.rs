@@ -28,6 +28,7 @@ use crate::{
     ReplicationConfig,
     request::{GlobalRequestManager, GlobalResponseManager},
 };
+use crate::world::entity_room_map::EntityRoomMap;
 use super::{
     error::NaiaServerError,
     events::Events,
@@ -56,7 +57,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
-    entity_room_map: HashMap<E, RoomKey>,
+    entity_room_map: EntityRoomMap<E>,
     entity_scope_map: EntityScopeMap<E>,
     global_world_manager: GlobalWorldManager<E>,
     // Events
@@ -98,7 +99,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // Rooms
             rooms: BigMap::new(),
             // Entities
-            entity_room_map: HashMap::new(),
+            entity_room_map: EntityRoomMap::new(),
             entity_scope_map: EntityScopeMap::new(),
             global_world_manager: GlobalWorldManager::new(),
             // Events
@@ -998,9 +999,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.entity_scope_map.remove_entity(entity);
 
         // Delete room cache entry
-        if let Some(room_key) = self.entity_room_map.remove(entity) {
-            if let Some(room) = self.rooms.get_mut(&room_key) {
-                room.remove_entity(entity, true);
+        if let Some(room_keys) = self.entity_room_map.remove_from_all_rooms(entity) {
+            for room_key in room_keys {
+                if let Some(room) = self.rooms.get_mut(&room_key) {
+                    room.remove_entity(entity, true);
+                }
             }
         }
 
@@ -1553,10 +1556,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &E) -> bool {
-        let Some(actual_room_key) = self.entity_room_map.get(entity) else {
+        let Some(room) = self.rooms.get(room_key) else {
             return false;
         };
-        return *room_key == *actual_room_key;
+        return room.has_entity(entity);
     }
 
     /// Add an Entity to a Room associated with the given RoomKey.
@@ -1571,17 +1574,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         if !is_some {
             return;
         }
-        if self.entity_room_map.contains_key(entity) {
-            panic!("Entity already belongs to a Room! Remove the Entity from the Room before adding it to a new Room.");
-        }
-        self.entity_room_map.insert(*entity, *room_key);
+        self.entity_room_map.entity_add_room(entity, room_key);
     }
 
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, entity: &E) {
         if let Some(room) = self.rooms.get_mut(room_key) {
             room.remove_entity(entity, false);
-            self.entity_room_map.remove(entity);
+            self.entity_room_map.remove_from_room(entity, room_key);
         }
     }
 
@@ -1591,7 +1591,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             let entities: Vec<E> = room.entities().copied().collect();
             for entity in entities {
                 room.remove_entity(&entity, false);
-                self.entity_room_map.remove(&entity);
+                self.entity_room_map.remove_from_room(&entity, room_key);
             }
         }
     }

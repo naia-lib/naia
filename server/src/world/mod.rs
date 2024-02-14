@@ -7,3 +7,4 @@ pub mod global_world_manager;
 pub mod mut_channel;
 pub mod replication_config;
 pub mod server_auth_handler;
+pub mod entity_room_map;

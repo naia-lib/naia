@@ -81,6 +81,10 @@ impl<E: Copy + Eq + Hash> Room<E> {
         }
     }
 
+    pub(crate) fn has_entity(&self, entity: &E) -> bool {
+        self.entities.contains(entity)
+    }
+
     pub(crate) fn entities(&self) -> Iter<E> {
         self.entities.iter()
     }
