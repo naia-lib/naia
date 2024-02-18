@@ -101,7 +101,8 @@ pub fn message_events(
                 if let Ok(position) = position_query.get(entity) {
                     let prediction_entity = commands
                         .entity(entity)
-                        .local_duplicate() // copies all Replicate components as well
+                        .local_duplicate(); // copies all Replicate components as well
+                    commands.entity(prediction_entity)
                         .insert(SpriteBundle {
                             sprite: Sprite {
                                 custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
@@ -114,8 +115,7 @@ pub fn message_events(
                         // insert interpolation component
                         .insert(Interp::new(*position.x, *position.y))
                         // mark as predicted
-                        .insert(Predicted)
-                        .id();
+                        .insert(Predicted);
 
                     global.owned_entity = Some(OwnedEntity::new(entity, prediction_entity));
                 }

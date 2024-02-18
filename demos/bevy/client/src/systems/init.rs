@@ -1,6 +1,6 @@
 
 use bevy::{prelude::{
-    shape, Assets, Camera2dBundle, Color, ColorMaterial, Commands, Mesh, ResMut,
+    Assets, Camera2dBundle, Color, ColorMaterial, Commands, Mesh, ResMut, Circle,
 }, log::info};
 
 use naia_bevy_client::{transport::webrtc, Client};
@@ -37,7 +37,7 @@ pub fn init(
     global.aqua = materials.add(ColorMaterial::from(Color::AQUAMARINE));
 
     // Load shapes
-    global.circle = meshes.add(shape::Circle::new(6.).into());
+    global.circle = meshes.add(Circle::new(6.));
 
     // Insert Global Resource
     commands.insert_resource(global);
