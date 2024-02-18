@@ -14,6 +14,7 @@ use super::{
 };
 
 /// Used to send packets from the Server Socket
+#[allow(dead_code)]
 pub trait SocketTrait {
     fn listen(
         server_addrs: &ServerAddrs,

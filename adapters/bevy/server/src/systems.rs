@@ -14,9 +14,9 @@ use crate::{plugin::Singleton, server::ServerWrapper, ClientOwned, EntityAuthSta
 mod naia_events {
     pub use naia_server::{
         ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
-        EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvent,
-        PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-        UnpublishEntityEvent, UpdateComponentEvent,
+        EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent,
+        PublishEntityEvent, SpawnEntityEvent, TickEvent,
+        UnpublishEntityEvent,
     };
 }
 
