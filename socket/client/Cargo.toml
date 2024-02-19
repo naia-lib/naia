@@ -23,9 +23,9 @@ mquad = [ "naia-socket-shared/mquad", "miniquad" ]
 naia-socket-shared = { version = "0.22", path = "../shared" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
-wasm-bindgen = { version = "0.2.84", optional = true  }
-js-sys = { version = "0.3", optional = true  }
-web_sys = { version = "0.3", package = "web-sys", features = [
+wasm-bindgen = { version = "0.2", optional = true  }
+js-sys = { version = "0.3.64", optional = true  }
+web_sys = { version = "0.3.64", package = "web-sys", features = [
     "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType", "MessageChannel", "MessagePort",
     "RtcIceCandidate", "RtcIceCandidateInit", "RtcConfiguration", "RtcDataChannelState",
     "RtcPeerConnection", "RtcSdpType",  "RtcSessionDescription", "RtcSessionDescriptionInit",
