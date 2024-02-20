@@ -2,7 +2,10 @@ use std::{any::Any, collections::HashMap};
 
 use bevy_ecs::{entity::Entity, prelude::Event};
 
-use naia_bevy_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
+use naia_bevy_shared::{
+    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate,
+    Request, ResponseSendKey, Tick,
+};
 use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, User, UserKey};
 
 // ConnectEvent
@@ -94,7 +97,10 @@ fn convert_messages<M: Message>(
 // RequestEvents
 #[derive(Event)]
 pub struct RequestEvents {
-    inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>,
+    inner: HashMap<
+        ChannelKind,
+        HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>,
+    >,
 }
 
 impl<E: Copy> From<&mut Events<E>> for RequestEvents {
@@ -116,20 +122,21 @@ impl RequestEvents {
             return Vec::new();
         };
 
-            let mut output_list: Vec<(UserKey, ResponseSendKey<Q::Response>, Q)> = Vec::new();
+        let mut output_list: Vec<(UserKey, ResponseSendKey<Q::Response>, Q)> = Vec::new();
 
-            for (user_key, global_response_id, request) in requests {
-                let message: Q = Box::<dyn Any + 'static>::downcast::<Q>(request.clone().to_boxed_any())
+        for (user_key, global_response_id, request) in requests {
+            let message: Q =
+                Box::<dyn Any + 'static>::downcast::<Q>(request.clone().to_boxed_any())
                     .ok()
                     .map(|boxed_m| *boxed_m)
                     .unwrap();
 
-                let response_send_key = ResponseSendKey::new(*global_response_id);
+            let response_send_key = ResponseSendKey::new(*global_response_id);
 
-                output_list.push((*user_key, response_send_key, message));
-            }
+            output_list.push((*user_key, response_send_key, message));
+        }
 
-            return output_list;
+        return output_list;
     }
 }
 

@@ -7,9 +7,10 @@ pub use naia_shared::{
     LocalEntityAndGlobalEntityConverterMut, MessageBevy as Message, MessageBuilder,
     MessageContainer, MessageKind, MessageKinds, Named, OwnedBitReader, Property, PropertyMutate,
     PropertyMutator, Random, ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef,
-    ReplicateBevy as Replicate, ReplicateBuilder, SerdeBevyShared as Serde, SerdeErr,
-    SerdeIntegerConversion, SignedInteger, SignedVariableInteger, Tick, TickBufferSettings, Timer,
-    UnsignedInteger, UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, Request, Response, ResponseSendKey, ResponseReceiveKey
+    ReplicateBevy as Replicate, ReplicateBuilder, Request, Response, ResponseReceiveKey,
+    ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeIntegerConversion, SignedInteger,
+    SignedVariableInteger, Tick, TickBufferSettings, Timer, UnsignedInteger,
+    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 mod change_detection;

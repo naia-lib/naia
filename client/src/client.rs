@@ -2,7 +2,15 @@ use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::{info, warn};
 
-use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{
+    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
+    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
+    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer,
+    PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey,
+    ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel,
+    Tick, WorldMutType, WorldRefType,
+};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
@@ -297,8 +305,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     //
-    pub fn send_request<C: Channel, Q: Request>(&mut self, request: &Q) -> Result<ResponseReceiveKey<Q::Response>, NaiaClientError> {
-
+    pub fn send_request<C: Channel, Q: Request>(
+        &mut self,
+        request: &Q,
+    ) -> Result<ResponseReceiveKey<Q::Response>, NaiaClientError> {
         let cloned_request = Q::clone_box(request);
         // let response_type_id = TypeId::of::<Q::Response>();
         let id = self.send_request_inner(&ChannelKind::of::<C>(), cloned_request)?;
@@ -311,7 +321,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // response_type_id: TypeId,
         request_box: Box<dyn Message>,
     ) -> Result<GlobalRequestId, NaiaClientError> {
-
         let channel_settings = self.protocol.channel_kinds.channel(&channel_kind);
 
         if !channel_settings.can_request_and_respond() {
@@ -320,7 +329,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let Some(connection) = &mut self.server_connection else {
             warn!("currently not connected to server");
-            return Err(NaiaClientError::Message("currently not connected to server".to_string()));
+            return Err(NaiaClientError::Message(
+                "currently not connected to server".to_string(),
+            ));
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
@@ -341,8 +352,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// Sends a Response for a given Request. Returns whether or not was successful.
-    pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
-
+    pub fn send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> bool {
         let response_id = response_key.response_id();
 
         let cloned_response = S::clone_box(response);
@@ -359,7 +373,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let Some(connection) = &mut self.server_connection else {
             return false;
         };
-        let Some((channel_kind, local_response_id)) = connection.global_response_manager.destroy_response_id(response_id) else {
+        let Some((channel_kind, local_response_id)) = connection
+            .global_response_manager
+            .destroy_response_id(response_id)
+        else {
             return false;
         };
         let mut converter = EntityConverterMut::new(
@@ -378,12 +395,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         return true;
     }
 
-    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<S> {
+    pub fn receive_response<S: Response>(
+        &mut self,
+        response_key: &ResponseReceiveKey<S>,
+    ) -> Option<S> {
         let Some(connection) = &mut self.server_connection else {
             return None;
         };
         let request_id = response_key.request_id();
-        let Some(container) = connection.global_request_manager.destroy_request_id(&request_id) else {
+        let Some(container) = connection
+            .global_request_manager
+            .destroy_request_id(&request_id)
+        else {
             return None;
         };
         let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())

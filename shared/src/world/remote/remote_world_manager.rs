@@ -311,7 +311,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
 
             // split the component_update into the waiting and ready parts
             let Ok((waiting_updates_opt, ready_update_opt)) =
-                component_update.split_into_waiting_and_ready(&converter, component_kinds) else {
+                component_update.split_into_waiting_and_ready(&converter, component_kinds)
+            else {
                 warn!("Remote World Manager: cannot read malformed component update message");
                 continue;
             };

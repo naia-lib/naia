@@ -1,17 +1,20 @@
-
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::{LocalEntityAndGlobalEntityConverterMut, LocalResponseId, messages::{
-    channels::senders::{
-        channel_sender::{ChannelSender, MessageChannelSender},
-        indexed_message_writer::IndexedMessageWriter,
-    },
-    message_container::MessageContainer,
-    message_kinds::MessageKinds,
-}, ReliableSender, types::MessageIndex};
 use crate::messages::channels::senders::request_sender::{LocalRequestId, RequestSender};
 use crate::messages::request::GlobalRequestId;
+use crate::{
+    messages::{
+        channels::senders::{
+            channel_sender::{ChannelSender, MessageChannelSender},
+            indexed_message_writer::IndexedMessageWriter,
+        },
+        message_container::MessageContainer,
+        message_kinds::MessageKinds,
+    },
+    types::MessageIndex,
+    LocalEntityAndGlobalEntityConverterMut, LocalResponseId, ReliableSender,
+};
 
 // Sender
 pub struct ReliableMessageSender {
@@ -68,7 +71,7 @@ impl MessageChannelSender for ReliableMessageSender {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         global_request_id: GlobalRequestId,
-        request: MessageContainer
+        request: MessageContainer,
     ) {
         let processed_request = self.request_sender.process_outgoing_request(
             message_kinds,
@@ -79,7 +82,13 @@ impl MessageChannelSender for ReliableMessageSender {
         self.send_message(processed_request);
     }
 
-    fn send_outgoing_response(&mut self, message_kinds: &MessageKinds, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut, local_response_id: LocalResponseId, response: MessageContainer) {
+    fn send_outgoing_response(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        local_response_id: LocalResponseId,
+        response: MessageContainer,
+    ) {
         let processed_response = self.request_sender.process_outgoing_response(
             message_kinds,
             converter,
@@ -89,7 +98,11 @@ impl MessageChannelSender for ReliableMessageSender {
         self.send_message(processed_response);
     }
 
-    fn process_incoming_response(&mut self, local_request_id: &LocalRequestId) -> Option<GlobalRequestId> {
-        self.request_sender.process_incoming_response(local_request_id)
+    fn process_incoming_response(
+        &mut self,
+        local_request_id: &LocalRequestId,
+    ) -> Option<GlobalRequestId> {
+        self.request_sender
+            .process_incoming_response(local_request_id)
     }
 }

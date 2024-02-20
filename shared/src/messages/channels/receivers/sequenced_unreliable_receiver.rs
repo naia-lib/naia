@@ -2,14 +2,20 @@ use std::mem;
 
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, messages::{
-    channels::{receivers::{
-        channel_receiver::{ChannelReceiver, MessageChannelReceiver},
-        indexed_message_reader::IndexedMessageReader,
-    }},
-    message_kinds::MessageKinds,
-}, sequence_greater_than, types::MessageIndex, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}};
 use crate::messages::channels::senders::request_sender::LocalRequestId;
+use crate::{
+    messages::{
+        channels::receivers::{
+            channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+            indexed_message_reader::IndexedMessageReader,
+        },
+        message_kinds::MessageKinds,
+    },
+    sequence_greater_than,
+    types::MessageIndex,
+    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
+    LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer,
+};
 
 pub struct SequencedUnreliableReceiver {
     newest_received_message_index: Option<MessageIndex>,
@@ -92,7 +98,12 @@ impl MessageChannelReceiver for SequencedUnreliableReceiver {
         Ok(())
     }
 
-    fn receive_requests_and_responses(&mut self) -> (Vec<(LocalResponseId, MessageContainer)>, Vec<(LocalRequestId, MessageContainer)>) {
+    fn receive_requests_and_responses(
+        &mut self,
+    ) -> (
+        Vec<(LocalResponseId, MessageContainer)>,
+        Vec<(LocalRequestId, MessageContainer)>,
+    ) {
         panic!("SequencedUnreliable channels do not support requests");
     }
 }

@@ -2,12 +2,19 @@ use std::time::Duration;
 
 use bevy_ecs::{
     entity::Entity,
-    system::{ResMut, SystemParam, Resource},
+    system::{ResMut, Resource, SystemParam},
 };
 
-use naia_server::{shared::SocketConfig, transport::Socket, ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut, NaiaServerError, UserScopeRef};
+use naia_server::{
+    shared::SocketConfig, transport::Socket, NaiaServerError, ReplicationConfig, RoomKey, RoomMut,
+    RoomRef, Server as NaiaServer, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
+    UserScopeRef,
+};
 
-use naia_bevy_shared::{Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick};
+use naia_bevy_shared::{
+    Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
+    GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick,
+};
 
 #[derive(Resource)]
 pub struct ServerWrapper(pub NaiaServer<Entity>);
@@ -59,17 +66,27 @@ impl<'w> Server<'w> {
         self.server.0.receive_tick_buffer_messages(tick)
     }
 
-
     /// Requests ///
-    pub fn send_request<C: Channel, Q: Request>(&mut self, user_key: &UserKey, request: &Q) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
+    pub fn send_request<C: Channel, Q: Request>(
+        &mut self,
+        user_key: &UserKey,
+        request: &Q,
+    ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
         self.server.0.send_request::<C, Q>(user_key, request)
     }
 
-    pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
+    pub fn send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> bool {
         self.server.0.send_response(response_key, response)
     }
 
-    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<(UserKey, S)> {
+    pub fn receive_response<S: Response>(
+        &mut self,
+        response_key: &ResponseReceiveKey<S>,
+    ) -> Option<(UserKey, S)> {
         self.server.0.receive_response(response_key)
     }
 

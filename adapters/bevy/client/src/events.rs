@@ -4,7 +4,10 @@ use bevy_ecs::{entity::Entity, prelude::Event};
 
 use naia_client::{Events, NaiaClientError};
 
-use naia_bevy_shared::{Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
+use naia_bevy_shared::{
+    Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate,
+    Request, ResponseSendKey, Tick,
+};
 use naia_client::shared::GlobalResponseId;
 
 // ConnectEvent

@@ -5,7 +5,10 @@ use syn::{
     PathArguments, Type,
 };
 
-use crate::{message::get_builder_new_method, shared::{get_struct_type, StructType, get_generics, get_builder_generic_fields}};
+use crate::{
+    message::get_builder_new_method,
+    shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType},
+};
 
 const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
 
@@ -47,7 +50,15 @@ pub fn replicate_impl(
 
     // Names
     let replica_name = input.ident.clone();
-    let replica_name_str = LitStr::new(format!("{}{}", &replica_name.to_string(), &untyped_generics.to_string()).as_str(), replica_name.span());
+    let replica_name_str = LitStr::new(
+        format!(
+            "{}{}",
+            &replica_name.to_string(),
+            &untyped_generics.to_string()
+        )
+        .as_str(),
+        replica_name.span(),
+    );
     let lowercase_replica_name = Ident::new(
         replica_name.to_string().to_lowercase().as_str(),
         Span::call_site(),
@@ -69,17 +80,24 @@ pub fn replicate_impl(
     };
 
     // Methods
-    let new_complete_method =
-        get_new_complete_method(&enum_name, &properties, &struct_type);
+    let new_complete_method = get_new_complete_method(&enum_name, &properties, &struct_type);
     let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
-    let builder_new_method = get_builder_new_method(&typed_generics, &builder_name, &untyped_generics, &input.generics);
-    let builder_read_method = get_builder_read_method(&replica_name, &properties, &struct_type, &turbofish);
-    let read_create_update_method = get_read_create_update_method(&replica_name, &properties, &untyped_generics);
+    let builder_new_method = get_builder_new_method(
+        &typed_generics,
+        &builder_name,
+        &untyped_generics,
+        &input.generics,
+    );
+    let builder_read_method =
+        get_builder_read_method(&replica_name, &properties, &struct_type, &turbofish);
+    let read_create_update_method =
+        get_read_create_update_method(&replica_name, &properties, &untyped_generics);
 
     let dyn_ref_method = get_dyn_ref_method();
     let dyn_mut_method = get_dyn_mut_method();
     let clone_method = get_clone_method(&properties, &struct_type);
-    let mirror_method = get_mirror_method(&replica_name, &properties, &struct_type, &untyped_generics);
+    let mirror_method =
+        get_mirror_method(&replica_name, &properties, &struct_type, &untyped_generics);
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
     let publish_method = get_publish_method(&enum_name, &properties, &struct_type);
     let unpublish_method = get_unpublish_method(&properties, &struct_type);
@@ -94,7 +112,8 @@ pub fn replicate_impl(
     let write_update_method = get_write_update_method(&enum_name, &properties, &struct_type);
     let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
-    let split_update_method = get_split_update_method(&replica_name, &properties, &untyped_generics);
+    let split_update_method =
+        get_split_update_method(&replica_name, &properties, &untyped_generics);
 
     let gen = quote! {
         mod #module_name {
@@ -391,10 +410,7 @@ pub fn get_dyn_mut_method() -> TokenStream {
     }
 }
 
-fn get_clone_method(
-    properties: &[Property],
-    struct_type: &StructType,
-) -> TokenStream {
+fn get_clone_method(properties: &[Property], struct_type: &StructType) -> TokenStream {
     let mut output = quote! {};
     let mut entity_property_output = quote! {};
 
@@ -757,7 +773,6 @@ pub fn get_new_complete_method(
 }
 
 pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
-
     let builder_new = quote! {
         #builder_name #turbofish::new()
     };
@@ -850,7 +865,11 @@ pub fn get_builder_read_method(
     }
 }
 
-pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Property], untyped_generics: &TokenStream) -> TokenStream {
+pub fn get_read_create_update_method(
+    replica_name: &Ident,
+    properties: &[Property],
+    untyped_generics: &TokenStream,
+) -> TokenStream {
     let mut prop_read_writes = quote! {};
     for property in properties.iter() {
         let new_output_right = match property {
@@ -903,7 +922,11 @@ pub fn get_read_create_update_method(replica_name: &Ident, properties: &[Propert
     }
 }
 
-fn get_split_update_method(replica_name: &Ident, properties: &[Property], untyped_generics: &TokenStream) -> TokenStream {
+fn get_split_update_method(
+    replica_name: &Ident,
+    properties: &[Property],
+    untyped_generics: &TokenStream,
+) -> TokenStream {
     let mut output = quote! {};
 
     for property in properties.iter() {

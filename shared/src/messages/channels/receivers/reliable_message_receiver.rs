@@ -1,15 +1,23 @@
 use naia_serde::{BitReader, SerdeErr};
 
-use crate::{LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, messages::{
-    channels::{receivers::{
-        channel_receiver::{ChannelReceiver, MessageChannelReceiver},
-        fragment_receiver::FragmentReceiver,
-        indexed_message_reader::IndexedMessageReader,
-        reliable_receiver::ReliableReceiver,
-    }, senders::request_sender::LocalRequestOrResponseId},
-    message_kinds::MessageKinds,
-}, RequestOrResponse, types::MessageIndex, world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore}};
 use crate::messages::channels::senders::request_sender::LocalRequestId;
+use crate::{
+    messages::{
+        channels::{
+            receivers::{
+                channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+                fragment_receiver::FragmentReceiver,
+                indexed_message_reader::IndexedMessageReader,
+                reliable_receiver::ReliableReceiver,
+            },
+            senders::request_sender::LocalRequestOrResponseId,
+        },
+        message_kinds::MessageKinds,
+    },
+    types::MessageIndex,
+    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
+    LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RequestOrResponse,
+};
 
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
@@ -105,7 +113,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         &mut self,
         message_kinds: &MessageKinds,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        message_container: MessageContainer
+        message_container: MessageContainer,
     ) {
         // look at message, see if it's a request or response
         if message_container.is_request_or_response() {
@@ -128,8 +136,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                 LocalRequestOrResponseId::Request(local_request_id) => {
                     let request = request_or_response;
                     let local_response_id = local_request_id.receive_from_remote();
-                    self.incoming_requests
-                        .push((local_response_id, request));
+                    self.incoming_requests.push((local_response_id, request));
                 }
                 LocalRequestOrResponseId::Response(local_response_id) => {
                     let response = request_or_response;
@@ -181,7 +188,15 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
         Ok(())
     }
 
-    fn receive_requests_and_responses(&mut self) -> (Vec<(LocalResponseId, MessageContainer)>, Vec<(LocalRequestId, MessageContainer)>) {
-        (std::mem::take(&mut self.incoming_requests), std::mem::take(&mut self.incoming_responses))
+    fn receive_requests_and_responses(
+        &mut self,
+    ) -> (
+        Vec<(LocalResponseId, MessageContainer)>,
+        Vec<(LocalRequestId, MessageContainer)>,
+    ) {
+        (
+            std::mem::take(&mut self.incoming_requests),
+            std::mem::take(&mut self.incoming_responses),
+        )
     }
 }

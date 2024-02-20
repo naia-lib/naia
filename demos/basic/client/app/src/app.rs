@@ -9,14 +9,14 @@ cfg_if! {
 use naia_client::{
     shared::{default_channels::UnorderedReliableChannel, SocketConfig},
     transport::webrtc,
-    Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent,
-    DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent,
-    RemoveComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
+    Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent, DespawnEntityEvent,
+    DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent,
+    UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage, MyMarker};
+use naia_basic_demo_shared::{protocol, Auth, Character, MyMarker, StringMessage};
 
 type Client = NaiaClient<Entity>;
 
@@ -76,7 +76,9 @@ impl App {
         for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
         }
-        for message in events.read::<MessageEvent<UnorderedReliableChannel, StringMessage<MyMarker>>>() {
+        for message in
+            events.read::<MessageEvent<UnorderedReliableChannel, StringMessage<MyMarker>>>()
+        {
             let message_contents = &(*message.contents);
             info!("Client recv <- {}", message_contents);
 

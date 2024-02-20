@@ -3,13 +3,17 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
-use crate::{messages::{
-    channels::senders::channel_sender::{ChannelSender, MessageChannelSender},
-    message_container::MessageContainer,
-    message_kinds::MessageKinds,
-}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut, LocalResponseId};
 use crate::messages::channels::senders::request_sender::LocalRequestId;
 use crate::messages::request::GlobalRequestId;
+use crate::{
+    messages::{
+        channels::senders::channel_sender::{ChannelSender, MessageChannelSender},
+        message_container::MessageContainer,
+        message_kinds::MessageKinds,
+    },
+    types::MessageIndex,
+    LocalEntityAndGlobalEntityConverterMut, LocalResponseId,
+};
 
 pub struct UnorderedUnreliableSender {
     outgoing_messages: VecDeque<MessageContainer>,
@@ -102,7 +106,13 @@ impl MessageChannelSender for UnorderedUnreliableSender {
         None
     }
 
-    fn send_outgoing_request(&mut self, _: &MessageKinds, _: &mut dyn LocalEntityAndGlobalEntityConverterMut, _: GlobalRequestId, _: MessageContainer) {
+    fn send_outgoing_request(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: GlobalRequestId,
+        _: MessageContainer,
+    ) {
         panic!("UnorderedUnreliable channel does not support requests");
     }
 
@@ -110,7 +120,13 @@ impl MessageChannelSender for UnorderedUnreliableSender {
         panic!("UnorderedUnreliable channel does not support requests");
     }
 
-    fn send_outgoing_response(&mut self, _: &MessageKinds, _: &mut dyn LocalEntityAndGlobalEntityConverterMut, _: LocalResponseId, _: MessageContainer) {
+    fn send_outgoing_response(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: LocalResponseId,
+        _: MessageContainer,
+    ) {
         panic!("UnorderedUnreliable channel does not support requests");
     }
 }

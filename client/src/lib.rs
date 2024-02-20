@@ -16,8 +16,8 @@ extern crate cfg_if;
 pub mod transport;
 pub mod shared {
     pub use naia_shared::{
-        default_channels, sequence_greater_than, Instant, Message, Protocol, Random, SocketConfig,
-        Tick, GlobalRequestId, GlobalResponseId, ResponseReceiveKey
+        default_channels, sequence_greater_than, GlobalRequestId, GlobalResponseId, Instant,
+        Message, Protocol, Random, ResponseReceiveKey, SocketConfig, Tick,
     };
 }
 pub mod internal {
@@ -30,8 +30,8 @@ mod command_history;
 mod connection;
 mod error;
 mod events;
-mod world;
 mod request;
+mod world;
 
 pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;
@@ -40,8 +40,8 @@ pub use error::NaiaClientError;
 pub use events::{
     ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
     EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, Events, InsertComponentEvent,
-    MessageEvent, PublishEntityEvent, RejectEvent, RemoveComponentEvent, ServerTickEvent,
-    SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent, RequestEvent,
+    MessageEvent, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvent,
+    ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
 };
 pub use world::{
     entity_mut::EntityMut, entity_ref::EntityRef, replication_config::ReplicationConfig,

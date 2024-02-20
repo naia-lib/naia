@@ -322,7 +322,8 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         let Ok(entity) = self
             .global_world_manager
-            .global_entity_to_entity(global_entity) else {
+            .global_entity_to_entity(global_entity)
+        else {
             return Err(EntityDoesNotExistError);
         };
         if !self

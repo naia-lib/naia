@@ -160,7 +160,9 @@ impl HandshakeManager {
                     success = success_inner;
                 }
                 if success {
-                    let HandshakeState::TimeSync(time_manager) = std::mem::replace(&mut self.connection_state, HandshakeState::Connected) else {
+                    let HandshakeState::TimeSync(time_manager) =
+                        std::mem::replace(&mut self.connection_state, HandshakeState::Connected)
+                    else {
                         panic!("should be impossible due to check above");
                     };
                     self.connection_state =
@@ -253,7 +255,9 @@ impl HandshakeManager {
 
     // Step 6 of Handshake
     fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
-        let HandshakeState::AwaitingConnectResponse(time_manager) = std::mem::replace(&mut self.connection_state, HandshakeState::Connected) else {
+        let HandshakeState::AwaitingConnectResponse(time_manager) =
+            std::mem::replace(&mut self.connection_state, HandshakeState::Connected)
+        else {
             return None;
         };
 

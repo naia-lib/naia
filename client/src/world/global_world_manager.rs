@@ -244,7 +244,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
     }
 
     pub(crate) fn entity_request_authority(&mut self, entity: &E) -> bool {
-        let Some(auth_status) = self.auth_handler.auth_status(entity)  else {
+        let Some(auth_status) = self.auth_handler.auth_status(entity) else {
             panic!("Can only request authority for an Entity that is Delegated!");
         };
         if !auth_status.can_request() {

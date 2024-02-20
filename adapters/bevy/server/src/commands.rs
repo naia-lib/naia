@@ -13,12 +13,9 @@ use crate::{server::ServerWrapper, Server};
 // Bevy Commands Extension
 pub trait CommandsExt<'a> {
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
-    fn disable_replication(&'a mut self, server: &mut Server)
+    fn disable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
+    fn configure_replication(&'a mut self, config: ReplicationConfig)
         -> &'a mut EntityCommands<'a>;
-    fn configure_replication(
-        &'a mut self,
-        config: ReplicationConfig,
-    ) -> &'a mut EntityCommands<'a>;
     fn replication_config(&'a self, server: &Server) -> Option<ReplicationConfig>;
     fn give_authority(
         &'a mut self,
@@ -38,10 +35,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
         return self;
     }
 
-    fn disable_replication(
-        &'a mut self,
-        server: &mut Server,
-    ) -> &'a mut EntityCommands<'a> {
+    fn disable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.disable_replication(&self.id());
         self.remove::<HostOwned>();
         return self;

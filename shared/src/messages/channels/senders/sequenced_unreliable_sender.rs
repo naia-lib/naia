@@ -3,16 +3,20 @@ use std::collections::VecDeque;
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
-use crate::{messages::{
-    channels::senders::{
-        channel_sender::{ChannelSender, MessageChannelSender},
-        indexed_message_writer::IndexedMessageWriter,
-    },
-    message_container::MessageContainer,
-    message_kinds::MessageKinds,
-}, types::MessageIndex, LocalEntityAndGlobalEntityConverterMut, LocalResponseId};
 use crate::messages::channels::senders::request_sender::LocalRequestId;
 use crate::messages::request::GlobalRequestId;
+use crate::{
+    messages::{
+        channels::senders::{
+            channel_sender::{ChannelSender, MessageChannelSender},
+            indexed_message_writer::IndexedMessageWriter,
+        },
+        message_container::MessageContainer,
+        message_kinds::MessageKinds,
+    },
+    types::MessageIndex,
+    LocalEntityAndGlobalEntityConverterMut, LocalResponseId,
+};
 
 pub struct SequencedUnreliableSender {
     /// Buffer of the next messages to send along with their MessageKind
@@ -69,11 +73,23 @@ impl MessageChannelSender for SequencedUnreliableSender {
         )
     }
 
-    fn send_outgoing_request(&mut self, _: &MessageKinds, _: &mut dyn LocalEntityAndGlobalEntityConverterMut, _: GlobalRequestId, _: MessageContainer) {
+    fn send_outgoing_request(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: GlobalRequestId,
+        _: MessageContainer,
+    ) {
         panic!("SequencedUnreliable channel does not support requests");
     }
 
-    fn send_outgoing_response(&mut self, _: &MessageKinds, _: &mut dyn LocalEntityAndGlobalEntityConverterMut, _: LocalResponseId, _: MessageContainer) {
+    fn send_outgoing_response(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: LocalResponseId,
+        _: MessageContainer,
+    ) {
         panic!("SequencedUnreliable channel does not support requests");
     }
 

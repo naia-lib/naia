@@ -8,8 +8,7 @@ pub trait Request: Message {
 }
 
 // Response
-pub trait Response: Message {
-}
+pub trait Response: Message {}
 
 // ResponseSendKey
 #[derive(Clone, Eq, PartialEq, Hash)]
@@ -58,9 +57,7 @@ pub struct GlobalRequestId {
 
 impl GlobalRequestId {
     pub fn new(id: u64) -> Self {
-        Self {
-            id,
-        }
+        Self { id }
     }
 }
 
@@ -71,8 +68,6 @@ pub struct GlobalResponseId {
 
 impl GlobalResponseId {
     pub fn new(id: u64) -> Self {
-        Self {
-            id,
-        }
+        Self { id }
     }
 }

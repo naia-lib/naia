@@ -31,8 +31,8 @@ impl<T> ConstBitLength for PhantomData<T> {
 
 #[cfg(test)]
 mod phantom_tests {
-    use std::marker::PhantomData;
     use crate::{bit_reader::BitReader, bit_writer::BitWriter, serde::Serde};
+    use std::marker::PhantomData;
 
     #[test]
     fn read_write() {

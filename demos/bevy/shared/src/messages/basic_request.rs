@@ -22,9 +22,7 @@ pub struct BasicResponse {
     pub index: u8,
 }
 
-impl Response for BasicResponse {
-
-}
+impl Response for BasicResponse {}
 
 impl BasicResponse {
     pub fn new(contents: String, index: u8) -> Self {

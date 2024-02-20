@@ -26,7 +26,6 @@ impl FragmentReceiver {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         message: MessageContainer,
     ) -> Option<MessageContainer> {
-
         if !message.is_fragment() {
             panic!("Received non-fragmented message in FragmentReceiver!");
         }

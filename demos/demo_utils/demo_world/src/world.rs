@@ -324,8 +324,11 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
             if let Some(component) = component_map.get_mut(component_kind) {
                 let diff_mask_size = component.diff_mask_size();
-                let mutator =
-                    global_world_manager.register_component(entity, &component_kind, diff_mask_size);
+                let mutator = global_world_manager.register_component(
+                    entity,
+                    &component_kind,
+                    diff_mask_size,
+                );
                 component.publish(&mutator);
             }
         }

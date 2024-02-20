@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 use bevy_ecs::{entity::Entity, prelude::Resource};
 
 use naia_bevy_demo_shared::messages::BasicResponse;
-use naia_bevy_server::{RoomKey, UserKey, ResponseReceiveKey};
+use naia_bevy_server::{ResponseReceiveKey, RoomKey, UserKey};
 
 #[derive(Resource)]
 pub struct Global {

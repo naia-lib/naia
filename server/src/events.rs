@@ -2,7 +2,10 @@ use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIte
 
 use log::warn;
 
-use naia_shared::{Channel, ChannelKind, ComponentKind, EntityEvent, GlobalResponseId, EntityResponseEvent, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
+use naia_shared::{
+    Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, GlobalResponseId,
+    Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick,
+};
 
 use super::user::{User, UserKey};
 use crate::NaiaServerError;
@@ -14,7 +17,10 @@ pub struct Events<E: Copy> {
     errors: Vec<NaiaServerError>,
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
-    requests: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>,
+    requests: HashMap<
+        ChannelKind,
+        HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>,
+    >,
     spawns: Vec<(UserKey, E)>,
     despawns: Vec<(UserKey, E)>,
     publishes: Vec<(UserKey, E)>,
@@ -82,7 +88,10 @@ impl<E: Copy> Events<E> {
     }
     pub fn take_requests(
         &mut self,
-    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>> {
+    ) -> HashMap<
+        ChannelKind,
+        HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>,
+    > {
         mem::take(&mut self.requests)
     }
 

@@ -6,13 +6,13 @@ use std::{
 use crate::RoomKey;
 
 pub struct EntityRoomMap<E: Copy + Eq + Hash> {
-    map: HashMap<E, HashSet<RoomKey>>
+    map: HashMap<E, HashSet<RoomKey>>,
 }
 
 impl<E: Copy + Eq + Hash> EntityRoomMap<E> {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new()
+            map: HashMap::new(),
         }
     }
 

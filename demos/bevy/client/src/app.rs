@@ -24,7 +24,10 @@ pub fn run() {
         // Bevy Plugins
         .add_plugins(DefaultPlugins)
         // Add Naia Client Plugin
-        .add_plugins(ClientPlugin::<Main>::new(ClientConfig::default(), protocol()))
+        .add_plugins(ClientPlugin::<Main>::new(
+            ClientConfig::default(),
+            protocol(),
+        ))
         // Background Color
         .insert_resource(ClearColor(Color::BLACK))
         // Startup System

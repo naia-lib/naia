@@ -22,8 +22,8 @@ mod bevy_events {
     pub use crate::events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
         EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvents,
-        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, ServerTickEvent,
-        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents, RequestEvents,
+        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, RequestEvents,
+        ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents,
     };
 }
 
@@ -33,13 +33,12 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
     let host_id = TypeId::of::<T>();
 
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
-
         // Host Component Updates
         let mut other_host_component_events = Vec::new();
-        let mut host_component_event_reader = world
-            .get_resource_mut::<Events<HostSyncEvent>>()
-            .unwrap();
-        let host_component_events: Vec<HostSyncEvent> = host_component_event_reader.drain().collect();
+        let mut host_component_event_reader =
+            world.get_resource_mut::<Events<HostSyncEvent>>().unwrap();
+        let host_component_events: Vec<HostSyncEvent> =
+            host_component_event_reader.drain().collect();
         for event in host_component_events {
             if event.host_id() != host_id {
                 other_host_component_events.push(event);
@@ -48,13 +47,20 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
             match event {
                 HostSyncEvent::Insert(_, entity, component_kind) => {
                     let mut world_proxy = world.proxy_mut();
-                    let Some(mut component_mut) = world_proxy.component_mut_of_kind(&entity, &component_kind) else {
+                    let Some(mut component_mut) =
+                        world_proxy.component_mut_of_kind(&entity, &component_kind)
+                    else {
                         continue;
                     };
-                    client.client.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+                    client.client.insert_component_worldless(
+                        &entity,
+                        DerefMut::deref_mut(&mut component_mut),
+                    );
                 }
                 HostSyncEvent::Remove(_, entity, component_kind) => {
-                    client.client.remove_component_worldless(&entity, &component_kind);
+                    client
+                        .client
+                        .remove_component_worldless(&entity, &component_kind);
                 }
                 HostSyncEvent::Despawn(_, entity) => {
                     client.client.despawn_entity_worldless(&entity);
@@ -64,9 +70,7 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
 
         // pass non-matching host component events to be handled elsewhere
         if !other_host_component_events.is_empty() {
-            let mut event_writer = world
-                .get_resource_mut::<Events<HostSyncEvent>>()
-                .unwrap();
+            let mut event_writer = world.get_resource_mut::<Events<HostSyncEvent>>().unwrap();
             for event in other_host_component_events {
                 event_writer.send(event);
             }
@@ -75,7 +79,6 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
         // Receive Events
         let mut events = client.client.receive(world.proxy_mut());
         if !events.is_empty() {
-
             if events.has::<naia_events::ConnectEvent>() {
                 // Connect Event
                 let mut event_writer = world
@@ -212,7 +215,10 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
                     if world.get_entity(entity).is_some() {
                         world.entity_mut(entity).insert(HostOwned::new::<T>());
                     } else {
-                        warn!("Granted auth to an entity that no longer exists! {:?}", entity);
+                        warn!(
+                            "Granted auth to an entity that no longer exists! {:?}",
+                            entity
+                        );
                     }
                 }
             }
@@ -241,7 +247,10 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
                     if world.get_entity(entity).is_some() {
                         world.entity_mut(entity).remove::<HostOwned>();
                     } else {
-                        warn!("Reset auth to an entity that no longer exists! {:?}", entity);
+                        warn!(
+                            "Reset auth to an entity that no longer exists! {:?}",
+                            entity
+                        );
                     }
                 }
             }
@@ -261,8 +270,7 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Events<bevy_events::UpdateComponentEvents<T>>>()
                     .unwrap();
-                event_writer
-                    .send(bevy_events::UpdateComponentEvents::<T>::new(updates));
+                event_writer.send(bevy_events::UpdateComponentEvents::<T>::new(updates));
             }
 
             // Remove Component Event

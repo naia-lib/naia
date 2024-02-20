@@ -2,18 +2,23 @@ use std::{any::Any, hash::Hash};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType, HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig,
+    EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType, HostWorldEvents,
+    Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel,
+    Tick, WorldMutType, WorldRefType,
+};
 
+use crate::request::GlobalRequestManager;
 use crate::{
-    request::GlobalResponseManager,
     connection::{
         io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
         time_manager::TimeManager,
     },
     events::Events,
+    request::GlobalResponseManager,
     world::global_world_manager::GlobalWorldManager,
 };
-use crate::request::GlobalRequestManager;
 
 pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub base: BaseConnection<E>,
@@ -125,9 +130,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         for (channel_kind, messages) in messages {
             if channel_kind == ChannelKind::of::<SystemChannel>() {
                 for message in messages {
-                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<EntityEventMessage>(message.to_boxed_any())
-                        .ok()
-                        .map(|boxed_m| *boxed_m) else {
+                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<
+                        EntityEventMessage,
+                    >(message.to_boxed_any())
+                    .ok()
+                    .map(|boxed_m| *boxed_m) else {
                         panic!("Received unknown message over SystemChannel!");
                     };
                     match event_message.entity.get(global_world_manager) {
@@ -161,13 +168,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         // Requests
         for (channel_kind, requests) in requests {
             for (local_response_id, request) in requests {
-                let global_response_id = self.global_response_manager.create_response_id(&channel_kind, &local_response_id);
+                let global_response_id = self
+                    .global_response_manager
+                    .create_response_id(&channel_kind, &local_response_id);
                 incoming_events.push_request(&channel_kind, global_response_id, request);
             }
         }
         // Responses
         for (global_request_id, response) in responses {
-            self.global_request_manager.receive_response(&global_request_id, response);
+            self.global_request_manager
+                .receive_response(&global_request_id, response);
         }
 
         // Receive World Events

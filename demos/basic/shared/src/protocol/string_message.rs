@@ -1,4 +1,3 @@
-
 use naia_shared::{Message, Serde};
 
 #[derive(Message)]
@@ -9,6 +8,9 @@ pub struct StringMessage<T: Send + Sync + 'static + Serde> {
 
 impl<T: Send + Sync + 'static + Serde> StringMessage<T> {
     pub fn new(contents: String, something: T) -> Self {
-        Self { contents, something }
+        Self {
+            contents,
+            something,
+        }
     }
 }

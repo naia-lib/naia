@@ -3,14 +3,14 @@ use std::time::Duration;
 use naia_shared::{LinkConditionerConfig, Protocol, Serde};
 
 mod auth;
+mod basic_request;
 mod character;
 mod string_message;
-mod basic_request;
 
 pub use auth::Auth;
+pub use basic_request::{BasicRequest, BasicResponse};
 pub use character::Character;
 pub use string_message::StringMessage;
-pub use basic_request::{BasicRequest, BasicResponse};
 
 #[derive(Serde, PartialEq, Clone, Default)]
 pub struct MyMarker;

@@ -1,4 +1,3 @@
-
 use naia_shared::{Property, Replicate, Serde};
 
 /// Here's an example of a Custom Property

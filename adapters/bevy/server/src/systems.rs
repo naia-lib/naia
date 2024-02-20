@@ -14,9 +14,8 @@ use crate::{plugin::Singleton, server::ServerWrapper, ClientOwned, EntityAuthSta
 mod naia_events {
     pub use naia_server::{
         ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
-        EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent,
-        PublishEntityEvent, SpawnEntityEvent, TickEvent,
-        UnpublishEntityEvent,
+        EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, PublishEntityEvent,
+        SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     };
 }
 
@@ -24,7 +23,7 @@ mod bevy_events {
     pub use crate::events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
-        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents, RequestEvents,
+        RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     };
 }
 

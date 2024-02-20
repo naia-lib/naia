@@ -3,9 +3,9 @@ use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 use bevy_app::{App, Plugin as PluginType, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
 
+use crate::events::RequestEvents;
 use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin, WorldData};
 use naia_client::{Client, ClientConfig};
-use crate::events::RequestEvents;
 
 use super::{
     client::ClientWrapper,

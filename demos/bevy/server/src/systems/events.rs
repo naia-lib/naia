@@ -7,17 +7,17 @@ use bevy_log::info;
 use naia_bevy_server::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, SpawnEntityEvent,
-        TickEvent, UnpublishEntityEvent, UpdateComponentEvents, RequestEvents,
+        InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, RequestEvents,
+        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
     CommandsExt, Random, ReplicationConfig, Server,
 };
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
-    channels::{RequestChannel, EntityAssignmentChannel, PlayerCommandChannel},
+    channels::{EntityAssignmentChannel, PlayerCommandChannel, RequestChannel},
     components::{Color, ColorValue, Position, Shape, ShapeValue},
-    messages::{Auth, EntityAssignment, KeyCommand, BasicRequest, BasicResponse},
+    messages::{Auth, BasicRequest, BasicResponse, EntityAssignment, KeyCommand},
 };
 
 use crate::resources::Global;
@@ -138,13 +138,18 @@ pub fn tick_events(
 
         // Send a request to all clients
         if server_tick % 100 == 0 {
-
             for user_key in server.user_keys() {
                 let request = BasicRequest::new("ServerRequest".to_string(), global.request_index);
                 global.request_index = global.request_index.wrapping_add(1);
                 let user = server.user(&user_key);
-                info!("Server sending Request -> Client ({}): {:?}", user.address(), request);
-                let Ok(response_key) = server.send_request::<RequestChannel, _>(&user_key, &request) else {
+                info!(
+                    "Server sending Request -> Client ({}): {:?}",
+                    user.address(),
+                    request
+                );
+                let Ok(response_key) =
+                    server.send_request::<RequestChannel, _>(&user_key, &request)
+                else {
                     info!("Failed to send request to user: {:?}", user_key);
                     continue;
                 };
@@ -170,30 +175,37 @@ pub fn tick_events(
     }
 }
 
-pub fn request_events(
-    mut server: Server,
-    mut event_reader: EventReader<RequestEvents>,
-) {
+pub fn request_events(mut server: Server, mut event_reader: EventReader<RequestEvents>) {
     for events in event_reader.read() {
-        for (user_key, response_send_key, request) in events.read::<RequestChannel, BasicRequest>() {
+        for (user_key, response_send_key, request) in events.read::<RequestChannel, BasicRequest>()
+        {
             let user = server.user(&user_key);
-            info!("Server received Request <- Client({}): {:?}", user.address(), request);
+            info!(
+                "Server received Request <- Client({}): {:?}",
+                user.address(),
+                request
+            );
             let response = BasicResponse::new("ServerResponse".to_string(), request.index);
-            info!("Server sending Response -> Client({}): {:?}", user.address(), response);
+            info!(
+                "Server sending Response -> Client({}): {:?}",
+                user.address(),
+                response
+            );
             server.send_response(&response_send_key, &response);
         }
     }
 }
 
-pub fn response_events(
-    mut server: Server,
-    mut global: ResMut<Global>,
-) {
+pub fn response_events(mut server: Server, mut global: ResMut<Global>) {
     let mut finished_response_keys = Vec::new();
     for response_key in &global.response_keys {
         if let Some((user_key, response)) = server.receive_response(response_key) {
             let user = server.user(&user_key);
-            info!("Server received Response <- Client({:?}): {:?}", user.address(), response);
+            info!(
+                "Server received Response <- Client({:?}): {:?}",
+                user.address(),
+                response
+            );
             finished_response_keys.push(response_key.clone());
         }
     }

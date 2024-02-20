@@ -1,6 +1,9 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Index, LitStr, Member, Type, Generics, GenericParam};
+use syn::{
+    parse_macro_input, Data, DeriveInput, Fields, GenericParam, Generics, Ident, Index, LitStr,
+    Member, Type,
+};
 
 use super::shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType};
 
@@ -19,7 +22,15 @@ pub fn message_impl(
 
     // Names
     let struct_name = input.ident;
-    let struct_name_str = LitStr::new(format!("{}{}", &struct_name.to_string(), &untyped_generics.to_string()).as_str(), struct_name.span());
+    let struct_name_str = LitStr::new(
+        format!(
+            "{}{}",
+            &struct_name.to_string(),
+            &untyped_generics.to_string()
+        )
+        .as_str(),
+        struct_name.span(),
+    );
     let lowercase_struct_name = Ident::new(
         struct_name.to_string().to_lowercase().as_str(),
         Span::call_site(),
@@ -35,8 +46,14 @@ pub fn message_impl(
     let bit_length_method = get_bit_length_method(&fields, &struct_type);
     let write_method = get_write_method(&fields, &struct_type);
     let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
-    let builder_new_method = get_builder_new_method(&typed_generics, &builder_name, &untyped_generics, &input.generics);
-    let builder_read_method = get_builder_read_method(&struct_name, &fields, &struct_type, &turbofish);
+    let builder_new_method = get_builder_new_method(
+        &typed_generics,
+        &builder_name,
+        &untyped_generics,
+        &input.generics,
+    );
+    let builder_read_method =
+        get_builder_read_method(&struct_name, &fields, &struct_type, &turbofish);
     let is_fragment_method = get_is_fragment_method(is_fragment);
     let is_request_method = get_is_request_method(is_request);
 
@@ -389,7 +406,6 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
 }
 
 pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
-
     let builder_new = quote! {
         #builder_name #turbofish::new()
     };
@@ -482,7 +498,6 @@ pub fn get_builder_new_method(
     untyped_generics: &TokenStream,
     input_generics: &Generics,
 ) -> TokenStream {
-
     let fn_impl = if input_generics.gt_token.is_none() {
         quote! { return Self; }
     } else {
@@ -493,7 +508,8 @@ pub fn get_builder_new_method(
                 panic!("Only type parameters are supported for now");
             };
 
-            let field_name = format_ident!("phantom_{}", type_param.ident.to_string().to_lowercase());
+            let field_name =
+                format_ident!("phantom_{}", type_param.ident.to_string().to_lowercase());
             let new_output_right = quote! {
                 #field_name: std::marker::PhantomData,
             };

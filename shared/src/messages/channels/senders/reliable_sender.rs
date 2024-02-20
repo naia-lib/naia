@@ -2,10 +2,7 @@ use std::{collections::VecDeque, mem, time::Duration};
 
 use naia_socket_shared::Instant;
 
-use crate::{messages::
-    channels::senders::
-        channel_sender::ChannelSender,
- types::MessageIndex};
+use crate::{messages::channels::senders::channel_sender::ChannelSender, types::MessageIndex};
 
 // Sender
 pub struct ReliableSender<P: Send + Sync> {

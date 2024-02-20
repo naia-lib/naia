@@ -1,10 +1,10 @@
-use std::{time::Duration, collections::HashMap};
+use std::{collections::HashMap, time::Duration};
 
 use naia_derive::MessageRequest;
 use naia_serde::{BitWriter, SerdeInternal};
 
-use crate::{KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKinds};
 use crate::messages::request::GlobalRequestId;
+use crate::{KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKinds};
 
 pub struct RequestSender {
     local_key_generator: KeyGenerator<LocalRequestId>,
@@ -24,11 +24,11 @@ impl RequestSender {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         global_request_id: GlobalRequestId,
-        request: MessageContainer
+        request: MessageContainer,
     ) -> MessageContainer {
-
         let local_request_id = self.local_key_generator.generate();
-        self.local_to_global_ids.insert(local_request_id, global_request_id);
+        self.local_to_global_ids
+            .insert(local_request_id, global_request_id);
 
         let mut writer = BitWriter::with_max_capacity();
         request.write(message_kinds, &mut writer, converter);
@@ -42,9 +42,8 @@ impl RequestSender {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         local_response_id: LocalResponseId,
-        response: MessageContainer
+        response: MessageContainer,
     ) -> MessageContainer {
-
         let mut writer = BitWriter::with_max_capacity();
         response.write(message_kinds, &mut writer, converter);
         let response_bytes = writer.to_bytes();
@@ -52,7 +51,10 @@ impl RequestSender {
         MessageContainer::from_write(Box::new(response_message), converter)
     }
 
-    pub(crate) fn process_incoming_response(&mut self, local_request_id: &LocalRequestId) -> Option<GlobalRequestId> {
+    pub(crate) fn process_incoming_response(
+        &mut self,
+        local_request_id: &LocalRequestId,
+    ) -> Option<GlobalRequestId> {
         self.local_key_generator.recycle_key(local_request_id);
         self.local_to_global_ids.remove(local_request_id)
     }
@@ -108,7 +110,9 @@ impl LocalRequestOrResponseId {
     pub fn to_request_id(&self) -> LocalRequestId {
         match self {
             LocalRequestOrResponseId::Request(id) => *id,
-            LocalRequestOrResponseId::Response(_) => panic!("LocalRequestOrResponseId is a response"),
+            LocalRequestOrResponseId::Response(_) => {
+                panic!("LocalRequestOrResponseId is a response")
+            }
         }
     }
 

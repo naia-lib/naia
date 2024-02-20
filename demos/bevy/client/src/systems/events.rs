@@ -12,21 +12,22 @@ use bevy::{
 use naia_bevy_client::{
     events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
-        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, SpawnEntityEvent,
-        UnpublishEntityEvent, UpdateComponentEvents, RequestEvents,
+        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, RequestEvents,
+        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
     sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
 };
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
-    channels::{RequestChannel, EntityAssignmentChannel, PlayerCommandChannel},
+    channels::{EntityAssignmentChannel, PlayerCommandChannel, RequestChannel},
     components::{Color, ColorValue, Position, Shape, ShapeValue},
     messages::{BasicRequest, BasicResponse, EntityAssignment, KeyCommand},
 };
 
 use crate::{
+    app::Main,
     components::{Confirmed, Interp, LocalCursor, Predicted},
-    resources::{Global, OwnedEntity}, app::Main,
+    resources::{Global, OwnedEntity},
 };
 
 const SQUARE_SIZE: f32 = 32.0;
@@ -99,10 +100,9 @@ pub fn message_events(
 
                 // Here we create a local copy of the Player entity, to use for client-side prediction
                 if let Ok(position) = position_query.get(entity) {
-                    let prediction_entity = commands
-                        .entity(entity)
-                        .local_duplicate(); // copies all Replicate components as well
-                    commands.entity(prediction_entity)
+                    let prediction_entity = commands.entity(entity).local_duplicate(); // copies all Replicate components as well
+                    commands
+                        .entity(prediction_entity)
                         .insert(SpriteBundle {
                             sprite: Sprite {
                                 custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
@@ -178,10 +178,7 @@ pub fn request_events(
     }
 }
 
-pub fn response_events(
-    mut client: Client<Main>,
-    mut global: ResMut<Global>,
-) {
+pub fn response_events(mut client: Client<Main>, mut global: ResMut<Global>) {
     let mut finished_response_keys = Vec::new();
     for response_key in &global.response_keys {
         if let Some(response) = client.receive_response(response_key) {
@@ -379,7 +376,8 @@ pub fn tick_events(
     let Some(predicted_entity) = global
         .owned_entity
         .as_ref()
-        .map(|owned_entity| owned_entity.predicted) else {
+        .map(|owned_entity| owned_entity.predicted)
+    else {
         // No owned Entity
         return;
     };

@@ -1,14 +1,14 @@
 use naia_bevy_shared::{Protocol, ProtocolPlugin};
 
 mod auth;
+mod basic_request;
 mod entity_assignment;
 mod key_command;
-mod basic_request;
 
 pub use auth::Auth;
+pub use basic_request::{BasicRequest, BasicResponse};
 pub use entity_assignment::EntityAssignment;
 pub use key_command::KeyCommand;
-pub use basic_request::{BasicRequest, BasicResponse};
 
 // Plugin
 pub struct MessagesPlugin;

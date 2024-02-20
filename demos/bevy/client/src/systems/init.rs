@@ -1,7 +1,7 @@
-
-use bevy::{prelude::{
-    Assets, Camera2dBundle, Color, ColorMaterial, Commands, Mesh, ResMut, Circle,
-}, log::info};
+use bevy::{
+    log::info,
+    prelude::{Assets, Camera2dBundle, Circle, Color, ColorMaterial, Commands, Mesh, ResMut},
+};
 
 use naia_bevy_client::{transport::webrtc, Client};
 use naia_bevy_demo_shared::messages::Auth;

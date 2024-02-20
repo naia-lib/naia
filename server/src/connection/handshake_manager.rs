@@ -3,9 +3,8 @@ use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 use ring::{hmac, rand};
 
 pub use naia_shared::{
-    BitReader, BitWriter, FakeEntityConverter,
-    MessageContainer, MessageKinds, PacketType,
-    Serde, SerdeErr, StandardHeader,
+    BitReader, BitWriter, FakeEntityConverter, MessageContainer, MessageKinds, PacketType, Serde,
+    SerdeErr, StandardHeader,
 };
 
 use crate::{cache_map::CacheMap, connection::connection::Connection};

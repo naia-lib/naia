@@ -1,16 +1,33 @@
 use std::{
+    any::Any,
     collections::{hash_set::Iter, HashMap, HashSet},
     hash::Hash,
     net::SocketAddr,
     panic,
     time::Duration,
-    any::Any,
 };
 
 use log::{info, warn};
 
-use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
+use naia_shared::{
+    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
+    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
+    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
+    GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message,
+    MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response,
+    ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig,
+    StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
+};
 
+use super::{
+    error::NaiaServerError,
+    events::Events,
+    room::{Room, RoomKey, RoomMut, RoomRef},
+    server_config::ServerConfig,
+    user::{User, UserKey, UserMut, UserRef},
+    user_scope::{UserScopeMut, UserScopeRef},
+};
+use crate::world::entity_room_map::EntityRoomMap;
 use crate::{
     connection::{
         connection::Connection,
@@ -18,6 +35,7 @@ use crate::{
         io::Io,
         tick_buffer_messages::TickBufferMessages,
     },
+    request::{GlobalRequestManager, GlobalResponseManager},
     time_manager::TimeManager,
     transport::Socket,
     world::{
@@ -26,16 +44,6 @@ use crate::{
         server_auth_handler::AuthOwner,
     },
     ReplicationConfig,
-    request::{GlobalRequestManager, GlobalResponseManager},
-};
-use crate::world::entity_room_map::EntityRoomMap;
-use super::{
-    error::NaiaServerError,
-    events::Events,
-    room::{Room, RoomKey, RoomMut, RoomRef},
-    server_config::ServerConfig,
-    user::{User, UserKey, UserMut, UserRef},
-    user_scope::{UserScopeRef, UserScopeMut},
 };
 
 /// A server that uses either UDP or WebRTC communication to send/receive
@@ -288,8 +296,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     //
-    pub fn send_request<C: Channel, Q: Request>(&mut self, user_key: &UserKey, request: &Q) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
-
+    pub fn send_request<C: Channel, Q: Request>(
+        &mut self,
+        user_key: &UserKey,
+        request: &Q,
+    ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
         let cloned_request = Q::clone_box(request);
         let id = self.send_request_inner(user_key, &ChannelKind::of::<C>(), cloned_request)?;
         Ok(ResponseReceiveKey::new(id))
@@ -301,7 +312,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         channel_kind: &ChannelKind,
         request_box: Box<dyn Message>,
     ) -> Result<GlobalRequestId, NaiaServerError> {
-
         let channel_settings = self.protocol.channel_kinds.channel(&channel_kind);
 
         if !channel_settings.can_request_and_respond() {
@@ -316,7 +326,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         };
         let Some(connection) = self.user_connections.get_mut(&user.address) else {
             warn!("currently not connected to user");
-            return Err(NaiaServerError::Message("currently not connected to user".to_string()));
+            return Err(NaiaServerError::Message(
+                "currently not connected to user".to_string(),
+            ));
         };
         let mut converter = EntityConverterMut::new(
             &self.global_world_manager,
@@ -336,8 +348,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Sends a Response for a given Request. Returns whether or not was successful.
-    pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
-
+    pub fn send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> bool {
         let response_id = response_key.response_id();
 
         let cloned_response = S::clone_box(response);
@@ -351,7 +366,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         response_id: &GlobalResponseId,
         response_box: Box<dyn Message>,
     ) -> bool {
-        let Some((user_key, channel_kind, local_response_id)) = self.global_response_manager.destroy_response_id(&response_id) else {
+        let Some((user_key, channel_kind, local_response_id)) = self
+            .global_response_manager
+            .destroy_response_id(&response_id)
+        else {
             return false;
         };
         let Some(user) = self.users.get(&user_key) else {
@@ -375,9 +393,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return true;
     }
 
-    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<(UserKey, S)> {
+    pub fn receive_response<S: Response>(
+        &mut self,
+        response_key: &ResponseReceiveKey<S>,
+    ) -> Option<(UserKey, S)> {
         let request_id = response_key.request_id();
-        let Some((user_key, container)) = self.global_request_manager.destroy_request_id(&request_id) else {
+        let Some((user_key, container)) =
+            self.global_request_manager.destroy_request_id(&request_id)
+        else {
             return None;
         };
         let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
@@ -696,7 +719,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     fn entity_enable_delegation_response(&mut self, user_key: &UserKey, entity: &E) {
         if self.global_world_manager.entity_is_delegated(entity) {
-            let Some(auth_status) = self.global_world_manager.entity_authority_status(entity) else {
+            let Some(auth_status) = self.global_world_manager.entity_authority_status(entity)
+            else {
                 panic!("Entity should have an Auth status if it is delegated..")
             };
             if auth_status != EntityAuthStatus::Available {
@@ -1040,14 +1064,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             .insert(*user_key, *entity, is_contained);
     }
 
-    pub(crate) fn user_scope_has_entity(
-        &self,
-        user_key: &UserKey,
-        entity: &E,
-    ) -> bool {
-        if let Some(in_scope) =
-            self.entity_scope_map.get(user_key, entity)
-        {
+    pub(crate) fn user_scope_has_entity(&self, user_key: &UserKey, entity: &E) -> bool {
+        if let Some(in_scope) = self.entity_scope_map.get(user_key, entity) {
             *in_scope
         } else {
             false
@@ -1202,7 +1220,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             // send publish message to entity owner
             let entity_owner = self.global_world_manager.entity_owner(&entity);
             let Some(EntityOwner::Client(user_key)) = entity_owner else {
-                panic!("Entity is not owned by a Client. Cannot publish entity. Owner is: {:?}", entity_owner);
+                panic!(
+                    "Entity is not owned by a Client. Cannot publish entity. Owner is: {:?}",
+                    entity_owner
+                );
             };
             let message = EntityEventMessage::new_publish(&self.global_world_manager, entity);
             self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
@@ -1282,7 +1303,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("entity should have an owner at this point");
         };
         let EntityOwner::ClientPublic(user_key) = entity_owner else {
-            panic!("entity should be owned by a public client at this point. Owner is: {:?}", entity_owner);
+            panic!(
+                "entity should be owned by a public client at this point. Owner is: {:?}",
+                entity_owner
+            );
         };
         self.global_world_manager.migrate_entity_to_server(&entity);
 
@@ -1412,7 +1436,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let Some(user) = self.users.get(user_key) else {
             panic!("Attempting to despawn entities for a nonexistent user");
         };
-        let Some (connection) = self.user_connections.get_mut(&user.address) else {
+        let Some(connection) = self.user_connections.get_mut(&user.address) else {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
@@ -1626,7 +1650,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         continue;
                     };
 
-                    let Ok(should_continue) = self.maintain_handshake(&address, &header, &mut reader) else {
+                    let Ok(should_continue) =
+                        self.maintain_handshake(&address, &header, &mut reader)
+                    else {
                         warn!("Server Error: cannot read malformed packet");
                         continue;
                     };
