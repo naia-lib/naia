@@ -325,7 +325,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         if !entity_channel.is_spawning() {
             panic!("World Channel: should only receive this event if entity channel is spawning");
         }
-        let should_despawn = entity_channel.spawning_complete();
+
+        let (should_despawn, should_send_release_message) = entity_channel.spawning_complete();
+        if should_send_release_message {
+            self.outgoing_release_auth_messages.push(*entity);
+        }
 
         self.remote_world.insert(*entity, CheckedSet::new());
 
@@ -602,12 +606,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         for (entity, entity_channel) in self.entity_channels.iter() {
             if entity_channel.is_spawned() && world.has_entity(entity) {
                 for component_kind in entity_channel.inserted_components() {
-                    if global_world_manager.entity_is_replicating(entity)
-                        && !self
-                            .diff_handler
-                            .diff_mask_is_clear(entity, &component_kind)
-                        && world.has_component_of_kind(entity, &component_kind)
-                    {
+                    if self
+                        .diff_handler
+                        .diff_mask_is_clear(entity, &component_kind) {
+                       continue;
+                    }
+                    let entity_is_replicating = global_world_manager.entity_is_replicating(entity);
+                    let world_has_component = world.has_component_of_kind(entity, &component_kind);
+                    if entity_is_replicating && world_has_component {
                         if !output.contains_key(entity) {
                             output.insert(*entity, HashSet::new());
                         }

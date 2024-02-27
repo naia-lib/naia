@@ -94,18 +94,24 @@ impl EntityChannel {
         self.despawn_after_spawned = true;
     }
 
-    // returns true if entity should be immediately despawned
-    pub(crate) fn spawning_complete(&mut self) -> bool {
+    // returns (if entity should be immediately despawned, if release message should be sent)
+    pub(crate) fn spawning_complete(&mut self) -> (bool, bool) {
         if self.state != EntityChannelState::Spawning {
             panic!("EntityChannel::spawning_complete() called on non-spawning entity");
         }
         self.state = EntityChannelState::Spawned;
 
+        let mut release_message_queued = false;
+        if self.ready_to_release() && self.release_auth == ReleaseAuthState::Waiting {
+            self.release_auth = ReleaseAuthState::Complete;
+            release_message_queued = true;
+        }
+
         if self.components.len() > 0 {
             panic!("Newly spawned entity should not have any components yet..");
         }
 
-        return self.despawn_after_spawned;
+        return (self.despawn_after_spawned, release_message_queued);
     }
 
     pub(crate) fn despawn(&mut self) {
@@ -196,6 +202,7 @@ impl EntityChannel {
         return false;
     }
 
+    // // returns whether auth release message should be sent
     pub(crate) fn release_authority(&mut self) -> bool {
         if self.ready_to_release() {
             self.release_auth = ReleaseAuthState::Complete;
