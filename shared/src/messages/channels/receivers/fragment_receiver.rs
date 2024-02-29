@@ -38,7 +38,7 @@ impl FragmentReceiver {
         let fragment_id = fragment.id();
         let fragment_index = fragment.index();
         let fragment_total = fragment.total().as_usize();
-        info!("fragment_total: {fragment_total}");
+        // info!("fragment_total: {fragment_total}");
         if !self.map.contains_key(&fragment_id) {
             self.map
                 .insert(fragment_id, (0, vec![Box::new([]); fragment_total]));
