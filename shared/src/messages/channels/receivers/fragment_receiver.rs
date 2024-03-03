@@ -1,7 +1,5 @@
 use std::collections::HashMap;
 
-use log::info;
-
 use naia_serde::BitReader;
 
 use crate::{

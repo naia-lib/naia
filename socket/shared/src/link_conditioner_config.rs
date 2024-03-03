@@ -22,6 +22,14 @@ impl LinkConditionerConfig {
         }
     }
 
+    pub fn perfect_condition() -> Self {
+        LinkConditionerConfig {
+            incoming_latency: 1,
+            incoming_jitter: 0,
+            incoming_loss: 0.0,
+        }
+    }
+
     /// Creates a new LinkConditioner that simulates a connection which is in a
     /// good condition
     pub fn good_condition() -> Self {

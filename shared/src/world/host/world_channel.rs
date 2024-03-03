@@ -608,8 +608,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
                 for component_kind in entity_channel.inserted_components() {
                     if self
                         .diff_handler
-                        .diff_mask_is_clear(entity, &component_kind) {
-                       continue;
+                        .diff_mask_is_clear(entity, &component_kind)
+                    {
+                        continue;
                     }
                     let entity_is_replicating = global_world_manager.entity_is_replicating(entity);
                     let world_has_component = world.has_component_of_kind(entity, &component_kind);
