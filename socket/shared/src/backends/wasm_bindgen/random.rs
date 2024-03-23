@@ -2,7 +2,7 @@ use js_sys::Math::random;
 
 /// Container for cross-platform Random methods
 
-pub struct Random {}
+pub struct Random;
 
 impl Random {
     /// returns a random f32 value between an upper & lower bound
