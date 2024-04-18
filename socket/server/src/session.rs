@@ -79,10 +79,12 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
         .local_addr()
         .expect("stream does not have a local address");
     let mut success: bool = false;
-    let mut headers_read: bool = false;
+    let mut headers_been_read: bool = false;
     let mut content_length: Option<usize> = None;
-    let mut rtc_url_match = false;
+    let mut rtc_url_matched = false;
     let mut body: Vec<u8> = Vec::new();
+
+    // info!("Incoming WebRTC session request from {}", remote_addr);
 
     let buf_reader = BufReader::new(stream.clone());
     let mut bytes = buf_reader.bytes();
@@ -91,11 +93,12 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
         while let Some(byte) = bytes.next().await {
             let byte = byte.expect("unable to read a byte from incoming stream");
 
-            if headers_read {
+            if headers_been_read {
                 if let Some(content_length) = content_length {
                     body.push(byte);
 
                     if body.len() >= content_length {
+                        // info!("read body finished");
                         success = true;
                         break;
                     }
@@ -112,20 +115,27 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
                     .expect("unable to parse string from UTF-8 bytes");
                 line.clear();
 
-                if rtc_url_match {
+                if rtc_url_matched {
                     if str.to_lowercase().starts_with("content-length: ") {
                         let (_, last) = str.split_at(16);
                         str = last.to_string();
                         content_length = str.parse::<usize>().ok();
+                        // info!("read content length: {:?}", content_length);
                     } else if str.is_empty() {
-                        headers_read = true;
+                        // info!("read headers finished");
+                        headers_been_read = true;
+                    } else {
+                        // info!("read leftover line 1: {}", str);
                     }
                 } else if str.starts_with(
                     RTC_URL_PATH
                         .get()
                         .expect("unable to retrieve URL path, was it not configured?"),
                 ) {
-                    rtc_url_match = true;
+                    // info!("starting to match to RTC URL");
+                    rtc_url_matched = true;
+                } else {
+                    // info!("read leftover line 2: {}", str);
                 }
             } else {
                 line.push(byte);
@@ -166,6 +176,8 @@ async fn serve(mut session_endpoint: SessionEndpoint, mut stream: Arc<Async<TcpS
             }
         }
     }
+
+    // info!("Closing WebRTC session request from {}", remote_addr);
 
     if !success {
         stream.write_all(RESPONSE_BAD).await.expect("found");
