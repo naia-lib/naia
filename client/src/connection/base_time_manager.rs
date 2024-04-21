@@ -3,7 +3,7 @@ use std::hash::Hash;
 use log::warn;
 
 use naia_shared::{
-    sequence_greater_than, BitReader, BitWriter, GameDuration, GameInstant, Instant, PacketType,
+    sequence_greater_than, BitReader, BitWriter, GameInstant, Instant, PacketType,
     PingIndex, PingStore, Serde, SerdeErr, StandardHeader, UnsignedVariableInteger,
 };
 
@@ -30,7 +30,7 @@ impl BaseTimeManager {
 
     // Ping & Pong
 
-    pub fn send_ping(&mut self, io: &mut Io) {
+    pub fn write_ping(&mut self) -> BitWriter {
         let mut writer = BitWriter::new();
 
         // write header
@@ -41,6 +41,13 @@ impl BaseTimeManager {
 
         // write index
         ping_index.ser(&mut writer);
+
+        writer
+    }
+
+    pub fn send_ping(&mut self, io: &mut Io) {
+
+        let writer = self.write_ping();
 
         // send packet
         if io.send_packet(writer.to_packet()).is_err() {
@@ -142,9 +149,9 @@ impl BaseTimeManager {
         GameInstant::new(&self.start_instant)
     }
 
-    pub fn game_time_since(&self, previous_instant: &GameInstant) -> GameDuration {
-        self.game_time_now().time_since(previous_instant)
-    }
+    // pub fn game_time_since(&self, previous_instant: &GameInstant) -> GameDuration {
+    //     self.game_time_now().time_since(previous_instant)
+    // }
 
     pub fn sent_pings_clear(&mut self) {
         self.sent_pings.clear();

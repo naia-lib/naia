@@ -20,9 +20,6 @@ pub mod shared {
         Message, Protocol, Random, ResponseReceiveKey, SocketConfig, Tick,
     };
 }
-pub mod internal {
-    pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeState};
-}
 
 mod client;
 mod client_config;

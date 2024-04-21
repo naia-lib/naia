@@ -39,7 +39,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         channel_kinds: &ChannelKinds,
         global_world_manager: &GlobalWorldManager<E>,
     ) -> Self {
-        Connection {
+        Self {
             address: *user_address,
             user_key: *user_key,
             base: BaseConnection::new(
@@ -53,10 +53,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             ping_manager: PingManager::new(ping_config),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
         }
-    }
-
-    pub fn user_key(&self) -> UserKey {
-        self.user_key
     }
 
     // Incoming Data

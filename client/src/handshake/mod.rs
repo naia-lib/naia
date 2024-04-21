@@ -1,5 +1,11 @@
+use naia_shared::{BitReader, BitWriter, OutgoingPacket};
+
+use crate::connection::time_manager::TimeManager;
+
 cfg_if! {
     if #[cfg(feature = "advanced_handshake")] {
+        mod handshake_time_manager;
+
         mod advanced_handshaker;
         pub use advanced_handshaker::HandshakeManager;
     } else {
@@ -8,13 +14,14 @@ cfg_if! {
     }
 }
 
-pub use inner::{HandshakeError, Handshaker};
+pub enum HandshakeResult {
+    Connected(TimeManager),
+    Rejected,
+}
 
-mod inner {
-
-    pub struct HandshakeError;
-
-    pub trait Handshaker: Send + Sync {
-        fn example(&self) -> Result<(), HandshakeError>;
-    }
+pub trait Handshaker: Send + Sync {
+    fn is_connected(&self) -> bool;
+    fn send(&mut self) -> Option<OutgoingPacket>;
+    fn recv(&mut self, reader: &mut BitReader) -> Option<HandshakeResult>;
+    fn write_disconnect(&self) -> BitWriter;
 }

@@ -17,7 +17,6 @@ use crate::{
     connection::{
         base_time_manager::BaseTimeManager,
         connection::Connection,
-        handshake_manager::{HandshakeManager, HandshakeResult},
         io::Io,
     },
     transport::Socket,
@@ -26,6 +25,7 @@ use crate::{
         global_world_manager::GlobalWorldManager,
     },
     ReplicationConfig,
+    handshake::{Handshaker, HandshakeManager, HandshakeResult},
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
@@ -38,7 +38,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     auth_message: Option<MessageContainer>,
     io: Io,
     server_connection: Option<Connection<E>>,
-    handshake_manager: HandshakeManager,
+    handshake_manager: Box<dyn Handshaker>,
     manual_disconnect: bool,
     waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
@@ -74,7 +74,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 &compression_config,
             ),
             server_connection: None,
-            handshake_manager,
+            handshake_manager: Box::new(handshake_manager),
             manual_disconnect: false,
             waitlist_messages: VecDeque::new(),
             // World
@@ -268,8 +268,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
         } else {
-            self.handshake_manager
-                .send(&mut self.io);
+            if self.io.is_loaded() {
+                if let Some(outgoing_packet) = self.handshake_manager.send() {
+                    if self.io.send_packet(outgoing_packet).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send handshake packet to Server");
+                    }
+                }
+            }
         }
 
         if let Some(events) = response_events {
@@ -1267,11 +1273,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &self.protocol.compression,
         );
 
-        self.handshake_manager = HandshakeManager::new(
+        self.handshake_manager = Box::new(HandshakeManager::new(
             self.client_config.send_handshake_interval,
             self.client_config.ping_interval,
             self.client_config.handshake_pings,
-        );
+        ));
 
         self.manual_disconnect = false;
         self.global_world_manager = GlobalWorldManager::new();

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use naia_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, GameDuration, GameInstant,
+    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, GameInstant,
     Instant, SerdeErr, Tick, Timer,
 };
 
@@ -161,9 +161,9 @@ impl TimeManager {
         self.base.game_time_now()
     }
 
-    pub fn game_time_since(&self, previous_instant: &GameInstant) -> GameDuration {
-        self.base.game_time_since(previous_instant)
-    }
+    // pub fn game_time_since(&self, previous_instant: &GameInstant) -> GameDuration {
+    //     self.base.game_time_since(previous_instant)
+    // }
 
     // Tick
 

@@ -17,7 +17,7 @@ transport_webrtc = [ "naia-server/transport_webrtc" ]
 transport_udp = [ "naia-server/transport_udp" ]
 
 [dependencies]
-naia-server = { version = "0.22", path = "../../../server", features = ["bevy_support"] }
+naia-server = { version = "0.22", path = "../../../server", features = ["bevy_support", "advanced_handshake"] }
 naia-bevy-shared = { version = "0.22", path = "../shared" }
 bevy_app = { version = "0.13", default-features=false }
 bevy_ecs = { version = "0.13", default-features=false }

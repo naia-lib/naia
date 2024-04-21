@@ -40,17 +40,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
         }
     }
 
-    // Entities
-    pub fn entities(&self) -> Vec<E> {
-        let mut output = Vec::new();
-
-        for (entity, _) in &self.entity_records {
-            output.push(*entity);
-        }
-
-        output
-    }
-
     pub fn has_entity(&self, entity: &E) -> bool {
         self.entity_records.contains_key(entity)
     }
