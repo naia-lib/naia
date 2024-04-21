@@ -23,12 +23,12 @@ transport_webrtc = [ "naia-server-socket" ]
 transport_udp = []
 
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
-advanced_handshake = ["naia-shared/advanced_handshake"]
+advanced_handshake = ["naia-shared/advanced_handshake", "ring"]
 
 [dependencies]
 naia-shared = { version = "0.22", path = "../shared" }
 naia-server-socket = { version = "0.22", path = "../socket/server", optional = true }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
-ring = { version = "0.16.15" }
+ring = { version = "0.16.15", optional = true }
 fastrand = { version = "1.7.0" }

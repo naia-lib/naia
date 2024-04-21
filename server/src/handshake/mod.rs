@@ -6,6 +6,8 @@ use crate::UserKey;
 
 cfg_if! {
     if #[cfg(feature = "advanced_handshake")] {
+        mod cache_map;
+
         mod advanced_handshaker;
         pub use advanced_handshaker::HandshakeManager;
     } else {

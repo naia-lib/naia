@@ -16,7 +16,6 @@ cfg_if! {
 
 pub enum HandshakeResult {
     Connected(TimeManager),
-    Rejected,
 }
 
 pub trait Handshaker: Send + Sync {

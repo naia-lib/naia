@@ -22,13 +22,9 @@ pub mod shared {
         UnsignedVariableInteger,
     };
 }
-pub mod internal {
-    pub use crate::handshake::HandshakeManager;
-}
 
 pub use naia_shared::SerdeBevyServer as SerdeBevy;
 
-mod cache_map;
 mod connection;
 mod error;
 mod events;

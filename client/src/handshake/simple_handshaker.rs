@@ -10,8 +10,6 @@ use crate::{handshake::{HandshakeResult, handshake_time_manager::HandshakeTimeMa
 type Timestamp = u64;
 
 enum HandshakeState {
-    AwaitingChallengeResponse,
-    AwaitingValidateResponse,
     TimeSync(HandshakeTimeManager),
     AwaitingConnectResponse(TimeManager),
     Connected,
@@ -20,11 +18,9 @@ enum HandshakeState {
 impl HandshakeState {
     fn get_index(&self) -> u8 {
         match self {
-            HandshakeState::AwaitingChallengeResponse => 0,
-            HandshakeState::AwaitingValidateResponse => 1,
-            HandshakeState::TimeSync(_) => 2,
-            HandshakeState::AwaitingConnectResponse(_) => 3,
-            HandshakeState::Connected => 4,
+            HandshakeState::TimeSync(_) => 0,
+            HandshakeState::AwaitingConnectResponse(_) => 1,
+            HandshakeState::Connected => 2,
         }
     }
 }
@@ -38,8 +34,6 @@ impl PartialEq for HandshakeState {
 }
 
 pub struct HandshakeManager {
-    ping_interval: Duration,
-    handshake_pings: u8,
     connection_state: HandshakeState,
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
@@ -61,14 +55,6 @@ impl Handshaker for HandshakeManager {
         self.handshake_timer.reset();
 
         match &mut self.connection_state {
-            HandshakeState::AwaitingChallengeResponse => {
-                let writer = self.write_challenge_request();
-                return Some(writer.to_packet());
-            }
-            HandshakeState::AwaitingValidateResponse => {
-                let writer = self.write_validate_request();
-                return Some(writer.to_packet());
-            }
             HandshakeState::TimeSync(time_manager) => {
                 // use time manager to send initial pings until client/server time is synced
                 // then, move state to AwaitingConnectResponse
@@ -100,24 +86,9 @@ impl Handshaker for HandshakeManager {
                     return None;
                 };
                 match handshake_header {
-                    HandshakeHeader::ServerChallengeResponse => {
-                        self.recv_challenge_response(reader);
-                        return None;
-                    }
-                    HandshakeHeader::ServerValidateResponse => {
-                        if self.connection_state == HandshakeState::AwaitingValidateResponse {
-                            self.recv_validate_response();
-                        }
-                        return None;
-                    }
                     HandshakeHeader::ServerConnectResponse => {
                         return self.recv_connect_response();
                     }
-                    HandshakeHeader::ServerRejectResponse => {
-                        return Some(HandshakeResult::Rejected);
-                    }
-                    HandshakeHeader::ClientChallengeRequest
-                    | HandshakeHeader::ClientValidateRequest
                     | HandshakeHeader::ClientConnectRequest
                     | HandshakeHeader::Disconnect => {
                         return None;
@@ -175,64 +146,11 @@ impl HandshakeManager {
             handshake_timer,
             pre_connection_timestamp,
             pre_connection_digest: None,
-            connection_state: HandshakeState::AwaitingChallengeResponse,
-            ping_interval,
-            handshake_pings,
+            connection_state: HandshakeState::TimeSync(HandshakeTimeManager::new(
+                ping_interval,
+                handshake_pings,
+            )),
         }
-    }
-
-    // Step 1 of Handshake
-    fn write_challenge_request(&self) -> BitWriter {
-        let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
-        HandshakeHeader::ClientChallengeRequest.ser(&mut writer);
-
-        self.pre_connection_timestamp.ser(&mut writer);
-
-        writer
-    }
-
-    // Step 2 of Handshake
-    fn recv_challenge_response(&mut self, reader: &mut BitReader) {
-        if self.connection_state == HandshakeState::AwaitingChallengeResponse {
-            let timestamp_result = Timestamp::de(reader);
-            if timestamp_result.is_err() {
-                return;
-            }
-            let timestamp = timestamp_result.unwrap();
-
-            if self.pre_connection_timestamp == timestamp {
-                let digest_bytes_result = Vec::<u8>::de(reader);
-                if digest_bytes_result.is_err() {
-                    return;
-                }
-                let digest_bytes = digest_bytes_result.unwrap();
-                self.pre_connection_digest = Some(digest_bytes);
-
-                self.connection_state = HandshakeState::AwaitingValidateResponse;
-            }
-        }
-    }
-
-    // Step 3 of Handshake
-    fn write_validate_request(&self) -> BitWriter {
-        let mut writer = BitWriter::new();
-
-        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
-        HandshakeHeader::ClientValidateRequest.ser(&mut writer);
-
-        // write timestamp & digest into payload
-        self.write_signed_timestamp(&mut writer);
-
-        writer
-    }
-
-    // Step 4 of Handshake
-    fn recv_validate_response(&mut self) {
-        self.connection_state = HandshakeState::TimeSync(HandshakeTimeManager::new(
-            self.ping_interval,
-            self.handshake_pings,
-        ));
     }
 
     // Step 5 of Handshake

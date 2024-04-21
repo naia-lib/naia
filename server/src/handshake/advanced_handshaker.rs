@@ -10,7 +10,7 @@ use naia_shared::{
     SerdeErr, StandardHeader, handshake::HandshakeHeader, OutgoingPacket
 };
 
-use crate::{handshake::{HandshakeAction, Handshaker}, cache_map::CacheMap, UserKey};
+use crate::{handshake::{cache_map::CacheMap, HandshakeAction, Handshaker}, UserKey};
 
 type Timestamp = u64;
 

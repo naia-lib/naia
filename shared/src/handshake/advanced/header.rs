@@ -15,8 +15,6 @@ pub enum HandshakeHeader {
     // The final handshake message sent by the Server, indicating that the
     // connection has been established
     ServerConnectResponse,
-    // Indicates that the authentication payload was rejected, handshake must restart
-    ServerRejectResponse,
     // Used to request a graceful Client disconnect from the Server
     Disconnect,
 }

@@ -1093,13 +1093,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             let server_addr = self.server_address_unwrapped();
                             self.incoming_events.push_connection(&server_addr);
                         }
-                        Some(HandshakeResult::Rejected) => {
-                            let server_addr = self.server_address_unwrapped();
-                            self.incoming_events.clear();
-                            self.incoming_events.push_rejection(&server_addr);
-                            self.disconnect_reset_connection();
-                            return;
-                        }
+                        // Some(HandshakeResult::Rejected) => {
+                        //     let server_addr = self.server_address_unwrapped();
+                        //     self.incoming_events.clear();
+                        //     self.incoming_events.push_rejection(&server_addr);
+                        //     self.disconnect_reset_connection();
+                        //     return;
+                        // }
                         None => {}
                     }
                 }
