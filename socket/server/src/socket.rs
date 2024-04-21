@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use smol::channel;
 
-use naia_socket_shared::SocketConfig;
+use naia_socket_shared::{IdentityToken, SocketConfig};
 
 use super::{
     auth_receiver::{AuthReceiver, AuthReceiverImpl},
@@ -82,7 +82,7 @@ impl Socket {
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
         from_client_auth_sender: Option<smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>>,
-        to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, bool)>>,
+        to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>>,
     ) -> (
         smol::channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
         smol::channel::Receiver<smol::channel::Sender<(SocketAddr, Box<[u8]>)>>

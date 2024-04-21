@@ -1,13 +1,14 @@
 use std::net::SocketAddr;
 
 use smol::channel::{Sender, TrySendError};
+use naia_socket_shared::IdentityToken;
 
 use crate::NaiaServerSocketError;
 
 // Trait
 pub trait AuthSender: AuthSenderClone + Send + Sync {
     /// Accepts an incoming connection on the Server Socket
-    fn accept(&self, address: &SocketAddr) -> Result<(), NaiaServerSocketError>;
+    fn accept(&self, address: &SocketAddr, identity_token: &IdentityToken) -> Result<(), NaiaServerSocketError>;
     /// Rejects an incoming connection from the Server Socket
     fn reject(&self, address: &SocketAddr) -> Result<(), NaiaServerSocketError>;
 }
@@ -16,16 +17,16 @@ pub trait AuthSender: AuthSenderClone + Send + Sync {
 /// Used to send Auth messages to the Server Socket
 #[derive(Clone)]
 pub struct AuthSenderImpl {
-    channel_sender: Sender<(SocketAddr, bool)>,
+    channel_sender: Sender<(SocketAddr, Option<IdentityToken>)>,
 }
 
 impl AuthSenderImpl {
     /// Creates a new AuthSender
-    pub fn new(channel_sender: Sender<(SocketAddr, bool)>) -> Self {
+    pub fn new(channel_sender: Sender<(SocketAddr, Option<IdentityToken>)>) -> Self {
         Self { channel_sender }
     }
 
-    fn send(&self, address: &SocketAddr, accept: bool) -> Result<(), NaiaServerSocketError> {
+    fn send(&self, address: &SocketAddr, accept: Option<IdentityToken>) -> Result<(), NaiaServerSocketError> {
         self.channel_sender
             .try_send((*address, accept))
             .map_err(|err| match err {
@@ -37,13 +38,13 @@ impl AuthSenderImpl {
 
 impl AuthSender for AuthSenderImpl {
     /// Accepts an incoming connection on the Server Socket
-    fn accept(&self, address: &SocketAddr) -> Result<(), NaiaServerSocketError> {
-        self.send(address, true)
+    fn accept(&self, address: &SocketAddr, identity_token: &IdentityToken) -> Result<(), NaiaServerSocketError> {
+        self.send(address, Some(identity_token.clone()))
     }
 
     /// Rejects an incoming connection from the Server Socket
     fn reject(&self, address: &SocketAddr) -> Result<(), NaiaServerSocketError> {
-        self.send(address, false)
+        self.send(address, None)
     }
 }
 

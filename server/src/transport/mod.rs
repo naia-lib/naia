@@ -15,6 +15,7 @@ pub use inner::{PacketReceiver, PacketSender, AuthSender, AuthReceiver, RecvErro
 mod inner {
 
     use std::net::SocketAddr;
+    use naia_shared::IdentityToken;
 
     pub struct SendError;
 
@@ -58,7 +59,7 @@ mod inner {
 
     pub trait AuthSender: Send + Sync {
         ///
-        fn accept(&self, address: &SocketAddr) -> Result<(), SendError>;
+        fn accept(&self, address: &SocketAddr, identity_token: &IdentityToken) -> Result<(), SendError>;
         ///
         fn reject(&self, address: &SocketAddr) -> Result<(), SendError>;
     }

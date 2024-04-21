@@ -30,7 +30,7 @@ pub use naia_serde::{
     UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
-    link_condition_logic, Instant, LinkConditionerConfig, Random, SocketConfig, TimeQueue,
+    link_condition_logic, Instant, LinkConditionerConfig, Random, SocketConfig, TimeQueue, IdentityToken, generate_identity_token,
 };
 
 mod backends;

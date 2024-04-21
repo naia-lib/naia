@@ -5,7 +5,7 @@ use webrtc_unreliable::{
     MessageResult, MessageType, SendError, Server as InnerRtcServer, SessionEndpoint,
 };
 
-use naia_socket_shared::{parse_server_url, url_to_socket_addr, SocketConfig};
+use naia_socket_shared::{parse_server_url, url_to_socket_addr, SocketConfig, IdentityToken};
 
 use crate::{error::NaiaServerSocketError, server_addrs::ServerAddrs};
 use super::session::start_session_server;
@@ -25,7 +25,7 @@ impl Socket {
         server_addrs: ServerAddrs,
         config: SocketConfig,
         from_client_auth_sender: Option<smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>>,
-        to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, bool)>>,
+        to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>>,
     ) -> Self {
         let (to_client_sender, to_client_receiver) = smol::channel::unbounded();
 

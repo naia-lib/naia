@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use naia_shared::{BitReader, OutgoingPacket, SerdeErr};
+use naia_shared::{BitReader, IdentityToken, OutgoingPacket, SerdeErr};
 
 use crate::UserKey;
 
@@ -17,8 +17,8 @@ cfg_if! {
 }
 
 pub trait Handshaker: Send + Sync {
-    fn authenticate_user(&mut self, address: &SocketAddr, user_key: &UserKey);
-    fn delete_user(&mut self, address: &SocketAddr);
+    fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey);
+    fn delete_user(&mut self, user_key: &UserKey, address: &SocketAddr);
     fn maintain_handshake(
         &mut self,
         address: &SocketAddr,

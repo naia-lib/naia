@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use naia_shared::SocketConfig;
+use naia_shared::{IdentityToken, SocketConfig};
 
 use naia_server_socket::{PacketReceiver, PacketSender, AuthReceiver, AuthSender, Socket as ServerSocket};
 
@@ -41,8 +41,8 @@ impl TransportReceiver for Box<dyn PacketReceiver> {
 
 impl TransportAuthSender for Box<dyn AuthSender> {
     ///
-    fn accept(&self, address: &SocketAddr) -> Result<(), SendError> {
-        self.as_ref().accept(address).map_err(|_| SendError)
+    fn accept(&self, address: &SocketAddr, identity_token: &IdentityToken) -> Result<(), SendError> {
+        self.as_ref().accept(address, identity_token).map_err(|_| SendError)
     }
     ///
     fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
