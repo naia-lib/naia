@@ -1,5 +1,7 @@
 use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
+use log::warn;
+
 use ring::{hmac, rand};
 
 pub use naia_shared::{
@@ -76,13 +78,16 @@ impl HandshakeManager {
         // Verify that timestamp hash has been written by this
         // server instance
         let Some(timestamp) = self.timestamp_validate(reader) else {
+            warn!("Handshake Error from {}: Invalid timestamp hash", address);
             return HandshakeResult::Invalid;
         };
         // Timestamp hash is validated, now start configured auth process
         let Ok(has_auth) = bool::de(reader) else {
+            warn!("Handshake Error from {}: Auth flag serde issue", address);
             return HandshakeResult::Invalid;
         };
         if has_auth != self.require_auth {
+            warn!("Handshake Error from {}: Auth flag mismatch", address);
             return HandshakeResult::Invalid;
         }
 
@@ -93,6 +98,7 @@ impl HandshakeManager {
         }
 
         let Ok(auth_message) = message_kinds.read(reader, &FakeEntityConverter) else {
+            warn!("Handshake Error from {}: Auth message serde issue", address);
             return HandshakeResult::Invalid;
         };
 

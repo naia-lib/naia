@@ -463,6 +463,7 @@ impl EntityProperty {
                         Some(global_entity)
                     } else {
                         panic!("Error completing waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity!");
+                        // I hit this 2 times
                     }
                 };
 
