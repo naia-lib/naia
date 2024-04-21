@@ -1,4 +1,9 @@
+use std::net::SocketAddr;
+
+use naia_shared::{BitReader, OutgoingPacket, SerdeErr};
+
 use crate::UserKey;
+
 cfg_if! {
     if #[cfg(feature = "advanced_handshake")] {
         mod advanced_handshaker;
@@ -9,16 +14,21 @@ cfg_if! {
     }
 }
 
-pub struct HandshakeError;
-
 pub trait Handshaker: Send + Sync {
-    fn example(&self) -> Result<(), HandshakeError>;
+    fn authenticate_user(&mut self, address: &SocketAddr, user_key: &UserKey);
+    fn delete_user(&mut self, address: &SocketAddr);
+    fn maintain_handshake(
+        &mut self,
+        address: &SocketAddr,
+        reader: &mut BitReader,
+        has_connection: bool,
+    ) -> Result<HandshakeAction, SerdeErr>;
 }
 
-#[derive(Debug, PartialEq, Eq)]
 pub enum HandshakeAction {
     None,
-    FinalizeConnection(UserKey),
+    FinalizeConnection(UserKey, OutgoingPacket),
+    SendPacket(OutgoingPacket),
     DisconnectUser(UserKey),
 }
 

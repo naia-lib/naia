@@ -22,7 +22,6 @@ use super::{
 use crate::{
     connection::{
         connection::Connection,
-        handshake_manager::HandshakeManager,
         io::Io,
         tick_buffer_messages::TickBufferMessages,
     },
@@ -37,7 +36,7 @@ use crate::{
     },
     ReplicationConfig,
 };
-use crate::handshake::HandshakeAction;
+use crate::handshake::{HandshakeAction, HandshakeManager, Handshaker};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -51,7 +50,7 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ping_timer: Timer,
-    handshake_manager: HandshakeManager,
+    handshake_manager: Box<dyn Handshaker>,
     // Users
     users: BigMap<UserKey, User>,
     user_connections: HashMap<SocketAddr, Connection<E>>,
@@ -93,7 +92,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
             timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
             ping_timer: Timer::new(server_config.ping.ping_interval),
-            handshake_manager: HandshakeManager::new(),
+            handshake_manager: Box::new(HandshakeManager::new()),
             // Users
             users: BigMap::new(),
             user_connections: HashMap::new(),
@@ -1709,12 +1708,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             match self.handshake_manager.maintain_handshake(
                                 &address,
                                 &mut reader,
-                                &mut self.io,
                                 self.user_connections.contains_key(&address),
                             ) {
                                 Ok(HandshakeAction::None) => {}
-                                Ok(HandshakeAction::FinalizeConnection(user_key)) => {
+                                Ok(HandshakeAction::FinalizeConnection(user_key, validate_packet)) => {
                                     self.finalize_connection(&user_key);
+                                    if self.io.send_packet(&address, validate_packet).is_err() {
+                                        // TODO: pass this on and handle above
+                                        warn!(
+                                            "Server Error: Cannot send validation packet to {}",
+                                            &address
+                                        );
+                                    }
+                                }
+                                Ok(HandshakeAction::SendPacket(packet)) => {
+                                    if self.io.send_packet(&address, packet).is_err() {
+                                        // TODO: pass this on and handle above
+                                        warn!(
+                                            "Server Error: Cannot send packet to {}",
+                                            &address
+                                        );
+                                    }
                                 }
                                 Ok(HandshakeAction::DisconnectUser(user_key)) => {
                                     self.user_disconnect(&user_key, &mut world);
