@@ -1,6 +1,5 @@
 use std::{io::Error as IoError, net::SocketAddr};
 
-use futures_channel::mpsc;
 use futures_util::{pin_mut, select, FutureExt, StreamExt};
 use webrtc_unreliable::{
     MessageResult, MessageType, SendError, Server as InnerRtcServer, SessionEndpoint,
@@ -9,7 +8,6 @@ use webrtc_unreliable::{
 use naia_socket_shared::{parse_server_url, url_to_socket_addr, SocketConfig};
 
 use crate::{error::NaiaServerSocketError, server_addrs::ServerAddrs};
-
 use super::session::start_session_server;
 
 const CLIENT_CHANNEL_SIZE: usize = 8;
@@ -19,14 +17,19 @@ const CLIENT_CHANNEL_SIZE: usize = 8;
 
 pub struct Socket {
     rtc_server: RtcServer,
-    to_client_sender: mpsc::Sender<(SocketAddr, Box<[u8]>)>,
-    to_client_receiver: mpsc::Receiver<(SocketAddr, Box<[u8]>)>,
+    to_client_sender: futures_channel::mpsc::Sender<(SocketAddr, Box<[u8]>)>,
+    to_client_receiver: futures_channel::mpsc::Receiver<(SocketAddr, Box<[u8]>)>,
 }
 
 impl Socket {
     /// Returns a new ServerSocket, listening at the given socket address
-    pub async fn listen(server_addrs: ServerAddrs, config: SocketConfig) -> Self {
-        let (to_client_sender, to_client_receiver) = mpsc::channel(CLIENT_CHANNEL_SIZE);
+    pub async fn listen(
+        server_addrs: ServerAddrs,
+        config: SocketConfig,
+        from_client_auth_sender: Option<smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>>,
+        to_client_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, bool)>>,
+    ) -> Self {
+        let (to_client_sender, to_client_receiver) = futures_channel::mpsc::channel(CLIENT_CHANNEL_SIZE);
 
         let rtc_server = RtcServer::new(
             server_addrs.webrtc_listen_addr,
@@ -40,7 +43,13 @@ impl Socket {
             to_client_receiver,
         };
 
-        start_session_server(server_addrs, config, socket.rtc_server.session_endpoint());
+        start_session_server(
+            server_addrs,
+            config,
+            socket.rtc_server.session_endpoint(),
+            from_client_auth_sender,
+            to_client_auth_receiver
+        );
 
         socket
     }
@@ -102,7 +111,7 @@ impl Socket {
         }
     }
 
-    pub fn sender(&self) -> mpsc::Sender<(SocketAddr, Box<[u8]>)> {
+    pub fn sender(&self) -> futures_channel::mpsc::Sender<(SocketAddr, Box<[u8]>)> {
         self.to_client_sender.clone()
     }
 }

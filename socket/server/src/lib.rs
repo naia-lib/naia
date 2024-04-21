@@ -21,6 +21,8 @@ mod packet_sender;
 mod server_addrs;
 mod session;
 mod socket;
+mod auth_sender;
+mod auth_receiver;
 
 /// Executor for Server
 pub mod executor;
@@ -31,3 +33,5 @@ pub use packet_receiver::PacketReceiver;
 pub use packet_sender::PacketSender;
 pub use server_addrs::ServerAddrs;
 pub use socket::Socket;
+pub use auth_sender::AuthSender;
+pub use auth_receiver::AuthReceiver;

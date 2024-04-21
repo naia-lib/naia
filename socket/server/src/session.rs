@@ -1,5 +1,5 @@
 use std::{
-    net::{TcpListener, TcpStream},
+    net::{SocketAddr, TcpListener, TcpStream},
     pin::Pin,
     task::{Context, Poll},
 };
@@ -10,15 +10,15 @@ use http::{header, HeaderValue, Response};
 use log::info;
 use once_cell::sync::OnceCell;
 use smol::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines},
-    prelude::*,
+    stream::StreamExt,
+    io::{AsyncBufRead, AsyncReadExt, AsyncBufReadExt, AsyncWriteExt, BufReader, Lines},
     Async,
 };
 use webrtc_unreliable::SessionEndpoint;
 
 use naia_socket_shared::SocketConfig;
 
-use crate::{executor, server_addrs::ServerAddrs};
+use crate::{executor, NaiaServerSocketError, server_addrs::ServerAddrs};
 
 static RTC_URL_PATH: OnceCell<String> = OnceCell::new();
 
@@ -26,12 +26,14 @@ pub fn start_session_server(
     server_addrs: ServerAddrs,
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
+    from_client_auth_sender: Option<smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>>,
+    to_client_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, bool)>>,
 ) {
     RTC_URL_PATH
         .set(format!("POST /{}", config.rtc_endpoint_path))
         .expect("unable to set the URL Path");
     executor::spawn(async move {
-        listen(server_addrs, config, session_endpoint.clone()).await;
+        listen(server_addrs, config, session_endpoint.clone(), from_client_auth_sender, to_client_auth_receiver).await;
     })
     .detach();
 }
@@ -41,6 +43,8 @@ async fn listen(
     server_addrs: ServerAddrs,
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
+    from_client_auth_sender: Option<smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>>,
+    to_client_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, bool)>>,
 ) {
     let socket_address = server_addrs.session_listen_addr;
 

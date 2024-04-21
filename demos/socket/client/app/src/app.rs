@@ -27,7 +27,7 @@ impl App {
         info!("Naia Client Socket Demo started");
 
         let (packet_sender, packet_receiver) =
-            Socket::connect("http://127.0.0.1:14191", &shared_config());
+            Socket::connect_with_auth("http://127.0.0.1:14191", &shared_config(), "12345".as_bytes().to_vec());
 
         App {
             packet_sender,

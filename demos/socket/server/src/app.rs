@@ -1,10 +1,12 @@
 use std::{thread::sleep, time::Duration};
 
-use naia_server_socket::{PacketReceiver, PacketSender, ServerAddrs, Socket};
+use naia_server_socket::{AuthSender, AuthReceiver, PacketReceiver, PacketSender, ServerAddrs, Socket};
 
 use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
 
 pub struct App {
+    auth_sender: Box<dyn AuthSender>,
+    auth_receiver: Box<dyn AuthReceiver>,
     packet_sender: Box<dyn PacketSender>,
     packet_receiver: Box<dyn PacketReceiver>,
 }
@@ -26,15 +28,48 @@ impl App {
         );
         let shared_config = shared_config();
 
-        let (packet_sender, packet_receiver) = Socket::listen(&server_address, &shared_config);
+        let (
+            auth_sender,
+            auth_receiver,
+            packet_sender,
+            packet_receiver
+        ) = Socket::listen_with_auth(&server_address, &shared_config);
 
-        App {
+        Self {
+            auth_sender,
+            auth_receiver,
             packet_sender,
             packet_receiver,
         }
     }
 
     pub fn update(&mut self) {
+
+        let mut no_auths = false;
+        let mut no_packets = false;
+
+        match self.auth_receiver.receive() {
+            Ok(Some((address, payload))) => {
+                let auth_from_client = String::from_utf8_lossy(payload);
+                info!("Server incoming Auth <- {}: {}", address, auth_from_client);
+
+                if auth_from_client.eq("12345") {
+                    if let Err(error) = self.auth_sender.accept(&address) {
+                        info!("Server Accept Auth error {}", error);
+                    }
+                } else {
+                    if let Err(error) = self.auth_sender.reject(&address) {
+                        info!("Server Reject Auth error {}", error);
+                    }
+                }
+            }
+            Ok(None) => {
+                no_auths = true;
+            }
+            Err(error) => {
+                info!("Server Auth Error: {}", error);
+            }
+        }
         match self.packet_receiver.receive() {
             Ok(Some((address, payload))) => {
                 let message_from_client = String::from_utf8_lossy(payload);
@@ -55,12 +90,16 @@ impl App {
                 }
             }
             Ok(None) => {
-                // If we don't sleep here, app will loop at 100% CPU until a new message comes in
-                sleep(Duration::from_millis(1));
+                no_packets = true;
             }
             Err(error) => {
                 info!("Server Error: {}", error);
             }
+        }
+
+        if no_auths && no_packets {
+            // If we don't sleep here, app will loop at 100% CPU until a new message comes in
+            sleep(Duration::from_millis(1));
         }
     }
 }
