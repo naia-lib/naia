@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Socket Demo Client [mquad] [Wasm] [DEPLOY]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="make serve" />
+  <configuration default="false" name="Socket Demo Client [mquad] [Wasm] [BUILD]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="build --target wasm32-unknown-unknown" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/demos/socket/client/miniquad" />
     <envs />
     <option name="emulateTerminal" value="false" />
