@@ -89,9 +89,11 @@ impl App {
             for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
                 if auth.username == "charlie" && auth.password == "12345" {
                     // Accept incoming connection
+                    info!("accepting connection for user_key: {:?}", user_key);
                     self.server.accept_connection(&user_key);
                 } else {
                     // Reject incoming connection
+                    info!("rejecting connection for user_key: {:?}", user_key);
                     self.server.reject_connection(&user_key);
                 }
             }

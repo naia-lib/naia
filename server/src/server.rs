@@ -19,7 +19,6 @@ use super::{
     user::{User, UserKey, UserMut, UserRef},
     user_scope::{UserScopeMut, UserScopeRef},
 };
-use crate::world::entity_room_map::EntityRoomMap;
 use crate::{
     connection::{
         connection::Connection,
@@ -29,15 +28,15 @@ use crate::{
     },
     request::{GlobalRequestManager, GlobalResponseManager},
     time_manager::TimeManager,
-    transport::Socket,
+    transport::{AuthReceiver, AuthSender, Socket},
     world::{
+        entity_room_map::EntityRoomMap,
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
         entity_scope_map::EntityScopeMap, global_world_manager::GlobalWorldManager,
         server_auth_handler::AuthOwner,
     },
     ReplicationConfig,
 };
-use crate::transport::{AuthReceiver, AuthSender, RecvError};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -1771,8 +1770,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             };
                         } else {
                             info!("checking authenticated users for {}", address);
-                            let user_key = *self.authenticated_users.get(address).unwrap();
-                            self.user_finish_handshake(&user_key);
+                            if let Some(user_key) = self.authenticated_users.get(address) {
+                                let user_key = *user_key;
+                                self.user_finish_handshake(&user_key);
+                            } else {
+                                warn!("Server Error: Cannot find user by address {}", address);
+                            }
                         }
                     }
                     HandshakeResult::Invalid => {

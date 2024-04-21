@@ -37,7 +37,7 @@ impl App {
         let mut client = Client::new(ClientConfig::default(), protocol);
 
         // Incorrect auth here to force a rejection
-        let auth = Auth::new("ronald", "12345");
+        let auth = Auth::new("charlie", "12345");
         client.auth(auth);
 
         client.connect(socket);
