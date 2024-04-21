@@ -1,11 +1,11 @@
+mod handshake_time_manager;
+
 use naia_shared::{BitReader, BitWriter, OutgoingPacket};
 
 use crate::connection::time_manager::TimeManager;
 
 cfg_if! {
     if #[cfg(feature = "advanced_handshake")] {
-        mod handshake_time_manager;
-
         mod advanced_handshaker;
         pub use advanced_handshaker::HandshakeManager;
     } else {
