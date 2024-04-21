@@ -11,7 +11,7 @@ use naia_test::Auth;
 #[test]
 fn end_to_end_handshake_w_auth() {
     let mut client = ClientHandshakeManager::new(Duration::new(0, 0), Duration::new(0, 0), 1);
-    let mut server = ServerHandshakeManager::new(true);
+    let mut server = ServerHandshakeManager::new();
     let mut bytes: Box<[u8]>;
     let mut writer: BitWriter;
     let mut reader: BitReader;
@@ -58,7 +58,7 @@ fn end_to_end_handshake_w_auth() {
 
     // 5. Client send connect request
     {
-        writer = client.write_validate_request(&message_kinds);
+        writer = client.write_validate_request();
         bytes = writer.to_bytes();
     }
 
@@ -67,22 +67,9 @@ fn end_to_end_handshake_w_auth() {
         reader = BitReader::new(&bytes);
         StandardHeader::de(&mut reader).expect("unable to read standard header from stream");
         let address = "127.0.0.1:4000".parse().unwrap();
-        let result = server.recv_validate_request(&message_kinds, &address, &mut reader);
-        if let HandshakeResult::Success(Some(auth_message)) = result {
-            let boxed_any = auth_message.to_boxed_any();
-            let auth_replica = boxed_any
-                .downcast_ref::<Auth>()
-                .expect("did not construct protocol correctly...");
-            assert_eq!(
-                auth_replica.username, username,
-                "Server received an invalid username: '{}', should be: '{}'",
-                auth_replica.username, username
-            );
-            assert_eq!(
-                auth_replica.password, password,
-                "Server received an invalid password: '{}', should be: '{}'",
-                auth_replica.password, password
-            );
+        let result = server.recv_validate_request(&address, &mut reader);
+        if let HandshakeResult::Success = result {
+            //
         } else {
             assert!(false, "handshake result from server was not correct");
         }

@@ -3,7 +3,7 @@ use std::time::Duration;
 use log::warn;
 
 use naia_shared::{
-    BitReader, BitWriter, FakeEntityConverter, MessageContainer, MessageKinds, PacketType, Serde,
+    BitReader, BitWriter, PacketType, Serde,
     StandardHeader, Timer, Timestamp as stamp_time,
 };
 
@@ -52,7 +52,6 @@ pub struct HandshakeManager {
     handshake_timer: Timer,
     pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Vec<u8>>,
-    auth_message: Option<MessageContainer>,
 }
 
 impl HandshakeManager {
@@ -67,14 +66,9 @@ impl HandshakeManager {
             pre_connection_timestamp,
             pre_connection_digest: None,
             connection_state: HandshakeState::AwaitingChallengeResponse,
-            auth_message: None,
             ping_interval,
             handshake_pings,
         }
-    }
-
-    pub fn set_auth_message(&mut self, auth: MessageContainer) {
-        self.auth_message = Some(auth);
     }
 
     pub fn is_connected(&self) -> bool {
@@ -82,7 +76,7 @@ impl HandshakeManager {
     }
 
     // Give handshake manager the opportunity to send out messages to the server
-    pub fn send(&mut self, message_kinds: &MessageKinds, io: &mut Io) {
+    pub fn send(&mut self, io: &mut Io) {
         if io.is_loaded() {
             if !self.handshake_timer.ringing() {
                 return;
@@ -99,7 +93,7 @@ impl HandshakeManager {
                     }
                 }
                 HandshakeState::AwaitingValidateResponse => {
-                    let writer = self.write_validate_request(message_kinds);
+                    let writer = self.write_validate_request();
                     if io.send_packet(writer.to_packet()).is_err() {
                         // TODO: pass this on and handle above
                         warn!("Client Error: Cannot send validate request packet to Server");
@@ -215,24 +209,13 @@ impl HandshakeManager {
     }
 
     // Step 3 of Handshake
-    pub fn write_validate_request(&self, message_kinds: &MessageKinds) -> BitWriter {
+    pub fn write_validate_request(&self) -> BitWriter {
         let mut writer = BitWriter::new();
 
         StandardHeader::new(PacketType::ClientValidateRequest, 0, 0, 0).ser(&mut writer);
 
         // write timestamp & digest into payload
         self.write_signed_timestamp(&mut writer);
-
-        // write auth message if there is one
-        if let Some(auth_message) = &self.auth_message {
-            // write that we have auth
-            true.ser(&mut writer);
-            // write payload
-            auth_message.write(message_kinds, &mut writer, &mut FakeEntityConverter);
-        } else {
-            // write that we do not have auth
-            false.ser(&mut writer);
-        }
 
         writer
     }

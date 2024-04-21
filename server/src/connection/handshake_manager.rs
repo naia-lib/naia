@@ -5,7 +5,7 @@ use log::warn;
 use ring::{hmac, rand};
 
 pub use naia_shared::{
-    BitReader, BitWriter, FakeEntityConverter, MessageContainer, MessageKinds, PacketType, Serde,
+    BitReader, BitWriter, PacketType, Serde,
     SerdeErr, StandardHeader,
 };
 
@@ -15,24 +15,22 @@ pub type Timestamp = u64;
 
 pub enum HandshakeResult {
     Invalid,
-    Success(Option<MessageContainer>),
+    Success,
 }
 
 pub struct HandshakeManager {
     connection_hash_key: hmac::Key,
-    require_auth: bool,
     address_to_timestamp_map: HashMap<SocketAddr, Timestamp>,
     timestamp_digest_map: CacheMap<Timestamp, Vec<u8>>,
 }
 
 impl HandshakeManager {
-    pub fn new(require_auth: bool) -> Self {
+    pub fn new() -> Self {
         let connection_hash_key =
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
 
         Self {
             connection_hash_key,
-            require_auth,
             address_to_timestamp_map: HashMap::new(),
             timestamp_digest_map: CacheMap::with_capacity(64),
         }
@@ -71,7 +69,6 @@ impl HandshakeManager {
     // Step 3 of Handshake
     pub fn recv_validate_request(
         &mut self,
-        message_kinds: &MessageKinds,
         address: &SocketAddr,
         reader: &mut BitReader,
     ) -> HandshakeResult {
@@ -81,28 +78,11 @@ impl HandshakeManager {
             warn!("Handshake Error from {}: Invalid timestamp hash", address);
             return HandshakeResult::Invalid;
         };
-        // Timestamp hash is validated, now start configured auth process
-        let Ok(has_auth) = bool::de(reader) else {
-            warn!("Handshake Error from {}: Auth flag serde issue", address);
-            return HandshakeResult::Invalid;
-        };
-        if has_auth != self.require_auth {
-            warn!("Handshake Error from {}: Auth flag mismatch", address);
-            return HandshakeResult::Invalid;
-        }
+        // Timestamp hash is valid
 
         self.address_to_timestamp_map.insert(*address, timestamp);
 
-        if !has_auth {
-            return HandshakeResult::Success(None);
-        }
-
-        let Ok(auth_message) = message_kinds.read(reader, &FakeEntityConverter) else {
-            warn!("Handshake Error from {}: Auth message serde issue", address);
-            return HandshakeResult::Invalid;
-        };
-
-        return HandshakeResult::Success(Some(auth_message));
+        return HandshakeResult::Success;
     }
 
     // Step 4 of Handshake

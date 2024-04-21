@@ -35,6 +35,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     client_config: ClientConfig,
     protocol: Protocol,
     // Connection
+    auth_message: Option<MessageContainer>,
     io: Io,
     server_connection: Option<Connection<E>>,
     handshake_manager: HandshakeManager,
@@ -67,6 +68,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             client_config: client_config.clone(),
             protocol,
             // Connection
+            auth_message: None,
             io: Io::new(
                 &client_config.connection.bandwidth_measure_duration,
                 &compression_config,
@@ -86,8 +88,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
-        self.handshake_manager
-            .set_auth_message(MessageContainer::from_write(
+        self.auth_message = Some(MessageContainer::from_write(
                 Box::new(auth),
                 &mut FakeEntityConverter,
             ));
@@ -258,7 +259,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             }
         } else {
             self.handshake_manager
-                .send(&self.protocol.message_kinds, &mut self.io);
+                .send(&mut self.io);
         }
 
         if let Some(events) = response_events {

@@ -99,7 +99,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
             timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
             ping_timer: Timer::new(server_config.ping.ping_interval),
-            handshake_manager: HandshakeManager::new(server_config.require_auth),
+            handshake_manager: HandshakeManager::new(),
             // Users
             users: BigMap::new(),
             user_connections: HashMap::new(),
@@ -159,7 +159,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Accepts an incoming Client User, allowing them to establish a connection
     /// with the Server
-    pub fn accept_connection(&mut self, user_key: &UserKey) {
+    pub fn accept_connection(&mut self, _user_key: &UserKey) {
+        todo!();
+    }
+
+    /// Rejects an incoming Client User, terminating their attempt to establish
+    /// a connection with the Server
+    pub fn reject_connection(&mut self, _user_key: &UserKey) {
+        todo!();
+        self.user_delete(_user_key);
+    }
+
+    fn validate_connection(&mut self, user_key: &UserKey) {
         let Some(user) = self.users.get(user_key) else {
             warn!("unknown user is finalizing connection...");
             return;
@@ -215,28 +226,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             self.io.register_client(&user.address);
         }
         self.incoming_events.push_connection(user_key);
-    }
-
-    /// Rejects an incoming Client User, terminating their attempt to establish
-    /// a connection with the Server
-    pub fn reject_connection(&mut self, user_key: &UserKey) {
-        if let Some(user) = self.users.get(user_key) {
-            // send connect reject response
-            let writer = self.handshake_manager.write_reject_response();
-            if self
-                .io
-                .send_packet(&user.address, writer.to_packet())
-                .is_err()
-            {
-                // TODO: pass this on and handle above
-                warn!(
-                    "Server Error: Cannot send auth rejection packet to {}",
-                    &user.address
-                );
-            }
-            //
-        }
-        self.user_delete(user_key);
     }
 
     // Messages
@@ -1708,11 +1697,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             }
             PacketType::ClientValidateRequest => {
                 match self.handshake_manager.recv_validate_request(
-                    &self.protocol.message_kinds,
                     address,
                     reader,
                 ) {
-                    HandshakeResult::Success(auth_message_opt) => {
+                    HandshakeResult::Success => {
                         if self.validated_users.contains_key(address) {
                             // send validate response
                             let writer = self.handshake_manager.write_validate_response();
@@ -1723,12 +1711,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         } else {
                             let user = User::new(*address);
                             let user_key = self.users.insert(user);
-
-                            if let Some(auth_message) = auth_message_opt {
-                                self.incoming_events.push_auth(&user_key, auth_message);
-                            } else {
-                                self.accept_connection(&user_key);
-                            }
+                            self.validate_connection(&user_key);
                         }
                     }
                     HandshakeResult::Invalid => {
