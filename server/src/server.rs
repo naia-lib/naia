@@ -1705,31 +1705,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                             continue;
                         }
-                        _ => {}
-                    }
-
-                    match self.handshake_manager.maintain_handshake(
-                        &address,
-                        &header,
-                        &mut reader,
-                        &mut self.io,
-                        self.user_connections.contains_key(&address),
-                    ) {
-                        Ok(HandshakeAction::ContinueReadingPacket) => {}
-                        Ok(HandshakeAction::FinishedReadingPacket) => {
-                            continue;
-                        }
-                        Ok(HandshakeAction::FinalizeConnection(user_key)) => {
-                            self.finalize_connection(&user_key);
-                            continue;
-                        }
-                        Ok(HandshakeAction::DisconnectUser(user_key)) => {
-                            self.user_disconnect(&user_key, &mut world);
-                            continue;
-                        }
-                        Err(_err) => {
-                            warn!("Server Error: cannot read malformed packet");
-                            continue;
+                        PacketType::Handshake => {
+                            match self.handshake_manager.maintain_handshake(
+                                &address,
+                                &mut reader,
+                                &mut self.io,
+                                self.user_connections.contains_key(&address),
+                            ) {
+                                Ok(HandshakeAction::None) => {}
+                                Ok(HandshakeAction::FinalizeConnection(user_key)) => {
+                                    self.finalize_connection(&user_key);
+                                }
+                                Ok(HandshakeAction::DisconnectUser(user_key)) => {
+                                    self.user_disconnect(&user_key, &mut world);
+                                }
+                                Err(_err) => {
+                                    warn!("Server Error: cannot read malformed packet");
+                                }
+                            }
                         }
                     }
                 }

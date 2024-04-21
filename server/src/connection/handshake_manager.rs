@@ -8,6 +8,7 @@ pub use naia_shared::{
     BitReader, BitWriter, PacketType, Serde,
     SerdeErr, StandardHeader,
 };
+use naia_shared::handshake::HandshakeHeader;
 
 use crate::{time_manager::TimeManager, handshake::HandshakeAction, cache_map::CacheMap, connection::{connection::Connection, io::Io}, UserKey};
 
@@ -50,14 +51,16 @@ impl HandshakeManager {
     pub fn maintain_handshake(
         &mut self,
         address: &SocketAddr,
-        header: &StandardHeader,
         reader: &mut BitReader,
         io: &mut Io,
         has_connection: bool,
     ) -> Result<HandshakeAction, SerdeErr> {
+
+        let handshake_header = HandshakeHeader::de(reader)?;
+
         // Handshake stuff
-        match header.packet_type {
-            PacketType::ClientChallengeRequest => {
+        match handshake_header {
+            HandshakeHeader::ClientChallengeRequest => {
                 if let Ok(writer) = self.recv_challenge_request(reader) {
                     if io.send_packet(&address, writer.to_packet()).is_err() {
                         // TODO: pass this on and handle above
@@ -67,9 +70,9 @@ impl HandshakeManager {
                         );
                     }
                 }
-                return Ok(HandshakeAction::FinishedReadingPacket);
+                return Ok(HandshakeAction::None);
             }
-            PacketType::ClientValidateRequest => {
+            HandshakeHeader::ClientValidateRequest => {
                 if self.recv_validate_request(
                     address,
                     reader,
@@ -94,9 +97,9 @@ impl HandshakeManager {
                 } else {
                     // do nothing
                 }
-                return Ok(HandshakeAction::FinishedReadingPacket);
+                return Ok(HandshakeAction::None);
             }
-            PacketType::ClientConnectRequest => {
+            HandshakeHeader::ClientConnectRequest => {
 
                 // send connect response
                 let writer = self.write_connect_response();
@@ -112,7 +115,7 @@ impl HandshakeManager {
                 }
 
                 if has_connection {
-                    return Ok(HandshakeAction::FinishedReadingPacket);
+                    return Ok(HandshakeAction::None);
                 } else {
                     let user_key = *self
                         .been_handshaked_users
@@ -122,7 +125,7 @@ impl HandshakeManager {
                     return Ok(HandshakeAction::FinalizeConnection(user_key));
                 }
             }
-            PacketType::Disconnect => {
+            HandshakeHeader::Disconnect => {
                 if self.verify_disconnect_request(address, reader) {
                     let user_key = *self
                         .been_handshaked_users
@@ -130,11 +133,12 @@ impl HandshakeManager {
                         .expect("should be a user by now, from validation step");
                     return Ok(HandshakeAction::DisconnectUser(user_key));
                 } else {
-                    return Ok(HandshakeAction::FinishedReadingPacket);
+                    return Ok(HandshakeAction::None);
                 }
             }
             _ => {
-                return Ok(HandshakeAction::ContinueReadingPacket);
+                warn!("Server Error: Unexpected handshake header: {:?} from {}", handshake_header, address);
+                return Ok(HandshakeAction::None);
             }
         }
     }
@@ -152,7 +156,8 @@ impl HandshakeManager {
     // Step 2 of Handshake
     fn write_challenge_response(&mut self, timestamp: &Timestamp) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ServerChallengeResponse.ser(&mut writer);
         timestamp.ser(&mut writer);
 
         if !self.timestamp_digest_map.contains_key(timestamp) {
@@ -191,14 +196,16 @@ impl HandshakeManager {
     // Step 4 of Handshake
     fn write_validate_response(&self) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ServerValidateResponse, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ServerValidateResponse.ser(&mut writer);
         writer
     }
 
     // Step 5 of Handshake
     fn write_connect_response(&self) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ServerConnectResponse.ser(&mut writer);
         writer
     }
 

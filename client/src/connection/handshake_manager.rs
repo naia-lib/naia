@@ -6,6 +6,7 @@ use naia_shared::{
     BitReader, BitWriter, PacketType, Serde,
     StandardHeader, Timer, Timestamp as stamp_time,
 };
+use naia_shared::handshake::HandshakeHeader;
 
 use super::io::Io;
 use crate::connection::{handshake_time_manager::HandshakeTimeManager, time_manager::TimeManager};
@@ -126,21 +127,35 @@ impl HandshakeManager {
         }
         let header = header_result.unwrap();
         match header.packet_type {
-            PacketType::ServerChallengeResponse => {
-                self.recv_challenge_response(reader);
-                return None;
-            }
-            PacketType::ServerValidateResponse => {
-                if self.connection_state == HandshakeState::AwaitingValidateResponse {
-                    self.recv_validate_response();
+            PacketType::Handshake => {
+                let Ok(handshake_header) = HandshakeHeader::de(reader) else {
+                    warn!("Could not read HandshakeHeader");
+                    return None;
+                };
+                match handshake_header {
+                    HandshakeHeader::ServerChallengeResponse => {
+                        self.recv_challenge_response(reader);
+                        return None;
+                    }
+                    HandshakeHeader::ServerValidateResponse => {
+                        if self.connection_state == HandshakeState::AwaitingValidateResponse {
+                            self.recv_validate_response();
+                        }
+                        return None;
+                    }
+                    HandshakeHeader::ServerConnectResponse => {
+                        return self.recv_connect_response();
+                    }
+                    HandshakeHeader::ServerRejectResponse => {
+                        return Some(HandshakeResult::Rejected);
+                    }
+                    HandshakeHeader::ClientChallengeRequest
+                    | HandshakeHeader::ClientValidateRequest
+                    | HandshakeHeader::ClientConnectRequest
+                    | HandshakeHeader::Disconnect => {
+                        return None;
+                    }
                 }
-                return None;
-            }
-            PacketType::ServerConnectResponse => {
-                return self.recv_connect_response();
-            }
-            PacketType::ServerRejectResponse => {
-                return Some(HandshakeResult::Rejected);
             }
             PacketType::Pong => {
                 // Time Manager should record incoming Pongs in order to sync time
@@ -166,11 +181,7 @@ impl HandshakeManager {
             }
             PacketType::Data
             | PacketType::Heartbeat
-            | PacketType::ClientChallengeRequest
-            | PacketType::ClientValidateRequest
-            | PacketType::ClientConnectRequest
-            | PacketType::Ping
-            | PacketType::Disconnect => {
+            | PacketType::Ping => {
                 return None;
             }
         }
@@ -179,7 +190,8 @@ impl HandshakeManager {
     // Step 1 of Handshake
     pub fn write_challenge_request(&self) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ClientChallengeRequest, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ClientChallengeRequest.ser(&mut writer);
 
         self.pre_connection_timestamp.ser(&mut writer);
 
@@ -212,7 +224,8 @@ impl HandshakeManager {
     pub fn write_validate_request(&self) -> BitWriter {
         let mut writer = BitWriter::new();
 
-        StandardHeader::new(PacketType::ClientValidateRequest, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ClientValidateRequest.ser(&mut writer);
 
         // write timestamp & digest into payload
         self.write_signed_timestamp(&mut writer);
@@ -231,7 +244,8 @@ impl HandshakeManager {
     // Step 5 of Handshake
     pub fn write_connect_request(&self) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ClientConnectRequest, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ClientConnectRequest.ser(&mut writer);
 
         writer
     }
@@ -250,7 +264,8 @@ impl HandshakeManager {
     // Send 10 disconnect packets
     pub fn write_disconnect(&self) -> BitWriter {
         let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::Disconnect, 0, 0, 0).ser(&mut writer);
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::Disconnect.ser(&mut writer);
         self.write_signed_timestamp(&mut writer);
         writer
     }
