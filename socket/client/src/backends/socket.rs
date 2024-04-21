@@ -9,4 +9,9 @@ pub trait SocketTrait {
         server_session_url: &str,
         config: &SocketConfig,
     ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>);
+    fn connect_with_auth(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes: Vec<u8>,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>);
 }

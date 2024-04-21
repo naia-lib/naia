@@ -21,6 +21,22 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
     ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+        return Self::connect_inner(server_session_url, config, None);
+    }
+    /// Connects to the given server address with authentication
+    pub fn connect_with_auth(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes: Vec<u8>,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+        return Self::connect_inner(server_session_url, config, Some(auth_bytes));
+    }
+    /// Connects to the given server address
+    fn connect_inner(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes_opt: Option<Vec<u8>>,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         let server_session_string = format!(
             "{}{}",
             parse_server_url(server_session_url),
@@ -29,7 +45,7 @@ impl Socket {
         let conditioner_config = config.link_condition.clone();
 
         let (socket, io) = RTCSocket::new();
-        get_runtime().spawn(async move { socket.connect(&server_session_string).await });
+        get_runtime().spawn(async move { socket.connect(&server_session_string, auth_bytes_opt).await });
 
         // Setup Packet Sender
         let packet_sender_impl = PacketSenderImpl::new(
@@ -60,6 +76,14 @@ impl SocketTrait for Socket {
         server_session_url: &str,
         config: &SocketConfig,
     ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
-        return Socket::connect(server_session_url, config);
+        return Self::connect(server_session_url, config);
+    }
+    /// Connects to the given server address with authentication
+    fn connect_with_auth(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes: Vec<u8>,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+        return Self::connect_with_auth(server_session_url, config, auth_bytes);
     }
 }

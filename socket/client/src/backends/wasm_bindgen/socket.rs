@@ -15,12 +15,32 @@ use super::{
 pub struct Socket;
 
 impl Socket {
+
     /// Connects to the given server address
     pub fn connect(
         server_session_url: &str,
         config: &SocketConfig,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>)
+    {
+        return Self::connect_inner(server_session_url, config, None);
+    }
+    /// Connects to the given server address with authentication
+    pub fn connect_with_auth(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes: Vec<u8>,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>)
+    {
+        return Self::connect_inner(server_session_url, config, Some(auth_bytes));
+    }
+
+    /// Connects to the given server address
+    fn connect_inner(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes_opt: Option<Vec<u8>>,
     ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
-        let data_channel = DataChannel::new(config, server_session_url);
+        let data_channel = DataChannel::new(config, server_session_url, auth_bytes_opt);
 
         let data_port = data_channel.data_port();
         let addr_cell = data_channel.addr_cell();
@@ -72,7 +92,17 @@ impl SocketTrait for Socket {
     fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
-        return Socket::connect(server_session_url, config);
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>)
+    {
+        return Self::connect(server_session_url, config);
+    }
+    /// Connects to the given server address with authentication
+    fn connect_with_auth(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes: Vec<u8>,
+    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>)
+    {
+        return Self::connect_with_auth(server_session_url, config, auth_bytes);
     }
 }

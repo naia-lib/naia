@@ -32,6 +32,7 @@ web_sys = { version = "0.3.64", package = "web-sys", features = [
     "XmlHttpRequest", "XmlHttpRequestEventTarget", "MessageEvent", "ProgressEvent", "ErrorEvent", "Blob" ], optional = true  }
 tinyjson = { version = "2.3", optional = true }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }
+base64 = { version = "0.13" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 webrtc-unreliable-client = { path = "../../../webrtc-unreliable-client/client" }

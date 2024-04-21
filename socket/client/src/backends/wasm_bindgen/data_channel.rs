@@ -24,17 +24,23 @@ pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
 // PeerConnection
 pub struct DataChannel {
     server_session_url: String,
+    auth_bytes_opt: Option<Vec<u8>>,
     message_channel: MessageChannel,
     addr_cell: AddrCell,
     find_addr_func: Rc<RefCell<FindAddrFuncInner>>,
 }
 
 impl DataChannel {
-    pub fn new(config: &SocketConfig, server_session_url: &str) -> Self {
+    pub fn new(
+        config: &SocketConfig,
+        server_session_url: &str,
+        auth_bytes_opt: Option<Vec<u8>>,
+    ) -> Self {
         let server_url = parse_server_url(server_session_url);
 
         Self {
             server_session_url: format!("{}{}", server_url, config.rtc_endpoint_path.clone()),
+            auth_bytes_opt,
             message_channel: MessageChannel::new().expect("can't create message channel"),
             addr_cell: AddrCell::new(),
             find_addr_func: Rc::new(RefCell::new(FindAddrFuncInner(Box::new(move |_| {})))),
@@ -99,12 +105,14 @@ impl DataChannel {
                 let addr_cell_2 = self.addr_cell.clone();
                 let addr_func_2 = self.find_addr_func.clone();
                 let server_url_msg = self.server_session_url.clone();
+                let auth_bytes_opt_2 = self.auth_bytes_opt.clone();
                 let peer_offer_func: Box<dyn FnMut(JsValue)> = Box::new(move |e: JsValue| {
                     let session_description = e.into();
                     let peer_3 = peer_2.clone();
                     let addr_cell_3 = addr_cell_2.clone();
                     let addr_func_3 = addr_func_2.clone();
                     let server_url_msg_2 = server_url_msg.clone();
+                    let auth_bytes_opt_3 = auth_bytes_opt_2.clone();
                     let peer_desc_func: Box<dyn FnMut(JsValue)> = Box::new(move |_: JsValue| {
                         let request =
                             XmlHttpRequest::new().expect("can't create new XmlHttpRequest");
@@ -114,6 +122,11 @@ impl DataChannel {
                             .unwrap_or_else(|err| {
                                 info!("can't POST to server session url. {:?}", err)
                             });
+                        if let Some(auth_bytes) = &auth_bytes_opt_3 {
+                            let base64_encoded = base64::encode(auth_bytes);
+                            request.set_request_header("Authorization", &base64_encoded)
+                                .expect("Failed to set request header");
+                        }
 
                         let request_2 = request.clone();
                         let peer_4 = peer_3.clone();
