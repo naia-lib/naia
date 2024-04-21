@@ -25,6 +25,7 @@ mod inner {
 
     pub trait Socket {
         fn connect(self: Box<Self>) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>);
+        fn connect_with_auth(self: Box<Self>, auth_bytes: Vec<u8>) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>);
     }
 
     pub trait PacketSender: Send + Sync {

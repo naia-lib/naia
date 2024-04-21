@@ -9,15 +9,7 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{
-    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
-    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
-    GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message,
-    MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response,
-    ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig,
-    StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
-};
+use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
 
 use super::{
     error::NaiaServerError,
@@ -45,6 +37,7 @@ use crate::{
     },
     ReplicationConfig,
 };
+use crate::transport::{AuthReceiver, AuthSender, RecvError};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -54,14 +47,16 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     server_config: ServerConfig,
     protocol: Protocol,
     io: Io,
+    auth_io: Option<(Box<dyn AuthSender>, Box<dyn AuthReceiver>)>,
     heartbeat_timer: Timer,
     timeout_timer: Timer,
     ping_timer: Timer,
     handshake_manager: HandshakeManager,
     // Users
     users: BigMap<UserKey, User>,
+    authenticated_users: HashMap<SocketAddr, UserKey>,
+    been_handshaked_users: HashMap<SocketAddr, UserKey>,
     user_connections: HashMap<SocketAddr, Connection<E>>,
-    validated_users: HashMap<SocketAddr, UserKey>,
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
     // Entities
@@ -96,14 +91,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             protocol,
             // Connection
             io,
+            auth_io: None,
             heartbeat_timer: Timer::new(server_config.connection.heartbeat_interval),
             timeout_timer: Timer::new(server_config.connection.disconnection_timeout_duration),
             ping_timer: Timer::new(server_config.ping.ping_interval),
             handshake_manager: HandshakeManager::new(),
             // Users
             users: BigMap::new(),
+            authenticated_users: HashMap::new(),
+            been_handshaked_users: HashMap::new(),
             user_connections: HashMap::new(),
-            validated_users: HashMap::new(),
             // Rooms
             rooms: BigMap::new(),
             // Entities
@@ -123,8 +120,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Listen at the given addresses
     pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         let boxed_socket: Box<dyn Socket> = socket.into();
-        let (packet_sender, packet_receiver) = boxed_socket.listen();
+        let (
+            auth_sender,
+            auth_receiver,
+            packet_sender,
+            packet_receiver
+        ) = boxed_socket.listen();
+
         self.io.load(packet_sender, packet_receiver);
+
+        self.auth_io = Some((auth_sender, auth_receiver));
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -159,18 +164,40 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Accepts an incoming Client User, allowing them to establish a connection
     /// with the Server
-    pub fn accept_connection(&mut self, _user_key: &UserKey) {
-        todo!();
+    pub fn accept_connection(&mut self, user_key: &UserKey) {
+        let Some(user) = self.users.get(user_key) else {
+            warn!("unknown user is finalizing connection...");
+            return;
+        };
+        let address = user.address;
+
+        let (auth_sender, _) = self.auth_io.as_mut().expect("Auth should be set up by this point");
+        if auth_sender.accept(&address).is_err() {
+            warn!("Server Error: Cannot send auth accept packet to {}", &address);
+            // TODO: handle destroying any threads waiting on this response
+            return;
+        }
+
+        info!("adding authenticated user {}", &address);
+        self.authenticated_users.insert(address, *user_key);
     }
 
     /// Rejects an incoming Client User, terminating their attempt to establish
     /// a connection with the Server
-    pub fn reject_connection(&mut self, _user_key: &UserKey) {
-        todo!();
-        self.user_delete(_user_key);
+    pub fn reject_connection(&mut self, user_key: &UserKey) {
+        if let Some(user) = self.users.get(user_key) {
+            let address = user.address;
+            let (auth_sender, _) = self.auth_io.as_mut().expect("Auth should be set up by this point");
+            if auth_sender.reject(&address).is_err() {
+                warn!("Server Error: Cannot send auth reject message to {}", &address);
+                // TODO: handle destroying any threads waiting on this response
+            }
+
+            self.user_delete(user_key);
+        }
     }
 
-    fn validate_connection(&mut self, user_key: &UserKey) {
+    fn user_finish_handshake(&mut self, user_key: &UserKey) {
         let Some(user) = self.users.get(user_key) else {
             warn!("unknown user is finalizing connection...");
             return;
@@ -190,7 +217,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             );
         }
 
-        self.validated_users.insert(user.address, *user_key);
+        self.been_handshaked_users.insert(user.address, *user_key);
     }
 
     fn finalize_connection(&mut self, user_key: &UserKey) {
@@ -1446,8 +1473,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("Attempting to delete non-existant user!");
         };
 
+        info!("deleting authenticated user for {}", user.address);
+        self.authenticated_users.remove(&user.address);
+        self.been_handshaked_users.remove(&user.address);
         self.user_connections.remove(&user.address);
-        self.validated_users.remove(&user.address);
         self.entity_scope_map.remove_user(user_key);
         self.handshake_manager.delete_user(&user.address);
 
@@ -1626,6 +1655,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.handle_pings();
 
         let mut addresses: HashSet<SocketAddr> = HashSet::new();
+
+        // receive auth events
+        if let Some((_, auth_receiver)) = self.auth_io.as_mut() {
+            loop {
+                match auth_receiver.receive() {
+                    Ok(Some((remote_addr, auth_bytes))) => {
+
+                        // create new user
+                        let user = User::new(remote_addr);
+                        let user_key = self.users.insert(user);
+
+                        // convert bytes into auth object
+                        let mut reader = BitReader::new(auth_bytes);
+                        let Ok(auth_message) = self.protocol.message_kinds.read(&mut reader, &FakeEntityConverter) else {
+                            warn!("Server Error: cannot read auth message");
+                            continue;
+                        };
+
+                        // send out event
+                        self.incoming_events.push_auth(&user_key, auth_message);
+                    }
+                    Ok(None) => {
+                        // No more auths, break loop
+                        break;
+                    }
+                    Err(_) => {
+                        self.incoming_events.push_error(NaiaServerError::RecvError);
+                    }
+                }
+            }
+        }
+
         // receive socket events
         loop {
             match self.io.recv_reader() {
@@ -1701,7 +1762,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     reader,
                 ) {
                     HandshakeResult::Success => {
-                        if self.validated_users.contains_key(address) {
+                        if self.been_handshaked_users.contains_key(address) {
                             // send validate response
                             let writer = self.handshake_manager.write_validate_response();
                             if self.io.send_packet(address, writer.to_packet()).is_err() {
@@ -1709,9 +1770,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                                 warn!("Server Error: Cannot send validate success response packet to {}", &address);
                             };
                         } else {
-                            let user = User::new(*address);
-                            let user_key = self.users.insert(user);
-                            self.validate_connection(&user_key);
+                            info!("checking authenticated users for {}", address);
+                            let user_key = *self.authenticated_users.get(address).unwrap();
+                            self.user_finish_handshake(&user_key);
                         }
                     }
                     HandshakeResult::Invalid => {
@@ -1734,7 +1795,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     //
                 } else {
                     let user_key = *self
-                        .validated_users
+                        .been_handshaked_users
                         .get(address)
                         .expect("should be a user by now, from validation step");
                     self.finalize_connection(&user_key);

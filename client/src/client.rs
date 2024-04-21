@@ -99,8 +99,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
+
+        // get auth bytes
+        let Some(auth_message) = &self.auth_message else {
+            panic!("Client Error: Cannot connect without setting auth first");
+        };
+        let mut bit_writer = BitWriter::new();
+        auth_message.write(&self.protocol.message_kinds, &mut bit_writer, &mut FakeEntityConverter);
+        let auth_bytes = bit_writer.to_bytes().to_vec();
+
+        // connect with auth
         let boxed_socket: Box<dyn Socket> = socket.into();
-        let (packet_sender, packet_receiver) = boxed_socket.connect();
+        let (packet_sender, packet_receiver) = boxed_socket.connect_with_auth(auth_bytes);
         self.io.load(packet_sender, packet_receiver);
     }
 

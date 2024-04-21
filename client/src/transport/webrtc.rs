@@ -61,4 +61,9 @@ impl TransportSocket for Socket {
             ClientSocket::connect(&self.server_session_url, &self.config);
         return (Box::new(inner_sender), Box::new(inner_receiver));
     }
+    fn connect_with_auth(self: Box<Self>, auth_bytes: Vec<u8>) -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
+        let (inner_sender, inner_receiver) =
+            ClientSocket::connect_with_auth(&self.server_session_url, &self.config, auth_bytes);
+        return (Box::new(inner_sender), Box::new(inner_receiver));
+    }
 }

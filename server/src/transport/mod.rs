@@ -10,7 +10,7 @@ cfg_if! {
     } else {}
 }
 
-pub use inner::{PacketReceiver, PacketSender, RecvError, SendError, Socket};
+pub use inner::{PacketReceiver, PacketSender, AuthSender, AuthReceiver, RecvError, SendError, Socket};
 
 mod inner {
 
@@ -21,8 +21,10 @@ mod inner {
     pub struct RecvError;
 
     pub trait Socket {
-        fn listen(self: Box<Self>) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>);
+        fn listen(self: Box<Self>) -> (Box<dyn AuthSender>, Box<dyn AuthReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>);
     }
+
+    // Packet
 
     pub trait PacketSender: Send + Sync {
         /// Sends a packet to the Server Socket
@@ -49,6 +51,38 @@ mod inner {
     impl Clone for Box<dyn PacketReceiver> {
         fn clone(&self) -> Box<dyn PacketReceiver> {
             PacketReceiverClone::clone_box(self.as_ref())
+        }
+    }
+
+    // Auth
+
+    pub trait AuthSender: Send + Sync {
+        ///
+        fn accept(&self, address: &SocketAddr) -> Result<(), SendError>;
+        ///
+        fn reject(&self, address: &SocketAddr) -> Result<(), SendError>;
+    }
+
+    pub trait AuthReceiver: AuthReceiverClone + Send + Sync {
+        ///
+        fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;
+    }
+
+    /// Used to clone Box<dyn AuthReceiver>
+    pub trait AuthReceiverClone {
+        /// Clone the boxed AuthReceiver
+        fn clone_box(&self) -> Box<dyn AuthReceiver>;
+    }
+
+    impl<T: 'static + AuthReceiver + Clone> AuthReceiverClone for T {
+        fn clone_box(&self) -> Box<dyn AuthReceiver> {
+            Box::new(self.clone())
+        }
+    }
+
+    impl Clone for Box<dyn AuthReceiver> {
+        fn clone(&self) -> Box<dyn AuthReceiver> {
+            AuthReceiverClone::clone_box(self.as_ref())
         }
     }
 }
