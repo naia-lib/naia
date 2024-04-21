@@ -22,7 +22,7 @@ use super::{
 use crate::{
     connection::{
         connection::Connection,
-        handshake_manager::{HandshakeManager, HandshakeResult},
+        handshake_manager::HandshakeManager,
         io::Io,
         tick_buffer_messages::TickBufferMessages,
     },
@@ -37,6 +37,7 @@ use crate::{
     },
     ReplicationConfig,
 };
+use crate::handshake::HandshakeAction;
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -53,8 +54,6 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     handshake_manager: HandshakeManager,
     // Users
     users: BigMap<UserKey, User>,
-    authenticated_users: HashMap<SocketAddr, UserKey>,
-    been_handshaked_users: HashMap<SocketAddr, UserKey>,
     user_connections: HashMap<SocketAddr, Connection<E>>,
     // Rooms
     rooms: BigMap<RoomKey, Room<E>>,
@@ -97,8 +96,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             handshake_manager: HandshakeManager::new(),
             // Users
             users: BigMap::new(),
-            authenticated_users: HashMap::new(),
-            been_handshaked_users: HashMap::new(),
             user_connections: HashMap::new(),
             // Rooms
             rooms: BigMap::new(),
@@ -178,7 +175,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         info!("adding authenticated user {}", &address);
-        self.authenticated_users.insert(address, *user_key);
+        self.handshake_manager.authenticate_user(&address, user_key);
     }
 
     /// Rejects an incoming Client User, terminating their attempt to establish
@@ -196,29 +193,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
     }
 
-    fn user_finish_handshake(&mut self, user_key: &UserKey) {
-        let Some(user) = self.users.get(user_key) else {
-            warn!("unknown user is finalizing connection...");
-            return;
-        };
-
-        // send validate response
-        let writer = self.handshake_manager.write_validate_response();
-        if self
-            .io
-            .send_packet(&user.address, writer.to_packet())
-            .is_err()
-        {
-            // TODO: pass this on and handle above
-            warn!(
-                "Server Error: Cannot send validate response packet to {}",
-                &user.address
-            );
-        }
-
-        self.been_handshaked_users.insert(user.address, *user_key);
-    }
-
     fn finalize_connection(&mut self, user_key: &UserKey) {
         let Some(user) = self.users.get(user_key) else {
             warn!("unknown user is finalizing connection...");
@@ -232,20 +206,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             &self.protocol.channel_kinds,
             &self.global_world_manager,
         );
-
-        // send connect response
-        let writer = self.handshake_manager.write_connect_response();
-        if self
-            .io
-            .send_packet(&user.address, writer.to_packet())
-            .is_err()
-        {
-            // TODO: pass this on and handle above
-            warn!(
-                "Server Error: Cannot send connect response packet to {}",
-                &user.address
-            );
-        }
 
         self.user_connections.insert(user.address, new_connection);
         if self.io.bandwidth_monitor_enabled() {
@@ -1473,8 +1433,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         };
 
         info!("deleting authenticated user for {}", user.address);
-        self.authenticated_users.remove(&user.address);
-        self.been_handshaked_users.remove(&user.address);
         self.user_connections.remove(&user.address);
         self.entity_scope_map.remove_user(user_key);
         self.handshake_manager.delete_user(&user.address);
@@ -1699,14 +1657,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         continue;
                     };
 
-                    let Ok(should_continue) =
-                        self.maintain_handshake(&address, &header, &mut reader)
-                    else {
-                        warn!("Server Error: cannot read malformed packet");
-                        continue;
-                    };
-                    if should_continue {
-                        continue;
+                    match self.handshake_manager.maintain_handshake(
+                        &address,
+                        &header,
+                        &mut reader,
+                        &mut self.io,
+                        &mut self.user_connections,
+                        &mut self.time_manager,
+                    ) {
+                        Ok(HandshakeAction::ContinueReadingPacketAndFinalizeConnection(user_key)) => {
+                            self.finalize_connection(&user_key);
+                        }
+                        Ok(HandshakeAction::ContinueReadingPacket) => {}
+                        Ok(HandshakeAction::AbortPacket) => {
+                            continue;
+                        }
+                        Err(_err) => {
+                            warn!("Server Error: cannot read malformed packet");
+                            continue;
+                        }
                     }
 
                     addresses.insert(address);
@@ -1733,94 +1702,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for address in addresses {
             self.process_packets(&address, &mut world);
         }
-    }
-
-    fn maintain_handshake(
-        &mut self,
-        address: &SocketAddr,
-        header: &StandardHeader,
-        reader: &mut BitReader,
-    ) -> Result<bool, SerdeErr> {
-        // Handshake stuff
-        match header.packet_type {
-            PacketType::ClientChallengeRequest => {
-                if let Ok(writer) = self.handshake_manager.recv_challenge_request(reader) {
-                    if self.io.send_packet(&address, writer.to_packet()).is_err() {
-                        // TODO: pass this on and handle above
-                        warn!(
-                            "Server Error: Cannot send challenge response packet to {}",
-                            &address
-                        );
-                    }
-                }
-                return Ok(true);
-            }
-            PacketType::ClientValidateRequest => {
-                match self.handshake_manager.recv_validate_request(
-                    address,
-                    reader,
-                ) {
-                    HandshakeResult::Success => {
-                        if self.been_handshaked_users.contains_key(address) {
-                            // send validate response
-                            let writer = self.handshake_manager.write_validate_response();
-                            if self.io.send_packet(address, writer.to_packet()).is_err() {
-                                // TODO: pass this on and handle above
-                                warn!("Server Error: Cannot send validate success response packet to {}", &address);
-                            };
-                        } else {
-                            info!("checking authenticated users for {}", address);
-                            if let Some(user_key) = self.authenticated_users.get(address) {
-                                let user_key = *user_key;
-                                self.user_finish_handshake(&user_key);
-                            } else {
-                                warn!("Server Error: Cannot find user by address {}", address);
-                            }
-                        }
-                    }
-                    HandshakeResult::Invalid => {
-                        // do nothing
-                    }
-                }
-                return Ok(true);
-            }
-            PacketType::ClientConnectRequest => {
-                if self.user_connections.contains_key(address) {
-                    // send connect response
-                    let writer = self.handshake_manager.write_connect_response();
-                    if self.io.send_packet(address, writer.to_packet()).is_err() {
-                        // TODO: pass this on and handle above
-                        warn!(
-                            "Server Error: Cannot send connect success response packet to {}",
-                            address
-                        );
-                    };
-                    //
-                } else {
-                    let user_key = *self
-                        .been_handshaked_users
-                        .get(address)
-                        .expect("should be a user by now, from validation step");
-                    self.finalize_connection(&user_key);
-                }
-                return Ok(true);
-            }
-            PacketType::Ping => {
-                let response = self.time_manager.process_ping(reader).unwrap();
-                // send packet
-                if self.io.send_packet(address, response.to_packet()).is_err() {
-                    // TODO: pass this on and handle above
-                    warn!("Server Error: Cannot send pong packet to {}", address);
-                };
-                if let Some(connection) = self.user_connections.get_mut(address) {
-                    connection.base.mark_sent();
-                }
-                return Ok(true);
-            }
-            _ => {}
-        }
-
-        return Ok(false);
     }
 
     fn read_packet<W: WorldMutType<E>>(

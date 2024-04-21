@@ -23,7 +23,7 @@ pub mod shared {
     };
 }
 pub mod internal {
-    pub use crate::connection::handshake_manager::{HandshakeManager, HandshakeResult};
+    pub use crate::connection::handshake_manager::HandshakeManager;
 }
 
 pub use naia_shared::SerdeBevyServer as SerdeBevy;

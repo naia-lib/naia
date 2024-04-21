@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
-use log::warn;
+use log::{info, warn};
 
 use ring::{hmac, rand};
 
@@ -9,16 +9,14 @@ pub use naia_shared::{
     SerdeErr, StandardHeader,
 };
 
-use crate::{cache_map::CacheMap, connection::connection::Connection};
+use crate::{time_manager::TimeManager, handshake::HandshakeAction, cache_map::CacheMap, connection::{connection::Connection, io::Io}, UserKey};
 
 pub type Timestamp = u64;
 
-pub enum HandshakeResult {
-    Invalid,
-    Success,
-}
-
 pub struct HandshakeManager {
+    authenticated_users: HashMap<SocketAddr, UserKey>,
+    been_handshaked_users: HashMap<SocketAddr, UserKey>,
+
     connection_hash_key: hmac::Key,
     address_to_timestamp_map: HashMap<SocketAddr, Timestamp>,
     timestamp_digest_map: CacheMap<Timestamp, Vec<u8>>,
@@ -30,14 +28,123 @@ impl HandshakeManager {
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
 
         Self {
+            authenticated_users: HashMap::new(),
+            been_handshaked_users: HashMap::new(),
+
             connection_hash_key,
             address_to_timestamp_map: HashMap::new(),
             timestamp_digest_map: CacheMap::with_capacity(64),
         }
     }
 
+    pub(crate) fn authenticate_user(&mut self, address: &SocketAddr, user_key: &UserKey) {
+        self.authenticated_users.insert(*address, *user_key);
+    }
+
+    pub fn maintain_handshake<E: Copy + Eq + Hash + Send + Sync>(
+        &mut self,
+        address: &SocketAddr,
+        header: &StandardHeader,
+        reader: &mut BitReader,
+        io: &mut Io,
+        user_connections: &mut HashMap<SocketAddr, Connection<E>>,
+        time_manager: &mut TimeManager,
+    ) -> Result<HandshakeAction, SerdeErr> {
+        // Handshake stuff
+        match header.packet_type {
+            PacketType::ClientChallengeRequest => {
+                if let Ok(writer) = self.recv_challenge_request(reader) {
+                    if io.send_packet(&address, writer.to_packet()).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!(
+                            "Server Error: Cannot send challenge response packet to {}",
+                            &address
+                        );
+                    }
+                }
+                return Ok(HandshakeAction::ContinueReadingPacket);
+            }
+            PacketType::ClientValidateRequest => {
+                if self.recv_validate_request(
+                    address,
+                    reader,
+                ) {
+                    if self.been_handshaked_users.contains_key(address) {
+                        // send validate response
+                        let writer = self.write_validate_response();
+                        if io.send_packet(address, writer.to_packet()).is_err() {
+                            // TODO: pass this on and handle above
+                            warn!("Server Error: Cannot send validate success response packet to {}", &address);
+                        };
+                    } else {
+                        info!("checking authenticated users for {}", address);
+                        if let Some(user_key) = self.authenticated_users.get(address) {
+                            let user_key = *user_key;
+                            let address = *address;
+                            self.user_finish_handshake(io, &address, &user_key);
+                        } else {
+                            warn!("Server Error: Cannot find user by address {}", address);
+                        }
+                    }
+                } else {
+                    // do nothing
+                }
+                return Ok(HandshakeAction::ContinueReadingPacket);
+            }
+            PacketType::ClientConnectRequest => {
+                if user_connections.contains_key(address) {
+                    // send connect response
+                    let writer = self.write_connect_response();
+                    if io.send_packet(address, writer.to_packet()).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!(
+                            "Server Error: Cannot send connect success response packet to {}",
+                            address
+                        );
+                    };
+                    return Ok(HandshakeAction::ContinueReadingPacket);
+                } else {
+                    let user_key = *self
+                        .been_handshaked_users
+                        .get(address)
+                        .expect("should be a user by now, from validation step");
+
+                    // send connect response
+                    let writer = self.write_connect_response();
+                    if io
+                        .send_packet(address, writer.to_packet())
+                        .is_err()
+                    {
+                        // TODO: pass this on and handle above
+                        warn!(
+                            "Server Error: Cannot send connect response packet to {}",
+                            address
+                        );
+                    }
+
+                    return Ok(HandshakeAction::ContinueReadingPacketAndFinalizeConnection(user_key));
+                }
+            }
+            PacketType::Ping => {
+                let response = time_manager.process_ping(reader).unwrap();
+                // send packet
+                if io.send_packet(address, response.to_packet()).is_err() {
+                    // TODO: pass this on and handle above
+                    warn!("Server Error: Cannot send pong packet to {}", address);
+                };
+                if let Some(connection) = user_connections.get_mut(address) {
+                    connection.base.mark_sent();
+                }
+                return Ok(HandshakeAction::ContinueReadingPacket);
+            }
+            _ => {
+                return Ok(HandshakeAction::AbortPacket);
+            }
+        }
+    }
+
     // Step 1 of Handshake
-    pub fn recv_challenge_request(
+    fn recv_challenge_request(
         &mut self,
         reader: &mut BitReader,
     ) -> Result<BitWriter, SerdeErr> {
@@ -47,7 +154,7 @@ impl HandshakeManager {
     }
 
     // Step 2 of Handshake
-    pub fn write_challenge_response(&mut self, timestamp: &Timestamp) -> BitWriter {
+    fn write_challenge_response(&mut self, timestamp: &Timestamp) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerChallengeResponse, 0, 0, 0).ser(&mut writer);
         timestamp.ser(&mut writer);
@@ -67,33 +174,33 @@ impl HandshakeManager {
     }
 
     // Step 3 of Handshake
-    pub fn recv_validate_request(
+    fn recv_validate_request(
         &mut self,
         address: &SocketAddr,
         reader: &mut BitReader,
-    ) -> HandshakeResult {
+    ) -> bool {
         // Verify that timestamp hash has been written by this
         // server instance
         let Some(timestamp) = self.timestamp_validate(reader) else {
             warn!("Handshake Error from {}: Invalid timestamp hash", address);
-            return HandshakeResult::Invalid;
+            return false;
         };
         // Timestamp hash is valid
 
         self.address_to_timestamp_map.insert(*address, timestamp);
 
-        return HandshakeResult::Success;
+        return true;
     }
 
     // Step 4 of Handshake
-    pub fn write_validate_response(&self) -> BitWriter {
+    fn write_validate_response(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerValidateResponse, 0, 0, 0).ser(&mut writer);
         writer
     }
 
     // Step 5 of Handshake
-    pub(crate) fn write_connect_response(&self) -> BitWriter {
+    fn write_connect_response(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::ServerConnectResponse, 0, 0, 0).ser(&mut writer);
         writer
@@ -117,13 +224,15 @@ impl HandshakeManager {
         false
     }
 
-    pub fn write_reject_response(&self) -> BitWriter {
-        let mut writer = BitWriter::new();
-        StandardHeader::new(PacketType::ServerRejectResponse, 0, 0, 0).ser(&mut writer);
-        writer
-    }
+    // pub fn write_reject_response(&self) -> BitWriter {
+    //     let mut writer = BitWriter::new();
+    //     StandardHeader::new(PacketType::ServerRejectResponse, 0, 0, 0).ser(&mut writer);
+    //     writer
+    // }
 
     pub fn delete_user(&mut self, address: &SocketAddr) {
+        self.authenticated_users.remove(address);
+        self.been_handshaked_users.remove(address);
         self.address_to_timestamp_map.remove(address);
     }
 
@@ -153,5 +262,28 @@ impl HandshakeManager {
         } else {
             Some(timestamp)
         }
+    }
+
+    fn user_finish_handshake(
+        &mut self,
+        io: &mut Io,
+        addr: &SocketAddr,
+        user_key: &UserKey
+    ) {
+
+        // send validate response
+        let writer = self.write_validate_response();
+        if io
+            .send_packet(addr, writer.to_packet())
+            .is_err()
+        {
+            // TODO: pass this on and handle above
+            warn!(
+                "Server Error: Cannot send validate response packet to {}",
+                addr
+            );
+        }
+
+        self.been_handshaked_users.insert(*addr, *user_key);
     }
 }

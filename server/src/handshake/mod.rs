@@ -1,3 +1,4 @@
+use crate::UserKey;
 cfg_if! {
     if #[cfg(feature = "advanced_handshake")] {
         mod advanced_handshaker;
@@ -8,13 +9,16 @@ cfg_if! {
     }
 }
 
-pub use inner::{HandshakeError, Handshaker};
+pub struct HandshakeError;
 
-mod inner {
-
-    pub struct HandshakeError;
-
-    pub trait Handshaker: Send + Sync {
-        fn example(&self) -> Result<(), HandshakeError>;
-    }
+pub trait Handshaker: Send + Sync {
+    fn example(&self) -> Result<(), HandshakeError>;
 }
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum HandshakeAction {
+    ContinueReadingPacketAndFinalizeConnection(UserKey),
+    ContinueReadingPacket,
+    AbortPacket,
+}
+
