@@ -22,6 +22,9 @@ zstd_support = ["naia-shared/zstd_support"]
 transport_webrtc = [ "naia-server-socket" ]
 transport_udp = []
 
+# this should be used when the underlying transport does not handle it for you (i.e. UDP)
+advanced_handshake = ["naia-shared/advanced_handshake"]
+
 [dependencies]
 naia-shared = { version = "0.22", path = "../shared" }
 naia-server-socket = { version = "0.22", path = "../socket/server", optional = true }

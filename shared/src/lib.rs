@@ -45,6 +45,7 @@ mod sequence_list;
 mod types;
 mod world;
 mod wrapping_number;
+pub mod handshake;
 
 pub use backends::{Timer, Timestamp};
 pub use connection::{

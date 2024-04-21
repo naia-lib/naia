@@ -40,6 +40,7 @@ mod time_manager;
 mod user;
 mod user_scope;
 mod world;
+mod handshake;
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;
