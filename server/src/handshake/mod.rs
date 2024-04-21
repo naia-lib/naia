@@ -17,8 +17,9 @@ pub trait Handshaker: Send + Sync {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum HandshakeAction {
-    ContinueReadingPacketAndFinalizeConnection(UserKey),
+    FinalizeConnection(UserKey),
     ContinueReadingPacket,
-    AbortPacket,
+    FinishedReadingPacket,
+    DisconnectUser(UserKey),
 }
 

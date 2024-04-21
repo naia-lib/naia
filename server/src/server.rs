@@ -1648,44 +1648,89 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         loop {
             match self.io.recv_reader() {
                 Ok(Some((address, owned_reader))) => {
+                    // receive packet
                     let mut reader = owned_reader.borrow();
 
-                    // Read header
+                    // read header
                     let Ok(header) = StandardHeader::de(&mut reader) else {
                         // Received a malformed packet
                         // TODO: increase suspicion against packet sender
                         continue;
                     };
 
+                    match header.packet_type {
+                        PacketType::Data => {
+                            addresses.insert(address);
+
+                            if self
+                                .read_data_packet(&address, &header, &mut reader)
+                                .is_err()
+                            {
+                                warn!("Server Error: cannot read malformed packet");
+                                continue;
+                            }
+                        }
+                        PacketType::Ping => {
+                            let response = self.time_manager.process_ping(&mut reader).unwrap();
+                            // send packet
+                            if self.io.send_packet(&address, response.to_packet()).is_err() {
+                                // TODO: pass this on and handle above
+                                warn!("Server Error: Cannot send pong packet to {}", address);
+                                continue;
+                            };
+
+                            if let Some(connection) = self.user_connections.get_mut(&address) {
+                                connection.process_incoming_header(&header);
+                                connection.base.mark_heard();
+                                connection.base.mark_sent();
+                            }
+
+                            continue;
+                        }
+                        PacketType::Heartbeat => {
+                            if let Some(connection) = self.user_connections.get_mut(&address) {
+                                connection.process_incoming_header(&header);
+                                connection.base.mark_heard();
+                            }
+
+                            continue;
+                        }
+                        PacketType::Pong => {
+                            if let Some(connection) = self.user_connections.get_mut(&address) {
+                                connection.process_incoming_header(&header);
+                                connection.base.mark_heard();
+                                connection.base.mark_sent();
+                                connection.ping_manager.process_pong(&self.time_manager, &mut reader);
+                            }
+
+                            continue;
+                        }
+                        _ => {}
+                    }
+
                     match self.handshake_manager.maintain_handshake(
                         &address,
                         &header,
                         &mut reader,
                         &mut self.io,
-                        &mut self.user_connections,
-                        &mut self.time_manager,
+                        self.user_connections.contains_key(&address),
                     ) {
-                        Ok(HandshakeAction::ContinueReadingPacketAndFinalizeConnection(user_key)) => {
-                            self.finalize_connection(&user_key);
-                        }
                         Ok(HandshakeAction::ContinueReadingPacket) => {}
-                        Ok(HandshakeAction::AbortPacket) => {
+                        Ok(HandshakeAction::FinishedReadingPacket) => {
+                            continue;
+                        }
+                        Ok(HandshakeAction::FinalizeConnection(user_key)) => {
+                            self.finalize_connection(&user_key);
+                            continue;
+                        }
+                        Ok(HandshakeAction::DisconnectUser(user_key)) => {
+                            self.user_disconnect(&user_key, &mut world);
                             continue;
                         }
                         Err(_err) => {
                             warn!("Server Error: cannot read malformed packet");
                             continue;
                         }
-                    }
-
-                    addresses.insert(address);
-
-                    if self
-                        .read_packet(&address, &header, &mut reader, &mut world)
-                        .is_err()
-                    {
-                        warn!("Server Error: cannot read malformed packet");
-                        continue;
                     }
                 }
                 Ok(None) => {
@@ -1704,12 +1749,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
     }
 
-    fn read_packet<W: WorldMutType<E>>(
+    fn read_data_packet(
         &mut self,
         address: &SocketAddr,
         header: &StandardHeader,
         reader: &mut BitReader,
-        world: &mut W,
     ) -> Result<(), SerdeErr> {
         // Packets requiring established connection
         let Some(connection) = self.user_connections.get_mut(address) else {
@@ -1737,24 +1781,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     reader,
                     &mut self.global_world_manager,
                 )?;
-            }
-            PacketType::Disconnect => {
-                if self
-                    .handshake_manager
-                    .verify_disconnect_request(connection, reader)
-                {
-                    let user_key = connection.user_key;
-                    self.user_disconnect(&user_key, world);
-                }
-            }
-            PacketType::Heartbeat => {
-                // already marked heard above
-            }
-            PacketType::Pong => {
-                // read client tick
-                connection
-                    .ping_manager
-                    .process_pong(&self.time_manager, reader);
             }
             _ => {}
         }

@@ -41,14 +41,19 @@ impl HandshakeManager {
         self.authenticated_users.insert(*address, *user_key);
     }
 
-    pub fn maintain_handshake<E: Copy + Eq + Hash + Send + Sync>(
+    pub fn delete_user(&mut self, address: &SocketAddr) {
+        self.authenticated_users.remove(address);
+        self.been_handshaked_users.remove(address);
+        self.address_to_timestamp_map.remove(address);
+    }
+
+    pub fn maintain_handshake(
         &mut self,
         address: &SocketAddr,
         header: &StandardHeader,
         reader: &mut BitReader,
         io: &mut Io,
-        user_connections: &mut HashMap<SocketAddr, Connection<E>>,
-        time_manager: &mut TimeManager,
+        has_connection: bool,
     ) -> Result<HandshakeAction, SerdeErr> {
         // Handshake stuff
         match header.packet_type {
@@ -62,7 +67,7 @@ impl HandshakeManager {
                         );
                     }
                 }
-                return Ok(HandshakeAction::ContinueReadingPacket);
+                return Ok(HandshakeAction::FinishedReadingPacket);
             }
             PacketType::ClientValidateRequest => {
                 if self.recv_validate_request(
@@ -89,56 +94,47 @@ impl HandshakeManager {
                 } else {
                     // do nothing
                 }
-                return Ok(HandshakeAction::ContinueReadingPacket);
+                return Ok(HandshakeAction::FinishedReadingPacket);
             }
             PacketType::ClientConnectRequest => {
-                if user_connections.contains_key(address) {
-                    // send connect response
-                    let writer = self.write_connect_response();
-                    if io.send_packet(address, writer.to_packet()).is_err() {
-                        // TODO: pass this on and handle above
-                        warn!(
-                            "Server Error: Cannot send connect success response packet to {}",
+
+                // send connect response
+                let writer = self.write_connect_response();
+                if io
+                    .send_packet(address, writer.to_packet())
+                    .is_err()
+                {
+                    // TODO: pass this on and handle above
+                    warn!(
+                            "Server Error: Cannot send connect response packet to {}",
                             address
                         );
-                    };
-                    return Ok(HandshakeAction::ContinueReadingPacket);
+                }
+
+                if has_connection {
+                    return Ok(HandshakeAction::FinishedReadingPacket);
                 } else {
                     let user_key = *self
                         .been_handshaked_users
                         .get(address)
                         .expect("should be a user by now, from validation step");
 
-                    // send connect response
-                    let writer = self.write_connect_response();
-                    if io
-                        .send_packet(address, writer.to_packet())
-                        .is_err()
-                    {
-                        // TODO: pass this on and handle above
-                        warn!(
-                            "Server Error: Cannot send connect response packet to {}",
-                            address
-                        );
-                    }
-
-                    return Ok(HandshakeAction::ContinueReadingPacketAndFinalizeConnection(user_key));
+                    return Ok(HandshakeAction::FinalizeConnection(user_key));
                 }
             }
-            PacketType::Ping => {
-                let response = time_manager.process_ping(reader).unwrap();
-                // send packet
-                if io.send_packet(address, response.to_packet()).is_err() {
-                    // TODO: pass this on and handle above
-                    warn!("Server Error: Cannot send pong packet to {}", address);
-                };
-                if let Some(connection) = user_connections.get_mut(address) {
-                    connection.base.mark_sent();
+            PacketType::Disconnect => {
+                if self.verify_disconnect_request(address, reader) {
+                    let user_key = *self
+                        .been_handshaked_users
+                        .get(address)
+                        .expect("should be a user by now, from validation step");
+                    return Ok(HandshakeAction::DisconnectUser(user_key));
+                } else {
+                    return Ok(HandshakeAction::FinishedReadingPacket);
                 }
-                return Ok(HandshakeAction::ContinueReadingPacket);
             }
             _ => {
-                return Ok(HandshakeAction::AbortPacket);
+                return Ok(HandshakeAction::ContinueReadingPacket);
             }
         }
     }
@@ -206,15 +202,15 @@ impl HandshakeManager {
         writer
     }
 
-    pub fn verify_disconnect_request<E: Copy + Eq + Hash + Send + Sync>(
+    fn verify_disconnect_request(
         &mut self,
-        connection: &Connection<E>,
+        address: &SocketAddr,
         reader: &mut BitReader,
     ) -> bool {
         // Verify that timestamp hash has been written by this
         // server instance
         if let Some(new_timestamp) = self.timestamp_validate(reader) {
-            if let Some(old_timestamp) = self.address_to_timestamp_map.get(&connection.address) {
+            if let Some(old_timestamp) = self.address_to_timestamp_map.get(address) {
                 if *old_timestamp == new_timestamp {
                     return true;
                 }
@@ -224,17 +220,11 @@ impl HandshakeManager {
         false
     }
 
-    // pub fn write_reject_response(&self) -> BitWriter {
+    // fn write_reject_response(&self) -> BitWriter {
     //     let mut writer = BitWriter::new();
     //     StandardHeader::new(PacketType::ServerRejectResponse, 0, 0, 0).ser(&mut writer);
     //     writer
     // }
-
-    pub fn delete_user(&mut self, address: &SocketAddr) {
-        self.authenticated_users.remove(address);
-        self.been_handshaked_users.remove(address);
-        self.address_to_timestamp_map.remove(address);
-    }
 
     fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
         // Read timestamp
