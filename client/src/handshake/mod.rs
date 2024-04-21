@@ -1,6 +1,6 @@
 mod handshake_time_manager;
 
-use naia_shared::{BitReader, BitWriter, OutgoingPacket};
+use naia_shared::{BitReader, BitWriter, IdentityToken, OutgoingPacket};
 
 use crate::connection::time_manager::TimeManager;
 
@@ -19,6 +19,7 @@ pub enum HandshakeResult {
 }
 
 pub trait Handshaker: Send + Sync {
+    fn set_identity_token(&mut self, identity_token: IdentityToken);
     fn is_connected(&self) -> bool;
     fn send(&mut self) -> Option<OutgoingPacket>;
     fn recv(&mut self, reader: &mut BitReader) -> Option<HandshakeResult>;

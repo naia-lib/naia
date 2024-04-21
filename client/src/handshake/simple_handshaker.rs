@@ -3,13 +3,12 @@ use std::time::Duration;
 
 use log::warn;
 
-use naia_shared::{BitReader, BitWriter, PacketType, Serde, StandardHeader, Timer, Timestamp as stamp_time, handshake::HandshakeHeader, OutgoingPacket};
+use naia_shared::{BitReader, BitWriter, PacketType, Serde, StandardHeader, Timer, handshake::HandshakeHeader, OutgoingPacket, IdentityToken};
 
 use crate::{handshake::{HandshakeResult, handshake_time_manager::HandshakeTimeManager, Handshaker}, connection::time_manager::TimeManager};
 
-type Timestamp = u64;
-
 enum HandshakeState {
+    AwaitingIdentifyResponse,
     TimeSync(HandshakeTimeManager),
     AwaitingConnectResponse(TimeManager),
     Connected,
@@ -18,9 +17,10 @@ enum HandshakeState {
 impl HandshakeState {
     fn get_index(&self) -> u8 {
         match self {
-            HandshakeState::TimeSync(_) => 0,
-            HandshakeState::AwaitingConnectResponse(_) => 1,
-            HandshakeState::Connected => 2,
+            Self::AwaitingIdentifyResponse => 0,
+            Self::TimeSync(_) => 1,
+            Self::AwaitingConnectResponse(_) => 2,
+            Self::Connected => 3,
         }
     }
 }
@@ -36,11 +36,16 @@ impl PartialEq for HandshakeState {
 pub struct HandshakeManager {
     connection_state: HandshakeState,
     handshake_timer: Timer,
-    pre_connection_timestamp: Timestamp,
-    pre_connection_digest: Option<Vec<u8>>,
+    identity_token: Option<IdentityToken>,
+    ping_interval: Duration,
+    handshake_pings: u8,
 }
 
 impl Handshaker for HandshakeManager {
+    fn set_identity_token(&mut self, identity_token: IdentityToken) {
+        self.identity_token = Some(identity_token);
+    }
+
     fn is_connected(&self) -> bool {
         self.connection_state == HandshakeState::Connected
     }
@@ -55,6 +60,15 @@ impl Handshaker for HandshakeManager {
         self.handshake_timer.reset();
 
         match &mut self.connection_state {
+            HandshakeState::AwaitingIdentifyResponse => {
+                if let Some(identity_token) = &self.identity_token {
+                    let writer = self.write_identify_request(identity_token);
+                    return Some(writer.to_packet());
+                } else {
+                    warn!("Identity Token not set");
+                    return None;
+                }
+            }
             HandshakeState::TimeSync(time_manager) => {
                 // use time manager to send initial pings until client/server time is synced
                 // then, move state to AwaitingConnectResponse
@@ -86,9 +100,14 @@ impl Handshaker for HandshakeManager {
                     return None;
                 };
                 match handshake_header {
+                    HandshakeHeader::ServerIdentifyResponse => {
+                        self.recv_identify_response(reader);
+                        return None;
+                    }
                     HandshakeHeader::ServerConnectResponse => {
                         return self.recv_connect_response();
                     }
+                    | HandshakeHeader::ClientIdentifyRequest
                     | HandshakeHeader::ClientConnectRequest
                     | HandshakeHeader::Disconnect => {
                         return None;
@@ -130,7 +149,10 @@ impl Handshaker for HandshakeManager {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
         HandshakeHeader::Disconnect.ser(&mut writer);
-        self.write_signed_timestamp(&mut writer);
+
+        let identity_token = self.identity_token.as_ref().unwrap();
+        identity_token.ser(&mut writer);
+
         writer
     }
 }
@@ -140,16 +162,33 @@ impl HandshakeManager {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
-        let pre_connection_timestamp = stamp_time::now();
-
         Self {
             handshake_timer,
-            pre_connection_timestamp,
-            pre_connection_digest: None,
-            connection_state: HandshakeState::TimeSync(HandshakeTimeManager::new(
-                ping_interval,
-                handshake_pings,
-            )),
+            identity_token: None,
+            connection_state: HandshakeState::AwaitingIdentifyResponse,
+            ping_interval,
+            handshake_pings,
+        }
+    }
+
+    // Step 1 of Handshake
+    fn write_identify_request(&self, identity_token: &IdentityToken) -> BitWriter {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ClientIdentifyRequest.ser(&mut writer);
+
+        identity_token.ser(&mut writer);
+
+        writer
+    }
+
+    // Step 2 of Handshake
+    fn recv_identify_response(&mut self, _reader: &mut BitReader) {
+        if self.connection_state == HandshakeState::AwaitingIdentifyResponse {
+            self.connection_state = HandshakeState::TimeSync(HandshakeTimeManager::new(
+                self.ping_interval,
+                self.handshake_pings,
+            ));
         }
     }
 
@@ -171,11 +210,5 @@ impl HandshakeManager {
             };
 
         return Some(HandshakeResult::Connected(time_manager));
-    }
-
-    fn write_signed_timestamp(&self, writer: &mut BitWriter) {
-        self.pre_connection_timestamp.ser(writer);
-        let digest: &Vec<u8> = self.pre_connection_digest.as_ref().unwrap();
-        digest.ser(writer);
     }
 }
