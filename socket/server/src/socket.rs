@@ -1,7 +1,6 @@
 use std::net::SocketAddr;
 
 use smol::channel;
-use futures_util::SinkExt;
 
 use naia_socket_shared::SocketConfig;
 
@@ -51,15 +50,15 @@ impl Socket {
     ) -> (Box<dyn AuthSender>, Box<dyn AuthReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
 
         let (from_client_auth_sender, from_client_auth_receiver) = smol::channel::unbounded();
-        let (to_client_auth_sender, to_client_auth_receiver) = smol::channel::unbounded();
+        let (to_session_all_auth_sender, to_session_all_auth_receiver) = smol::channel::unbounded();
         let from_client_auth_sender = Some(from_client_auth_sender);
-        let to_client_auth_receiver = Some(to_client_auth_receiver);
+        let to_session_all_auth_receiver = Some(to_session_all_auth_receiver);
 
         let (from_client_receiver, sender_receiver) = Self::setup_receiver_loop(
             server_addrs,
             config,
             from_client_auth_sender,
-            to_client_auth_receiver
+            to_session_all_auth_receiver
         );
 
         let (packet_sender, packet_receiver) = Self::setup_sender_loop(
@@ -69,7 +68,7 @@ impl Socket {
         );
 
         // Setup Sender
-        let auth_sender_impl = AuthSenderImpl::new(to_client_auth_sender);
+        let auth_sender_impl = AuthSenderImpl::new(to_session_all_auth_sender);
 
         let auth_sender: Box<dyn AuthSender> = Box::new(auth_sender_impl);
 
@@ -83,11 +82,14 @@ impl Socket {
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
         from_client_auth_sender: Option<smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>>,
-        to_client_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, bool)>>,
-    ) -> (smol::channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>, smol::channel::Receiver<futures_channel::mpsc::Sender<(SocketAddr, Box<[u8]>)>>) {
+        to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, bool)>>,
+    ) -> (
+        smol::channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
+        smol::channel::Receiver<smol::channel::Sender<(SocketAddr, Box<[u8]>)>>
+    ) {
         // Set up receiver loop
         let (from_client_sender, from_client_receiver) = smol::channel::unbounded();
-        let (sender_sender, sender_receiver) = smol::channel::bounded(1);
+        let (sender_sender, sender_receiver) = smol::channel::unbounded();
 
         let server_addrs_clone = server_addrs.clone();
         let config_clone = config.clone();
@@ -98,7 +100,7 @@ impl Socket {
                 server_addrs_clone,
                 config_clone,
                 from_client_auth_sender,
-                to_client_auth_receiver,
+                to_session_all_auth_receiver,
             ).await;
 
             sender_sender.send(async_socket.sender()).await.unwrap();
@@ -118,14 +120,14 @@ impl Socket {
     fn setup_sender_loop(
         config: &SocketConfig,
         from_client_receiver: smol::channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
-        sender_receiver: smol::channel::Receiver<futures_channel::mpsc::Sender<(SocketAddr, Box<[u8]>)>>
+        sender_receiver: smol::channel::Receiver<smol::channel::Sender<(SocketAddr, Box<[u8]>)>>
     ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         // Set up sender loop
         let (to_client_sender, to_client_receiver) = channel::unbounded();
 
         executor::spawn(async move {
             // Create async socket
-            let mut async_sender = sender_receiver.recv().await.unwrap();
+            let async_sender = sender_receiver.recv().await.unwrap();
 
             loop {
                 if let Ok(msg) = to_client_receiver.recv().await {

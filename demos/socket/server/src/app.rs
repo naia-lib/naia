@@ -51,15 +51,19 @@ impl App {
         match self.auth_receiver.receive() {
             Ok(Some((address, payload))) => {
                 let auth_from_client = String::from_utf8_lossy(payload);
-                info!("Server incoming Auth <- {}: {}", address, auth_from_client);
+                info!("Server incoming Auth <- {}: [{}]", address, auth_from_client);
 
                 if auth_from_client.eq("12345") {
                     if let Err(error) = self.auth_sender.accept(&address) {
                         info!("Server Accept Auth error {}", error);
+                    } else {
+                        info!("Server Auth accepted: {}", address);
                     }
                 } else {
                     if let Err(error) = self.auth_sender.reject(&address) {
                         info!("Server Reject Auth error {}", error);
+                    } else {
+                        info!("Server Auth rejected: {}", address);
                     }
                 }
             }
