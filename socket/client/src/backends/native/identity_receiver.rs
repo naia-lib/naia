@@ -35,11 +35,11 @@ impl IdentityReceiver for IdentityReceiverImpl {
                 return Ok(Some(token));
             } else {
                 // info!("IdentityReceiverImpl::receive - No IdentityToken available");
+                return Ok(None);
             }
         } else {
             // info!("IdentityReceiverImpl::receive - Lock not acquired");
+            return Ok(None);
         }
-        // info!("IdentityReceiverImpl::receive - Returning None");
-        Ok(None)
     }
 }

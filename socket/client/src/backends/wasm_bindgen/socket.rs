@@ -1,9 +1,6 @@
 use naia_socket_shared::SocketConfig;
 
-use crate::{
-    backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver,
-    packet_receiver::PacketReceiver, packet_sender::PacketSender,
-};
+use crate::{backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver, IdentityReceiver, packet_receiver::PacketReceiver, packet_sender::PacketSender};
 
 use super::{
     addr_cell::AddrCell, data_channel::DataChannel, data_port::DataPort,
@@ -20,7 +17,7 @@ impl Socket {
     pub fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>)
+    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>)
     {
         return Self::connect_inner(server_session_url, config, None);
     }
@@ -29,7 +26,7 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>)
+    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>)
     {
         return Self::connect_inner(server_session_url, config, Some(auth_bytes));
     }
@@ -39,16 +36,20 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes_opt: Option<Vec<u8>>,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         let data_channel = DataChannel::new(config, server_session_url, auth_bytes_opt);
 
         let data_port = data_channel.data_port();
         let addr_cell = data_channel.addr_cell();
 
-        let result = Socket::setup_io(config, &addr_cell, &data_port);
+        let (packet_sender, packet_receiver) = Socket::setup_io(config, &addr_cell, &data_port);
+
+        // Setup Identity Receiver
+        let id_receiver: Box<dyn IdentityReceiver> = Box::new(data_channel.id_receiver());
 
         data_channel.start();
-        return result;
+
+        return (id_receiver, packet_sender, packet_receiver);
     }
 
     // Creates a Socket from an underlying DataPort.
@@ -92,7 +93,7 @@ impl SocketTrait for Socket {
     fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>)
+    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>)
     {
         return Self::connect(server_session_url, config);
     }
@@ -101,7 +102,7 @@ impl SocketTrait for Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>)
+    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>)
     {
         return Self::connect_with_auth(server_session_url, config, auth_bytes);
     }

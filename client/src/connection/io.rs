@@ -1,5 +1,4 @@
 use std::{net::SocketAddr, time::Duration};
-use log::info;
 
 use naia_shared::{BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, IdentityToken, OutgoingPacket};
 

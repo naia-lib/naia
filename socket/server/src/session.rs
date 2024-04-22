@@ -372,22 +372,26 @@ async fn serve(
             let buf = RequestBuffer::new(&mut lines);
 
             match session_endpoint.http_session_request(buf).await {
-                Ok(mut resp) => {
+                Ok(resp) => {
                     success = true;
 
-                    resp.headers_mut().insert(
-                        header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                        HeaderValue::from_static("*"),
+                    let (_head, body) = resp.into_parts();
+
+                    let body = format!(
+                        "{{\
+                        \"sdp\":{body},\
+                        \"id\":\"{identity_token}\"\
+                        }}",
                     );
 
-                    resp.headers_mut().insert(
-                        header::AUTHORIZATION,
-                        HeaderValue::from_str(&identity_token)
-                            .expect("unable to convert identity token to header value"),
-                    );
+                    let response = Response::builder()
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, HeaderValue::from_static("*"))
+                        .body(body)
+                        .expect("could not combine sdp response with id token");
 
-                    let mut out = response_header_to_vec(&resp);
-                    out.extend_from_slice(resp.body().as_bytes());
+                    let mut out = response_header_to_vec(&response);
+                    out.extend_from_slice(response.body().as_bytes());
 
                     info!("Successful WebRTC session request from {}", remote_addr);
 
