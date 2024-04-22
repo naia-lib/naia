@@ -11,16 +11,16 @@ use http::{header, HeaderValue, Response};
 use log::{info, warn};
 use once_cell::sync::OnceCell;
 use smol::{
-    stream::StreamExt,
-    io::{AsyncBufRead, AsyncReadExt, AsyncBufReadExt, AsyncWriteExt, BufReader, Lines},
-    Async,
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Lines},
     lock::Mutex,
+    stream::StreamExt,
+    Async,
 };
 use webrtc_unreliable::SessionEndpoint;
 
 use naia_socket_shared::{IdentityToken, SocketConfig};
 
-use crate::{executor, NaiaServerSocketError, server_addrs::ServerAddrs};
+use crate::{executor, server_addrs::ServerAddrs, NaiaServerSocketError};
 
 static RTC_URL_POST_PATH: OnceCell<String> = OnceCell::new();
 static RTC_URL_OPTIONS_PATH: OnceCell<String> = OnceCell::new();
@@ -29,8 +29,12 @@ pub fn start_session_server(
     server_addrs: ServerAddrs,
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
-    from_client_auth_sender: Option<smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>>,
-    to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>>,
+    from_client_auth_sender: Option<
+        smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
+    >,
+    to_session_all_auth_receiver: Option<
+        smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
+    >,
 ) {
     RTC_URL_POST_PATH
         .set(format!("POST /{}", config.rtc_endpoint_path))
@@ -39,7 +43,14 @@ pub fn start_session_server(
         .set(format!("OPTIONS /{}", config.rtc_endpoint_path))
         .expect("unable to set the URL Path");
     executor::spawn(async move {
-        listen(server_addrs, config, session_endpoint.clone(), from_client_auth_sender, to_session_all_auth_receiver).await;
+        listen(
+            server_addrs,
+            config,
+            session_endpoint.clone(),
+            from_client_auth_sender,
+            to_session_all_auth_receiver,
+        )
+        .await;
     })
     .detach();
 }
@@ -49,8 +60,12 @@ async fn listen(
     server_addrs: ServerAddrs,
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
-    from_client_auth_sender: Option<smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>>,
-    to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>>,
+    from_client_auth_sender: Option<
+        smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
+    >,
+    to_session_all_auth_receiver: Option<
+        smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
+    >,
 ) {
     let socket_address = server_addrs.session_listen_addr;
 
@@ -65,11 +80,12 @@ async fn listen(
         config.rtc_endpoint_path
     );
 
-    let mut auth_mux_sender_opt = if let Some(to_session_all_auth_receiver) = to_session_all_auth_receiver {
-        Some(setup_auth_mux(to_session_all_auth_receiver).await)
-    } else {
-        None
-    };
+    let mut auth_mux_sender_opt =
+        if let Some(to_session_all_auth_receiver) = to_session_all_auth_receiver {
+            Some(setup_auth_mux(to_session_all_auth_receiver).await)
+        } else {
+            None
+        };
 
     loop {
         // Accept the next connection.
@@ -80,17 +96,19 @@ async fn listen(
 
         let session_endpoint_clone = session_endpoint.clone();
 
-        let (
-            to_session_single_auth_sender,
-            to_session_single_auth_receiver
-        ) = if from_client_auth_sender.is_some() {
-            let (sender, receiver) = futures_channel::oneshot::channel();
-            (Some(sender), Some(receiver))
-        } else {
-            (None, None)
-        };
+        let (to_session_single_auth_sender, to_session_single_auth_receiver) =
+            if from_client_auth_sender.is_some() {
+                let (sender, receiver) = futures_channel::oneshot::channel();
+                (Some(sender), Some(receiver))
+            } else {
+                (None, None)
+            };
         if let Some(to_session_single_auth_sender) = to_session_single_auth_sender {
-            let result = auth_mux_sender_opt.as_mut().unwrap().send((remote_addr, to_session_single_auth_sender)).await;
+            let result = auth_mux_sender_opt
+                .as_mut()
+                .unwrap()
+                .send((remote_addr, to_session_single_auth_sender))
+                .await;
             if result.is_err() {
                 warn!("Unable to send auth sender to auth mux");
                 continue;
@@ -105,16 +123,19 @@ async fn listen(
                 Arc::new(response_stream),
                 from_client_auth_sender,
                 to_session_single_auth_receiver,
-            ).await;
+            )
+            .await;
         })
         .detach();
     }
 }
 
 async fn setup_auth_mux(
-    to_session_all_auth_receiver: smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>
-) -> smol::channel::Sender<(SocketAddr, futures_channel::oneshot::Sender<Option<IdentityToken>>)> {
-
+    to_session_all_auth_receiver: smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
+) -> smol::channel::Sender<(
+    SocketAddr,
+    futures_channel::oneshot::Sender<Option<IdentityToken>>,
+)> {
     let (sender_sender, sender_receiver) = smol::channel::unbounded();
 
     let map_1 = Arc::new(Mutex::new(HashMap::new()));
@@ -122,27 +143,31 @@ async fn setup_auth_mux(
 
     // Spawn a background task for muxing in
     executor::spawn(async move {
-        serve_auth_mux_in(
-            map_1,
-            to_session_all_auth_receiver,
-        ).await;
+        serve_auth_mux_in(map_1, to_session_all_auth_receiver).await;
     })
-        .detach();
+    .detach();
 
     // Spawn a background task for muxing out
     executor::spawn(async move {
-        serve_auth_mux_out(
-            map_2,
-            sender_receiver,
-        ).await;
+        serve_auth_mux_out(map_2, sender_receiver).await;
     })
-        .detach();
+    .detach();
 
     sender_sender
 }
 
 async fn serve_auth_mux_in(
-    map: Arc<Mutex<HashMap<SocketAddr, (Option<futures_channel::oneshot::Sender<Option<IdentityToken>>>, Option<Option<IdentityToken>>)>>>,
+    map: Arc<
+        Mutex<
+            HashMap<
+                SocketAddr,
+                (
+                    Option<futures_channel::oneshot::Sender<Option<IdentityToken>>>,
+                    Option<Option<IdentityToken>>,
+                ),
+            >,
+        >,
+    >,
     to_session_all_auth_receiver: smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
 ) {
     loop {
@@ -170,8 +195,21 @@ async fn serve_auth_mux_in(
 }
 
 async fn serve_auth_mux_out(
-    map: Arc<Mutex<HashMap<SocketAddr, (Option<futures_channel::oneshot::Sender<Option<IdentityToken>>>, Option<Option<IdentityToken>>)>>>,
-    sender_receiver: smol::channel::Receiver<(SocketAddr, futures_channel::oneshot::Sender<Option<IdentityToken>>)>
+    map: Arc<
+        Mutex<
+            HashMap<
+                SocketAddr,
+                (
+                    Option<futures_channel::oneshot::Sender<Option<IdentityToken>>>,
+                    Option<Option<IdentityToken>>,
+                ),
+            >,
+        >,
+    >,
+    sender_receiver: smol::channel::Receiver<(
+        SocketAddr,
+        futures_channel::oneshot::Sender<Option<IdentityToken>>,
+    )>,
 ) {
     loop {
         let Ok((addr, sender)) = sender_receiver.recv().await else {
@@ -203,8 +241,12 @@ async fn serve_auth_mux_out(
 async fn serve(
     mut session_endpoint: SessionEndpoint,
     mut stream: Arc<Async<TcpStream>>,
-    from_client_auth_sender: Option<smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>>,
-    to_session_single_auth_receiver: Option<futures_channel::oneshot::Receiver<Option<IdentityToken>>>,
+    from_client_auth_sender: Option<
+        smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
+    >,
+    to_session_single_auth_receiver: Option<
+        futures_channel::oneshot::Receiver<Option<IdentityToken>>,
+    >,
 ) {
     let remote_addr = stream
         .get_ref()
@@ -269,7 +311,6 @@ async fn serve(
                             success = true;
                             break;
                         }
-
                     } else {
                         // info!("read leftover line 1: {}", str);
                     }
@@ -330,7 +371,6 @@ async fn serve(
         // handle auth
         if success && !is_options {
             if let Some(from_client_auth_sender) = from_client_auth_sender {
-
                 success = false;
 
                 let to_session_auth_receiver = to_session_single_auth_receiver.unwrap();
@@ -339,9 +379,11 @@ async fn serve(
                 if let Some(auth_string) = auth_string {
                     match base64::decode(&auth_string) {
                         Ok(decoded_bytes) => {
-                            if from_client_auth_sender.send(
-                                Ok((remote_addr, decoded_bytes.into()))
-                            ).await.is_err() {
+                            if from_client_auth_sender
+                                .send(Ok((remote_addr, decoded_bytes.into())))
+                                .await
+                                .is_err()
+                            {
                                 warn!("Unable to send auth string to server app");
                             } else {
                                 // info!("Sent auth bytes to server app");
@@ -386,7 +428,10 @@ async fn serve(
 
                     let response = Response::builder()
                         .header(header::CONTENT_TYPE, "application/json")
-                        .header(header::ACCESS_CONTROL_ALLOW_ORIGIN, HeaderValue::from_static("*"))
+                        .header(
+                            header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                            HeaderValue::from_static("*"),
+                        )
                         .body(body)
                         .expect("could not combine sdp response with id token");
 

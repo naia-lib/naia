@@ -17,18 +17,18 @@ extern crate cfg_if;
 pub mod link_condition_logic;
 
 mod backends;
+mod identity_token;
 mod link_conditioner_config;
 mod socket_config;
 mod time_queue;
 mod url_parse;
-mod identity_token;
 
 pub use backends::{Instant, Random};
+pub use identity_token::*;
 pub use link_conditioner_config::LinkConditionerConfig;
 pub use socket_config::SocketConfig;
 pub use time_queue::TimeQueue;
 pub use url_parse::{parse_server_url, url_to_socket_addr};
-pub use identity_token::*;
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct ChannelClosedError<T>(pub T);

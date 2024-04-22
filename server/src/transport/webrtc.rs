@@ -2,12 +2,15 @@ use std::net::SocketAddr;
 
 use naia_shared::{IdentityToken, SocketConfig};
 
-use naia_server_socket::{PacketReceiver, PacketSender, AuthReceiver, AuthSender, Socket as ServerSocket};
+use naia_server_socket::{
+    AuthReceiver, AuthSender, PacketReceiver, PacketSender, Socket as ServerSocket,
+};
 
 pub use naia_server_socket::ServerAddrs;
 
 use super::{
-    PacketReceiver as TransportReceiver, PacketSender as TransportSender, AuthSender as TransportAuthSender, AuthReceiver as TransportAuthReceiver, RecvError, SendError,
+    AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
+    PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     Socket as TransportSocket,
 };
 
@@ -41,8 +44,14 @@ impl TransportReceiver for Box<dyn PacketReceiver> {
 
 impl TransportAuthSender for Box<dyn AuthSender> {
     ///
-    fn accept(&self, address: &SocketAddr, identity_token: &IdentityToken) -> Result<(), SendError> {
-        self.as_ref().accept(address, identity_token).map_err(|_| SendError)
+    fn accept(
+        &self,
+        address: &SocketAddr,
+        identity_token: &IdentityToken,
+    ) -> Result<(), SendError> {
+        self.as_ref()
+            .accept(address, identity_token)
+            .map_err(|_| SendError)
     }
     ///
     fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
@@ -64,18 +73,21 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 }
 
 impl TransportSocket for Socket {
-    fn listen(self: Box<Self>) -> (Box<dyn TransportAuthSender>, Box<dyn TransportAuthReceiver>, Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
-        let (
-            inner_auth_sender,
-            inner_auth_receiver,
-            inner_packet_sender,
-            inner_packet_receiver
-        ) = ServerSocket::listen_with_auth(&self.server_addrs, &self.config);
+    fn listen(
+        self: Box<Self>,
+    ) -> (
+        Box<dyn TransportAuthSender>,
+        Box<dyn TransportAuthReceiver>,
+        Box<dyn TransportSender>,
+        Box<dyn TransportReceiver>,
+    ) {
+        let (inner_auth_sender, inner_auth_receiver, inner_packet_sender, inner_packet_receiver) =
+            ServerSocket::listen_with_auth(&self.server_addrs, &self.config);
         return (
             Box::new(inner_auth_sender),
             Box::new(inner_auth_receiver),
             Box::new(inner_packet_sender),
-            Box::new(inner_packet_receiver)
+            Box::new(inner_packet_receiver),
         );
     }
 }

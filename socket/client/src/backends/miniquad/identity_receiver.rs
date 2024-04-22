@@ -1,9 +1,7 @@
 use naia_socket_shared::IdentityToken;
 
-use crate::{
-    error::NaiaClientSocketError, identity_receiver::IdentityReceiver,
-};
 use super::shared::ID_CELL;
+use crate::{error::NaiaClientSocketError, identity_receiver::IdentityReceiver};
 
 /// Handles receiving an IdentityToken from the Server through a given Client Socket
 #[derive(Clone)]

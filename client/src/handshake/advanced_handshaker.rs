@@ -1,12 +1,17 @@
-
 use std::time::Duration;
 
 use log::warn;
 use naia_client_socket::shared::IdentityToken;
 
-use naia_shared::{BitReader, BitWriter, PacketType, Serde, StandardHeader, Timer, Timestamp as stamp_time, handshake::HandshakeHeader, OutgoingPacket};
+use naia_shared::{
+    handshake::HandshakeHeader, BitReader, BitWriter, OutgoingPacket, PacketType, Serde,
+    StandardHeader, Timer, Timestamp as stamp_time,
+};
 
-use crate::{handshake::{HandshakeResult, handshake_time_manager::HandshakeTimeManager, Handshaker}, connection::time_manager::TimeManager};
+use crate::{
+    connection::time_manager::TimeManager,
+    handshake::{handshake_time_manager::HandshakeTimeManager, HandshakeResult, Handshaker},
+};
 
 type Timestamp = u64;
 
@@ -59,7 +64,6 @@ impl Handshaker for HandshakeManager {
 
     // Give handshake manager the opportunity to send out messages to the server
     fn send(&mut self) -> Option<OutgoingPacket> {
-
         if !self.handshake_timer.ringing() {
             return None;
         }
@@ -146,17 +150,15 @@ impl Handshaker for HandshakeManager {
                 if success {
                     let HandshakeState::TimeSync(time_manager) =
                         std::mem::replace(&mut self.connection_state, HandshakeState::Connected)
-                        else {
-                            panic!("should be impossible due to check above");
-                        };
+                    else {
+                        panic!("should be impossible due to check above");
+                    };
                     self.connection_state =
                         HandshakeState::AwaitingConnectResponse(time_manager.finalize());
                 }
                 return None;
             }
-            PacketType::Data
-            | PacketType::Heartbeat
-            | PacketType::Ping => {
+            PacketType::Data | PacketType::Heartbeat | PacketType::Ping => {
                 return None;
             }
         }
@@ -258,9 +260,9 @@ impl HandshakeManager {
     fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
         let HandshakeState::AwaitingConnectResponse(time_manager) =
             std::mem::replace(&mut self.connection_state, HandshakeState::Connected)
-            else {
-                return None;
-            };
+        else {
+            return None;
+        };
 
         return Some(HandshakeResult::Connected(time_manager));
     }

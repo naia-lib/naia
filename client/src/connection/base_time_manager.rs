@@ -3,8 +3,8 @@ use std::hash::Hash;
 use log::warn;
 
 use naia_shared::{
-    sequence_greater_than, BitReader, BitWriter, GameInstant, Instant, PacketType,
-    PingIndex, PingStore, Serde, SerdeErr, StandardHeader, UnsignedVariableInteger,
+    sequence_greater_than, BitReader, BitWriter, GameInstant, Instant, PacketType, PingIndex,
+    PingStore, Serde, SerdeErr, StandardHeader, UnsignedVariableInteger,
 };
 
 use crate::connection::{connection::Connection, io::Io};
@@ -46,7 +46,6 @@ impl BaseTimeManager {
     }
 
     pub fn send_ping(&mut self, io: &mut Io) {
-
         let writer = self.write_ping();
 
         // send packet

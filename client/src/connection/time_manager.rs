@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use naia_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, GameInstant,
-    Instant, SerdeErr, Tick, Timer,
+    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, GameInstant, Instant,
+    SerdeErr, Tick, Timer,
 };
 
 use crate::connection::{base_time_manager::BaseTimeManager, io::Io};

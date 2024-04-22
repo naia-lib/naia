@@ -17,7 +17,6 @@ pub enum PacketType {
     // A Pong message, used to calculate RTT. Must be the response to all Ping
     // messages
     Pong,
-
 }
 
 // Most packets should be Data, so lets compress this a bit more.

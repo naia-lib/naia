@@ -12,10 +12,10 @@ use web_sys::{
     RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit, XmlHttpRequest,
 };
 
-use naia_socket_shared::{IdentityToken, parse_server_url, SocketConfig};
+use naia_socket_shared::{parse_server_url, IdentityToken, SocketConfig};
 
-use crate::{IdentityReceiverImpl, ServerAddr};
 use super::{addr_cell::AddrCell, data_port::DataPort};
+use crate::{IdentityReceiverImpl, ServerAddr};
 
 // FindAddrFuncInner
 pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
@@ -131,7 +131,8 @@ impl DataChannel {
                             });
                         if let Some(auth_bytes) = &auth_bytes_opt_3 {
                             let base64_encoded = base64::encode(auth_bytes);
-                            request.set_request_header("Authorization", &base64_encoded)
+                            request
+                                .set_request_header("Authorization", &base64_encoded)
                                 .expect("Failed to set request header");
                         }
 
@@ -143,7 +144,6 @@ impl DataChannel {
                         let request_func: Box<dyn FnMut(ProgressEvent)> = Box::new(
                             move |_: ProgressEvent| {
                                 if request_2.status().unwrap() == 200 {
-
                                     let response_string =
                                         request_2.response_text().unwrap().unwrap();
 

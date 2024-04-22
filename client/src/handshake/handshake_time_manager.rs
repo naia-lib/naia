@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use naia_shared::{BitReader, GameInstant, Serde, SerdeErr, Tick, GAME_TIME_LIMIT, BitWriter};
+use naia_shared::{BitReader, BitWriter, GameInstant, Serde, SerdeErr, Tick, GAME_TIME_LIMIT};
 
 use crate::connection::{base_time_manager::BaseTimeManager, time_manager::TimeManager};
 

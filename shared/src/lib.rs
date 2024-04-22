@@ -30,7 +30,8 @@ pub use naia_serde::{
     UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
-    link_condition_logic, Instant, LinkConditionerConfig, Random, SocketConfig, TimeQueue, IdentityToken, generate_identity_token,
+    generate_identity_token, link_condition_logic, IdentityToken, Instant, LinkConditionerConfig,
+    Random, SocketConfig, TimeQueue,
 };
 
 mod backends;
@@ -38,6 +39,7 @@ mod bigmap;
 mod connection;
 mod constants;
 mod game_time;
+pub mod handshake;
 mod key_generator;
 mod messages;
 mod protocol;
@@ -45,7 +47,6 @@ mod sequence_list;
 mod types;
 mod world;
 mod wrapping_number;
-pub mod handshake;
 
 pub use backends::{Timer, Timestamp};
 pub use connection::{

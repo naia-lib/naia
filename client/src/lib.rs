@@ -27,9 +27,9 @@ mod command_history;
 mod connection;
 mod error;
 mod events;
+mod handshake;
 mod request;
 mod world;
-mod handshake;
 
 pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;

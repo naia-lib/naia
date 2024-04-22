@@ -28,6 +28,7 @@ pub use naia_shared::SerdeBevyServer as SerdeBevy;
 mod connection;
 mod error;
 mod events;
+mod handshake;
 mod request;
 mod room;
 mod server;
@@ -36,7 +37,6 @@ mod time_manager;
 mod user;
 mod user_scope;
 mod world;
-mod handshake;
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;

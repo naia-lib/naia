@@ -8,6 +8,7 @@ pub extern "C" fn naia_socket_crate_version() -> u32 {
 }
 
 use std::collections::VecDeque;
+
 use naia_socket_shared::IdentityToken;
 
 use crate::{server_addr::ServerAddr, wasm_utils::candidate_to_addr};

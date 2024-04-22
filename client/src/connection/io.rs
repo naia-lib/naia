@@ -1,10 +1,12 @@
 use std::{net::SocketAddr, time::Duration};
 
-use naia_shared::{BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, IdentityToken, OutgoingPacket};
+use naia_shared::{
+    BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, IdentityToken, OutgoingPacket,
+};
 
 use crate::{
     error::NaiaClientError,
-    transport::{PacketReceiver, IdentityReceiver, PacketSender, ServerAddr},
+    transport::{IdentityReceiver, PacketReceiver, PacketSender, ServerAddr},
 };
 
 pub struct Io {

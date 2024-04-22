@@ -1,11 +1,16 @@
-
 use std::{collections::HashMap, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{BitReader, BitWriter, PacketType, Serde, SerdeErr, StandardHeader, handshake::HandshakeHeader, IdentityToken};
+use naia_shared::{
+    handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, PacketType, Serde, SerdeErr,
+    StandardHeader,
+};
 
-use crate::{handshake::{HandshakeAction, Handshaker}, UserKey};
+use crate::{
+    handshake::{HandshakeAction, Handshaker},
+    UserKey,
+};
 
 pub struct HandshakeManager {
     authenticated_and_identified_users: HashMap<SocketAddr, UserKey>,
@@ -15,13 +20,16 @@ pub struct HandshakeManager {
 
 impl Handshaker for HandshakeManager {
     fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey) {
-        self.authenticated_unidentified_users.insert(identity_token.clone(), *user_key);
-        self.identity_token_map.insert(*user_key, identity_token.clone());
+        self.authenticated_unidentified_users
+            .insert(identity_token.clone(), *user_key);
+        self.identity_token_map
+            .insert(*user_key, identity_token.clone());
     }
 
     fn delete_user(&mut self, user_key: &UserKey, address: &SocketAddr) {
         if let Some(identity_token) = self.identity_token_map.remove(user_key) {
-            self.authenticated_unidentified_users.remove(&identity_token);
+            self.authenticated_unidentified_users
+                .remove(&identity_token);
         }
         self.authenticated_and_identified_users.remove(address);
     }
@@ -30,7 +38,7 @@ impl Handshaker for HandshakeManager {
         &mut self,
         address: &SocketAddr,
         reader: &mut BitReader,
-        has_connection: bool
+        has_connection: bool,
     ) -> Result<HandshakeAction, SerdeErr> {
         let handshake_header = HandshakeHeader::de(reader)?;
 
@@ -38,16 +46,16 @@ impl Handshaker for HandshakeManager {
         match handshake_header {
             HandshakeHeader::ClientIdentifyRequest => {
                 if let Ok(id_token) = self.recv_identify_request(reader) {
-
-                    if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token) {
-
+                    if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
+                    {
                         // remove identity token from map
                         if self.identity_token_map.remove(&user_key).is_none() {
                             panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
                         }
 
                         // User is authenticated
-                        self.authenticated_and_identified_users.insert(*address, user_key);
+                        self.authenticated_and_identified_users
+                            .insert(*address, user_key);
                     } else {
                         // commented out because it's pretty common to get multiple ClientIdentifyRequests which would trigger this
                         //warn!("Server Error: User not authenticated for: {:?}, with token: {}", address, identity_token);
@@ -63,7 +71,6 @@ impl Handshaker for HandshakeManager {
                 }
             }
             HandshakeHeader::ClientConnectRequest => {
-
                 // send connect response
                 let writer = self.write_connect_response();
                 let packet = writer.to_packet();
@@ -71,7 +78,8 @@ impl Handshaker for HandshakeManager {
                 if has_connection {
                     return Ok(HandshakeAction::SendPacket(packet));
                 } else {
-                    let Some(user_key) = self.authenticated_and_identified_users.get(address) else {
+                    let Some(user_key) = self.authenticated_and_identified_users.get(address)
+                    else {
                         warn!("Server Error: User not authenticated for: {:?}", address);
                         return Ok(HandshakeAction::None);
                     };
@@ -91,7 +99,10 @@ impl Handshaker for HandshakeManager {
                 }
             }
             _ => {
-                warn!("Server Error: Unexpected handshake header: {:?} from {}", handshake_header, address);
+                warn!(
+                    "Server Error: Unexpected handshake header: {:?} from {}",
+                    handshake_header, address
+                );
                 return Ok(HandshakeAction::None);
             }
         }
@@ -108,10 +119,7 @@ impl HandshakeManager {
     }
 
     // Step 1 of Handshake
-    fn recv_identify_request(
-        &mut self,
-        reader: &mut BitReader,
-    ) -> Result<IdentityToken, SerdeErr> {
+    fn recv_identify_request(&mut self, reader: &mut BitReader) -> Result<IdentityToken, SerdeErr> {
         IdentityToken::de(reader)
     }
 

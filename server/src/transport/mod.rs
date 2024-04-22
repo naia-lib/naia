@@ -10,19 +10,28 @@ cfg_if! {
     } else {}
 }
 
-pub use inner::{PacketReceiver, PacketSender, AuthSender, AuthReceiver, RecvError, SendError, Socket};
+pub use inner::{
+    AuthReceiver, AuthSender, PacketReceiver, PacketSender, RecvError, SendError, Socket,
+};
 
 mod inner {
 
-    use std::net::SocketAddr;
     use naia_shared::IdentityToken;
+    use std::net::SocketAddr;
 
     pub struct SendError;
 
     pub struct RecvError;
 
     pub trait Socket {
-        fn listen(self: Box<Self>) -> (Box<dyn AuthSender>, Box<dyn AuthReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>);
+        fn listen(
+            self: Box<Self>,
+        ) -> (
+            Box<dyn AuthSender>,
+            Box<dyn AuthReceiver>,
+            Box<dyn PacketSender>,
+            Box<dyn PacketReceiver>,
+        );
     }
 
     // Packet
@@ -59,7 +68,11 @@ mod inner {
 
     pub trait AuthSender: Send + Sync {
         ///
-        fn accept(&self, address: &SocketAddr, identity_token: &IdentityToken) -> Result<(), SendError>;
+        fn accept(
+            &self,
+            address: &SocketAddr,
+            identity_token: &IdentityToken,
+        ) -> Result<(), SendError>;
         ///
         fn reject(&self, address: &SocketAddr) -> Result<(), SendError>;
     }

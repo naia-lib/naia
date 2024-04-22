@@ -1,13 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use log::info;
 use tokio::sync::oneshot;
 
 use naia_socket_shared::IdentityToken;
 
-use crate::{
-    error::NaiaClientSocketError, identity_receiver::IdentityReceiver,
-};
+use crate::{error::NaiaClientSocketError, identity_receiver::IdentityReceiver};
 
 /// Handles receiving an IdentityToken from the Server through a given Client Socket
 #[derive(Clone)]

@@ -1,7 +1,9 @@
 use naia_socket_shared::SocketConfig;
 
-use crate::{backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver, IdentityReceiver, packet_receiver::PacketReceiver, packet_sender::PacketSender};
-
+use crate::{
+    backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver,
+    packet_receiver::PacketReceiver, packet_sender::PacketSender, IdentityReceiver,
+};
 use super::{
     addr_cell::AddrCell, data_channel::DataChannel, data_port::DataPort,
     packet_receiver::PacketReceiverImpl, packet_sender::PacketSenderImpl,
@@ -12,7 +14,6 @@ use super::{
 pub struct Socket;
 
 impl Socket {
-
     /// Connects to the given server address
     pub fn connect(
         server_session_url: &str,
@@ -20,7 +21,7 @@ impl Socket {
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         return Self::connect_inner(server_session_url, config, None);
     }
@@ -33,7 +34,7 @@ impl Socket {
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         return Self::connect_inner(server_session_url, config, Some(auth_bytes));
     }
@@ -46,7 +47,7 @@ impl Socket {
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         let data_channel = DataChannel::new(config, server_session_url, auth_bytes_opt);
 
@@ -104,8 +105,11 @@ impl SocketTrait for Socket {
     fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>)
-    {
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
         return Self::connect(server_session_url, config);
     }
     /// Connects to the given server address with authentication
@@ -113,8 +117,11 @@ impl SocketTrait for Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
-    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>)
-    {
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
         return Self::connect_with_auth(server_session_url, config, auth_bytes);
     }
 }

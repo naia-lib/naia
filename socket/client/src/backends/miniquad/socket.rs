@@ -2,12 +2,16 @@ use std::collections::VecDeque;
 
 use naia_socket_shared::{parse_server_url, SocketConfig};
 
-use crate::{backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver, IdentityReceiver, IdentityReceiverImpl, packet_receiver::PacketReceiver, packet_sender::PacketSender};
+use crate::{
+    backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver,
+    packet_receiver::PacketReceiver, packet_sender::PacketSender, IdentityReceiver,
+    IdentityReceiverImpl,
+};
 
 use super::{
     packet_receiver::PacketReceiverImpl,
     packet_sender::PacketSenderImpl,
-    shared::{naia_connect, JsObject, ERROR_QUEUE,ID_CELL, MESSAGE_QUEUE},
+    shared::{naia_connect, JsObject, ERROR_QUEUE, ID_CELL, MESSAGE_QUEUE},
 };
 
 /// A client-side socket which communicates with an underlying unordered &
@@ -22,7 +26,7 @@ impl Socket {
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         return Self::connect_inner(server_session_url, config, None);
     }
@@ -35,7 +39,7 @@ impl Socket {
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         return Self::connect_inner(server_session_url, config, Some(auth_bytes));
     }
@@ -48,17 +52,13 @@ impl Socket {
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         let server_url = parse_server_url(server_session_url);
 
         let auth_str: String = match auth_bytes_opt {
-            Some(auth_bytes) => {
-                base64::encode(auth_bytes)
-            },
-            None => {
-                "".to_string()
-            }
+            Some(auth_bytes) => base64::encode(auth_bytes),
+            None => "".to_string(),
         };
 
         unsafe {
@@ -99,7 +99,11 @@ impl SocketTrait for Socket {
     fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
         return Self::connect(server_session_url, config);
     }
     /// Connects to the given server address with authentication
@@ -107,7 +111,11 @@ impl SocketTrait for Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
-    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
         return Self::connect_with_auth(server_session_url, config, auth_bytes);
     }
 }

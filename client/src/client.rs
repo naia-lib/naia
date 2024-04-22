@@ -14,18 +14,14 @@ use naia_shared::{
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
-    connection::{
-        base_time_manager::BaseTimeManager,
-        connection::Connection,
-        io::Io,
-    },
+    connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
+    handshake::{HandshakeManager, HandshakeResult, Handshaker},
     transport::Socket,
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
         global_world_manager::GlobalWorldManager,
     },
     ReplicationConfig,
-    handshake::{Handshaker, HandshakeManager, HandshakeResult},
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
@@ -89,9 +85,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
         self.auth_message = Some(MessageContainer::from_write(
-                Box::new(auth),
-                &mut FakeEntityConverter,
-            ));
+            Box::new(auth),
+            &mut FakeEntityConverter,
+        ));
     }
 
     /// Connect to the given server address
@@ -105,12 +101,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Client Error: Cannot connect without setting auth first");
         };
         let mut bit_writer = BitWriter::new();
-        auth_message.write(&self.protocol.message_kinds, &mut bit_writer, &mut FakeEntityConverter);
+        auth_message.write(
+            &self.protocol.message_kinds,
+            &mut bit_writer,
+            &mut FakeEntityConverter,
+        );
         let auth_bytes = bit_writer.to_bytes().to_vec();
 
         // connect with auth
         let boxed_socket: Box<dyn Socket> = socket.into();
-        let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect_with_auth(auth_bytes);
+        let (id_receiver, packet_sender, packet_receiver) =
+            boxed_socket.connect_with_auth(auth_bytes);
         self.io.load(id_receiver, packet_sender, packet_receiver);
     }
 

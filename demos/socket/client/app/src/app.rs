@@ -26,11 +26,11 @@ impl App {
     pub fn new() -> App {
         info!("Naia Client Socket Demo started");
 
-        let (
-            _id_receiver,
-            packet_sender,
-            packet_receiver
-        ) = Socket::connect_with_auth("http://127.0.0.1:14191", &shared_config(), "12345".as_bytes().to_vec());
+        let (_id_receiver, packet_sender, packet_receiver) = Socket::connect_with_auth(
+            "http://127.0.0.1:14191",
+            &shared_config(),
+            "12345".as_bytes().to_vec(),
+        );
 
         Self {
             packet_sender,

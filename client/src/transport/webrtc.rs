@@ -1,10 +1,13 @@
 use naia_shared::{IdentityToken, SocketConfig};
 
-use naia_client_socket::{IdentityReceiver, PacketReceiver, PacketSender, ServerAddr, Socket as ClientSocket};
+use naia_client_socket::{
+    IdentityReceiver, PacketReceiver, PacketSender, ServerAddr, Socket as ClientSocket,
+};
 
 use super::{
-    IdentityReceiver as TransportIdentityReceiver, PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
-    ServerAddr as TransportAddr, Socket as TransportSocket,
+    IdentityReceiver as TransportIdentityReceiver, PacketReceiver as TransportReceiver,
+    PacketSender as TransportSender, RecvError, SendError, ServerAddr as TransportAddr,
+    Socket as TransportSocket,
 };
 
 pub struct Socket {
@@ -63,14 +66,35 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 }
 
 impl TransportSocket for Socket {
-    fn connect(self: Box<Self>) -> (Box<dyn TransportIdentityReceiver>, Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
+    fn connect(
+        self: Box<Self>,
+    ) -> (
+        Box<dyn TransportIdentityReceiver>,
+        Box<dyn TransportSender>,
+        Box<dyn TransportReceiver>,
+    ) {
         let (id_receiver, inner_sender, inner_receiver) =
             ClientSocket::connect(&self.server_session_url, &self.config);
-        return (Box::new(id_receiver), Box::new(inner_sender), Box::new(inner_receiver));
+        return (
+            Box::new(id_receiver),
+            Box::new(inner_sender),
+            Box::new(inner_receiver),
+        );
     }
-    fn connect_with_auth(self: Box<Self>, auth_bytes: Vec<u8>) -> (Box<dyn TransportIdentityReceiver>, Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
+    fn connect_with_auth(
+        self: Box<Self>,
+        auth_bytes: Vec<u8>,
+    ) -> (
+        Box<dyn TransportIdentityReceiver>,
+        Box<dyn TransportSender>,
+        Box<dyn TransportReceiver>,
+    ) {
         let (id_receiver, inner_sender, inner_receiver) =
             ClientSocket::connect_with_auth(&self.server_session_url, &self.config, auth_bytes);
-        return (Box::new(id_receiver), Box::new(inner_sender), Box::new(inner_receiver));
+        return (
+            Box::new(id_receiver),
+            Box::new(inner_sender),
+            Box::new(inner_receiver),
+        );
     }
 }

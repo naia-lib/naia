@@ -13,7 +13,7 @@ cfg_if! {
 mod server_addr;
 pub use server_addr::ServerAddr;
 
-pub use inner::{PacketReceiver, IdentityReceiver, PacketSender, RecvError, SendError, Socket};
+pub use inner::{IdentityReceiver, PacketReceiver, PacketSender, RecvError, SendError, Socket};
 
 mod inner {
 
@@ -26,8 +26,21 @@ mod inner {
     pub struct RecvError;
 
     pub trait Socket {
-        fn connect(self: Box<Self>) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>);
-        fn connect_with_auth(self: Box<Self>, auth_bytes: Vec<u8>) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>);
+        fn connect(
+            self: Box<Self>,
+        ) -> (
+            Box<dyn IdentityReceiver>,
+            Box<dyn PacketSender>,
+            Box<dyn PacketReceiver>,
+        );
+        fn connect_with_auth(
+            self: Box<Self>,
+            auth_bytes: Vec<u8>,
+        ) -> (
+            Box<dyn IdentityReceiver>,
+            Box<dyn PacketSender>,
+            Box<dyn PacketReceiver>,
+        );
     }
 
     pub trait PacketSender: Send + Sync {

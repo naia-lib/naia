@@ -1,17 +1,18 @@
-
 use std::{collections::HashMap, net::SocketAddr};
 
 use log::{info, warn};
-
 use ring::{hmac, rand};
-use naia_server_socket::shared::IdentityToken;
 
+use naia_server_socket::shared::IdentityToken;
 use naia_shared::{
-    BitReader, BitWriter, PacketType, Serde,
-    SerdeErr, StandardHeader, handshake::HandshakeHeader, OutgoingPacket
+    handshake::HandshakeHeader, BitReader, BitWriter, OutgoingPacket, PacketType, Serde, SerdeErr,
+    StandardHeader,
 };
 
-use crate::{handshake::{cache_map::CacheMap, HandshakeAction, Handshaker}, UserKey};
+use crate::{
+    handshake::{cache_map::CacheMap, HandshakeAction, Handshaker},
+    UserKey,
+};
 
 type Timestamp = u64;
 
@@ -28,13 +29,16 @@ pub struct HandshakeManager {
 
 impl Handshaker for HandshakeManager {
     fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey) {
-        self.authenticated_unidentified_users.insert(identity_token.clone(), *user_key);
-        self.identity_token_map.insert(*user_key, identity_token.clone());
+        self.authenticated_unidentified_users
+            .insert(identity_token.clone(), *user_key);
+        self.identity_token_map
+            .insert(*user_key, identity_token.clone());
     }
 
     fn delete_user(&mut self, user_key: &UserKey, address: &SocketAddr) {
         if let Some(identity_token) = self.identity_token_map.remove(user_key) {
-            self.authenticated_unidentified_users.remove(&identity_token);
+            self.authenticated_unidentified_users
+                .remove(&identity_token);
         }
         self.authenticated_and_identified_users.remove(address);
         self.been_handshaked_users.remove(address);
@@ -45,7 +49,7 @@ impl Handshaker for HandshakeManager {
         &mut self,
         address: &SocketAddr,
         reader: &mut BitReader,
-        has_connection: bool
+        has_connection: bool,
     ) -> Result<HandshakeAction, SerdeErr> {
         let handshake_header = HandshakeHeader::de(reader)?;
 
@@ -53,15 +57,16 @@ impl Handshaker for HandshakeManager {
         match handshake_header {
             HandshakeHeader::ClientChallengeRequest => {
                 if let Ok((timestamp, id_token)) = self.recv_challenge_request(reader) {
-                    if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token) {
-
+                    if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
+                    {
                         // remove identity token from map
                         if self.identity_token_map.remove(&user_key).is_none() {
                             panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
                         }
 
                         // User is authenticated and identified
-                        self.authenticated_and_identified_users.insert(*address, user_key);
+                        self.authenticated_and_identified_users
+                            .insert(*address, user_key);
                     } else {
                         // commented out because it's pretty common to get multiple ClientChallengeRequest which would trigger this
                         //warn!("Server Error: User not authenticated for: {:?}, with token: {}", address, identity_token);
@@ -77,17 +82,15 @@ impl Handshaker for HandshakeManager {
                 }
             }
             HandshakeHeader::ClientValidateRequest => {
-                if self.recv_validate_request(
-                    address,
-                    reader,
-                ) {
+                if self.recv_validate_request(address, reader) {
                     if self.been_handshaked_users.contains_key(address) {
                         // send validate response
                         let writer = self.write_validate_response();
                         return Ok(HandshakeAction::SendPacket(writer.to_packet()));
                     } else {
                         info!("checking authenticated users for {}", address);
-                        if let Some(user_key) = self.authenticated_and_identified_users.get(address) {
+                        if let Some(user_key) = self.authenticated_and_identified_users.get(address)
+                        {
                             let user_key = *user_key;
                             let address = *address;
                             let packet = self.user_finish_handshake(&address, &user_key);
@@ -103,7 +106,6 @@ impl Handshaker for HandshakeManager {
                 }
             }
             HandshakeHeader::ClientConnectRequest => {
-
                 // send connect response
                 let writer = self.write_connect_response();
                 let packet = writer.to_packet();
@@ -131,7 +133,10 @@ impl Handshaker for HandshakeManager {
                 }
             }
             _ => {
-                warn!("Server Error: Unexpected handshake header: {:?} from {}", handshake_header, address);
+                warn!(
+                    "Server Error: Unexpected handshake header: {:?} from {}",
+                    handshake_header, address
+                );
                 return Ok(HandshakeAction::None);
             }
         }
@@ -188,11 +193,7 @@ impl HandshakeManager {
     }
 
     // Step 3 of Handshake
-    fn recv_validate_request(
-        &mut self,
-        address: &SocketAddr,
-        reader: &mut BitReader,
-    ) -> bool {
+    fn recv_validate_request(&mut self, address: &SocketAddr, reader: &mut BitReader) -> bool {
         // Verify that timestamp hash has been written by this
         // server instance
         let Some(timestamp) = self.timestamp_validate(reader) else {
@@ -222,11 +223,7 @@ impl HandshakeManager {
         writer
     }
 
-    fn verify_disconnect_request(
-        &mut self,
-        address: &SocketAddr,
-        reader: &mut BitReader,
-    ) -> bool {
+    fn verify_disconnect_request(&mut self, address: &SocketAddr, reader: &mut BitReader) -> bool {
         // Verify that timestamp hash has been written by this
         // server instance
         if let Some(new_timestamp) = self.timestamp_validate(reader) {
@@ -274,12 +271,7 @@ impl HandshakeManager {
         }
     }
 
-    fn user_finish_handshake(
-        &mut self,
-        addr: &SocketAddr,
-        user_key: &UserKey
-    ) -> OutgoingPacket {
-
+    fn user_finish_handshake(&mut self, addr: &SocketAddr, user_key: &UserKey) -> OutgoingPacket {
         // send validate response
         let writer = self.write_validate_response();
         let packet = writer.to_packet();
