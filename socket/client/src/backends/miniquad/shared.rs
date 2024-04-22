@@ -8,10 +8,12 @@ pub extern "C" fn naia_socket_crate_version() -> u32 {
 }
 
 use std::collections::VecDeque;
+use naia_socket_shared::IdentityToken;
 
 use crate::{server_addr::ServerAddr, wasm_utils::candidate_to_addr};
 
 // Static vars
+pub static mut ID_CELL: Option<Option<IdentityToken>> = None;
 pub static mut MESSAGE_QUEUE: Option<VecDeque<Box<[u8]>>> = None;
 pub static mut ERROR_QUEUE: Option<VecDeque<String>> = None;
 pub static mut SERVER_ADDR: ServerAddr = ServerAddr::Finding;
@@ -32,6 +34,19 @@ extern "C" {
 }
 
 // Rust methods
+#[no_mangle]
+pub extern "C" fn receive_id(id_token: JsObject) {
+    let mut id_token_string = String::new();
+
+    id_token.to_string(&mut id_token_string);
+
+    unsafe {
+        if let Some(id_cell) = &mut ID_CELL {
+            *id_cell = Some(id_token_string);
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn receive(message: JsObject) {
     let mut message_string = Vec::<u8>::new();

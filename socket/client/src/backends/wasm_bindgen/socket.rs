@@ -17,17 +17,24 @@ impl Socket {
     pub fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>)
-    {
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>
+    ) {
         return Self::connect_inner(server_session_url, config, None);
     }
+
     /// Connects to the given server address with authentication
     pub fn connect_with_auth(
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
-    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>)
-    {
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>
+    ) {
         return Self::connect_inner(server_session_url, config, Some(auth_bytes));
     }
 
@@ -36,7 +43,11 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes_opt: Option<Vec<u8>>,
-    ) -> (Box<dyn IdentityReceiver>, Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>
+    ) {
         let data_channel = DataChannel::new(config, server_session_url, auth_bytes_opt);
 
         let data_port = data_channel.data_port();

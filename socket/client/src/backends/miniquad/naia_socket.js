@@ -77,8 +77,11 @@ const naia_socket = {
             request.onload = function() {
                 if (request.status === 200) {
                     let response = JSON.parse(request.responseText);
-                    peer.setRemoteDescription(new RTCSessionDescription(response.answer)).then(function() {
-                        let response_candidate = response.candidate;
+
+                    wasm_exports.receive_id(naia_socket.js_object(response.id));
+
+                    peer.setRemoteDescription(new RTCSessionDescription(response.sdp.answer)).then(function() {
+                        let response_candidate = response.sdp.candidate;
                         wasm_exports.receive_candidate(naia_socket.js_object(JSON.stringify(response_candidate.candidate)));
                         let candidate = new RTCIceCandidate(response_candidate);
                         peer.addIceCandidate(candidate).then(function() {

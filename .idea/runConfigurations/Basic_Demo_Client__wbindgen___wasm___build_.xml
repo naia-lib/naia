@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Basic Demo Client [wbindgen] [Linux] [RUN]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run" />
+  <configuration default="false" name="Basic Demo Client [wbindgen] [wasm] [build]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="command" value="build --target wasm32-unknown-unknown --lib" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/demos/basic/client/wasm_bindgen" />
     <envs />
     <option name="emulateTerminal" value="false" />
