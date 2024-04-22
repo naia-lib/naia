@@ -260,7 +260,7 @@ async fn serve(
                     } else if str.to_lowercase().starts_with("authorization: ") {
                         let (_, last) = str.split_at(15);
                         auth_string = Some(last.to_string());
-                        info!("read authorization header: {:?}", auth_string);
+                        // info!("read authorization header: {:?}", auth_string);
                     } else if str.is_empty() {
                         // info!("read headers finished");
                         headers_been_read = true;
@@ -348,7 +348,7 @@ async fn serve(
 
                                 // wait for response from app
                                 if let Ok(Some(identity_token)) = to_session_auth_receiver.await {
-                                    info!("Server app accepted auth with identity token: {}", identity_token);
+                                    // info!("Server app accepted auth with identity token: {}", identity_token);
                                     identity_token_opt = Some(identity_token);
                                     success = true;
                                 }

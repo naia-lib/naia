@@ -1,9 +1,9 @@
-use naia_shared::SocketConfig;
+use naia_shared::{IdentityToken, SocketConfig};
 
-use naia_client_socket::{PacketReceiver, PacketSender, ServerAddr, Socket as ClientSocket};
+use naia_client_socket::{IdentityReceiver, PacketReceiver, PacketSender, ServerAddr, Socket as ClientSocket};
 
 use super::{
-    PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
+    IdentityReceiver as TransportIdentityReceiver, PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     ServerAddr as TransportAddr, Socket as TransportSocket,
 };
 
@@ -49,6 +49,13 @@ impl TransportReceiver for Box<dyn PacketReceiver> {
     }
 }
 
+impl TransportIdentityReceiver for Box<dyn IdentityReceiver> {
+    /// Receives an IdentityToken from the Client Socket
+    fn receive(&mut self) -> Result<Option<IdentityToken>, RecvError> {
+        self.as_mut().receive().map_err(|_| RecvError)
+    }
+}
+
 impl Into<Box<dyn TransportSocket>> for Socket {
     fn into(self) -> Box<dyn TransportSocket> {
         Box::new(self)
@@ -56,14 +63,14 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 }
 
 impl TransportSocket for Socket {
-    fn connect(self: Box<Self>) -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
-        let (inner_sender, inner_receiver) =
+    fn connect(self: Box<Self>) -> (Box<dyn TransportIdentityReceiver>, Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
+        let (id_receiver, inner_sender, inner_receiver) =
             ClientSocket::connect(&self.server_session_url, &self.config);
-        return (Box::new(inner_sender), Box::new(inner_receiver));
+        return (Box::new(id_receiver), Box::new(inner_sender), Box::new(inner_receiver));
     }
-    fn connect_with_auth(self: Box<Self>, auth_bytes: Vec<u8>) -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
-        let (inner_sender, inner_receiver) =
+    fn connect_with_auth(self: Box<Self>, auth_bytes: Vec<u8>) -> (Box<dyn TransportIdentityReceiver>, Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
+        let (id_receiver, inner_sender, inner_receiver) =
             ClientSocket::connect_with_auth(&self.server_session_url, &self.config, auth_bytes);
-        return (Box::new(inner_sender), Box::new(inner_receiver));
+        return (Box::new(id_receiver), Box::new(inner_sender), Box::new(inner_receiver));
     }
 }

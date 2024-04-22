@@ -40,12 +40,20 @@ impl User {
         }
     }
 
+    pub fn has_address(&self) -> bool {
+        self.data_addr.is_some()
+    }
+
     pub fn address(&self) -> SocketAddr {
         self.data_addr.unwrap()
     }
 
     pub(crate) fn take_auth_address(&mut self) -> SocketAddr {
         self.auth_addr.take().unwrap()
+    }
+
+    pub(crate) fn set_address(&mut self, addr: &SocketAddr) {
+        self.data_addr = Some(*addr);
     }
 
     pub(crate) fn cache_room(&mut self, room_key: &RoomKey) {

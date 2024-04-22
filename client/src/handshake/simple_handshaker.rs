@@ -65,7 +65,7 @@ impl Handshaker for HandshakeManager {
                     let writer = self.write_identify_request(identity_token);
                     return Some(writer.to_packet());
                 } else {
-                    warn!("Identity Token not set");
+                    // warn!("Identity Token not set");
                     return None;
                 }
             }

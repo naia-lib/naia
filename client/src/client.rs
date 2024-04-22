@@ -110,8 +110,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // connect with auth
         let boxed_socket: Box<dyn Socket> = socket.into();
-        let (packet_sender, packet_receiver) = boxed_socket.connect_with_auth(auth_bytes);
-        self.io.load(packet_sender, packet_receiver);
+        let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect_with_auth(auth_bytes);
+        self.io.load(id_receiver, packet_sender, packet_receiver);
     }
 
     /// Returns client's current connection status
@@ -1073,6 +1073,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if !self.io.is_loaded() {
             return;
+        }
+
+        if !self.io.is_authenticated() {
+            // info!("Client is not authenticated yet, trying to receive id");
+            if let Some(id_token) = self.io.recv_auth() {
+                // info!("Received IdToken: {:?}, passing to Handshaker", id_token);
+                self.handshake_manager.set_identity_token(id_token);
+            } else {
+                return;
+            }
         }
 
         // receive from socket

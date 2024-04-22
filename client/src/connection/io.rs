@@ -1,15 +1,16 @@
 use std::{net::SocketAddr, time::Duration};
+use log::info;
 
-use naia_shared::{
-    BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, OutgoingPacket,
-};
+use naia_shared::{BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, IdentityToken, OutgoingPacket};
 
 use crate::{
     error::NaiaClientError,
-    transport::{PacketReceiver, PacketSender, ServerAddr},
+    transport::{PacketReceiver, IdentityReceiver, PacketSender, ServerAddr},
 };
 
 pub struct Io {
+    authenticated: bool,
+    id_receiver: Option<Box<dyn IdentityReceiver>>,
     packet_sender: Option<Box<dyn PacketSender>>,
     packet_receiver: Option<Box<dyn PacketReceiver>>,
     outgoing_bandwidth_monitor: Option<BandwidthMonitor>,
@@ -39,7 +40,9 @@ impl Io {
                 .map(|mode| Decoder::new(mode.clone()))
         });
 
-        Io {
+        Self {
+            authenticated: false,
+            id_receiver: None,
             packet_sender: None,
             packet_receiver: None,
             outgoing_bandwidth_monitor,
@@ -51,6 +54,7 @@ impl Io {
 
     pub fn load(
         &mut self,
+        id_receiver: Box<dyn IdentityReceiver>,
         packet_sender: Box<dyn PacketSender>,
         packet_receiver: Box<dyn PacketReceiver>,
     ) {
@@ -58,12 +62,33 @@ impl Io {
             panic!("Packet sender/receiver already loaded! Cannot do this twice!");
         }
 
+        self.id_receiver = Some(id_receiver);
         self.packet_sender = Some(packet_sender);
         self.packet_receiver = Some(packet_receiver);
     }
 
     pub fn is_loaded(&self) -> bool {
         self.packet_sender.is_some()
+    }
+
+    pub fn is_authenticated(&self) -> bool {
+        self.authenticated
+    }
+
+    pub fn recv_auth(&mut self) -> Option<IdentityToken> {
+        // info!("Io::recv_auth() called");
+        let id_receiver = self.id_receiver.as_mut()?;
+        // info!("id_receiver is Some");
+        let id_result = id_receiver.receive().ok()?;
+        // info!("result is Some");
+        if id_result.is_some() {
+            // info!("Received IdToken from IdentityReceiver!");
+            self.authenticated = true;
+            self.id_receiver = None;
+        } else {
+            // info!("No IdToken available from IdentityReceiver");
+        }
+        id_result
     }
 
     pub fn send_packet(&mut self, packet: OutgoingPacket) -> Result<(), NaiaClientError> {

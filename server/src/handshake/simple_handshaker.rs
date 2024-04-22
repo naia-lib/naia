@@ -49,7 +49,9 @@ impl Handshaker for HandshakeManager {
                         // User is authenticated
                         self.authenticated_and_identified_users.insert(*address, user_key);
                     } else {
-                        warn!("Server Error: User not authenticated for: {:?}, with token: {}", address, identity_token);
+                        // commented out because it's pretty common to get multiple ClientIdentifyRequests which would trigger this
+                        //warn!("Server Error: User not authenticated for: {:?}, with token: {}", address, identity_token);
+
                         return Ok(HandshakeAction::None);
                     }
 

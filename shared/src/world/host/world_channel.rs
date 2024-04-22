@@ -131,6 +131,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             return;
         }
         if entity_channel.is_despawning() {
+            // i've run into this multiple times: 1
             panic!("World Channel: cannot despawn entity twice!");
         }
 
