@@ -2,6 +2,7 @@
 use std::time::Duration;
 
 use log::warn;
+use naia_client_socket::shared::IdentityToken;
 
 use naia_shared::{BitReader, BitWriter, PacketType, Serde, StandardHeader, Timer, Timestamp as stamp_time, handshake::HandshakeHeader, OutgoingPacket};
 
@@ -42,11 +43,16 @@ pub struct HandshakeManager {
     handshake_pings: u8,
     connection_state: HandshakeState,
     handshake_timer: Timer,
+    identity_token: Option<IdentityToken>,
     pre_connection_timestamp: Timestamp,
     pre_connection_digest: Option<Vec<u8>>,
 }
 
 impl Handshaker for HandshakeManager {
+    fn set_identity_token(&mut self, identity_token: IdentityToken) {
+        self.identity_token = Some(identity_token);
+    }
+
     fn is_connected(&self) -> bool {
         self.connection_state == HandshakeState::Connected
     }
@@ -62,8 +68,13 @@ impl Handshaker for HandshakeManager {
 
         match &mut self.connection_state {
             HandshakeState::AwaitingChallengeResponse => {
-                let writer = self.write_challenge_request();
-                return Some(writer.to_packet());
+                if let Some(identity_token) = &self.identity_token {
+                    let writer = self.write_challenge_request(identity_token);
+                    return Some(writer.to_packet());
+                } else {
+                    // warn!("Identity Token not set");
+                    return None;
+                }
             }
             HandshakeState::AwaitingValidateResponse => {
                 let writer = self.write_validate_request();
@@ -112,9 +123,6 @@ impl Handshaker for HandshakeManager {
                     }
                     HandshakeHeader::ServerConnectResponse => {
                         return self.recv_connect_response();
-                    }
-                    HandshakeHeader::ServerRejectResponse => {
-                        return Some(HandshakeResult::Rejected);
                     }
                     HandshakeHeader::ClientChallengeRequest
                     | HandshakeHeader::ClientValidateRequest
@@ -173,6 +181,7 @@ impl HandshakeManager {
 
         Self {
             handshake_timer,
+            identity_token: None,
             pre_connection_timestamp,
             pre_connection_digest: None,
             connection_state: HandshakeState::AwaitingChallengeResponse,
@@ -182,12 +191,13 @@ impl HandshakeManager {
     }
 
     // Step 1 of Handshake
-    fn write_challenge_request(&self) -> BitWriter {
+    fn write_challenge_request(&self, identity_token: &IdentityToken) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
         HandshakeHeader::ClientChallengeRequest.ser(&mut writer);
 
         self.pre_connection_timestamp.ser(&mut writer);
+        identity_token.ser(&mut writer);
 
         writer
     }

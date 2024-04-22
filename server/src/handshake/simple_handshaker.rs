@@ -37,9 +37,9 @@ impl Handshaker for HandshakeManager {
         // Handshake stuff
         match handshake_header {
             HandshakeHeader::ClientIdentifyRequest => {
-                if let Ok(identity_token) = self.recv_identify_request(reader) {
+                if let Ok(id_token) = self.recv_identify_request(reader) {
 
-                    if let Some(user_key) = self.authenticated_unidentified_users.remove(&identity_token) {
+                    if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token) {
 
                         // remove identity token from map
                         if self.identity_token_map.remove(&user_key).is_none() {
