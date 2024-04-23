@@ -10,7 +10,7 @@ pub use naia_shared::{
     ReplicateBevy as Replicate, ReplicateBuilder, Request, Response, ResponseReceiveKey,
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeIntegerConversion, SignedInteger,
     SignedVariableInteger, Tick, TickBufferSettings, Timer, UnsignedInteger,
-    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, FakeEntityConverter,
 };
 
 mod change_detection;

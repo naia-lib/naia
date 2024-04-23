@@ -96,23 +96,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
 
-        // get auth bytes
-        let Some(auth_message) = &self.auth_message else {
-            panic!("Client Error: Cannot connect without setting auth first");
-        };
-        let mut bit_writer = BitWriter::new();
-        auth_message.write(
-            &self.protocol.message_kinds,
-            &mut bit_writer,
-            &mut FakeEntityConverter,
-        );
-        let auth_bytes = bit_writer.to_bytes().to_vec();
+        if let Some(auth_message) = &self.auth_message {
+            // get auth bytes
+            let mut bit_writer = BitWriter::new();
+            auth_message.write(
+                &self.protocol.message_kinds,
+                &mut bit_writer,
+                &mut FakeEntityConverter,
+            );
+            let auth_bytes = bit_writer.to_bytes().to_vec();
 
-        // connect with auth
-        let boxed_socket: Box<dyn Socket> = socket.into();
-        let (id_receiver, packet_sender, packet_receiver) =
-            boxed_socket.connect_with_auth(auth_bytes);
-        self.io.load(id_receiver, packet_sender, packet_receiver);
+            // connect with auth
+            let boxed_socket: Box<dyn Socket> = socket.into();
+            let (id_receiver, packet_sender, packet_receiver) =
+                boxed_socket.connect_with_auth(auth_bytes);
+            self.io.load(id_receiver, packet_sender, packet_receiver);
+        } else {
+            // connect without auth
+            let boxed_socket: Box<dyn Socket> = socket.into();
+            let (id_receiver, packet_sender, packet_receiver) =
+                boxed_socket.connect();
+            self.io.load(id_receiver, packet_sender, packet_receiver);
+        }
+
     }
 
     /// Returns client's current connection status
