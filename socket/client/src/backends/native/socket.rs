@@ -2,15 +2,15 @@ use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use webrtc_unreliable_client::Socket as RTCSocket;
 
+use super::{packet_receiver::PacketReceiverImpl, packet_sender::PacketSenderImpl};
 use crate::{
-    identity_receiver::IdentityReceiver,
     backends::{native::runtime::get_runtime, socket::SocketTrait},
     conditioned_packet_receiver::ConditionedPacketReceiver,
+    identity_receiver::IdentityReceiver,
     packet_receiver::PacketReceiver,
     packet_sender::PacketSender,
     IdentityReceiverImpl,
 };
-use super::{packet_receiver::PacketReceiverImpl, packet_sender::PacketSenderImpl};
 
 /// A client-side socket which communicates with an underlying unordered &
 /// unreliable protocol

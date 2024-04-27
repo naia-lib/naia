@@ -17,7 +17,8 @@ pub struct GameInstant {
 
 impl GameInstant {
     pub fn new(start_instant: &Instant) -> Self {
-        let millis = (start_instant.elapsed().as_millis() % GAME_TIME_LIMIT_U128) as u32;
+        let now = Instant::now();
+        let millis = (start_instant.elapsed(&now).as_millis() % GAME_TIME_LIMIT_U128) as u32;
 
         // start_instant should mark the initialization of the Server's TimeManager
         Self { millis }

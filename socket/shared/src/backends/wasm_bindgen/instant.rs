@@ -14,19 +14,24 @@ impl Instant {
     }
 
     /// Returns time elapsed since the Instant
-    pub fn elapsed(&self) -> Duration {
-        let inner_duration = Date::now() - self.inner;
+    pub fn elapsed(&self, now: &Self) -> Duration {
+        let inner_duration = now.inner - self.inner;
         let seconds: u64 = (inner_duration as u64) / 1000;
         let nanos: u32 = ((inner_duration as u32) % 1000) * 1000000;
         Duration::new(seconds, nanos)
     }
 
     /// Returns time until the Instant occurs
-    pub fn until(&self) -> Duration {
-        let inner_duration = self.inner - Date::now();
+    pub fn until(&self, now: &Self) -> Duration {
+        let inner_duration = self.inner - now.inner;
         let seconds: u64 = (inner_duration as u64) / 1000;
         let nanos: u32 = ((inner_duration as u32) % 1000) * 1000000;
         Duration::new(seconds, nanos)
+    }
+
+    /// Returns whether the Instant is after another Instant
+    pub fn is_after(&self, other: &Self) -> bool {
+        self.inner > other.inner
     }
 
     /// Adds a given number of milliseconds to the Instant

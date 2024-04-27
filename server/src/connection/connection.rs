@@ -96,6 +96,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn process_packets<W: WorldMutType<E>>(
         &mut self,
         protocol: &Protocol,
+        now: &Instant,
         global_world_manager: &mut GlobalWorldManager<E>,
         global_request_manager: &mut GlobalRequestManager,
         global_response_manager: &mut GlobalResponseManager,
@@ -106,6 +107,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
             &protocol.message_kinds,
+            now,
             global_world_manager,
             &self.base.local_world_manager,
             &mut self.base.remote_world_manager.entity_waitlist,
@@ -170,6 +172,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 &mut self.base.local_world_manager,
                 &protocol.component_kinds,
                 world,
+                now,
                 remote_events,
             );
             response_events

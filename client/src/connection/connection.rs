@@ -117,12 +117,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         global_world_manager: &mut GlobalWorldManager<E>,
         protocol: &Protocol,
         world: &mut W,
+        now: &Instant,
         incoming_events: &mut Events<E>,
     ) -> Vec<EntityResponseEvent<E>> {
         let mut response_events = Vec::new();
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
             &protocol.message_kinds,
+            now,
             global_world_manager,
             &self.base.local_world_manager,
             &mut self.base.remote_world_manager.entity_waitlist,
@@ -187,6 +189,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             &mut self.base.local_world_manager,
             &protocol.component_kinds,
             world,
+            now,
             remote_events,
         );
         response_events.extend(incoming_events.receive_world_events(world_events));

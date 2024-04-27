@@ -74,9 +74,10 @@ impl EntityWaitlist {
 
     pub fn collect_ready_items<T>(
         &mut self,
+        now: &Instant,
         waitlist_store: &mut WaitlistStore<T>,
     ) -> Option<Vec<T>> {
-        self.check_handle_ttls();
+        self.check_handle_ttls(now);
         waitlist_store.remove_expired_items(&mut self.removed_handles);
 
         if self.ready_handles.is_empty() {
@@ -146,12 +147,12 @@ impl EntityWaitlist {
         }
     }
 
-    fn check_handle_ttls(&mut self) {
+    fn check_handle_ttls(&mut self, now: &Instant) {
         loop {
             let Some((ttl, _)) = self.handle_ttls.front() else {
                 break;
             };
-            if ttl.elapsed() < self.handle_ttl {
+            if ttl.elapsed(now) < self.handle_ttl {
                 break;
             }
             let (_, handle) = self.handle_ttls.pop_front().unwrap();

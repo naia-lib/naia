@@ -1,12 +1,12 @@
 use naia_socket_shared::SocketConfig;
 
-use crate::{
-    backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver,
-    packet_receiver::PacketReceiver, packet_sender::PacketSender, IdentityReceiver,
-};
 use super::{
     addr_cell::AddrCell, data_channel::DataChannel, data_port::DataPort,
     packet_receiver::PacketReceiverImpl, packet_sender::PacketSenderImpl,
+};
+use crate::{
+    backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver,
+    packet_receiver::PacketReceiver, packet_sender::PacketSender, IdentityReceiver,
 };
 
 /// A client-side socket which communicates with an underlying unordered &

@@ -114,11 +114,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         } else {
             // connect without auth
             let boxed_socket: Box<dyn Socket> = socket.into();
-            let (id_receiver, packet_sender, packet_receiver) =
-                boxed_socket.connect();
+            let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect();
             self.io.load(id_receiver, packet_sender, packet_receiver);
         }
-
     }
 
     /// Returns client's current connection status
@@ -206,9 +204,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             return std::mem::take(&mut self.incoming_events);
         }
 
+        let now = Instant::now();
+
         if let Some(connection) = &mut self.server_connection {
             let (receiving_tick_happened, sending_tick_happened) =
-                connection.time_manager.collect_ticks();
+                connection.time_manager.collect_ticks(&now);
 
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // read packets on tick boundary, de-jittering
@@ -225,6 +225,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     &mut self.global_world_manager,
                     &self.protocol,
                     &mut world,
+                    &now,
                     &mut self.incoming_events,
                 ));
 
@@ -241,7 +242,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
             if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
                 // send outgoing packets
-                let now = Instant::now();
 
                 // collect waiting auth release messages
                 if let Some(mut entities) = connection

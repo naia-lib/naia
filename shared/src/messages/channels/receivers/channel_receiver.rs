@@ -1,4 +1,5 @@
 use naia_serde::{BitReader, SerdeErr};
+use naia_socket_shared::Instant;
 
 use crate::messages::channels::senders::request_sender::LocalRequestId;
 use crate::{
@@ -12,6 +13,7 @@ pub trait ChannelReceiver<P>: Send + Sync {
     fn receive_messages(
         &mut self,
         message_kinds: &MessageKinds,
+        now: &Instant,
         entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<P>;

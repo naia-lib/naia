@@ -4,6 +4,7 @@ use std::{
 };
 
 use log::{info, warn};
+use naia_socket_shared::Instant;
 
 use crate::{
     world::{
@@ -54,6 +55,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         local_world_manager: &mut LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
+        now: &Instant,
         world_events: RemoteWorldEvents<E>,
     ) -> Vec<EntityEvent<E>> {
         self.process_updates(
@@ -61,12 +63,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             local_world_manager,
             component_kinds,
             world,
+            now,
             world_events.incoming_updates,
         );
         self.process_actions(
             global_world_manager,
             local_world_manager,
             world,
+            now,
             world_events.incoming_actions,
             world_events.incoming_components,
         );
@@ -83,6 +87,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
+        now: &Instant,
         incoming_actions: Vec<EntityAction<RemoteEntity>>,
         incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
     ) {
@@ -93,7 +98,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             incoming_actions,
             incoming_components,
         );
-        self.process_waitlist_actions(global_world_manager, local_world_manager, world);
+        self.process_waitlist_actions(global_world_manager, local_world_manager, world, now);
     }
 
     /// For each [`EntityAction`] that can be executed now,
@@ -246,10 +251,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &mut LocalWorldManager<E>,
         world: &mut W,
+        now: &Instant,
     ) {
         if let Some(list) = self
             .entity_waitlist
-            .collect_ready_items(&mut self.insert_waitlist_store)
+            .collect_ready_items(now, &mut self.insert_waitlist_store)
         {
             let converter = EntityConverter::new(
                 global_world_manager.to_global_entity_converter(),
@@ -281,6 +287,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         local_world_manager: &mut LocalWorldManager<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
+        now: &Instant,
         incoming_updates: Vec<(Tick, E, ComponentUpdate)>,
     ) {
         self.process_ready_updates(
@@ -290,7 +297,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
             world,
             incoming_updates,
         );
-        self.process_waitlist_updates(global_world_manager, local_world_manager, world);
+        self.process_waitlist_updates(global_world_manager, local_world_manager, world, now);
     }
 
     /// Process component updates from raw bits for a given entity
@@ -390,6 +397,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         global_world_manager: &dyn GlobalWorldManagerType<E>,
         local_world_manager: &LocalWorldManager<E>,
         world: &mut W,
+        now: &Instant,
     ) {
         let converter = EntityConverter::new(
             global_world_manager.to_global_entity_converter(),
@@ -397,7 +405,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldManager<E> {
         );
         if let Some(list) = self
             .entity_waitlist
-            .collect_ready_items(&mut self.update_waitlist_store)
+            .collect_ready_items(now, &mut self.update_waitlist_store)
         {
             for (tick, world_entity, component_kind, ready_update) in list {
                 info!("processing waiting update!");

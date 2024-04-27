@@ -1,6 +1,7 @@
 use std::mem;
 
 use naia_serde::{BitReader, SerdeErr};
+use naia_socket_shared::Instant;
 
 use crate::messages::channels::senders::request_sender::LocalRequestId;
 use crate::{
@@ -67,10 +68,11 @@ impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
     fn receive_messages(
         &mut self,
         _message_kinds: &MessageKinds,
+        now: &Instant,
         entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
-        if let Some(list) = entity_waitlist.collect_ready_items(&mut self.waitlist_store) {
+        if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {
             for (message_index, mut message) in list {
                 message.relations_complete(converter);
                 self.arrange_message(message_index, message);

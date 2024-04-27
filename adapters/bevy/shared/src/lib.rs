@@ -2,15 +2,15 @@ pub use naia_shared::{
     sequence_greater_than, BitReader, BitWrite, BitWriter, Channel, ChannelDirection, ChannelKind,
     ChannelMode, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
     ConstBitLength, DiffMask, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus,
-    EntityDoesNotExistError, EntityProperty, GlobalEntity, HostEntity, HostEntityAuthStatus,
-    LinkConditionerConfig, LocalEntityAndGlobalEntityConverter,
+    EntityDoesNotExistError, EntityProperty, FakeEntityConverter, GlobalEntity, HostEntity,
+    HostEntityAuthStatus, LinkConditionerConfig, LocalEntityAndGlobalEntityConverter,
     LocalEntityAndGlobalEntityConverterMut, MessageBevy as Message, MessageBuilder,
     MessageContainer, MessageKind, MessageKinds, Named, OwnedBitReader, Property, PropertyMutate,
     PropertyMutator, Random, ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef,
     ReplicateBevy as Replicate, ReplicateBuilder, Request, Response, ResponseReceiveKey,
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeIntegerConversion, SignedInteger,
     SignedVariableInteger, Tick, TickBufferSettings, Timer, UnsignedInteger,
-    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, FakeEntityConverter,
+    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 mod change_detection;

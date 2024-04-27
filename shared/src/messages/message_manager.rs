@@ -324,6 +324,7 @@ impl MessageManager {
     pub fn receive_messages<E: Eq + Copy + Hash>(
         &mut self,
         message_kinds: &MessageKinds,
+        now: &Instant,
         global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         local_entity_converter: &dyn EntityAndLocalEntityConverter<E>,
         entity_waitlist: &mut EntityWaitlist,
@@ -334,7 +335,7 @@ impl MessageManager {
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
             let messages =
-                channel.receive_messages(message_kinds, entity_waitlist, &entity_converter);
+                channel.receive_messages(message_kinds, now, entity_waitlist, &entity_converter);
             output.push((channel_kind.clone(), messages));
         }
         output

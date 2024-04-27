@@ -90,7 +90,7 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         for (message_index, last_sent_opt, message) in self.sending_messages.iter_mut().flatten() {
             let mut should_send = false;
             if let Some(last_sent) = last_sent_opt {
-                if last_sent.elapsed() >= resend_duration {
+                if last_sent.elapsed(now) >= resend_duration {
                     should_send = true;
                 }
             } else {

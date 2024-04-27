@@ -139,12 +139,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Events<E> {
+
+        let now = Instant::now();
+
         // Need to run this to maintain connection with all clients, and receive packets
         // until none left
-        self.maintain_socket(world);
+        self.maintain_socket(world, &now);
 
         // tick event
-        if self.time_manager.recv_server_tick() {
+        if self.time_manager.recv_server_tick(&now) {
             self.incoming_events
                 .push_tick(self.time_manager.current_tick());
         }
@@ -1668,7 +1671,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     // Private methods
 
     /// Maintain connection with a client and read all incoming packet data
-    fn maintain_socket<W: WorldMutType<E>>(&mut self, mut world: W) {
+    fn maintain_socket<W: WorldMutType<E>>(
+        &mut self,
+        mut world: W,
+        now: &Instant,
+    ) {
         self.handle_disconnects(&mut world);
         self.handle_heartbeats();
         self.handle_pings();
@@ -1819,7 +1826,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         }
 
         for address in addresses {
-            self.process_packets(&address, &mut world);
+            self.process_packets(&address, &mut world, now);
         }
     }
 
@@ -1862,7 +1869,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return Ok(());
     }
 
-    fn process_packets<W: WorldMutType<E>>(&mut self, address: &SocketAddr, world: &mut W) {
+    fn process_packets<W: WorldMutType<E>>(&mut self, address: &SocketAddr, world: &mut W, now: &Instant) {
         // Packets requiring established connection
         let (user_key, response_events) = {
             let Some(connection) = self.user_connections.get_mut(address) else {
@@ -1872,6 +1879,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 connection.user_key,
                 connection.process_packets(
                     &self.protocol,
+                    now,
                     &mut self.global_world_manager,
                     &mut self.global_request_manager,
                     &mut self.global_response_manager,

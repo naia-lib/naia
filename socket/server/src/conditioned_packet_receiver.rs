@@ -2,7 +2,7 @@ use std::net::SocketAddr;
 
 use smol::channel::Receiver;
 
-use naia_socket_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
+use naia_socket_shared::{Instant, link_condition_logic, LinkConditionerConfig, TimeQueue};
 
 use super::{error::NaiaServerSocketError, packet_receiver::PacketReceiver};
 
@@ -49,8 +49,9 @@ impl PacketReceiver for ConditionedPacketReceiverImpl {
             }
         }
 
-        if self.time_queue.has_item() {
-            let (address, payload) = self.time_queue.pop_item().unwrap();
+        let now = Instant::now();
+        if self.time_queue.has_item(&now) {
+            let (address, payload) = self.time_queue.pop_item(&now).unwrap();
             self.last_payload = Some(payload);
             return Ok(Some((address, self.last_payload.as_ref().unwrap())));
         } else {
