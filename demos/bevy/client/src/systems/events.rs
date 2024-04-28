@@ -14,7 +14,7 @@ use naia_bevy_client::{
         MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, SpawnEntityEvent,
         UnpublishEntityEvent, UpdateComponentEvents,
     },
-    sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
+    sequence_greater_than, Client, CommandsExt, EntityCommandsExt, Random, Replicate, Tick,
 };
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
@@ -99,8 +99,8 @@ pub fn message_events(
                 // Here we create a local copy of the Player entity, to use for client-side prediction
                 if let Ok(position) = position_query.get(entity) {
                     let prediction_entity = commands
-                        .entity(entity)
-                        .local_duplicate() // copies all Replicate components as well
+                        .local_duplicate(entity)
+                        // copies all Replicate components as well
                         .insert(SpriteBundle {
                             sprite: Sprite {
                                 custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
@@ -348,7 +348,8 @@ pub fn tick_events(
     let Some(predicted_entity) = global
         .owned_entity
         .as_ref()
-        .map(|owned_entity| owned_entity.predicted) else {
+        .map(|owned_entity| owned_entity.predicted)
+    else {
         // No owned Entity
         return;
     };

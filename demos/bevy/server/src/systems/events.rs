@@ -10,7 +10,7 @@ use naia_bevy_server::{
         InsertComponentEvents, PublishEntityEvent, RemoveComponentEvents, SpawnEntityEvent,
         TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
-    CommandsExt, Random, ReplicationConfig, Server,
+    EntityCommandsExt, Random, ReplicationConfig, Server,
 };
 
 use naia_bevy_demo_shared::{

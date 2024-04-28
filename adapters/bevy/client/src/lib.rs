@@ -15,5 +15,6 @@ mod systems;
 
 pub use client::Client;
 pub use commands::CommandsExt;
+pub use commands::EntityCommandsExt;
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;

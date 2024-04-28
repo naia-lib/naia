@@ -15,7 +15,7 @@ mod plugin;
 mod server;
 mod systems;
 
-pub use commands::CommandsExt;
+pub use commands::EntityCommandsExt;
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;
 pub use server::Server;

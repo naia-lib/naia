@@ -25,7 +25,7 @@ transport_udp = []
 [dependencies]
 naia-shared = { version = "0.22", path = "../shared" }
 naia-server-socket = { version = "0.22", path = "../socket/server", optional = true }
-bevy_ecs = { version = "0.12.1", default_features = false, optional = true }
+bevy_ecs = { version = "0.13.2", default_features = false, optional = true }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
 ring = { version = "0.16.15" }

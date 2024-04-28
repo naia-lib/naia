@@ -1,6 +1,6 @@
 use bevy_ecs::{
     entity::Entity,
-    system::{Command as BevyCommand, EntityCommands},
+    system::{Command as BevyCommand, Commands, EntityCommands},
     world::{Mut, World},
 };
 
@@ -9,42 +9,40 @@ use naia_client::{Client as NaiaClient, ReplicationConfig};
 
 use crate::Client;
 
+pub trait CommandsExt<'w, 's> {
+    fn local_duplicate(&mut self, entity: Entity) -> EntityCommands;
+}
+
+impl<'w, 's> CommandsExt<'w, 's> for Commands<'w, 's> {
+    fn local_duplicate(&mut self, entity: Entity) -> EntityCommands {
+        let new_entity = self.spawn_empty().id();
+        let command = LocalDuplicateComponents::new(new_entity, entity);
+        self.add(command);
+
+        self.entity(new_entity)
+    }
+}
+
 // Bevy Commands Extension
-pub trait CommandsExt<'w, 's, 'a> {
-    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a>;
-    fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn disable_replication(&'a mut self, client: &mut Client)
-        -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn configure_replication(
-        &'a mut self,
-        config: ReplicationConfig,
-    ) -> &'a mut EntityCommands<'w, 's, 'a>;
+pub trait EntityCommandsExt<'a> {
+    fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'a>;
+    fn disable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'a>;
+    fn configure_replication(&'a mut self, config: ReplicationConfig)
+        -> &'a mut EntityCommands<'a>;
     fn replication_config(&'a self, client: &Client) -> Option<ReplicationConfig>;
-    fn request_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
-    fn release_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a>;
+    fn request_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'a>;
+    fn release_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'a>;
     fn authority(&'a self, client: &Client) -> Option<EntityAuthStatus>;
 }
 
-impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
-    fn local_duplicate(&'a mut self) -> EntityCommands<'w, 's, 'a> {
-        let old_entity = self.id();
-        let commands = self.commands();
-        let new_entity = commands.spawn_empty().id();
-        let command = LocalDuplicateComponents::new(new_entity, old_entity);
-        commands.add(command);
-        commands.entity(new_entity)
-    }
-
-    fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+impl<'a> EntityCommandsExt<'a> for EntityCommands<'a> {
+    fn enable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'a> {
         client.enable_replication(&self.id());
         self.insert(HostOwned);
         return self;
     }
 
-    fn disable_replication(
-        &'a mut self,
-        client: &mut Client,
-    ) -> &'a mut EntityCommands<'w, 's, 'a> {
+    fn disable_replication(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'a> {
         client.disable_replication(&self.id());
         self.remove::<HostOwned>();
         return self;
@@ -53,9 +51,9 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
     fn configure_replication(
         &'a mut self,
         config: ReplicationConfig,
-    ) -> &'a mut EntityCommands<'w, 's, 'a> {
+    ) -> &'a mut EntityCommands<'a> {
         let entity = self.id();
-        let commands = self.commands();
+        let mut commands = self.commands();
         let command = ConfigureReplicationCommand::new(entity, config);
         commands.add(command);
         return self;
@@ -65,12 +63,12 @@ impl<'w, 's, 'a> CommandsExt<'w, 's, 'a> for EntityCommands<'w, 's, 'a> {
         client.replication_config(&self.id())
     }
 
-    fn request_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+    fn request_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'a> {
         client.entity_request_authority(&self.id());
         return self;
     }
 
-    fn release_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'w, 's, 'a> {
+    fn release_authority(&'a mut self, client: &mut Client) -> &'a mut EntityCommands<'a> {
         client.entity_release_authority(&self.id());
         return self;
     }
