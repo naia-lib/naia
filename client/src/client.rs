@@ -95,12 +95,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.auth_bytes(&auth_bytes)
     }
 
-    /// Set the auth bytes to use when setting up a connection with the Server
-    /// This is helpful to customize your auth flow
-    pub fn auth_bytes(&mut self, bytes: &[u8]) {
-        self.auth_message = Some(bytes.to_vec());
-    }
-
     /// Connect to the given server address
     pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         if !self.is_disconnected() {
