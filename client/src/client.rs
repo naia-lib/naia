@@ -92,7 +92,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut FakeEntityConverter,
         );
         let auth_bytes = bit_writer.to_bytes();
-        self.auth_bytes(&auth_bytes)
+        self.auth_message = Some(auth_bytes.to_vec());
     }
 
     /// Connect to the given server address
