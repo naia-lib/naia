@@ -31,7 +31,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     client_config: ClientConfig,
     protocol: Protocol,
     // Connection
-    auth_message: Option<MessageContainer>,
+    auth_message: Option<Vec<u8>>,
     io: Io,
     server_connection: Option<Connection<E>>,
     handshake_manager: Box<dyn Handshaker>,
@@ -84,10 +84,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
-        self.auth_message = Some(MessageContainer::from_write(
-            Box::new(auth),
+        // get auth bytes
+        let mut bit_writer = BitWriter::new();
+        auth.write(
+            &self.protocol.message_kinds,
+            &mut bit_writer,
             &mut FakeEntityConverter,
-        ));
+        );
+        let auth_bytes = bit_writer.to_bytes();
+        self.auth_bytes(&auth_bytes)
+    }
+
+    /// Set the auth bytes to use when setting up a connection with the Server
+    /// This is helpful to customize your auth flow
+    pub fn auth_bytes(&mut self, bytes: &[u8]) {
+        self.auth_message = Some(bytes.to_vec());
     }
 
     /// Connect to the given server address
@@ -96,20 +107,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
 
-        if let Some(auth_message) = &self.auth_message {
-            // get auth bytes
-            let mut bit_writer = BitWriter::new();
-            auth_message.write(
-                &self.protocol.message_kinds,
-                &mut bit_writer,
-                &mut FakeEntityConverter,
-            );
-            let auth_bytes = bit_writer.to_bytes().to_vec();
+        if let Some(auth_bytes) = &self.auth_message {
 
             // connect with auth
             let boxed_socket: Box<dyn Socket> = socket.into();
             let (id_receiver, packet_sender, packet_receiver) =
-                boxed_socket.connect_with_auth(auth_bytes);
+                boxed_socket.connect_with_auth(auth_bytes.clone());
             self.io.load(id_receiver, packet_sender, packet_receiver);
         } else {
             // connect without auth

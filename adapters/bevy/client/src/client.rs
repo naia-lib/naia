@@ -46,6 +46,8 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
         self.client.client.auth(auth);
     }
 
+    pub fn auth_bytes(&mut self, bytes: &[u8]) { self.client.client.auth_bytes(bytes); }
+
     pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         self.client.client.connect(socket);
     }
