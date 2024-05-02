@@ -89,6 +89,10 @@ impl Protocol {
         self
     }
 
+    pub fn get_rtc_endpoint(&self) -> String {
+        self.socket.rtc_endpoint_path.clone()
+    }
+
     pub fn tick_interval(&mut self, duration: Duration) -> &mut Self {
         self.check_lock();
         self.tick_interval = duration;

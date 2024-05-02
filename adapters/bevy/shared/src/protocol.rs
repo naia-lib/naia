@@ -51,6 +51,10 @@ impl Protocol {
         self
     }
 
+    pub fn get_rtc_endpoint(&self) -> String {
+        self.inner.get_rtc_endpoint()
+    }
+
     pub fn tick_interval(&mut self, duration: Duration) -> &mut Self {
         self.inner.tick_interval(duration);
         self
