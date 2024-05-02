@@ -46,6 +46,10 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
         self.client.client.auth(auth);
     }
 
+    pub fn auth_headers(&mut self, headers: Vec<(String, String)>) {
+        self.client.client.auth_headers(headers);
+    }
+
     pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         self.client.client.connect(socket);
     }

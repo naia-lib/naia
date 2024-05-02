@@ -97,4 +97,37 @@ impl TransportSocket for Socket {
             Box::new(inner_receiver),
         );
     }
+    fn connect_with_auth_headers(
+        self: Box<Self>,
+        auth_headers: Vec<(String, String)>,
+    ) -> (
+        Box<dyn TransportIdentityReceiver>,
+        Box<dyn TransportSender>,
+        Box<dyn TransportReceiver>,
+    ) {
+        let (id_receiver, inner_sender, inner_receiver) =
+            ClientSocket::connect_with_auth_headers(&self.server_session_url, &self.config, auth_headers);
+        return (
+            Box::new(id_receiver),
+            Box::new(inner_sender),
+            Box::new(inner_receiver),
+        );
+    }
+    fn connect_with_auth_and_headers(
+        self: Box<Self>,
+        auth_bytes: Vec<u8>,
+        auth_headers: Vec<(String, String)>,
+    ) -> (
+        Box<dyn TransportIdentityReceiver>,
+        Box<dyn TransportSender>,
+        Box<dyn TransportReceiver>,
+    ) {
+        let (id_receiver, inner_sender, inner_receiver) =
+            ClientSocket::connect_with_auth_and_headers(&self.server_session_url, &self.config, auth_bytes, auth_headers);
+        return (
+            Box::new(id_receiver),
+            Box::new(inner_sender),
+            Box::new(inner_receiver),
+        );
+    }
 }

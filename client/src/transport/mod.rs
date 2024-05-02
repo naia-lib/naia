@@ -41,6 +41,23 @@ mod inner {
             Box<dyn PacketSender>,
             Box<dyn PacketReceiver>,
         );
+        fn connect_with_auth_headers(
+            self: Box<Self>,
+            auth_headers: Vec<(String, String)>,
+        ) -> (
+            Box<dyn IdentityReceiver>,
+            Box<dyn PacketSender>,
+            Box<dyn PacketReceiver>,
+        );
+        fn connect_with_auth_and_headers(
+            self: Box<Self>,
+            auth_bytes: Vec<u8>,
+            auth_headers: Vec<(String, String)>,
+        ) -> (
+            Box<dyn IdentityReceiver>,
+            Box<dyn PacketSender>,
+            Box<dyn PacketReceiver>,
+        );
     }
 
     pub trait PacketSender: Send + Sync {

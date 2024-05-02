@@ -32,7 +32,7 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
         if let Some(item) = self.queue.peek() {
             // item's instant has passed, so it's ready to be returned
 
-            let will_pop = item.instant.is_after(now);
+            let will_pop = now.is_after(&item.instant);
 
             return will_pop;
         }

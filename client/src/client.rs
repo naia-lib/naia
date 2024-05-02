@@ -32,6 +32,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     protocol: Protocol,
     // Connection
     auth_message: Option<Vec<u8>>,
+    auth_headers: Option<Vec<(String, String)>>,
     io: Io,
     server_connection: Option<Connection<E>>,
     handshake_manager: Box<dyn Handshaker>,
@@ -65,6 +66,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             protocol,
             // Connection
             auth_message: None,
+            auth_headers: None,
             io: Io::new(
                 &client_config.connection.bandwidth_measure_duration,
                 &compression_config,
@@ -95,6 +97,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.auth_message = Some(auth_bytes.to_vec());
     }
 
+    pub fn auth_headers(&mut self, headers: Vec<(String, String)>) {
+        self.auth_headers = Some(headers);
+    }
+
     /// Connect to the given server address
     pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         if !self.is_disconnected() {
@@ -102,17 +108,32 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some(auth_bytes) = &self.auth_message {
-
-            // connect with auth
-            let boxed_socket: Box<dyn Socket> = socket.into();
-            let (id_receiver, packet_sender, packet_receiver) =
-                boxed_socket.connect_with_auth(auth_bytes.clone());
-            self.io.load(id_receiver, packet_sender, packet_receiver);
+            if let Some(auth_headers) = &self.auth_headers {
+                // connect with auth & headers
+                let boxed_socket: Box<dyn Socket> = socket.into();
+                let (id_receiver, packet_sender, packet_receiver) =
+                    boxed_socket.connect_with_auth_and_headers(auth_bytes.clone(), auth_headers.clone());
+                self.io.load(id_receiver, packet_sender, packet_receiver);
+            } else {
+                // connect with auth
+                let boxed_socket: Box<dyn Socket> = socket.into();
+                let (id_receiver, packet_sender, packet_receiver) =
+                    boxed_socket.connect_with_auth(auth_bytes.clone());
+                self.io.load(id_receiver, packet_sender, packet_receiver);
+            }
         } else {
-            // connect without auth
-            let boxed_socket: Box<dyn Socket> = socket.into();
-            let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect();
-            self.io.load(id_receiver, packet_sender, packet_receiver);
+            if let Some(auth_headers) = &self.auth_headers {
+                // connect with auth headers
+                let boxed_socket: Box<dyn Socket> = socket.into();
+                let (id_receiver, packet_sender, packet_receiver) =
+                    boxed_socket.connect_with_auth_headers(auth_headers.clone());
+                self.io.load(id_receiver, packet_sender, packet_receiver);
+            } else {
+                // connect without auth
+                let boxed_socket: Box<dyn Socket> = socket.into();
+                let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect();
+                self.io.load(id_receiver, packet_sender, packet_receiver);
+            }
         }
     }
 

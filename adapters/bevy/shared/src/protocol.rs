@@ -102,6 +102,10 @@ impl Protocol {
         self.inner
     }
 
+    pub fn inner(&self) -> &InnerProtocol {
+        &self.inner
+    }
+
     fn check_lock(&self) {
         self.inner.check_lock();
     }

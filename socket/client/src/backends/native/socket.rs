@@ -26,8 +26,9 @@ impl Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect_inner(server_session_url, config, None);
+        return Self::connect_inner(server_session_url, config, None, None);
     }
+
     /// Connects to the given server address with authentication
     pub fn connect_with_auth(
         server_session_url: &str,
@@ -38,13 +39,42 @@ impl Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect_inner(server_session_url, config, Some(auth_bytes));
+        return Self::connect_inner(server_session_url, config, Some(auth_bytes), None);
     }
+
+    /// Connects to the given server address with authentication
+    pub fn connect_with_auth_headers(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_headers: Vec<(String, String)>
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
+        return Self::connect_inner(server_session_url, config, None, Some(auth_headers));
+    }
+
+    /// Connects to the given server address with authentication
+    pub fn connect_with_auth_and_headers(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes: Vec<u8>,
+        auth_headers: Vec<(String, String)>
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
+        return Self::connect_inner(server_session_url, config, Some(auth_bytes), Some(auth_headers));
+    }
+
     /// Connects to the given server address
     fn connect_inner(
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes_opt: Option<Vec<u8>>,
+        auth_headers_opt: Option<Vec<(String, String)>>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
@@ -59,7 +89,7 @@ impl Socket {
 
         let (socket, io) = RTCSocket::new();
         get_runtime()
-            .spawn(async move { socket.connect(&server_session_string, auth_bytes_opt).await });
+            .spawn(async move { socket.connect(&server_session_string, auth_bytes_opt, auth_headers_opt).await });
 
         // Setup Packet Sender
         let packet_sender_impl = PacketSenderImpl::new(
