@@ -400,7 +400,11 @@ async fn serve(
                             warn!("Invalid WebRTC session request from {}. Error: unable to decode auth string", remote_addr);
                         }
                     }
+                } else {
+                    warn!("Invalid WebRTC session request from {}. Error: missing auth string", remote_addr);
                 }
+            } else {
+                warn!("Invalid WebRTC session request from {}. Error: missing auth sender", remote_addr);
             }
         }
 
@@ -408,13 +412,20 @@ async fn serve(
         if success && !is_options {
             success = false;
 
+            // info!("reading identity token");
+
             let identity_token = identity_token_opt.take().unwrap();
+
+            // info!("identity token: {:?}", identity_token);
 
             let mut lines = body.lines();
             let buf = RequestBuffer::new(&mut lines);
 
             match session_endpoint.http_session_request(buf).await {
                 Ok(resp) => {
+
+                    info!("Successful WebRTC session request");
+
                     success = true;
 
                     let (_head, body) = resp.into_parts();

@@ -4,7 +4,7 @@ use std::{
     net::SocketAddr,
 };
 
-use log::warn;
+use log::{info, warn};
 
 use super::{
     entity_action_event::EntityActionEvent, host_world_manager::ActionId,
@@ -521,6 +521,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         world_entity: &E,
     ) -> HostEntity {
         if let Some(host_entity) = local_world_manager.remove_reserved_host_entity(world_entity) {
+            info!("World Channel: entity channel opening with reserved host entity: {:?}", host_entity);
             return host_entity;
         } else {
             let host_entity = local_world_manager.generate_host_entity();
