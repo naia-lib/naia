@@ -915,6 +915,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     pub(crate) fn publish_entity(&mut self, entity: &E, client_is_origin: bool) {
         if client_is_origin {
+            // warn!("sending publish entity message");
             let message = EntityEventMessage::new_publish(&self.global_world_manager, entity);
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
         } else {
@@ -955,6 +956,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if client_is_origin {
             // send message to server
+            // warn!("sending enable delegation for entity message");
             let message =
                 EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
             self.send_message::<SystemChannel, EntityEventMessage>(&message);

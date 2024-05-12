@@ -1240,7 +1240,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world: &mut W,
         entity: &E,
         server_origin: bool,
-    ) {
+    ) -> bool {
         if server_origin {
             // send publish message to entity owner
             let entity_owner = self.global_world_manager.entity_owner(&entity);
@@ -1254,8 +1254,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
         }
 
-        self.global_world_manager.entity_publish(&entity);
-        world.entity_publish(&self.global_world_manager, &entity);
+        let result = self.global_world_manager.entity_publish(&entity);
+        if result {
+            world.entity_publish(&self.global_world_manager, &entity);
+        }
+        return result;
     }
 
     pub(crate) fn unpublish_entity<W: WorldMutType<E>>(
@@ -1330,12 +1333,37 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let Some(entity_owner) = self.global_world_manager.entity_owner(entity) else {
             panic!("entity should have an owner at this point");
         };
-        let EntityOwner::ClientPublic(user_key) = entity_owner else {
-            panic!(
-                "entity should be owned by a public client at this point. Owner is: {:?}",
-                entity_owner
-            );
-        };
+        let mut owner_user_key;
+        match entity_owner {
+            EntityOwner::Client(user_key) => {
+                owner_user_key = user_key;
+                warn!(
+                    "entity should be owned by a public client at this point. Owner is: {:?}",
+                    entity_owner
+                );
+
+                // publishing here to ensure that the entity is in the correct state ..
+                // TODO: this is probably a bad idea somehow! this is hacky
+                // instead, should rely on client message coming through at the appropriate time to publish the entity before this..
+                let result = self.global_world_manager.entity_publish(&entity);
+                if result {
+                    world.entity_publish(&self.global_world_manager, &entity);
+                } else {
+                    warn!("failed to publish entity before enabling delegation");
+                    return;
+                }
+            }
+            EntityOwner::ClientPublic(user_key) => {
+                owner_user_key = user_key;
+            }
+            _owner => {
+                panic!(
+                    "entity should be owned by a public client at this point. Owner is: {:?}",
+                    entity_owner
+                );
+            }
+        }
+        let user_key = owner_user_key;
         self.global_world_manager.migrate_entity_to_server(&entity);
 
         // we set this to true immediately since it's already being replicated out to the remote
@@ -1982,7 +2010,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for response_event in deferred_events {
             match response_event {
                 EntityResponseEvent::PublishEntity(entity) => {
-                    // info!("received publish entity message!");
+                    info!("received publish entity message!");
                     self.publish_entity(world, &entity, false);
                     self.incoming_events.push_publish(user_key, &entity);
                 }
@@ -1991,7 +2019,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     self.incoming_events.push_unpublish(user_key, &entity);
                 }
                 EntityResponseEvent::EnableDelegationEntity(entity) => {
-                    // info!("received enable delegation entity message!");
+                    info!("received enable delegation entity message!");
                     self.entity_enable_delegation(world, &entity, Some(*user_key));
                     self.incoming_events.push_delegate(user_key, &entity);
                 }

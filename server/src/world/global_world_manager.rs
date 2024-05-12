@@ -4,6 +4,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use log::{info, warn};
+
 use naia_shared::{
     BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor,
     EntityAuthStatus, EntityDoesNotExistError, GlobalDiffHandler, GlobalEntity,
@@ -135,15 +137,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
     // Public
 
-    pub(crate) fn entity_publish(&mut self, entity: &E) {
+    pub(crate) fn entity_publish(&mut self, entity: &E) -> bool {
         let Some(record) = self.entity_records.get_mut(entity) else {
             panic!("entity record does not exist!");
         };
-        if let EntityOwner::Client(user_key) = record.owner {
-            record.owner = EntityOwner::ClientPublic(user_key);
-            record.replication_config = ReplicationConfig::Public;
-        } else {
-            panic!("Can only publish an Entity that is owned by a Client!");
+
+        match record.owner {
+            EntityOwner::Local => {
+                panic!("Can only publish an Entity that is owned by a Client! Current owner: {:?}", record.owner);
+            }
+            EntityOwner::Server => {
+                warn!("Can only publish an Entity that is owned by a Client! Current owner: {:?}", record.owner);
+                return false;
+            }
+            EntityOwner::ClientWaiting(user_key) => {
+                panic!("Attempting to publish an Entity that is waiting for a Client to take ownership");
+            }
+            EntityOwner::Client(user_key) => {
+                // info!("Publishing Entity owned by User: {:?}", user_key);
+                record.owner = EntityOwner::ClientPublic(user_key);
+                record.replication_config = ReplicationConfig::Public;
+                return true;
+            }
+            EntityOwner::ClientPublic(user_key) => {
+                warn!("Published Entity is being published again!");
+                record.owner = EntityOwner::ClientPublic(user_key);
+                record.replication_config = ReplicationConfig::Public;
+                return true;
+            }
         }
     }
 
