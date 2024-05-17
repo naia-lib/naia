@@ -1,3 +1,5 @@
+use log::warn;
+
 use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use webrtc_unreliable_client::Socket as RTCSocket;
@@ -89,7 +91,12 @@ impl Socket {
 
         let (socket, io) = RTCSocket::new();
         get_runtime()
-            .spawn(async move { socket.connect(&server_session_string, auth_bytes_opt, auth_headers_opt).await });
+            .spawn(async move {
+                let result = socket.connect(&server_session_string, auth_bytes_opt, auth_headers_opt).await;
+                if let Err(e) = result {
+                    warn!("Error connecting to server: {:?}", e);
+                }
+            });
 
         // Setup Packet Sender
         let packet_sender_impl = PacketSenderImpl::new(
