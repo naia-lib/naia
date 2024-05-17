@@ -49,8 +49,8 @@ impl Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        let (from_client_auth_sender, from_client_auth_receiver) = smol::channel::unbounded();
-        let (to_session_all_auth_sender, to_session_all_auth_receiver) = smol::channel::unbounded();
+        let (from_client_auth_sender, from_client_auth_receiver) = channel::unbounded();
+        let (to_session_all_auth_sender, to_session_all_auth_receiver) = channel::unbounded();
         let from_client_auth_sender = Some(from_client_auth_sender);
         let to_session_all_auth_receiver = Some(to_session_all_auth_receiver);
 
