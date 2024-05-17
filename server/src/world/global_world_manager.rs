@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use log::{info, warn};
+use log::warn;
 
 use naia_shared::{
     BigMap, BigMapKey, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthAccessor,
@@ -150,7 +150,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
                 warn!("Can only publish an Entity that is owned by a Client! Current owner: {:?}", record.owner);
                 return false;
             }
-            EntityOwner::ClientWaiting(user_key) => {
+            EntityOwner::ClientWaiting(_user_key) => {
                 panic!("Attempting to publish an Entity that is waiting for a Client to take ownership");
             }
             EntityOwner::Client(user_key) => {

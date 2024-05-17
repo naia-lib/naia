@@ -1333,7 +1333,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let Some(entity_owner) = self.global_world_manager.entity_owner(entity) else {
             panic!("entity should have an owner at this point");
         };
-        let mut owner_user_key;
+        let owner_user_key;
         match entity_owner {
             EntityOwner::Client(user_key) => {
                 owner_user_key = user_key;

@@ -80,18 +80,18 @@ impl Socket {
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
         from_client_auth_sender: Option<
-            smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
+            channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
         >,
         to_session_all_auth_receiver: Option<
-            smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
+            channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
         >,
     ) -> (
-        smol::channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
-        smol::channel::Receiver<smol::channel::Sender<(SocketAddr, Box<[u8]>)>>,
+        channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
+        channel::Receiver<channel::Sender<(SocketAddr, Box<[u8]>)>>,
     ) {
         // Set up receiver loop
-        let (from_client_sender, from_client_receiver) = smol::channel::unbounded();
-        let (sender_sender, sender_receiver) = smol::channel::unbounded();
+        let (from_client_sender, from_client_receiver) = channel::unbounded();
+        let (sender_sender, sender_receiver) = channel::unbounded();
 
         let server_addrs_clone = server_addrs.clone();
         let config_clone = config.clone();
@@ -122,10 +122,8 @@ impl Socket {
 
     fn setup_sender_loop(
         config: &SocketConfig,
-        from_client_receiver: smol::channel::Receiver<
-            Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>,
-        >,
-        sender_receiver: smol::channel::Receiver<smol::channel::Sender<(SocketAddr, Box<[u8]>)>>,
+        from_client_receiver: channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
+        sender_receiver: channel::Receiver<channel::Sender<(SocketAddr, Box<[u8]>)>>,
     ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         // Set up sender loop
         let (to_client_sender, to_client_receiver) = channel::unbounded();
