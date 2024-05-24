@@ -214,7 +214,10 @@ impl TimeManager {
             self.instant_from_interp(self.server_receivable_tick, server_receivable_interp);
     }
 
-    pub(crate) fn collect_ticks(&mut self, now: &Instant) -> (Option<(Tick, Tick)>, Option<(Tick, Tick)>) {
+    pub(crate) fn collect_ticks(
+        &mut self,
+        now: &Instant,
+    ) -> (Option<(Tick, Tick)>, Option<(Tick, Tick)>) {
         // updates client_receiving_tick
         // returns (Some(start_tick, end_tick), None) if a client_receiving_tick has incremented
         // returns (None, Some(start_tick, end_tick)) if a client_sending_tick or server_receivable_tick has incremented

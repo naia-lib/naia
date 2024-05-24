@@ -295,12 +295,12 @@ impl<T> EntityAuthResetEvent<T> {
 
 // InsertComponentEvent
 #[derive(Event, Clone)]
-pub struct InsertComponentEvents<T> {
+pub struct InsertComponentEvents<T: Send + Sync + 'static> {
     inner: HashMap<ComponentKind, Vec<Entity>>,
     phantom_t: PhantomData<T>,
 }
 
-impl<T> InsertComponentEvents<T> {
+impl<T: Send + Sync + 'static> InsertComponentEvents<T> {
     pub fn new(inner: HashMap<ComponentKind, Vec<Entity>>) -> Self {
         Self {
             inner,

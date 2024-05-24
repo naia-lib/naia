@@ -122,7 +122,9 @@ impl Socket {
 
     fn setup_sender_loop(
         config: &SocketConfig,
-        from_client_receiver: channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
+        from_client_receiver: channel::Receiver<
+            Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>,
+        >,
         sender_receiver: channel::Receiver<channel::Sender<(SocketAddr, Box<[u8]>)>>,
     ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         // Set up sender loop

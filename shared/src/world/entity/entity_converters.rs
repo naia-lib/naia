@@ -337,9 +337,7 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
             return result;
         }
 
-        let host_entity = self
-            .local_world_manager
-            .host_reserve_entity(&entity);
+        let host_entity = self.local_world_manager.host_reserve_entity(&entity);
 
         warn!("get_or_reserve_entity(): entity is not owned by user, attempting to reserve. HostEntity: {:?}", host_entity);
         return Ok(host_entity.copy_to_owned());

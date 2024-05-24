@@ -401,10 +401,16 @@ async fn serve(
                         }
                     }
                 } else {
-                    warn!("Invalid WebRTC session request from {}. Error: missing auth string", remote_addr);
+                    warn!(
+                        "Invalid WebRTC session request from {}. Error: missing auth string",
+                        remote_addr
+                    );
                 }
             } else {
-                warn!("Invalid WebRTC session request from {}. Error: missing auth sender", remote_addr);
+                warn!(
+                    "Invalid WebRTC session request from {}. Error: missing auth sender",
+                    remote_addr
+                );
             }
         }
 
@@ -423,7 +429,6 @@ async fn serve(
 
             match session_endpoint.http_session_request(buf).await {
                 Ok(resp) => {
-
                     info!("Successful WebRTC session request");
 
                     success = true;

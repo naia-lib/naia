@@ -48,7 +48,7 @@ impl Socket {
     pub fn connect_with_auth_headers(
         server_session_url: &str,
         config: &SocketConfig,
-        auth_headers: Vec<(String, String)>
+        auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
@@ -62,13 +62,18 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
-        auth_headers: Vec<(String, String)>
+        auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect_inner(server_session_url, config, Some(auth_bytes), Some(auth_headers));
+        return Self::connect_inner(
+            server_session_url,
+            config,
+            Some(auth_bytes),
+            Some(auth_headers),
+        );
     }
 
     /// Connects to the given server address
@@ -90,13 +95,14 @@ impl Socket {
         let conditioner_config = config.link_condition.clone();
 
         let (socket, io) = RTCSocket::new();
-        get_runtime()
-            .spawn(async move {
-                let result = socket.connect(&server_session_string, auth_bytes_opt, auth_headers_opt).await;
-                if let Err(e) = result {
-                    warn!("Error connecting to server: {:?}", e);
-                }
-            });
+        get_runtime().spawn(async move {
+            let result = socket
+                .connect(&server_session_string, auth_bytes_opt, auth_headers_opt)
+                .await;
+            if let Err(e) = result {
+                warn!("Error connecting to server: {:?}", e);
+            }
+        });
 
         // Setup Packet Sender
         let packet_sender_impl = PacketSenderImpl::new(

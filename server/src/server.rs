@@ -139,7 +139,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Must be called regularly, maintains connection to and receives messages
     /// from all Clients
     pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Events<E> {
-
         let now = Instant::now();
 
         // Need to run this to maintain connection with all clients, and receive packets
@@ -1699,11 +1698,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     // Private methods
 
     /// Maintain connection with a client and read all incoming packet data
-    fn maintain_socket<W: WorldMutType<E>>(
-        &mut self,
-        mut world: W,
-        now: &Instant,
-    ) {
+    fn maintain_socket<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
         self.handle_disconnects(&mut world);
         self.handle_heartbeats();
         self.handle_pings();
@@ -1897,7 +1892,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         return Ok(());
     }
 
-    fn process_packets<W: WorldMutType<E>>(&mut self, address: &SocketAddr, world: &mut W, now: &Instant) {
+    fn process_packets<W: WorldMutType<E>>(
+        &mut self,
+        address: &SocketAddr,
+        world: &mut W,
+        now: &Instant,
+    ) {
         // Packets requiring established connection
         let (user_key, response_events) = {
             let Some(connection) = self.user_connections.get_mut(address) else {

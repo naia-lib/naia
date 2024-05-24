@@ -144,10 +144,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalWorldManager<E> {
 
         match record.owner {
             EntityOwner::Local => {
-                panic!("Can only publish an Entity that is owned by a Client! Current owner: {:?}", record.owner);
+                panic!(
+                    "Can only publish an Entity that is owned by a Client! Current owner: {:?}",
+                    record.owner
+                );
             }
             EntityOwner::Server => {
-                warn!("Can only publish an Entity that is owned by a Client! Current owner: {:?}", record.owner);
+                warn!(
+                    "Can only publish an Entity that is owned by a Client! Current owner: {:?}",
+                    record.owner
+                );
                 return false;
             }
             EntityOwner::ClientWaiting(_user_key) => {

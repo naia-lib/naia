@@ -256,6 +256,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         entity: &E,
     ) {
         if !self.host_world.contains_key(entity) {
+            // I hit this once, after despawning a ChangelistEntry
             panic!("World Channel: cannot untrack remote entity that doesn't exist");
         }
 
@@ -521,7 +522,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         world_entity: &E,
     ) -> HostEntity {
         if let Some(host_entity) = local_world_manager.remove_reserved_host_entity(world_entity) {
-            info!("World Channel: entity channel opening with reserved host entity: {:?}", host_entity);
+            info!(
+                "World Channel: entity channel opening with reserved host entity: {:?}",
+                host_entity
+            );
             return host_entity;
         } else {
             let host_entity = local_world_manager.generate_host_entity();

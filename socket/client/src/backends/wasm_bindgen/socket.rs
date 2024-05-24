@@ -43,7 +43,7 @@ impl Socket {
     pub fn connect_with_auth_headers(
         server_session_url: &str,
         config: &SocketConfig,
-        auth_headers: Vec<(String, String)>
+        auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
@@ -52,19 +52,23 @@ impl Socket {
         return Self::connect_inner(server_session_url, config, None, Some(auth_headers));
     }
 
-
     /// Connects to the given server address with authentication
     pub fn connect_with_auth_and_headers(
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
-        auth_headers: Vec<(String, String)>
+        auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect_inner(server_session_url, config, Some(auth_bytes), Some(auth_headers));
+        return Self::connect_inner(
+            server_session_url,
+            config,
+            Some(auth_bytes),
+            Some(auth_headers),
+        );
     }
 
     /// Connects to the given server address
@@ -78,7 +82,8 @@ impl Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        let data_channel = DataChannel::new(config, server_session_url, auth_bytes_opt, auth_headers_opt);
+        let data_channel =
+            DataChannel::new(config, server_session_url, auth_bytes_opt, auth_headers_opt);
 
         let data_port = data_channel.data_port();
         let addr_cell = data_channel.addr_cell();

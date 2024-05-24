@@ -1,4 +1,4 @@
-use naia_socket_shared::{Instant, link_condition_logic, LinkConditionerConfig, TimeQueue};
+use naia_socket_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 
 use super::{
     error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,

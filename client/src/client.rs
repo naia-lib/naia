@@ -111,8 +111,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             if let Some(auth_headers) = &self.auth_headers {
                 // connect with auth & headers
                 let boxed_socket: Box<dyn Socket> = socket.into();
-                let (id_receiver, packet_sender, packet_receiver) =
-                    boxed_socket.connect_with_auth_and_headers(auth_bytes.clone(), auth_headers.clone());
+                let (id_receiver, packet_sender, packet_receiver) = boxed_socket
+                    .connect_with_auth_and_headers(auth_bytes.clone(), auth_headers.clone());
                 self.io.load(id_receiver, packet_sender, packet_receiver);
             } else {
                 // connect with auth

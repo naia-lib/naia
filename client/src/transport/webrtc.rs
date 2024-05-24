@@ -105,8 +105,11 @@ impl TransportSocket for Socket {
         Box<dyn TransportSender>,
         Box<dyn TransportReceiver>,
     ) {
-        let (id_receiver, inner_sender, inner_receiver) =
-            ClientSocket::connect_with_auth_headers(&self.server_session_url, &self.config, auth_headers);
+        let (id_receiver, inner_sender, inner_receiver) = ClientSocket::connect_with_auth_headers(
+            &self.server_session_url,
+            &self.config,
+            auth_headers,
+        );
         return (
             Box::new(id_receiver),
             Box::new(inner_sender),
@@ -123,7 +126,12 @@ impl TransportSocket for Socket {
         Box<dyn TransportReceiver>,
     ) {
         let (id_receiver, inner_sender, inner_receiver) =
-            ClientSocket::connect_with_auth_and_headers(&self.server_session_url, &self.config, auth_bytes, auth_headers);
+            ClientSocket::connect_with_auth_and_headers(
+                &self.server_session_url,
+                &self.config,
+                auth_bytes,
+                auth_headers,
+            );
         return (
             Box::new(id_receiver),
             Box::new(inner_sender),

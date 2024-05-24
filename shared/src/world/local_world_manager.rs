@@ -51,7 +51,6 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     fn process_reserved_entity_timeouts(&mut self) {
-
         let now = Instant::now();
 
         loop {
