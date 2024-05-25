@@ -429,7 +429,7 @@ async fn serve(
 
             match session_endpoint.http_session_request(buf).await {
                 Ok(resp) => {
-                    info!("Successful WebRTC session request");
+                    // info!("Successful WebRTC session request");
 
                     success = true;
 
