@@ -6,6 +6,7 @@ pub enum NaiaClientError {
     Wrapped(Box<dyn Error + Send>),
     SendError,
     RecvError,
+    IdError(u16),
 }
 
 impl NaiaClientError {
@@ -17,10 +18,11 @@ impl NaiaClientError {
 impl fmt::Display for NaiaClientError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            NaiaClientError::Message(msg) => write!(f, "Naia Client Error: {}", msg),
-            NaiaClientError::Wrapped(boxed_err) => fmt::Display::fmt(boxed_err.as_ref(), f),
-            NaiaClientError::SendError => write!(f, "Naia Client Error: Send Error"),
-            NaiaClientError::RecvError => write!(f, "Naia Client Error: Recv Error"),
+            Self::Message(msg) => write!(f, "Naia Client Error: {}", msg),
+            Self::Wrapped(boxed_err) => fmt::Display::fmt(boxed_err.as_ref(), f),
+            Self::SendError => write!(f, "Naia Client Error: Send Error"),
+            Self::RecvError => write!(f, "Naia Client Error: Recv Error"),
+            Self::IdError(code) => write!(f, "Naia Client Error: Id Error: {}", code),
         }
     }
 }

@@ -1111,7 +1111,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     return;
                 }
                 IdentityReceiverResult::ErrorResponseCode(code) => {
-                    panic!("Error receiving auth token: {:?}", code);
+
+                    warn!("Authentication error status code: {}", code);
+
+                    // reset connection
+                    self.io = Io::new(
+                        &self.client_config.connection.bandwidth_measure_duration,
+                        &self.protocol.compression,
+                    );
+
+                    // push out error
+                    self.incoming_events.push_error(NaiaClientError::IdError(code));
+
+                    return;
                 }
             }
         }
@@ -1153,6 +1165,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
         }
+
+        return;
     }
 
     fn maintain_connection(&mut self) {
