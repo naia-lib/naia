@@ -16,8 +16,7 @@ pub use server_addr::ServerAddr;
 pub use inner::{IdentityReceiver, PacketReceiver, PacketSender, RecvError, SendError, Socket};
 
 mod inner {
-
-    use naia_client_socket::shared::IdentityToken;
+    use naia_client_socket::IdentityReceiverResult;
 
     use super::ServerAddr;
 
@@ -96,7 +95,7 @@ mod inner {
 
     pub trait IdentityReceiver: IdentityReceiverClone + Send + Sync {
         ///
-        fn receive(&mut self) -> Result<Option<IdentityToken>, RecvError>;
+        fn receive(&mut self) -> IdentityReceiverResult;
     }
 
     /// Used to clone Box<dyn IdentityReceiver>

@@ -1,8 +1,6 @@
-use naia_shared::{IdentityToken, SocketConfig};
+use naia_shared::SocketConfig;
 
-use naia_client_socket::{
-    IdentityReceiver, PacketReceiver, PacketSender, ServerAddr, Socket as ClientSocket,
-};
+use naia_client_socket::{IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr, Socket as ClientSocket};
 
 use super::{
     IdentityReceiver as TransportIdentityReceiver, PacketReceiver as TransportReceiver,
@@ -54,8 +52,8 @@ impl TransportReceiver for Box<dyn PacketReceiver> {
 
 impl TransportIdentityReceiver for Box<dyn IdentityReceiver> {
     /// Receives an IdentityToken from the Client Socket
-    fn receive(&mut self) -> Result<Option<IdentityToken>, RecvError> {
-        self.as_mut().receive().map_err(|_| RecvError)
+    fn receive(&mut self) -> IdentityReceiverResult {
+        self.as_mut().receive()
     }
 }
 

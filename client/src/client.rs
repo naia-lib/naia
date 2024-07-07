@@ -1,7 +1,7 @@
 use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::{info, warn};
-
+use naia_client_socket::IdentityReceiverResult;
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
@@ -1103,12 +1103,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if !self.io.is_authenticated() {
-            // info!("Client is not authenticated yet, trying to receive id");
-            if let Some(id_token) = self.io.recv_auth() {
-                // info!("Received IdToken: {:?}, passing to Handshaker", id_token);
-                self.handshake_manager.set_identity_token(id_token);
-            } else {
-                return;
+            match self.io.recv_auth() {
+                IdentityReceiverResult::Success(id_token) => {
+                    self.handshake_manager.set_identity_token(id_token);
+                }
+                IdentityReceiverResult::Waiting => {
+                    return;
+                }
+                IdentityReceiverResult::ErrorResponseCode(code) => {
+                    panic!("Error receiving auth token: {:?}", code);
+                }
             }
         }
 

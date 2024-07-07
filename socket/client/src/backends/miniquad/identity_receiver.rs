@@ -8,7 +8,7 @@ use crate::{error::NaiaClientSocketError, identity_receiver::IdentityReceiver};
 pub struct IdentityReceiverImpl;
 
 impl IdentityReceiver for IdentityReceiverImpl {
-    fn receive(&mut self) -> Result<Option<IdentityToken>, NaiaClientSocketError> {
+    fn receive(&mut self) -> IdentityReceiverResult {
         unsafe {
             if let Some(id_cell) = &mut ID_CELL {
                 if let Some(id_token) = id_cell.take() {

@@ -27,7 +27,7 @@ pub use naia_socket_shared as shared;
 
 pub use backends::*;
 pub use error::NaiaClientSocketError;
-pub use identity_receiver::IdentityReceiver;
+pub use identity_receiver::{IdentityReceiver, IdentityReceiverResult};
 pub use packet_receiver::PacketReceiver;
 pub use packet_sender::PacketSender;
 pub use server_addr::ServerAddr;

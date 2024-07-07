@@ -1,7 +1,8 @@
 use std::{net::SocketAddr, time::Duration};
 
+use naia_client_socket::IdentityReceiverResult;
 use naia_shared::{
-    BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, IdentityToken, OutgoingPacket,
+    BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, OutgoingPacket,
 };
 
 use crate::{
@@ -76,19 +77,19 @@ impl Io {
         self.authenticated
     }
 
-    pub fn recv_auth(&mut self) -> Option<IdentityToken> {
-        // info!("Io::recv_auth() called");
-        let id_receiver = self.id_receiver.as_mut()?;
-        // info!("id_receiver is Some");
-        let id_result = id_receiver.receive().ok()?;
-        // info!("result is Some");
-        if id_result.is_some() {
-            // info!("Received IdToken from IdentityReceiver!");
+    pub fn recv_auth(&mut self) -> IdentityReceiverResult {
+
+        let Some(id_receiver) = self.id_receiver.as_mut() else {
+            return IdentityReceiverResult::Waiting;
+        };
+
+        let id_result = id_receiver.receive();
+
+        if let IdentityReceiverResult::Success(_) = &id_result {
             self.authenticated = true;
             self.id_receiver = None;
-        } else {
-            // info!("No IdToken available from IdentityReceiver");
         }
+
         id_result
     }
 

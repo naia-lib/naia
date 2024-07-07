@@ -1,11 +1,15 @@
 use naia_socket_shared::IdentityToken;
 
-use super::error::NaiaClientSocketError;
+pub enum IdentityReceiverResult {
+    Waiting,
+    Success(IdentityToken),
+    ErrorResponseCode(u16),
+}
 
 /// Used to receive an IdentityToken from the Client Socket
 pub trait IdentityReceiver: IdentityReceiverClone + Send + Sync {
     /// Receives an IdentityToken from the Client Socket
-    fn receive(&mut self) -> Result<Option<IdentityToken>, NaiaClientSocketError>;
+    fn receive(&mut self) -> IdentityReceiverResult;
 }
 
 /// Used to clone Box<dyn IdentityReceiver>
