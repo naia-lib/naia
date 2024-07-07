@@ -21,7 +21,7 @@ impl PacketReceiverImpl {
     /// Create a new PacketReceiver, if supplied with the RtcDataChannel and a
     /// reference to a list of dropped messages
     pub fn new(data_port: &DataPort, addr_cell: &AddrCell) -> Self {
-        PacketReceiverImpl {
+        Self {
             message_queue: data_port.message_queue(),
             server_addr: addr_cell.clone(),
             last_payload: None,

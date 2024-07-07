@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::SocketAddr};
 
-use log::{info, warn};
+use log::warn;
 use ring::{hmac, rand};
 
 use naia_server_socket::shared::IdentityToken;
@@ -88,7 +88,7 @@ impl Handshaker for HandshakeManager {
                         let writer = self.write_validate_response();
                         return Ok(HandshakeAction::SendPacket(writer.to_packet()));
                     } else {
-                        info!("checking authenticated users for {}", address);
+                        // info!("checking authenticated users for {}", address);
                         if let Some(user_key) = self.authenticated_and_identified_users.get(address)
                         {
                             let user_key = *user_key;
