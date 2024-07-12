@@ -543,7 +543,6 @@ fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
 
 pub struct EntityProperty {
     pub variable_name: Ident,
-    pub uppercase_variable_name: Ident,
 }
 
 pub struct Normal {
@@ -561,10 +560,6 @@ impl Field {
     pub fn entity_property(variable_name: Ident) -> Self {
         Self::EntityProperty(EntityProperty {
             variable_name: variable_name.clone(),
-            uppercase_variable_name: Ident::new(
-                variable_name.to_string().to_uppercase().as_str(),
-                Span::call_site(),
-            ),
         })
     }
 
