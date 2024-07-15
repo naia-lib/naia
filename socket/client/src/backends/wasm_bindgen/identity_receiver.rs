@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use naia_socket_shared::IdentityToken;
 
-use crate::{IdentityReceiverResult, identity_receiver::IdentityReceiver};
+use crate::{identity_receiver::IdentityReceiver, IdentityReceiverResult};
 
 /// Handles receiving an IdentityToken from the Server through a given Client Socket
 #[derive(Clone)]

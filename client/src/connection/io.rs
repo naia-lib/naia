@@ -78,7 +78,6 @@ impl Io {
     }
 
     pub fn recv_auth(&mut self) -> IdentityReceiverResult {
-
         let Some(id_receiver) = self.id_receiver.as_mut() else {
             return IdentityReceiverResult::Waiting;
         };

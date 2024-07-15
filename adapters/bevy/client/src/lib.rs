@@ -4,7 +4,7 @@ pub use naia_bevy_shared::{
 };
 pub use naia_client::{
     shared::{default_channels, Instant, Message, ResponseReceiveKey},
-    transport, ClientConfig, CommandHistory, ReplicationConfig, NaiaClientError,
+    transport, ClientConfig, CommandHistory, NaiaClientError, ReplicationConfig,
 };
 
 pub mod events;

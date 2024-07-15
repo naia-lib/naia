@@ -1,6 +1,9 @@
 use naia_shared::SocketConfig;
 
-use naia_client_socket::{IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr, Socket as ClientSocket};
+use naia_client_socket::{
+    IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr,
+    Socket as ClientSocket,
+};
 
 use super::{
     IdentityReceiver as TransportIdentityReceiver, PacketReceiver as TransportReceiver,

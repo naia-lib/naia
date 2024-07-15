@@ -27,7 +27,7 @@ impl IdentityReceiver for IdentityReceiverImpl {
                 return match recv_result {
                     Ok(identity_token) => IdentityReceiverResult::Success(identity_token),
                     Err(error_code) => IdentityReceiverResult::ErrorResponseCode(error_code),
-                }
+                };
             } else {
                 return IdentityReceiverResult::Waiting;
             }

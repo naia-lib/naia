@@ -1111,7 +1111,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     return;
                 }
                 IdentityReceiverResult::ErrorResponseCode(code) => {
-
                     warn!("Authentication error status code: {}", code);
 
                     // reset connection
@@ -1121,7 +1120,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     );
 
                     // push out error
-                    self.incoming_events.push_error(NaiaClientError::IdError(code));
+                    self.incoming_events
+                        .push_error(NaiaClientError::IdError(code));
 
                     return;
                 }
