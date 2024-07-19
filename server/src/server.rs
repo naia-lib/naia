@@ -1457,7 +1457,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
     pub(crate) fn user_room_keys(&self, user_key: &UserKey) -> Option<Iter<RoomKey>> {
         if let Some(user) = self.users.get(user_key) {
-            return Some(user.room_keys());
+            return Some(user.room_keys().iter());
         }
         return None;
     }
@@ -2186,102 +2186,120 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     fn update_entity_scopes<W: WorldRefType<E>>(&mut self, world: &W) {
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_entity)) = room.pop_entity_removal_queue() {
-                if let Some(user) = self.users.get(&removed_user) {
-                    if !user.has_address() {
+                let Some(user) = self.users.get(&removed_user) else {
+                    continue;
+                };
+                if !user.has_address() {
+                    continue;
+                }
+                let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+                    continue;
+                };
+
+                // evaluate whether the Entity really needs to be despawned!
+                // what if the Entity shares another Room with this User? It shouldn't be despawned!
+                if let Some(entity_rooms) = self.entity_room_map.entity_get_rooms(&removed_entity) {
+                    let user_rooms = user.room_keys();
+                    let has_room_in_common = entity_rooms.intersection(user_rooms).next().is_some();
+                    if has_room_in_common {
                         continue;
                     }
-                    if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                        // TODO: evaluate whether the Entity really needs to be despawned!
-                        // What if the Entity shares another Room with this User? It shouldn't be despawned!
+                }
 
-                        // check if host has entity, because it may have been removed from room before despawning, and we don't want to double despawn
-                        if connection
-                            .base
-                            .host_world_manager
-                            .host_has_entity(&removed_entity)
-                        {
-                            //remove entity from user connection
-                            connection
-                                .base
-                                .host_world_manager
-                                .despawn_entity(&removed_entity);
-                        }
-                    }
+
+                // check if host has entity, because it may have been removed from room before despawning, and we don't want to double despawn
+                if connection
+                    .base
+                    .host_world_manager
+                    .host_has_entity(&removed_entity)
+                {
+                    //remove entity from user connection
+                    connection
+                        .base
+                        .host_world_manager
+                        .despawn_entity(&removed_entity);
                 }
             }
+        }
 
+        for (_, room) in self.rooms.iter_mut() {
             // TODO: we should be able to cache these tuples of keys to avoid building a new
             // list each time
             for user_key in room.user_keys() {
-                if let Some(user) = self.users.get(user_key) {
-                    if !user.has_address() {
+                let Some(user) = self.users.get(user_key) else {
+                    continue;
+                };
+                if !user.has_address() {
+                    continue;
+                }
+                let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+                    continue;
+                };
+                for entity in room.entities() {
+                    if !world.has_entity(entity) {
                         continue;
                     }
-                    if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                        for entity in room.entities() {
-                            if world.has_entity(entity) {
-                                if self
-                                    .global_world_manager
-                                    .entity_is_public_and_owned_by_user(user_key, entity)
-                                {
-                                    // entity is owned by client, but it is public, so we don't need to replicate it
-                                    continue;
-                                }
+                    if self
+                        .global_world_manager
+                        .entity_is_public_and_owned_by_user(user_key, entity)
+                    {
+                        // entity is owned by client, but it is public, so we don't need to replicate it
+                        continue;
+                    }
 
-                                let currently_in_scope =
-                                    connection.base.host_world_manager.host_has_entity(entity);
+                    let currently_in_scope =
+                        connection.base.host_world_manager.host_has_entity(entity);
 
-                                let should_be_in_scope = if let Some(in_scope) =
-                                    self.entity_scope_map.get(user_key, entity)
-                                {
-                                    *in_scope
-                                } else {
-                                    false
-                                };
+                    let should_be_in_scope = if let Some(in_scope) =
+                        self.entity_scope_map.get(user_key, entity)
+                    {
+                        *in_scope
+                    } else {
+                        false
+                    };
 
-                                if should_be_in_scope {
-                                    if !currently_in_scope {
-                                        let component_kinds = self
-                                            .global_world_manager
-                                            .component_kinds(entity)
-                                            .unwrap();
-                                        // add entity & components to the connections local scope
-                                        connection.base.host_world_manager.init_entity(
-                                            &mut connection.base.local_world_manager,
-                                            entity,
-                                            component_kinds,
-                                        );
-
-                                        // if entity is delegated, send message to connection
-                                        if self.global_world_manager.entity_is_delegated(entity) {
-                                            let event_message =
-                                                EntityEventMessage::new_enable_delegation(
-                                                    &self.global_world_manager,
-                                                    entity,
-                                                );
-                                            let mut converter = EntityConverterMut::new(
-                                                &self.global_world_manager,
-                                                &mut connection.base.local_world_manager,
-                                            );
-                                            let channel_kind = ChannelKind::of::<SystemChannel>();
-                                            let message = MessageContainer::from_write(
-                                                Box::new(event_message),
-                                                &mut converter,
-                                            );
-                                            connection.base.message_manager.send_message(
-                                                &self.protocol.message_kinds,
-                                                &mut converter,
-                                                &channel_kind,
-                                                message,
-                                            );
-                                        }
-                                    }
-                                } else if currently_in_scope {
-                                    // remove entity from the connections local scope
-                                    connection.base.host_world_manager.despawn_entity(entity);
-                                }
-                            }
+                    if should_be_in_scope {
+                        if currently_in_scope {
+                            continue;
                         }
+                        let component_kinds = self
+                            .global_world_manager
+                            .component_kinds(entity)
+                            .unwrap();
+                        // add entity & components to the connections local scope
+                        connection.base.host_world_manager.init_entity(
+                            &mut connection.base.local_world_manager,
+                            entity,
+                            component_kinds,
+                        );
+
+                        // if entity is delegated, send message to connection
+                        if !self.global_world_manager.entity_is_delegated(entity) {
+                            continue;
+                        }
+                        let event_message =
+                            EntityEventMessage::new_enable_delegation(
+                                &self.global_world_manager,
+                                entity,
+                            );
+                        let mut converter = EntityConverterMut::new(
+                            &self.global_world_manager,
+                            &mut connection.base.local_world_manager,
+                        );
+                        let channel_kind = ChannelKind::of::<SystemChannel>();
+                        let message = MessageContainer::from_write(
+                            Box::new(event_message),
+                            &mut converter,
+                        );
+                        connection.base.message_manager.send_message(
+                            &self.protocol.message_kinds,
+                            &mut converter,
+                            &channel_kind,
+                            message,
+                        );
+                    } else if currently_in_scope {
+                        // remove entity from the connections local scope
+                        connection.base.host_world_manager.despawn_entity(entity);
                     }
                 }
             }

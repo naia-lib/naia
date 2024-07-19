@@ -11,8 +11,8 @@ pub mod events;
 
 mod client;
 mod commands;
-mod components;
 pub mod component_events;
+mod components;
 mod plugin;
 mod systems;
 

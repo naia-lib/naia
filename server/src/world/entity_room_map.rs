@@ -16,6 +16,10 @@ impl<E: Copy + Eq + Hash> EntityRoomMap<E> {
         }
     }
 
+    pub(crate) fn entity_get_rooms(&self, entity: &E) -> Option<&HashSet<RoomKey>> {
+        self.map.get(entity)
+    }
+
     pub(crate) fn entity_add_room(&mut self, entity: &E, room_key: &RoomKey) {
         if !self.map.contains_key(entity) {
             self.map.insert(*entity, HashSet::new());

@@ -64,8 +64,8 @@ impl User {
         self.rooms_cache.remove(room_key);
     }
 
-    pub(crate) fn room_keys(&self) -> Iter<RoomKey> {
-        self.rooms_cache.iter()
+    pub(crate) fn room_keys(&self) -> &HashSet<RoomKey> {
+        &self.rooms_cache
     }
 
     pub(crate) fn room_count(&self) -> usize {
@@ -145,7 +145,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
-    pub fn room_keys(&self) -> impl Iterator<Item = &RoomKey> {
+    pub fn room_keys(&self) -> Iter<RoomKey> {
         self.server.user_room_keys(&self.key).unwrap()
     }
 }
