@@ -176,7 +176,7 @@ async fn serve_auth_mux_in(
             continue;
         };
 
-        // info!("received auth answer from app, for addr: {}, answer: {}", addr, answer);
+        // info!("received auth answer from app, for addr: {}, answer: {:?}", addr, answer);
 
         let mut map = map.lock().await;
         if let Some((Some(_), _)) = map.get(&addr) {
@@ -389,10 +389,16 @@ async fn serve(
                                 // info!("Sent auth bytes to server app");
 
                                 // wait for response from app
-                                if let Ok(Some(identity_token)) = to_session_auth_receiver.await {
-                                    // info!("Server app accepted auth with identity token: {}", identity_token);
-                                    identity_token_opt = Some(identity_token);
-                                    success = true;
+                                if let Ok(identity_token_inner_opt) = to_session_auth_receiver.await {
+                                    if let Some(identity_token) = identity_token_inner_opt {
+                                        // info!("Server app accepted auth with identity token: {}", identity_token);
+                                        identity_token_opt = Some(identity_token);
+                                        success = true;
+                                    } else {
+                                        // warn!("Server app rejected auth");
+                                        identity_token_opt = None;
+                                        success = true;
+                                    }
                                 }
                             }
                         }
@@ -420,53 +426,70 @@ async fn serve(
 
             // info!("reading identity token");
 
-            let identity_token = identity_token_opt.take().unwrap();
+            if let Some(identity_token) = identity_token_opt.take() {
 
-            // info!("identity token: {:?}", identity_token);
+                // info!("identity token: {:?}", identity_token);
 
-            let mut lines = body.lines();
-            let buf = RequestBuffer::new(&mut lines);
+                let mut lines = body.lines();
+                let buf = RequestBuffer::new(&mut lines);
 
-            match session_endpoint.http_session_request(buf).await {
-                Ok(resp) => {
-                    // info!("Successful WebRTC session request");
+                match session_endpoint.http_session_request(buf).await {
+                    Ok(resp) => {
+                        // info!("Successful WebRTC session request");
 
-                    success = true;
+                        success = true;
 
-                    let (_head, body) = resp.into_parts();
+                        let (_head, body) = resp.into_parts();
 
-                    let body = format!(
-                        "{{\
+                        let body = format!(
+                            "{{\
                         \"sdp\":{body},\
                         \"id\":\"{identity_token}\"\
                         }}",
-                    );
+                        );
 
-                    let response = Response::builder()
-                        .header(header::CONTENT_TYPE, "application/json")
-                        .header(
-                            header::ACCESS_CONTROL_ALLOW_ORIGIN,
-                            HeaderValue::from_static("*"),
-                        )
-                        .body(body)
-                        .expect("could not combine sdp response with id token");
+                        let response = Response::builder()
+                            .header(header::CONTENT_TYPE, "application/json")
+                            .header(
+                                header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                                HeaderValue::from_static("*"),
+                            )
+                            .body(body)
+                            .expect("could not combine sdp response with id token");
 
-                    let mut out = response_header_to_vec(&response);
-                    out.extend_from_slice(response.body().as_bytes());
+                        let mut out = response_header_to_vec(&response);
+                        out.extend_from_slice(response.body().as_bytes());
 
-                    info!("Successful WebRTC session request from {}", remote_addr);
+                        info!("Successful WebRTC session request from {}", remote_addr);
 
-                    stream
-                        .write_all(&out)
-                        .await
-                        .expect("found an error while writing to a stream");
+                        stream
+                            .write_all(&out)
+                            .await
+                            .expect("found an error while writing to a stream");
+                    }
+                    Err(err) => {
+                        warn!(
+                            "Invalid WebRTC session request from {}. Error: {}",
+                            remote_addr, err
+                        );
+                    }
                 }
-                Err(err) => {
-                    warn!(
-                        "Invalid WebRTC session request from {}. Error: {}",
-                        remote_addr, err
-                    );
-                }
+            } else {
+                // Server rejected auth!
+                let response = Response::builder()
+                    .status(401)
+                    .body("".to_string())
+                    .expect("could not build 401 response");
+
+                let mut out = response_header_to_vec(&response);
+                out.extend_from_slice(response.body().as_bytes());
+
+                info!("Rejected WebRTC session request from {}", remote_addr);
+
+                stream
+                    .write_all(&out)
+                    .await
+                    .expect("found an error while writing to a stream");
             }
         }
     }

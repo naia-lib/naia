@@ -51,9 +51,9 @@ impl Handshaker for HandshakeManager {
         self.identity_token = Some(identity_token);
     }
 
-    fn is_connected(&self) -> bool {
-        self.connection_state == HandshakeState::Connected
-    }
+    // fn is_connected(&self) -> bool {
+    //     self.connection_state == HandshakeState::Connected
+    // }
 
     // Give handshake manager the opportunity to send out messages to the server
     fn send(&mut self) -> Option<OutgoingPacket> {

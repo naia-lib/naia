@@ -177,7 +177,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             .expect("Auth should be set up by this point");
         if auth_sender.accept(&auth_addr, &identity_token).is_err() {
             warn!(
-                "Server Error: Cannot send auth accept packet to {}",
+                "Server Error: Cannot send auth accept packet to {:?}",
                 &auth_addr
             );
             // TODO: handle destroying any threads waiting on this response
@@ -188,16 +188,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Rejects an incoming Client User, terminating their attempt to establish
     /// a connection with the Server
     pub fn reject_connection(&mut self, user_key: &UserKey) {
-        if let Some(user) = self.users.get(user_key) {
-            let address = user.address();
+        if let Some(user) = self.users.get_mut(user_key) {
+            let auth_addr = user.take_auth_address();
+
+            // info!("rejecting authenticated user {:?}", &auth_addr);
             let (auth_sender, _) = self
                 .auth_io
                 .as_mut()
                 .expect("Auth should be set up by this point");
-            if auth_sender.reject(&address).is_err() {
+            if auth_sender.reject(&auth_addr).is_err() {
                 warn!(
-                    "Server Error: Cannot send auth reject message to {}",
-                    &address
+                    "Server Error: Cannot send auth reject message to {:?}",
+                    &auth_addr
                 );
                 // TODO: handle destroying any threads waiting on this response
             }
@@ -1523,11 +1525,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             panic!("Attempting to delete non-existant user!");
         };
 
-        info!("deleting authenticated user for {}", user.address());
-        self.user_connections.remove(&user.address());
+        if let Some(user_addr) = user.address_opt() {
+            info!("deleting authenticated user for {}", user.address());
+            self.user_connections.remove(&user_addr);
+        }
+
         self.entity_scope_map.remove_user(user_key);
-        self.handshake_manager
-            .delete_user(user_key, &user.address());
+
+        self.handshake_manager.delete_user(user_key, user.address_opt());
 
         // Clean up all user data
         for room_key in user.room_keys() {

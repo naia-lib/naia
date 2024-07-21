@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [dependencies]
-naia-server = { path = "../../../server", features = [ "transport_webrtc", "advanced_handshake" ] }
+naia-server = { path = "../../../server", features = [ "transport_webrtc" ] }
 naia-demo-world = { path = "../../demo_utils/demo_world" }
 naia-basic-demo-shared = { path = "../shared" }
 log = { version = "0.4" }

@@ -35,14 +35,17 @@ impl Handshaker for HandshakeManager {
             .insert(*user_key, identity_token.clone());
     }
 
-    fn delete_user(&mut self, user_key: &UserKey, address: &SocketAddr) {
+    // address is optional because user may not have been identified yet
+    fn delete_user(&mut self, user_key: &UserKey, address_opt: Option<SocketAddr>) {
         if let Some(identity_token) = self.identity_token_map.remove(user_key) {
             self.authenticated_unidentified_users
                 .remove(&identity_token);
         }
-        self.authenticated_and_identified_users.remove(address);
-        self.been_handshaked_users.remove(address);
-        self.address_to_timestamp_map.remove(address);
+        if let Some(address) = address_opt {
+            self.authenticated_and_identified_users.remove(&address);
+            self.been_handshaked_users.remove(&address);
+            self.address_to_timestamp_map.remove(&address);
+        }
     }
 
     fn maintain_handshake(

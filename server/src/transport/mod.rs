@@ -16,8 +16,11 @@ pub use inner::{
 
 mod inner {
 
-    use naia_shared::IdentityToken;
     use std::net::SocketAddr;
+
+    use naia_shared::IdentityToken;
+
+    use crate::user::UserAuthAddr;
 
     pub struct SendError;
 
@@ -70,16 +73,16 @@ mod inner {
         ///
         fn accept(
             &self,
-            address: &SocketAddr,
+            address: &UserAuthAddr,
             identity_token: &IdentityToken,
         ) -> Result<(), SendError>;
         ///
-        fn reject(&self, address: &SocketAddr) -> Result<(), SendError>;
+        fn reject(&self, address: &UserAuthAddr) -> Result<(), SendError>;
     }
 
     pub trait AuthReceiver: AuthReceiverClone + Send + Sync {
         ///
-        fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;
+        fn receive(&mut self) -> Result<Option<(UserAuthAddr, &[u8])>, RecvError>;
     }
 
     /// Used to clone Box<dyn AuthReceiver>

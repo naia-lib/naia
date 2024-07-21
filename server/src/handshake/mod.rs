@@ -5,7 +5,7 @@ use naia_shared::{BitReader, IdentityToken, OutgoingPacket, SerdeErr};
 use crate::UserKey;
 
 cfg_if! {
-    if #[cfg(feature = "advanced_handshake")] {
+    if #[cfg(feature = "transport_udp")] {
         mod cache_map;
 
         mod advanced_handshaker;
@@ -18,7 +18,10 @@ cfg_if! {
 
 pub trait Handshaker: Send + Sync {
     fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey);
-    fn delete_user(&mut self, user_key: &UserKey, address: &SocketAddr);
+
+    // address is optional because user may not have been identified yet
+    fn delete_user(&mut self, user_key: &UserKey, address_opt: Option<SocketAddr>);
+
     fn maintain_handshake(
         &mut self,
         address: &SocketAddr,

@@ -60,7 +60,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let compression_config = protocol.compression.clone();
 
-        Client {
+        Self {
             // Config
             client_config: client_config.clone(),
             protocol,
@@ -1111,7 +1111,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     return;
                 }
                 IdentityReceiverResult::ErrorResponseCode(code) => {
-                    warn!("Authentication error status code: {}", code);
+                    // warn!("Authentication error status code: {}", code);
 
                     // reset connection
                     self.io = Io::new(
@@ -1119,9 +1119,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         &self.protocol.compression,
                     );
 
-                    // push out error
-                    self.incoming_events
-                        .push_error(NaiaClientError::IdError(code));
+                    if code == 401 {
+                        // push out rejection
+                        self.incoming_events.push_rejection();
+                    } else {
+                        // push out error
+                        self.incoming_events
+                            .push_error(NaiaClientError::IdError(code));
+                    }
 
                     return;
                 }

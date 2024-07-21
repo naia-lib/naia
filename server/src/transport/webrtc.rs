@@ -2,12 +2,11 @@ use std::net::SocketAddr;
 
 use naia_shared::{IdentityToken, SocketConfig};
 
-use naia_server_socket::{
-    AuthReceiver, AuthSender, PacketReceiver, PacketSender, Socket as ServerSocket,
-};
+use naia_server_socket::{AuthReceiver, AuthSender, PacketReceiver, PacketSender, Socket as ServerSocket};
 
 pub use naia_server_socket::ServerAddrs;
 
+use crate::user::UserAuthAddr;
 use super::{
     AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
@@ -46,23 +45,33 @@ impl TransportAuthSender for Box<dyn AuthSender> {
     ///
     fn accept(
         &self,
-        address: &SocketAddr,
+        address: &UserAuthAddr,
         identity_token: &IdentityToken,
     ) -> Result<(), SendError> {
         self.as_ref()
-            .accept(address, identity_token)
+            .accept(&address.addr(), identity_token)
             .map_err(|_| SendError)
     }
     ///
-    fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
-        self.as_ref().reject(address).map_err(|_| SendError)
+    fn reject(&self, address: &UserAuthAddr) -> Result<(), SendError> {
+        self.as_ref().reject(&address.addr()).map_err(|_| SendError)
     }
 }
 
 impl TransportAuthReceiver for Box<dyn AuthReceiver> {
     ///
-    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
-        self.as_mut().receive().map_err(|_| RecvError)
+    fn receive(&mut self) -> Result<Option<(UserAuthAddr, &[u8])>, RecvError> {
+        match self.as_mut().receive() {
+            Ok(auth_opt) => {
+                match auth_opt {
+                    Some((addr, payload)) => {
+                        return Ok(Some((UserAuthAddr::new(addr), payload)));
+                    }
+                    None => { return Ok(None); }
+                }
+            }
+            Err(_err) => { return Err(RecvError); }
+        }
     }
 }
 

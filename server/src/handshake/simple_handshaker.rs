@@ -26,12 +26,15 @@ impl Handshaker for HandshakeManager {
             .insert(*user_key, identity_token.clone());
     }
 
-    fn delete_user(&mut self, user_key: &UserKey, address: &SocketAddr) {
+    // address is optional because user may not have been identified yet
+    fn delete_user(&mut self, user_key: &UserKey, address_opt: Option<SocketAddr>) {
         if let Some(identity_token) = self.identity_token_map.remove(user_key) {
             self.authenticated_unidentified_users
                 .remove(&identity_token);
         }
-        self.authenticated_and_identified_users.remove(address);
+        if let Some(address) = address_opt {
+            self.authenticated_and_identified_users.remove(&address);
+        }
     }
 
     fn maintain_handshake(
@@ -54,8 +57,7 @@ impl Handshaker for HandshakeManager {
                         }
 
                         // User is authenticated
-                        self.authenticated_and_identified_users
-                            .insert(*address, user_key);
+                        self.authenticated_and_identified_users.insert(*address, user_key);
                     } else {
                         // commented out because it's pretty common to get multiple ClientIdentifyRequests which would trigger this
                         //warn!("Server Error: User not authenticated for: {:?}, with token: {}", address, identity_token);

@@ -5,7 +5,7 @@ use naia_shared::{BitReader, BitWriter, IdentityToken, OutgoingPacket};
 use crate::connection::time_manager::TimeManager;
 
 cfg_if! {
-    if #[cfg(feature = "advanced_handshake")] {
+    if #[cfg(feature = "transport_udp")] {
         mod advanced_handshaker;
         pub use advanced_handshaker::HandshakeManager;
     } else {

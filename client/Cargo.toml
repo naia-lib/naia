@@ -22,10 +22,7 @@ mquad = [ "naia-shared/mquad", "naia-client-socket?/mquad" ]
 bevy_support = ["naia-shared/bevy_support"]
 zstd_support = ["naia-shared/zstd_support"]
 transport_webrtc = [ "naia-client-socket" ]
-transport_udp = [ "local_ipaddress" ]
-
-# this should be used when the underlying transport does not handle it for you (i.e. UDP)
-advanced_handshake = ["naia-shared/advanced_handshake"]
+transport_udp = [ "local_ipaddress", "naia-shared/advanced_handshake" ]
 
 [dependencies]
 naia-shared = { version = "0.22", path = "../shared" }

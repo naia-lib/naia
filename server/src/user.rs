@@ -22,17 +22,33 @@ impl BigMapKey for UserKey {
     }
 }
 
+// UserAuthAddr
+#[derive(Clone, Debug)]
+pub struct UserAuthAddr {
+    addr: SocketAddr,
+}
+
+impl UserAuthAddr {
+    pub fn new(addr: SocketAddr) -> Self {
+        Self { addr }
+    }
+
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+}
+
 // User
 
 #[derive(Clone)]
 pub struct User {
-    auth_addr: Option<SocketAddr>,
+    auth_addr: Option<UserAuthAddr>,
     data_addr: Option<SocketAddr>,
     rooms_cache: HashSet<RoomKey>,
 }
 
 impl User {
-    pub fn new(auth_addr: SocketAddr) -> User {
+    pub fn new(auth_addr: UserAuthAddr) -> User {
         Self {
             auth_addr: Some(auth_addr),
             data_addr: None,
@@ -48,7 +64,11 @@ impl User {
         self.data_addr.unwrap()
     }
 
-    pub(crate) fn take_auth_address(&mut self) -> SocketAddr {
+    pub fn address_opt(&self) -> Option<SocketAddr> {
+        self.data_addr
+    }
+
+    pub(crate) fn take_auth_address(&mut self) -> UserAuthAddr {
         self.auth_addr.take().unwrap()
     }
 
