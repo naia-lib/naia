@@ -23,7 +23,7 @@ impl LinkConditionerConfig {
     }
 
     pub fn perfect_condition() -> Self {
-        LinkConditionSelferConfig {
+        Self {
             incoming_latency: 1,
             incoming_jitter: 0,
             incoming_loss: 0.0,
