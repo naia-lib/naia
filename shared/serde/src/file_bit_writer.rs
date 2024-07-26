@@ -28,6 +28,11 @@ impl FileBitWriter {
         self.finalize();
         Box::from(self.buffer)
     }
+
+    pub fn to_vec(mut self) -> Vec<u8> {
+        self.finalize();
+        self.buffer
+    }
 }
 
 impl BitWrite for FileBitWriter {

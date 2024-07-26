@@ -31,19 +31,19 @@ impl<T: Clone> CommandHistory<T> {
 
     // this only goes forward
     pub fn insert(&mut self, command_tick: Tick, new_command: T) {
-        if let Some((last_most_recent_command_tick, _)) = self.buffer.front() {
+        if let Some((last_most_recent_command_tick, _)) = self.buffer.back() {
             if !sequence_greater_than(command_tick, *last_most_recent_command_tick) {
                 panic!("You must always insert a more recent command into the CommandHistory than the one you last inserted.");
             }
         }
 
         // go ahead and push
-        self.buffer.push_front((command_tick, new_command));
+        self.buffer.push_back((command_tick, new_command));
     }
 
     fn remove_to_and_including(&mut self, index: Tick) {
         loop {
-            let back_index = match self.buffer.back() {
+            let back_index = match self.buffer.front() {
                 Some((index, _)) => *index,
                 None => {
                     return;
@@ -52,12 +52,12 @@ impl<T: Clone> CommandHistory<T> {
             if sequence_greater_than(back_index, index) {
                 return;
             }
-            self.buffer.pop_back();
+            self.buffer.pop_front();
         }
     }
 
     pub fn can_insert(&self, tick: &Tick) -> bool {
-        if let Some((last_most_recent_command_tick, _)) = self.buffer.front() {
+        if let Some((last_most_recent_command_tick, _)) = self.buffer.back() {
             if !sequence_greater_than(*tick, *last_most_recent_command_tick) {
                 return false;
             }

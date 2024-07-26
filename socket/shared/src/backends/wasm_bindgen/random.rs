@@ -17,6 +17,12 @@ impl Random {
         rand_range + lower
     }
 
+    /// returns a random i32 value between an upper & lower bound
+    pub fn gen_range_i32(lower: i32, upper: i32) -> i32 {
+        let rand_range: i32 = (random() * f64::from(upper - lower)) as i32;
+        rand_range + lower
+    }
+
     /// returns a random boolean value between an upper & lower bound
     pub fn gen_bool() -> bool {
         random() < 0.5

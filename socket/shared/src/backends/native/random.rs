@@ -15,6 +15,11 @@ impl Random {
         rand::thread_rng().gen_range(lower..upper)
     }
 
+    /// returns a random i32 value between an upper & lower bound
+    pub fn gen_range_i32(lower: i32, upper: i32) -> i32 {
+        rand::thread_rng().gen_range(lower..upper)
+    }
+
     /// returns a random boolean value between an upper & lower bound
     pub fn gen_bool() -> bool {
         rand::thread_rng().gen_bool(0.5)
