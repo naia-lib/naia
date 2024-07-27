@@ -10,7 +10,7 @@ pub use naia_shared::{
     RemoteEntity, ReplicaDynMut, ReplicaDynRef, ReplicateBevy as Replicate, ReplicateBuilder,
     Request, Response, ResponseReceiveKey, ResponseSendKey, SerdeBevyShared as Serde, SerdeErr,
     SerdeIntegerConversion, SignedInteger, SignedVariableInteger, Tick, TickBufferSettings, Timer,
-    UnsignedInteger, UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    UnsignedInteger, UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, Instant,
 };
 
 mod change_detection;

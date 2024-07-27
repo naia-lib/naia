@@ -1532,7 +1532,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         self.entity_scope_map.remove_user(user_key);
 
-        self.handshake_manager.delete_user(user_key, user.address_opt());
+        self.handshake_manager
+            .delete_user(user_key, user.address_opt());
 
         // Clean up all user data
         for room_key in user.room_keys() {
@@ -2211,7 +2212,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     }
                 }
 
-
                 // check if host has entity, because it may have been removed from room before despawning, and we don't want to double despawn
                 if connection
                     .base
@@ -2255,22 +2255,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                     let currently_in_scope =
                         connection.base.host_world_manager.host_has_entity(entity);
 
-                    let should_be_in_scope = if let Some(in_scope) =
-                        self.entity_scope_map.get(user_key, entity)
-                    {
-                        *in_scope
-                    } else {
-                        false
-                    };
+                    let should_be_in_scope =
+                        if let Some(in_scope) = self.entity_scope_map.get(user_key, entity) {
+                            *in_scope
+                        } else {
+                            false
+                        };
 
                     if should_be_in_scope {
                         if currently_in_scope {
                             continue;
                         }
-                        let component_kinds = self
-                            .global_world_manager
-                            .component_kinds(entity)
-                            .unwrap();
+                        let component_kinds =
+                            self.global_world_manager.component_kinds(entity).unwrap();
                         // add entity & components to the connections local scope
                         connection.base.host_world_manager.init_entity(
                             &mut connection.base.local_world_manager,
@@ -2282,20 +2279,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         if !self.global_world_manager.entity_is_delegated(entity) {
                             continue;
                         }
-                        let event_message =
-                            EntityEventMessage::new_enable_delegation(
-                                &self.global_world_manager,
-                                entity,
-                            );
+                        let event_message = EntityEventMessage::new_enable_delegation(
+                            &self.global_world_manager,
+                            entity,
+                        );
                         let mut converter = EntityConverterMut::new(
                             &self.global_world_manager,
                             &mut connection.base.local_world_manager,
                         );
                         let channel_kind = ChannelKind::of::<SystemChannel>();
-                        let message = MessageContainer::from_write(
-                            Box::new(event_message),
-                            &mut converter,
-                        );
+                        let message =
+                            MessageContainer::from_write(Box::new(event_message), &mut converter);
                         connection.base.message_manager.send_message(
                             &self.protocol.message_kinds,
                             &mut converter,

@@ -389,7 +389,8 @@ async fn serve(
                                 // info!("Sent auth bytes to server app");
 
                                 // wait for response from app
-                                if let Ok(identity_token_inner_opt) = to_session_auth_receiver.await {
+                                if let Ok(identity_token_inner_opt) = to_session_auth_receiver.await
+                                {
                                     if let Some(identity_token) = identity_token_inner_opt {
                                         // info!("Server app accepted auth with identity token: {}", identity_token);
                                         identity_token_opt = Some(identity_token);
@@ -427,7 +428,6 @@ async fn serve(
             // info!("reading identity token");
 
             if let Some(identity_token) = identity_token_opt.take() {
-
                 // info!("identity token: {:?}", identity_token);
 
                 let mut lines = body.lines();
