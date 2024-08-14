@@ -752,6 +752,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         return None;
     }
 
+    pub fn tick_to_instant(&self, tick: Tick) -> Option<GameInstant> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.time_manager.tick_to_instant(tick));
+        }
+        return None;
+    }
+
     // Interpolation
 
     /// Gets the interpolation tween amount for the current frame, for use by entities on the Client Tick (i.e. predicted)

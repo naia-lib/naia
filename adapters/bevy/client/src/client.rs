@@ -10,7 +10,7 @@ use naia_bevy_shared::{
     GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick,
 };
 use naia_client::{
-    shared::SocketConfig, transport::Socket, Client as NaiaClient, ConnectionStatus,
+    shared::{GameInstant, SocketConfig}, transport::Socket, Client as NaiaClient, ConnectionStatus,
     NaiaClientError,
 };
 
@@ -121,6 +121,10 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
 
     pub fn server_tick(&self) -> Option<Tick> {
         self.client.client.server_tick()
+    }
+
+    pub fn tick_to_instant(&self, tick: Tick) -> Option<GameInstant> {
+        self.client.client.tick_to_instant(tick)
     }
 
     // Interpolation

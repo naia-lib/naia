@@ -346,7 +346,7 @@ impl TimeManager {
         self.pruned_rtt_avg / 2.0
     }
 
-    pub(crate) fn tick_to_instant(&self, tick: Tick) -> GameInstant {
+    pub fn tick_to_instant(&self, tick: Tick) -> GameInstant {
         let tick_diff = wrapping_diff(self.server_tick, tick);
         let tick_diff_duration =
             ((tick_diff as f32) * self.server_tick_duration_avg).round() as i32;
