@@ -1,7 +1,7 @@
 [package]
 name = "naia-hecs-server"
-# 0.22 is unpublished for now, due to lack of use of this crate, as well as plans for rapid releases - 1/9/2024
-version = "0.22.0"
+# 0.23 is unpublished for now, due to lack of use of this crate, as well as plans for rapid releases - 9/17/2024
+version = "0.23.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia_server & Hecs interop"
@@ -20,6 +20,6 @@ transport_webrtc = [ "naia-server/transport_webrtc" ]
 transport_udp = [ "naia-server/transport_udp" ]
 
 [dependencies]
-naia-server = { version = "0.22", path = "../../../server" }
-naia-hecs-shared = { version = "0.22", path = "../shared" }
+naia-server = { version = "0.23", path = "../../../server" }
+naia-hecs-shared = { version = "0.23", path = "../shared" }
 hecs = { version = "0.10" }
