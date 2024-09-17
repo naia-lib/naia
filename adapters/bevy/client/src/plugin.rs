@@ -54,7 +54,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
         let mut world_data = config.protocol.take_world_data();
         world_data.add_systems(app);
 
-        if let Some(old_world_data) = app.world.remove_resource::<WorldData>() {
+        if let Some(old_world_data) = app.world_mut().remove_resource::<WorldData>() {
             world_data.merge(old_world_data);
         }
 

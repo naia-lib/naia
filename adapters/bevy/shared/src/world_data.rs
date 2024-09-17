@@ -10,7 +10,7 @@ use bevy_ecs::{
     prelude::Resource,
     world::{FromWorld, World},
 };
-
+use bevy_ecs::component::Component;
 use naia_shared::{ComponentKind, Replicate};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
@@ -90,7 +90,7 @@ impl WorldData {
         None
     }
 
-    pub(crate) fn put_kind<R: Replicate>(&mut self, component_kind: &ComponentKind) {
+    pub(crate) fn put_kind<R: Replicate + Component>(&mut self, component_kind: &ComponentKind) {
         self.kind_to_accessor_map
             .insert(*component_kind, ComponentAccessor::<R>::create());
     }

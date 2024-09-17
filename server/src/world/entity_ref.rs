@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use naia_shared::{EntityAuthStatus, ReplicaRefWrapper, Replicate, WorldRefType};
+use naia_shared::{EntityAuthStatus, ReplicaRefWrapper, ReplicatedComponent, WorldRefType};
 
 use crate::{ReplicationConfig, Server};
 
@@ -24,11 +24,11 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
         self.entity
     }
 
-    pub fn has_component<R: Replicate>(&self) -> bool {
+    pub fn has_component<R: ReplicatedComponent>(&self) -> bool {
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: Replicate>(&self) -> Option<ReplicaRefWrapper<R>> {
+    pub fn component<R: ReplicatedComponent>(&self) -> Option<ReplicaRefWrapper<R>> {
         self.world.component::<R>(&self.entity)
     }
 

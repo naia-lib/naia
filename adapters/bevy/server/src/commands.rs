@@ -1,14 +1,13 @@
 use bevy_ecs::{
     entity::Entity,
-    system::{Command as BevyCommand, EntityCommands},
-    world::{Mut, World},
+    system::EntityCommands,
+    world::{Mut, World, Command as BevyCommand},
 };
 
 use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldProxyMut};
 use naia_server::{ReplicationConfig, UserKey};
 
-use crate::plugin::Singleton;
-use crate::{server::ServerWrapper, Server};
+use crate::{server::ServerWrapper, Server, plugin::Singleton};
 
 // Bevy Commands Extension
 pub trait CommandsExt<'a> {

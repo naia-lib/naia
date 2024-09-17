@@ -9,15 +9,7 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{
-    BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind,
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus,
-    EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent,
-    FakeEntityConverter, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType,
-    Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, Request,
-    Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager,
-    SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType,
-};
+use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
 
 use super::{
     error::NaiaServerError,
@@ -1097,7 +1089,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     //// Components
 
     /// Adds a Component to an Entity
-    pub(crate) fn insert_component<R: Replicate, W: WorldMutType<E>>(
+    pub(crate) fn insert_component<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,
@@ -1194,7 +1186,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Removes a Component from an Entity
-    pub(crate) fn remove_component<R: Replicate, W: WorldMutType<E>>(
+    pub(crate) fn remove_component<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,

@@ -35,7 +35,7 @@ miniquad = { version = "0.3", features = ["log-impl"], optional = true }
 base64 = { version = "0.13" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-webrtc-unreliable-client = { path = "../../../webrtc-unreliable-client/client" }
+webrtc-unreliable-client = { path = "../../../webrtc-unreliable-client/client" } # webrtc-unreliable-client = { version = "0.2" }
 tokio = { version = "1.15", features = ["full"] }
 once_cell = { version = "1.4.1" }
 

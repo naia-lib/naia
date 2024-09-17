@@ -2,15 +2,7 @@ use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::{info, warn};
 use naia_client_socket::IdentityReceiverResult;
-use naia_shared::{
-    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
-    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
-    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer,
-    PacketType, Protocol, RemoteEntity, Replicate, Request, Response, ResponseReceiveKey,
-    ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel,
-    Tick, WorldMutType, WorldRefType,
-};
+use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
@@ -835,7 +827,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// Adds a Component to an Entity
-    pub(crate) fn insert_component<R: Replicate, W: WorldMutType<E>>(
+    pub(crate) fn insert_component<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,
@@ -891,7 +883,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// Removes a Component from an Entity
-    pub(crate) fn remove_component<R: Replicate, W: WorldMutType<E>>(
+    pub(crate) fn remove_component<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,

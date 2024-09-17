@@ -2,7 +2,7 @@ use bevy::{
     log::info,
     prelude::{Assets, Camera2dBundle, Circle, Color, ColorMaterial, Commands, Mesh, ResMut},
 };
-
+use bevy::color::LinearRgba;
 use naia_bevy_client::{transport::webrtc, Client};
 use naia_bevy_demo_shared::messages::Auth;
 
@@ -27,14 +27,14 @@ pub fn init(
     let mut global = Global::default();
 
     // Load colors
-    global.red = materials.add(ColorMaterial::from(Color::RED));
-    global.blue = materials.add(ColorMaterial::from(Color::BLUE));
-    global.yellow = materials.add(ColorMaterial::from(Color::YELLOW));
-    global.green = materials.add(ColorMaterial::from(Color::GREEN));
-    global.white = materials.add(ColorMaterial::from(Color::WHITE));
-    global.purple = materials.add(ColorMaterial::from(Color::PURPLE));
-    global.orange = materials.add(ColorMaterial::from(Color::ORANGE));
-    global.aqua = materials.add(ColorMaterial::from(Color::AQUAMARINE));
+    global.red = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::RED)));
+    global.blue = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::BLUE)));
+    global.yellow = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(1.0, 1.0, 0.0))));
+    global.green = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::GREEN)));
+    global.white = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::WHITE)));
+    global.purple = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(1.0, 0.0, 1.0))));
+    global.orange = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(1.0, 0.5, 0.0))));
+    global.aqua = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(0.0, 1.0, 1.0))));
 
     // Load shapes
     global.circle = meshes.add(Circle::new(6.));

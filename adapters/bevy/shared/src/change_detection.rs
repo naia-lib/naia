@@ -8,7 +8,7 @@ use bevy_ecs::{
     removal_detection::RemovedComponents,
     system::{Query, ResMut},
 };
-
+use bevy_ecs::component::Component;
 use naia_shared::{ComponentKind, Replicate};
 
 use crate::{HostOwned, HostOwnedMap};
@@ -58,7 +58,7 @@ pub fn on_despawn(
     }
 }
 
-pub fn on_component_added<R: Replicate>(
+pub fn on_component_added<R: Replicate + Component>(
     mut events: EventWriter<HostSyncEvent>,
     query: Query<(Entity, &HostOwned), Added<R>>,
 ) {
@@ -71,7 +71,7 @@ pub fn on_component_added<R: Replicate>(
     }
 }
 
-pub fn on_component_removed<R: Replicate>(
+pub fn on_component_removed<R: Replicate + Component>(
     mut events: EventWriter<HostSyncEvent>,
     query: Query<&HostOwned>,
     mut removals: RemovedComponents<R>,

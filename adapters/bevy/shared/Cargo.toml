@@ -18,6 +18,6 @@ advanced_handshake = [ "naia-shared/advanced_handshake" ]
 
 [dependencies]
 naia-shared = { version = "0.22", path = "../../../shared", features = ["bevy_support", "wbindgen"] }
-bevy_app = { version = "0.13", default-features=false }
-bevy_ecs = { version = "0.13", default-features=false }
+bevy_app = { version = "0.14", default-features=false }
+bevy_ecs = { version = "0.14", default-features=false }
 log = { version = "0.4" }

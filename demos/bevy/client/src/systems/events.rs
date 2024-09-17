@@ -8,7 +8,7 @@ use bevy::{
     },
     sprite::MaterialMesh2dBundle,
 };
-
+use bevy::color::LinearRgba;
 use naia_bevy_client::{
     events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
@@ -234,14 +234,14 @@ pub fn insert_component_events(
                     ShapeValue::Square => {
                         let color = {
                             match *color.value {
-                                ColorValue::Red => BevyColor::RED,
-                                ColorValue::Blue => BevyColor::BLUE,
-                                ColorValue::Yellow => BevyColor::YELLOW,
-                                ColorValue::Green => BevyColor::GREEN,
-                                ColorValue::White => BevyColor::WHITE,
-                                ColorValue::Purple => BevyColor::PURPLE,
-                                ColorValue::Orange => BevyColor::ORANGE,
-                                ColorValue::Aqua => BevyColor::AQUAMARINE,
+                                ColorValue::Red => BevyColor::LinearRgba(LinearRgba::RED),
+                                ColorValue::Blue => BevyColor::LinearRgba(LinearRgba::BLUE),
+                                ColorValue::Yellow => BevyColor::LinearRgba(LinearRgba::rgb(1.0, 1.0, 0.0)),
+                                ColorValue::Green => BevyColor::LinearRgba(LinearRgba::GREEN),
+                                ColorValue::White => BevyColor::LinearRgba(LinearRgba::WHITE),
+                                ColorValue::Purple => BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.0, 1.0)),
+                                ColorValue::Orange => BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.5, 0.0)),
+                                ColorValue::Aqua => BevyColor::LinearRgba(LinearRgba::rgb(0.0, 1.0, 1.0)),
                             }
                         };
 

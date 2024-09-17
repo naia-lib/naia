@@ -1,19 +1,16 @@
 use naia_serde::SerdeErr;
 
-use crate::{
-    world::{
-        component::{
-            component_kinds::ComponentKind,
-            component_update::{ComponentFieldUpdate, ComponentUpdate},
-            replica_ref::{
-                ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
-            },
-            replicate::Replicate,
+use crate::{world::{
+    component::{
+        component_kinds::ComponentKind,
+        component_update::{ComponentFieldUpdate, ComponentUpdate},
+        replica_ref::{
+            ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
         },
-        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+        replicate::Replicate,
     },
-    GlobalWorldManagerType,
-};
+    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
+}, GlobalWorldManagerType, ReplicatedComponent};
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
@@ -27,11 +24,11 @@ pub trait WorldRefType<E> {
 
     // Components
     /// check whether entity contains component
-    fn has_component<R: Replicate>(&self, entity: &E) -> bool;
+    fn has_component<R: ReplicatedComponent>(&self, entity: &E) -> bool;
     /// check whether entity contains component, dynamically
     fn has_component_of_kind(&self, entity: &E, component_kind: &ComponentKind) -> bool;
     /// gets an entity's component
-    fn component<'a, R: Replicate>(&'a self, entity: &E) -> Option<ReplicaRefWrapper<'a, R>>;
+    fn component<'a, R: ReplicatedComponent>(&'a self, entity: &E) -> Option<ReplicaRefWrapper<'a, R>>;
     /// gets an entity's component, dynamically
     fn component_of_kind<'a>(
         &'a self,
@@ -58,7 +55,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// gets all of an Entity's Components
     fn component_kinds(&mut self, entity: &E) -> Vec<ComponentKind>;
     /// gets an entity's component
-    fn component_mut<'a, R: Replicate>(
+    fn component_mut<'a, R: ReplicatedComponent>(
         &'a mut self,
         entity: &E,
     ) -> Option<ReplicaMutWrapper<'a, R>>;
@@ -96,11 +93,11 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         component_kind: &ComponentKind,
     );
     /// insert a component
-    fn insert_component<R: Replicate>(&mut self, entity: &E, component_ref: R);
+    fn insert_component<R: ReplicatedComponent>(&mut self, entity: &E, component_ref: R);
     /// insert a boxed component
     fn insert_boxed_component(&mut self, entity: &E, boxed_component: Box<dyn Replicate>);
     /// remove a component
-    fn remove_component<R: Replicate>(&mut self, entity: &E) -> Option<R>;
+    fn remove_component<R: ReplicatedComponent>(&mut self, entity: &E) -> Option<R>;
     /// remove a component by kind
     fn remove_component_of_kind(
         &mut self,

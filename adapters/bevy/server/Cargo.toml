@@ -19,6 +19,6 @@ transport_udp = [ "naia-server/transport_udp" ]
 [dependencies]
 naia-server = { version = "0.22", path = "../../../server", features = ["bevy_support"] }
 naia-bevy-shared = { version = "0.22", path = "../shared" }
-bevy_app = { version = "0.13", default-features=false }
-bevy_ecs = { version = "0.13", default-features=false }
+bevy_app = { version = "0.14", default-features=false }
+bevy_ecs = { version = "0.14", default-features=false }
 log = { version = "0.4" }
