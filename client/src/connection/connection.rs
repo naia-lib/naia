@@ -3,18 +3,20 @@ use std::{any::Any, hash::Hash};
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ComponentKinds,
-    ConnectionConfig, EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType,
-    HostWorldEvents, Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr,
-    StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
+    BaseConnection, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig,
+    EntityEventMessage, EntityEventMessageAction, EntityResponseEvent, HostType, HostWorldEvents,
+    Instant, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, SystemChannel,
+    Tick, WorldMutType, WorldRefType,
 };
 
+use crate::request::GlobalRequestManager;
 use crate::{
     connection::{
         io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
         time_manager::TimeManager,
     },
     events::Events,
+    request::GlobalResponseManager,
     world::global_world_manager::GlobalWorldManager,
 };
 
@@ -25,6 +27,9 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
     jitter_buffer: TickQueue<OwnedBitReader>,
+    // Request/Response
+    pub global_request_manager: GlobalRequestManager,
+    pub global_response_manager: GlobalResponseManager,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
@@ -36,7 +41,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     ) -> Self {
         let tick_buffer = TickBufferSender::new(channel_kinds);
 
-        let mut connection = Connection {
+        let mut connection = Self {
             base: BaseConnection::new(
                 &None,
                 HostType::Client,
@@ -48,6 +53,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             time_manager,
             tick_buffer,
             jitter_buffer: TickQueue::new(),
+            global_request_manager: GlobalRequestManager::new(),
+            global_response_manager: GlobalResponseManager::new(),
         };
 
         let existing_entities = global_world_manager.entities();
@@ -108,13 +115,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn process_packets<W: WorldMutType<E>>(
         &mut self,
         global_world_manager: &mut GlobalWorldManager<E>,
-        component_kinds: &ComponentKinds,
+        protocol: &Protocol,
         world: &mut W,
+        now: &Instant,
         incoming_events: &mut Events<E>,
     ) -> Vec<EntityResponseEvent<E>> {
         let mut response_events = Vec::new();
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
+            &protocol.message_kinds,
+            now,
             global_world_manager,
             &self.base.local_world_manager,
             &mut self.base.remote_world_manager.entity_waitlist,
@@ -122,9 +132,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         for (channel_kind, messages) in messages {
             if channel_kind == ChannelKind::of::<SystemChannel>() {
                 for message in messages {
-                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<EntityEventMessage>(message.to_boxed_any())
-                        .ok()
-                        .map(|boxed_m| *boxed_m) else {
+                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<
+                        EntityEventMessage,
+                    >(message.to_boxed_any())
+                    .ok()
+                    .map(|boxed_m| *boxed_m) else {
                         panic!("Received unknown message over SystemChannel!");
                     };
                     match event_message.entity.get(global_world_manager) {
@@ -153,13 +165,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
         }
 
+        // Receive Request and Response Events
+        let (requests, responses) = self.base.message_manager.receive_requests_and_responses();
+        // Requests
+        for (channel_kind, requests) in requests {
+            for (local_response_id, request) in requests {
+                let global_response_id = self
+                    .global_response_manager
+                    .create_response_id(&channel_kind, &local_response_id);
+                incoming_events.push_request(&channel_kind, global_response_id, request);
+            }
+        }
+        // Responses
+        for (global_request_id, response) in responses {
+            self.global_request_manager
+                .receive_response(&global_request_id, response);
+        }
+
         // Receive World Events
         let remote_events = self.base.remote_world_reader.take_incoming_events();
         let world_events = self.base.remote_world_manager.process_world_events(
             global_world_manager,
             &mut self.base.local_world_manager,
-            component_kinds,
+            &protocol.component_kinds,
             world,
+            now,
             remote_events,
         );
         response_events.extend(incoming_events.receive_world_events(world_events));

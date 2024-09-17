@@ -382,7 +382,7 @@ impl<T: Serde> HostOwnedProperty<T> {
             warn!("Host Property should have a mutator immediately after creation.");
             return;
         };
-        mutator.mutate(self.index);
+        let _success = mutator.mutate(self.index);
     }
 }
 
@@ -447,7 +447,7 @@ impl<T: Serde> RemotePublicProperty<T> {
     }
 
     fn mutate(&mut self) {
-        self.mutator.mutate(self.index);
+        let _success = self.mutator.mutate(self.index);
     }
 }
 
@@ -504,7 +504,7 @@ impl<T: Serde> DelegatedProperty<T> {
         if !self.can_mutate() {
             panic!("Must request authority to mutate a Delegated Property.");
         }
-        self.mutator.mutate(self.index);
+        let _success = self.mutator.mutate(self.index);
     }
 
     fn can_mutate(&self) -> bool {

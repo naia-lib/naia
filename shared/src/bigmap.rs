@@ -54,7 +54,7 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     }
 
     #[allow(clippy::type_complexity)]
-    pub fn iter<'a>(&'a self) -> Map<Iter<'_, u64, V>, fn((&'a u64, &'a V)) -> (K, &'a V)> {
+    pub fn iter<'a>(&'a self) -> Map<Iter<'a, u64, V>, fn((&'a u64, &'a V)) -> (K, &'a V)> {
         return self
             .inner
             .iter()
@@ -64,7 +64,7 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     #[allow(clippy::type_complexity)]
     pub fn iter_mut<'a>(
         &'a mut self,
-    ) -> Map<IterMut<'_, u64, V>, fn((&'a u64, &'a mut V)) -> (K, &'a mut V)> {
+    ) -> Map<IterMut<'a, u64, V>, fn((&'a u64, &'a mut V)) -> (K, &'a mut V)> {
         return self
             .inner
             .iter_mut()

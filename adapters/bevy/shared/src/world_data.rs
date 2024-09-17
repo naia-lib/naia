@@ -10,7 +10,7 @@ use bevy_ecs::{
     prelude::Resource,
     world::{FromWorld, World},
 };
-
+use bevy_ecs::component::Component;
 use naia_shared::{ComponentKind, Replicate};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
@@ -39,6 +39,13 @@ impl WorldData {
             entities: HashSet::default(),
             kind_to_accessor_map: HashMap::default(),
         }
+    }
+
+    pub fn merge(&mut self, other: Self) {
+        if !self.entities.is_empty() || !other.entities.is_empty() {
+            panic!("merging world data with non-empty entities");
+        }
+        self.kind_to_accessor_map.extend(other.kind_to_accessor_map);
     }
 
     pub fn add_systems(&self, app: &mut App) {
@@ -83,7 +90,7 @@ impl WorldData {
         None
     }
 
-    pub(crate) fn put_kind<R: Replicate>(&mut self, component_kind: &ComponentKind) {
+    pub(crate) fn put_kind<R: Replicate + Component>(&mut self, component_kind: &ComponentKind) {
         self.kind_to_accessor_map
             .insert(*component_kind, ComponentAccessor::<R>::create());
     }

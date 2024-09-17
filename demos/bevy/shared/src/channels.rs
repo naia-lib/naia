@@ -9,6 +9,9 @@ pub struct PlayerCommandChannel;
 #[derive(Channel)]
 pub struct EntityAssignmentChannel;
 
+#[derive(Channel)]
+pub struct RequestChannel;
+
 // Plugin
 pub struct ChannelsPlugin;
 
@@ -21,6 +24,10 @@ impl ProtocolPlugin for ChannelsPlugin {
             )
             .add_channel::<EntityAssignmentChannel>(
                 ChannelDirection::ServerToClient,
+                ChannelMode::UnorderedReliable(ReliableSettings::default()),
+            )
+            .add_channel::<RequestChannel>(
+                ChannelDirection::Bidirectional,
                 ChannelMode::UnorderedReliable(ReliableSettings::default()),
             );
     }

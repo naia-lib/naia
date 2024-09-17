@@ -3,6 +3,8 @@ use std::collections::VecDeque;
 use naia_serde::{BitWrite, BitWriter, Serde};
 use naia_socket_shared::Instant;
 
+use crate::messages::channels::senders::request_sender::LocalRequestId;
+use crate::messages::request::GlobalRequestId;
 use crate::{
     messages::{
         channels::senders::channel_sender::{ChannelSender, MessageChannelSender},
@@ -10,7 +12,7 @@ use crate::{
         message_kinds::MessageKinds,
     },
     types::MessageIndex,
-    LocalEntityAndGlobalEntityConverterMut,
+    LocalEntityAndGlobalEntityConverterMut, LocalResponseId,
 };
 
 pub struct UnorderedUnreliableSender {
@@ -102,5 +104,29 @@ impl MessageChannelSender for UnorderedUnreliableSender {
             self.outgoing_messages.pop_front();
         }
         None
+    }
+
+    fn send_outgoing_request(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: GlobalRequestId,
+        _: MessageContainer,
+    ) {
+        panic!("UnorderedUnreliable channel does not support requests");
+    }
+
+    fn process_incoming_response(&mut self, _: &LocalRequestId) -> Option<GlobalRequestId> {
+        panic!("UnorderedUnreliable channel does not support requests");
+    }
+
+    fn send_outgoing_response(
+        &mut self,
+        _: &MessageKinds,
+        _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        _: LocalResponseId,
+        _: MessageContainer,
+    ) {
+        panic!("UnorderedUnreliable channel does not support requests");
     }
 }

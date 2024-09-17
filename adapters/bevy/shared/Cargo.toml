@@ -1,6 +1,6 @@
 [package]
 name = "naia-bevy-shared"
-version = "0.22.0"
+version = "0.23.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia & Bevy interop, functionality shared by client & server versions"
@@ -13,9 +13,11 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [features]
+# this should be used when the underlying transport does not handle it for you (i.e. UDP)
+advanced_handshake = [ "naia-shared/advanced_handshake" ]
 
 [dependencies]
-naia-shared = { version = "0.22", path = "../../../shared", features = ["bevy_support", "wbindgen"] }
-bevy_app = { version = "0.12.1", default-features=false }
-bevy_ecs = { version = "0.12.1", default-features=false }
+naia-shared = { version = "0.23", path = "../../../shared", features = ["bevy_support", "wbindgen"] }
+bevy_app = { version = "0.14", default-features=false }
+bevy_ecs = { version = "0.14", default-features=false }
 log = { version = "0.4" }

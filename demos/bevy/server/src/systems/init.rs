@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bevy_ecs::system::Commands;
 use bevy_log::info;
@@ -34,6 +34,8 @@ pub fn init(mut commands: Commands, mut server: Server) {
         main_room_key,
         user_to_square_map: HashMap::new(),
         square_to_user_map: HashMap::new(),
+        response_keys: HashSet::new(),
+        request_index: 0,
     };
 
     // Insert Global Resource

@@ -155,19 +155,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
     // Messages
 
-    pub fn handle_dropped_packets(&mut self, rtt_millis: &f32) {
-        self.handle_dropped_update_packets(rtt_millis);
-        self.handle_dropped_action_packets();
+    pub fn handle_dropped_packets(&mut self, now: &Instant, rtt_millis: &f32) {
+        self.handle_dropped_update_packets(now, rtt_millis);
+        self.handle_dropped_action_packets(now);
     }
 
     // Collecting
 
-    fn handle_dropped_action_packets(&mut self) {
+    fn handle_dropped_action_packets(&mut self, now: &Instant) {
         let mut pop = false;
 
         loop {
             if let Some((_, (time_sent, _))) = self.sent_action_packets.front() {
-                if time_sent.elapsed() > ACTION_RECORD_TTL {
+                if time_sent.elapsed(now) > ACTION_RECORD_TTL {
                     pop = true;
                 }
             } else {
@@ -181,13 +181,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         }
     }
 
-    fn handle_dropped_update_packets(&mut self, rtt_millis: &f32) {
+    fn handle_dropped_update_packets(&mut self, now: &Instant, rtt_millis: &f32) {
         let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
 
         {
             let mut dropped_packets = Vec::new();
             for (packet_index, (time_sent, _)) in &self.sent_updates {
-                if time_sent.elapsed() > drop_duration {
+                if time_sent.elapsed(now) > drop_duration {
                     dropped_packets.push(*packet_index);
                 }
             }

@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use naia_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, GameDuration, GameInstant,
-    Instant, SerdeErr, Tick, Timer,
+    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, GameInstant, Instant,
+    SerdeErr, Tick, Timer,
 };
 
 use crate::connection::{base_time_manager::BaseTimeManager, io::Io};
@@ -161,9 +161,9 @@ impl TimeManager {
         self.base.game_time_now()
     }
 
-    pub fn game_time_since(&self, previous_instant: &GameInstant) -> GameDuration {
-        self.base.game_time_since(previous_instant)
-    }
+    // pub fn game_time_since(&self, previous_instant: &GameInstant) -> GameDuration {
+    //     self.base.game_time_since(previous_instant)
+    // }
 
     // Tick
 
@@ -214,7 +214,10 @@ impl TimeManager {
             self.instant_from_interp(self.server_receivable_tick, server_receivable_interp);
     }
 
-    pub(crate) fn collect_ticks(&mut self) -> (Option<(Tick, Tick)>, Option<(Tick, Tick)>) {
+    pub(crate) fn collect_ticks(
+        &mut self,
+        now: &Instant,
+    ) -> (Option<(Tick, Tick)>, Option<(Tick, Tick)>) {
         // updates client_receiving_tick
         // returns (Some(start_tick, end_tick), None) if a client_receiving_tick has incremented
         // returns (None, Some(start_tick, end_tick)) if a client_sending_tick or server_receivable_tick has incremented
@@ -222,8 +225,8 @@ impl TimeManager {
         let prev_client_sending_tick = self.client_sending_tick;
 
         {
-            let time_elapsed = self.last_tick_check_instant.elapsed().as_secs_f32() * 1000.0;
-            self.last_tick_check_instant = Instant::now();
+            let time_elapsed = self.last_tick_check_instant.elapsed(now).as_secs_f32() * 1000.0;
+            self.last_tick_check_instant = now.clone();
             self.accumulator += time_elapsed;
             if self.accumulator < 1.0 {
                 return (None, None);
@@ -343,7 +346,7 @@ impl TimeManager {
         self.pruned_rtt_avg / 2.0
     }
 
-    pub(crate) fn tick_to_instant(&self, tick: Tick) -> GameInstant {
+    pub fn tick_to_instant(&self, tick: Tick) -> GameInstant {
         let tick_diff = wrapping_diff(self.server_tick, tick);
         let tick_diff_duration =
             ((tick_diff as f32) * self.server_tick_duration_avg).round() as i32;

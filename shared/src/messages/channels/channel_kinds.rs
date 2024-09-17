@@ -7,7 +7,7 @@ use crate::messages::channels::channel::{Channel, ChannelSettings};
 type NetId = u16;
 
 /// ChannelKind - should be one unique value for each type of Channel
-#[derive(Eq, Hash, Copy, Clone, PartialEq)]
+#[derive(Eq, Hash, Copy, Clone, PartialEq, Debug)]
 pub struct ChannelKind {
     type_id: TypeId,
 }
@@ -61,6 +61,7 @@ impl ChannelKinds {
 
     pub fn add_channel<C: Channel>(&mut self, settings: ChannelSettings) {
         let channel_kind = ChannelKind::of::<C>();
+        //info!("ChannelKinds adding channel: {:?}", channel_kind);
         let net_id = self.current_net_id;
         self.kind_map.insert(channel_kind, (net_id, settings));
         self.net_id_map.insert(net_id, channel_kind);

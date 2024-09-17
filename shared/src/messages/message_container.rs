@@ -49,7 +49,7 @@ impl MessageContainer {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) {
         if writer.is_counter() {
-            writer.write_bits(self.bit_length());
+            writer.count_bits(self.bit_length());
         } else {
             self.inner.write(message_kinds, writer, converter);
         }
@@ -57,6 +57,10 @@ impl MessageContainer {
 
     pub fn is_fragment(&self) -> bool {
         return self.inner.is_fragment();
+    }
+
+    pub fn is_request_or_response(&self) -> bool {
+        return self.inner.is_request();
     }
 
     pub fn to_boxed_any(self) -> Box<dyn Any> {

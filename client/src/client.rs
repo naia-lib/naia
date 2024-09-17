@@ -1,27 +1,13 @@
-use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
+use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use log::{info, warn};
-
-#[cfg(feature = "bevy_support")]
-use bevy_ecs::prelude::Resource;
-
-use naia_shared::{
-    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
-    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
-    GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity,
-    Replicate, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick,
-    WorldMutType, WorldRefType,
-};
+use naia_client_socket::IdentityReceiverResult;
+use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
-    connection::{
-        base_time_manager::BaseTimeManager,
-        connection::Connection,
-        handshake_manager::{HandshakeManager, HandshakeResult},
-        io::Io,
-    },
+    connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
+    handshake::{HandshakeManager, HandshakeResult, Handshaker},
     transport::Socket,
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
@@ -32,15 +18,16 @@ use crate::{
 
 /// Client can send/receive messages to/from a server, and has a pool of
 /// in-scope entities/components that are synced with the server
-#[cfg_attr(feature = "bevy_support", derive(Resource))]
 pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     client_config: ClientConfig,
     protocol: Protocol,
     // Connection
+    auth_message: Option<Vec<u8>>,
+    auth_headers: Option<Vec<(String, String)>>,
     io: Io,
     server_connection: Option<Connection<E>>,
-    handshake_manager: HandshakeManager,
+    handshake_manager: Box<dyn Handshaker>,
     manual_disconnect: bool,
     waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
@@ -65,17 +52,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let compression_config = protocol.compression.clone();
 
-        Client {
+        Self {
             // Config
             client_config: client_config.clone(),
             protocol,
             // Connection
+            auth_message: None,
+            auth_headers: None,
             io: Io::new(
                 &client_config.connection.bandwidth_measure_duration,
                 &compression_config,
             ),
             server_connection: None,
-            handshake_manager,
+            handshake_manager: Box::new(handshake_manager),
             manual_disconnect: false,
             waitlist_messages: VecDeque::new(),
             // World
@@ -89,11 +78,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Set the auth object to use when setting up a connection with the Server
     pub fn auth<M: Message>(&mut self, auth: M) {
-        self.handshake_manager
-            .set_auth_message(MessageContainer::from_write(
-                Box::new(auth),
-                &mut FakeEntityConverter,
-            ));
+        // get auth bytes
+        let mut bit_writer = BitWriter::new();
+        auth.write(
+            &self.protocol.message_kinds,
+            &mut bit_writer,
+            &mut FakeEntityConverter,
+        );
+        let auth_bytes = bit_writer.to_bytes();
+        self.auth_message = Some(auth_bytes.to_vec());
+    }
+
+    pub fn auth_headers(&mut self, headers: Vec<(String, String)>) {
+        self.auth_headers = Some(headers);
     }
 
     /// Connect to the given server address
@@ -101,24 +98,78 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
-        let boxed_socket: Box<dyn Socket> = socket.into();
-        let (packet_sender, packet_receiver) = boxed_socket.connect();
-        self.io.load(packet_sender, packet_receiver);
+
+        if let Some(auth_bytes) = &self.auth_message {
+            if let Some(auth_headers) = &self.auth_headers {
+                // connect with auth & headers
+                let boxed_socket: Box<dyn Socket> = socket.into();
+                let (id_receiver, packet_sender, packet_receiver) = boxed_socket
+                    .connect_with_auth_and_headers(auth_bytes.clone(), auth_headers.clone());
+                self.io.load(id_receiver, packet_sender, packet_receiver);
+            } else {
+                // connect with auth
+                let boxed_socket: Box<dyn Socket> = socket.into();
+                let (id_receiver, packet_sender, packet_receiver) =
+                    boxed_socket.connect_with_auth(auth_bytes.clone());
+                self.io.load(id_receiver, packet_sender, packet_receiver);
+            }
+        } else {
+            if let Some(auth_headers) = &self.auth_headers {
+                // connect with auth headers
+                let boxed_socket: Box<dyn Socket> = socket.into();
+                let (id_receiver, packet_sender, packet_receiver) =
+                    boxed_socket.connect_with_auth_headers(auth_headers.clone());
+                self.io.load(id_receiver, packet_sender, packet_receiver);
+            } else {
+                // connect without auth
+                let boxed_socket: Box<dyn Socket> = socket.into();
+                let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect();
+                self.io.load(id_receiver, packet_sender, packet_receiver);
+            }
+        }
     }
 
-    /// Returns whether or not the client is disconnected
-    pub fn is_disconnected(&self) -> bool {
-        !self.io.is_loaded()
+    /// Returns client's current connection status
+    pub fn connection_status(&self) -> ConnectionStatus {
+        if self.is_connected() {
+            if self.is_disconnecting() {
+                return ConnectionStatus::Disconnecting;
+            } else {
+                return ConnectionStatus::Connected;
+            }
+        } else {
+            if self.is_disconnected() {
+                return ConnectionStatus::Disconnected;
+            }
+            if self.is_connecting() {
+                return ConnectionStatus::Connecting;
+            }
+            panic!("Client is in an unknown connection state!");
+        }
     }
 
     /// Returns whether or not a connection is being established with the Server
-    pub fn is_connecting(&self) -> bool {
+    fn is_connecting(&self) -> bool {
         self.io.is_loaded()
     }
 
     /// Returns whether or not a connection has been established with the Server
-    pub fn is_connected(&self) -> bool {
+    fn is_connected(&self) -> bool {
         self.server_connection.is_some()
+    }
+
+    /// Returns whether or not the client is disconnecting
+    fn is_disconnecting(&self) -> bool {
+        if let Some(connection) = &self.server_connection {
+            connection.base.should_drop() || self.manual_disconnect
+        } else {
+            false
+        }
+    }
+
+    /// Returns whether or not the client is disconnected
+    fn is_disconnected(&self) -> bool {
+        !self.io.is_loaded()
     }
 
     /// Disconnect from Server
@@ -158,14 +209,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let mut response_events = None;
 
         // all other operations
-        if let Some(connection) = &mut self.server_connection {
-            if connection.base.should_drop() || self.manual_disconnect {
-                self.disconnect_with_events(&mut world);
-                return std::mem::take(&mut self.incoming_events);
-            }
+        if self.is_disconnecting() {
+            self.disconnect_with_events(&mut world);
+            return std::mem::take(&mut self.incoming_events);
+        }
 
+        let now = Instant::now();
+
+        if let Some(connection) = &mut self.server_connection {
             let (receiving_tick_happened, sending_tick_happened) =
-                connection.time_manager.collect_ticks();
+                connection.time_manager.collect_ticks(&now);
 
             if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
                 // read packets on tick boundary, de-jittering
@@ -180,8 +233,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // receive packets, process into events
                 response_events = Some(connection.process_packets(
                     &mut self.global_world_manager,
-                    &self.protocol.component_kinds,
+                    &self.protocol,
                     &mut world,
+                    &now,
                     &mut self.incoming_events,
                 ));
 
@@ -198,7 +252,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
             if let Some((prev_sending_tick, current_sending_tick)) = sending_tick_happened {
                 // send outgoing packets
-                let now = Instant::now();
 
                 // collect waiting auth release messages
                 if let Some(mut entities) = connection
@@ -232,8 +285,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
         } else {
-            self.handshake_manager
-                .send(&self.protocol.message_kinds, &mut self.io);
+            if self.io.is_loaded() {
+                if let Some(outgoing_packet) = self.handshake_manager.send() {
+                    if self.io.send_packet(outgoing_packet).is_err() {
+                        // TODO: pass this on and handle above
+                        warn!("Client Error: Cannot send handshake packet to Server");
+                    }
+                }
+            }
         }
 
         if let Some(events) = response_events {
@@ -278,6 +337,119 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .push_back((channel_kind.clone(), message_box));
         }
     }
+
+    //
+    pub fn send_request<C: Channel, Q: Request>(
+        &mut self,
+        request: &Q,
+    ) -> Result<ResponseReceiveKey<Q::Response>, NaiaClientError> {
+        let cloned_request = Q::clone_box(request);
+        // let response_type_id = TypeId::of::<Q::Response>();
+        let id = self.send_request_inner(&ChannelKind::of::<C>(), cloned_request)?;
+        Ok(ResponseReceiveKey::new(id))
+    }
+
+    fn send_request_inner(
+        &mut self,
+        channel_kind: &ChannelKind,
+        // response_type_id: TypeId,
+        request_box: Box<dyn Message>,
+    ) -> Result<GlobalRequestId, NaiaClientError> {
+        let channel_settings = self.protocol.channel_kinds.channel(&channel_kind);
+
+        if !channel_settings.can_request_and_respond() {
+            std::panic!("Requests can only be sent over Bidirectional, Reliable Channels");
+        }
+
+        let Some(connection) = &mut self.server_connection else {
+            warn!("currently not connected to server");
+            return Err(NaiaClientError::Message(
+                "currently not connected to server".to_string(),
+            ));
+        };
+        let mut converter = EntityConverterMut::new(
+            &self.global_world_manager,
+            &mut connection.base.local_world_manager,
+        );
+
+        let request_id = connection.global_request_manager.create_request_id();
+        let message = MessageContainer::from_write(request_box, &mut converter);
+        connection.base.message_manager.send_request(
+            &self.protocol.message_kinds,
+            &mut converter,
+            channel_kind,
+            request_id,
+            message,
+        );
+
+        return Ok(request_id);
+    }
+
+    /// Sends a Response for a given Request. Returns whether or not was successful.
+    pub fn send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> bool {
+        let response_id = response_key.response_id();
+
+        let cloned_response = S::clone_box(response);
+
+        self.send_response_inner(&response_id, cloned_response)
+    }
+
+    // returns whether was successful
+    fn send_response_inner(
+        &mut self,
+        response_id: &GlobalResponseId,
+        response_box: Box<dyn Message>,
+    ) -> bool {
+        let Some(connection) = &mut self.server_connection else {
+            return false;
+        };
+        let Some((channel_kind, local_response_id)) = connection
+            .global_response_manager
+            .destroy_response_id(response_id)
+        else {
+            return false;
+        };
+        let mut converter = EntityConverterMut::new(
+            &self.global_world_manager,
+            &mut connection.base.local_world_manager,
+        );
+
+        let response = MessageContainer::from_write(response_box, &mut converter);
+        connection.base.message_manager.send_response(
+            &self.protocol.message_kinds,
+            &mut converter,
+            &channel_kind,
+            local_response_id,
+            response,
+        );
+        return true;
+    }
+
+    pub fn receive_response<S: Response>(
+        &mut self,
+        response_key: &ResponseReceiveKey<S>,
+    ) -> Option<S> {
+        let Some(connection) = &mut self.server_connection else {
+            return None;
+        };
+        let request_id = response_key.request_id();
+        let Some(container) = connection
+            .global_request_manager
+            .destroy_request_id(&request_id)
+        else {
+            return None;
+        };
+        let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
+            .ok()
+            .map(|boxed_s| *boxed_s)
+            .unwrap();
+        return Some(response);
+    }
+    //
 
     fn on_connect(&mut self) {
         // send queued messages
@@ -572,6 +744,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         return None;
     }
 
+    pub fn tick_to_instant(&self, tick: Tick) -> Option<GameInstant> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.time_manager.tick_to_instant(tick));
+        }
+        return None;
+    }
+
     // Interpolation
 
     /// Gets the interpolation tween amount for the current frame, for use by entities on the Client Tick (i.e. predicted)
@@ -648,7 +827,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// Adds a Component to an Entity
-    pub(crate) fn insert_component<R: Replicate, W: WorldMutType<E>>(
+    pub(crate) fn insert_component<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,
@@ -704,7 +883,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// Removes a Component from an Entity
-    pub(crate) fn remove_component<R: Replicate, W: WorldMutType<E>>(
+    pub(crate) fn remove_component<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
         entity: &E,
@@ -735,6 +914,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     pub(crate) fn publish_entity(&mut self, entity: &E, client_is_origin: bool) {
         if client_is_origin {
+            // warn!("sending publish entity message");
             let message = EntityEventMessage::new_publish(&self.global_world_manager, entity);
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
         } else {
@@ -775,6 +955,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if client_is_origin {
             // send message to server
+            // warn!("sending enable delegation for entity message");
             let message =
                 EntityEventMessage::new_enable_delegation(&self.global_world_manager, entity);
             self.send_message::<SystemChannel, EntityEventMessage>(&message);
@@ -920,6 +1101,37 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             return;
         }
 
+        if !self.io.is_authenticated() {
+            match self.io.recv_auth() {
+                IdentityReceiverResult::Success(id_token) => {
+                    self.handshake_manager.set_identity_token(id_token);
+                }
+                IdentityReceiverResult::Waiting => {
+                    return;
+                }
+                IdentityReceiverResult::ErrorResponseCode(code) => {
+                    // warn!("Authentication error status code: {}", code);
+
+                    // reset connection
+                    self.io = Io::new(
+                        &self.client_config.connection.bandwidth_measure_duration,
+                        &self.protocol.compression,
+                    );
+
+                    if code == 401 {
+                        // push out rejection
+                        self.incoming_events.push_rejection();
+                    } else {
+                        // push out error
+                        self.incoming_events
+                            .push_error(NaiaClientError::IdError(code));
+                    }
+
+                    return;
+                }
+            }
+        }
+
         // receive from socket
         loop {
             match self.io.recv_reader() {
@@ -938,13 +1150,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             let server_addr = self.server_address_unwrapped();
                             self.incoming_events.push_connection(&server_addr);
                         }
-                        Some(HandshakeResult::Rejected) => {
-                            let server_addr = self.server_address_unwrapped();
-                            self.incoming_events.clear();
-                            self.incoming_events.push_rejection(&server_addr);
-                            self.disconnect_reset_connection();
-                            return;
-                        }
+                        // Some(HandshakeResult::Rejected) => {
+                        //     let server_addr = self.server_address_unwrapped();
+                        //     self.incoming_events.clear();
+                        //     self.incoming_events.push_rejection(&server_addr);
+                        //     self.disconnect_reset_connection();
+                        //     return;
+                        // }
                         None => {}
                     }
                 }
@@ -957,6 +1169,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
         }
+
+        return;
     }
 
     fn maintain_connection(&mut self) {
@@ -1118,11 +1332,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &self.protocol.compression,
         );
 
-        self.handshake_manager = HandshakeManager::new(
+        self.handshake_manager = Box::new(HandshakeManager::new(
             self.client_config.send_handshake_interval,
             self.client_config.ping_interval,
             self.client_config.handshake_pings,
-        );
+        ));
+
+        self.manual_disconnect = false;
+        self.global_world_manager = GlobalWorldManager::new();
+        self.queued_entity_auth_release_messages = Vec::new();
     }
 
     fn server_address_unwrapped(&self) -> SocketAddr {
@@ -1266,5 +1484,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Cl
 
     fn entity_to_global_entity(&self, entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.global_world_manager.entity_to_global_entity(entity)
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+pub enum ConnectionStatus {
+    Disconnected,
+    Connecting,
+    Connected,
+    Disconnecting,
+}
+
+impl ConnectionStatus {
+    pub fn is_disconnected(&self) -> bool {
+        self == &ConnectionStatus::Disconnected
+    }
+
+    pub fn is_connecting(&self) -> bool {
+        self == &ConnectionStatus::Connecting
+    }
+
+    pub fn is_connected(&self) -> bool {
+        self == &ConnectionStatus::Connected
+    }
+
+    pub fn is_disconnecting(&self) -> bool {
+        self == &ConnectionStatus::Disconnecting
     }
 }

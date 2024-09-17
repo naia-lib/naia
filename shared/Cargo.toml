@@ -1,6 +1,6 @@
 [package]
 name = "naia-shared"
-version = "0.22.0"
+version = "0.23.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "Common functionality shared between naia-server & naia-client crates"
@@ -22,12 +22,15 @@ mquad = [ "naia-socket-shared/mquad" ]
 bevy_support = [ "bevy_ecs" ]
 zstd_support = [ "zstd" ]
 
+# this should be used when the underlying transport does not handle it for you (i.e. UDP)
+advanced_handshake = []
+
 [dependencies]
-naia-socket-shared = { version = "0.22", path = "../socket/shared" }
-naia-derive = { version = "0.22", path = "derive" }
-naia-serde = { version = "0.22", path = "serde" }
+naia-socket-shared = { version = "0.23", path = "../socket/shared" }
+naia-derive = { version = "0.23", path = "derive" }
+naia-serde = { version = "0.23", path = "serde" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }
-js-sys = { version = "0.3", optional = true }
-bevy_ecs = { version = "0.12.1", default_features = false, optional = true }
+js-sys = { version = "0.3.64", optional = true }
+bevy_ecs = { version = "0.14", default-features = false, optional = true }
 zstd = { version = "0.12.2", optional = true }

@@ -3,7 +3,7 @@ use std::{cmp::Ordering, collections::BinaryHeap};
 use super::Instant;
 
 /// A queue for items marked by time, will only ever pop items from the queue if
-/// the time
+/// the time passes
 #[derive(Clone)]
 pub struct TimeQueue<T: Eq + PartialEq> {
     queue: BinaryHeap<ItemContainer<T>>,
@@ -24,20 +24,24 @@ impl<T: Eq + PartialEq> TimeQueue<T> {
         self.queue.push(ItemContainer { instant, item });
     }
 
-    /// Returns whether or not there is an item that is ready to be returned
-    pub fn has_item(&self) -> bool {
+    /// Returns whether or not there is an item whose time has elapsed on the queue
+    pub fn has_item(&self, now: &Instant) -> bool {
         if self.queue.is_empty() {
             return false;
         }
         if let Some(item) = self.queue.peek() {
-            return item.instant <= Instant::now();
+            // item's instant has passed, so it's ready to be returned
+
+            let will_pop = now.is_after(&item.instant);
+
+            return will_pop;
         }
         false
     }
 
-    /// Pops an item from the queue if the sufficient time has elapsed
-    pub fn pop_item(&mut self) -> Option<T> {
-        if self.has_item() {
+    /// Pops an item from the queue if it's time has elapsed
+    pub fn pop_item(&mut self, now: &Instant) -> Option<T> {
+        if self.has_item(now) {
             if let Some(container) = self.queue.pop() {
                 return Some(container.item);
             }

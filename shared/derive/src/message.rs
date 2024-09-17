@@ -1,29 +1,43 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, Data, DeriveInput, Fields, Ident, Index, LitStr, Member, Type};
+use syn::{
+    parse_macro_input, Data, DeriveInput, Fields, GenericParam, Generics, Ident, Index, LitStr,
+    Member, Type,
+};
 
-use super::shared::{get_struct_type, StructType};
+use super::shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType};
 
 pub fn message_impl(
     input: proc_macro::TokenStream,
     shared_crate_name: TokenStream,
     is_fragment: bool,
+    is_request: bool,
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
     // Helper Properties
     let struct_type = get_struct_type(&input);
     let fields = get_fields(&input);
+    let (untyped_generics, typed_generics, turbofish) = get_generics(&input);
 
     // Names
     let struct_name = input.ident;
-    let struct_name_str = LitStr::new(&struct_name.to_string(), struct_name.span());
+    let struct_name_str = LitStr::new(
+        format!(
+            "{}{}",
+            &struct_name.to_string(),
+            &untyped_generics.to_string()
+        )
+        .as_str(),
+        struct_name.span(),
+    );
     let lowercase_struct_name = Ident::new(
         struct_name.to_string().to_lowercase().as_str(),
         Span::call_site(),
     );
     let module_name = format_ident!("define_{}", lowercase_struct_name);
     let builder_name = format_ident!("{}Builder", struct_name);
+    let builder_generic_fields = get_builder_generic_fields(&input.generics);
 
     // Methods
     let clone_method = get_clone_method(&fields, &struct_type);
@@ -31,9 +45,17 @@ pub fn message_impl(
     let relations_complete_method = get_relations_complete_method(&fields, &struct_type);
     let bit_length_method = get_bit_length_method(&fields, &struct_type);
     let write_method = get_write_method(&fields, &struct_type);
-    let create_builder_method = get_create_builder_method(&builder_name);
-    let read_method = get_read_method(&struct_name, &fields, &struct_type);
+    let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
+    let builder_new_method = get_builder_new_method(
+        &typed_generics,
+        &builder_name,
+        &untyped_generics,
+        &input.generics,
+    );
+    let builder_read_method =
+        get_builder_read_method(&struct_name, &fields, &struct_type, &turbofish);
     let is_fragment_method = get_is_fragment_method(is_fragment);
+    let is_request_method = get_is_request_method(is_request);
 
     let gen = quote! {
         mod #module_name {
@@ -45,31 +67,33 @@ pub fn message_impl(
             };
             use super::*;
 
-            struct #builder_name;
-            impl MessageBuilder for #builder_name {
-                #read_method
+            struct #builder_name #typed_generics #builder_generic_fields
+            #builder_new_method
+            impl #typed_generics MessageBuilder for #builder_name #untyped_generics {
+                #builder_read_method
             }
 
-            impl Message for #struct_name {
+            impl #typed_generics Message for #struct_name #untyped_generics {
                 fn kind(&self) -> MessageKind {
-                    MessageKind::of::<#struct_name>()
+                    MessageKind::of::<#struct_name #untyped_generics>()
                 }
                 fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
                     self
                 }
                 #is_fragment_method
+                #is_request_method
                 #bit_length_method
-                #create_builder_method
+                #builder_create_method
                 #relations_waiting_method
                 #relations_complete_method
                 #write_method
             }
-            impl Named for #struct_name {
+            impl #typed_generics Named for #struct_name #untyped_generics {
                 fn name(&self) -> String {
                     return #struct_name_str.to_string();
                 }
             }
-            impl Clone for #struct_name {
+            impl #typed_generics Clone for #struct_name #untyped_generics {
                 #clone_method
             }
         }
@@ -88,6 +112,21 @@ fn get_is_fragment_method(is_fragment: bool) -> TokenStream {
     };
     quote! {
         fn is_fragment(&self) -> bool {
+            #value
+        }
+    }
+}
+
+fn get_is_request_method(is_request: bool) -> TokenStream {
+    let value = {
+        if is_request {
+            quote! { true }
+        } else {
+            quote! { false }
+        }
+    };
+    quote! {
+        fn is_request(&self) -> bool {
             #value
         }
     }
@@ -223,10 +262,11 @@ fn get_relations_complete_method(fields: &[Field], struct_type: &StructType) -> 
     }
 }
 
-pub fn get_read_method(
+pub fn get_builder_read_method(
     struct_name: &Ident,
     fields: &[Field],
     struct_type: &StructType,
+    turbofish: &TokenStream,
 ) -> TokenStream {
     let mut field_names = quote! {};
     for field in fields.iter() {
@@ -269,14 +309,14 @@ pub fn get_read_method(
     let struct_build = match *struct_type {
         StructType::Struct => {
             quote! {
-                #struct_name {
+                #struct_name #turbofish {
                     #field_names
                 }
             }
         }
         StructType::TupleStruct => {
             quote! {
-                #struct_name (
+                #struct_name #turbofish (
                     #field_names
                 )
             }
@@ -365,10 +405,14 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
     }
 }
 
-pub fn get_create_builder_method(builder_name: &Ident) -> TokenStream {
+pub fn get_builder_create_method(builder_name: &Ident, turbofish: &TokenStream) -> TokenStream {
+    let builder_new = quote! {
+        #builder_name #turbofish::new()
+    };
+
     quote! {
         fn create_builder() -> Box<dyn MessageBuilder> where Self:Sized {
-            Box::new(#builder_name)
+            Box::new(#builder_new)
         }
     }
 }
@@ -425,7 +469,7 @@ fn get_fields(input: &DeriveInput) -> Vec<Field> {
             Fields::Unit => {}
         }
     } else {
-        panic!("Can only derive Replicate on a struct");
+        panic!("Can only derive Message on a struct");
     }
 
     fields
@@ -448,6 +492,50 @@ fn get_field_name(field: &Field, index: usize, struct_type: &StructType) -> Memb
     }
 }
 
+pub fn get_builder_new_method(
+    typed_generics: &TokenStream,
+    builder_name: &Ident,
+    untyped_generics: &TokenStream,
+    input_generics: &Generics,
+) -> TokenStream {
+    let fn_impl = if input_generics.gt_token.is_none() {
+        quote! { return Self; }
+    } else {
+        let mut output = quote! {};
+
+        for param in input_generics.params.iter() {
+            let GenericParam::Type(type_param) = param else {
+                panic!("Only type parameters are supported for now");
+            };
+
+            let field_name =
+                format_ident!("phantom_{}", type_param.ident.to_string().to_lowercase());
+            let new_output_right = quote! {
+                #field_name: std::marker::PhantomData,
+            };
+            let new_output_result = quote! {
+                #output
+                #new_output_right
+            };
+            output = new_output_result;
+        }
+
+        quote! {
+            Self {
+                #output
+            }
+        }
+    };
+
+    quote! {
+        impl #typed_generics #builder_name #untyped_generics {
+            pub fn new() -> Self {
+                #fn_impl
+            }
+        }
+    }
+}
+
 const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
 fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
     Ident::new(&format!("{}{}", UNNAMED_FIELD_PREFIX, index), span)
@@ -455,7 +543,6 @@ fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
 
 pub struct EntityProperty {
     pub variable_name: Ident,
-    pub uppercase_variable_name: Ident,
 }
 
 pub struct Normal {
@@ -473,10 +560,6 @@ impl Field {
     pub fn entity_property(variable_name: Ident) -> Self {
         Self::EntityProperty(EntityProperty {
             variable_name: variable_name.clone(),
-            uppercase_variable_name: Ident::new(
-                variable_name.to_string().to_uppercase().as_str(),
-                Span::call_site(),
-            ),
         })
     }
 

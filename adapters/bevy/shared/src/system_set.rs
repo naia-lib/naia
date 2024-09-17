@@ -8,3 +8,6 @@ pub struct BeforeReceiveEvents;
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub struct HostSyncChangeTracking;
+
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+pub struct BeforeHostSyncChangeTracking;

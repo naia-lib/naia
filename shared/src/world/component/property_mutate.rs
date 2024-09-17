@@ -5,7 +5,7 @@ use std::ops::{Deref, DerefMut};
 pub trait PropertyMutate: PropertyMutateClone + Send + Sync + 'static {
     /// Given the index of the Property whose value has changed, queue that
     /// Property for transmission to the Client
-    fn mutate(&mut self, property_index: u8);
+    fn mutate(&mut self, property_index: u8) -> bool;
 }
 
 pub trait PropertyMutateClone {

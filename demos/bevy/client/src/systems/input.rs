@@ -1,21 +1,21 @@
-use bevy::prelude::{Commands, Input, KeyCode, Query, Res, ResMut, Vec2, Window};
+use bevy::prelude::{ButtonInput, Commands, KeyCode, Query, Res, ResMut, Vec2, Window};
 
 use naia_bevy_client::{Client, CommandsExt, ReplicationConfig};
 use naia_bevy_demo_shared::{components::Position, messages::KeyCommand};
 
-use crate::resources::Global;
+use crate::{app::Main, resources::Global};
 
 pub fn key_input(
-    client: Client,
+    client: Client<Main>,
     mut commands: Commands,
     mut global: ResMut<Global>,
-    keyboard_input: Res<Input<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
 ) {
-    let w = keyboard_input.pressed(KeyCode::W);
-    let s = keyboard_input.pressed(KeyCode::S);
-    let a = keyboard_input.pressed(KeyCode::A);
-    let d = keyboard_input.pressed(KeyCode::D);
-    let x = keyboard_input.pressed(KeyCode::X);
+    let w = keyboard_input.pressed(KeyCode::KeyW);
+    let s = keyboard_input.pressed(KeyCode::KeyS);
+    let a = keyboard_input.pressed(KeyCode::KeyA);
+    let d = keyboard_input.pressed(KeyCode::KeyD);
+    let x = keyboard_input.pressed(KeyCode::KeyX);
 
     if let Some(command) = &mut global.queued_command {
         if w {
@@ -42,7 +42,7 @@ pub fn key_input(
                 if prev_config != ReplicationConfig::Private {
                     commands
                         .entity(entity)
-                        .configure_replication(ReplicationConfig::Private);
+                        .configure_replication::<Main>(ReplicationConfig::Private);
                 }
             }
         }
@@ -68,7 +68,7 @@ pub fn cursor_input(
 
 fn window_relative_mouse_position(window: &Window) -> Option<Vec2> {
     let Some(cursor_pos) = window.cursor_position() else {
-        return None
+        return None;
     };
 
     Some(Vec2::new(

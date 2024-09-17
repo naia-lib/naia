@@ -2,9 +2,9 @@ use naia_derive::MessageFragment;
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger};
 
 const FRAGMENT_ID_BITS: u8 = 10;
-const FRAGMENT_ID_LIMIT: u16 = 2 ^ (FRAGMENT_ID_BITS as u16);
+const FRAGMENT_ID_LIMIT: u16 = 2_u16.pow(FRAGMENT_ID_BITS as u32);
 const FRAGMENT_INDEX_BITS: u8 = 20;
-const FRAGMENT_INDEX_LIMIT: u32 = 2 ^ (FRAGMENT_INDEX_BITS as u32);
+const FRAGMENT_INDEX_LIMIT: u32 = 2_u32.pow(FRAGMENT_INDEX_BITS as u32);
 
 // FragmentId
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]

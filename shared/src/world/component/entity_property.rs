@@ -463,6 +463,7 @@ impl EntityProperty {
                         Some(global_entity)
                     } else {
                         panic!("Error completing waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity!");
+                        // I hit this 2 times
                     }
                 };
 
@@ -802,9 +803,11 @@ impl HostOwnedRelation {
     }
 
     fn mutate(&mut self) {
-        if let Some(mutator) = &mut self.mutator {
-            mutator.mutate(self.index);
-        }
+        let _success = if let Some(mutator) = &mut self.mutator {
+            mutator.mutate(self.index)
+        } else {
+            false
+        };
     }
 }
 
@@ -1086,7 +1089,7 @@ impl DelegatedRelation {
         if !self.can_mutate() {
             panic!("Must request authority to mutate a Delegated EntityProperty.");
         }
-        self.mutator.mutate(self.index);
+        let _success = self.mutator.mutate(self.index);
     }
 
     fn can_mutate(&self) -> bool {

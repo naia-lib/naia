@@ -6,7 +6,9 @@ const naia_socket = {
     unique_js_id: 0,
 
     plugin: function (importObject) {
-        importObject.env.naia_connect = function (address, rtc_path) { naia_socket.connect(address, rtc_path); };
+        importObject.env.naia_is_connected = function () { return naia_socket.is_connected(); };
+        importObject.env.naia_connect = function (address, rtc_path, auth_str) { naia_socket.connect(address, rtc_path, auth_str); };
+        importObject.env.naia_disconnect = function () { naia_socket.disconnect(); };
         importObject.env.naia_send = function (message) { return naia_socket.send(message); };
         importObject.env.naia_create_string = function (buf, max_len) { return naia_socket.js_create_string(buf, max_len); };
         importObject.env.naia_unwrap_to_str = function (js_object, buf, max_len) { naia_socket.js_unwrap_to_str(js_object, buf, max_len); };
@@ -19,7 +21,15 @@ const naia_socket = {
         importObject.env.naia_now = function () { return Date.now(); };
     },
 
-    connect: function (server_socket_address, rtc_path) {
+    is_connected: function() {
+        if (this.channel) {
+            return true;
+        } else {
+            return false;
+        }
+    },
+
+    connect: function (server_socket_address, rtc_path, auth_str) {
         let server_socket_address_string = naia_socket.get_js_object(server_socket_address);
         let rtc_path_string = naia_socket.get_js_object(rtc_path);
         let SESSION_ADDRESS = server_socket_address_string + rtc_path_string;
@@ -61,11 +71,17 @@ const naia_socket = {
         }).then(function() {
             let request = new XMLHttpRequest();
             request.open("POST", SESSION_ADDRESS);
+            if (auth_str.length > 0) {
+                request.setRequestHeader("Authorization", auth_str);
+            }
             request.onload = function() {
                 if (request.status === 200) {
                     let response = JSON.parse(request.responseText);
-                    peer.setRemoteDescription(new RTCSessionDescription(response.answer)).then(function() {
-                        let response_candidate = response.candidate;
+
+                    wasm_exports.receive_id(naia_socket.js_object(response.id));
+
+                    peer.setRemoteDescription(new RTCSessionDescription(response.sdp.answer)).then(function() {
+                        let response_candidate = response.sdp.candidate;
                         wasm_exports.receive_candidate(naia_socket.js_object(JSON.stringify(response_candidate.candidate)));
                         let candidate = new RTCIceCandidate(response_candidate);
                         peer.addIceCandidate(candidate).then(function() {
@@ -89,6 +105,12 @@ const naia_socket = {
         }).catch(function(err) {
             naia_socket.error("error during 'createOffer'", err);
         });
+    },
+
+    disconnect: function() {
+        if (this.channel) {
+            this.channel = null;
+        }
     },
 
     error: function (desc, err) {

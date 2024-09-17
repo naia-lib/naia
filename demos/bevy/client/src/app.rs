@@ -10,6 +10,9 @@ use naia_bevy_demo_shared::protocol;
 
 use crate::systems::{events, init, input, sync};
 
+// name for the Client
+pub struct Main;
+
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 struct MainLoop;
 
@@ -21,7 +24,10 @@ pub fn run() {
         // Bevy Plugins
         .add_plugins(DefaultPlugins)
         // Add Naia Client Plugin
-        .add_plugins(ClientPlugin::new(ClientConfig::default(), protocol()))
+        .add_plugins(ClientPlugin::<Main>::new(
+            ClientConfig::default(),
+            protocol(),
+        ))
         // Background Color
         .insert_resource(ClearColor(Color::BLACK))
         // Startup System
@@ -41,6 +47,8 @@ pub fn run() {
                 events::update_component_events,
                 events::remove_component_events,
                 events::message_events,
+                events::request_events,
+                events::response_events,
             )
                 .chain()
                 .in_set(ReceiveEvents),

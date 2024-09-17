@@ -70,7 +70,10 @@ fn convert_single_fragment() {
     let Some(incoming_message_container) = incoming_message_container_opt else {
         panic!("Did not receive reassembled message!");
     };
-    let Ok(incoming_message) = incoming_message_container.to_boxed_any().downcast::<StringMessage>() else {
+    let Ok(incoming_message) = incoming_message_container
+        .to_boxed_any()
+        .downcast::<StringMessage>()
+    else {
         panic!("cannot cast message container into proper message!");
     };
 
@@ -122,7 +125,10 @@ fn convert_multiple_fragments() {
     let Some(incoming_message_container) = incoming_message_container_opt else {
         panic!("Did not receive reassembled message!");
     };
-    let Ok(incoming_message) = incoming_message_container.to_boxed_any().downcast::<StringMessage>() else {
+    let Ok(incoming_message) = incoming_message_container
+        .to_boxed_any()
+        .downcast::<StringMessage>()
+    else {
         panic!("cannot cast message container into proper message!");
     };
 

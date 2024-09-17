@@ -1,6 +1,8 @@
 use crate::{error::NaiaClientSocketError, packet_sender::PacketSender, ServerAddr};
 
-use super::shared::{naia_create_u8_array, naia_send, SERVER_ADDR};
+use super::shared::{
+    naia_create_u8_array, naia_disconnect, naia_is_connected, naia_send, SERVER_ADDR,
+};
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone, Default)]
@@ -24,5 +26,17 @@ impl PacketSender for PacketSenderImpl {
     /// Get the Server's Socket address
     fn server_addr(&self) -> ServerAddr {
         unsafe { SERVER_ADDR }
+    }
+
+    fn connected(&self) -> bool {
+        unsafe {
+            return naia_is_connected();
+        }
+    }
+
+    fn disconnect(&mut self) {
+        unsafe {
+            naia_disconnect();
+        }
     }
 }

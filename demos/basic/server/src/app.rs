@@ -8,7 +8,7 @@ use naia_server::{
 
 use naia_demo_world::{Entity, World, WorldRefType};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage};
+use naia_basic_demo_shared::{protocol, Auth, Character, MyMarker, StringMessage};
 
 type Server = NaiaServer<Entity>;
 
@@ -59,7 +59,8 @@ impl App {
                 count += 1;
 
                 // Create a Character
-                let character = Character::new((count * 4) as u8, 0, first, last);
+                let character =
+                    Character::<MyMarker>::new(MyMarker, (count * 4) as u8, 0, first, last);
                 let character_key = server
                     .spawn_entity(world.proxy_mut())
                     .insert_component(character)
@@ -88,9 +89,11 @@ impl App {
             for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
                 if auth.username == "charlie" && auth.password == "12345" {
                     // Accept incoming connection
+                    info!("accepting connection for user_key: {:?}", user_key);
                     self.server.accept_connection(&user_key);
                 } else {
                     // Reject incoming connection
+                    info!("rejecting connection for user_key: {:?}", user_key);
                     self.server.reject_connection(&user_key);
                 }
             }
@@ -104,10 +107,10 @@ impl App {
                     .add_user(&user_key);
             }
             for (_user_key, user) in events.read::<DisconnectEvent>() {
-                info!("Naia Server disconnected from: {:?}", user.address);
+                info!("Naia Server disconnected from: {:?}", user.address());
             }
             for (user_key, message) in
-                events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>()
+                events.read::<MessageEvent<UnorderedReliableChannel, StringMessage<MyMarker>>>()
             {
                 let message_contents = &(*message.contents);
                 info!(
@@ -120,17 +123,20 @@ impl App {
                 // All game logic should happen here, on a tick event
 
                 // Message sending
-                for user_key in self.server.user_keys() {
-                    let new_message_contents = format!("Server Message ({})", self.tick_count);
-                    info!(
-                        "Server send to   ({}) -> {}",
-                        self.server.user(&user_key).address(),
-                        new_message_contents
-                    );
+                if self.tick_count % 10 == 0 {
+                    for user_key in self.server.user_keys() {
+                        let new_message_contents = format!("Server Message ({})", self.tick_count);
+                        info!(
+                            "Server send to   ({}) -> {}",
+                            self.server.user(&user_key).address(),
+                            new_message_contents
+                        );
 
-                    let new_message = StringMessage::new(new_message_contents);
-                    self.server
-                        .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message);
+                        let new_message =
+                            StringMessage::<MyMarker>::new(new_message_contents, MyMarker);
+                        self.server
+                            .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message);
+                    }
                 }
 
                 // Iterate through Characters, marching them from (0,0) to (20, N)
@@ -138,7 +144,7 @@ impl App {
                     if let Some(mut character) = self
                         .server
                         .entity_mut(self.world.proxy_mut(), &entity)
-                        .component::<Character>()
+                        .component::<Character<MyMarker>>()
                     {
                         character.step();
                     }
@@ -149,12 +155,18 @@ impl App {
                     let server = &mut self.server;
                     let world = &self.world;
                     for (_, user_key, entity) in server.scope_checks() {
-                        if let Some(character) = world.proxy().component::<Character>(&entity) {
+                        if let Some(character) =
+                            world.proxy().component::<Character<MyMarker>>(&entity)
+                        {
                             let x = *character.x;
-                            if (5..=15).contains(&x) {
-                                server.user_scope(&user_key).include(&entity);
-                            } else {
-                                server.user_scope(&user_key).exclude(&entity);
+                            let should_be_in_scope = (5..=15).contains(&x);
+                            let is_in_scope = server.user_scope(&user_key).has(&entity);
+                            if should_be_in_scope != is_in_scope {
+                                if should_be_in_scope {
+                                    server.user_scope_mut(&user_key).include(&entity);
+                                } else {
+                                    server.user_scope_mut(&user_key).exclude(&entity);
+                                }
                             }
                         }
                     }

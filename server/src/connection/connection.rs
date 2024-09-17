@@ -8,6 +8,7 @@ use naia_shared::{
     Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
 };
 
+use crate::request::{GlobalRequestManager, GlobalResponseManager};
 use crate::{
     connection::{
         io::Io, ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
@@ -38,7 +39,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         channel_kinds: &ChannelKinds,
         global_world_manager: &GlobalWorldManager<E>,
     ) -> Self {
-        Connection {
+        Self {
             address: *user_address,
             user_key: *user_key,
             base: BaseConnection::new(
@@ -52,10 +53,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             ping_manager: PingManager::new(ping_config),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
         }
-    }
-
-    pub fn user_key(&self) -> UserKey {
-        self.user_key
     }
 
     // Incoming Data
@@ -99,13 +96,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     pub fn process_packets<W: WorldMutType<E>>(
         &mut self,
         protocol: &Protocol,
+        now: &Instant,
         global_world_manager: &mut GlobalWorldManager<E>,
+        global_request_manager: &mut GlobalRequestManager,
+        global_response_manager: &mut GlobalResponseManager,
         world: &mut W,
         incoming_events: &mut Events<E>,
     ) -> Vec<EntityResponseEvent<E>> {
         let mut response_events = Vec::new();
         // Receive Message Events
         let messages = self.base.message_manager.receive_messages(
+            &protocol.message_kinds,
+            now,
             global_world_manager,
             &self.base.local_world_manager,
             &mut self.base.remote_world_manager.entity_waitlist,
@@ -113,9 +115,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         for (channel_kind, messages) in messages {
             if channel_kind == ChannelKind::of::<SystemChannel>() {
                 for message in messages {
-                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<EntityEventMessage>(message.to_boxed_any())
-                                .ok()
-                                .map(|boxed_m| *boxed_m) else {
+                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<
+                        EntityEventMessage,
+                    >(message.to_boxed_any())
+                    .ok()
+                    .map(|boxed_m| *boxed_m) else {
                         panic!("Received unknown message over SystemChannel!");
                     };
                     match event_message.entity.get(global_world_manager) {
@@ -137,6 +141,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             }
         }
 
+        // Receive Request and Response Events
+        let (requests, responses) = self.base.message_manager.receive_requests_and_responses();
+        // Requests
+        for (channel_kind, requests) in requests {
+            for (local_response_id, request) in requests {
+                let global_response_id = global_response_manager.create_response_id(
+                    &self.user_key,
+                    &channel_kind,
+                    &local_response_id,
+                );
+                incoming_events.push_request(
+                    &self.user_key,
+                    &channel_kind,
+                    global_response_id,
+                    request,
+                );
+            }
+        }
+        // Responses
+        for (global_request_id, response) in responses {
+            global_request_manager.receive_response(&global_request_id, response);
+        }
+
         // Receive World Events
         if protocol.client_authoritative_entities {
             let remote_events = self.base.remote_world_reader.take_incoming_events();
@@ -145,6 +172,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
                 &mut self.base.local_world_manager,
                 &protocol.component_kinds,
                 world,
+                now,
                 remote_events,
             );
             response_events

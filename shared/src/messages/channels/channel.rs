@@ -47,6 +47,10 @@ impl ChannelSettings {
             ChannelDirection::Bidirectional => true,
         }
     }
+
+    pub fn can_request_and_respond(&self) -> bool {
+        self.reliable() && self.can_send_to_server() && self.can_send_to_client()
+    }
 }
 
 #[derive(Clone)]

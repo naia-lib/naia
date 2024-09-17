@@ -23,7 +23,7 @@ impl TickBufferMessages {
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {
-        events::push_message(&mut self.messages, user_key, channel_kind, message);
+        events::push_message_impl(&mut self.messages, user_key, channel_kind, message);
         self.empty = false;
     }
 

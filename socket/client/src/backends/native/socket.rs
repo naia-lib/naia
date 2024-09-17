@@ -2,14 +2,15 @@ use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use webrtc_unreliable_client::Socket as RTCSocket;
 
+use super::{packet_receiver::PacketReceiverImpl, packet_sender::PacketSenderImpl};
 use crate::{
     backends::{native::runtime::get_runtime, socket::SocketTrait},
     conditioned_packet_receiver::ConditionedPacketReceiver,
+    identity_receiver::IdentityReceiver,
     packet_receiver::PacketReceiver,
     packet_sender::PacketSender,
+    IdentityReceiverImpl,
 };
-
-use super::{packet_receiver::PacketReceiverImpl, packet_sender::PacketSenderImpl};
 
 /// A client-side socket which communicates with an underlying unordered &
 /// unreliable protocol
@@ -20,7 +21,70 @@ impl Socket {
     pub fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
+        return Self::connect_inner(server_session_url, config, None, None);
+    }
+
+    /// Connects to the given server address with authentication
+    pub fn connect_with_auth(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes: Vec<u8>,
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
+        return Self::connect_inner(server_session_url, config, Some(auth_bytes), None);
+    }
+
+    /// Connects to the given server address with authentication
+    pub fn connect_with_auth_headers(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_headers: Vec<(String, String)>,
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
+        return Self::connect_inner(server_session_url, config, None, Some(auth_headers));
+    }
+
+    /// Connects to the given server address with authentication
+    pub fn connect_with_auth_and_headers(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes: Vec<u8>,
+        auth_headers: Vec<(String, String)>,
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
+        return Self::connect_inner(
+            server_session_url,
+            config,
+            Some(auth_bytes),
+            Some(auth_headers),
+        );
+    }
+
+    /// Connects to the given server address
+    fn connect_inner(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes_opt: Option<Vec<u8>>,
+        auth_headers_opt: Option<Vec<(String, String)>>,
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
         let server_session_string = format!(
             "{}{}",
             parse_server_url(server_session_url),
@@ -29,10 +93,18 @@ impl Socket {
         let conditioner_config = config.link_condition.clone();
 
         let (socket, io) = RTCSocket::new();
-        get_runtime().spawn(async move { socket.connect(&server_session_string).await });
+        get_runtime().spawn(async move {
+            socket
+                .connect(&server_session_string, auth_bytes_opt, auth_headers_opt)
+                .await;
+        });
 
         // Setup Packet Sender
-        let packet_sender_impl = PacketSenderImpl::new(io.addr_cell.clone(), io.to_server_sender);
+        let packet_sender_impl = PacketSenderImpl::new(
+            io.addr_cell.clone(),
+            io.to_server_sender,
+            io.to_server_disconnect_sender,
+        );
         let packet_sender: Box<dyn PacketSender> = Box::new(packet_sender_impl);
 
         // Setup Packet Receiver
@@ -46,7 +118,11 @@ impl Socket {
             }
         };
 
-        return (packet_sender, packet_receiver);
+        // Setup Identity Receiver
+        let identity_receiver_impl = IdentityReceiverImpl::new(io.to_client_id_receiver);
+        let identity_receiver: Box<dyn IdentityReceiver> = Box::new(identity_receiver_impl);
+
+        return (identity_receiver, packet_sender, packet_receiver);
     }
 }
 
@@ -55,7 +131,23 @@ impl SocketTrait for Socket {
     fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
-        return Socket::connect(server_session_url, config);
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
+        return Self::connect(server_session_url, config);
+    }
+    /// Connects to the given server address with authentication
+    fn connect_with_auth(
+        server_session_url: &str,
+        config: &SocketConfig,
+        auth_bytes: Vec<u8>,
+    ) -> (
+        Box<dyn IdentityReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    ) {
+        return Self::connect_with_auth(server_session_url, config, auth_bytes);
     }
 }

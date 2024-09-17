@@ -10,8 +10,9 @@ use super::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
-        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
+    server::ServerWrapper,
     systems::before_receive_events,
 };
 
@@ -28,6 +29,9 @@ impl PluginConfig {
         }
     }
 }
+
+#[derive(Clone)]
+pub struct Singleton;
 
 pub struct Plugin {
     config: Mutex<Option<PluginConfig>>,
@@ -51,10 +55,11 @@ impl PluginType for Plugin {
         app.insert_resource(world_data);
 
         let server = Server::<Entity>::new(config.server_config, config.protocol.into());
+        let server = ServerWrapper(server);
 
         app
             // SHARED PLUGIN //
-            .add_plugins(SharedPlugin)
+            .add_plugins(SharedPlugin::<Singleton>::new())
             // RESOURCES //
             .insert_resource(server)
             // EVENTS //
@@ -63,6 +68,7 @@ impl PluginType for Plugin {
             .add_event::<ErrorEvent>()
             .add_event::<TickEvent>()
             .add_event::<MessageEvents>()
+            .add_event::<RequestEvents>()
             .add_event::<AuthEvents>()
             .add_event::<SpawnEntityEvent>()
             .add_event::<DespawnEntityEvent>()

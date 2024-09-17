@@ -118,8 +118,9 @@ impl MutSender {
 }
 
 impl PropertyMutate for MutSender {
-    fn mutate(&mut self, property_index: u8) {
-        self.channel.send(property_index);
+    fn mutate(&mut self, property_index: u8) -> bool {
+        let success = self.channel.send(property_index);
+        success
     }
 }
 

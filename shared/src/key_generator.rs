@@ -23,12 +23,14 @@ impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
     }
     /// Get a new, unused key
     pub fn generate(&mut self) -> K {
+        let now = Instant::now();
+
         // Check whether we can recycle any keys
         loop {
             let Some((_, instant)) = self.recycling_keys.front() else {
                 break;
             };
-            if instant.elapsed() < self.recycle_timeout {
+            if instant.elapsed(&now) < self.recycle_timeout {
                 break;
             }
             let (key, _) = self.recycling_keys.pop_front().unwrap();

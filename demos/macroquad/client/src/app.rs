@@ -10,7 +10,7 @@ use naia_client::{
     transport::webrtc,
     Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent,
     DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
-    ReplicationConfig, SpawnEntityEvent, UpdateComponentEvent,
+    SpawnEntityEvent, UpdateComponentEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldMutType, WorldRefType};
@@ -48,7 +48,6 @@ pub struct App {
     client: Client,
     world: World,
     owned_entity: Option<OwnedEntity>,
-    cursor_entity: Option<Entity>,
     interp_entities: HashMap<Entity, Interp>,
     server_entities: HashSet<Entity>,
     queued_command: Option<KeyCommand>,
@@ -69,7 +68,6 @@ impl App {
             client,
             world: World::default(),
             owned_entity: None,
-            cursor_entity: None,
             interp_entities: HashMap::new(),
             server_entities: HashSet::new(),
             queued_command: None,
@@ -114,22 +112,10 @@ impl App {
                 }
             }
         }
-
-        // Cursor events
-        if let Some(cursor_entity) = &self.cursor_entity {
-            if let Some(mut cursor_position) = self
-                .world
-                .proxy_mut()
-                .component_mut::<Position>(cursor_entity)
-            {
-                *cursor_position.x = macroquad::input::mouse_position().0 as i16;
-                *cursor_position.y = macroquad::input::mouse_position().1 as i16;
-            }
-        }
     }
 
     fn receive_events(&mut self) {
-        if self.client.is_disconnected() {
+        if self.client.connection_status().is_disconnected() {
             return;
         }
 
@@ -138,19 +124,6 @@ impl App {
         // Connect Events
         for server_address in events.read::<ConnectEvent>() {
             info!("Client connected to: {}", server_address);
-
-            // Spawn new Client-authoritative Cursor entity
-            let entity = self
-                .client
-                .spawn_entity(self.world.proxy_mut())
-                // This entity will be replicated to all other Clients
-                .configure_replication(ReplicationConfig::Public)
-                // Add Position component to Entity
-                .insert_component(Position::new(0, 0))
-                // Get Entity ID
-                .id();
-
-            self.cursor_entity = Some(entity);
         }
 
         // Disconnect Events
@@ -300,7 +273,7 @@ impl App {
     fn draw(&mut self) {
         clear_background(BLACK);
 
-        if !self.client.is_connected() {
+        if !self.client.connection_status().is_connected() {
             return;
         }
 
@@ -378,18 +351,6 @@ impl App {
                     interp.interp_y,
                     SQUARE_SIZE,
                     SQUARE_SIZE,
-                    WHITE,
-                );
-            }
-        }
-
-        // draw own client-authoritative cursor
-        if let Some(entity) = &self.cursor_entity {
-            if let Some(position) = self.world.proxy().component::<Position>(entity) {
-                draw_circle(
-                    f32::from(*position.x),
-                    f32::from(*position.y),
-                    CIRCLE_RADIUS,
                     WHITE,
                 );
             }

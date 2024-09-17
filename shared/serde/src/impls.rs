@@ -2,6 +2,7 @@ mod array;
 mod boxed;
 mod hash;
 mod option;
+mod phantom;
 mod scalars;
 mod string;
 mod tuple;

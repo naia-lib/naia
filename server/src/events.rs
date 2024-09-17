@@ -3,12 +3,11 @@ use std::{any::Any, collections::HashMap, marker::PhantomData, mem, vec::IntoIte
 use log::warn;
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, Message,
-    MessageContainer, MessageKind, Replicate, Tick,
+    Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, GlobalResponseId,
+    Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick,
 };
 
 use super::user::{User, UserKey};
-
 use crate::NaiaServerError;
 
 pub struct Events<E: Copy> {
@@ -18,6 +17,10 @@ pub struct Events<E: Copy> {
     errors: Vec<NaiaServerError>,
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
+    requests: HashMap<
+        ChannelKind,
+        HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>,
+    >,
     spawns: Vec<(UserKey, E)>,
     despawns: Vec<(UserKey, E)>,
     publishes: Vec<(UserKey, E)>,
@@ -40,6 +43,7 @@ impl<E: Copy> Events<E> {
             errors: Vec::new(),
             auths: HashMap::new(),
             messages: HashMap::new(),
+            requests: HashMap::new(),
             spawns: Vec::new(),
             despawns: Vec::new(),
             publishes: Vec::new(),
@@ -76,6 +80,19 @@ impl<E: Copy> Events<E> {
         &mut self,
     ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>> {
         mem::take(&mut self.messages)
+    }
+
+    // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    pub fn has_requests(&self) -> bool {
+        !self.requests.is_empty()
+    }
+    pub fn take_requests(
+        &mut self,
+    ) -> HashMap<
+        ChannelKind,
+        HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>,
+    > {
+        mem::take(&mut self.requests)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
@@ -152,7 +169,28 @@ impl<E: Copy> Events<E> {
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {
-        push_message(&mut self.messages, user_key, channel_kind, message);
+        push_message_impl(&mut self.messages, user_key, channel_kind, message);
+        self.empty = false;
+    }
+
+    pub(crate) fn push_request(
+        &mut self,
+        user_key: &UserKey,
+        channel_kind: &ChannelKind,
+        global_response_id: GlobalResponseId,
+        request: MessageContainer,
+    ) {
+        if !self.requests.contains_key(&channel_kind) {
+            self.requests.insert(*channel_kind, HashMap::new());
+        }
+        let channel_map = self.requests.get_mut(&channel_kind).unwrap();
+        let request_type_id = request.kind();
+        if !channel_map.contains_key(&request_type_id) {
+            channel_map.insert(request_type_id, Vec::new());
+        }
+        let list = channel_map.get_mut(&request_type_id).unwrap();
+        list.push((*user_key, global_response_id, request));
+
         self.empty = false;
     }
 
@@ -444,7 +482,7 @@ pub(crate) fn read_messages<M: Message>(
     output_list
 }
 
-pub(crate) fn push_message(
+pub(crate) fn push_message_impl(
     messages: &mut HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
     user_key: &UserKey,
     channel_kind: &ChannelKind,
@@ -460,6 +498,48 @@ pub(crate) fn push_message(
     }
     let list = channel_map.get_mut(&message_type_id).unwrap();
     list.push((*user_key, message));
+}
+
+// Request Event
+pub struct RequestEvent<C: Channel, Q: Request> {
+    phantom_c: PhantomData<C>,
+    phantom_m: PhantomData<Q>,
+}
+impl<E: Copy, C: Channel, Q: Request> Event<E> for RequestEvent<C, Q> {
+    type Iter = IntoIter<(UserKey, ResponseSendKey<Q::Response>, Q)>;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        let channel_kind: ChannelKind = ChannelKind::of::<C>();
+        let Some(channel_map) = events.requests.get_mut(&channel_kind) else {
+            return IntoIterator::into_iter(Vec::new());
+        };
+        let message_kind: MessageKind = MessageKind::of::<Q>();
+        let Some(requests) = channel_map.remove(&message_kind) else {
+            return IntoIterator::into_iter(Vec::new());
+        };
+
+        let mut output_list = Vec::new();
+
+        for (user_key, global_response_id, request) in requests {
+            let request: Q = Box::<dyn Any + 'static>::downcast::<Q>(request.to_boxed_any())
+                .ok()
+                .map(|boxed_q| *boxed_q)
+                .unwrap();
+            let response_send_key = ResponseSendKey::<Q::Response>::new(global_response_id);
+            output_list.push((user_key, response_send_key, request));
+        }
+
+        return IntoIterator::into_iter(output_list);
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        let channel_kind: ChannelKind = ChannelKind::of::<C>();
+        if let Some(channel_map) = events.requests.get(&channel_kind) {
+            let message_kind: MessageKind = MessageKind::of::<Q>();
+            return channel_map.contains_key(&message_kind);
+        }
+        return false;
+    }
 }
 
 // Spawn Entity Event

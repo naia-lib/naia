@@ -10,15 +10,17 @@ pub struct FullName {
 }
 
 #[derive(Replicate)]
-pub struct Character {
+pub struct Character<T: 'static + Send + Sync + Serde> {
+    pub something: Property<T>,
     pub x: Property<u8>,
     pub y: Property<u8>,
     pub fullname: Property<FullName>,
 }
 
-impl Character {
-    pub fn new(x: u8, y: u8, first: &str, last: &str) -> Self {
+impl<T: 'static + Send + Sync + Serde> Character<T> {
+    pub fn new(t: T, x: u8, y: u8, first: &str, last: &str) -> Self {
         Self::new_complete(
+            t,
             x,
             y,
             FullName {

@@ -25,13 +25,14 @@ pub struct SequencedArranger {
 impl ReceiverArranger for SequencedArranger {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, MessageContainer)>,
         message_index: MessageIndex,
         message: MessageContainer,
-    ) {
+    ) -> Vec<(MessageIndex, MessageContainer)> {
+        let mut output = Vec::new();
         if !sequence_less_than(message_index, self.newest_received_message_index) {
             self.newest_received_message_index = message_index;
-            incoming_messages.push((message_index, message));
+            output.push((message_index, message));
         }
+        output
     }
 }

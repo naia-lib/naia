@@ -22,20 +22,58 @@ impl BigMapKey for UserKey {
     }
 }
 
+// UserAuthAddr
+#[derive(Clone, Debug)]
+pub struct UserAuthAddr {
+    addr: SocketAddr,
+}
+
+impl UserAuthAddr {
+    pub fn new(addr: SocketAddr) -> Self {
+        Self { addr }
+    }
+
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+}
+
 // User
 
 #[derive(Clone)]
 pub struct User {
-    pub address: SocketAddr,
+    auth_addr: Option<UserAuthAddr>,
+    data_addr: Option<SocketAddr>,
     rooms_cache: HashSet<RoomKey>,
 }
 
 impl User {
-    pub fn new(address: SocketAddr) -> User {
-        User {
-            address,
+    pub fn new(auth_addr: UserAuthAddr) -> User {
+        Self {
+            auth_addr: Some(auth_addr),
+            data_addr: None,
             rooms_cache: HashSet::new(),
         }
+    }
+
+    pub fn has_address(&self) -> bool {
+        self.data_addr.is_some()
+    }
+
+    pub fn address(&self) -> SocketAddr {
+        self.data_addr.unwrap()
+    }
+
+    pub fn address_opt(&self) -> Option<SocketAddr> {
+        self.data_addr
+    }
+
+    pub(crate) fn take_auth_address(&mut self) -> UserAuthAddr {
+        self.auth_addr.take().unwrap()
+    }
+
+    pub(crate) fn set_address(&mut self, addr: &SocketAddr) {
+        self.data_addr = Some(*addr);
     }
 
     pub(crate) fn cache_room(&mut self, room_key: &RoomKey) {
@@ -46,8 +84,8 @@ impl User {
         self.rooms_cache.remove(room_key);
     }
 
-    pub(crate) fn room_keys(&self) -> Iter<RoomKey> {
-        self.rooms_cache.iter()
+    pub(crate) fn room_keys(&self) -> &HashSet<RoomKey> {
+        &self.rooms_cache
     }
 
     pub(crate) fn room_count(&self) -> usize {
@@ -127,7 +165,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
-    pub fn room_keys(&self) -> impl Iterator<Item = &RoomKey> {
+    pub fn room_keys(&self) -> Iter<RoomKey> {
         self.server.user_room_keys(&self.key).unwrap()
     }
 }

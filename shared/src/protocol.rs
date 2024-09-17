@@ -16,7 +16,7 @@ use crate::{
         message_kinds::MessageKinds,
     },
     world::component::{component_kinds::ComponentKinds, replicate::Replicate},
-    EntityEventMessage, ReliableSettings,
+    EntityEventMessage, ReliableSettings, Request, RequestOrResponse,
 };
 
 // Protocol Plugin
@@ -44,6 +44,7 @@ impl Default for Protocol {
     fn default() -> Self {
         let mut message_kinds = MessageKinds::new();
         message_kinds.add_message::<FragmentedMessage>();
+        message_kinds.add_message::<RequestOrResponse>();
         message_kinds.add_message::<EntityEventMessage>();
 
         let mut channel_kinds = ChannelKinds::new();
@@ -88,6 +89,10 @@ impl Protocol {
         self
     }
 
+    pub fn get_rtc_endpoint(&self) -> String {
+        self.socket.rtc_endpoint_path.clone()
+    }
+
     pub fn tick_interval(&mut self, duration: Duration) -> &mut Self {
         self.check_lock();
         self.tick_interval = duration;
@@ -127,6 +132,14 @@ impl Protocol {
     pub fn add_message<M: Message>(&mut self) -> &mut Self {
         self.check_lock();
         self.message_kinds.add_message::<M>();
+        self
+    }
+
+    pub fn add_request<Q: Request>(&mut self) -> &mut Self {
+        self.check_lock();
+        // Requests and Responses are handled just like Messages
+        self.message_kinds.add_message::<Q>();
+        self.message_kinds.add_message::<Q::Response>();
         self
     }
 

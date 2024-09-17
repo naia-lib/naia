@@ -30,7 +30,8 @@ pub use naia_serde::{
     UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
-    link_condition_logic, Instant, LinkConditionerConfig, Random, SocketConfig, TimeQueue,
+    generate_identity_token, link_condition_logic, IdentityToken, Instant, LinkConditionerConfig,
+    Random, SocketConfig, TimeQueue,
 };
 
 mod backends;
@@ -38,6 +39,7 @@ mod bigmap;
 mod connection;
 mod constants;
 mod game_time;
+pub mod handshake;
 mod key_generator;
 mod messages;
 mod protocol;
@@ -72,6 +74,7 @@ pub use messages::{
         senders::{
             channel_sender::{ChannelSender, MessageChannelSender},
             reliable_sender::ReliableSender,
+            request_sender::LocalResponseId,
         },
         system_channel::SystemChannel,
     },
@@ -80,6 +83,9 @@ pub use messages::{
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
     named::Named,
+    request::{
+        GlobalRequestId, GlobalResponseId, Request, Response, ResponseReceiveKey, ResponseSendKey,
+    },
 };
 pub use world::{
     component::{
@@ -95,7 +101,7 @@ pub use world::{
             ReplicaRefTrait, ReplicaRefWrapper,
         },
         replicate::{
-            Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
+            Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder, ReplicatedComponent,
         },
     },
     delegation::{
@@ -115,7 +121,7 @@ pub use world::{
         },
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
-        local_entity::{HostEntity, RemoteEntity},
+        local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
     },
     host::{
         global_diff_handler::GlobalDiffHandler,
@@ -135,6 +141,9 @@ pub use world::{
 pub use bigmap::{BigMap, BigMapKey};
 pub use game_time::{GameDuration, GameInstant, GAME_TIME_LIMIT};
 pub use key_generator::KeyGenerator;
+pub use messages::channels::senders::request_sender::{
+    LocalRequestOrResponseId, RequestOrResponse,
+};
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};

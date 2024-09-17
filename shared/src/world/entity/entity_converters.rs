@@ -322,7 +322,8 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
         let Ok(entity) = self
             .global_world_manager
-            .global_entity_to_entity(global_entity) else {
+            .global_entity_to_entity(global_entity)
+        else {
             return Err(EntityDoesNotExistError);
         };
         if !self
@@ -335,10 +336,10 @@ impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
         if result.is_ok() {
             return result;
         }
-        warn!("get_or_reserve_entity(): entity is not owned by user, attempting to reserve");
-        return Ok(self
-            .local_world_manager
-            .host_reserve_entity(&entity)
-            .copy_to_owned());
+
+        let host_entity = self.local_world_manager.host_reserve_entity(&entity);
+
+        warn!("get_or_reserve_entity(): entity is not owned by user, attempting to reserve. HostEntity: {:?}", host_entity);
+        return Ok(host_entity.copy_to_owned());
     }
 }

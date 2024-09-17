@@ -1,8 +1,8 @@
 use std::time::Duration;
-
+use bevy_ecs::component::Component;
 use naia_shared::{
     Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig,
-    LinkConditionerConfig, Message, Protocol as InnerProtocol, Replicate,
+    LinkConditionerConfig, Message, Protocol as InnerProtocol, Replicate, Request,
 };
 
 use crate::{ProtocolPlugin, WorldData};
@@ -51,6 +51,10 @@ impl Protocol {
         self
     }
 
+    pub fn get_rtc_endpoint(&self) -> String {
+        self.inner.get_rtc_endpoint()
+    }
+
     pub fn tick_interval(&mut self, duration: Duration) -> &mut Self {
         self.inner.tick_interval(duration);
         self
@@ -80,7 +84,12 @@ impl Protocol {
         self
     }
 
-    pub fn add_component<C: Replicate>(&mut self) -> &mut Self {
+    pub fn add_request<Q: Request>(&mut self) -> &mut Self {
+        self.inner.add_request::<Q>();
+        self
+    }
+
+    pub fn add_component<C: Replicate + Component>(&mut self) -> &mut Self {
         self.inner.add_component::<C>();
         self.world_data
             .as_mut()
@@ -95,6 +104,10 @@ impl Protocol {
 
     pub fn into(self) -> InnerProtocol {
         self.inner
+    }
+
+    pub fn inner(&self) -> &InnerProtocol {
+        &self.inner
     }
 
     fn check_lock(&self) {

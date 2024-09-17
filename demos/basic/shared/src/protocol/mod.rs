@@ -1,14 +1,19 @@
 use std::time::Duration;
 
-use naia_shared::{LinkConditionerConfig, Protocol};
+use naia_shared::{LinkConditionerConfig, Protocol, Serde};
 
 mod auth;
+mod basic_request;
 mod character;
 mod string_message;
 
 pub use auth::Auth;
+pub use basic_request::{BasicRequest, BasicResponse};
 pub use character::Character;
 pub use string_message::StringMessage;
+
+#[derive(Serde, PartialEq, Clone, Default)]
+pub struct MyMarker;
 
 // Protocol Build
 pub fn protocol() -> Protocol {
@@ -20,9 +25,11 @@ pub fn protocol() -> Protocol {
         .add_default_channels()
         // Messages
         .add_message::<Auth>()
-        .add_message::<StringMessage>()
+        .add_message::<StringMessage<MyMarker>>()
+        // Requests
+        .add_request::<BasicRequest>()
         // Components
-        .add_component::<Character>()
+        .add_component::<Character<MyMarker>>()
         // Build Protocol
         .build()
 }

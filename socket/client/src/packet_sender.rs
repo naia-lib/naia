@@ -6,6 +6,10 @@ pub trait PacketSender: PacketSenderClone + Send + Sync {
     fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError>;
     /// Get the Server's Socket address
     fn server_addr(&self) -> ServerAddr;
+    /// Get whether the Client Socket is connected
+    fn connected(&self) -> bool;
+    /// Disconnect the Client Socket
+    fn disconnect(&mut self);
 }
 
 /// Used to clone Box<dyn PacketSender>

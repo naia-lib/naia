@@ -2,7 +2,7 @@ use std::{any::Any, marker::PhantomData};
 
 use bevy_app::{App, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs, world::World};
-
+use bevy_ecs::component::Component;
 use naia_shared::{GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 
 use super::{
@@ -10,6 +10,10 @@ use super::{
     component_ref::{ComponentDynMut, ComponentDynRef},
     system_set::HostSyncChangeTracking,
 };
+
+pub trait AppTag: Send + Sync + 'static {
+    fn add_systems(boxed_component: Box<dyn ComponentAccess>, app: &mut App);
+}
 
 pub trait ComponentAccess: Send + Sync {
     fn add_systems(&self, app: &mut App);
@@ -53,16 +57,20 @@ pub struct ComponentAccessor<R: Replicate> {
     phantom_r: PhantomData<R>,
 }
 
-impl<R: Replicate> ComponentAccessor<R> {
-    pub fn create() -> Box<dyn Any> {
-        let inner_box: Box<dyn ComponentAccess> = Box::new(ComponentAccessor {
+impl<R: Replicate + Component> ComponentAccessor<R> {
+    fn new() -> Self {
+        Self {
             phantom_r: PhantomData::<R>,
-        });
+        }
+    }
+
+    pub fn create() -> Box<dyn Any> {
+        let inner_box: Box<dyn ComponentAccess> = Box::new(ComponentAccessor::<R>::new());
         Box::new(inner_box)
     }
 }
 
-impl<R: Replicate> ComponentAccess for ComponentAccessor<R> {
+impl<R: Replicate + Component> ComponentAccess for ComponentAccessor<R> {
     fn add_systems(&self, app: &mut App) {
         app.add_systems(
             Update,

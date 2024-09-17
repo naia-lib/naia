@@ -29,10 +29,10 @@ pub struct OrderedArranger {
 impl ReceiverArranger for OrderedArranger {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, MessageContainer)>,
         message_index: MessageIndex,
         message: MessageContainer,
-    ) {
+    ) -> Vec<(MessageIndex, MessageContainer)> {
+        let mut output = Vec::new();
         let mut current_index = 0;
 
         // Put message where it needs to go in buffer
@@ -67,13 +67,13 @@ impl ReceiverArranger for OrderedArranger {
         loop {
             let Some((_, Some(_))) = self.buffer.front() else {
                 // no more messages, return
-                return;
+                return output;
             };
             let Some((index, Some(message))) = self.buffer.pop_front() else {
                 panic!("shouldn't be possible due to above check");
             };
 
-            incoming_messages.push((index, message));
+            output.push((index, message));
             self.oldest_received_message_index = self.oldest_received_message_index.wrapping_add(1);
         }
     }

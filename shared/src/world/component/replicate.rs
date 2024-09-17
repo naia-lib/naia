@@ -44,7 +44,7 @@ pub trait ReplicateBuilder: Send + Sync + Named {
 /// A struct that implements Replicate is a Component, or otherwise,
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
-pub trait Replicate: ReplicateInner + Named + Any {
+pub trait Replicate: Sync + Send + 'static + Named + Any {
     /// Gets the ComponentKind of this type
     fn kind(&self) -> ComponentKind;
     fn to_any(&self) -> &dyn Any;
@@ -119,20 +119,12 @@ cfg_if! {
     if #[cfg(feature = "bevy_support")]
     {
         // Require that Bevy Component to be implemented
-        use bevy_ecs::component::{TableStorage, Component};
+        use bevy_ecs::component::Component;
 
-        pub trait ReplicateInner: Component<Storage = TableStorage> + Sync + Send + 'static {}
-
-        impl<T> ReplicateInner for T
-        where T: Component<Storage = TableStorage> + Sync + Send + 'static {
-        }
+        pub trait ReplicatedComponent: Replicate + Component {}
     }
     else
     {
-        pub trait ReplicateInner: Sync + Send + 'static {}
-
-        impl<T> ReplicateInner for T
-        where T: Sync + Send + 'static {
-        }
+        pub trait ReplicatedComponent: Replicate {}
     }
 }

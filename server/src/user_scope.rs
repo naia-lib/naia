@@ -2,6 +2,22 @@ use std::hash::Hash;
 
 use super::{server::Server, user::UserKey};
 
+pub struct UserScopeRef<'s, E: Copy + Eq + Hash + Send + Sync> {
+    server: &'s Server<E>,
+    key: UserKey,
+}
+
+impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeRef<'s, E> {
+    pub fn new(server: &'s Server<E>, key: &UserKey) -> Self {
+        Self { server, key: *key }
+    }
+
+    /// Returns true if the User's scope contains the Entity
+    pub fn has(&self, entity: &E) -> bool {
+        self.server.user_scope_has_entity(&self.key, entity)
+    }
+}
+
 pub struct UserScopeMut<'s, E: Copy + Eq + Hash + Send + Sync> {
     server: &'s mut Server<E>,
     key: UserKey,
@@ -9,7 +25,12 @@ pub struct UserScopeMut<'s, E: Copy + Eq + Hash + Send + Sync> {
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeMut<'s, E> {
     pub fn new(server: &'s mut Server<E>, key: &UserKey) -> Self {
-        UserScopeMut { server, key: *key }
+        Self { server, key: *key }
+    }
+
+    /// Returns true if the User's scope contains the Entity
+    pub fn has(&self, entity: &E) -> bool {
+        self.server.user_scope_has_entity(&self.key, entity)
     }
 
     /// Adds an Entity to the User's scope

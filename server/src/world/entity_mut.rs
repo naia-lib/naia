@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, Replicate, WorldMutType};
+use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
 
 use crate::{room::RoomKey, server::Server, ReplicationConfig};
 
@@ -30,22 +30,22 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
 
     // Components
 
-    pub fn has_component<R: Replicate>(&self) -> bool {
+    pub fn has_component<R: ReplicatedComponent>(&self) -> bool {
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: Replicate>(&mut self) -> Option<ReplicaMutWrapper<R>> {
+    pub fn component<R: ReplicatedComponent>(&mut self) -> Option<ReplicaMutWrapper<R>> {
         self.world.component_mut::<R>(&self.entity)
     }
 
-    pub fn insert_component<R: Replicate>(&mut self, component_ref: R) -> &mut Self {
+    pub fn insert_component<R: ReplicatedComponent>(&mut self, component_ref: R) -> &mut Self {
         self.server
             .insert_component(&mut self.world, &self.entity, component_ref);
 
         self
     }
 
-    pub fn insert_components<R: Replicate>(&mut self, mut component_refs: Vec<R>) -> &mut Self {
+    pub fn insert_components<R: ReplicatedComponent>(&mut self, mut component_refs: Vec<R>) -> &mut Self {
         while let Some(component_ref) = component_refs.pop() {
             self.insert_component(component_ref);
         }
@@ -53,7 +53,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self
     }
 
-    pub fn remove_component<R: Replicate>(&mut self) -> Option<R> {
+    pub fn remove_component<R: ReplicatedComponent>(&mut self) -> Option<R> {
         self.server
             .remove_component::<R, W>(&mut self.world, &self.entity)
     }

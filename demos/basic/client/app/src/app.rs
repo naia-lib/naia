@@ -16,7 +16,7 @@ use naia_client::{
 
 use naia_demo_world::{Entity, World};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage};
+use naia_basic_demo_shared::{protocol, Auth, Character, MyMarker, StringMessage};
 
 type Client = NaiaClient<Entity>;
 
@@ -37,7 +37,7 @@ impl App {
         let mut client = Client::new(ClientConfig::default(), protocol);
 
         // Incorrect auth here to force a rejection
-        let auth = Auth::new("ronald", "12345");
+        let auth = Auth::new("charlie", "12345");
         client.auth(auth);
 
         client.connect(socket);
@@ -51,7 +51,7 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        if self.client.is_disconnected() {
+        if self.client.connection_status().is_disconnected() {
             return;
         }
 
@@ -76,7 +76,9 @@ impl App {
         for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
         }
-        for message in events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>() {
+        for message in
+            events.read::<MessageEvent<UnorderedReliableChannel, StringMessage<MyMarker>>>()
+        {
             let message_contents = &(*message.contents);
             info!("Client recv <- {}", message_contents);
 
@@ -90,46 +92,46 @@ impl App {
             self.message_count += 1;
         }
         for entity in events.read::<SpawnEntityEvent>() {
-            if let Some(character) = self
+            if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
-                .component::<Character>()
+                .component::<Character<MyMarker>>()
             {
-                info!(
-                    "creation of Character - x: {}, y: {}, name: {} {}",
-                    *character.x,
-                    *character.y,
-                    (*character.fullname).first,
-                    (*character.fullname).last,
-                );
+                // info!(
+                //     "creation of Character - x: {}, y: {}, name: {} {}",
+                //     *character.x,
+                //     *character.y,
+                //     (*character.fullname).first,
+                //     (*character.fullname).last,
+                // );
             }
         }
         for _ in events.read::<DespawnEntityEvent>() {
-            info!("deletion of Character entity");
+            // info!("deletion of Character entity");
         }
-        for (_, entity) in events.read::<UpdateComponentEvent<Character>>() {
-            if let Some(character) = self
+        for (_, entity) in events.read::<UpdateComponentEvent<Character<MyMarker>>>() {
+            if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
-                .component::<Character>()
+                .component::<Character<MyMarker>>()
             {
-                info!(
-                    "update of Character - x: {}, y: {}, name: {} {}",
-                    *character.x,
-                    *character.y,
-                    (*character.fullname).first,
-                    (*character.fullname).last,
-                );
+                // info!(
+                //     "update of Character - x: {}, y: {}, name: {} {}",
+                //     *character.x,
+                //     *character.y,
+                //     (*character.fullname).first,
+                //     (*character.fullname).last,
+                // );
             }
         }
-        for (_, character) in events.read::<RemoveComponentEvent<Character>>() {
-            info!(
-                "data delete of Character - x: {}, y: {}, name: {} {}",
-                *character.x,
-                *character.y,
-                (*character.fullname).first,
-                (*character.fullname).last,
-            );
+        for (_, _character) in events.read::<RemoveComponentEvent<Character<MyMarker>>>() {
+            // info!(
+            //     "data delete of Character - x: {}, y: {}, name: {} {}",
+            //     *character.x,
+            //     *character.y,
+            //     (*character.fullname).first,
+            //     (*character.fullname).last,
+            // );
         }
         for _ in events.read::<ClientTickEvent>() {
             //info!("tick event");

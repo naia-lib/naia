@@ -12,11 +12,10 @@ use web_sys::{
     RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit, XmlHttpRequest,
 };
 
-use naia_socket_shared::{parse_server_url, SocketConfig};
-
-use crate::ServerAddr;
+use naia_socket_shared::{parse_server_url, IdentityToken, SocketConfig};
 
 use super::{addr_cell::AddrCell, data_port::DataPort};
+use crate::{IdentityReceiverImpl, ServerAddr};
 
 // FindAddrFuncInner
 pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
@@ -24,19 +23,30 @@ pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
 // PeerConnection
 pub struct DataChannel {
     server_session_url: String,
+    auth_bytes_opt: Option<Vec<u8>>,
+    auth_headers_opt: Option<Vec<(String, String)>>,
     message_channel: MessageChannel,
     addr_cell: AddrCell,
+    id_cell: IdentityReceiverImpl,
     find_addr_func: Rc<RefCell<FindAddrFuncInner>>,
 }
 
 impl DataChannel {
-    pub fn new(config: &SocketConfig, server_session_url: &str) -> Self {
+    pub fn new(
+        config: &SocketConfig,
+        server_session_url: &str,
+        auth_bytes_opt: Option<Vec<u8>>,
+        auth_headers_opt: Option<Vec<(String, String)>>,
+    ) -> Self {
         let server_url = parse_server_url(server_session_url);
 
         Self {
             server_session_url: format!("{}{}", server_url, config.rtc_endpoint_path.clone()),
+            auth_bytes_opt,
+            auth_headers_opt,
             message_channel: MessageChannel::new().expect("can't create message channel"),
             addr_cell: AddrCell::new(),
+            id_cell: IdentityReceiverImpl::new(),
             find_addr_func: Rc::new(RefCell::new(FindAddrFuncInner(Box::new(move |_| {})))),
         }
     }
@@ -47,6 +57,10 @@ impl DataChannel {
 
     pub fn data_port(&self) -> DataPort {
         DataPort::new(self.message_channel.port1())
+    }
+
+    pub fn id_receiver(&self) -> IdentityReceiverImpl {
+        self.id_cell.clone()
     }
 
     pub fn on_find_addr(&mut self, func: Box<dyn FnMut(SocketAddr)>) {
@@ -98,13 +112,19 @@ impl DataChannel {
                 let peer_2 = peer.clone();
                 let addr_cell_2 = self.addr_cell.clone();
                 let addr_func_2 = self.find_addr_func.clone();
+                let id_sender_2 = self.id_cell.clone();
                 let server_url_msg = self.server_session_url.clone();
+                let auth_bytes_opt_2 = self.auth_bytes_opt.clone();
+                let auth_headers_opt_2 = self.auth_headers_opt.clone();
                 let peer_offer_func: Box<dyn FnMut(JsValue)> = Box::new(move |e: JsValue| {
                     let session_description = e.into();
                     let peer_3 = peer_2.clone();
                     let addr_cell_3 = addr_cell_2.clone();
                     let addr_func_3 = addr_func_2.clone();
+                    let id_sender_3 = id_sender_2.clone();
                     let server_url_msg_2 = server_url_msg.clone();
+                    let auth_bytes_opt_3 = auth_bytes_opt_2.clone();
+                    let auth_headers_opt_3 = auth_headers_opt_2.clone();
                     let peer_desc_func: Box<dyn FnMut(JsValue)> = Box::new(move |_: JsValue| {
                         let request =
                             XmlHttpRequest::new().expect("can't create new XmlHttpRequest");
@@ -114,11 +134,25 @@ impl DataChannel {
                             .unwrap_or_else(|err| {
                                 info!("can't POST to server session url. {:?}", err)
                             });
+                        if let Some(auth_bytes) = &auth_bytes_opt_3 {
+                            let base64_encoded = base64::encode(auth_bytes);
+                            request
+                                .set_request_header("Authorization", &base64_encoded)
+                                .expect("Failed to set request header");
+                        }
+                        if let Some(auth_headers) = &auth_headers_opt_3 {
+                            for (key, value) in auth_headers {
+                                request
+                                    .set_request_header(key, value)
+                                    .expect("Failed to set request header");
+                            }
+                        }
 
                         let request_2 = request.clone();
                         let peer_4 = peer_3.clone();
                         let addr_cell_4 = addr_cell_3.clone();
                         let addr_func_4 = addr_func_3.clone();
+                        let id_sender_4 = id_sender_3.clone();
                         let request_func: Box<dyn FnMut(ProgressEvent)> = Box::new(
                             move |_: ProgressEvent| {
                                 if request_2.status().unwrap() == 200 {
@@ -127,6 +161,10 @@ impl DataChannel {
 
                                     let session_response: JsSessionResponse =
                                         get_session_response(response_string.as_str());
+
+                                    // send the id token to the client
+                                    // info!("Sending id token to client: {:?}", auth_header);
+                                    id_sender_4.send(session_response.id_token);
 
                                     let session_response_answer: SessionAnswer =
                                         session_response.answer.clone();
@@ -294,6 +332,7 @@ pub struct SessionCandidate {
 }
 
 pub struct JsSessionResponse {
+    pub id_token: IdentityToken,
     pub answer: SessionAnswer,
     pub candidate: SessionCandidate,
 }
@@ -301,19 +340,23 @@ pub struct JsSessionResponse {
 fn get_session_response(input: &str) -> JsSessionResponse {
     let json_obj: JsonValue = input.parse().unwrap();
 
-    let sdp_opt: Option<&String> = json_obj["answer"]["sdp"].get();
+    let sdp_opt: Option<&String> = json_obj["sdp"]["answer"]["sdp"].get();
     let sdp: String = sdp_opt.unwrap().clone();
 
-    let candidate_opt: Option<&String> = json_obj["candidate"]["candidate"].get();
+    let candidate_opt: Option<&String> = json_obj["sdp"]["candidate"]["candidate"].get();
     let candidate: String = candidate_opt.unwrap().clone();
 
-    let sdp_m_line_index_opt: Option<&f64> = json_obj["candidate"]["sdpMLineIndex"].get();
+    let sdp_m_line_index_opt: Option<&f64> = json_obj["sdp"]["candidate"]["sdpMLineIndex"].get();
     let sdp_m_line_index: u16 = *(sdp_m_line_index_opt.unwrap()) as u16;
 
-    let sdp_mid_opt: Option<&String> = json_obj["candidate"]["sdpMid"].get();
+    let sdp_mid_opt: Option<&String> = json_obj["sdp"]["candidate"]["sdpMid"].get();
     let sdp_mid: String = sdp_mid_opt.unwrap().clone();
 
+    let id_token_opt: Option<&String> = json_obj["id"].get();
+    let id_token: String = id_token_opt.unwrap().clone();
+
     JsSessionResponse {
+        id_token,
         answer: SessionAnswer { sdp },
         candidate: SessionCandidate {
             candidate,

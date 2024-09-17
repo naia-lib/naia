@@ -51,11 +51,13 @@ impl<E: Copy + Eq + Hash> LocalWorldManager<E> {
     }
 
     fn process_reserved_entity_timeouts(&mut self) {
+        let now = Instant::now();
+
         loop {
             let Some((timeout, _)) = self.reserved_entities_ttls.front() else {
                 break;
             };
-            if timeout.elapsed() < self.reserved_entity_ttl {
+            if timeout.elapsed(&now) < self.reserved_entity_ttl {
                 break;
             }
             let (_, world_entity) = self.reserved_entities_ttls.pop_front().unwrap();

@@ -143,8 +143,8 @@ impl<E: Copy + Eq + Hash> LocalEntityMap<E> {
         };
         if record.host.is_some() && record.remote.is_some() {
             let Some(remote_entity) = record.remote.take() else {
-                    panic!("record does not have remote entity");
-                };
+                panic!("record does not have remote entity");
+            };
             self.remote_to_world.remove(&remote_entity);
             return remote_entity;
         } else {

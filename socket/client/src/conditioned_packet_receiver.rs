@@ -1,4 +1,4 @@
-use naia_socket_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
+use naia_socket_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 
 use super::{
     error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,
@@ -50,8 +50,9 @@ impl PacketReceiver for ConditionedPacketReceiver {
             }
         }
 
-        if self.time_queue.has_item() {
-            self.last_payload = Some(self.time_queue.pop_item().unwrap());
+        let now = Instant::now();
+        if self.time_queue.has_item(&now) {
+            self.last_payload = Some(self.time_queue.pop_item(&now).unwrap());
             return Ok(Some(self.last_payload.as_ref().unwrap()));
         } else {
             Ok(None)

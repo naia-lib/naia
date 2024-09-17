@@ -14,6 +14,8 @@
 extern crate log;
 
 mod async_socket;
+mod auth_receiver;
+mod auth_sender;
 mod conditioned_packet_receiver;
 mod error;
 mod packet_receiver;
@@ -25,6 +27,8 @@ mod socket;
 /// Executor for Server
 pub mod executor;
 
+pub use auth_receiver::AuthReceiver;
+pub use auth_sender::AuthSender;
 pub use error::NaiaServerSocketError;
 pub use naia_socket_shared as shared;
 pub use packet_receiver::PacketReceiver;

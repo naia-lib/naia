@@ -51,33 +51,40 @@ pub fn channel_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream
 #[proc_macro_derive(MessageInternal)]
 pub fn message_derive_internal(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { crate };
-    message_impl(input, shared_crate_name, false)
+    message_impl(input, shared_crate_name, false, false)
 }
 
 /// Derives the Message trait for a given struct, for FragmentedMessage
 #[proc_macro_derive(MessageFragment)]
 pub fn message_derive_fragment(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { crate };
-    message_impl(input, shared_crate_name, true)
+    message_impl(input, shared_crate_name, true, false)
+}
+
+/// Derives the Message trait for a given struct, for RequestMessage
+#[proc_macro_derive(MessageRequest)]
+pub fn message_derive_request(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let shared_crate_name = quote! { crate };
+    message_impl(input, shared_crate_name, false, true)
 }
 
 /// Derives the Message trait for a given struct
 #[proc_macro_derive(Message)]
 pub fn message_derive_shared(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { naia_shared };
-    message_impl(input, shared_crate_name, false)
+    message_impl(input, shared_crate_name, false, false)
 }
 
 /// Derives the Message trait for a given struct, for the Bevy adapter
 #[proc_macro_derive(MessageBevy)]
 pub fn message_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { naia_bevy_shared };
-    message_impl(input, shared_crate_name, false)
+    message_impl(input, shared_crate_name, false, false)
 }
 
 /// Derives the Message trait for a given struct, for the Hecs adapter
 #[proc_macro_derive(MessageHecs)]
 pub fn message_derive_hecs(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { naia_hecs_shared };
-    message_impl(input, shared_crate_name, false)
+    message_impl(input, shared_crate_name, false, false)
 }

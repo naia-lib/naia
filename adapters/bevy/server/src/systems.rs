@@ -1,24 +1,21 @@
 use std::ops::DerefMut;
 
 use bevy_ecs::{
-    entity::Entity,
     event::Events,
     world::{Mut, World},
 };
-
 use log::warn;
 
 use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
-use naia_server::{EntityOwner, Server};
+use naia_server::EntityOwner;
 
-use crate::{ClientOwned, EntityAuthStatus};
+use crate::{plugin::Singleton, server::ServerWrapper, ClientOwned, EntityAuthStatus};
 
 mod naia_events {
     pub use naia_server::{
         ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
-        EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvent,
-        PublishEntityEvent, RemoveComponentEvent, SpawnEntityEvent, TickEvent,
-        UnpublishEntityEvent, UpdateComponentEvent,
+        EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, PublishEntityEvent,
+        SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     };
 }
 
@@ -26,13 +23,13 @@ mod bevy_events {
     pub use crate::events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
         InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
-        SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     };
 }
 
 pub fn before_receive_events(world: &mut World) {
-    world.resource_scope(|world, mut server: Mut<Server<Entity>>| {
-        if !server.is_listening() {
+    world.resource_scope(|world, mut server: Mut<ServerWrapper>| {
+        if !server.0.is_listening() {
             return;
         }
 
@@ -43,8 +40,8 @@ pub fn before_receive_events(world: &mut World) {
         let host_component_events: Vec<HostSyncEvent> = host_component_event_reader.drain().collect();
         for event in host_component_events {
             match event {
-                HostSyncEvent::Insert(entity, component_kind) => {
-                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                HostSyncEvent::Insert(_host_id, entity, component_kind) => {
+                    if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
@@ -53,28 +50,28 @@ pub fn before_receive_events(world: &mut World) {
                         warn!("could not find Component in World which has just been inserted!");
                         continue;
                     };
-                    server.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+                    server.0.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
                 }
-                HostSyncEvent::Remove(entity, component_kind) => {
-                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                HostSyncEvent::Remove(_host_id, entity, component_kind) => {
+                    if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
-                    server.remove_component_worldless(&entity, &component_kind);
+                    server.0.remove_component_worldless(&entity, &component_kind);
                 }
-                HostSyncEvent::Despawn(entity) => {
-                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                HostSyncEvent::Despawn(_host_id, entity) => {
+                    if server.0.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
-                    server.despawn_entity_worldless(&entity);
+                    server.0.despawn_entity_worldless(&entity);
                 }
             }
         }
 
         // Receive Events
         let mut did_tick = false;
-        let mut events = server.receive(world.proxy_mut());
+        let mut events = server.0.receive(world.proxy_mut());
         if !events.is_empty() {
 
             // Connect Event
@@ -126,6 +123,14 @@ pub fn before_receive_events(world: &mut World) {
                 event_writer.send(bevy_events::MessageEvents::from(&mut events));
             }
 
+            // Request Event
+            if events.has_requests() {
+                let mut event_writer = world
+                    .get_resource_mut::<Events<bevy_events::RequestEvents>>()
+                    .unwrap();
+                event_writer.send(bevy_events::RequestEvents::from(&mut events));
+            }
+
             // Auth Event
             if events.has_auths() {
                 let mut event_writer = world
@@ -145,7 +150,7 @@ pub fn before_receive_events(world: &mut World) {
                     event_writer.send(bevy_events::SpawnEntityEvent(user_key, entity));
                 }
                 for entity in spawned_entities {
-                    let EntityOwner::Client(user_key) = server.entity_owner(&entity) else {
+                    let EntityOwner::Client(user_key) = server.0.entity_owner(&entity) else {
                         panic!("spawned entity that doesn't belong to a client ... shouldn't be possible.");
                     };
                     world.entity_mut(entity).insert(ClientOwned(user_key));
@@ -185,7 +190,7 @@ pub fn before_receive_events(world: &mut World) {
             // Delegate Entity Event
             if events.has::<naia_events::DelegateEntityEvent>() {
                 for (_, entity) in events.read::<naia_events::DelegateEntityEvent>() {
-                    world.entity_mut(entity).insert(HostOwned);
+                    world.entity_mut(entity).insert(HostOwned::new::<Singleton>());
                 }
             }
 
@@ -200,7 +205,7 @@ pub fn before_receive_events(world: &mut World) {
             if events.has::<naia_events::EntityAuthResetEvent>() {
                 for entity in events.read::<naia_events::EntityAuthResetEvent>() {
                     if let Some(mut entity_mut) = world.get_entity_mut(entity) {
-                        entity_mut.insert(HostOwned);
+                        entity_mut.insert(HostOwned::new::<Singleton>());
                     }
                 }
             }
@@ -235,7 +240,7 @@ pub fn before_receive_events(world: &mut World) {
             }
 
             if did_tick {
-                server.send_all_updates(world.proxy());
+                server.0.send_all_updates(world.proxy());
             }
         }
     });

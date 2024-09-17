@@ -7,8 +7,9 @@ use crate::{
 pub trait BitWrite {
     fn write_bit(&mut self, bit: bool);
     fn write_byte(&mut self, byte: u8);
-    fn write_bits(&mut self, bits: u32);
+
     fn is_counter(&self) -> bool;
+    fn count_bits(&mut self, bits: u32);
 }
 
 // BitWriter
@@ -43,6 +44,10 @@ impl BitWriter {
             current_bits: 0,
             max_bits: bit_capacity,
         }
+    }
+
+    pub fn with_max_capacity() -> Self {
+        Self::with_capacity(u32::MAX)
     }
 
     fn finalize(&mut self) {
@@ -117,7 +122,7 @@ impl BitWrite for BitWriter {
         }
     }
 
-    fn write_bits(&mut self, _: u32) {
+    fn count_bits(&mut self, _: u32) {
         panic!("This method should not be called for BitWriter!");
     }
 

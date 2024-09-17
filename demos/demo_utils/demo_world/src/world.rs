@@ -1,6 +1,10 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_shared::{BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
+use naia_shared::{
+    BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
+    LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -296,12 +300,38 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         None
     }
 
-    fn entity_publish(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity) {
-        todo!()
+    fn entity_publish(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        entity: &Entity,
+    ) {
+        for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
+            WorldMutType::<Entity>::component_publish(
+                self,
+                global_world_manager,
+                entity,
+                &component_kind,
+            );
+        }
     }
 
-    fn component_publish(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity, _component_kind: &ComponentKind) {
-        todo!()
+    fn component_publish(
+        &mut self,
+        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) {
+        if let Some(component_map) = self.world.entities.get_mut(entity) {
+            if let Some(component) = component_map.get_mut(component_kind) {
+                let diff_mask_size = component.diff_mask_size();
+                let mutator = global_world_manager.register_component(
+                    entity,
+                    &component_kind,
+                    diff_mask_size,
+                );
+                component.publish(&mutator);
+            }
+        }
     }
 
     fn entity_unpublish(&mut self, _entity: &Entity) {
@@ -312,11 +342,20 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         todo!()
     }
 
-    fn entity_enable_delegation(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity) {
+    fn entity_enable_delegation(
+        &mut self,
+        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _entity: &Entity,
+    ) {
         todo!()
     }
 
-    fn component_enable_delegation(&mut self, _global_world_manager: &dyn GlobalWorldManagerType<Entity>, _entity: &Entity, _component_kind: &ComponentKind) {
+    fn component_enable_delegation(
+        &mut self,
+        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _entity: &Entity,
+        _component_kind: &ComponentKind,
+    ) {
         todo!()
     }
 

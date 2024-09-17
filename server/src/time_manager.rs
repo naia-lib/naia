@@ -47,12 +47,12 @@ impl TimeManager {
     // }
 
     /// Whether or not we should emit a tick event
-    pub fn recv_server_tick(&mut self) -> bool {
-        let time_since_tick_ms = self.last_tick_instant.elapsed().as_secs_f32() * 1000.0;
+    pub fn recv_server_tick(&mut self, now: &Instant) -> bool {
+        let time_since_tick_ms = self.last_tick_instant.elapsed(now).as_secs_f32() * 1000.0;
 
         if time_since_tick_ms >= self.tick_interval_millis {
             self.record_tick_duration(time_since_tick_ms);
-            self.last_tick_instant = Instant::now();
+            self.last_tick_instant = now.clone();
             self.last_tick_game_instant = self.game_time_now();
             self.current_tick = self.current_tick.wrapping_add(1);
             return true;

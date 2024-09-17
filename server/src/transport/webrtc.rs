@@ -1,15 +1,19 @@
 use std::net::SocketAddr;
 
-use naia_shared::SocketConfig;
+use naia_shared::{IdentityToken, SocketConfig};
 
-use naia_server_socket::{PacketReceiver, PacketSender, Socket as ServerSocket};
+use naia_server_socket::{
+    AuthReceiver, AuthSender, PacketReceiver, PacketSender, Socket as ServerSocket,
+};
 
 pub use naia_server_socket::ServerAddrs;
 
 use super::{
+    AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     Socket as TransportSocket,
 };
+use crate::user::UserAuthAddr;
 
 pub struct Socket {
     server_addrs: ServerAddrs,
@@ -39,6 +43,42 @@ impl TransportReceiver for Box<dyn PacketReceiver> {
     }
 }
 
+impl TransportAuthSender for Box<dyn AuthSender> {
+    ///
+    fn accept(
+        &self,
+        address: &UserAuthAddr,
+        identity_token: &IdentityToken,
+    ) -> Result<(), SendError> {
+        self.as_ref()
+            .accept(&address.addr(), identity_token)
+            .map_err(|_| SendError)
+    }
+    ///
+    fn reject(&self, address: &UserAuthAddr) -> Result<(), SendError> {
+        self.as_ref().reject(&address.addr()).map_err(|_| SendError)
+    }
+}
+
+impl TransportAuthReceiver for Box<dyn AuthReceiver> {
+    ///
+    fn receive(&mut self) -> Result<Option<(UserAuthAddr, &[u8])>, RecvError> {
+        match self.as_mut().receive() {
+            Ok(auth_opt) => match auth_opt {
+                Some((addr, payload)) => {
+                    return Ok(Some((UserAuthAddr::new(addr), payload)));
+                }
+                None => {
+                    return Ok(None);
+                }
+            },
+            Err(_err) => {
+                return Err(RecvError);
+            }
+        }
+    }
+}
+
 impl Into<Box<dyn TransportSocket>> for Socket {
     fn into(self) -> Box<dyn TransportSocket> {
         Box::new(self)
@@ -46,8 +86,21 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 }
 
 impl TransportSocket for Socket {
-    fn listen(self: Box<Self>) -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
-        let (inner_sender, inner_receiver) = ServerSocket::listen(&self.server_addrs, &self.config);
-        return (Box::new(inner_sender), Box::new(inner_receiver));
+    fn listen(
+        self: Box<Self>,
+    ) -> (
+        Box<dyn TransportAuthSender>,
+        Box<dyn TransportAuthReceiver>,
+        Box<dyn TransportSender>,
+        Box<dyn TransportReceiver>,
+    ) {
+        let (inner_auth_sender, inner_auth_receiver, inner_packet_sender, inner_packet_receiver) =
+            ServerSocket::listen_with_auth(&self.server_addrs, &self.config);
+        return (
+            Box::new(inner_auth_sender),
+            Box::new(inner_auth_receiver),
+            Box::new(inner_packet_sender),
+            Box::new(inner_packet_receiver),
+        );
     }
 }

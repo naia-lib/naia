@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::hash::Hash;
+use std::{collections::HashMap, hash::Hash};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
@@ -21,12 +20,13 @@ use crate::{
             },
             senders::{
                 channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
-                reliable_sender::ReliableSender,
+                reliable_message_sender::ReliableMessageSender, request_sender::LocalResponseId,
                 sequenced_unreliable_sender::SequencedUnreliableSender,
                 unordered_unreliable_sender::UnorderedUnreliableSender,
             },
         },
         message_container::MessageContainer,
+        request::GlobalRequestId,
     },
     types::{HostType, MessageIndex, PacketIndex},
     world::{
@@ -55,6 +55,7 @@ impl MessageManager {
         // initialize senders
         let mut channel_senders = HashMap::<ChannelKind, Box<dyn MessageChannelSender>>::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
+            //info!("initialize senders for channel: {:?}", channel_kind);
             match &host_type {
                 HostType::Server => {
                     if !channel_settings.can_send_to_client() {
@@ -82,9 +83,7 @@ impl MessageManager {
                 | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         channel_kind,
-                        Box::new(ReliableSender::<MessageContainer>::new(
-                            settings.rtt_resend_factor,
-                        )),
+                        Box::new(ReliableMessageSender::new(settings.rtt_resend_factor)),
                     );
                 }
                 ChannelMode::TickBuffered(_) => {
@@ -152,7 +151,7 @@ impl MessageManager {
             channel_settings_map.insert(channel_kind.clone(), channel_settings);
         }
 
-        MessageManager {
+        Self {
             channel_senders,
             channel_receivers,
             channel_settings: channel_settings_map,
@@ -196,6 +195,34 @@ impl MessageManager {
         }
     }
 
+    pub fn send_request(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        channel_kind: &ChannelKind,
+        global_request_id: GlobalRequestId,
+        request: MessageContainer,
+    ) {
+        let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
+            panic!("Channel not configured correctly! Cannot send message.");
+        };
+        channel.send_outgoing_request(message_kinds, converter, global_request_id, request);
+    }
+
+    pub fn send_response(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        channel_kind: &ChannelKind,
+        local_response_id: LocalResponseId,
+        response: MessageContainer,
+    ) {
+        let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
+            panic!("Channel not configured correctly! Cannot send message.");
+        };
+        channel.send_outgoing_response(message_kinds, converter, local_response_id, response);
+    }
+
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         for channel in self.channel_senders.values_mut() {
             channel.collect_messages(now, rtt_millis);
@@ -233,7 +260,7 @@ impl MessageManager {
             // write ChannelContinue bit
             counter.write_bit(false);
             // write ChannelIndex
-            counter.write_bits(<ChannelKind as ConstBitLength>::const_bit_length());
+            counter.count_bits(<ChannelKind as ConstBitLength>::const_bit_length());
             if counter.overflowed() {
                 break;
             }
@@ -296,6 +323,8 @@ impl MessageManager {
     /// Retrieve all messages from the channel buffers
     pub fn receive_messages<E: Eq + Copy + Hash>(
         &mut self,
+        message_kinds: &MessageKinds,
+        now: &Instant,
         global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         local_entity_converter: &dyn EntityAndLocalEntityConverter<E>,
         entity_waitlist: &mut EntityWaitlist,
@@ -305,10 +334,53 @@ impl MessageManager {
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
-            let messages = channel.receive_messages(entity_waitlist, &entity_converter);
+            let messages =
+                channel.receive_messages(message_kinds, now, entity_waitlist, &entity_converter);
             output.push((channel_kind.clone(), messages));
         }
         output
+    }
+
+    /// Retrieve all requests from the channel buffers
+    pub fn receive_requests_and_responses(
+        &mut self,
+    ) -> (
+        Vec<(ChannelKind, Vec<(LocalResponseId, MessageContainer)>)>,
+        Vec<(GlobalRequestId, MessageContainer)>,
+    ) {
+        let mut request_output = Vec::new();
+        let mut response_output = Vec::new();
+        for (channel_kind, channel) in &mut self.channel_receivers {
+            if !self
+                .channel_settings
+                .get(channel_kind)
+                .unwrap()
+                .can_request_and_respond()
+            {
+                continue;
+            }
+
+            let (requests, responses) = channel.receive_requests_and_responses();
+            if !requests.is_empty() {
+                request_output.push((channel_kind.clone(), requests));
+            }
+
+            if !responses.is_empty() {
+                let Some(channel_sender) = self.channel_senders.get_mut(channel_kind) else {
+                    panic!(
+                        "Channel not configured correctly! Cannot send message on channel: {:?}",
+                        channel_kind
+                    );
+                };
+                for (local_request_id, response) in responses {
+                    let global_request_id = channel_sender
+                        .process_incoming_response(&local_request_id)
+                        .unwrap();
+                    response_output.push((global_request_id, response));
+                }
+            }
+        }
+        (request_output, response_output)
     }
 }
 

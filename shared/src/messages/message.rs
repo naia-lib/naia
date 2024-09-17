@@ -31,6 +31,7 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
         Self: Sized;
     fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32;
     fn is_fragment(&self) -> bool;
+    fn is_request(&self) -> bool;
     /// Writes data into an outgoing byte stream
     fn write(
         &self,

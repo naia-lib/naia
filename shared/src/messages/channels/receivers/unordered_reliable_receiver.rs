@@ -20,10 +20,11 @@ pub struct UnorderedArranger;
 impl ReceiverArranger for UnorderedArranger {
     fn process(
         &mut self,
-        incoming_messages: &mut Vec<(MessageIndex, MessageContainer)>,
         message_index: MessageIndex,
         message: MessageContainer,
-    ) {
-        incoming_messages.push((message_index, message));
+    ) -> Vec<(MessageIndex, MessageContainer)> {
+        let mut output = Vec::new();
+        output.push((message_index, message));
+        output
     }
 }
