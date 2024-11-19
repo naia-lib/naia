@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use bevy_ecs::{
     entity::Entity,
     system::EntityCommands,
-    world::{Mut, World, Command as BevyCommand},
+    world::{Command as BevyCommand, Mut, World},
 };
 
 use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldMutType, WorldProxyMut};

@@ -7,8 +7,9 @@ use bevy_ecs::{
     query::{Added, Changed},
     removal_detection::RemovedComponents,
     system::{Query, ResMut},
+    component::Component,
 };
-use bevy_ecs::component::Component;
+
 use naia_shared::{ComponentKind, Replicate};
 
 use crate::{HostOwned, HostOwnedMap};

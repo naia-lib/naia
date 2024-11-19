@@ -10,7 +10,7 @@ const TIME_OFFSET_MIN: i32 = -2097152; // 2^21 * -1
 
 // GameInstant measures the # of milliseconds since the start of the Server
 // GameInstant wraps around at 2^22 milliseconds (around one hour)
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Debug, Clone, Copy)]
 pub struct GameInstant {
     millis: u32,
 }

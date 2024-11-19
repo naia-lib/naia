@@ -1,8 +1,16 @@
-use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr};
+use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use log::{info, warn};
 use naia_client_socket::IdentityReceiverResult;
-use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+use naia_shared::{
+    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
+    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
+    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer,
+    PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response,
+    ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig,
+    StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
+};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
@@ -730,23 +738,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Gets the current tick of the Client
     pub fn client_tick(&self) -> Option<Tick> {
-        if let Some(connection) = &self.server_connection {
-            return Some(connection.time_manager.client_sending_tick);
-        }
-        return None;
+        let connection = self.server_connection.as_ref()?;
+        return Some(connection.time_manager.client_sending_tick);
+    }
+
+    /// Gets the current instant of the Client
+    pub fn client_instant(&self) -> Option<GameInstant> {
+        let connection = self.server_connection.as_ref()?;
+        return Some(connection.time_manager.client_sending_instant);
     }
 
     /// Gets the current tick of the Server
     pub fn server_tick(&self) -> Option<Tick> {
-        if let Some(connection) = &self.server_connection {
-            return Some(connection.time_manager.client_receiving_tick);
-        }
-        return None;
+        let connection = self.server_connection.as_ref()?;
+        return Some(connection.time_manager.client_receiving_tick);
+    }
+
+    /// Gets the current instant of the Server
+    pub fn server_instant(&self) -> Option<GameInstant> {
+        let connection = self.server_connection.as_ref()?;
+        return Some(connection.time_manager.client_receiving_instant);
     }
 
     pub fn tick_to_instant(&self, tick: Tick) -> Option<GameInstant> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.tick_to_instant(tick));
+        }
+        return None;
+    }
+
+    pub fn tick_duration(&self) -> Option<Duration> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.time_manager.tick_duration());
         }
         return None;
     }

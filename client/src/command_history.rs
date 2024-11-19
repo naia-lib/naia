@@ -64,4 +64,8 @@ impl<T: Clone> CommandHistory<T> {
         }
         true
     }
+
+    pub fn most_recent_tick(&self) -> Option<Tick> {
+        self.buffer.back().map(|(tick, _)| *tick)
+    }
 }

@@ -1,5 +1,7 @@
 use std::time::Duration;
+
 use bevy_ecs::component::Component;
+
 use naia_shared::{
     Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig,
     LinkConditionerConfig, Message, Protocol as InnerProtocol, Replicate, Request,

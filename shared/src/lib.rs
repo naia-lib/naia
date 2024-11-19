@@ -101,7 +101,8 @@ pub use world::{
             ReplicaRefTrait, ReplicaRefWrapper,
         },
         replicate::{
-            Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder, ReplicatedComponent,
+            Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
+            ReplicatedComponent,
         },
     },
     delegation::{

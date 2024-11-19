@@ -5,7 +5,12 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType};
+use naia_shared::{
+    ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
+    LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
+    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType,
+    WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -182,7 +187,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         kinds
     }
 
-    fn component_mut<R: ReplicatedComponent>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
+    fn component_mut<R: ReplicatedComponent>(
+        &mut self,
+        entity: &Entity,
+    ) -> Option<ReplicaMutWrapper<R>> {
         if let Some(bevy_mut) = self.world.get_mut::<R>(*entity) {
             let wrapper = ComponentMut(bevy_mut);
             let component_mut = ReplicaMutWrapper::new(wrapper);

@@ -1,6 +1,6 @@
 use std::{collections::HashMap, hash::Hash};
 
-use log::warn;
+use log::{info, warn};
 
 use crate::{
     messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
@@ -248,6 +248,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
             if local_world_manager.has_remote_entity(remote_entity) {
                 let world_entity = local_world_manager.world_entity_from_remote(remote_entity);
+
+                info!(
+                    "received update (Entity: {:?}, Kind: {}, Tick: {:?})",
+                    remote_entity,
+                    component_kinds.kind_to_name(&component_update.kind),
+                    tick,
+                );
 
                 self.received_updates
                     .push((*tick, world_entity, component_update));

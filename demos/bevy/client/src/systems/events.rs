@@ -1,6 +1,7 @@
 use std::default::Default;
 
 use bevy::{
+    color::LinearRgba,
     log::info,
     prelude::{
         Color as BevyColor, Commands, EventReader, Query, Res, ResMut, Sprite, SpriteBundle,
@@ -8,7 +9,7 @@ use bevy::{
     },
     sprite::MaterialMesh2dBundle,
 };
-use bevy::color::LinearRgba;
+
 use naia_bevy_client::{
     events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
@@ -17,6 +18,7 @@ use naia_bevy_client::{
     },
     sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
 };
+
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,
     channels::{EntityAssignmentChannel, PlayerCommandChannel, RequestChannel},
@@ -236,12 +238,20 @@ pub fn insert_component_events(
                             match *color.value {
                                 ColorValue::Red => BevyColor::LinearRgba(LinearRgba::RED),
                                 ColorValue::Blue => BevyColor::LinearRgba(LinearRgba::BLUE),
-                                ColorValue::Yellow => BevyColor::LinearRgba(LinearRgba::rgb(1.0, 1.0, 0.0)),
+                                ColorValue::Yellow => {
+                                    BevyColor::LinearRgba(LinearRgba::rgb(1.0, 1.0, 0.0))
+                                }
                                 ColorValue::Green => BevyColor::LinearRgba(LinearRgba::GREEN),
                                 ColorValue::White => BevyColor::LinearRgba(LinearRgba::WHITE),
-                                ColorValue::Purple => BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.0, 1.0)),
-                                ColorValue::Orange => BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.5, 0.0)),
-                                ColorValue::Aqua => BevyColor::LinearRgba(LinearRgba::rgb(0.0, 1.0, 1.0)),
+                                ColorValue::Purple => {
+                                    BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.0, 1.0))
+                                }
+                                ColorValue::Orange => {
+                                    BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.5, 0.0))
+                                }
+                                ColorValue::Aqua => {
+                                    BevyColor::LinearRgba(LinearRgba::rgb(0.0, 1.0, 1.0))
+                                }
                             }
                         };
 
