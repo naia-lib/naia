@@ -187,7 +187,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         {
             let mut dropped_packets = Vec::new();
             for (packet_index, (time_sent, _)) in &self.sent_updates {
-                if time_sent.elapsed(now) > drop_duration {
+                let elapsed_since_send = time_sent.elapsed(now);
+                if elapsed_since_send > drop_duration {
                     dropped_packets.push(*packet_index);
                 }
             }
@@ -212,19 +213,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
                 let mut new_diff_mask = diff_mask.clone();
 
                 // walk from dropped packet up to most recently sent packet
-                if dropped_packet_index == self.last_update_packet_index {
-                    continue;
-                }
-
-                let mut packet_index = dropped_packet_index.wrapping_add(1);
-                while packet_index != self.last_update_packet_index {
-                    if let Some((_, diff_mask_map)) = self.sent_updates.get(&packet_index) {
-                        if let Some(next_diff_mask) = diff_mask_map.get(component_index) {
-                            new_diff_mask.nand(next_diff_mask);
+                if dropped_packet_index != self.last_update_packet_index {
+                    let mut packet_index = dropped_packet_index.wrapping_add(1);
+                    while packet_index != self.last_update_packet_index {
+                        if let Some((_, diff_mask_map)) = self.sent_updates.get(&packet_index) {
+                            if let Some(next_diff_mask) = diff_mask_map.get(component_index) {
+                                new_diff_mask.nand(next_diff_mask);
+                            }
                         }
-                    }
 
-                    packet_index = packet_index.wrapping_add(1);
+                        packet_index = packet_index.wrapping_add(1);
+                    }
                 }
 
                 self.world_channel

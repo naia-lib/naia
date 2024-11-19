@@ -288,7 +288,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         self.base.write_header(PacketType::Data, &mut writer);
 
         // write server tick
-        time_manager.current_tick().ser(&mut writer);
+        let tick = time_manager.current_tick();
+        tick.ser(&mut writer);
 
         // write server tick instant
         time_manager.current_tick_instant().ser(&mut writer);

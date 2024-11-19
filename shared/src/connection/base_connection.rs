@@ -44,7 +44,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
         channel_kinds: &ChannelKinds,
         global_world_manager: &dyn GlobalWorldManagerType<E>,
     ) -> Self {
-        BaseConnection {
+        Self {
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             ack_manager: AckManager::new(),
@@ -61,7 +61,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     /// Record that a message has been sent (to prevent needing to send a
     /// heartbeat)
     pub fn mark_sent(&mut self) {
-        self.heartbeat_timer.reset()
+        self.heartbeat_timer.reset();
+        self.ack_manager.clear_should_send_empty_ack();
     }
 
     /// Returns whether a heartbeat message should be sent
@@ -84,6 +85,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> BaseConnection<E> {
     }
 
     // Acks & Headers
+
+    pub fn mark_should_send_empty_ack(&mut self) {
+        self.ack_manager.mark_should_send_empty_ack();
+    }
+
+    pub fn should_send_empty_ack(&self) -> bool {
+        self.ack_manager.should_send_empty_ack()
+    }
 
     /// Process an incoming packet, pulling out the packet index number to keep
     /// track of the current RTT, and sending the packet to the AckManager to

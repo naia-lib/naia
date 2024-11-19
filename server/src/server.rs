@@ -1709,6 +1709,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.handle_disconnects(&mut world);
         self.handle_heartbeats();
         self.handle_pings();
+        self.handle_empty_acks();
 
         let mut addresses: HashSet<SocketAddr> = HashSet::new();
 
@@ -1783,7 +1784,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             if let Some(connection) = self.user_connections.get_mut(&address) {
                                 connection.process_incoming_header(&header);
                                 connection.base.mark_heard();
-                                connection.base.mark_sent();
                             }
 
                             continue;
@@ -1800,7 +1800,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                             if let Some(connection) = self.user_connections.get_mut(&address) {
                                 connection.process_incoming_header(&header);
                                 connection.base.mark_heard();
-                                connection.base.mark_sent();
                                 connection
                                     .ping_manager
                                     .process_pong(&self.time_manager, &mut reader);
@@ -1866,6 +1865,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         header: &StandardHeader,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
+
+        if header.packet_type != PacketType::Data {
+            panic!("Server Error: received non-data packet in data packet handler");
+        }
+
         // Packets requiring established connection
         let Some(connection) = self.user_connections.get_mut(address) else {
             return Ok(());
@@ -1874,27 +1878,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // Mark that we've heard from the client
         connection.base.mark_heard();
 
+        // Mark that we've received a data packet, to queue an empty ack
+        connection.base.mark_should_send_empty_ack();
+
         // Process incoming header
         connection.process_incoming_header(header);
 
-        match header.packet_type {
-            PacketType::Data => {
-                // read client tick
-                let client_tick = Tick::de(reader)?;
+        // read client tick
+        let client_tick = Tick::de(reader)?;
 
-                let server_tick = self.time_manager.current_tick();
+        let server_tick = self.time_manager.current_tick();
 
-                // process data
-                connection.read_packet(
-                    &self.protocol,
-                    server_tick,
-                    client_tick,
-                    reader,
-                    &mut self.global_world_manager,
-                )?;
-            }
-            _ => {}
-        }
+        // process data
+        connection.read_packet(
+            &self.protocol,
+            server_tick,
+            client_tick,
+            reader,
+            &mut self.global_world_manager,
+        )?;
 
         return Ok(());
     }
@@ -2116,37 +2118,51 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             for (user_address, connection) in &mut self.user_connections.iter_mut() {
                 // user heartbeats
                 if connection.base.should_send_heartbeat() {
-                    // Don't try to refactor this to self.internal_send, doesn't seem to
-                    // work cause of iter_mut()
-                    let mut writer = BitWriter::new();
-
-                    // write header
-                    connection
-                        .base
-                        .write_header(PacketType::Heartbeat, &mut writer);
-
-                    // write server tick
-                    self.time_manager.current_tick().ser(&mut writer);
-
-                    // write server tick instant
-                    self.time_manager.current_tick_instant().ser(&mut writer);
-
-                    // send packet
-                    if self
-                        .io
-                        .send_packet(user_address, writer.to_packet())
-                        .is_err()
-                    {
-                        // TODO: pass this on and handle above
-                        warn!(
-                            "Server Error: Cannot send heartbeat packet to {}",
-                            user_address
-                        );
-                    }
-                    connection.base.mark_sent();
+                    Self::send_heartbeat_packet(user_address, connection, &self.time_manager, &mut self.io);
                 }
             }
         }
+    }
+
+    fn handle_empty_acks(&mut self) {
+        // empty acks
+
+        for (user_address, connection) in &mut self.user_connections.iter_mut() {
+
+            if connection.base.should_send_empty_ack() {
+                Self::send_heartbeat_packet(user_address, connection, &self.time_manager, &mut self.io);
+            }
+        }
+    }
+
+    fn send_heartbeat_packet(user_address: &SocketAddr, connection: &mut Connection<E>, time_manager: &TimeManager, io: &mut Io) {
+        // Don't try to refactor this to self.internal_send, doesn't seem to
+        // work cause of iter_mut()
+        let mut writer = BitWriter::new();
+
+        // write header
+        connection
+            .base
+            .write_header(PacketType::Heartbeat, &mut writer);
+
+        // write server tick
+        time_manager.current_tick().ser(&mut writer);
+
+        // write server tick instant
+        time_manager.current_tick_instant().ser(&mut writer);
+
+        // send packet
+        if io
+            .send_packet(user_address, writer.to_packet())
+            .is_err()
+        {
+            // TODO: pass this on and handle above
+            warn!(
+                "Server Error: Cannot send heartbeat packet to {}",
+                user_address
+            );
+        }
+        connection.base.mark_sent();
     }
 
     fn handle_pings(&mut self) {

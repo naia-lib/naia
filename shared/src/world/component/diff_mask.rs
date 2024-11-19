@@ -68,6 +68,9 @@ impl DiffMask {
 
     /// Performs a NAND operation on the DiffMask, with another DiffMask
     pub fn nand(&mut self, other: &DiffMask) {
+
+        // NOTE: this is not actually a NAND operation, but a "AND NOT" operation
+
         //if other diff mask has different capacity, do nothing
         if other.byte_number() != self.byte_number() {
             return;

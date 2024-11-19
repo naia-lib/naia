@@ -1205,6 +1205,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         Self::handle_heartbeats(connection, &mut self.io);
         Self::handle_pings(connection, &mut self.io);
+        Self::handle_empty_acks(connection, &mut self.io);
 
         // receive from socket
         loop {
@@ -1252,6 +1253,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // Handle based on PacketType
                     match header.packet_type {
                         PacketType::Data => {
+
+                            connection.base.mark_should_send_empty_ack();
+
                             if connection
                                 .buffer_data_packet(&server_tick, &mut reader)
                                 .is_err()
@@ -1295,20 +1299,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     fn handle_heartbeats(connection: &mut Connection<E>, io: &mut Io) {
         // send heartbeats
         if connection.base.should_send_heartbeat() {
-            let mut writer = BitWriter::new();
-
-            // write header
-            connection
-                .base
-                .write_header(PacketType::Heartbeat, &mut writer);
-
-            // send packet
-            if io.send_packet(writer.to_packet()).is_err() {
-                // TODO: pass this on and handle above
-                warn!("Client Error: Cannot send heartbeat packet to Server");
-            }
-            connection.base.mark_sent();
+            Self::send_heartbeat_packet(connection, io);
         }
+    }
+
+    fn handle_empty_acks(connection: &mut Connection<E>, io: &mut Io) {
+        // send empty acks
+        if connection.base.should_send_empty_ack() {
+            Self::send_heartbeat_packet(connection, io);
+        }
+    }
+
+    fn send_heartbeat_packet(connection: &mut Connection<E>, io: &mut Io) {
+        let mut writer = BitWriter::new();
+
+        // write header
+        connection
+            .base
+            .write_header(PacketType::Heartbeat, &mut writer);
+
+        // send packet
+        if io.send_packet(writer.to_packet()).is_err() {
+            // TODO: pass this on and handle above
+            warn!("Client Error: Cannot send heartbeat packet to Server");
+        }
+        connection.base.mark_sent();
     }
 
     fn handle_pings(connection: &mut Connection<E>, io: &mut Io) {
