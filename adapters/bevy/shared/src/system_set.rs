@@ -11,3 +11,6 @@ pub struct HostSyncChangeTracking;
 
 #[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
 pub struct BeforeHostSyncChangeTracking;
+
+#[derive(SystemSet, Debug, Hash, PartialEq, Eq, Clone)]
+pub struct SendPackets;

@@ -1,9 +1,11 @@
 use std::ops::DerefMut;
 
 use bevy_ecs::{
-    event::Events,
+    event::{Events, EventReader},
     world::{Mut, World},
+    system::SystemState,
 };
+
 use log::warn;
 
 use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxy, WorldProxyMut};
@@ -26,6 +28,8 @@ mod bevy_events {
         RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     };
 }
+
+use crate::events::CachedTickEventsState;
 
 pub fn before_receive_events(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<ServerWrapper>| {
@@ -70,7 +74,6 @@ pub fn before_receive_events(world: &mut World) {
         }
 
         // Receive Events
-        let mut did_tick = false;
         let mut events = server.0.receive(world.proxy_mut());
         if !events.is_empty() {
 
@@ -111,7 +114,6 @@ pub fn before_receive_events(world: &mut World) {
                     .unwrap();
                 for tick in events.read::<naia_events::TickEvent>() {
                     event_writer.send(bevy_events::TickEvent(tick));
-                    did_tick = true;
                 }
             }
 
@@ -238,10 +240,41 @@ pub fn before_receive_events(world: &mut World) {
 
                 event_writer.send(bevy_events::RemoveComponentEvents::new(removes));
             }
-
-            if did_tick {
-                server.0.send_all_updates(world.proxy());
-            }
         }
+    });
+}
+
+pub fn send_packets_init(world: &mut World) {
+    let tick_event_state: SystemState<EventReader<bevy_events::TickEvent>> =
+        SystemState::new(world);
+    world.insert_resource(CachedTickEventsState {
+        event_state: tick_event_state,
+    });
+}
+
+pub fn send_packets(world: &mut World) {
+
+    world.resource_scope(|world, mut server: Mut<ServerWrapper>| {
+        if !server.0.is_listening() {
+            return;
+        }
+
+        world.resource_scope(
+            |world, mut events_reader_state: Mut<CachedTickEventsState>| {
+
+                // Tick Event
+                let mut did_tick = false;
+
+                let mut events_reader = events_reader_state.event_state.get_mut(world);
+
+                for bevy_events::TickEvent(_tick) in events_reader.read() {
+                    did_tick = true;
+                }
+
+                if did_tick {
+                    server.0.send_all_updates(world.proxy());
+                }
+            },
+        );
     });
 }

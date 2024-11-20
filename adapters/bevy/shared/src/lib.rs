@@ -31,6 +31,6 @@ pub use components::{HostOwned, HostOwnedMap};
 pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
-pub use system_set::{BeforeReceiveEvents, HostSyncChangeTracking, ReceiveEvents};
+pub use system_set::{BeforeReceiveEvents, HostSyncChangeTracking, SendPackets, ReceiveEvents};
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};
