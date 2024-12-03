@@ -1135,6 +1135,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 IdentityReceiverResult::ErrorResponseCode(code) => {
                     // warn!("Authentication error status code: {}", code);
 
+                    let old_socket_addr_result = self.io.server_addr();
+
                     // reset connection
                     self.io = Io::new(
                         &self.client_config.connection.bandwidth_measure_duration,
@@ -1143,7 +1145,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                     if code == 401 {
                         // push out rejection
-                        self.incoming_events.push_rejection();
+                        match old_socket_addr_result {
+                            Ok(old_socket_addr) => {
+                                self.incoming_events.push_rejection(&old_socket_addr);
+                            }
+                            Err(err) => {
+                                self.incoming_events.push_error(err);
+                            }
+                        }
                     } else {
                         // push out error
                         self.incoming_events

@@ -9,7 +9,7 @@ use crate::NaiaClientError;
 
 pub struct Events<E: Copy> {
     connections: Vec<SocketAddr>,
-    rejections: Vec<()>,
+    rejections: Vec<SocketAddr>,
     disconnections: Vec<SocketAddr>,
     client_ticks: Vec<Tick>,
     server_ticks: Vec<Tick>,
@@ -135,8 +135,8 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_rejection(&mut self) {
-        self.rejections.push(());
+    pub(crate) fn push_rejection(&mut self, socket_addr: &SocketAddr) {
+        self.rejections.push(*socket_addr);
         self.empty = false;
     }
 
@@ -342,7 +342,7 @@ impl<E: Copy> Event<E> for ConnectEvent {
 // RejectEvent
 pub struct RejectEvent;
 impl<E: Copy> Event<E> for RejectEvent {
-    type Iter = IntoIter<()>;
+    type Iter = IntoIter<SocketAddr>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.rejections);
