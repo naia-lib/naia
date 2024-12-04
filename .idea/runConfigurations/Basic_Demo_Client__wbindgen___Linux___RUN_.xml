@@ -1,5 +1,5 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Basic Demo Client [wbindgen] [Linux] [RUN]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="Basic Demo Client [wbindgen] [Linux] [RUN]" type="CargoCommandRunConfiguration" factoryName="Cargo Command" singleton="false">
     <option name="command" value="run" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/demos/basic/client/wasm_bindgen" />
     <envs />
