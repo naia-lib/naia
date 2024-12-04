@@ -28,6 +28,7 @@ pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
     pub base: BaseConnection<E>,
     pub ping_manager: PingManager,
     tick_buffer: TickBufferReceiver,
+    pub manual_disconnect: bool,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
@@ -52,6 +53,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             ),
             ping_manager: PingManager::new(ping_config),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
+            manual_disconnect: false,
         }
     }
 

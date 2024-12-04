@@ -8,7 +8,7 @@ use naia_server::{
 
 use naia_demo_world::{Entity, World, WorldRefType};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, MyMarker, StringMessage};
+use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage};
 
 type Server = NaiaServer<Entity>;
 
@@ -60,7 +60,7 @@ impl App {
 
                 // Create a Character
                 let character =
-                    Character::<MyMarker>::new(MyMarker, (count * 4) as u8, 0, first, last);
+                    Character::new((count * 4) as u8, 0, first, last);
                 let character_key = server
                     .spawn_entity(world.proxy_mut())
                     .insert_component(character)
@@ -71,7 +71,7 @@ impl App {
             }
         }
 
-        App {
+        Self {
             server,
             world,
             main_room_key,
@@ -110,7 +110,7 @@ impl App {
                 info!("Naia Server disconnected from: {:?}", user.address());
             }
             for (user_key, message) in
-                events.read::<MessageEvent<UnorderedReliableChannel, StringMessage<MyMarker>>>()
+                events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>()
             {
                 let message_contents = &(*message.contents);
                 info!(
@@ -133,7 +133,7 @@ impl App {
                         );
 
                         let new_message =
-                            StringMessage::<MyMarker>::new(new_message_contents, MyMarker);
+                            StringMessage::new(new_message_contents);
                         self.server
                             .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message);
                     }
@@ -144,7 +144,7 @@ impl App {
                     if let Some(mut character) = self
                         .server
                         .entity_mut(self.world.proxy_mut(), &entity)
-                        .component::<Character<MyMarker>>()
+                        .component::<Character>()
                     {
                         character.step();
                     }
@@ -156,7 +156,7 @@ impl App {
                     let world = &self.world;
                     for (_, user_key, entity) in server.scope_checks() {
                         if let Some(character) =
-                            world.proxy().component::<Character<MyMarker>>(&entity)
+                            world.proxy().component::<Character>(&entity)
                         {
                             let x = *character.x;
                             let should_be_in_scope = (5..=15).contains(&x);

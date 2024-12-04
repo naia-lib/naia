@@ -1493,6 +1493,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.incoming_events.push_disconnection(user_key, user);
     }
 
+    pub(crate) fn user_queue_disconnect(&mut self, user_key: &UserKey) {
+        let Some(user) = self.users.get(user_key) else {
+            panic!("Attempting to disconnect a nonexistent user");
+        };
+        if !user.has_address() {
+            panic!("Attempting to disconnect a nonexistent connection");
+        }
+        let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+            panic!("Attempting to disconnect a nonexistent connection");
+        };
+        connection.manual_disconnect = true;
+    }
+
     /// All necessary cleanup, when they're actually gone...
     pub(crate) fn despawn_all_remote_entities<W: WorldMutType<E>>(
         &mut self,
@@ -2098,7 +2111,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
             for (_, connection) in &mut self.user_connections.iter_mut() {
                 // user disconnects
-                if connection.base.should_drop() {
+                if connection.base.should_drop() || connection.manual_disconnect {
                     user_disconnects.push(connection.user_key);
                     continue;
                 }
