@@ -3,7 +3,6 @@ use std::{collections::HashMap, net::SocketAddr};
 use log::warn;
 use ring::{hmac, rand};
 
-use naia_server_socket::shared::IdentityToken;
 use naia_shared::{
     handshake::HandshakeHeader, BitReader, BitWriter, OutgoingPacket, PacketType, Serde, SerdeErr,
     StandardHeader,
@@ -15,6 +14,7 @@ use crate::{
 };
 
 type Timestamp = u64;
+type IdentityToken = String;
 
 pub struct HandshakeManager {
     authenticated_and_identified_users: HashMap<SocketAddr, UserKey>,

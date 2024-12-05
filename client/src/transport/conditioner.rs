@@ -1,11 +1,12 @@
-use naia_shared::{link_condition_logic, LinkConditionerConfig, TimeQueue};
+use naia_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 
+use crate::transport::udp::UdpPacketReceiver;
 use super::{server_addr::ServerAddr, PacketReceiver, RecvError};
 
 /// Used to receive packets from the Client Socket
 #[derive(Clone)]
 pub struct ConditionedPacketReceiver {
-    inner_receiver: Box<dyn PacketReceiver>,
+    inner_receiver: UdpPacketReceiver,
     link_conditioner_config: LinkConditionerConfig,
     time_queue: TimeQueue<Box<[u8]>>,
     last_payload: Option<Box<[u8]>>,
@@ -14,10 +15,10 @@ pub struct ConditionedPacketReceiver {
 impl ConditionedPacketReceiver {
     /// Creates a new ConditionedPacketReceiver
     pub fn new(
-        inner_receiver: Box<dyn PacketReceiver>,
+        inner_receiver: UdpPacketReceiver,
         link_conditioner_config: &LinkConditionerConfig,
     ) -> Self {
-        ConditionedPacketReceiver {
+        Self {
             inner_receiver,
             link_conditioner_config: link_conditioner_config.clone(),
             time_queue: TimeQueue::new(),
@@ -48,8 +49,9 @@ impl PacketReceiver for ConditionedPacketReceiver {
             }
         }
 
-        if self.time_queue.has_item() {
-            self.last_payload = Some(self.time_queue.pop_item().unwrap());
+        let now = Instant::now();
+        if self.time_queue.has_item(&now) {
+            self.last_payload = Some(self.time_queue.pop_item(&now).unwrap());
             return Ok(Some(self.last_payload.as_ref().unwrap()));
         } else {
             Ok(None)

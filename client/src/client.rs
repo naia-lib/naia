@@ -1,7 +1,7 @@
 use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use log::{info, warn};
-use naia_client_socket::IdentityReceiverResult;
+
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
@@ -16,7 +16,7 @@ use super::{client_config::ClientConfig, error::NaiaClientError, events::Events}
 use crate::{
     connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
     handshake::{HandshakeManager, HandshakeResult, Handshaker},
-    transport::Socket,
+    transport::{Socket, IdentityReceiverResult},
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
         global_world_manager::GlobalWorldManager,
