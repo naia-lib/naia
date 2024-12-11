@@ -22,7 +22,7 @@ mquad = [ "naia-shared/mquad", "naia-client-socket?/mquad" ]
 bevy_support = ["naia-shared/bevy_support"]
 zstd_support = ["naia-shared/zstd_support"]
 transport_webrtc = [ "naia-client-socket" ]
-transport_udp = [ "local_ipaddress", "naia-shared/advanced_handshake" ]
+transport_udp = [ "local_ipaddress", "naia-shared/advanced_handshake", "naia-shared/transport_udp", "http", "base64" ]
 
 [dependencies]
 naia-shared = { version = "0.23", path = "../shared" }
@@ -30,3 +30,5 @@ naia-client-socket = { version = "0.23", path = "../socket/client", optional = t
 local_ipaddress = { version = "0.1", optional = true }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
+http = { version = "1.2", optional = true }
+base64 = { version = "0.13", optional = true }

@@ -21,6 +21,7 @@ wbindgen = [ "naia-socket-shared/wbindgen", "js-sys" ]
 mquad = [ "naia-socket-shared/mquad" ]
 bevy_support = [ "bevy_ecs" ]
 zstd_support = [ "zstd" ]
+transport_udp = [ "http" ]
 
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
 advanced_handshake = []
@@ -34,3 +35,4 @@ cfg-if = { version = "1.0" }
 js-sys = { version = "0.3.64", optional = true }
 bevy_ecs = { version = "0.14", default-features = false, optional = true }
 zstd = { version = "0.12.2", optional = true }
+http = { version = "1.2", optional = true }

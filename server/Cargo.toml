@@ -20,7 +20,7 @@ maintenance = { status = "actively-developed" }
 bevy_support = ["naia-shared/bevy_support"]
 zstd_support = ["naia-shared/zstd_support"]
 transport_webrtc = [ "naia-server-socket" ]
-transport_udp = ["naia-shared/advanced_handshake", "ring"]
+transport_udp = ["naia-shared/advanced_handshake", "naia-shared/transport_udp", "ring", "http", "base64"]
 
 [dependencies]
 naia-shared = { version = "0.23", path = "../shared" }
@@ -29,3 +29,5 @@ cfg-if = { version = "1.0" }
 log = { version = "0.4" }
 ring = { version = "0.16.15", optional = true }
 fastrand = { version = "1.7.0" }
+http = { version = "1.2", optional = true }
+base64 = { version = "0.13", optional = true }

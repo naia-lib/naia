@@ -26,7 +26,7 @@ impl Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect_inner(server_session_url, config, None, None);
+        Self::connect_inner(server_session_url, config, None, None)
     }
 
     /// Connects to the given server address with authentication
@@ -39,7 +39,7 @@ impl Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect_inner(server_session_url, config, Some(auth_bytes), None);
+        Self::connect_inner(server_session_url, config, Some(auth_bytes), None)
     }
 
     /// Connects to the given server address with authentication
@@ -52,7 +52,7 @@ impl Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect_inner(server_session_url, config, None, Some(auth_headers));
+        Self::connect_inner(server_session_url, config, None, Some(auth_headers))
     }
 
     /// Connects to the given server address with authentication
@@ -66,12 +66,12 @@ impl Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect_inner(
+        Self::connect_inner(
             server_session_url,
             config,
             Some(auth_bytes),
             Some(auth_headers),
-        );
+        )
     }
 
     /// Connects to the given server address
@@ -122,7 +122,7 @@ impl Socket {
         let identity_receiver_impl = IdentityReceiverImpl::new(io.to_client_id_receiver);
         let identity_receiver: Box<dyn IdentityReceiver> = Box::new(identity_receiver_impl);
 
-        return (identity_receiver, packet_sender, packet_receiver);
+        (identity_receiver, packet_sender, packet_receiver)
     }
 }
 

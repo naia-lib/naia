@@ -1,10 +1,12 @@
 use std::{
     io::{Read, Write, ErrorKind},
-    net::{SocketAddr, UdpSocket},
+    net::{SocketAddr, UdpSocket, IpAddr, Ipv4Addr, Ipv6Addr, TcpStream},
     sync::{Arc, Mutex},
 };
 
-use naia_shared::{IdentityToken, LinkConditionerConfig};
+use log::warn;
+
+use naia_shared::{transport_udp, IdentityToken, LinkConditionerConfig};
 
 use super::{conditioner::ConditionedPacketReceiver, IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender as TransportSender, RecvError, SendError, ServerAddr as TransportAddr, Socket as TransportSocket};
 
@@ -69,11 +71,11 @@ impl Socket {
             }
         };
 
-        return (
+        (
             Box::new(id_receiver),
             packet_sender,
             packet_receiver
-        );
+        )
     }
 }
 
@@ -137,10 +139,10 @@ struct PacketSender {
 
 impl PacketSender {
     pub fn new(socket: Arc<Mutex<UdpSocket>>, server_addr: SocketAddr) -> Self {
-        return Self {
+        Self {
             socket,
             server_addr,
-        };
+        }
     }
 }
 
@@ -157,7 +159,7 @@ impl TransportSender for PacketSender {
         {
             return Err(SendError);
         }
-        return Ok(());
+        Ok(())
     }
     /// Get the Server's Socket address
     fn server_addr(&self) -> TransportAddr {
@@ -175,11 +177,11 @@ pub(crate) struct UdpPacketReceiver {
 
 impl UdpPacketReceiver {
     pub fn new(socket: Arc<Mutex<UdpSocket>>, server_addr: SocketAddr) -> Self {
-        return Self {
+        Self {
             socket,
             server_addr,
             buffer: [0; 1472],
-        };
+        }
     }
 }
 
@@ -205,11 +207,9 @@ impl PacketReceiver for UdpPacketReceiver {
                 match kind {
                     ErrorKind::WouldBlock => {
                         //just didn't receive anything this time
-                        return Ok(None);
+                        Ok(None)
                     }
-                    _ => {
-                        return Err(RecvError);
-                    }
+                    _ => Err(RecvError),
                 }
             }
         }
@@ -251,29 +251,21 @@ impl AuthIo {
         };
         stream.set_nonblocking(true).unwrap();
 
-        let sig: u8 = match (auth_bytes_opt.is_some(), auth_headers_opt.is_some()) {
-            (false, false) => 0,
-            (true, false) => 1,
-            (false, true) => 2,
-            (true, true) => 3,
-        };
-
-        stream.write(&[sig]).unwrap();
-
-        // TODO: refactor this correctly
+        let mut request = http::Request::builder()
+            .method("POST")
+            .uri("/");
         if let Some(auth_bytes) = auth_bytes_opt {
-            stream.write(&auth_bytes).unwrap();
-            stream.write(b"\r\n").unwrap();
+            let base64_encoded = base64::encode(&auth_bytes);
+            request = request.header("Authorization", &base64_encoded);
         }
-        if let Some(auth_headers) = auth_headers_opt {
-            stream.write(&[1]).unwrap();
+        if let Some(auth_headers) = auth_headers_opt.clone() {
             for (key, value) in auth_headers {
-                stream.write(key.as_bytes()).unwrap();
-                stream.write(b": ").unwrap();
-                stream.write(value.as_bytes()).unwrap();
-                stream.write(b"\r\n").unwrap();
+                request = request.header(key, value);
             }
         }
+        let request = request.body(Vec::new()).unwrap();
+        let request_bytes = transport_udp::request_to_bytes(request);
+        stream.write_all(&request_bytes).unwrap();
 
         stream.flush().unwrap();
 
@@ -287,27 +279,20 @@ impl AuthIo {
         match stream.read(&mut self.buffer) {
             Ok(recv_len) => {
 
-                // read first byte to determine if was succesfull or not
-                let success_byte = self.buffer[0];
-                if success_byte == 0 {
-                    return IdentityReceiverResult::ErrorResponseCode(401);
-                }
-                if success_byte != 1 {
-                    warn!("Unexpected id response type: {}", success_byte);
-                    return IdentityReceiverResult::ErrorResponseCode(500);
+                let response = transport_udp::bytes_to_response(&self.buffer[..recv_len]);
+                let response_status = response.status().as_u16();
+                if response_status != 200 {
+                    return IdentityReceiverResult::ErrorResponseCode(response_status);
                 }
 
                 // read the rest of the bytes as the identity token
-
-                let id_token = IdentityToken::from_utf8_lossy(&self.buffer[1..recv_len]).to_string();
-                return IdentityReceiverResult::Success(id_token);
+                let id_token = IdentityToken::from_utf8_lossy(response.body()).to_string();
+                IdentityReceiverResult::Success(id_token)
             }
             Err(ref e) => {
                 let kind = e.kind();
                 match kind {
-                    ErrorKind::WouldBlock => {
-                        IdentityReceiverResult::Waiting
-                    }
+                    ErrorKind::WouldBlock => IdentityReceiverResult::Waiting,
                     _ => {
                         warn!("Unexpected auth read error: {:?}",  e);
                         IdentityReceiverResult::ErrorResponseCode(500)
@@ -344,12 +329,6 @@ impl IdentityReceiver for AuthReceiver {
         guard.receive()
     }
 }
-
-//
-
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, TcpStream};
-
-use log::warn;
 
 /// Helper method to find local IP address, if possible
 pub fn find_my_ip_address() -> Option<IpAddr> {
