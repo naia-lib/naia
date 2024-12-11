@@ -10,31 +10,38 @@ use super::{conditioner::ConditionedPacketReceiver, IdentityReceiver, IdentityRe
 
 // Socket
 pub struct Socket {
-    server_addr: SocketAddr,
-    udp_socket: Arc<Mutex<UdpSocket>>,
     auth_io: Arc<Mutex<AuthIo>>,
+
+    data_addr: SocketAddr,
+    data_socket: Arc<Mutex<UdpSocket>>,
+
     config: Option<LinkConditionerConfig>,
 }
 
 impl Socket {
-    pub fn new(server_addr: &SocketAddr, config: Option<LinkConditionerConfig>) -> Self {
+    pub fn new(
+        auth_addr: &SocketAddr,
+        data_addr: &SocketAddr,
+        config: Option<LinkConditionerConfig>,
+    ) -> Self {
+
+        let auth_io = Arc::new(Mutex::new(AuthIo::new(auth_addr)));
+
         let client_ip_address =
             find_my_ip_address().expect("cannot find host's current IP address");
 
-        let udp_socket = Arc::new(Mutex::new(UdpSocket::bind((client_ip_address, 0)).unwrap()));
-        udp_socket
+        let data_socket = Arc::new(Mutex::new(UdpSocket::bind((client_ip_address, 0)).unwrap()));
+        data_socket
             .as_ref()
             .lock()
             .unwrap()
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
 
-        let auth_io = Arc::new(Mutex::new(AuthIo::new(server_addr)));
-
         Self {
-            server_addr: *server_addr,
-            udp_socket,
             auth_io,
+            data_addr: *data_addr,
+            data_socket,
             config,
         }
     }
@@ -51,9 +58,9 @@ impl Socket {
         self.auth_io.lock().unwrap().connect(auth_bytes_opt, auth_headers_opt);
         let id_receiver = AuthReceiver::new(self.auth_io.clone());
 
-        let packet_sender = Box::new(PacketSender::new(self.udp_socket.clone(), self.server_addr));
+        let packet_sender = Box::new(PacketSender::new(self.data_socket.clone(), self.data_addr));
 
-        let packet_receiver = UdpPacketReceiver::new(self.udp_socket.clone(), self.server_addr);
+        let packet_receiver = UdpPacketReceiver::new(self.data_socket.clone(), self.data_addr);
         let packet_receiver: Box<dyn PacketReceiver> = {
             if let Some(config) = &self.config {
                 Box::new(ConditionedPacketReceiver::new(packet_receiver, config))
@@ -222,9 +229,10 @@ pub(crate) struct AuthIo {
 }
 
 impl AuthIo {
-    pub fn new(server_addr: &SocketAddr) -> Self {
+    pub fn new(addr: &SocketAddr) -> Self {
+
         Self {
-            server_addr: *server_addr,
+            server_addr: *addr,
             buffer: [0; 1472],
             stream_opt: None,
         }
@@ -235,7 +243,12 @@ impl AuthIo {
         auth_bytes_opt: Option<Vec<u8>>,
         auth_headers_opt: Option<Vec<(String, String)>>,
     ) {
-        let mut stream = TcpStream::connect(self.server_addr).unwrap();
+        let mut stream = match TcpStream::connect(self.server_addr) {
+            Ok(stream) => stream,
+            Err(err) => {
+                panic!("Couldn't connect to server at address: {:?}. {:?}", self.server_addr, err);
+            }
+        };
         stream.set_nonblocking(true).unwrap();
 
         let sig: u8 = match (auth_bytes_opt.is_some(), auth_headers_opt.is_some()) {
@@ -247,6 +260,7 @@ impl AuthIo {
 
         stream.write(&[sig]).unwrap();
 
+        // TODO: refactor this correctly
         if let Some(auth_bytes) = auth_bytes_opt {
             stream.write(&auth_bytes).unwrap();
             stream.write(b"\r\n").unwrap();

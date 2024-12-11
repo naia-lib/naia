@@ -16,28 +16,33 @@ use super::{
 
 // Socket
 pub struct Socket {
-    udp_socket: Arc<Mutex<UdpSocket>>,
+    data_socket: Arc<Mutex<UdpSocket>>,
     auth_io: Arc<Mutex<AuthIo>>,
     config: Option<LinkConditionerConfig>,
 }
 
 impl Socket {
-    pub fn new(server_addr: &SocketAddr, config: Option<LinkConditionerConfig>) -> Self {
-        let udp_socket = Arc::new(Mutex::new(UdpSocket::bind(*server_addr).unwrap()));
-        udp_socket
+    pub fn new(
+        auth_addr: &SocketAddr,
+        data_addr: &SocketAddr,
+        config: Option<LinkConditionerConfig>
+    ) -> Self {
+
+        let auth_socket = TcpListener::bind(*auth_addr).unwrap();
+        auth_socket
+            .set_nonblocking(true)
+            .expect("can't set socket to non-blocking!");
+        let auth_io = Arc::new(Mutex::new(AuthIo::new(auth_socket)));
+
+        let data_socket = Arc::new(Mutex::new(UdpSocket::bind(*data_addr).unwrap()));
+        data_socket
             .as_ref()
             .lock()
             .unwrap()
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
 
-        let tcp_socket = TcpListener::bind(*server_addr).unwrap();
-        tcp_socket
-            .set_nonblocking(true)
-            .expect("can't set socket to non-blocking!");
-        let auth_io = Arc::new(Mutex::new(AuthIo::new(tcp_socket)));
-
-        return Self { udp_socket, auth_io, config };
+        Self { data_socket, auth_io, config }
     }
 }
 
@@ -58,8 +63,8 @@ impl TransportSocket for Socket {
     ) {
         let auth_sender = AuthSender::new(self.auth_io.clone());
         let auth_receiver = AuthReceiver::new(self.auth_io.clone());
-        let packet_sender = UdpPacketSender::new(self.udp_socket.clone());
-        let packet_receiver = UdpPacketReceiver::new(self.udp_socket.clone());
+        let packet_sender = UdpPacketSender::new(self.data_socket.clone());
+        let packet_receiver = UdpPacketReceiver::new(self.data_socket.clone());
 
         let packet_receiver: Box<dyn PacketReceiver> = {
             if let Some(config) = &self.config {
