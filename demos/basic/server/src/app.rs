@@ -59,8 +59,7 @@ impl App {
                 count += 1;
 
                 // Create a Character
-                let character =
-                    Character::new((count * 4) as u8, 0, first, last);
+                let character = Character::new((count * 4) as u8, 0, first, last);
                 let character_key = server
                     .spawn_entity(world.proxy_mut())
                     .insert_component(character)
@@ -132,8 +131,7 @@ impl App {
                             new_message_contents
                         );
 
-                        let new_message =
-                            StringMessage::new(new_message_contents);
+                        let new_message = StringMessage::new(new_message_contents);
                         self.server
                             .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message);
                     }
@@ -155,9 +153,7 @@ impl App {
                     let server = &mut self.server;
                     let world = &self.world;
                     for (_, user_key, entity) in server.scope_checks() {
-                        if let Some(character) =
-                            world.proxy().component::<Character>(&entity)
-                        {
+                        if let Some(character) = world.proxy().component::<Character>(&entity) {
                             let x = *character.x;
                             let should_be_in_scope = (5..=15).contains(&x);
                             let is_in_scope = server.user_scope(&user_key).has(&entity);

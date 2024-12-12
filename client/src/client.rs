@@ -16,7 +16,7 @@ use super::{client_config::ClientConfig, error::NaiaClientError, events::Events}
 use crate::{
     connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
     handshake::{HandshakeManager, HandshakeResult, Handshaker},
-    transport::{Socket, IdentityReceiverResult},
+    transport::{IdentityReceiverResult, Socket},
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
         global_world_manager::GlobalWorldManager,
@@ -1262,7 +1262,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // Handle based on PacketType
                     match header.packet_type {
                         PacketType::Data => {
-
                             connection.base.mark_should_send_empty_ack();
 
                             if connection

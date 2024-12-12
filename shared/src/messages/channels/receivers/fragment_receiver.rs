@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use naia_serde::BitReader;
 
-use crate::{messages::fragment::{FragmentIndex, FragmentId, FragmentedMessage}, LocalEntityAndGlobalEntityConverter, MessageContainer, MessageIndex, MessageKinds};
+use crate::{
+    messages::fragment::{FragmentId, FragmentIndex, FragmentedMessage},
+    LocalEntityAndGlobalEntityConverter, MessageContainer, MessageIndex, MessageKinds,
+};
 
 pub struct FragmentReceiver {
     // <FragmentId, (FragmentsReceived, Option(FirstMessageIndex, FragmentCount), FragmentData)
@@ -40,7 +43,8 @@ impl FragmentReceiver {
             self.map
                 .insert(fragment_id, (0, None, vec![Box::new([]); fragment_total]));
         }
-        let (fragments_received, first_message_id_opt, fragment_list) = self.map.get_mut(&fragment_id).unwrap();
+        let (fragments_received, first_message_id_opt, fragment_list) =
+            self.map.get_mut(&fragment_id).unwrap();
 
         if fragment_index == FragmentIndex::zero() {
             if first_message_id_opt.is_some() {

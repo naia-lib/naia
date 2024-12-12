@@ -1,9 +1,9 @@
 use std::ops::DerefMut;
 
 use bevy_ecs::{
-    event::{Events, EventReader},
-    world::{Mut, World},
+    event::{EventReader, Events},
     system::SystemState,
+    world::{Mut, World},
 };
 
 use log::warn;
@@ -253,7 +253,6 @@ pub fn send_packets_init(world: &mut World) {
 }
 
 pub fn send_packets(world: &mut World) {
-
     world.resource_scope(|world, mut server: Mut<ServerWrapper>| {
         if !server.0.is_listening() {
             return;
@@ -261,7 +260,6 @@ pub fn send_packets(world: &mut World) {
 
         world.resource_scope(
             |world, mut events_reader_state: Mut<CachedTickEventsState>| {
-
                 // Tick Event
                 let mut did_tick = false;
 

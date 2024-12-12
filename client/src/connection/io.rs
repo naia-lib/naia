@@ -6,7 +6,9 @@ use naia_shared::{
 
 use crate::{
     error::NaiaClientError,
-    transport::{IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr},
+    transport::{
+        IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr,
+    },
 };
 
 pub struct Io {

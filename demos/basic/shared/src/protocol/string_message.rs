@@ -7,8 +7,6 @@ pub struct StringMessage {
 
 impl StringMessage {
     pub fn new(contents: String) -> Self {
-        Self {
-            contents,
-        }
+        Self { contents }
     }
 }

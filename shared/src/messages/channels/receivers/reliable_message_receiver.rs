@@ -85,7 +85,9 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             //info!("Received message!");
         }
 
-        let incoming_messages = self.arranger.process(start_message_index, end_message_index, full_message);
+        let incoming_messages =
+            self.arranger
+                .process(start_message_index, end_message_index, full_message);
         for message in incoming_messages {
             self.receive_message(message_kinds, converter, message);
         }
@@ -103,7 +105,13 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             .buffer_message(message_index, message);
         let received_messages = self.reliable_receiver.receive_messages();
         for (received_message_id, received_message) in received_messages {
-            self.push_message(message_kinds, entity_waitlist, converter, received_message_id, received_message)
+            self.push_message(
+                message_kinds,
+                entity_waitlist,
+                converter,
+                received_message_id,
+                received_message,
+            )
         }
     }
 
@@ -160,7 +168,9 @@ impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageR
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {
             for (start_message_index, end_message_index, mut full_message) in list {
                 full_message.relations_complete(converter);
-                let incoming_messages = self.arranger.process(start_message_index, end_message_index, full_message);
+                let incoming_messages =
+                    self.arranger
+                        .process(start_message_index, end_message_index, full_message);
                 for message in incoming_messages {
                     self.receive_message(message_kinds, converter, message);
                 }

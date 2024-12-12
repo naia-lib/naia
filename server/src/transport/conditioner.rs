@@ -2,8 +2,8 @@ use std::net::SocketAddr;
 
 use naia_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 
-use crate::transport::udp::UdpPacketReceiver;
 use super::{PacketReceiver, RecvError};
+use crate::transport::udp::UdpPacketReceiver;
 
 /// Used to receive packets from the Client Socket
 #[derive(Clone)]

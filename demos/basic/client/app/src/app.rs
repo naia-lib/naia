@@ -76,9 +76,7 @@ impl App {
         for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
         }
-        for message in
-            events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>()
-        {
+        for message in events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>() {
             let message_contents = &(*message.contents);
             info!("Client recv <- {}", message_contents);
 

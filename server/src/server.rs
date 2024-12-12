@@ -1878,7 +1878,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         header: &StandardHeader,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-
         if header.packet_type != PacketType::Data {
             panic!("Server Error: received non-data packet in data packet handler");
         }
@@ -2131,7 +2130,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             for (user_address, connection) in &mut self.user_connections.iter_mut() {
                 // user heartbeats
                 if connection.base.should_send_heartbeat() {
-                    Self::send_heartbeat_packet(user_address, connection, &self.time_manager, &mut self.io);
+                    Self::send_heartbeat_packet(
+                        user_address,
+                        connection,
+                        &self.time_manager,
+                        &mut self.io,
+                    );
                 }
             }
         }
@@ -2141,14 +2145,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // empty acks
 
         for (user_address, connection) in &mut self.user_connections.iter_mut() {
-
             if connection.base.should_send_empty_ack() {
-                Self::send_heartbeat_packet(user_address, connection, &self.time_manager, &mut self.io);
+                Self::send_heartbeat_packet(
+                    user_address,
+                    connection,
+                    &self.time_manager,
+                    &mut self.io,
+                );
             }
         }
     }
 
-    fn send_heartbeat_packet(user_address: &SocketAddr, connection: &mut Connection<E>, time_manager: &TimeManager, io: &mut Io) {
+    fn send_heartbeat_packet(
+        user_address: &SocketAddr,
+        connection: &mut Connection<E>,
+        time_manager: &TimeManager,
+        io: &mut Io,
+    ) {
         // Don't try to refactor this to self.internal_send, doesn't seem to
         // work cause of iter_mut()
         let mut writer = BitWriter::new();
@@ -2165,10 +2178,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         time_manager.current_tick_instant().ser(&mut writer);
 
         // send packet
-        if io
-            .send_packet(user_address, writer.to_packet())
-            .is_err()
-        {
+        if io.send_packet(user_address, writer.to_packet()).is_err() {
             // TODO: pass this on and handle above
             warn!(
                 "Server Error: Cannot send heartbeat packet to {}",

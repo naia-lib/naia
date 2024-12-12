@@ -1,7 +1,7 @@
 use std::{any::Any, marker::PhantomData};
 
 use bevy_app::{App, Update};
-use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs, world::World, component::Component};
+use bevy_ecs::{component::Component, entity::Entity, schedule::IntoSystemConfigs, world::World};
 
 use naia_shared::{GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
 

@@ -1,16 +1,19 @@
 use std::{
     io::ErrorKind,
-    net::{UdpSocket, IpAddr, Ipv4Addr, Ipv6Addr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, UdpSocket},
     sync::{Arc, Mutex},
 };
 
 use naia_shared::LinkConditionerConfig;
 
 use crate::transport::{
-    IdentityReceiver, PacketReceiver,
-    PacketSender as TransportSender, RecvError, SendError, ServerAddr as TransportAddr,
-    Socket as TransportSocket,
-    udp::{addr_cell::AddrCell, auth::{AuthIo, AuthReceiver}, conditioner::ConditionedPacketReceiver},
+    udp::{
+        addr_cell::AddrCell,
+        auth::{AuthIo, AuthReceiver},
+        conditioner::ConditionedPacketReceiver,
+    },
+    IdentityReceiver, PacketReceiver, PacketSender as TransportSender, RecvError, SendError,
+    ServerAddr as TransportAddr, Socket as TransportSocket,
 };
 
 // Socket
@@ -25,9 +28,11 @@ pub struct Socket {
 
 impl Socket {
     pub fn new(server_session_url: &str, config: Option<LinkConditionerConfig>) -> Self {
-
         let data_addr_cell = AddrCell::default();
-        let auth_io = Arc::new(Mutex::new(AuthIo::new(data_addr_cell.clone(), server_session_url)));
+        let auth_io = Arc::new(Mutex::new(AuthIo::new(
+            data_addr_cell.clone(),
+            server_session_url,
+        )));
 
         let client_ip_address =
             find_my_ip_address().expect("cannot find host's current IP address");
@@ -55,14 +60,21 @@ impl Socket {
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
-        self.auth_io.lock().unwrap().connect(auth_bytes_opt, auth_headers_opt);
+        self.auth_io
+            .lock()
+            .unwrap()
+            .connect(auth_bytes_opt, auth_headers_opt);
         let id_receiver = AuthReceiver::new(self.auth_io.clone());
 
-        let packet_sender = Box::new(PacketSender::new(self.data_addr_cell.clone(), self.data_socket.clone()));
+        let packet_sender = Box::new(PacketSender::new(
+            self.data_addr_cell.clone(),
+            self.data_socket.clone(),
+        ));
 
-        let packet_receiver = UdpPacketReceiver::new(self.data_addr_cell.clone(), self.data_socket.clone());
+        let packet_receiver =
+            UdpPacketReceiver::new(self.data_addr_cell.clone(), self.data_socket.clone());
         let packet_receiver: Box<dyn PacketReceiver> = {
             if let Some(config) = &self.config {
                 Box::new(ConditionedPacketReceiver::new(packet_receiver, config))
@@ -71,11 +83,7 @@ impl Socket {
             }
         };
 
-        (
-            Box::new(id_receiver),
-            packet_sender,
-            packet_receiver
-        )
+        (Box::new(id_receiver), packet_sender, packet_receiver)
     }
 }
 
@@ -87,33 +95,33 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 
 impl TransportSocket for Socket {
     fn connect(
-        self: Box<Self>
+        self: Box<Self>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         self.connect_inner(None, None)
     }
 
     fn connect_with_auth(
         self: Box<Self>,
-        auth_bytes: Vec<u8>
+        auth_bytes: Vec<u8>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         self.connect_inner(Some(auth_bytes), None)
     }
 
     fn connect_with_auth_headers(
         self: Box<Self>,
-        auth_headers: Vec<(String, String)>
+        auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         self.connect_inner(None, Some(auth_headers))
     }
@@ -121,11 +129,11 @@ impl TransportSocket for Socket {
     fn connect_with_auth_and_headers(
         self: Box<Self>,
         auth_bytes: Vec<u8>,
-        auth_headers: Vec<(String, String)>
+        auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
-        Box<dyn PacketReceiver>
+        Box<dyn PacketReceiver>,
     ) {
         self.connect_inner(Some(auth_bytes), Some(auth_headers))
     }
@@ -139,10 +147,7 @@ struct PacketSender {
 
 impl PacketSender {
     pub fn new(addr_cell: AddrCell, socket: Arc<Mutex<UdpSocket>>) -> Self {
-        Self {
-            socket,
-            addr_cell,
-        }
+        Self { socket, addr_cell }
     }
 }
 

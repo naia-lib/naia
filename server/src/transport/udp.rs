@@ -1,18 +1,18 @@
 use std::{
     collections::HashMap,
-    io::{Read, Write, ErrorKind},
-    net::{TcpStream, SocketAddr, UdpSocket, TcpListener},
+    io::{ErrorKind, Read, Write},
+    net::{SocketAddr, TcpListener, TcpStream, UdpSocket},
     sync::{Arc, Mutex},
 };
 
 use naia_shared::{transport_udp, IdentityToken, LinkConditionerConfig};
 
-use crate::user::UserAuthAddr;
 use super::{
-    AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
-    conditioner::ConditionedPacketReceiver, PacketReceiver,
-    PacketSender as TransportSender, RecvError, SendError, Socket as TransportSocket,
+    conditioner::ConditionedPacketReceiver, AuthReceiver as TransportAuthReceiver,
+    AuthSender as TransportAuthSender, PacketReceiver, PacketSender as TransportSender, RecvError,
+    SendError, Socket as TransportSocket,
 };
+use crate::user::UserAuthAddr;
 
 // Socket
 pub struct Socket {
@@ -22,18 +22,19 @@ pub struct Socket {
 }
 
 impl Socket {
-    pub fn new(
-        server_addrs: &ServerAddrs,
-        config: Option<LinkConditionerConfig>
-    ) -> Self {
-
+    pub fn new(server_addrs: &ServerAddrs, config: Option<LinkConditionerConfig>) -> Self {
         let auth_socket = TcpListener::bind(server_addrs.auth_listen_addr).unwrap();
         auth_socket
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
-        let auth_io = Arc::new(Mutex::new(AuthIo::new(&server_addrs.public_udp_url, auth_socket)));
+        let auth_io = Arc::new(Mutex::new(AuthIo::new(
+            &server_addrs.public_udp_url,
+            auth_socket,
+        )));
 
-        let data_socket = Arc::new(Mutex::new(UdpSocket::bind(server_addrs.udp_listen_addr).unwrap()));
+        let data_socket = Arc::new(Mutex::new(
+            UdpSocket::bind(server_addrs.udp_listen_addr).unwrap(),
+        ));
         data_socket
             .as_ref()
             .lock()
@@ -41,7 +42,11 @@ impl Socket {
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
 
-        Self { data_socket, auth_io, config }
+        Self {
+            data_socket,
+            auth_io,
+            config,
+        }
     }
 }
 
@@ -53,7 +58,7 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 
 impl TransportSocket for Socket {
     fn listen(
-        self: Box<Self>
+        self: Box<Self>,
     ) -> (
         Box<dyn TransportAuthSender>,
         Box<dyn TransportAuthReceiver>,
@@ -159,7 +164,6 @@ pub(crate) struct AuthIo {
 
 impl AuthIo {
     pub fn new(public_udp_url: &str, socket: TcpListener) -> Self {
-
         let public_udp_addr = url_str_to_addr(public_udp_url);
 
         Self {
@@ -183,10 +187,18 @@ impl AuthIo {
 
                 let request = transport_udp::bytes_to_request(&self.buffer[..recv_len]);
                 if request.headers().contains_key("Authorization") {
-                    let auth_bytes = request.headers().get("Authorization").unwrap().to_str().unwrap();
+                    let auth_bytes = request
+                        .headers()
+                        .get("Authorization")
+                        .unwrap()
+                        .to_str()
+                        .unwrap();
                     let auth_bytes = base64::decode(auth_bytes).unwrap();
                     self.buffer[0..auth_bytes.len()].copy_from_slice(&auth_bytes);
-                    return Ok(Some((UserAuthAddr::new(addr), &self.buffer[..auth_bytes.len()])));
+                    return Ok(Some((
+                        UserAuthAddr::new(addr),
+                        &self.buffer[..auth_bytes.len()],
+                    )));
                 } else {
                     return Ok(None);
                 }
@@ -208,7 +220,6 @@ impl AuthIo {
         identity_token: &IdentityToken,
     ) -> Result<(), SendError> {
         if let Some(mut stream) = self.outgoing_streams.remove(&address.addr()) {
-
             let response_body = format!("{}\r\n{}", identity_token, self.public_udp_addr);
             let response_body_bytes = response_body.into_bytes();
 
@@ -229,7 +240,6 @@ impl AuthIo {
     /// Sends a rejection packet from the Client Socket
     fn reject(&mut self, address: &UserAuthAddr) -> Result<(), SendError> {
         if let Some(mut stream) = self.outgoing_streams.remove(&address.addr()) {
-
             let response = http::Response::builder()
                 .status(401)
                 .body(Vec::new())
@@ -277,12 +287,15 @@ impl TransportAuthSender for AuthSender {
 #[derive(Clone)]
 pub(crate) struct AuthReceiver {
     auth_io: Arc<Mutex<AuthIo>>,
-    buffer: Box<[u8]>
+    buffer: Box<[u8]>,
 }
 
 impl AuthReceiver {
     pub fn new(auth_io: Arc<Mutex<AuthIo>>) -> Self {
-        Self { auth_io, buffer: Box::new([0; 1472]) }
+        Self {
+            auth_io,
+            buffer: Box::new([0; 1472]),
+        }
     }
 }
 

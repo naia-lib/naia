@@ -1,6 +1,11 @@
 use std::{any::Any, collections::HashMap};
 
-use bevy_ecs::{event::EventReader, entity::Entity, prelude::{Event, Resource}, system::SystemState};
+use bevy_ecs::{
+    entity::Entity,
+    event::EventReader,
+    prelude::{Event, Resource},
+    system::SystemState,
+};
 
 use naia_bevy_shared::{
     Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate,

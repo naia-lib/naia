@@ -1,13 +1,13 @@
 use std::any::TypeId;
 
 use bevy_ecs::{
+    component::Component,
     entity::Entity,
     event::EventWriter,
     prelude::Event,
     query::{Added, Changed},
     removal_detection::RemovedComponents,
     system::{Query, ResMut},
-    component::Component,
 };
 
 use naia_shared::{ComponentKind, Replicate};

@@ -1,14 +1,18 @@
 use std::{
-    sync::{Arc, Mutex},
-    future, thread,
-    str::FromStr,
+    future,
     net::SocketAddr,
+    str::FromStr,
+    sync::{Arc, Mutex},
+    thread,
 };
 
-use once_cell::sync::Lazy;
 use log::warn;
+use once_cell::sync::Lazy;
 use reqwest::header::{HeaderName, HeaderValue};
-use tokio::{runtime::{Builder, Handle}, sync::{oneshot, oneshot::error::TryRecvError, RwLock}};
+use tokio::{
+    runtime::{Builder, Handle},
+    sync::{oneshot, oneshot::error::TryRecvError, RwLock},
+};
 
 use crate::transport::{udp::addr_cell::AddrCell, IdentityReceiver, IdentityReceiverResult};
 
@@ -21,7 +25,6 @@ pub(crate) struct AuthIo {
 
 impl AuthIo {
     pub(crate) fn new(data_addr_cell: AddrCell, auth_url: &str) -> Self {
-
         let client = reqwest::Client::new();
 
         Self {
@@ -37,7 +40,8 @@ impl AuthIo {
         auth_bytes_opt: Option<Vec<u8>>,
         auth_headers_opt: Option<Vec<(String, String)>>,
     ) {
-        let mut request = reqwest::Request::new(reqwest::Method::POST, self.auth_url.parse().unwrap());
+        let mut request =
+            reqwest::Request::new(reqwest::Method::POST, self.auth_url.parse().unwrap());
         if let Some(auth_bytes) = auth_bytes_opt {
             let base64_encoded = base64::encode(&auth_bytes);
             let header_name = HeaderName::from_str("Authorization").unwrap();
@@ -52,7 +56,11 @@ impl AuthIo {
                 request_headers.insert(header_name, header_value);
             }
         }
-        self.pending_req_opt = Some(PendingRequest::new(self.http_client.clone(), request, self.data_addr_cell.clone()));
+        self.pending_req_opt = Some(PendingRequest::new(
+            self.http_client.clone(),
+            request,
+            self.data_addr_cell.clone(),
+        ));
     }
 
     fn receive(&mut self) -> IdentityReceiverResult {
@@ -61,7 +69,6 @@ impl AuthIo {
         };
         match pending_req.poll_response() {
             Ok(Some((response_status, id_token))) => {
-
                 if response_status != 200 {
                     return IdentityReceiverResult::ErrorResponseCode(response_status);
                 }

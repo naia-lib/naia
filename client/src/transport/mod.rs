@@ -13,7 +13,10 @@ mod server_addr;
 
 pub use server_addr::ServerAddr;
 
-pub use inner::{IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, RecvError, SendError, Socket};
+pub use inner::{
+    IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, RecvError, SendError,
+    Socket,
+};
 
 mod inner {
 

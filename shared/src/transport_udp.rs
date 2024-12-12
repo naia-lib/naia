@@ -16,7 +16,10 @@ pub fn request_to_bytes(request: http::Request<Vec<u8>>) -> Vec<u8> {
     // Add the other headers
     for (key, value) in request.headers() {
         let Ok(value_str) = value.to_str() else {
-            warn!("Failed to convert header `{:?}`'s value to string: {:?}", key, value);
+            warn!(
+                "Failed to convert header `{:?}`'s value to string: {:?}",
+                key, value
+            );
             continue;
         };
         request_string.push_str(&format!("{}: {}\r\n", key, value_str));
@@ -43,9 +46,7 @@ pub fn bytes_to_request(request_bytes: &[u8]) -> http::Request<Vec<u8>> {
     let headers = parse_headers(headers_str);
     let body = request_bytes[body_start_index..].to_vec();
 
-    let mut request = http::Request::builder()
-        .method(method)
-        .uri(url);
+    let mut request = http::Request::builder().method(method).uri(url);
     for (key, value) in headers {
         request = request.header(key, value);
     }
@@ -66,8 +67,7 @@ pub fn bytes_to_response(response_bytes: &[u8]) -> http::Response<Vec<u8>> {
     let headers = parse_headers(headers_str);
     let body = response_bytes[body_start_index..].to_vec();
 
-    let mut response = http::Response::builder()
-        .status(status_code);
+    let mut response = http::Response::builder().status(status_code);
     for (key, value) in headers {
         response = response.header(key, value);
     }
@@ -78,9 +78,7 @@ fn split_request(request_str: &str) -> (&str, &str, usize) {
     let mut parts = request_str.splitn(3, "\r\n\r\n");
     let status_and_headers = parts.next().unwrap();
     let mut pathline_and_headers_parts = status_and_headers.splitn(2, "\r\n");
-    let path_line = pathline_and_headers_parts
-        .next()
-        .unwrap();
+    let path_line = pathline_and_headers_parts.next().unwrap();
     let headers = pathline_and_headers_parts.next().unwrap_or(""); // If there are no headers, it's an empty string
     let body_start_index = request_str
         .find("\r\n\r\n")
@@ -93,9 +91,7 @@ fn split_response(response_str: &str) -> (&str, &str, usize) {
     let mut parts = response_str.splitn(3, "\r\n\r\n");
     let status_and_headers = parts.next().unwrap();
     let mut status_and_headers_parts = status_and_headers.splitn(2, "\r\n");
-    let status_line = status_and_headers_parts
-        .next()
-        .unwrap();
+    let status_line = status_and_headers_parts.next().unwrap();
     let headers = status_and_headers_parts.next().unwrap_or(""); // If there are no headers, it's an empty string
     let body_start_index = response_str
         .find("\r\n\r\n")
@@ -119,9 +115,7 @@ fn parse_status_line(status_line: &str) -> (u16, String) {
     let _http_version = parts.next().unwrap();
     let status_code = parts.next().unwrap();
     let status_text = parts.next().unwrap_or("").to_string(); // Status text can be empty
-    let status_code = status_code
-        .parse::<u16>()
-        .unwrap();
+    let status_code = status_code.parse::<u16>().unwrap();
     (status_code, status_text)
 }
 
@@ -129,14 +123,8 @@ fn parse_headers(headers: &str) -> Vec<(String, String)> {
     let mut header_store: Vec<(String, String)> = Vec::new();
     for line in headers.lines() {
         let mut parts = line.splitn(2, ": ");
-        let key = parts
-            .next()
-            .unwrap()
-            .to_lowercase();
-        let value = parts
-            .next()
-            .unwrap()
-            .to_string();
+        let key = parts.next().unwrap().to_lowercase();
+        let value = parts.next().unwrap().to_string();
         header_store.push((key, value));
     }
     header_store
@@ -149,7 +137,6 @@ fn response_header_to_vec(r: &http::Response<Vec<u8>>) -> Vec<u8> {
 }
 
 fn write_response_header(r: &http::Response<Vec<u8>>, output: &mut Vec<u8>) -> std::io::Result<()> {
-
     let status = r.status().as_u16();
     let code = status.to_string();
 
@@ -159,7 +146,10 @@ fn write_response_header(r: &http::Response<Vec<u8>>, output: &mut Vec<u8>) -> s
 
     for (hn, hv) in r.headers() {
         let Ok(hv) = hv.to_str() else {
-            warn!("Failed to convert header `{:?}`'s value to string: {:?}", hn, hv);
+            warn!(
+                "Failed to convert header `{:?}`'s value to string: {:?}",
+                hn, hv
+            );
             continue;
         };
 
