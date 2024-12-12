@@ -23,18 +23,17 @@ pub struct Socket {
 
 impl Socket {
     pub fn new(
-        auth_addr: &SocketAddr,
-        data_addr: &SocketAddr,
+        server_addrs: &ServerAddrs,
         config: Option<LinkConditionerConfig>
     ) -> Self {
 
-        let auth_socket = TcpListener::bind(*auth_addr).unwrap();
+        let auth_socket = TcpListener::bind(server_addrs.auth_listen_addr).unwrap();
         auth_socket
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
         let auth_io = Arc::new(Mutex::new(AuthIo::new(auth_socket)));
 
-        let data_socket = Arc::new(Mutex::new(UdpSocket::bind(*data_addr).unwrap()));
+        let data_socket = Arc::new(Mutex::new(UdpSocket::bind(server_addrs.udp_listen_addr).unwrap()));
         data_socket
             .as_ref()
             .lock()
@@ -294,5 +293,46 @@ impl TransportAuthReceiver for AuthReceiver {
             },
             Err(err) => Err(err),
         }
+    }
+}
+
+/// List of addresses needed to start listening on a ServerSocket
+#[derive(Clone)]
+pub struct ServerAddrs {
+    /// IP Address to listen on for incoming auth requests
+    pub auth_listen_addr: SocketAddr,
+    /// IP Address to listen on for UDP data transmission
+    pub udp_listen_addr: SocketAddr,
+    /// The public IP address to advertise for UDP data transmission
+    pub public_udp_url: String,
+}
+
+impl ServerAddrs {
+    /// Create a new ServerAddrs instance which will be used to start
+    /// listening on a ServerSocket
+    pub fn new(
+        auth_listen_addr: SocketAddr,
+        udp_listen_addr: SocketAddr,
+        public_udp_url: &str,
+    ) -> Self {
+        Self {
+            auth_listen_addr,
+            udp_listen_addr,
+            public_udp_url: public_udp_url.to_string(),
+        }
+    }
+}
+
+impl Default for ServerAddrs {
+    fn default() -> Self {
+        Self::new(
+            "127.0.0.1:14191"
+                .parse()
+                .expect("could not parse HTTP address/port"),
+            "127.0.0.1:14192"
+                .parse()
+                .expect("could not parse UDP data address/port"),
+            "http://127.0.0.1:14192",
+        )
     }
 }

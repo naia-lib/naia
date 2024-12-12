@@ -1,6 +1,6 @@
 [package]
 name = "naia-client"
-version = "0.23.0"
+version = "0.24.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "Provides a cross-platform client that can send/receive messages to/from a server, and has a pool of in-scope entities/components that is synced with the server."
@@ -22,7 +22,7 @@ mquad = [ "naia-shared/mquad", "naia-client-socket?/mquad" ]
 bevy_support = ["naia-shared/bevy_support"]
 zstd_support = ["naia-shared/zstd_support"]
 transport_webrtc = [ "naia-client-socket" ]
-transport_udp = [ "local_ipaddress", "naia-shared/advanced_handshake", "naia-shared/transport_udp", "http", "base64" ]
+transport_udp = [ "local_ipaddress", "naia-shared/advanced_handshake", "naia-shared/transport_udp", "once_cell", "base64", "tokio", "reqwest" ]
 
 [dependencies]
 naia-shared = { version = "0.23", path = "../shared" }
@@ -30,5 +30,7 @@ naia-client-socket = { version = "0.23", path = "../socket/client", optional = t
 local_ipaddress = { version = "0.1", optional = true }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
-http = { version = "1.2", optional = true }
 base64 = { version = "0.13", optional = true }
+tokio = { version = "1.15", features = ["full"], optional = true }
+reqwest = { version = "0.11", optional = true }
+once_cell = { version = "1.4.1", optional = true }

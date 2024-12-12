@@ -19,7 +19,7 @@ impl ServerAddrs {
         webrtc_listen_addr: SocketAddr,
         public_webrtc_url: &str,
     ) -> Self {
-        ServerAddrs {
+        Self {
             session_listen_addr,
             webrtc_listen_addr,
             public_webrtc_url: public_webrtc_url.to_string(),
@@ -29,7 +29,7 @@ impl ServerAddrs {
 
 impl Default for ServerAddrs {
     fn default() -> Self {
-        ServerAddrs::new(
+        Self::new(
             "127.0.0.1:14191"
                 .parse()
                 .expect("could not parse HTTP address/port"),

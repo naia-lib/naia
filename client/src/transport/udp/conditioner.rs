@@ -1,7 +1,6 @@
 use naia_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 
-use crate::transport::udp::UdpPacketReceiver;
-use super::{server_addr::ServerAddr, PacketReceiver, RecvError};
+use crate::transport::{PacketReceiver, RecvError, ServerAddr, udp::data::UdpPacketReceiver};
 
 /// Used to receive packets from the Client Socket
 #[derive(Clone)]
