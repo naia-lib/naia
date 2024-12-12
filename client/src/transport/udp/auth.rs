@@ -2,6 +2,7 @@ use std::{
     sync::{Arc, Mutex},
     future, thread,
     str::FromStr,
+    net::SocketAddr,
 };
 
 use once_cell::sync::Lazy;
@@ -9,23 +10,25 @@ use log::warn;
 use reqwest::header::{HeaderName, HeaderValue};
 use tokio::{runtime::{Builder, Handle}, sync::{oneshot, oneshot::error::TryRecvError, RwLock}};
 
-use crate::transport::{IdentityReceiver, IdentityReceiverResult};
+use crate::transport::{udp::addr_cell::AddrCell, IdentityReceiver, IdentityReceiverResult};
 
 pub(crate) struct AuthIo {
-    server_addr: String,
+    auth_url: String,
     http_client: Arc<RwLock<reqwest::Client>>,
     pending_req_opt: Option<PendingRequest>,
+    data_addr_cell: AddrCell,
 }
 
 impl AuthIo {
-    pub(crate) fn new(auth_url: &str) -> Self {
+    pub(crate) fn new(data_addr_cell: AddrCell, auth_url: &str) -> Self {
 
         let client = reqwest::Client::new();
 
         Self {
-            server_addr: auth_url.to_string(),
+            auth_url: auth_url.to_string(),
             http_client: Arc::new(RwLock::new(client)),
             pending_req_opt: None,
+            data_addr_cell,
         }
     }
 
@@ -34,7 +37,7 @@ impl AuthIo {
         auth_bytes_opt: Option<Vec<u8>>,
         auth_headers_opt: Option<Vec<(String, String)>>,
     ) {
-        let mut request = reqwest::Request::new(reqwest::Method::POST, self.server_addr.parse().unwrap());
+        let mut request = reqwest::Request::new(reqwest::Method::POST, self.auth_url.parse().unwrap());
         if let Some(auth_bytes) = auth_bytes_opt {
             let base64_encoded = base64::encode(&auth_bytes);
             let header_name = HeaderName::from_str("Authorization").unwrap();
@@ -49,7 +52,7 @@ impl AuthIo {
                 request_headers.insert(header_name, header_value);
             }
         }
-        self.pending_req_opt = Some(PendingRequest::new(self.http_client.clone(), request));
+        self.pending_req_opt = Some(PendingRequest::new(self.http_client.clone(), request, self.data_addr_cell.clone()));
     }
 
     fn receive(&mut self) -> IdentityReceiverResult {
@@ -111,7 +114,11 @@ struct PendingRequest {
 }
 
 impl PendingRequest {
-    fn new(client: Arc<RwLock<reqwest::Client>>, request: reqwest::Request) -> Self {
+    fn new(
+        client: Arc<RwLock<reqwest::Client>>,
+        request: reqwest::Request,
+        addr_cell: AddrCell,
+    ) -> Self {
         let (tx, rx) = oneshot::channel::<Result<(u16, String), reqwest::Error>>();
 
         get_runtime().spawn(async move {
@@ -121,7 +128,15 @@ impl PendingRequest {
                 Ok(response) => {
                     let status_code = response.status().as_u16();
                     let response_text = response.text().await.unwrap();
-                    Ok((status_code, response_text))
+
+                    let mut response_parts = response_text.splitn(2, "\r\n");
+                    let id_token = response_parts.next().unwrap().to_string();
+                    let data_addr = response_parts.next().unwrap().to_string();
+                    let data_addr: SocketAddr = data_addr.parse().unwrap();
+                    // parse out the server's address, put into addrcell
+                    addr_cell.recv(&data_addr).await;
+
+                    Ok((status_code, id_token))
                 }
                 Err(e) => Err(e),
             };
@@ -133,7 +148,7 @@ impl PendingRequest {
 
     pub fn poll_response(&mut self) -> Result<Option<(u16, String)>, HttpError> {
         match self.receiver.try_recv() {
-            Ok(Ok((status_code, response_text))) => Ok(Some((status_code, response_text))),
+            Ok(Ok((status_code, id_token))) => Ok(Some((status_code, id_token))),
             Ok(Err(e)) => Err(HttpError::ReqwestError(e)),
             Err(TryRecvError::Empty) => Ok(None),
             Err(TryRecvError::Closed) => Err(HttpError::ChannelClosed),

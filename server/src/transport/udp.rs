@@ -31,7 +31,7 @@ impl Socket {
         auth_socket
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
-        let auth_io = Arc::new(Mutex::new(AuthIo::new(auth_socket)));
+        let auth_io = Arc::new(Mutex::new(AuthIo::new(&server_addrs.public_udp_url, auth_socket)));
 
         let data_socket = Arc::new(Mutex::new(UdpSocket::bind(server_addrs.udp_listen_addr).unwrap()));
         data_socket
@@ -151,14 +151,19 @@ impl PacketReceiver for UdpPacketReceiver {
 
 // AuthIo
 pub(crate) struct AuthIo {
+    public_udp_addr: SocketAddr,
     socket: TcpListener,
     buffer: [u8; 1472],
     outgoing_streams: HashMap<SocketAddr, TcpStream>,
 }
 
 impl AuthIo {
-    pub fn new(socket: TcpListener) -> Self {
+    pub fn new(public_udp_url: &str, socket: TcpListener) -> Self {
+
+        let public_udp_addr = url_str_to_addr(public_udp_url);
+
         Self {
+            public_udp_addr,
             socket,
             buffer: [0; 1472],
             outgoing_streams: HashMap::new(),
@@ -204,11 +209,12 @@ impl AuthIo {
     ) -> Result<(), SendError> {
         if let Some(mut stream) = self.outgoing_streams.remove(&address.addr()) {
 
-            let id_token_bytes = identity_token.clone().into_bytes();
+            let response_body = format!("{}\r\n{}", identity_token, self.public_udp_addr);
+            let response_body_bytes = response_body.into_bytes();
 
             let response = http::Response::builder()
                 .status(200)
-                .body(id_token_bytes)
+                .body(response_body_bytes)
                 .unwrap();
             let response_bytes = transport_udp::response_to_bytes(response);
             stream.write_all(&response_bytes).unwrap();
@@ -334,5 +340,51 @@ impl Default for ServerAddrs {
                 .expect("could not parse UDP data address/port"),
             "http://127.0.0.1:14192",
         )
+    }
+}
+
+use url::Url;
+
+fn url_str_to_addr(url_str: &str) -> SocketAddr {
+    let url = Url::parse(url_str).expect("server_url_str is not a valid URL!");
+    if let Some(path_segments) = url.path_segments() {
+        let path_segment_count = path_segments.count();
+        if path_segment_count > 1 {
+            log::error!("server_url_str must not include a path");
+            panic!("");
+        }
+    }
+    if url.query().is_some() {
+        log::error!("server_url_str must not include a query string");
+        panic!("");
+    }
+    if url.fragment().is_some() {
+        log::error!("server_url_str must not include a fragment");
+        panic!("");
+    }
+
+    url_to_addr(&url)
+}
+
+fn url_to_addr(url: &Url) -> SocketAddr {
+    const SOCKET_PARSE_FAIL_STR: &str = "could not get SocketAddr from input URL";
+
+    match url.socket_addrs(|| match url.scheme() {
+        "http" => Some(80),
+        "https" => Some(443),
+        _ => None,
+    }) {
+        Ok(addr_list) => {
+            if addr_list.is_empty() {
+                log::error!("{}", SOCKET_PARSE_FAIL_STR);
+                panic!("");
+            }
+
+            return *addr_list.first().expect(SOCKET_PARSE_FAIL_STR);
+        }
+        Err(err) => {
+            log::error!("URL -> SocketAddr parse fails with: {:?}", err);
+            panic!("");
+        }
     }
 }

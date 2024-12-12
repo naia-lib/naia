@@ -10,13 +10,14 @@ use crate::transport::{
     IdentityReceiver, PacketReceiver,
     PacketSender as TransportSender, RecvError, SendError, ServerAddr as TransportAddr,
     Socket as TransportSocket,
-    udp::{auth::{AuthIo, AuthReceiver}, conditioner::ConditionedPacketReceiver},
+    udp::{addr_cell::AddrCell, auth::{AuthIo, AuthReceiver}, conditioner::ConditionedPacketReceiver},
 };
 
 // Socket
 pub struct Socket {
     auth_io: Arc<Mutex<AuthIo>>,
 
+    data_addr_cell: AddrCell,
     data_socket: Arc<Mutex<UdpSocket>>,
 
     config: Option<LinkConditionerConfig>,
@@ -25,7 +26,8 @@ pub struct Socket {
 impl Socket {
     pub fn new(server_session_url: &str, config: Option<LinkConditionerConfig>) -> Self {
 
-        let auth_io = Arc::new(Mutex::new(AuthIo::new(server_session_url)));
+        let data_addr_cell = AddrCell::default();
+        let auth_io = Arc::new(Mutex::new(AuthIo::new(data_addr_cell.clone(), server_session_url)));
 
         let client_ip_address =
             find_my_ip_address().expect("cannot find host's current IP address");
@@ -40,6 +42,7 @@ impl Socket {
 
         Self {
             auth_io,
+            data_addr_cell,
             data_socket,
             config,
         }
@@ -57,9 +60,9 @@ impl Socket {
         self.auth_io.lock().unwrap().connect(auth_bytes_opt, auth_headers_opt);
         let id_receiver = AuthReceiver::new(self.auth_io.clone());
 
-        let packet_sender = Box::new(PacketSender::new(self.data_socket.clone()));
+        let packet_sender = Box::new(PacketSender::new(self.data_addr_cell.clone(), self.data_socket.clone()));
 
-        let packet_receiver = UdpPacketReceiver::new(self.data_socket.clone());
+        let packet_receiver = UdpPacketReceiver::new(self.data_addr_cell.clone(), self.data_socket.clone());
         let packet_receiver: Box<dyn PacketReceiver> = {
             if let Some(config) = &self.config {
                 Box::new(ConditionedPacketReceiver::new(packet_receiver, config))
@@ -131,14 +134,14 @@ impl TransportSocket for Socket {
 // Packet Sender
 struct PacketSender {
     socket: Arc<Mutex<UdpSocket>>,
-    server_addr: TransportAddr,
+    addr_cell: AddrCell,
 }
 
 impl PacketSender {
-    pub fn new(socket: Arc<Mutex<UdpSocket>>) -> Self {
+    pub fn new(addr_cell: AddrCell, socket: Arc<Mutex<UdpSocket>>) -> Self {
         Self {
             socket,
-            server_addr: TransportAddr::Finding,
+            addr_cell,
         }
     }
 }
@@ -146,7 +149,7 @@ impl PacketSender {
 impl TransportSender for PacketSender {
     /// Sends a packet from the Client Socket
     fn send(&self, payload: &[u8]) -> Result<(), SendError> {
-        let TransportAddr::Found(server_addr) = self.server_addr else {
+        let TransportAddr::Found(server_addr) = self.server_addr() else {
             return Err(SendError);
         };
         if self
@@ -163,7 +166,7 @@ impl TransportSender for PacketSender {
     }
     /// Get the Server's Socket address
     fn server_addr(&self) -> TransportAddr {
-        self.server_addr
+        self.addr_cell.get()
     }
 }
 
@@ -171,15 +174,15 @@ impl TransportSender for PacketSender {
 #[derive(Clone)]
 pub(crate) struct UdpPacketReceiver {
     socket: Arc<Mutex<UdpSocket>>,
-    server_addr: TransportAddr,
+    addr_cell: AddrCell,
     buffer: [u8; 1472],
 }
 
 impl UdpPacketReceiver {
-    pub fn new(socket: Arc<Mutex<UdpSocket>>) -> Self {
+    pub fn new(addr_cell: AddrCell, socket: Arc<Mutex<UdpSocket>>) -> Self {
         Self {
             socket,
-            server_addr: TransportAddr::Finding,
+            addr_cell,
             buffer: [0; 1472],
         }
     }
@@ -188,7 +191,7 @@ impl UdpPacketReceiver {
 impl PacketReceiver for UdpPacketReceiver {
     /// Receives a packet from the Client Socket
     fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
-        let TransportAddr::Found(server_addr) = self.server_addr else {
+        let TransportAddr::Found(server_addr) = self.server_addr() else {
             return Ok(None);
         };
         match self
@@ -219,7 +222,7 @@ impl PacketReceiver for UdpPacketReceiver {
     }
     /// Get the Server's Socket address
     fn server_addr(&self) -> TransportAddr {
-        self.server_addr
+        self.addr_cell.get()
     }
 }
 
