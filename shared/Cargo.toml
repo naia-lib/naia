@@ -1,6 +1,6 @@
 [package]
 name = "naia-shared"
-version = "0.23.0"
+version = "0.24.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 description = "Common functionality shared between naia-server & naia-client crates"
@@ -27,9 +27,9 @@ transport_udp = [ "http" ]
 advanced_handshake = []
 
 [dependencies]
-naia-socket-shared = { version = "0.23", path = "../socket/shared" }
-naia-derive = { version = "0.23", path = "derive" }
-naia-serde = { version = "0.23", path = "serde" }
+naia-socket-shared = { version = "0.24", path = "../socket/shared" }
+naia-derive = { version = "0.24", path = "derive" }
+naia-serde = { version = "0.24", path = "serde" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }
 js-sys = { version = "0.3.64", optional = true }

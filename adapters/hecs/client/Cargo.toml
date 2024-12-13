@@ -23,5 +23,5 @@ transport_udp = [ "naia-client/transport_udp" ]
 
 [dependencies]
 naia-client = { version = "0.24", path = "../../../client" }
-naia-hecs-shared = { version = "0.23", path = "../shared" }
+naia-hecs-shared = { version = "0.24", path = "../shared" }
 hecs = { version = "0.10" }
