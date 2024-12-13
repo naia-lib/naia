@@ -135,7 +135,7 @@ impl App {
 
         // Disconnect Events
         for (user_key, user) in events.read::<DisconnectEvent>() {
-            info!("Naia Server disconnected from: {}", user.address);
+            info!("Naia Server disconnected from: {}", user.address());
             if let Some(entity) = self.user_to_square_map.remove(&user_key) {
                 self.server
                     .entity_mut(self.world.proxy_mut(), &entity)
@@ -184,7 +184,7 @@ impl App {
                 // to determine whether each Entity should be in scope or not.
 
                 // This indicates the Entity should be in this scope.
-                self.server.user_scope(&user_key).include(&entity);
+                self.server.user_scope_mut(&user_key).include(&entity);
 
                 // And call this if Entity should NOT be in this scope.
                 // self.server.user_scope(..).exclude(..);
