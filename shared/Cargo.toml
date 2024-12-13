@@ -33,6 +33,6 @@ naia-serde = { version = "0.23", path = "serde" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }
 js-sys = { version = "0.3.64", optional = true }
-bevy_ecs = { version = "0.14", default-features = false, optional = true }
+bevy_ecs = { version = "0.15", default-features = false, optional = true }
 zstd = { version = "0.12.2", optional = true }
 http = { version = "1.2", optional = true }

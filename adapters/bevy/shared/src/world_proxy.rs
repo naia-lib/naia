@@ -209,7 +209,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
             return None;
         };
         let new_component_access = component_access.box_clone();
-        return new_component_access.component_mut(self.world, entity);
+        new_component_access.component_mut(self.world, entity)
     }
 
     fn component_apply_update(
@@ -293,7 +293,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn remove_component<R: ReplicatedComponent>(&mut self, entity: &Entity) -> Option<R> {
-        return self.world.entity_mut(*entity).take::<R>();
+        self.world.entity_mut(*entity).take::<R>()
     }
 
     fn remove_component_of_kind(
@@ -408,7 +408,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 // private static methods
 
 fn has_entity(world: &World, entity: &Entity) -> bool {
-    return world.get_entity(*entity).is_some();
+    world.get_entity(*entity).is_ok()
 }
 
 fn entities(world: &World) -> Vec<Entity> {
@@ -417,13 +417,13 @@ fn entities(world: &World) -> Vec<Entity> {
 }
 
 fn has_component<R: ReplicatedComponent>(world: &World, entity: &Entity) -> bool {
-    return world.get::<R>(*entity).is_some();
+    world.get::<R>(*entity).is_some()
 }
 
 fn has_component_of_kind(world: &World, entity: &Entity, component_kind: &ComponentKind) -> bool {
-    return world
+    world
         .entity(*entity)
-        .contains_type_id(<ComponentKind as Into<TypeId>>::into(*component_kind));
+        .contains_type_id(<ComponentKind as Into<TypeId>>::into(*component_kind))
 }
 
 fn component<'a, R: ReplicatedComponent>(
@@ -447,20 +447,20 @@ fn component_of_kind<'a>(
     let Some(component_access) = world_data.component_access(component_kind) else {
         panic!("ComponentKind has not been registered?");
     };
-    return component_access.component(world, entity);
+    component_access.component(world, entity)
 }
 
 fn world_data(world: &World) -> &WorldData {
-    return world
+    world
         .get_resource::<WorldData>()
-        .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
+        .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
 }
 
 fn world_data_unchecked_mut(world: &mut World) -> Mut<WorldData> {
     unsafe {
-        return world
+        world
             .as_unsafe_world_cell()
             .get_resource_mut::<WorldData>()
-            .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!");
+            .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
     }
 }

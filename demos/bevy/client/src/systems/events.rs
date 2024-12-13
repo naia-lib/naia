@@ -4,10 +4,10 @@ use bevy::{
     color::LinearRgba,
     log::info,
     prelude::{
-        Color as BevyColor, Commands, EventReader, Query, Res, ResMut, Sprite, SpriteBundle,
+        Mesh2d, MeshMaterial2d,
+        Color as BevyColor, Commands, EventReader, Query, Res, ResMut, Sprite,
         Transform, Vec2,
     },
-    sprite::MaterialMesh2dBundle,
 };
 
 use naia_bevy_client::{
@@ -105,15 +105,14 @@ pub fn message_events(
                     let prediction_entity = commands.entity(entity).local_duplicate(); // copies all Replicate components as well
                     commands
                         .entity(prediction_entity)
-                        .insert(SpriteBundle {
-                            sprite: Sprite {
+                        .insert((
+                            Sprite {
                                 custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
                                 color: BevyColor::WHITE,
                                 ..Default::default()
                             },
-                            transform: Transform::from_xyz(0.0, 0.0, 1.0),
-                            ..Default::default()
-                        })
+                            Transform::from_xyz(0.0, 0.0, 1.0),
+                        ))
                         // insert interpolation component
                         .insert(Interp::new(*position.x, *position.y))
                         // mark as predicted
@@ -140,12 +139,13 @@ pub fn message_events(
                                 ColorValue::Aqua => &global.aqua,
                             }
                         };
-                        commands.entity(cursor_entity).insert(MaterialMesh2dBundle {
-                            mesh: global.circle.clone().into(),
-                            material: color_handle.clone(),
-                            transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                            ..Default::default()
-                        });
+                        commands
+                            .entity(cursor_entity)
+                            .insert((
+                                Mesh2d(global.circle.clone().into()),
+                                MeshMaterial2d(color_handle.clone()),
+                                Transform::from_xyz(0.0, 0.0, 0.0)
+                            ));
                         info!("assigned color to cursor");
                     }
                 }
@@ -257,15 +257,14 @@ pub fn insert_component_events(
 
                         commands
                             .entity(entity)
-                            .insert(SpriteBundle {
-                                sprite: Sprite {
+                            .insert((
+                                Sprite {
                                     custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
                                     color,
                                     ..Default::default()
                                 },
-                                transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                                ..Default::default()
-                            })
+                                Transform::from_xyz(0.0, 0.0, 0.0),
+                            ))
                             // mark as confirmed
                             .insert(Confirmed);
                     }
@@ -285,12 +284,11 @@ pub fn insert_component_events(
                         };
                         commands
                             .entity(entity)
-                            .insert(MaterialMesh2dBundle {
-                                mesh: global.circle.clone().into(),
-                                material: handle.clone(),
-                                transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                                ..Default::default()
-                            })
+                            .insert((
+                                Mesh2d(global.circle.clone().into()),
+                                MeshMaterial2d(handle.clone()),
+                                Transform::from_xyz(0.0, 0.0, 0.0),
+                            ))
                             // mark as confirmed
                             .insert(Confirmed);
                     }

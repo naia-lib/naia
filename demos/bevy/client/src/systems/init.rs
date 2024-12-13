@@ -1,9 +1,9 @@
 use bevy::{
     color::LinearRgba,
     log::info,
-    prelude::{Assets, Camera2dBundle, Circle, Color, ColorMaterial, Commands, Mesh, ResMut},
+    prelude::{Assets, Circle, Color, ColorMaterial, Commands, Mesh, ResMut},
 };
-
+use bevy::prelude::Camera2d;
 use naia_bevy_client::{transport::webrtc, Client};
 
 use naia_bevy_demo_shared::messages::Auth;
@@ -23,7 +23,7 @@ pub fn init(
     client.connect(socket);
 
     // Setup Camera
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2d);
 
     // Setup Global Resource
     let mut global = Global::default();

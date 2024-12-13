@@ -50,7 +50,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
         let mut commands = self.commands();
         let new_entity = commands.spawn_empty().id();
         let command = LocalDuplicateComponents::new(new_entity, old_entity);
-        commands.add(command);
+        commands.queue(command);
         new_entity
     }
 
@@ -60,7 +60,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     ) -> &'a mut EntityCommands<'a> {
         client.enable_replication(&self.id());
         self.insert(HostOwned::new::<T>());
-        return self;
+        self
     }
 
     fn disable_replication<T: Send + Sync + 'static>(
@@ -69,7 +69,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     ) -> &'a mut EntityCommands<'a> {
         client.disable_replication(&self.id());
         self.remove::<HostOwned>();
-        return self;
+        self
     }
 
     fn configure_replication<T: Send + Sync + 'static>(
@@ -79,8 +79,8 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
         let entity = self.id();
         let mut commands = self.commands();
         let command = ConfigureReplicationCommand::<T>::new(entity, config);
-        commands.add(command);
-        return self;
+        commands.queue(command);
+        self
     }
 
     fn replication_config<T: Send + Sync + 'static>(
@@ -95,7 +95,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
         client: &mut Client<T>,
     ) -> &'a mut EntityCommands<'a> {
         client.entity_request_authority(&self.id());
-        return self;
+        self
     }
 
     fn release_authority<T: Send + Sync + 'static>(
@@ -103,7 +103,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
         client: &mut Client<T>,
     ) -> &'a mut EntityCommands<'a> {
         client.entity_release_authority(&self.id());
-        return self;
+        self
     }
 
     fn authority<T: Send + Sync + 'static>(
