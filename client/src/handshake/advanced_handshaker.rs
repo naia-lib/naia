@@ -1,11 +1,10 @@
 use std::time::Duration;
 
 use log::warn;
-use naia_client_socket::shared::IdentityToken;
 
 use naia_shared::{
-    handshake::HandshakeHeader, BitReader, BitWriter, OutgoingPacket, PacketType, Serde,
-    StandardHeader, Timer, Timestamp as stamp_time,
+    handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, OutgoingPacket, PacketType,
+    Serde, StandardHeader, Timer, Timestamp as stamp_time,
 };
 
 use crate::{

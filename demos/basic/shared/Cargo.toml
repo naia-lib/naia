@@ -13,5 +13,3 @@ mquad = [ "naia-shared/mquad" ]
 
 [dependencies]
 naia-shared = { path = "../../../shared" }
-cfg-if = { version = "1.0" }
-log = { version = "0.4" }

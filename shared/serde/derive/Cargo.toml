@@ -1,6 +1,6 @@
 [package]
 name = "naia-serde-derive"
-version = "0.23.0"
+version = "0.24.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>", "Fedor <not.fl3@gmail.com>", "makepad <info@makepad.nl>"]
 workspace = "../../.."
 description = "Derive methods for naia-serde"

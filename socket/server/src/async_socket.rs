@@ -128,7 +128,7 @@ impl RtcServer {
             .await
             .expect("could not start RTC server");
 
-        RtcServer { inner }
+        Self { inner }
     }
 
     pub fn session_endpoint(&self) -> SessionEndpoint {

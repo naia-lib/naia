@@ -106,7 +106,7 @@ struct IncomingMessages {
 
 impl IncomingMessages {
     pub fn new() -> Self {
-        IncomingMessages {
+        Self {
             buffer: VecDeque::new(),
         }
     }
@@ -117,7 +117,7 @@ impl IncomingMessages {
         &mut self,
         host_tick: &Tick,
         message_tick: &Tick,
-        message_index: ShortMessageIndex,
+        message_index: ShortMessageIndex, // this is used to de-dupe messages
         new_message: MessageContainer,
     ) -> bool {
         // TODO:
@@ -206,7 +206,7 @@ impl IncomingMessages {
         // now get the newest applicable command
         let mut output = Vec::new();
         let mut pop = false;
-        if let Some((front_tick, _)) = self.buffer.front_mut() {
+        if let Some((front_tick, _)) = self.buffer.front() {
             if *front_tick == *host_tick {
                 pop = true;
             }

@@ -3,14 +3,15 @@ pub use naia_shared::{
     Channel, ChannelDirection, ChannelKind, ChannelMode, ComponentFieldUpdate, ComponentKind,
     ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask, EntityAndGlobalEntityConverter,
     EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, EntityProperty,
-    FakeEntityConverter, GlobalEntity, HostEntity, HostEntityAuthStatus, LinkConditionerConfig,
-    LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
-    MessageBevy as Message, MessageBuilder, MessageContainer, MessageKind, MessageKinds, Named,
-    OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random, ReliableSettings,
-    RemoteEntity, ReplicaDynMut, ReplicaDynRef, ReplicateBevy as Replicate, ReplicateBuilder,
-    Request, Response, ResponseReceiveKey, ResponseSendKey, SerdeBevyShared as Serde, SerdeErr,
-    SerdeIntegerConversion, SignedInteger, SignedVariableInteger, Tick, TickBufferSettings, Timer,
-    UnsignedInteger, UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, Instant, GameInstant,
+    FakeEntityConverter, GameInstant, GlobalEntity, HostEntity, HostEntityAuthStatus, Instant,
+    LinkConditionerConfig, LocalEntityAndGlobalEntityConverter,
+    LocalEntityAndGlobalEntityConverterMut, MessageBevy as Message, MessageBuilder,
+    MessageContainer, MessageKind, MessageKinds, Named, OwnedBitReader, Property, PropertyMutate,
+    PropertyMutator, Random, ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef,
+    ReplicateBevy as Replicate, ReplicateBuilder, Request, Response, ResponseReceiveKey,
+    ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeIntegerConversion, SignedInteger,
+    SignedVariableInteger, Tick, TickBufferSettings, Timer, UnsignedInteger,
+    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 mod change_detection;
@@ -30,6 +31,6 @@ pub use components::{HostOwned, HostOwnedMap};
 pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
-pub use system_set::{BeforeReceiveEvents, HostSyncChangeTracking, ReceiveEvents};
+pub use system_set::{BeforeReceiveEvents, HostSyncChangeTracking, ReceiveEvents, SendPackets};
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};

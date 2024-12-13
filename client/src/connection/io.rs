@@ -1,13 +1,14 @@
 use std::{net::SocketAddr, time::Duration};
 
-use naia_client_socket::IdentityReceiverResult;
 use naia_shared::{
     BandwidthMonitor, BitReader, CompressionConfig, Decoder, Encoder, OutgoingPacket,
 };
 
 use crate::{
     error::NaiaClientError,
-    transport::{IdentityReceiver, PacketReceiver, PacketSender, ServerAddr},
+    transport::{
+        IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr,
+    },
 };
 
 pub struct Io {

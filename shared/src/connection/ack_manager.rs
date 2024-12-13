@@ -26,6 +26,8 @@ pub struct AckManager {
     // However, we can only reasonably ack up to `REDUNDANT_PACKET_ACKS_SIZE + 1` packets on each
     // message we send so this should be that large.
     received_packets: SequenceBuffer<ReceivedPacket>,
+    // Whether or not we should send an empty ack on the next outgoing packet
+    should_send_empty_ack: bool,
 }
 
 impl AckManager {
@@ -35,7 +37,20 @@ impl AckManager {
             last_recv_packet_index: u16::MAX,
             sent_packets: HashMap::with_capacity(DEFAULT_SEND_PACKETS_SIZE),
             received_packets: SequenceBuffer::with_capacity(REDUNDANT_PACKET_ACKS_SIZE + 1),
+            should_send_empty_ack: false,
         }
+    }
+
+    pub fn should_send_empty_ack(&self) -> bool {
+        self.should_send_empty_ack
+    }
+
+    pub fn mark_should_send_empty_ack(&mut self) {
+        self.should_send_empty_ack = true;
+    }
+
+    pub fn clear_should_send_empty_ack(&mut self) {
+        self.should_send_empty_ack = false;
     }
 
     /// Get the index of the next outgoing packet

@@ -1,6 +1,11 @@
 use std::{any::Any, collections::HashMap};
 
-use bevy_ecs::{entity::Entity, prelude::Event};
+use bevy_ecs::{
+    entity::Entity,
+    event::EventReader,
+    prelude::{Event, Resource},
+    system::SystemState,
+};
 
 use naia_bevy_shared::{
     Channel, ChannelKind, ComponentKind, Message, MessageContainer, MessageKind, Replicate,
@@ -19,6 +24,12 @@ pub struct DisconnectEvent(pub UserKey, pub User);
 // ErrorEvent
 #[derive(Event)]
 pub struct ErrorEvent(pub NaiaServerError);
+
+// TickEventReader
+#[derive(Resource)]
+pub(crate) struct CachedTickEventsState {
+    pub(crate) event_state: SystemState<EventReader<'static, 'static, TickEvent>>,
+}
 
 // TickEvent
 #[derive(Event)]

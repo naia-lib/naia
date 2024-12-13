@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
 use bevy_ecs::{
+    component::Component,
     entity::Entity,
     event::EventWriter,
     prelude::Event,
@@ -8,7 +9,7 @@ use bevy_ecs::{
     removal_detection::RemovedComponents,
     system::{Query, ResMut},
 };
-use bevy_ecs::component::Component;
+
 use naia_shared::{ComponentKind, Replicate};
 
 use crate::{HostOwned, HostOwnedMap};

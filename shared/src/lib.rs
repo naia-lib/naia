@@ -48,6 +48,11 @@ mod types;
 mod world;
 mod wrapping_number;
 
+cfg_if! {
+    if #[cfg(feature = "transport_udp")]{
+        pub mod transport_udp;
+    }
+}
 pub use backends::{Timer, Timestamp};
 pub use connection::{
     ack_manager::AckManager,
@@ -101,7 +106,8 @@ pub use world::{
             ReplicaRefTrait, ReplicaRefWrapper,
         },
         replicate::{
-            Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder, ReplicatedComponent,
+            Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
+            ReplicatedComponent,
         },
     },
     delegation::{

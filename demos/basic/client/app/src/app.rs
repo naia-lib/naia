@@ -16,7 +16,7 @@ use naia_client::{
 
 use naia_demo_world::{Entity, World};
 
-use naia_basic_demo_shared::{protocol, Auth, Character, MyMarker, StringMessage};
+use naia_basic_demo_shared::{protocol, Auth, Character, StringMessage};
 
 type Client = NaiaClient<Entity>;
 
@@ -76,9 +76,7 @@ impl App {
         for server_address in events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
         }
-        for message in
-            events.read::<MessageEvent<UnorderedReliableChannel, StringMessage<MyMarker>>>()
-        {
+        for message in events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>() {
             let message_contents = &(*message.contents);
             info!("Client recv <- {}", message_contents);
 
@@ -95,7 +93,7 @@ impl App {
             if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
-                .component::<Character<MyMarker>>()
+                .component::<Character>()
             {
                 // info!(
                 //     "creation of Character - x: {}, y: {}, name: {} {}",
@@ -109,11 +107,11 @@ impl App {
         for _ in events.read::<DespawnEntityEvent>() {
             // info!("deletion of Character entity");
         }
-        for (_, entity) in events.read::<UpdateComponentEvent<Character<MyMarker>>>() {
+        for (_, entity) in events.read::<UpdateComponentEvent<Character>>() {
             if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
-                .component::<Character<MyMarker>>()
+                .component::<Character>()
             {
                 // info!(
                 //     "update of Character - x: {}, y: {}, name: {} {}",
@@ -124,7 +122,7 @@ impl App {
                 // );
             }
         }
-        for (_, _character) in events.read::<RemoveComponentEvent<Character<MyMarker>>>() {
+        for (_, _character) in events.read::<RemoveComponentEvent<Character>>() {
             // info!(
             //     "data delete of Character - x: {}, y: {}, name: {} {}",
             //     *character.x,

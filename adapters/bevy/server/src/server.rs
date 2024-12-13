@@ -162,6 +162,16 @@ impl<'w> Server<'w> {
         self.server.0.average_tick_duration()
     }
 
+    //// Network Conditions ////
+
+    pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
+        self.server.0.jitter(user_key)
+    }
+
+    pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
+        self.server.0.rtt(user_key)
+    }
+
     // Entity Replication
 
     pub(crate) fn enable_replication(&mut self, entity: &Entity) {

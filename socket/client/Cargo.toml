@@ -1,6 +1,6 @@
 [package]
 name = "naia-client-socket"
-version = "0.23.0"
+version = "0.24.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 description = "Abstraction to expose common API over a UDP socket on Linux, and a unreliable WebRTC datachannel on the browser"
@@ -20,7 +20,7 @@ wbindgen = [ "naia-socket-shared/wbindgen", "wasm-bindgen", "js-sys", "web_sys",
 mquad = [ "naia-socket-shared/mquad", "miniquad" ]
 
 [dependencies]
-naia-socket-shared = { version = "0.23", path = "../shared" }
+naia-socket-shared = { version = "0.24", path = "../shared" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
 wasm-bindgen = { version = "0.2", optional = true  }
@@ -32,7 +32,6 @@ web_sys = { version = "0.3.64", package = "web-sys", features = [
     "XmlHttpRequest", "XmlHttpRequestEventTarget", "MessageEvent", "ProgressEvent", "ErrorEvent", "Blob" ], optional = true  }
 tinyjson = { version = "2.3", optional = true }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }
-base64 = { version = "0.13" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 webrtc-unreliable-client = { version = "0.3" }

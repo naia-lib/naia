@@ -1,14 +1,22 @@
-use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr};
+use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Duration};
 
 use log::{info, warn};
-use naia_client_socket::IdentityReceiverResult;
-use naia_shared::{BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType};
+
+use naia_shared::{
+    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    EntityAndLocalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError,
+    EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GameInstant, GlobalEntity,
+    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer,
+    PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response,
+    ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig,
+    StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
+};
 
 use super::{client_config::ClientConfig, error::NaiaClientError, events::Events};
 use crate::{
     connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
     handshake::{HandshakeManager, HandshakeResult, Handshaker},
-    transport::Socket,
+    transport::{IdentityReceiverResult, Socket},
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
         global_world_manager::GlobalWorldManager,
@@ -730,23 +738,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     /// Gets the current tick of the Client
     pub fn client_tick(&self) -> Option<Tick> {
-        if let Some(connection) = &self.server_connection {
-            return Some(connection.time_manager.client_sending_tick);
-        }
-        return None;
+        let connection = self.server_connection.as_ref()?;
+        return Some(connection.time_manager.client_sending_tick);
+    }
+
+    /// Gets the current instant of the Client
+    pub fn client_instant(&self) -> Option<GameInstant> {
+        let connection = self.server_connection.as_ref()?;
+        return Some(connection.time_manager.client_sending_instant);
     }
 
     /// Gets the current tick of the Server
     pub fn server_tick(&self) -> Option<Tick> {
-        if let Some(connection) = &self.server_connection {
-            return Some(connection.time_manager.client_receiving_tick);
-        }
-        return None;
+        let connection = self.server_connection.as_ref()?;
+        return Some(connection.time_manager.client_receiving_tick);
+    }
+
+    /// Gets the current instant of the Server
+    pub fn server_instant(&self) -> Option<GameInstant> {
+        let connection = self.server_connection.as_ref()?;
+        return Some(connection.time_manager.client_receiving_instant);
     }
 
     pub fn tick_to_instant(&self, tick: Tick) -> Option<GameInstant> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.tick_to_instant(tick));
+        }
+        return None;
+    }
+
+    pub fn tick_duration(&self) -> Option<Duration> {
+        if let Some(connection) = &self.server_connection {
+            return Some(connection.time_manager.tick_duration());
         }
         return None;
     }
@@ -1112,6 +1135,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 IdentityReceiverResult::ErrorResponseCode(code) => {
                     // warn!("Authentication error status code: {}", code);
 
+                    let old_socket_addr_result = self.io.server_addr();
+
                     // reset connection
                     self.io = Io::new(
                         &self.client_config.connection.bandwidth_measure_duration,
@@ -1120,7 +1145,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                     if code == 401 {
                         // push out rejection
-                        self.incoming_events.push_rejection();
+                        match old_socket_addr_result {
+                            Ok(old_socket_addr) => {
+                                self.incoming_events.push_rejection(&old_socket_addr);
+                            }
+                            Err(err) => {
+                                self.incoming_events.push_error(err);
+                            }
+                        }
                     } else {
                         // push out error
                         self.incoming_events
@@ -1182,6 +1214,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         Self::handle_heartbeats(connection, &mut self.io);
         Self::handle_pings(connection, &mut self.io);
+        Self::handle_empty_acks(connection, &mut self.io);
 
         // receive from socket
         loop {
@@ -1229,6 +1262,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // Handle based on PacketType
                     match header.packet_type {
                         PacketType::Data => {
+                            connection.base.mark_should_send_empty_ack();
+
                             if connection
                                 .buffer_data_packet(&server_tick, &mut reader)
                                 .is_err()
@@ -1272,20 +1307,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     fn handle_heartbeats(connection: &mut Connection<E>, io: &mut Io) {
         // send heartbeats
         if connection.base.should_send_heartbeat() {
-            let mut writer = BitWriter::new();
-
-            // write header
-            connection
-                .base
-                .write_header(PacketType::Heartbeat, &mut writer);
-
-            // send packet
-            if io.send_packet(writer.to_packet()).is_err() {
-                // TODO: pass this on and handle above
-                warn!("Client Error: Cannot send heartbeat packet to Server");
-            }
-            connection.base.mark_sent();
+            Self::send_heartbeat_packet(connection, io);
         }
+    }
+
+    fn handle_empty_acks(connection: &mut Connection<E>, io: &mut Io) {
+        // send empty acks
+        if connection.base.should_send_empty_ack() {
+            Self::send_heartbeat_packet(connection, io);
+        }
+    }
+
+    fn send_heartbeat_packet(connection: &mut Connection<E>, io: &mut Io) {
+        let mut writer = BitWriter::new();
+
+        // write header
+        connection
+            .base
+            .write_header(PacketType::Heartbeat, &mut writer);
+
+        // send packet
+        if io.send_packet(writer.to_packet()).is_err() {
+            // TODO: pass this on and handle above
+            warn!("Client Error: Cannot send heartbeat packet to Server");
+        }
+        connection.base.mark_sent();
     }
 
     fn handle_pings(connection: &mut Connection<E>, io: &mut Io) {

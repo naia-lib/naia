@@ -1,14 +1,14 @@
 use naia_shared::SocketConfig;
 
 use naia_client_socket::{
-    IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr,
+    IdentityReceiver, IdentityReceiverResult as SocketIdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr,
     Socket as ClientSocket,
 };
 
 use super::{
     IdentityReceiver as TransportIdentityReceiver, PacketReceiver as TransportReceiver,
     PacketSender as TransportSender, RecvError, SendError, ServerAddr as TransportAddr,
-    Socket as TransportSocket,
+    Socket as TransportSocket, IdentityReceiverResult,
 };
 
 pub struct Socket {
@@ -56,7 +56,11 @@ impl TransportReceiver for Box<dyn PacketReceiver> {
 impl TransportIdentityReceiver for Box<dyn IdentityReceiver> {
     /// Receives an IdentityToken from the Client Socket
     fn receive(&mut self) -> IdentityReceiverResult {
-        self.as_mut().receive()
+        match self.as_mut().receive() {
+            SocketIdentityReceiverResult::Waiting => IdentityReceiverResult::Waiting,
+            SocketIdentityReceiverResult::Success(token) => IdentityReceiverResult::Success(token),
+            SocketIdentityReceiverResult::ErrorResponseCode(code) => IdentityReceiverResult::ErrorResponseCode(code),
+        }
     }
 }
 

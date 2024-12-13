@@ -45,7 +45,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self
     }
 
-    pub fn insert_components<R: ReplicatedComponent>(&mut self, mut component_refs: Vec<R>) -> &mut Self {
+    pub fn insert_components<R: ReplicatedComponent>(
+        &mut self,
+        mut component_refs: Vec<R>,
+    ) -> &mut Self {
         while let Some(component_ref) = component_refs.pop() {
             self.insert_component(component_ref);
         }

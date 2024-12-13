@@ -23,7 +23,7 @@ impl ConditionedPacketReceiverImpl {
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
         link_conditioner_config: &LinkConditionerConfig,
     ) -> Self {
-        ConditionedPacketReceiverImpl {
+        Self {
             channel_receiver,
             link_conditioner_config: link_conditioner_config.clone(),
             time_queue: TimeQueue::new(),

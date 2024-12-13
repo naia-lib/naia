@@ -24,9 +24,10 @@ use crate::{
 pub trait ReceiverArranger: Send + Sync {
     fn process(
         &mut self,
-        message_index: MessageIndex,
+        start_message_index: MessageIndex,
+        end_message_index: MessageIndex,
         message: MessageContainer,
-    ) -> Vec<(MessageIndex, MessageContainer)>;
+    ) -> Vec<MessageContainer>;
 }
 
 // Reliable Receiver
@@ -35,8 +36,7 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     incoming_messages: Vec<MessageContainer>,
     arranger: A,
     fragment_receiver: FragmentReceiver,
-    waitlist_store: WaitlistStore<(MessageIndex, MessageContainer)>,
-    current_index: MessageIndex,
+    waitlist_store: WaitlistStore<(MessageIndex, MessageIndex, MessageContainer)>,
     incoming_requests: Vec<(LocalResponseId, MessageContainer)>,
     incoming_responses: Vec<(LocalRequestId, MessageContainer)>,
 }
@@ -49,7 +49,6 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             arranger,
             fragment_receiver: FragmentReceiver::new(),
             waitlist_store: WaitlistStore::new(),
-            current_index: 0,
             incoming_requests: Vec::new(),
             incoming_responses: Vec::new(),
         }
@@ -60,36 +59,36 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         message_kinds: &MessageKinds,
         entity_waitlist: &mut EntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
+        message_index: MessageIndex,
         message: MessageContainer,
     ) {
-        let Some(full_message) = ({
+        let Some((start_message_index, end_message_index, full_message)) = ({
             if message.is_fragment() {
                 self.fragment_receiver
-                    .receive(message_kinds, converter, message)
+                    .receive(message_kinds, converter, message_index, message)
             } else {
-                Some(message)
+                Some((message_index, message_index, message))
             }
         }) else {
             return;
         };
-
-        let first_index = self.current_index;
-        self.current_index = self.current_index.wrapping_add(1);
 
         if let Some(entity_set) = full_message.relations_waiting() {
             //warn!("Queuing waiting message!");
             entity_waitlist.queue(
                 &entity_set,
                 &mut self.waitlist_store,
-                (first_index, full_message),
+                (start_message_index, end_message_index, full_message),
             );
             return;
         } else {
             //info!("Received message!");
         }
 
-        let incoming_messages = self.arranger.process(first_index, full_message);
-        for (_, message) in incoming_messages {
+        let incoming_messages =
+            self.arranger
+                .process(start_message_index, end_message_index, full_message);
+        for message in incoming_messages {
             self.receive_message(message_kinds, converter, message);
         }
     }
@@ -105,8 +104,14 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         self.reliable_receiver
             .buffer_message(message_index, message);
         let received_messages = self.reliable_receiver.receive_messages();
-        for (_, received_message) in received_messages {
-            self.push_message(message_kinds, entity_waitlist, converter, received_message)
+        for (received_message_id, received_message) in received_messages {
+            self.push_message(
+                message_kinds,
+                entity_waitlist,
+                converter,
+                received_message_id,
+                received_message,
+            )
         }
     }
 
@@ -161,10 +166,12 @@ impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageR
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {
-            for (first_index, mut full_message) in list {
+            for (start_message_index, end_message_index, mut full_message) in list {
                 full_message.relations_complete(converter);
-                let incoming_messages = self.arranger.process(first_index, full_message);
-                for (_, message) in incoming_messages {
+                let incoming_messages =
+                    self.arranger
+                        .process(start_message_index, end_message_index, full_message);
+                for message in incoming_messages {
                     self.receive_message(message_kinds, converter, message);
                 }
             }

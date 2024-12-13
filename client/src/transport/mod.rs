@@ -6,17 +6,26 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "transport_udp")] {
         pub mod udp;
-        mod conditioner;
     } else {}
 }
 
 mod server_addr;
+
 pub use server_addr::ServerAddr;
 
-pub use inner::{IdentityReceiver, PacketReceiver, PacketSender, RecvError, SendError, Socket};
+pub use inner::{
+    IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, RecvError, SendError,
+    Socket,
+};
 
 mod inner {
-    use naia_client_socket::IdentityReceiverResult;
+
+    use naia_shared::IdentityToken;
+    pub enum IdentityReceiverResult {
+        Waiting,
+        Success(IdentityToken),
+        ErrorResponseCode(u16),
+    }
 
     use super::ServerAddr;
 

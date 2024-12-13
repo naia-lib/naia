@@ -1,16 +1,19 @@
 use naia_serde::SerdeErr;
 
-use crate::{world::{
-    component::{
-        component_kinds::ComponentKind,
-        component_update::{ComponentFieldUpdate, ComponentUpdate},
-        replica_ref::{
-            ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+use crate::{
+    world::{
+        component::{
+            component_kinds::ComponentKind,
+            component_update::{ComponentFieldUpdate, ComponentUpdate},
+            replica_ref::{
+                ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper,
+            },
+            replicate::Replicate,
         },
-        replicate::Replicate,
+        entity::entity_converters::LocalEntityAndGlobalEntityConverter,
     },
-    entity::entity_converters::LocalEntityAndGlobalEntityConverter,
-}, GlobalWorldManagerType, ReplicatedComponent};
+    GlobalWorldManagerType, ReplicatedComponent,
+};
 
 /// Structures that implement the WorldMutType trait will be able to be loaded
 /// into the Server at which point the Server will use this interface to keep
@@ -28,7 +31,10 @@ pub trait WorldRefType<E> {
     /// check whether entity contains component, dynamically
     fn has_component_of_kind(&self, entity: &E, component_kind: &ComponentKind) -> bool;
     /// gets an entity's component
-    fn component<'a, R: ReplicatedComponent>(&'a self, entity: &E) -> Option<ReplicaRefWrapper<'a, R>>;
+    fn component<'a, R: ReplicatedComponent>(
+        &'a self,
+        entity: &E,
+    ) -> Option<ReplicaRefWrapper<'a, R>>;
     /// gets an entity's component, dynamically
     fn component_of_kind<'a>(
         &'a self,

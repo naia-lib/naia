@@ -212,7 +212,7 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
                     event_writer.send(bevy_events::EntityAuthGrantedEvent::<T>::new(entity));
                 }
                 for entity in auth_granted_entities {
-                    if world.get_entity(entity).is_some() {
+                    if world.get_entity(entity).is_ok() {
                         world.entity_mut(entity).insert(HostOwned::new::<T>());
                     } else {
                         warn!(
@@ -244,7 +244,7 @@ pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
                     event_writer.send(bevy_events::EntityAuthResetEvent::<T>::new(entity));
                 }
                 for entity in auth_reset_entities {
-                    if world.get_entity(entity).is_some() {
+                    if world.get_entity(entity).is_ok() {
                         world.entity_mut(entity).remove::<HostOwned>();
                     } else {
                         warn!(

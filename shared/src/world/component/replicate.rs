@@ -122,9 +122,11 @@ cfg_if! {
         use bevy_ecs::component::Component;
 
         pub trait ReplicatedComponent: Replicate + Component {}
+        impl<T: Replicate + Component> ReplicatedComponent for T {}
     }
     else
     {
         pub trait ReplicatedComponent: Replicate {}
+        impl<T: Replicate> ReplicatedComponent for T {}
     }
 }

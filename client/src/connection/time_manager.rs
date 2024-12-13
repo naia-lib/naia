@@ -31,8 +31,8 @@ pub struct TimeManager {
     pub client_receiving_tick: Tick,
     pub client_sending_tick: Tick,
     pub server_receivable_tick: Tick,
-    client_receiving_instant: GameInstant,
-    client_sending_instant: GameInstant,
+    pub client_receiving_instant: GameInstant,
+    pub client_sending_instant: GameInstant,
     server_receivable_instant: GameInstant,
 }
 
@@ -353,6 +353,10 @@ impl TimeManager {
         return self
             .server_tick_instant
             .add_signed_millis(tick_diff_duration);
+    }
+
+    pub fn tick_duration(&self) -> Duration {
+        Duration::from_millis(self.server_tick_duration_avg as u64)
     }
 
     pub(crate) fn get_interp(&self, tick: Tick, instant: &GameInstant) -> f32 {

@@ -101,7 +101,7 @@ impl HandshakeTimeManager {
         let offset_stdv = offset_diff_mean.sqrt();
         let rtt_stdv = rtt_diff_mean.sqrt();
 
-        // Prune out any pong values outside the standard deviation (mitigation)
+        // Prune out any pong values outside the Standard Deviation (mitigation)
         let mut pruned_pongs = Vec::new();
         for (time_offset_millis, rtt_millis) in pongs {
             let offset_diff = (time_offset_millis - offset_mean).abs();
@@ -109,6 +109,13 @@ impl HandshakeTimeManager {
             if offset_diff < offset_stdv && rtt_diff < rtt_stdv {
                 pruned_pongs.push((time_offset_millis, rtt_millis));
             }
+        }
+
+        // If no pongs were pruned, add the mean values.
+        // This may happen if the standard deviation is close to 0.
+        // This is a safety measure to ensure the time manager has at least one sample.
+        if pruned_pongs.is_empty() {
+            pruned_pongs.push((offset_mean, rtt_mean));
         }
 
         // Find the mean of the pruned pongs

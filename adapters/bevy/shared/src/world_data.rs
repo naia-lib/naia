@@ -6,11 +6,12 @@ use std::{
 
 use bevy_app::App;
 use bevy_ecs::{
+    component::Component,
     entity::Entity,
     prelude::Resource,
     world::{FromWorld, World},
 };
-use bevy_ecs::component::Component;
+
 use naia_shared::{ComponentKind, Replicate};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};

@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, net::SocketAddr};
+use std::{marker::PhantomData, net::SocketAddr, time::Duration};
 
 use bevy_ecs::{
     entity::Entity,
@@ -10,8 +10,9 @@ use naia_bevy_shared::{
     GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick,
 };
 use naia_client::{
-    shared::{GameInstant, SocketConfig}, transport::Socket, Client as NaiaClient, ConnectionStatus,
-    NaiaClientError,
+    shared::{GameInstant, SocketConfig},
+    transport::Socket,
+    Client as NaiaClient, ConnectionStatus, NaiaClientError,
 };
 
 use crate::ReplicationConfig;
@@ -119,12 +120,24 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
         self.client.client.client_tick()
     }
 
+    pub fn client_instant(&self) -> Option<GameInstant> {
+        self.client.client.client_instant()
+    }
+
     pub fn server_tick(&self) -> Option<Tick> {
         self.client.client.server_tick()
     }
 
+    pub fn server_instant(&self) -> Option<GameInstant> {
+        self.client.client.server_instant()
+    }
+
     pub fn tick_to_instant(&self, tick: Tick) -> Option<GameInstant> {
         self.client.client.tick_to_instant(tick)
+    }
+
+    pub fn tick_duration(&self) -> Option<Duration> {
+        self.client.client.tick_duration()
     }
 
     // Interpolation

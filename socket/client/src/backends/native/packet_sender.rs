@@ -19,7 +19,7 @@ impl PacketSenderImpl {
         sender_channel: UnboundedSender<Box<[u8]>>,
         disconnect_channel: Sender<()>,
     ) -> Self {
-        PacketSenderImpl {
+        Self {
             server_addr,
             sender_channel,
             disconnect_channel,

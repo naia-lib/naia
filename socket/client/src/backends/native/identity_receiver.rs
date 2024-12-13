@@ -24,15 +24,15 @@ impl IdentityReceiver for IdentityReceiverImpl {
     fn receive(&mut self) -> IdentityReceiverResult {
         if let Ok(mut receiver) = self.receiver_channel.lock() {
             if let Ok(recv_result) = receiver.try_recv() {
-                return match recv_result {
+                match recv_result {
                     Ok(identity_token) => IdentityReceiverResult::Success(identity_token),
                     Err(error_code) => IdentityReceiverResult::ErrorResponseCode(error_code),
-                };
+                }
             } else {
-                return IdentityReceiverResult::Waiting;
+                IdentityReceiverResult::Waiting
             }
         } else {
-            return IdentityReceiverResult::Waiting;
+            IdentityReceiverResult::Waiting
         }
     }
 }

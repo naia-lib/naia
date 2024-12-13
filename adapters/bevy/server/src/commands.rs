@@ -1,13 +1,13 @@
 use bevy_ecs::{
     entity::Entity,
     system::EntityCommands,
-    world::{Mut, World, Command as BevyCommand},
+    world::{Command as BevyCommand, Mut, World},
 };
 
 use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldProxyMut};
 use naia_server::{ReplicationConfig, UserKey};
 
-use crate::{server::ServerWrapper, Server, plugin::Singleton};
+use crate::{plugin::Singleton, server::ServerWrapper, Server};
 
 // Bevy Commands Extension
 pub trait CommandsExt<'a> {
@@ -31,13 +31,13 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.enable_replication(&self.id());
         self.insert(HostOwned::new::<Singleton>());
-        return self;
+        self
     }
 
     fn disable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.disable_replication(&self.id());
         self.remove::<HostOwned>();
-        return self;
+        self
     }
 
     fn configure_replication(
@@ -47,8 +47,8 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
         let entity = self.id();
         let mut commands = self.commands();
         let command = ConfigureReplicationCommand::new(entity, config);
-        commands.add(command);
-        return self;
+        commands.queue(command);
+        self
     }
 
     fn replication_config(&'a self, server: &Server) -> Option<ReplicationConfig> {
