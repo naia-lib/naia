@@ -30,12 +30,12 @@ More comprehensive documentation / tutorials are on their way, but for now, the 
 
 ### Server:
 
-To run the UDP server demo on Linux: (that will be able to communicate with Linux clients)
+To run the basic server demo on Linux:
 
     1. cd /naia/demos/basic/server
     2. cargo run
 
-To run the WebRTC server demo on Linux: (that will be able to communicate with Web clients)
+To run the basic server demo on Linux:
 
     1. // go to (https://docs.rs/openssl/latest/openssl/) to install openssl on your machine
     2. cd /naia/demos/basic/server
@@ -43,12 +43,12 @@ To run the WebRTC server demo on Linux: (that will be able to communicate with W
 
 ### Client:
 
-To run the UDP client demo on Linux: (that will be able to communicate with a UDP server)
+To run the basic client demo on Linux:
 
     1. cd /naia/demos/basic/client/wasm_bindgen
     2. cargo run
 
-To run the WebRTC client demo on Web: (that will be able to communicate with a WebRTC server)
+To run the basic client demo on Web:
 
     1. cargo install cargo-web  // should only need to do this once if you haven't already
     2. cargo install cargo-make // should only need to do this once if you haven't already
