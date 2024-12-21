@@ -16,7 +16,7 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [features]
-wbindgen = [ "naia-socket-shared/wbindgen", "wasm-bindgen", "js-sys", "web_sys", "tinyjson" ]
+wbindgen = [ "naia-socket-shared/wbindgen", "wasm-bindgen", "js-sys", "web_sys", "tinyjson", "base64" ]
 mquad = [ "naia-socket-shared/mquad", "miniquad" ]
 
 [dependencies]
@@ -32,6 +32,7 @@ web_sys = { version = "0.3.64", package = "web-sys", features = [
     "XmlHttpRequest", "XmlHttpRequestEventTarget", "MessageEvent", "ProgressEvent", "ErrorEvent", "Blob" ], optional = true  }
 tinyjson = { version = "2.3", optional = true }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }
+base64 = { version = "0.13", optional = true  }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 webrtc-unreliable-client = { version = "0.3" }
