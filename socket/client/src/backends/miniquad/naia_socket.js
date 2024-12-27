@@ -32,6 +32,7 @@ const naia_socket = {
     connect: function (server_socket_address, rtc_path, auth_str) {
         let server_socket_address_string = naia_socket.get_js_object(server_socket_address);
         let rtc_path_string = naia_socket.get_js_object(rtc_path);
+        let auth_string = naia_socket.get_js_object(auth_str);
         let SESSION_ADDRESS = server_socket_address_string + rtc_path_string;
 
         let peer = new RTCPeerConnection({
@@ -71,8 +72,8 @@ const naia_socket = {
         }).then(function() {
             let request = new XMLHttpRequest();
             request.open("POST", SESSION_ADDRESS);
-            if (auth_str.length > 0) {
-                request.setRequestHeader("Authorization", auth_str);
+            if (auth_string.length > 0) {
+                request.setRequestHeader("Authorization", auth_string);
             }
             request.onload = function() {
                 if (request.status === 200) {

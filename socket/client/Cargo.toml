@@ -40,3 +40,4 @@ once_cell = { version = "1.4.1" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 regex = { version = "1.5" }
+base64 = { version = "0.13" }

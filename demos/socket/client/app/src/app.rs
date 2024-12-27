@@ -8,13 +8,18 @@ cfg_if! {
     }
 }
 
-use naia_client_socket::{PacketReceiver, PacketSender, ServerAddr, Socket};
+use naia_client_socket::{IdentityReceiver, PacketReceiver, PacketSender, ServerAddr, Socket};
 
 use naia_shared::Timer;
 
 use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
 
 pub struct App {
+
+    // IdentityReceiver must not be de-allocated, even if we don't use it in this demo
+    #[allow(dead_code)]
+    id_receiver: Box<dyn IdentityReceiver>,
+
     packet_sender: Box<dyn PacketSender>,
     packet_receiver: Box<dyn PacketReceiver>,
     message_count: u8,
@@ -26,13 +31,14 @@ impl App {
     pub fn new() -> App {
         info!("Naia Client Socket Demo started");
 
-        let (_id_receiver, packet_sender, packet_receiver) = Socket::connect_with_auth(
+        let (id_receiver, packet_sender, packet_receiver) = Socket::connect_with_auth(
             "http://127.0.0.1:14191",
             &shared_config(),
             "12345".as_bytes().to_vec(),
         );
 
         Self {
+            id_receiver,
             packet_sender,
             packet_receiver,
             message_count: 0,

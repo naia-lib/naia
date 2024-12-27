@@ -1,7 +1,5 @@
-use naia_socket_shared::IdentityToken;
-
 use super::shared::ID_CELL;
-use crate::{error::NaiaClientSocketError, identity_receiver::IdentityReceiver};
+use crate::{identity_receiver::IdentityReceiver, IdentityReceiverResult};
 
 /// Handles receiving an IdentityToken from the Server through a given Client Socket
 #[derive(Clone)]
@@ -12,11 +10,11 @@ impl IdentityReceiver for IdentityReceiverImpl {
         unsafe {
             if let Some(id_cell) = &mut ID_CELL {
                 if let Some(id_token) = id_cell.take() {
-                    return Ok(Some(id_token));
+                    return IdentityReceiverResult::Success(id_token);
                 }
             }
         };
 
-        Ok(None)
+        IdentityReceiverResult::Waiting
     }
 }

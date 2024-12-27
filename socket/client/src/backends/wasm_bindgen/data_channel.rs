@@ -20,7 +20,7 @@ use crate::{IdentityReceiverImpl, ServerAddr};
 // FindAddrFuncInner
 pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
 
-// PeerConnection
+// DataChannel
 pub struct DataChannel {
     server_session_url: String,
     auth_bytes_opt: Option<Vec<u8>>,
@@ -88,15 +88,15 @@ impl DataChannel {
         ice_server_config_list.push(&ice_server_config);
 
         // Set up RtcConfiguration
-        let mut peer_config: RtcConfiguration = RtcConfiguration::new();
-        peer_config.ice_servers(&ice_server_config_list);
+        let peer_config: RtcConfiguration = RtcConfiguration::new();
+        peer_config.set_ice_servers(&ice_server_config_list);
 
         // Setup Peer Connection
         match RtcPeerConnection::new_with_configuration(&peer_config) {
             Ok(peer) => {
-                let mut data_channel_config: RtcDataChannelInit = RtcDataChannelInit::new();
-                data_channel_config.ordered(false);
-                data_channel_config.max_retransmits(0);
+                let data_channel_config: RtcDataChannelInit = RtcDataChannelInit::new();
+                data_channel_config.set_ordered(false);
+                data_channel_config.set_max_retransmits(0);
 
                 let channel: RtcDataChannel =
                     peer.create_data_channel_with_data_channel_dict("data", &data_channel_config);
@@ -193,12 +193,11 @@ impl DataChannel {
                                                 }
                                             }
 
-                                            let mut candidate_init_dict: RtcIceCandidateInit =
-                                                RtcIceCandidateInit::new(candidate_str);
-                                            candidate_init_dict.sdp_m_line_index(Some(
+                                            let candidate_init_dict: RtcIceCandidateInit = RtcIceCandidateInit::new(candidate_str);
+                                            candidate_init_dict.set_sdp_m_line_index(Some(
                                                 session_response.candidate.sdp_m_line_index,
                                             ));
-                                            candidate_init_dict.sdp_mid(Some(
+                                            candidate_init_dict.set_sdp_mid(Some(
                                                 session_response.candidate.sdp_mid.as_str(),
                                             ));
                                             let candidate: RtcIceCandidate =
@@ -231,11 +230,11 @@ impl DataChannel {
                                     );
                                     let remote_desc_callback = Closure::wrap(remote_desc_func);
 
-                                    let mut rtc_session_desc_init_dict: RtcSessionDescriptionInit =
+                                    let rtc_session_desc_init_dict: RtcSessionDescriptionInit =
                                         RtcSessionDescriptionInit::new(RtcSdpType::Answer);
 
                                     rtc_session_desc_init_dict
-                                        .sdp(session_response_answer.sdp.as_str());
+                                        .set_sdp(session_response_answer.sdp.as_str());
 
                                     peer_4
                                         .set_remote_description(&rtc_session_desc_init_dict)

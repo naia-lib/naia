@@ -54,7 +54,8 @@ impl App {
                 );
 
                 if auth_from_client.eq("12345") {
-                    if let Err(error) = self.auth_sender.accept(&address) {
+                    let id_token = "id_token".to_string();
+                    if let Err(error) = self.auth_sender.accept(&address, &id_token) {
                         info!("Server Accept Auth error {}", error);
                     } else {
                         info!("Server Auth accepted: {}", address);
