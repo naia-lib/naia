@@ -1,5 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Socket Demo Client [wbindgen] [Wasm] [BUILD]" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+    <option name="buildProfileId" value="dev" />
     <option name="command" value="build --target wasm32-unknown-unknown --lib" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$/demos/socket/client/wasm_bindgen" />
     <envs />
