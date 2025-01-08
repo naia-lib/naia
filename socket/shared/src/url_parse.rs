@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use url::Url;
 
 pub fn parse_server_url(server_url_str: &str) -> Url {
-    let url = Url::parse(server_url_str).expect("server_url_str is not a valid URL!");
+    let url = Url::parse(server_url_str).expect(&format!("{} is not a valid URL!", server_url_str));
     if let Some(path_segments) = url.path_segments() {
         let path_segment_count = path_segments.count();
         if path_segment_count > 1 {
