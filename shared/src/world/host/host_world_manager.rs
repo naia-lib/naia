@@ -6,14 +6,9 @@ use std::{
     time::Duration,
 };
 
-use crate::{
-    sequence_list::SequenceList,
-    world::{
-        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
-    },
-    ComponentKind, DiffMask, EntityAction, HostEntity, Instant, MessageIndex, PacketIndex,
-    WorldRefType,
-};
+use crate::{sequence_list::SequenceList, world::{
+    entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+}, ComponentKind, DiffMask, EntityAction, EntityAndGlobalEntityConverter, GlobalEntity, HostEntity, Instant, MessageIndex, PacketIndex, WorldRefType};
 
 use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
 
@@ -24,36 +19,36 @@ pub type ActionId = MessageIndex;
 
 /// Manages Entities for a given Client connection and keeps them in
 /// sync on the Client
-pub struct HostWorldManager<E: Copy + Eq + Hash + Send + Sync> {
+pub struct HostWorldManager {
     // World
-    pub world_channel: WorldChannel<E>,
+    pub world_channel: WorldChannel,
 
     // Actions
-    pub sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E>)>)>,
+    pub sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<GlobalEntity>)>)>,
 
     // Updates
     /// Map of component updates and [`DiffMask`] that were written into each packet
-    pub sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, ComponentKind), DiffMask>)>,
+    pub sent_updates: HashMap<PacketIndex, (Instant, HashMap<(GlobalEntity, ComponentKind), DiffMask>)>,
     /// Last [`PacketIndex`] where a component update was written by the server
     pub last_update_packet_index: PacketIndex,
 }
 
-pub struct HostWorldEvents<E: Copy + Eq + Hash + Send + Sync> {
-    pub next_send_actions: VecDeque<(ActionId, EntityActionEvent<E>)>,
-    pub next_send_updates: HashMap<E, HashSet<ComponentKind>>,
+pub struct HostWorldEvents {
+    pub next_send_actions: VecDeque<(ActionId, EntityActionEvent)>,
+    pub next_send_updates: HashMap<GlobalEntity, HashSet<ComponentKind>>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> HostWorldEvents<E> {
+impl HostWorldEvents {
     pub fn has_events(&self) -> bool {
         !self.next_send_actions.is_empty() || !self.next_send_updates.is_empty()
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
+impl HostWorldManager {
     /// Create a new HostWorldManager, given the client's address
     pub fn new(
         address: &Option<SocketAddr>,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType,
     ) -> Self {
         HostWorldManager {
             // World
@@ -71,8 +66,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
     // used when Entity first comes into Connection's scope
     pub fn init_entity(
         &mut self,
-        world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        world_manager: &mut LocalWorldManager,
+        entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) {
         // add entity
@@ -85,41 +80,41 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
     pub fn spawn_entity(
         &mut self,
-        world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        world_manager: &mut LocalWorldManager,
+        entity: &GlobalEntity,
         component_kinds: &Vec<ComponentKind>,
     ) {
         self.world_channel
             .host_spawn_entity(world_manager, entity, component_kinds);
     }
 
-    pub fn despawn_entity(&mut self, entity: &E) {
+    pub fn despawn_entity(&mut self, entity: &GlobalEntity) {
         self.world_channel.host_despawn_entity(entity);
     }
 
-    pub fn client_initiated_despawn(&mut self, entity: &E) {
+    pub fn client_initiated_despawn(&mut self, entity: &GlobalEntity) {
         self.world_channel.client_initiated_despawn(entity);
     }
 
-    pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn insert_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.world_channel
             .host_insert_component(entity, component_kind);
     }
 
-    pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn remove_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.world_channel
             .host_remove_component(entity, component_kind);
     }
 
-    pub fn host_has_entity(&self, entity: &E) -> bool {
-        self.world_channel.host_has_entity(entity)
+    pub fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
+        self.world_channel.host_has_entity(global_entity)
     }
 
     // used when Remote Entity gains Write Authority (delegation)
     pub fn track_remote_entity(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        local_world_manager: &mut LocalWorldManager,
+        entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) -> HostEntity {
         // add entity
@@ -141,14 +136,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
 
     pub fn untrack_remote_entity(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        local_world_manager: &mut LocalWorldManager,
+        entity: &GlobalEntity,
     ) {
         self.world_channel
             .untrack_remote_entity(local_world_manager, entity);
     }
 
-    pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn track_remote_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.world_channel
             .track_remote_component(entity, component_kind);
     }
@@ -233,27 +228,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
         }
     }
 
-    pub fn take_outgoing_events<W: WorldRefType<E>>(
+    pub fn take_outgoing_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         world: &W,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &dyn GlobalWorldManagerType,
         now: &Instant,
         rtt_millis: &f32,
-    ) -> HostWorldEvents<E> {
+    ) -> HostWorldEvents {
         HostWorldEvents {
             next_send_actions: self.world_channel.take_next_actions(now, rtt_millis),
             next_send_updates: self
                 .world_channel
-                .collect_next_updates(world, global_world_manager),
+                .collect_next_updates(world, converter, global_world_manager),
         }
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
+impl HostWorldManager {
     pub fn notify_packet_delivered(
         &mut self,
         packet_index: PacketIndex,
-        local_world_manager: &mut LocalWorldManager<E>,
+        local_world_manager: &mut LocalWorldManager,
     ) {
         // Updates
         self.sent_updates.remove(&packet_index);

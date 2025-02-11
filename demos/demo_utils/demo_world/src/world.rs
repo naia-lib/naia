@@ -1,10 +1,6 @@
 use std::{any::Any, collections::HashMap};
 
-use naia_shared::{
-    BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
-    LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
-};
+use naia_shared::{BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -302,14 +298,16 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_publish(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
-        entity: &Entity,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        world_entity: &Entity,
     ) {
-        for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
+        for component_kind in WorldMutType::<Entity>::component_kinds(self, world_entity) {
             WorldMutType::<Entity>::component_publish(
                 self,
+                converter,
                 global_world_manager,
-                entity,
+                world_entity,
                 &component_kind,
             );
         }
@@ -317,15 +315,17 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_publish(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
-        entity: &Entity,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        world_entity: &Entity,
         component_kind: &ComponentKind,
     ) {
-        if let Some(component_map) = self.world.entities.get_mut(entity) {
+        if let Some(component_map) = self.world.entities.get_mut(world_entity) {
             if let Some(component) = component_map.get_mut(component_kind) {
                 let diff_mask_size = component.diff_mask_size();
+                let global_entity = converter.entity_to_global_entity(world_entity).unwrap();
                 let mutator = global_world_manager.register_component(
-                    entity,
+                    &global_entity,
                     &component_kind,
                     diff_mask_size,
                 );
@@ -344,7 +344,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_enable_delegation(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
     ) {
         todo!()
@@ -352,7 +352,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_enable_delegation(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
         _component_kind: &ComponentKind,
     ) {

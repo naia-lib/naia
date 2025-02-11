@@ -13,8 +13,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeRef<'s, E> {
     }
 
     /// Returns true if the User's scope contains the Entity
-    pub fn has(&self, entity: &E) -> bool {
-        self.server.user_scope_has_entity(&self.key, entity)
+    pub fn has(&self, world_entity: &E) -> bool {
+        self.server.user_scope_has_entity(&self.key, world_entity)
     }
 }
 
@@ -29,20 +29,20 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeMut<'s, E> {
     }
 
     /// Returns true if the User's scope contains the Entity
-    pub fn has(&self, entity: &E) -> bool {
-        self.server.user_scope_has_entity(&self.key, entity)
+    pub fn has(&self, world_entity: &E) -> bool {
+        self.server.user_scope_has_entity(&self.key, world_entity)
     }
 
     /// Adds an Entity to the User's scope
-    pub fn include(&mut self, entity: &E) -> &mut Self {
-        self.server.user_scope_set_entity(&self.key, entity, true);
+    pub fn include(&mut self, world_entity: &E) -> &mut Self {
+        self.server.user_scope_set_entity(&self.key, world_entity, true);
 
         self
     }
 
     /// Removes an Entity from the User's scope
-    pub fn exclude(&mut self, entity: &E) -> &mut Self {
-        self.server.user_scope_set_entity(&self.key, entity, false);
+    pub fn exclude(&mut self, world_entity: &E) -> &mut Self {
+        self.server.user_scope_set_entity(&self.key, world_entity, false);
 
         self
     }

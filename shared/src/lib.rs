@@ -121,12 +121,12 @@ pub use world::{
         entity_action_type::EntityActionType,
         entity_auth_event::{EntityEventMessage, EntityEventMessageAction},
         entity_converters::{
-            EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter,
-            EntityConverterMut, FakeEntityConverter, GlobalWorldManagerType,
+            EntityConverterMut, FakeEntityConverter, GlobalWorldManagerType, EntityAndGlobalEntityConverter,
             LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
         },
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
+        global_entity_map::{GlobalEntityMap, GlobalEntitySpawner},
         local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
     },
     host::{

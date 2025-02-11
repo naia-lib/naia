@@ -1,5 +1,6 @@
 use crate::world::component::component_kinds::ComponentKind;
 
+// Keep E here! TODO: remove
 pub enum EntityAction<E: Copy> {
     SpawnEntity(E, Vec<ComponentKind>),
     DespawnEntity(E),

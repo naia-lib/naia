@@ -4,11 +4,9 @@ use std::{
     marker::PhantomData,
 };
 
-use crate::{
-    messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than,
-    world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex,
-};
+use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, sequence_less_than, world::component::component_kinds::ComponentKind, EntityAction, MessageIndex as ActionIndex};
 
+// keep E here! TODO: remove
 pub struct EntityActionReceiver<E: Copy + Hash + Eq> {
     receiver: ReliableReceiver<EntityAction<E>>,
     entity_channels: HashMap<E, EntityChannel<E>>,
@@ -73,6 +71,8 @@ impl<E: Copy + Hash + Eq> EntityActionReceiver<E> {
 }
 
 // Entity Channel
+
+// keep E here! TODO: remove
 struct EntityChannel<E: Copy + Hash + Eq> {
     entity: E,
     last_canonical_index: Option<ActionIndex>,
@@ -329,6 +329,7 @@ impl<E: Copy + Hash + Eq> EntityChannel<E> {
 // Component Channel
 // most of this should be public, no methods here
 
+// keep E here! TODO: remove
 pub struct ComponentChannel<E: Copy + Hash + Eq> {
     pub inserted: bool,
     pub last_canonical_index: Option<ActionIndex>,

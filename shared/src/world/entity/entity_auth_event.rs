@@ -3,10 +3,7 @@ use std::hash::Hash;
 use naia_derive::MessageInternal;
 use naia_serde::SerdeInternal;
 
-use crate::{
-    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityProperty, EntityResponseEvent,
-    HostEntity, RemoteEntity,
-};
+use crate::{world::entity::entity_converters::EntityAndGlobalEntityConverter, EntityAuthStatus, EntityProperty, EntityResponseEvent, GlobalEntity, HostEntity, RemoteEntity};
 
 #[derive(MessageInternal)]
 pub struct EntityEventMessage {
@@ -28,34 +25,34 @@ pub enum EntityEventMessageAction {
 }
 
 impl EntityEventMessageAction {
-    pub fn to_response_event<E: Copy>(&self, entity: &E) -> EntityResponseEvent<E> {
+    pub fn to_response_event(&self, global_entity: &GlobalEntity) -> EntityResponseEvent {
         match self {
-            EntityEventMessageAction::Publish => EntityResponseEvent::PublishEntity(*entity),
-            EntityEventMessageAction::Unpublish => EntityResponseEvent::UnpublishEntity(*entity),
+            EntityEventMessageAction::Publish => EntityResponseEvent::PublishEntity(*global_entity),
+            EntityEventMessageAction::Unpublish => EntityResponseEvent::UnpublishEntity(*global_entity),
             EntityEventMessageAction::EnableDelegation => {
-                EntityResponseEvent::EnableDelegationEntity(*entity)
+                EntityResponseEvent::EnableDelegationEntity(*global_entity)
             }
             EntityEventMessageAction::EnableDelegationResponse => {
-                EntityResponseEvent::EnableDelegationEntityResponse(*entity)
+                EntityResponseEvent::EnableDelegationEntityResponse(*global_entity)
             }
             EntityEventMessageAction::DisableDelegation => {
-                EntityResponseEvent::DisableDelegationEntity(*entity)
+                EntityResponseEvent::DisableDelegationEntity(*global_entity)
             }
             EntityEventMessageAction::RequestAuthority(remote_entity) => {
                 EntityResponseEvent::EntityRequestAuthority(
-                    *entity,
+                    *global_entity,
                     RemoteEntity::new(*remote_entity),
                 )
             }
             EntityEventMessageAction::ReleaseAuthority => {
-                EntityResponseEvent::EntityReleaseAuthority(*entity)
+                EntityResponseEvent::EntityReleaseAuthority(*global_entity)
             }
             EntityEventMessageAction::UpdateAuthority(new_auth_status) => {
-                EntityResponseEvent::EntityUpdateAuthority(*entity, *new_auth_status)
+                EntityResponseEvent::EntityUpdateAuthority(*global_entity, *new_auth_status)
             }
             EntityEventMessageAction::EntityMigrateResponse(remote_entity) => {
                 EntityResponseEvent::EntityMigrateResponse(
-                    *entity,
+                    *global_entity,
                     RemoteEntity::new(*remote_entity),
                 )
             }
@@ -66,101 +63,101 @@ impl EntityEventMessageAction {
 impl EntityEventMessage {
     pub fn new_publish<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
     ) -> Self {
-        Self::new(converter, entity, EntityEventMessageAction::Publish)
+        Self::new(converter, world_entity, EntityEventMessageAction::Publish)
     }
 
     pub fn new_unpublish<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
     ) -> Self {
-        Self::new(converter, entity, EntityEventMessageAction::Unpublish)
+        Self::new(converter, world_entity, EntityEventMessageAction::Unpublish)
     }
 
     pub fn new_enable_delegation<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
     ) -> Self {
         Self::new(
             converter,
-            entity,
+            world_entity,
             EntityEventMessageAction::EnableDelegation,
         )
     }
 
     pub fn new_enable_delegation_response<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
     ) -> Self {
         Self::new(
             converter,
-            entity,
+            world_entity,
             EntityEventMessageAction::EnableDelegationResponse,
         )
     }
 
     pub fn new_disable_delegation<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
     ) -> Self {
         Self::new(
             converter,
-            entity,
+            world_entity,
             EntityEventMessageAction::DisableDelegation,
         )
     }
 
     pub fn new_request_authority<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
         host_entity: HostEntity,
     ) -> Self {
         Self::new(
             converter,
-            entity,
+            world_entity,
             EntityEventMessageAction::RequestAuthority(host_entity.value()),
         )
     }
 
     pub fn new_release_authority<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
     ) -> Self {
         Self::new(
             converter,
-            entity,
+            world_entity,
             EntityEventMessageAction::ReleaseAuthority,
         )
     }
 
     pub fn new_update_auth_status<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
         auth_status: EntityAuthStatus,
     ) -> Self {
         Self::new(
             converter,
-            entity,
+            world_entity,
             EntityEventMessageAction::UpdateAuthority(auth_status),
         )
     }
 
     pub fn new_entity_migrate_response<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
         host_entity: HostEntity,
     ) -> Self {
         Self::new(
             converter,
-            entity,
+            world_entity,
             EntityEventMessageAction::EntityMigrateResponse(host_entity.value()),
         )
     }
 
     fn new<E: Copy + Eq + Hash + Send + Sync>(
         converter: &dyn EntityAndGlobalEntityConverter<E>,
-        entity: &E,
+        world_entity: &E,
         action: EntityEventMessageAction,
     ) -> Self {
         let mut output = Self {
@@ -168,7 +165,7 @@ impl EntityEventMessage {
             action,
         };
 
-        output.entity.set(converter, entity);
+        output.entity.set(converter, world_entity);
 
         output
     }

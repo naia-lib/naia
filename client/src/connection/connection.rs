@@ -102,7 +102,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             self.base.read_packet(
                 protocol,
                 &server_tick,
-                global_world_manager,
                 true,
                 &mut reader,
             )?;
@@ -126,7 +125,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
             &protocol.message_kinds,
             now,
             global_world_manager,
-            &self.base.local_world_manager,
             &mut self.base.remote_world_manager.entity_waitlist,
         );
         for (channel_kind, messages) in messages {

@@ -6,8 +6,9 @@ use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use crate::{
     world::entity::{
         entity_converters::{
-            EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
+            LocalEntityAndGlobalEntityConverter,
             LocalEntityAndGlobalEntityConverterMut,
+            EntityAndGlobalEntityConverter,
         },
         global_entity::GlobalEntity,
         local_entity::OwnedLocalEntity,
@@ -109,7 +110,7 @@ impl EntityRelation {
             }
         }
     }
-    fn get<E: Copy + Eq + Hash>(
+    fn get<E: Copy + Eq + Hash + Sync + Send>(
         &self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
     ) -> Option<E> {
@@ -126,7 +127,8 @@ impl EntityRelation {
         warn!("Could not get EntityRelation value, because EntityRelation has no GlobalEntity!");
         return None;
     }
-    fn set<E: Copy + Eq + Hash>(
+
+    fn set<E: Copy + Eq + Hash + Sync + Send>(
         &mut self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
@@ -679,14 +681,18 @@ impl EntityProperty {
         self.inner.write(writer, converter);
     }
 
-    pub fn get<E: Copy + Eq + Hash>(
+    pub fn get<E: Copy + Eq + Hash + Sync + Send>(
         &self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
     ) -> Option<E> {
         self.inner.get(converter)
     }
 
-    pub fn set<E: Copy + Eq + Hash>(
+    pub fn get_inner(&self) -> Option<GlobalEntity> {
+        self.inner.get_global_entity()
+    }
+
+    pub fn set<E: Copy + Eq + Hash + Sync + Send>(
         &mut self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         entity: &E,
@@ -773,7 +779,7 @@ impl HostOwnedRelation {
         return bit_counter.bits_needed();
     }
 
-    pub fn set<E: Copy + Eq + Hash>(
+    pub fn set<E: Copy + Eq + Hash + Sync + Send>(
         &mut self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         world_entity: &E,
@@ -985,7 +991,7 @@ impl DelegatedRelation {
         }
     }
 
-    pub fn set<E: Copy + Eq + Hash>(
+    pub fn set<E: Copy + Eq + Hash + Sync + Send>(
         &mut self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         world_entity: &E,
@@ -1116,7 +1122,7 @@ impl LocalRelation {
         Self { global_entity }
     }
 
-    pub fn set<E: Copy + Eq + Hash>(
+    pub fn set<E: Copy + Eq + Hash + Sync + Send>(
         &mut self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         world_entity: &E,

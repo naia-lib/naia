@@ -10,11 +10,7 @@ use super::{
     entity_action_event::EntityActionEvent, host_world_manager::ActionId,
     user_diff_handler::UserDiffHandler,
 };
-use crate::{
-    world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager},
-    ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, GlobalWorldManagerType,
-    HostEntity, Instant, ReliableSender, WorldRefType,
-};
+use crate::{world::{host::entity_channel::EntityChannel, local_world_manager::LocalWorldManager}, ChannelSender, ComponentKind, EntityAction, EntityActionReceiver, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, HostEntity, Instant, ReliableSender, WorldRefType};
 
 const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
 
@@ -24,26 +20,26 @@ const RESEND_ACTION_RTT_FACTOR: f32 = 1.5;
 /// Only handles entity actions (Spawn/despawn entity and insert/remove components)
 /// Will use a reliable sender.
 /// Will wait for acks from the client to know the state of the client's ECS world ("remote")
-pub struct WorldChannel<E: Copy + Eq + Hash + Send + Sync> {
+pub struct WorldChannel {
     /// ECS World that exists currently on the server
-    host_world: CheckedMap<E, CheckedSet<ComponentKind>>,
+    host_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
     /// ECS World that exists on the client. Uses packet acks to receive confirmation of the
     /// EntityActions (Entity spawned, component inserted) that were actually received on the client
-    remote_world: CheckedMap<E, CheckedSet<ComponentKind>>,
-    entity_channels: CheckedMap<E, EntityChannel>,
-    outgoing_actions: ReliableSender<EntityActionEvent<E>>,
-    delivered_actions: EntityActionReceiver<E>,
+    remote_world: CheckedMap<GlobalEntity, CheckedSet<ComponentKind>>,
+    entity_channels: CheckedMap<GlobalEntity, EntityChannel>,
+    outgoing_actions: ReliableSender<EntityActionEvent>,
+    delivered_actions: EntityActionReceiver<GlobalEntity>,
 
     address: Option<SocketAddr>,
-    pub diff_handler: UserDiffHandler<E>,
+    pub diff_handler: UserDiffHandler,
 
-    outgoing_release_auth_messages: Vec<E>,
+    outgoing_release_auth_messages: Vec<GlobalEntity>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
+impl WorldChannel {
     pub fn new(
         address: &Option<SocketAddr>,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
+        global_world_manager: &dyn GlobalWorldManagerType,
     ) -> Self {
         Self {
             host_world: CheckedMap::new(),
@@ -61,18 +57,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     // Main
 
-    pub fn host_has_entity(&self, entity: &E) -> bool {
+    pub fn host_has_entity(&self, entity: &GlobalEntity) -> bool {
         self.host_world.contains_key(entity)
     }
 
-    pub fn entity_channel_is_open(&self, entity: &E) -> bool {
+    pub fn entity_channel_is_open(&self, entity: &GlobalEntity) -> bool {
         if let Some(entity_channel) = self.entity_channels.get(entity) {
             return entity_channel.is_spawned();
         }
         return false;
     }
 
-    pub fn host_component_kinds(&self, entity: &E) -> Vec<ComponentKind> {
+    pub fn host_component_kinds(&self, entity: &GlobalEntity) -> Vec<ComponentKind> {
         if let Some(component_kinds) = self.host_world.get(entity) {
             component_kinds.iter().cloned().collect()
         } else {
@@ -81,7 +77,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
     }
 
     // returns whether auth release message should be sent
-    pub fn entity_release_authority(&mut self, entity: &E) -> bool {
+    pub fn entity_release_authority(&mut self, entity: &GlobalEntity) -> bool {
         if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
             let output = entity_channel.release_authority();
             return output;
@@ -95,8 +91,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn host_spawn_entity(
         &mut self,
-        world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        world_manager: &mut LocalWorldManager,
+        entity: &GlobalEntity,
         component_kinds: &Vec<ComponentKind>,
     ) {
         if self.host_world.contains_key(entity) {
@@ -118,7 +114,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
-    pub fn host_despawn_entity(&mut self, entity: &E) {
+    pub fn host_despawn_entity(&mut self, entity: &GlobalEntity) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot despawn entity that doesn't exist");
         }
@@ -149,7 +145,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
-    pub fn client_initiated_despawn(&mut self, entity: &E) {
+    pub fn client_initiated_despawn(&mut self, entity: &GlobalEntity) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot despawn entity that doesn't exist");
         }
@@ -176,7 +172,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.entity_channels.remove(entity);
     }
 
-    pub fn host_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn host_insert_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot insert component into entity that doesn't exist");
         }
@@ -199,7 +195,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
-    pub fn host_remove_component(&mut self, world_entity: &E, component_kind: &ComponentKind) {
+    pub fn host_remove_component(&mut self, world_entity: &GlobalEntity, component_kind: &ComponentKind) {
         let Some(components) = self.host_world.get_mut(world_entity) else {
             panic!("World Channel: cannot remove component from non-existent entity");
         };
@@ -227,8 +223,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn track_remote_entity(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        local_world_manager: &mut LocalWorldManager,
+        entity: &GlobalEntity,
         component_kinds: &Vec<ComponentKind>,
     ) -> HostEntity {
         if self.host_world.contains_key(entity) {
@@ -252,8 +248,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn untrack_remote_entity(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        local_world_manager: &mut LocalWorldManager,
+        entity: &GlobalEntity,
     ) {
         if !self.host_world.contains_key(entity) {
             // I hit this once, after despawning a ChangelistEntry
@@ -273,7 +269,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
             .untrack_hosts_redundant_remote_entity(entity);
     }
 
-    pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn track_remote_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         if !self.host_world.contains_key(entity) {
             panic!("World Channel: cannot insert component into entity that doesn't exist");
         }
@@ -314,7 +310,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn on_remote_spawn_entity(
         &mut self,
-        entity: &E,
+        entity: &GlobalEntity,
         inserted_component_kinds: &HashSet<ComponentKind>,
     ) {
         if self.remote_world.contains_key(entity) {
@@ -382,8 +378,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn on_remote_despawn_entity(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        local_world_manager: &mut LocalWorldManager,
+        entity: &GlobalEntity,
     ) {
         if !self.remote_world.contains_key(entity) {
             panic!(
@@ -416,7 +412,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         self.remote_world.remove(entity);
     }
 
-    pub fn on_remote_insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn on_remote_insert_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         if !self.remote_world.contains_key(entity) {
             panic!("World Channel: cannot insert component into non-existent entity");
         }
@@ -469,7 +465,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
-    pub fn on_remote_remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn on_remote_remove_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         if !self.remote_world.contains_key(entity) {
             panic!("World Channel: cannot remove component from non-existent entity");
         }
@@ -518,8 +514,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     fn on_entity_channel_opening(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        world_entity: &E,
+        local_world_manager: &mut LocalWorldManager,
+        world_entity: &GlobalEntity,
     ) -> HostEntity {
         if let Some(host_entity) = local_world_manager.remove_reserved_host_entity(world_entity) {
             info!(
@@ -536,18 +532,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     fn on_remote_entity_channel_closed(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        local_world_manager: &mut LocalWorldManager,
+        entity: &GlobalEntity,
     ) {
         local_world_manager.remove_by_world_entity(entity);
     }
 
-    fn on_component_channel_opened(&mut self, entity: &E, component_kind: &ComponentKind) {
+    fn on_component_channel_opened(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.diff_handler
             .register_component(&self.address, entity, component_kind);
     }
 
-    fn on_component_channel_closing(&mut self, entity: &E, component_kind: &ComponentKind) {
+    fn on_component_channel_closing(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.diff_handler
             .deregister_component(entity, component_kind);
     }
@@ -556,9 +552,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
 
     pub fn action_delivered(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
+        local_world_manager: &mut LocalWorldManager,
         action_id: ActionId,
-        action: EntityAction<E>,
+        action: EntityAction<GlobalEntity>,
     ) {
         if self.outgoing_actions.deliver_message(&action_id).is_some() {
             self.delivered_actions.buffer_action(action_id, action);
@@ -566,7 +562,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         }
     }
 
-    fn process_delivered_actions(&mut self, local_world_manager: &mut LocalWorldManager<E>) {
+    fn process_delivered_actions(&mut self, local_world_manager: &mut LocalWorldManager) {
         let delivered_actions = self.delivered_actions.receive_actions();
         for action in delivered_actions {
             match action {
@@ -597,34 +593,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         &mut self,
         now: &Instant,
         rtt_millis: &f32,
-    ) -> VecDeque<(ActionId, EntityActionEvent<E>)> {
+    ) -> VecDeque<(ActionId, EntityActionEvent)> {
         self.outgoing_actions.collect_messages(now, rtt_millis);
         self.outgoing_actions.take_next_messages()
     }
 
-    pub fn collect_next_updates<W: WorldRefType<E>>(
+    pub fn collect_next_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &self,
         world: &W,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
-    ) -> HashMap<E, HashSet<ComponentKind>> {
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+    ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         let mut output = HashMap::new();
 
-        for (entity, entity_channel) in self.entity_channels.iter() {
-            if entity_channel.is_spawned() && world.has_entity(entity) {
+        for (global_entity, entity_channel) in self.entity_channels.iter() {
+
+            let world_entity = converter.global_entity_to_entity(global_entity).unwrap();
+
+            if entity_channel.is_spawned() && world.has_entity(&world_entity) {
                 for component_kind in entity_channel.inserted_components() {
                     if self
                         .diff_handler
-                        .diff_mask_is_clear(entity, &component_kind)
+                        .diff_mask_is_clear(global_entity, &component_kind)
                     {
                         continue;
                     }
-                    let entity_is_replicating = global_world_manager.entity_is_replicating(entity);
-                    let world_has_component = world.has_component_of_kind(entity, &component_kind);
+                    let entity_is_replicating = global_world_manager.entity_is_replicating(global_entity);
+                    let world_has_component = world.has_component_of_kind(&world_entity, &component_kind);
                     if entity_is_replicating && world_has_component {
-                        if !output.contains_key(entity) {
-                            output.insert(*entity, HashSet::new());
+                        if !output.contains_key(global_entity) {
+                            output.insert(*global_entity, HashSet::new());
                         }
-                        let send_component_set = output.get_mut(entity).unwrap();
+                        let send_component_set = output.get_mut(global_entity).unwrap();
                         send_component_set.insert(component_kind);
                     }
                 }
@@ -633,7 +633,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldChannel<E> {
         output
     }
 
-    pub fn collect_auth_release_messages(&mut self) -> Option<Vec<E>> {
+    pub fn collect_auth_release_messages(&mut self) -> Option<Vec<GlobalEntity>> {
         if self.outgoing_release_auth_messages.is_empty() {
             return None;
         }

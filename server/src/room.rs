@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{BigMapKey, Channel, ChannelKind, Message};
+use naia_shared::{BigMapKey, Channel, ChannelKind, GlobalEntity, Message};
 
 use super::user::UserKey;
 
@@ -22,15 +22,15 @@ impl BigMapKey for RoomKey {
 }
 
 // Room
-pub struct Room<E: Copy + Eq + Hash> {
+pub struct Room {
     users: HashSet<UserKey>,
-    entities: HashSet<E>,
-    entity_removal_queue: VecDeque<(UserKey, E)>,
+    entities: HashSet<GlobalEntity>,
+    entity_removal_queue: VecDeque<(UserKey, GlobalEntity)>,
 }
 
-impl<E: Copy + Eq + Hash> Room<E> {
-    pub(crate) fn new() -> Room<E> {
-        Room {
+impl Room {
+    pub(crate) fn new() -> Room {
+        Self {
             users: HashSet::new(),
             entities: HashSet::new(),
             entity_removal_queue: VecDeque::new(),
@@ -64,15 +64,15 @@ impl<E: Copy + Eq + Hash> Room<E> {
 
     // Entities
 
-    pub(crate) fn add_entity(&mut self, entity: &E) {
-        self.entities.insert(*entity);
+    pub(crate) fn add_entity(&mut self, global_entity: &GlobalEntity) {
+        self.entities.insert(*global_entity);
     }
 
-    pub(crate) fn remove_entity(&mut self, entity: &E, entity_is_despawned: bool) -> bool {
-        if self.entities.remove(entity) {
+    pub(crate) fn remove_entity(&mut self, global_entity: &GlobalEntity, entity_is_despawned: bool) -> bool {
+        if self.entities.remove(global_entity) {
             if !entity_is_despawned {
                 for user_key in self.users.iter() {
-                    self.entity_removal_queue.push_back((*user_key, *entity));
+                    self.entity_removal_queue.push_back((*user_key, *global_entity));
                 }
             }
             true
@@ -81,15 +81,15 @@ impl<E: Copy + Eq + Hash> Room<E> {
         }
     }
 
-    pub(crate) fn has_entity(&self, entity: &E) -> bool {
-        self.entities.contains(entity)
+    pub(crate) fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
+        self.entities.contains(global_entity)
     }
 
-    pub(crate) fn entities(&self) -> Iter<E> {
+    pub(crate) fn entities(&self) -> Iter<GlobalEntity> {
         self.entities.iter()
     }
 
-    pub(crate) fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, E)> {
+    pub(crate) fn pop_entity_removal_queue(&mut self) -> Option<(UserKey, GlobalEntity)> {
         self.entity_removal_queue.pop_front()
     }
 
@@ -136,15 +136,27 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
     // Entities
 
     pub fn has_entity(&self, entity: &E) -> bool {
-        self.server.room_has_entity(&self.key, entity)
+        if let Ok(global_entity) = self.server.entity_converter().entity_to_global_entity(entity) {
+            return self.server.room_has_entity(&self.key, &global_entity);
+        } else {
+            return false;
+        }
     }
 
     pub fn entities_count(&self) -> usize {
         self.server.room_entities_count(&self.key)
     }
 
-    pub fn entities(&self) -> impl Iterator<Item = &E> {
-        self.server.room_entities(&self.key)
+    pub fn entities(&self) -> Vec<E> {
+        let mut output = Vec::new();
+
+        for global_entity in self.server.room_entities(&self.key) {
+            if let Ok(entity) = self.server.entity_converter().global_entity_to_entity(global_entity) {
+                output.push(entity);
+            }
+        }
+
+        output
     }
 }
 
@@ -197,17 +209,21 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
     // Entities
 
     pub fn has_entity(&self, entity: &E) -> bool {
-        self.server.room_has_entity(&self.key, entity)
+        if let Ok(global_entity) = self.server.entity_converter().entity_to_global_entity(entity) {
+            return self.server.room_has_entity(&self.key, &global_entity);
+        } else {
+            return false;
+        }
     }
 
-    pub fn add_entity(&mut self, entity: &E) -> &mut Self {
-        self.server.room_add_entity(&self.key, entity);
+    pub fn add_entity(&mut self, world_entity: &E) -> &mut Self {
+        self.server.room_add_entity(&self.key, world_entity);
 
         self
     }
 
-    pub fn remove_entity(&mut self, entity: &E) -> &mut Self {
-        self.server.room_remove_entity(&self.key, entity);
+    pub fn remove_entity(&mut self, world_entity: &E) -> &mut Self {
+        self.server.room_remove_entity(&self.key, world_entity);
 
         self
     }

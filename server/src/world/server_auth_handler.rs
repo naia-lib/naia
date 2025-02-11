@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{EntityAuthAccessor, EntityAuthStatus, HostAuthHandler, HostType};
+use naia_shared::{EntityAuthAccessor, EntityAuthStatus, GlobalEntity, HostAuthHandler, HostType};
 
 use crate::UserKey;
 
@@ -23,13 +23,13 @@ impl AuthOwner {
     }
 }
 
-pub struct ServerAuthHandler<E: Copy + Eq + Hash + Send + Sync> {
-    host_auth_handler: HostAuthHandler<E>,
-    entity_auth_map: HashMap<E, AuthOwner>,
-    user_to_entity_map: HashMap<UserKey, HashSet<E>>,
+pub struct ServerAuthHandler {
+    host_auth_handler: HostAuthHandler,
+    entity_auth_map: HashMap<GlobalEntity, AuthOwner>,
+    user_to_entity_map: HashMap<UserKey, HashSet<GlobalEntity>>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
+impl ServerAuthHandler {
     pub fn new() -> Self {
         Self {
             host_auth_handler: HostAuthHandler::new(),
@@ -38,28 +38,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
         }
     }
 
-    pub fn get_accessor(&self, entity: &E) -> EntityAuthAccessor {
+    pub fn get_accessor(&self, entity: &GlobalEntity) -> EntityAuthAccessor {
         return self.host_auth_handler.get_accessor(entity);
     }
 
-    pub fn register_entity(&mut self, entity: &E) {
+    pub fn register_entity(&mut self, entity: &GlobalEntity) {
         self.host_auth_handler
             .register_entity(HostType::Server, entity);
         self.entity_auth_map.insert(*entity, AuthOwner::None);
     }
 
-    pub fn deregister_entity(&mut self, entity: &E) {
+    pub fn deregister_entity(&mut self, entity: &GlobalEntity) {
         self.host_auth_handler.deregister_entity(entity);
         self.entity_auth_map.remove(&entity);
     }
 
-    pub(crate) fn authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
+    pub(crate) fn authority_status(&self, entity: &GlobalEntity) -> Option<EntityAuthStatus> {
         self.host_auth_handler
             .auth_status(entity)
             .map(|host_status| host_status.status())
     }
 
-    pub(crate) fn client_request_authority(&mut self, entity: &E, requester: &AuthOwner) -> bool {
+    pub(crate) fn client_request_authority(&mut self, entity: &GlobalEntity, requester: &AuthOwner) -> bool {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
             panic!("Entity not registered with ServerAuthHandler");
         };
@@ -90,7 +90,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
         }
     }
 
-    pub(crate) fn client_release_authority(&mut self, entity: &E, releaser: &AuthOwner) -> bool {
+    pub(crate) fn client_release_authority(&mut self, entity: &GlobalEntity, releaser: &AuthOwner) -> bool {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
             panic!("Entity not registered with ServerAuthHandler");
         };
@@ -107,7 +107,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
     }
 
     // returns whether or not any change needed to be made
-    pub(crate) fn server_take_authority(&mut self, entity: &E) -> bool {
+    pub(crate) fn server_take_authority(&mut self, entity: &GlobalEntity) -> bool {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
             panic!("Entity not registered with ServerAuthHandler");
         };
@@ -119,7 +119,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
         response
     }
 
-    fn release_all_authority(&mut self, entity: &E, owner: AuthOwner) -> bool {
+    fn release_all_authority(&mut self, entity: &GlobalEntity, owner: AuthOwner) -> bool {
         if owner == AuthOwner::None {
             // no change was made
             return false;
@@ -142,7 +142,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerAuthHandler<E> {
         return true;
     }
 
-    pub(crate) fn user_all_owned_entities(&self, user_key: &UserKey) -> Option<&HashSet<E>> {
+    pub(crate) fn user_all_owned_entities(&self, user_key: &UserKey) -> Option<&HashSet<GlobalEntity>> {
         if let Some(entities) = self.user_to_entity_map.get(user_key) {
             return Some(entities);
         }

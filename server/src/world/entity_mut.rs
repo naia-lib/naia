@@ -13,7 +13,7 @@ pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> 
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
     pub(crate) fn new(server: &'s mut Server<E>, world: W, entity: &E) -> Self {
-        EntityMut {
+        Self {
             server,
             world,
             entity: *entity,

@@ -1,5 +1,4 @@
 use std::{
-    hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock, RwLockReadGuard},
 };
@@ -18,8 +17,8 @@ pub struct MutChannel {
 }
 
 impl MutChannel {
-    pub fn new_channel<E: Copy + Eq + Hash>(
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
+    pub fn new_channel(
+        global_world_manager: &dyn GlobalWorldManagerType,
         diff_mask_length: u8,
     ) -> (MutSender, MutReceiverBuilder) {
         let channel = Self {

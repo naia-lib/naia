@@ -1,22 +1,21 @@
 use std::{
     collections::HashMap,
-    hash::Hash,
     net::SocketAddr,
     sync::{Arc, RwLock, RwLockReadGuard},
 };
 
-use crate::{ComponentKind, DiffMask, GlobalWorldManagerType};
+use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
 use super::{global_diff_handler::GlobalDiffHandler, mut_channel::MutReceiver};
 
 #[derive(Clone)]
-pub struct UserDiffHandler<E: Copy + Eq + Hash> {
-    receivers: HashMap<(E, ComponentKind), MutReceiver>,
-    global_diff_handler: Arc<RwLock<GlobalDiffHandler<E>>>,
+pub struct UserDiffHandler {
+    receivers: HashMap<(GlobalEntity, ComponentKind), MutReceiver>,
+    global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
 }
 
-impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
-    pub fn new(global_world_manager: &dyn GlobalWorldManagerType<E>) -> Self {
+impl UserDiffHandler {
+    pub fn new(global_world_manager: &dyn GlobalWorldManagerType) -> Self {
         Self {
             receivers: HashMap::new(),
             global_diff_handler: global_world_manager.diff_handler(),
@@ -27,7 +26,7 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
     pub fn register_component(
         &mut self,
         address: &Option<SocketAddr>,
-        entity: &E,
+        entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
         let Ok(global_handler) = self.global_diff_handler.as_ref().read() else {
@@ -39,18 +38,18 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
         self.receivers.insert((*entity, *component_kind), receiver);
     }
 
-    pub fn deregister_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.receivers.remove(&(*entity, *component_kind));
     }
 
-    pub fn has_component(&self, entity: &E, component: &ComponentKind) -> bool {
+    pub fn has_component(&self, entity: &GlobalEntity, component: &ComponentKind) -> bool {
         self.receivers.contains_key(&(*entity, *component))
     }
 
     // Diff masks
     pub fn diff_mask(
         &self,
-        entity: &E,
+        entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> RwLockReadGuard<DiffMask> {
         let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
@@ -63,7 +62,7 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
     //        return self.receivers.contains_key(component_key);
     //    }
 
-    pub fn diff_mask_is_clear(&self, entity: &E, component_kind: &ComponentKind) -> bool {
+    pub fn diff_mask_is_clear(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
         let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };
@@ -72,7 +71,7 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
 
     pub fn or_diff_mask(
         &mut self,
-        entity: &E,
+        entity: &GlobalEntity,
         component_kind: &ComponentKind,
         other_mask: &DiffMask,
     ) {
@@ -82,7 +81,7 @@ impl<E: Copy + Eq + Hash> UserDiffHandler<E> {
         receiver.or_mask(other_mask);
     }
 
-    pub fn clear_diff_mask(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn clear_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         let Some(receiver) = self.receivers.get_mut(&(*entity, *component_kind)) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };

@@ -1,9 +1,9 @@
-use crate::ComponentKind;
+use crate::{ComponentKind, GlobalEntity};
 
 #[derive(Clone, PartialEq, Eq)]
-pub enum EntityActionEvent<E: Copy> {
-    SpawnEntity(E, Vec<ComponentKind>),
-    DespawnEntity(E),
-    InsertComponent(E, ComponentKind),
-    RemoveComponent(E, ComponentKind),
+pub enum EntityActionEvent {
+    SpawnEntity(GlobalEntity, Vec<ComponentKind>),
+    DespawnEntity(GlobalEntity),
+    InsertComponent(GlobalEntity, ComponentKind),
+    RemoveComponent(GlobalEntity, ComponentKind),
 }

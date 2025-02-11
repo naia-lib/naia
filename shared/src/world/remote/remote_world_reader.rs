@@ -1,28 +1,22 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use log::warn;
 
-use crate::{
-    messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
-    world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager,
-    BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityActionReceiver,
-    EntityActionType, EntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
-    MessageIndex, Protocol, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger,
-};
+use crate::{messages::channels::receivers::indexed_message_reader::IndexedMessageReader, world::entity::local_entity::RemoteEntity, world::local_world_manager::LocalWorldManager, BitReader, ComponentKind, ComponentKinds, ComponentUpdate, EntityAction, EntityActionReceiver, EntityActionType, GlobalEntity, LocalEntityAndGlobalEntityConverter, MessageIndex, Protocol, Replicate, Serde, SerdeErr, Tick, UnsignedVariableInteger};
 
-pub struct RemoteWorldReader<E: Copy + Eq + Hash + Send + Sync> {
+pub struct RemoteWorldReader {
     receiver: EntityActionReceiver<RemoteEntity>,
     received_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
-    received_updates: Vec<(Tick, E, ComponentUpdate)>,
+    received_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
 }
 
-pub struct RemoteWorldEvents<E: Copy + Eq + Hash + Send + Sync> {
+pub struct RemoteWorldEvents {
     pub incoming_actions: Vec<EntityAction<RemoteEntity>>,
     pub incoming_components: HashMap<(RemoteEntity, ComponentKind), Box<dyn Replicate>>,
-    pub incoming_updates: Vec<(Tick, E, ComponentUpdate)>,
+    pub incoming_updates: Vec<(Tick, GlobalEntity, ComponentUpdate)>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
+impl RemoteWorldReader {
     pub fn new() -> Self {
         Self {
             receiver: EntityActionReceiver::new(),
@@ -31,7 +25,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
         }
     }
 
-    pub fn take_incoming_events(&mut self) -> RemoteWorldEvents<E> {
+    pub fn take_incoming_events(&mut self) -> RemoteWorldEvents {
         RemoteWorldEvents {
             incoming_actions: self.receiver.receive_actions(),
             incoming_components: std::mem::take(&mut self.received_components),
@@ -69,8 +63,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
 
     pub fn read_world_events(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
-        local_world_manager: &mut LocalWorldManager<E>,
+        local_world_manager: &mut LocalWorldManager,
         protocol: &Protocol,
         tick: &Tick,
         reader: &mut BitReader,
@@ -80,8 +73,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
 
         // read entity actions
         self.read_actions(
-            global_world_manager,
-            local_world_manager,
+            local_world_manager.entity_converter(),
             &protocol.component_kinds,
             reader,
         )?;
@@ -92,28 +84,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
     /// Read incoming Entity actions.
     fn read_actions(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
-        local_world_manager: &mut LocalWorldManager<E>,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         let mut last_read_id: Option<MessageIndex> = None;
 
-        {
-            let converter = EntityConverter::new(
-                global_world_manager.to_global_entity_converter(),
-                local_world_manager,
-            );
-
-            loop {
-                // read action continue bit
-                let action_continue = bool::de(reader)?;
-                if !action_continue {
-                    break;
-                }
-
-                self.read_action(&converter, component_kinds, reader, &mut last_read_id)?;
+        loop {
+            // read action continue bit
+            let action_continue = bool::de(reader)?;
+            if !action_continue {
+                break;
             }
+
+            self.read_action(converter, component_kinds, reader, &mut last_read_id)?;
         }
 
         Ok(())
@@ -201,7 +185,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
     /// Read component updates from raw bits
     fn read_updates(
         &mut self,
-        local_world_manager: &LocalWorldManager<E>,
+        local_world_manager: &LocalWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
@@ -230,7 +214,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
     /// Read component updates from raw bits for a given entity
     fn read_update(
         &mut self,
-        local_world_manager: &LocalWorldManager<E>,
+        local_world_manager: &LocalWorldManager,
         component_kinds: &ComponentKinds,
         tick: &Tick,
         reader: &mut BitReader,
@@ -247,7 +231,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RemoteWorldReader<E> {
 
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
             if local_world_manager.has_remote_entity(remote_entity) {
-                let world_entity = local_world_manager.world_entity_from_remote(remote_entity);
+                let world_entity = local_world_manager.global_entity_from_remote(remote_entity);
 
                 self.received_updates
                     .push((*tick, world_entity, component_update));

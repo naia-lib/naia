@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use crate::{
     messages::message_manager::MessageManager, types::PacketIndex,
@@ -60,12 +60,12 @@ impl AckManager {
 
     /// Process an incoming packet, handle notifications of delivered / dropped
     /// packets
-    pub fn process_incoming_header<E: Copy + Eq + Hash + Send + Sync>(
+    pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
         message_manager: &mut MessageManager,
-        host_world_manager: &mut HostWorldManager<E>,
-        local_world_manager: &mut LocalWorldManager<E>,
+        host_world_manager: &mut HostWorldManager,
+        local_world_manager: &mut LocalWorldManager,
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         let sender_packet_index = header.sender_packet_index;
@@ -150,12 +150,12 @@ impl AckManager {
         outgoing
     }
 
-    fn notify_packet_delivered<E: Copy + Eq + Hash + Send + Sync>(
+    fn notify_packet_delivered(
         &self,
         sent_packet_index: PacketIndex,
         message_manager: &mut MessageManager,
-        host_world_manager: &mut HostWorldManager<E>,
-        local_world_manager: &mut LocalWorldManager<E>,
+        host_world_manager: &mut HostWorldManager,
+        local_world_manager: &mut LocalWorldManager,
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         message_manager.notify_packet_delivered(sent_packet_index);

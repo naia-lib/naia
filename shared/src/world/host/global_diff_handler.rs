@@ -1,14 +1,14 @@
-use std::{collections::HashMap, hash::Hash, net::SocketAddr};
+use std::{collections::HashMap, net::SocketAddr};
 
-use crate::{ComponentKind, GlobalWorldManagerType};
+use crate::{ComponentKind, GlobalEntity, GlobalWorldManagerType};
 
 use super::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
-pub struct GlobalDiffHandler<E: Copy + Eq + Hash> {
-    mut_receiver_builders: HashMap<(E, ComponentKind), MutReceiverBuilder>,
+pub struct GlobalDiffHandler {
+    mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>,
 }
 
-impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
+impl GlobalDiffHandler {
     pub fn new() -> Self {
         Self {
             mut_receiver_builders: HashMap::new(),
@@ -17,8 +17,8 @@ impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
 
     pub fn register_component(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
-        entity: &E,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        entity: &GlobalEntity,
         component_kind: &ComponentKind,
         diff_mask_length: u8,
     ) -> MutSender {
@@ -37,7 +37,7 @@ impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
         sender
     }
 
-    pub fn deregister_component(&mut self, entity: &E, component_kind: &ComponentKind) {
+    pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.mut_receiver_builders
             .remove(&(*entity, *component_kind));
     }
@@ -45,7 +45,7 @@ impl<E: Copy + Eq + Hash> GlobalDiffHandler<E> {
     pub fn receiver(
         &self,
         address: &Option<SocketAddr>,
-        entity: &E,
+        entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> Option<MutReceiver> {
         if let Some(builder) = self.mut_receiver_builders.get(&(*entity, *component_kind)) {

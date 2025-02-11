@@ -1,10 +1,6 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
-use naia_shared::{
-    BitReader, ChannelKind, ChannelKinds, ChannelMode, EntityAndGlobalEntityConverter,
-    EntityAndLocalEntityConverter, EntityConverter, MessageContainer, Protocol, Serde, SerdeErr,
-    Tick,
-};
+use naia_shared::{BitReader, ChannelKind, ChannelKinds, ChannelMode, LocalEntityAndGlobalEntityConverter, MessageContainer, Protocol, Serde, SerdeErr, Tick};
 
 use crate::connection::tick_buffer_receiver_channel::TickBufferReceiverChannel;
 
@@ -31,16 +27,14 @@ impl TickBufferReceiver {
     // Incoming Messages
 
     /// Read incoming packet data and store in a buffer
-    pub fn read_messages<E: Copy + Eq + Hash + Send + Sync>(
+    pub fn read_messages(
         &mut self,
         protocol: &Protocol,
         host_tick: &Tick,
         remote_tick: &Tick,
-        global_world_manager: &dyn EntityAndGlobalEntityConverter<E>,
-        local_world_manager: &dyn EntityAndLocalEntityConverter<E>,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let converter = EntityConverter::new(global_world_manager, local_world_manager);
         loop {
             let channel_continue = bool::de(reader)?;
             if !channel_continue {
@@ -53,7 +47,7 @@ impl TickBufferReceiver {
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
             channel.read_messages(
-                &converter,
+                converter,
                 &protocol.message_kinds,
                 host_tick,
                 remote_tick,
