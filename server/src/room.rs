@@ -208,8 +208,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
 
     // Entities
 
-    pub fn has_entity(&self, entity: &E) -> bool {
-        if let Ok(global_entity) = self.server.entity_converter().entity_to_global_entity(entity) {
+    pub fn has_entity(&self, world_entity: &E) -> bool {
+        if let Ok(global_entity) = self.server.entity_converter().entity_to_global_entity(world_entity) {
             return self.server.room_has_entity(&self.key, &global_entity);
         } else {
             return false;

@@ -12,6 +12,7 @@ use naia_bevy_shared::{
     Request, ResponseSendKey, Tick,
 };
 use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, User, UserKey};
+use crate::world_entity::WorldId;
 
 // ConnectEvent
 #[derive(Event)]
@@ -153,31 +154,31 @@ impl RequestEvents {
 
 // SpawnEntityEvent
 #[derive(Event)]
-pub struct SpawnEntityEvent(pub UserKey, pub Entity);
+pub struct SpawnEntityEvent(pub UserKey, pub WorldId, pub Entity);
 
 // DespawnEntityEvent
 #[derive(Event)]
-pub struct DespawnEntityEvent(pub UserKey, pub Entity);
+pub struct DespawnEntityEvent(pub UserKey, pub WorldId, pub Entity);
 
 // PublishEntityEvent
 #[derive(Event)]
-pub struct PublishEntityEvent(pub UserKey, pub Entity);
+pub struct PublishEntityEvent(pub UserKey, pub WorldId, pub Entity);
 
 // UnpublishEntityEvent
 #[derive(Event)]
-pub struct UnpublishEntityEvent(pub UserKey, pub Entity);
+pub struct UnpublishEntityEvent(pub UserKey, pub WorldId, pub Entity);
 
 // InsertComponentEvent
 #[derive(Event, Clone)]
 pub struct InsertComponentEvents {
-    inner: HashMap<ComponentKind, Vec<(UserKey, Entity)>>,
+    inner: HashMap<ComponentKind, Vec<(UserKey, WorldId, Entity)>>,
 }
 
 impl InsertComponentEvents {
-    pub fn new(inner: HashMap<ComponentKind, Vec<(UserKey, Entity)>>) -> Self {
+    pub fn new(inner: HashMap<ComponentKind, Vec<(UserKey, WorldId, Entity)>>) -> Self {
         Self { inner }
     }
-    pub fn read<C: Replicate>(&self) -> Vec<(UserKey, Entity)> {
+    pub fn read<C: Replicate>(&self) -> Vec<(UserKey, WorldId, Entity)> {
         let component_kind = ComponentKind::of::<C>();
         if let Some(components) = self.inner.get(&component_kind) {
             return components.clone();
@@ -190,15 +191,15 @@ impl InsertComponentEvents {
 // UpdateComponentEvents
 #[derive(Event)]
 pub struct UpdateComponentEvents {
-    inner: HashMap<ComponentKind, Vec<(UserKey, Entity)>>,
+    inner: HashMap<ComponentKind, Vec<(UserKey, WorldId, Entity)>>,
 }
 
 impl UpdateComponentEvents {
-    pub fn new(inner: HashMap<ComponentKind, Vec<(UserKey, Entity)>>) -> Self {
+    pub fn new(inner: HashMap<ComponentKind, Vec<(UserKey, WorldId, Entity)>>) -> Self {
         Self { inner }
     }
 
-    pub fn read<C: Replicate>(&self) -> Vec<(UserKey, Entity)> {
+    pub fn read<C: Replicate>(&self) -> Vec<(UserKey, WorldId, Entity)> {
         let component_kind = ComponentKind::of::<C>();
         if let Some(components) = self.inner.get(&component_kind) {
             return components.clone();
@@ -211,26 +212,26 @@ impl UpdateComponentEvents {
 // RemoveComponentEvents
 #[derive(Event)]
 pub struct RemoveComponentEvents {
-    inner: HashMap<ComponentKind, Vec<(UserKey, Entity, Box<dyn Replicate>)>>,
+    inner: HashMap<ComponentKind, Vec<(UserKey, WorldId, Entity, Box<dyn Replicate>)>>,
 }
 
 impl RemoveComponentEvents {
-    pub fn new(inner: HashMap<ComponentKind, Vec<(UserKey, Entity, Box<dyn Replicate>)>>) -> Self {
+    pub fn new(inner: HashMap<ComponentKind, Vec<(UserKey, WorldId, Entity, Box<dyn Replicate>)>>) -> Self {
         Self { inner }
     }
 
-    pub fn read<C: Replicate>(&self) -> Vec<(UserKey, Entity, C)> {
+    pub fn read<C: Replicate>(&self) -> Vec<(UserKey, WorldId, Entity, C)> {
         let mut output = Vec::new();
 
         let component_kind = ComponentKind::of::<C>();
         if let Some(components) = self.inner.get(&component_kind) {
-            for (user_key, entity, boxed_component) in components {
+            for (user_key, world_id, entity, boxed_component) in components {
                 let boxed_any = boxed_component.copy_to_box().to_boxed_any();
                 let component: C = Box::<dyn Any + 'static>::downcast::<C>(boxed_any)
                     .ok()
                     .map(|boxed_c| *boxed_c)
                     .unwrap();
-                output.push((*user_key, *entity, component));
+                output.push((*user_key, *world_id, *entity, component));
             }
         }
 

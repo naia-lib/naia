@@ -8,7 +8,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{HostOwned, HostSyncEvent, WorldMutType};
 
 mod naia_events {
     pub use naia_client::{
@@ -28,6 +28,7 @@ mod bevy_events {
 }
 
 use crate::{client::ClientWrapper, ServerOwned};
+use crate::world_proxy::WorldProxyMut;
 
 pub fn before_receive_events<T: Send + Sync + 'static>(world: &mut World) {
     let host_id = TypeId::of::<T>();

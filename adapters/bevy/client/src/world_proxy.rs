@@ -5,24 +5,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType};
-
-use super::{
-    component_ref::{ComponentMut, ComponentRef},
-    world_data::WorldData,
-};
-
-// WorldProxy
-
-pub trait WorldProxy<'w> {
-    fn proxy(self) -> WorldRef<'w>;
-}
-
-impl<'w> WorldProxy<'w> for &'w World {
-    fn proxy(self) -> WorldRef<'w> {
-        WorldRef::new(self)
-    }
-}
+use naia_bevy_shared::{ComponentMut, ComponentRef, WorldData, ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType, WorldEntities};
 
 // WorldProxyMut
 
@@ -36,47 +19,47 @@ impl<'w> WorldProxyMut<'w> for &'w mut World {
     }
 }
 
-// WorldRef //
-
-pub struct WorldRef<'w> {
-    world: &'w World,
-}
-
-impl<'w> WorldRef<'w> {
-    pub fn new(world: &'w World) -> Self {
-        WorldRef { world }
-    }
-}
-
-impl<'w> WorldRefType<Entity> for WorldRef<'w> {
-    fn has_entity(&self, entity: &Entity) -> bool {
-        has_entity(self.world, entity)
-    }
-
-    fn entities(&self) -> Vec<Entity> {
-        entities(self.world)
-    }
-
-    fn has_component<R: ReplicatedComponent>(&self, entity: &Entity) -> bool {
-        has_component::<R>(self.world, entity)
-    }
-
-    fn has_component_of_kind(&self, entity: &Entity, component_kind: &ComponentKind) -> bool {
-        has_component_of_kind(self.world, entity, component_kind)
-    }
-
-    fn component<R: ReplicatedComponent>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
-        component(self.world, entity)
-    }
-
-    fn component_of_kind(
-        &self,
-        entity: &Entity,
-        component_kind: &ComponentKind,
-    ) -> Option<ReplicaDynRefWrapper> {
-        component_of_kind(self.world, entity, component_kind)
-    }
-}
+// // WorldRef //
+//
+// pub struct WorldRef<'w> {
+//     world: &'w World,
+// }
+//
+// impl<'w> WorldRef<'w> {
+//     pub fn new(world: &'w World) -> Self {
+//         WorldRef { world }
+//     }
+// }
+//
+// impl<'w> WorldRefType<Entity> for WorldRef<'w> {
+//     fn has_entity(&self, entity: &Entity) -> bool {
+//         has_entity(self.world, entity)
+//     }
+//
+//     fn entities(&self) -> Vec<Entity> {
+//         entities(self.world)
+//     }
+//
+//     fn has_component<R: ReplicatedComponent>(&self, entity: &Entity) -> bool {
+//         has_component::<R>(self.world, entity)
+//     }
+//
+//     fn has_component_of_kind(&self, entity: &Entity, component_kind: &ComponentKind) -> bool {
+//         has_component_of_kind(self.world, entity, component_kind)
+//     }
+//
+//     fn component<R: ReplicatedComponent>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+//         component(self.world, entity)
+//     }
+//
+//     fn component_of_kind(
+//         &self,
+//         entity: &Entity,
+//         component_kind: &ComponentKind,
+//     ) -> Option<ReplicaDynRefWrapper> {
+//         component_of_kind(self.world, entity, component_kind)
+//     }
+// }
 
 // WorldMut
 
@@ -86,7 +69,7 @@ pub struct WorldMut<'w> {
 
 impl<'w> WorldMut<'w> {
     pub fn new(world: &'w mut World) -> Self {
-        WorldMut { world }
+        Self { world }
     }
 }
 
@@ -124,8 +107,8 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn spawn_entity(&mut self) -> Entity {
         let entity = self.world.spawn_empty().id();
 
-        let mut world_data = world_data_unchecked_mut(self.world);
-        world_data.spawn_entity(&entity);
+        let mut world_entities = world_entities_unchecked_mut(self.world);
+        world_entities.spawn_entity(&entity);
 
         entity
     }
@@ -152,8 +135,8 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn despawn_entity(&mut self, entity: &Entity) {
-        let mut world_data = world_data_unchecked_mut(self.world);
-        world_data.despawn_entity(entity);
+        let mut world_entities = world_entities_unchecked_mut(self.world);
+        world_entities.despawn_entity(entity);
 
         self.world.despawn(*entity);
     }
@@ -413,8 +396,8 @@ fn has_entity(world: &World, entity: &Entity) -> bool {
 }
 
 fn entities(world: &World) -> Vec<Entity> {
-    let world_data = world_data(world);
-    world_data.entities()
+    let world_entities = world_entities(world);
+    world_entities.entities()
 }
 
 fn has_component<R: ReplicatedComponent>(world: &World, entity: &Entity) -> bool {
@@ -457,11 +440,26 @@ fn world_data(world: &World) -> &WorldData {
         .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
 }
 
-fn world_data_unchecked_mut(world: &mut World) -> Mut<WorldData> {
+// fn world_data_unchecked_mut(world: &mut World) -> Mut<WorldData> {
+//     unsafe {
+//         world
+//             .as_unsafe_world_cell()
+//             .get_resource_mut::<WorldData>()
+//             .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
+//     }
+// }
+
+fn world_entities(world: &World) -> &WorldEntities {
+    world
+        .get_resource::<WorldEntities>()
+        .expect("Need to instantiate by adding WorldEntities resource at startup!")
+}
+
+fn world_entities_unchecked_mut(world: &mut World) -> Mut<WorldEntities> {
     unsafe {
         world
             .as_unsafe_world_cell()
-            .get_resource_mut::<WorldData>()
-            .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
+            .get_resource_mut::<WorldEntities>()
+            .expect("Need to instantiate by adding WorldEntities resource at startup!")
     }
 }

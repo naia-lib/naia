@@ -21,7 +21,7 @@ impl HostOwned {
 }
 
 #[derive(Resource)]
-pub struct HostOwnedMap {
+pub(crate) struct HostOwnedMap {
     map: HashMap<Entity, HostOwned>,
 }
 

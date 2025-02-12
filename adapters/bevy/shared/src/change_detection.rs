@@ -12,7 +12,7 @@ use bevy_ecs::{
 
 use naia_shared::{ComponentKind, Replicate};
 
-use crate::{HostOwned, HostOwnedMap};
+use crate::{HostOwned, components::HostOwnedMap};
 
 #[derive(Event)]
 pub enum HostSyncEvent {

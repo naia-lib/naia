@@ -15,6 +15,9 @@ mod components;
 mod plugin;
 mod server;
 mod systems;
+mod sub_worlds;
+mod world_entity;
+mod world_proxy;
 
 pub use commands::CommandsExt;
 pub use components::{ClientOwned, ServerOwned};

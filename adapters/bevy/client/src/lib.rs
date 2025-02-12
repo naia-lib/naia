@@ -15,6 +15,7 @@ pub mod component_events;
 mod components;
 mod plugin;
 mod systems;
+mod world_proxy;
 
 pub use client::Client;
 pub use commands::CommandsExt;

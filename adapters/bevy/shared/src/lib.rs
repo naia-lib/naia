@@ -11,7 +11,7 @@ pub use naia_shared::{
     ReplicateBevy as Replicate, ReplicateBuilder, Request, Response, ResponseReceiveKey,
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeIntegerConversion, SignedInteger,
     SignedVariableInteger, Tick, TickBufferSettings, Timer, UnsignedInteger,
-    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, ReplicaDynMutWrapper, GlobalWorldManagerType, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicatedComponent,
 };
 
 mod change_detection;
@@ -23,14 +23,16 @@ mod protocol;
 mod protocol_plugin;
 mod system_set;
 mod world_data;
-mod world_proxy;
+mod world_entities;
 
 pub use change_detection::HostSyncEvent;
-pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
-pub use components::{HostOwned, HostOwnedMap};
+pub use components::HostOwned;
+pub use component_access::ComponentAccess;
+pub use component_ref::{ComponentMut, ComponentRef};
 pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
-pub use system_set::{BeforeReceiveEvents, HostSyncChangeTracking, ReceiveEvents, SendPackets};
+pub use system_set::{BeforeReceiveEvents, ReceiveEvents, SendPackets};
 pub use world_data::WorldData;
-pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};
+pub use world_entities::WorldEntities;
+

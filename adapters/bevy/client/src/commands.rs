@@ -6,10 +6,11 @@ use bevy_ecs::{
     world::{Command as BevyCommand, Mut, World},
 };
 
-use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldMutType};
 use naia_client::ReplicationConfig;
 
 use crate::{client::ClientWrapper, Client};
+use crate::world_proxy::WorldProxyMut;
 
 // Bevy Commands Extension
 pub trait CommandsExt<'a> {

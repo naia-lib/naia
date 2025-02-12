@@ -1,11 +1,12 @@
 use std::{ops::DerefMut, sync::Mutex};
 
 use bevy_app::{App, Last, Plugin as PluginType, Startup, Update};
-use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
+use bevy_ecs::{schedule::IntoSystemConfigs};
 
 use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SendPackets, SharedPlugin};
 use naia_server::{Server, ServerConfig};
 
+use crate::world_entity::WorldEntity;
 use super::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
@@ -14,6 +15,7 @@ use super::{
     },
     server::ServerWrapper,
     systems::{before_receive_events, send_packets, send_packets_init},
+    sub_worlds::SubWorlds,
 };
 
 struct PluginConfig {
@@ -23,7 +25,7 @@ struct PluginConfig {
 
 impl PluginConfig {
     pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
-        PluginConfig {
+        Self {
             server_config,
             protocol,
         }
@@ -54,14 +56,15 @@ impl PluginType for Plugin {
         world_data.add_systems(app);
         app.insert_resource(world_data);
 
-        let server = Server::<Entity>::new(config.server_config, config.protocol.into());
-        let server = ServerWrapper(server);
+        let server = Server::<WorldEntity>::new(config.server_config, config.protocol.into());
+        let server = ServerWrapper::wrap(server);
 
         app
             // SHARED PLUGIN //
             .add_plugins(SharedPlugin::<Singleton>::new())
             // RESOURCES //
             .insert_resource(server)
+            .init_resource::<SubWorlds>()
             // EVENTS //
             .add_event::<ConnectEvent>()
             .add_event::<DisconnectEvent>()

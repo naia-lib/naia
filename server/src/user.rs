@@ -102,7 +102,7 @@ pub struct UserRef<'s, E: Copy + Eq + Hash + Send + Sync> {
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserRef<'s, E> {
     pub fn new(server: &'s Server<E>, key: &UserKey) -> Self {
-        UserRef { server, key: *key }
+        Self { server, key: *key }
     }
 
     pub fn key(&self) -> UserKey {

@@ -18,7 +18,7 @@ use naia_client::{
 use crate::ReplicationConfig;
 
 #[derive(Resource)]
-pub struct ClientWrapper<T: Send + Sync + 'static> {
+pub(crate) struct ClientWrapper<T: Send + Sync + 'static> {
     pub client: NaiaClient<Entity>,
     phantom_t: PhantomData<T>,
 }

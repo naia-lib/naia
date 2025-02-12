@@ -11,30 +11,26 @@ use super::{
     system_set::HostSyncChangeTracking,
 };
 
-pub trait AppTag: Send + Sync + 'static {
-    fn add_systems(boxed_component: Box<dyn ComponentAccess>, app: &mut App);
-}
-
 pub trait ComponentAccess: Send + Sync {
     fn add_systems(&self, app: &mut App);
     fn box_clone(&self) -> Box<dyn ComponentAccess>;
-    fn component<'w>(&self, world: &'w World, world_entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>>;
+    fn component<'w>(&self, world: &'w World, entity: &Entity) -> Option<ReplicaDynRefWrapper<'w>>;
     fn component_mut<'w>(
         &self,
         world: &'w mut World,
-        world_entity: &Entity,
+        entity: &Entity,
     ) -> Option<ReplicaDynMutWrapper<'w>>;
-    fn remove_component(&self, world: &mut World, world_entity: &Entity) -> Option<Box<dyn Replicate>>;
+    fn remove_component(&self, world: &mut World, entity: &Entity) -> Option<Box<dyn Replicate>>;
     fn mirror_components(
         &self,
         world: &mut World,
-        mutable_world_entity: &Entity,
-        immutable_world_entity: &Entity,
+        mutable_entity: &Entity,
+        immutable_entity: &Entity,
     );
     fn insert_component(
         &self,
         world: &mut World,
-        world_entity: &Entity,
+        entity: &Entity,
         boxed_component: Box<dyn Replicate>,
     );
     fn component_publish(
@@ -42,17 +38,17 @@ pub trait ComponentAccess: Send + Sync {
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         world: &mut World,
-        world_entity: &Entity,
+        entity: &Entity,
     );
-    fn component_unpublish(&self, world: &mut World, world_entity: &Entity);
+    fn component_unpublish(&self, world: &mut World, entity: &Entity);
     fn component_enable_delegation(
         &self,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_manager: &dyn GlobalWorldManagerType,
         world: &mut World,
-        world_entity: &Entity,
+        entity: &Entity,
     );
-    fn component_disable_delegation(&self, world: &mut World, world_entity: &Entity);
+    fn component_disable_delegation(&self, world: &mut World, entity: &Entity);
 }
 
 pub struct ComponentAccessor<R: Replicate> {
@@ -155,12 +151,12 @@ impl<R: Replicate + Component> ComponentAccess for ComponentAccessor<R> {
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_manager: &dyn GlobalWorldManagerType,
         world: &mut World,
-        world_entity: &Entity,
+        entity: &Entity,
     ) {
-        if let Some(mut component_mut) = world.get_mut::<R>(*world_entity) {
+        if let Some(mut component_mut) = world.get_mut::<R>(*entity) {
             let component_kind = component_mut.kind();
             let diff_mask_size = component_mut.diff_mask_size();
-            let global_entity = converter.entity_to_global_entity(world_entity).unwrap();
+            let global_entity = converter.entity_to_global_entity(entity).unwrap();
             let mutator =
                 global_manager.register_component(&global_entity, &component_kind, diff_mask_size);
             component_mut.publish(&mutator);
