@@ -77,8 +77,8 @@ impl WorldChannel {
     }
 
     // returns whether auth release message should be sent
-    pub fn entity_release_authority(&mut self, entity: &GlobalEntity) -> bool {
-        if let Some(entity_channel) = self.entity_channels.get_mut(entity) {
+    pub fn entity_release_authority(&mut self, global_entity: &GlobalEntity) -> bool {
+        if let Some(entity_channel) = self.entity_channels.get_mut(global_entity) {
             let output = entity_channel.release_authority();
             return output;
         } else {

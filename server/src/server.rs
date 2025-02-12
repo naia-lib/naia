@@ -9,7 +9,7 @@ use std::{
 
 use log::{info, warn};
 
-use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
+use naia_shared::{BigMap, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityConverterMut, EntityDoesNotExistError, EntityEventMessage, EntityResponseEvent, FakeEntityConverter, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, Instant, Message, MessageContainer, PacketType, Protocol, RemoteEntity, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, SocketConfig, StandardHeader, SystemChannel, Tick, Timer, WorldMutType, WorldRefType};
 
 use super::{
     error::NaiaServerError,
@@ -441,7 +441,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         for (room_key, room) in self.rooms.iter() {
             for user_key in room.user_keys() {
                 for global_entity in room.entities() {
-                    if let Ok(entity) = self.entity_converter().global_entity_to_entity(global_entity) {
+                    if let Ok(entity) = self.global_entity_map.global_entity_to_entity(global_entity) {
                         list.push((room_key, *user_key, entity));
                     }
                 }
@@ -511,24 +511,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn pause_entity_replication(&mut self, world_entity: &E) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         self.global_world_manager.pause_entity_replication(&global_entity);
     }
 
     pub fn resume_entity_replication(&mut self, world_entity: &E) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         self.global_world_manager.resume_entity_replication(&global_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_replication_config(&self, world_entity: &E) -> Option<ReplicationConfig> {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         self.global_world_manager.entity_replication_config(&global_entity)
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_take_authority(&mut self, world_entity: &E) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         let did_change = self.global_world_manager.server_take_authority(&global_entity);
 
         if did_change {
@@ -580,7 +580,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world_entity: &E,
         config: ReplicationConfig,
     ) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         if !self.global_world_manager.has_entity(&global_entity) {
             panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Server, before configuring replication.");
         }
@@ -679,7 +679,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world_entity: &E,
         remote_entity: &RemoteEntity,
     ) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         let requester = AuthOwner::Client(*origin_user);
         let success = self
             .global_world_manager
@@ -756,7 +756,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         self.global_world_manager.entity_authority_status(&global_entity)
     }
 
@@ -808,7 +808,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_release_authority(&mut self, origin_user: Option<&UserKey>, world_entity: &E) {
         let releaser = AuthOwner::from_user_key(origin_user);
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         let success = self
             .global_world_manager
             .client_release_authority(&global_entity, &releaser);
@@ -843,7 +843,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn entity_owner(&self, world_entity: &E) -> EntityOwner {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         if let Some(owner) = self.global_world_manager.entity_owner(&global_entity) {
             return owner;
         }
@@ -1044,13 +1044,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn despawn_entity_worldless(&mut self, world_entity: &E) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         if !self.global_world_manager.has_entity(&global_entity) {
             info!("attempting to despawn entity that does not exist, this can happen if a delegated entity is being despawned");
             return;
         }
         self.cleanup_entity_replication(&global_entity);
         self.global_world_manager.remove_entity_record(&global_entity);
+        self.global_entity_map.despawn_by_global(&global_entity);
     }
 
     fn cleanup_entity_replication(&mut self, global_entity: &GlobalEntity) {
@@ -1097,13 +1098,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world_entity: &E,
         is_contained: bool,
     ) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         self.entity_scope_map
             .insert(*user_key, global_entity, is_contained);
     }
 
     pub(crate) fn user_scope_has_entity(&self, user_key: &UserKey, world_entity: &E) -> bool {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         if let Some(in_scope) = self.entity_scope_map.get(user_key, &global_entity) {
             *in_scope
         } else {
@@ -1146,7 +1147,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
 
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
 
         if self
             .global_world_manager
@@ -1226,7 +1227,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // This intended to be used by adapter crates, do not use this as it will not update the world
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         self.remove_component_from_all_connections(&global_entity, component_kind);
 
         // cleanup all other loose ends
@@ -1344,7 +1345,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             self.enable_delegation_client_owned_entity(world, global_entity, world_entity, &client_key);
         } else {
             self.global_world_manager.entity_enable_delegation(&global_entity);
-            world.entity_enable_delegation(&self.global_world_manager, world_entity);
+            world.entity_enable_delegation(&self.global_entity_map, &self.global_world_manager, world_entity);
         }
     }
 
@@ -1422,7 +1423,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.send_message::<SystemChannel, EntityEventMessage>(&user_key, &message);
 
         self.global_world_manager.entity_enable_delegation(&global_entity);
-        world.entity_enable_delegation(&self.global_world_manager, world_entity);
+        world.entity_enable_delegation(&self.global_entity_map, &self.global_world_manager, world_entity);
 
         // grant authority to user
         let requester = AuthOwner::from_user_key(Some(client_key));
@@ -1441,7 +1442,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world_entity: &E,
     ) {
         // TODO: check that entity is eligible for delegation?
-        info!("server.entity_disable_delegation");
+
         // for any users that have this entity in scope, send an `disable_delegation` message
         {
             // TODO: we can make this more efficient in the future by caching which Entities
@@ -1703,7 +1704,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them.
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         let mut is_some = false;
         if let Some(room) = self.rooms.get_mut(room_key) {
             room.add_entity(&global_entity);
@@ -1717,7 +1718,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
-        let global_entity = self.entity_converter().entity_to_global_entity(world_entity).unwrap();
+        let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         if let Some(room) = self.rooms.get_mut(room_key) {
             room.remove_entity(&global_entity, false);
             self.entity_room_map.remove_from_room(&global_entity, room_key);
@@ -2014,6 +2015,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
                         if self.global_world_manager.entity_is_delegated(&global_entity) {
                             world.component_enable_delegation(
+                                &self.global_entity_map,
                                 &self.global_world_manager,
                                 &world_entity,
                                 &component_kind,
@@ -2130,6 +2132,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                         self.despawn_entity_worldless(&world_entity);
                     } else {
                         self.global_world_manager.remove_entity_record(&global_entity);
+                        self.global_entity_map.despawn_by_global(&global_entity);
                     }
                 }
                 _ => {
@@ -2382,5 +2385,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 }
             }
         }
+    }
+}
+
+impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Server<E> {
+    fn global_entity_to_entity(&self, global_entity: &GlobalEntity) -> Result<E, EntityDoesNotExistError> {
+        self.global_entity_map.global_entity_to_entity(global_entity)
+    }
+
+    fn entity_to_global_entity(&self, world_entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.global_entity_map.entity_to_global_entity(world_entity)
     }
 }

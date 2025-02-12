@@ -60,19 +60,19 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// gets an entity's component
     fn component_mut<'a, R: ReplicatedComponent>(
         &'a mut self,
-        entity: &E,
+        world_entity: &E,
     ) -> Option<ReplicaMutWrapper<'a, R>>;
     /// gets an entity's component, dynamically
     fn component_mut_of_kind<'a>(
         &'a mut self,
-        entity: &E,
+        world_entity: &E,
         component_kind: &ComponentKind,
     ) -> Option<ReplicaDynMutWrapper<'a>>;
     /// reads an incoming stream into a component
     fn component_apply_update(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: &E,
+        world_entity: &E,
         component_kind: &ComponentKind,
         update: ComponentUpdate,
     ) -> Result<(), SerdeErr>;
@@ -80,7 +80,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     fn component_apply_field_update(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: &E,
+        world_entity: &E,
         component_kind: &ComponentKind,
         update: ComponentFieldUpdate,
     ) -> Result<(), SerdeErr>;
@@ -104,7 +104,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// remove a component by kind
     fn remove_component_of_kind(
         &mut self,
-        entity: &E,
+        world_entity: &E,
         component_kind: &ComponentKind,
     ) -> Option<Box<dyn Replicate>>;
 
@@ -125,14 +125,16 @@ pub trait WorldMutType<E>: WorldRefType<E> {
     /// enable delegation on entity
     fn entity_enable_delegation(
         &mut self,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
         world_entity: &E,
     );
     /// enable delegation on component
     fn component_enable_delegation(
         &mut self,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-        entity: &E,
+        world_entity: &E,
         component_kind: &ComponentKind,
     );
     /// disable delegation on entity

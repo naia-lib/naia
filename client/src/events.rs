@@ -1,13 +1,10 @@
-use std::{collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
+use std::{hash::Hash, collections::HashMap, marker::PhantomData, mem, net::SocketAddr, vec::IntoIter};
 
-use naia_shared::{
-    Channel, ChannelKind, ComponentKind, EntityEvent, EntityResponseEvent, GlobalResponseId,
-    Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick,
-};
+use naia_shared::{Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, EntityEvent, EntityResponseEvent, GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick};
 
 use crate::NaiaClientError;
 
-pub struct Events<E: Copy> {
+pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<SocketAddr>,
     rejections: Vec<SocketAddr>,
     disconnections: Vec<SocketAddr>,
@@ -29,13 +26,13 @@ pub struct Events<E: Copy> {
     empty: bool,
 }
 
-impl<E: Copy> Default for Events<E> {
+impl<E: Hash + Copy + Eq + Sync + Send> Default for Events<E> {
     fn default() -> Self {
         Events::new()
     }
 }
 
-impl<E: Copy> Events<E> {
+impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub(crate) fn new() -> Self {
         Self {
             connections: Vec::new(),
@@ -196,96 +193,107 @@ impl<E: Copy> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_spawn(&mut self, entity: E) {
-        self.spawns.push(entity);
+    pub(crate) fn push_spawn(&mut self, world_entity: E) {
+        self.spawns.push(world_entity);
         self.empty = false;
     }
 
-    pub(crate) fn push_despawn(&mut self, entity: E) {
-        self.despawns.push(entity);
+    pub(crate) fn push_despawn(&mut self, world_entity: E) {
+        self.despawns.push(world_entity);
         self.empty = false;
     }
 
-    pub(crate) fn push_publish(&mut self, entity: E) {
-        self.publishes.push(entity);
+    pub(crate) fn push_publish(&mut self, world_entity: E) {
+        self.publishes.push(world_entity);
         self.empty = false;
     }
 
-    pub(crate) fn push_unpublish(&mut self, entity: E) {
-        self.unpublishes.push(entity);
+    pub(crate) fn push_unpublish(&mut self, world_entity: E) {
+        self.unpublishes.push(world_entity);
         self.empty = false;
     }
 
-    pub(crate) fn push_auth_grant(&mut self, entity: E) {
-        self.auth_grants.push(entity);
+    pub(crate) fn push_auth_grant(&mut self, world_entity: E) {
+        self.auth_grants.push(world_entity);
         self.empty = false;
     }
 
-    pub(crate) fn push_auth_deny(&mut self, entity: E) {
-        self.auth_denies.push(entity);
+    pub(crate) fn push_auth_deny(&mut self, world_entity: E) {
+        self.auth_denies.push(world_entity);
         self.empty = false;
     }
 
-    pub(crate) fn push_auth_reset(&mut self, entity: E) {
-        self.auth_resets.push(entity);
+    pub(crate) fn push_auth_reset(&mut self, world_entity: E) {
+        self.auth_resets.push(world_entity);
         self.empty = false;
     }
 
-    pub(crate) fn push_insert(&mut self, entity: E, component_kind: ComponentKind) {
+    pub(crate) fn push_insert(&mut self, world_entity: E, component_kind: ComponentKind) {
         if !self.inserts.contains_key(&component_kind) {
             self.inserts.insert(component_kind, Vec::new());
         }
         let list = self.inserts.get_mut(&component_kind).unwrap();
-        list.push(entity);
+        list.push(world_entity);
         self.empty = false;
     }
 
-    pub(crate) fn push_update(&mut self, tick: Tick, entity: E, component_kind: ComponentKind) {
+    pub(crate) fn push_update(&mut self, tick: Tick, world_entity: E, component_kind: ComponentKind) {
         if !self.updates.contains_key(&component_kind) {
             self.updates.insert(component_kind, Vec::new());
         }
         let list = self.updates.get_mut(&component_kind).unwrap();
-        list.push((tick, entity));
+        list.push((tick, world_entity));
         self.empty = false;
     }
 
-    pub(crate) fn push_remove(&mut self, entity: E, component: Box<dyn Replicate>) {
+    pub(crate) fn push_remove(&mut self, world_entity: E, component: Box<dyn Replicate>) {
         let component_kind: ComponentKind = component.kind();
         if !self.removes.contains_key(&component_kind) {
             self.removes.insert(component_kind, Vec::new());
         }
         let list = self.removes.get_mut(&component_kind).unwrap();
-        list.push((entity, component));
+        list.push((world_entity, component));
         self.empty = false;
     }
 
     pub(crate) fn receive_world_events(
         &mut self,
-        entity_events: Vec<EntityEvent<E>>,
-    ) -> Vec<EntityResponseEvent<E>> {
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        entity_events: Vec<EntityEvent>,
+    ) -> Vec<EntityResponseEvent> {
         let mut response_events = Vec::new();
         for event in entity_events {
             match event {
-                EntityEvent::SpawnEntity(entity) => {
-                    self.push_spawn(entity);
-                    response_events.push(EntityResponseEvent::SpawnEntity(entity));
+                EntityEvent::SpawnEntity(global_entity) => {
+                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
+                        self.push_spawn(world_entity);
+                    }
+                    response_events.push(EntityResponseEvent::SpawnEntity(global_entity));
                 }
-                EntityEvent::DespawnEntity(entity) => {
-                    self.push_despawn(entity);
-                    response_events.push(EntityResponseEvent::DespawnEntity(entity));
+                EntityEvent::DespawnEntity(global_entity) => {
+                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
+                        self.push_despawn(world_entity);
+                    }
+                    response_events.push(EntityResponseEvent::DespawnEntity(global_entity));
                 }
-                EntityEvent::InsertComponent(entity, component_kind) => {
-                    self.push_insert(entity, component_kind);
+                EntityEvent::InsertComponent(global_entity, component_kind) => {
+                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
+                        self.push_insert(world_entity, component_kind);
+                    }
                     response_events
-                        .push(EntityResponseEvent::InsertComponent(entity, component_kind));
+                        .push(EntityResponseEvent::InsertComponent(global_entity, component_kind));
                 }
-                EntityEvent::RemoveComponent(entity, component_box) => {
+                EntityEvent::RemoveComponent(global_entity, component_box) => {
                     let kind = component_box.kind();
-                    self.push_remove(entity, component_box);
-                    response_events.push(EntityResponseEvent::RemoveComponent(entity, kind));
+                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
+                        self.push_remove(world_entity, component_box);
+                    }
+                    response_events.push(EntityResponseEvent::RemoveComponent(global_entity, kind));
                 }
-                EntityEvent::UpdateComponent(tick, entity, component_kind) => {
-                    self.push_update(tick, entity, component_kind);
+                EntityEvent::UpdateComponent(tick, global_entity, component_kind) => {
+                    if let Ok(world_entity) = converter.global_entity_to_entity(&global_entity) {
+                        self.push_update(tick, world_entity, component_kind);
+                    }
                 }
             }
         }
@@ -316,7 +324,7 @@ impl<E: Copy> Events<E> {
 }
 
 // Event Trait
-pub trait Event<E: Copy> {
+pub trait Event<E: Hash + Copy + Eq + Sync + Send> {
     type Iter;
 
     fn iter(events: &mut Events<E>) -> Self::Iter;
@@ -326,7 +334,7 @@ pub trait Event<E: Copy> {
 
 // ConnectEvent
 pub struct ConnectEvent;
-impl<E: Copy> Event<E> for ConnectEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for ConnectEvent {
     type Iter = IntoIter<SocketAddr>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -341,7 +349,7 @@ impl<E: Copy> Event<E> for ConnectEvent {
 
 // RejectEvent
 pub struct RejectEvent;
-impl<E: Copy> Event<E> for RejectEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for RejectEvent {
     type Iter = IntoIter<SocketAddr>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -356,7 +364,7 @@ impl<E: Copy> Event<E> for RejectEvent {
 
 // DisconnectEvent
 pub struct DisconnectEvent;
-impl<E: Copy> Event<E> for DisconnectEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for DisconnectEvent {
     type Iter = IntoIter<SocketAddr>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -371,7 +379,7 @@ impl<E: Copy> Event<E> for DisconnectEvent {
 
 // Client Tick Event
 pub struct ClientTickEvent;
-impl<E: Copy> Event<E> for ClientTickEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for ClientTickEvent {
     type Iter = IntoIter<Tick>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -386,7 +394,7 @@ impl<E: Copy> Event<E> for ClientTickEvent {
 
 // Server Tick Event
 pub struct ServerTickEvent;
-impl<E: Copy> Event<E> for ServerTickEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for ServerTickEvent {
     type Iter = IntoIter<Tick>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -401,7 +409,7 @@ impl<E: Copy> Event<E> for ServerTickEvent {
 
 // Error Event
 pub struct ErrorEvent;
-impl<E: Copy> Event<E> for ErrorEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for ErrorEvent {
     type Iter = IntoIter<NaiaClientError>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -419,7 +427,7 @@ pub struct MessageEvent<C: Channel, M: Message> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<M>,
 }
-impl<E: Copy, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
+impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> Event<E> for MessageEvent<C, M> {
     type Iter = IntoIter<M>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -456,7 +464,7 @@ pub struct RequestEvent<C: Channel, Q: Request> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<Q>,
 }
-impl<E: Copy, C: Channel, Q: Request> Event<E> for RequestEvent<C, Q> {
+impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> Event<E> for RequestEvent<C, Q> {
     type Iter = IntoIter<(ResponseSendKey<Q::Response>, Q)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -492,7 +500,7 @@ impl<E: Copy, C: Channel, Q: Request> Event<E> for RequestEvent<C, Q> {
 
 // Spawn Entity Event
 pub struct SpawnEntityEvent;
-impl<E: Copy> Event<E> for SpawnEntityEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for SpawnEntityEvent {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -507,7 +515,7 @@ impl<E: Copy> Event<E> for SpawnEntityEvent {
 
 // Despawn Entity Event
 pub struct DespawnEntityEvent;
-impl<E: Copy> Event<E> for DespawnEntityEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for DespawnEntityEvent {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -522,7 +530,7 @@ impl<E: Copy> Event<E> for DespawnEntityEvent {
 
 // Publish Entity Event
 pub struct PublishEntityEvent;
-impl<E: Copy> Event<E> for PublishEntityEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for PublishEntityEvent {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -537,7 +545,7 @@ impl<E: Copy> Event<E> for PublishEntityEvent {
 
 // Unpublish Entity Event
 pub struct UnpublishEntityEvent;
-impl<E: Copy> Event<E> for UnpublishEntityEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for UnpublishEntityEvent {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -552,7 +560,7 @@ impl<E: Copy> Event<E> for UnpublishEntityEvent {
 
 // Auth Grant Entity Event
 pub struct EntityAuthGrantedEvent;
-impl<E: Copy> Event<E> for EntityAuthGrantedEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for EntityAuthGrantedEvent {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -567,7 +575,7 @@ impl<E: Copy> Event<E> for EntityAuthGrantedEvent {
 
 // Auth Reset Entity Event
 pub struct EntityAuthResetEvent;
-impl<E: Copy> Event<E> for EntityAuthResetEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for EntityAuthResetEvent {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -582,7 +590,7 @@ impl<E: Copy> Event<E> for EntityAuthResetEvent {
 
 // Auth Deny Entity Event
 pub struct EntityAuthDeniedEvent;
-impl<E: Copy> Event<E> for EntityAuthDeniedEvent {
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for EntityAuthDeniedEvent {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -599,7 +607,7 @@ impl<E: Copy> Event<E> for EntityAuthDeniedEvent {
 pub struct InsertComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
-impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
+impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> Event<E> for InsertComponentEvent<C> {
     type Iter = IntoIter<E>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -621,7 +629,7 @@ impl<E: Copy, C: Replicate> Event<E> for InsertComponentEvent<C> {
 pub struct UpdateComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
-impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
+impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> Event<E> for UpdateComponentEvent<C> {
     type Iter = IntoIter<(Tick, E)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
@@ -643,7 +651,7 @@ impl<E: Copy, C: Replicate> Event<E> for UpdateComponentEvent<C> {
 pub struct RemoveComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
-impl<E: Copy, C: Replicate> Event<E> for RemoveComponentEvent<C> {
+impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> Event<E> for RemoveComponentEvent<C> {
     type Iter = IntoIter<(E, C)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {

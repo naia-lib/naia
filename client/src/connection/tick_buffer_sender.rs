@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use naia_shared::{
     BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength,
@@ -60,11 +60,11 @@ impl TickBufferSender {
         false
     }
 
-    pub fn write_messages<E: Copy + Eq + Hash + Send + Sync>(
+    pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        global_world_manager: &GlobalWorldManager<E>,
-        local_world_manager: &mut LocalWorldManager<E>,
+        global_world_manager: &GlobalWorldManager,
+        local_world_manager: &mut LocalWorldManager,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         host_tick: &Tick,

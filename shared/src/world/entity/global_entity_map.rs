@@ -37,8 +37,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Gl
 
 pub trait GlobalEntitySpawner<E: Copy + Eq + Hash + Send + Sync>: EntityAndGlobalEntityConverter<E> {
     fn spawn(&mut self, world_entity: E) -> GlobalEntity;
-    fn despawn_by_global(&mut self, global_entity: GlobalEntity);
-    fn despawn_by_world(&mut self, world_entity: E);
+    fn despawn_by_global(&mut self, global_entity: &GlobalEntity);
+    fn despawn_by_world(&mut self, world_entity: &E);
     fn to_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E>;
 }
 
@@ -51,12 +51,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
         global_entity
     }
 
-    fn despawn_by_global(&mut self, global_entity: GlobalEntity) {
+    fn despawn_by_global(&mut self, global_entity: &GlobalEntity) {
         let world_entity = self.global_to_entity_map.remove(&global_entity).unwrap();
         self.entity_to_global_map.remove(&world_entity);
     }
 
-    fn despawn_by_world(&mut self, world_entity: E) {
+    fn despawn_by_world(&mut self, world_entity: &E) {
         let global_entity = self.entity_to_global_map.remove(&world_entity).unwrap();
         self.global_to_entity_map.remove(&global_entity);
     }

@@ -67,8 +67,8 @@ impl LocalWorldManager {
         }
     }
 
-    pub fn remove_reserved_host_entity(&mut self, world_entity: &GlobalEntity) -> Option<HostEntity> {
-        self.reserved_entities.remove(world_entity)
+    pub fn remove_reserved_host_entity(&mut self, global_entity: &GlobalEntity) -> Option<HostEntity> {
+        self.reserved_entities.remove(global_entity)
     }
 
     pub(crate) fn generate_host_entity(&mut self) -> HostEntity {

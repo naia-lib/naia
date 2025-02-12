@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap};
+use std::{hash::Hash, any::Any, collections::HashMap};
 
 use bevy_ecs::{
     entity::Entity,
@@ -41,7 +41,7 @@ pub struct AuthEvents {
     inner: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
 }
 
-impl<E: Copy> From<&mut Events<E>> for AuthEvents {
+impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for AuthEvents {
     fn from(events: &mut Events<E>) -> Self {
         Self {
             inner: events.take_auths(),
@@ -67,7 +67,7 @@ pub struct MessageEvents {
     inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
 }
 
-impl<E: Copy> From<&mut Events<E>> for MessageEvents {
+impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for MessageEvents {
     fn from(events: &mut Events<E>) -> Self {
         Self {
             inner: events.take_messages(),
@@ -114,7 +114,7 @@ pub struct RequestEvents {
     >,
 }
 
-impl<E: Copy> From<&mut Events<E>> for RequestEvents {
+impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for RequestEvents {
     fn from(events: &mut Events<E>) -> Self {
         Self {
             inner: events.take_requests(),

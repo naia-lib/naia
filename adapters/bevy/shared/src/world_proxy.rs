@@ -5,12 +5,7 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
-    LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType,
-    WorldRefType,
-};
+use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -314,12 +309,14 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_publish(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
     ) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_publish(
                 self,
+                converter,
                 global_world_manager,
                 entity,
                 &component_kind,
@@ -329,8 +326,9 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_publish(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
-        entity: &Entity,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        world_entity: &Entity,
         component_kind: &ComponentKind,
     ) {
         self.world
@@ -338,13 +336,13 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 let Some(accessor) = data.component_access(component_kind) else {
                     panic!("ComponentKind has not been registered?");
                 };
-                accessor.component_publish(global_world_manager, world, entity);
+                accessor.component_publish(converter, global_world_manager, world, world_entity);
             });
     }
 
-    fn entity_unpublish(&mut self, entity: &Entity) {
-        for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
-            WorldMutType::<Entity>::component_unpublish(self, entity, &component_kind);
+    fn entity_unpublish(&mut self, world_entity: &Entity) {
+        for component_kind in WorldMutType::<Entity>::component_kinds(self, world_entity) {
+            WorldMutType::<Entity>::component_unpublish(self, world_entity, &component_kind);
         }
     }
 
@@ -360,12 +358,14 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_enable_delegation(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
     ) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_enable_delegation(
                 self,
+                converter,
                 global_world_manager,
                 entity,
                 &component_kind,
@@ -375,7 +375,8 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_enable_delegation(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
         component_kind: &ComponentKind,
     ) {
@@ -384,7 +385,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 let Some(accessor) = data.component_access(component_kind) else {
                     panic!("ComponentKind has not been registered?");
                 };
-                accessor.component_enable_delegation(global_world_manager, world, entity);
+                accessor.component_enable_delegation(converter, global_world_manager, world, entity);
             });
     }
 

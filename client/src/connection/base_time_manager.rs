@@ -1,4 +1,3 @@
-use std::hash::Hash;
 
 use log::warn;
 
@@ -61,8 +60,8 @@ impl BaseTimeManager {
         Ok(ping_index)
     }
 
-    pub(crate) fn send_pong<E: Copy + Eq + Hash + Send + Sync>(
-        connection: &mut Connection<E>,
+    pub(crate) fn send_pong(
+        connection: &mut Connection,
         io: &mut Io,
         ping_index: PingIndex,
     ) {

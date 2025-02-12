@@ -67,43 +67,43 @@ impl HostWorldManager {
     pub fn init_entity(
         &mut self,
         world_manager: &mut LocalWorldManager,
-        entity: &GlobalEntity,
+        global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) {
         // add entity
-        self.spawn_entity(world_manager, entity, &component_kinds);
+        self.spawn_entity(world_manager, global_entity, &component_kinds);
         // add components
         for component_kind in component_kinds {
-            self.insert_component(entity, &component_kind);
+            self.insert_component(global_entity, &component_kind);
         }
     }
 
     pub fn spawn_entity(
         &mut self,
         world_manager: &mut LocalWorldManager,
-        entity: &GlobalEntity,
+        global_entity: &GlobalEntity,
         component_kinds: &Vec<ComponentKind>,
     ) {
         self.world_channel
-            .host_spawn_entity(world_manager, entity, component_kinds);
+            .host_spawn_entity(world_manager, global_entity, component_kinds);
     }
 
-    pub fn despawn_entity(&mut self, entity: &GlobalEntity) {
-        self.world_channel.host_despawn_entity(entity);
+    pub fn despawn_entity(&mut self, global_entity: &GlobalEntity) {
+        self.world_channel.host_despawn_entity(global_entity);
     }
 
-    pub fn client_initiated_despawn(&mut self, entity: &GlobalEntity) {
-        self.world_channel.client_initiated_despawn(entity);
+    pub fn client_initiated_despawn(&mut self, global_entity: &GlobalEntity) {
+        self.world_channel.client_initiated_despawn(global_entity);
     }
 
-    pub fn insert_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn insert_component(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.world_channel
-            .host_insert_component(entity, component_kind);
+            .host_insert_component(global_entity, component_kind);
     }
 
-    pub fn remove_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn remove_component(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.world_channel
-            .host_remove_component(entity, component_kind);
+            .host_remove_component(global_entity, component_kind);
     }
 
     pub fn host_has_entity(&self, global_entity: &GlobalEntity) -> bool {
@@ -114,19 +114,19 @@ impl HostWorldManager {
     pub fn track_remote_entity(
         &mut self,
         local_world_manager: &mut LocalWorldManager,
-        entity: &GlobalEntity,
+        global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
     ) -> HostEntity {
         // add entity
         let new_host_entity =
             self.world_channel
-                .track_remote_entity(local_world_manager, entity, &component_kinds);
+                .track_remote_entity(local_world_manager, global_entity, &component_kinds);
 
         // info!("--- tracking remote entity ---");
 
         // add components
         for component_kind in component_kinds {
-            self.track_remote_component(entity, &component_kind);
+            self.track_remote_component(global_entity, &component_kind);
         }
 
         // info!("--- ---------------------- ---");
@@ -137,15 +137,15 @@ impl HostWorldManager {
     pub fn untrack_remote_entity(
         &mut self,
         local_world_manager: &mut LocalWorldManager,
-        entity: &GlobalEntity,
+        global_entity: &GlobalEntity,
     ) {
         self.world_channel
-            .untrack_remote_entity(local_world_manager, entity);
+            .untrack_remote_entity(local_world_manager, global_entity);
     }
 
-    pub fn track_remote_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn track_remote_component(&mut self, global_entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.world_channel
-            .track_remote_component(entity, component_kind);
+            .track_remote_component(global_entity, component_kind);
     }
 
     // Messages
