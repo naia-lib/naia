@@ -527,6 +527,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    pub fn entity_give_authority(&mut self, _user_key: &UserKey, _world_entity: &E) {
+        todo!();
+    }
+
+    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_take_authority(&mut self, world_entity: &E) {
         let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
         let did_change = self.global_world_manager.server_take_authority(&global_entity);

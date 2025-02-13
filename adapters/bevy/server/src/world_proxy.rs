@@ -7,8 +7,8 @@ use bevy_ecs::{
 
 use naia_bevy_shared::{ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, Replicate, SerdeErr, WorldMutType, WorldRefType, ReplicaDynMutWrapper, GlobalWorldManagerType, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, ReplicatedComponent, WorldData, ComponentMut, ComponentRef, WorldEntities, ComponentAccess, GlobalEntity, EntityDoesNotExistError};
 
-use crate::{sub_worlds::SubWorlds, world_entity::WorldEntity};
-use crate::world_entity::WorldId;
+use crate::{world_entity::WorldId, world_entity::WorldEntity};
+
 // WorldProxy
 
 pub trait WorldProxy<'w> {
@@ -484,10 +484,10 @@ fn has_entity(world: &World, entity: &Entity) -> bool {
     world.get_entity(*entity).is_ok()
 }
 
-fn entities(world: &World) -> Vec<Entity> {
-    let world_entities = world_entities(world);
-    world_entities.entities()
-}
+// fn entities(world: &World) -> Vec<Entity> {
+//     let world_entities = world_entities(world);
+//     world_entities.entities()
+// }
 
 fn has_component<R: ReplicatedComponent>(world: &World, entity: &Entity) -> bool {
     world.get::<R>(*entity).is_some()
@@ -529,20 +529,20 @@ fn world_data(world: &World) -> &WorldData {
         .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
 }
 
-fn world_data_unchecked_mut(world: &mut World) -> Mut<WorldData> {
-    unsafe {
-        world
-            .as_unsafe_world_cell()
-            .get_resource_mut::<WorldData>()
-            .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
-    }
-}
+// fn world_data_unchecked_mut(world: &mut World) -> Mut<WorldData> {
+//     unsafe {
+//         world
+//             .as_unsafe_world_cell()
+//             .get_resource_mut::<WorldData>()
+//             .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
+//     }
+// }
 
-fn world_entities(world: &World) -> &WorldEntities {
-    world
-        .get_resource::<WorldEntities>()
-        .expect("Need to instantiate by adding WorldEntities resource at startup!")
-}
+// fn world_entities(world: &World) -> &WorldEntities {
+//     world
+//         .get_resource::<WorldEntities>()
+//         .expect("Need to instantiate by adding WorldEntities resource at startup!")
+// }
 
 fn world_entities_unchecked_mut(world: &mut World) -> Mut<WorldEntities> {
     unsafe {
@@ -558,8 +558,8 @@ fn get_world_from_id<'a, 'b>(main_world: &'a World, world_entity: &'b WorldEntit
     if world_id.is_main() {
         return main_world;
     } else {
-        let sub_worlds = main_world.get_resource::<SubWorlds>().unwrap();
-        return sub_worlds.get_world(&world_id);
+        todo!()
+        //return sub_worlds.get_world(&world_id);
     }
 }
 
@@ -572,8 +572,7 @@ pub(crate) fn get_world_mut_from_id<U>(
     if world_id.is_main() {
         return f(main_world);
     } else {
-        let mut sub_worlds = main_world.get_resource_mut::<SubWorlds>().unwrap();
-        let sub_world = sub_worlds.get_world_mut(&world_id);
-        return f(sub_world);
+        todo!()
+        // return f(sub_world);
     }
 }

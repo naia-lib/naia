@@ -30,11 +30,9 @@ mod bevy_events {
     };
 }
 
-use crate::events::CachedTickEventsState;
-use crate::sub_worlds::SubWorlds;
-use crate::world_entity::WorldEntity;
+use crate::{world_entity::WorldEntity, events::CachedTickEventsState};
 
-pub fn before_receive_events(main_world: &mut World) {
+pub(crate) fn main_world_before_receive_events(main_world: &mut World) {
     main_world.resource_scope(|main_world, mut server: Mut<ServerWrapper>| {
         if !server.is_listening() {
             return;
@@ -43,14 +41,8 @@ pub fn before_receive_events(main_world: &mut World) {
         // Host Component Updates in Main World
         host_component_updates(WorldId::main(), &mut server, main_world);
 
-        // Host Component Updates in Subworlds
-        let mut sub_worlds = main_world.get_resource_mut::<SubWorlds>().unwrap();
-        for (world_id, sub_world) in sub_worlds.iter_mut() {
-            host_component_updates(world_id, &mut server, sub_world);
-        }
-
         // Receive Events
-        before_receive_events_impl(main_world, &mut server);
+        before_receive_events_impl(WorldId::main(), main_world, &mut server);
     });
 }
 
@@ -73,7 +65,7 @@ fn host_component_updates(world_id: WorldId, server: &mut ServerWrapper, sub_wor
                     warn!("could not find Component in World which has just been inserted!");
                     continue;
                 };
-                server.inner_mut().insert_component_worldless(&world_entity, DerefMut::deref_mut(&mut component_mut));
+                server.insert_component_worldless(&world_entity, DerefMut::deref_mut(&mut component_mut));
             }
             HostSyncEvent::Remove(_host_id, entity, component_kind) => {
                 let world_entity = WorldEntity::new(world_id, entity);
@@ -81,7 +73,7 @@ fn host_component_updates(world_id: WorldId, server: &mut ServerWrapper, sub_wor
                     // if auth status is denied, that means the client is performing this operation and it's already being handled
                     continue;
                 }
-                server.inner_mut().remove_component_worldless(&world_entity, &component_kind);
+                server.remove_component_worldless(&world_entity, &component_kind);
             }
             HostSyncEvent::Despawn(_host_id, entity) => {
                 let world_entity = WorldEntity::new(world_id, entity);
@@ -89,16 +81,16 @@ fn host_component_updates(world_id: WorldId, server: &mut ServerWrapper, sub_wor
                     // if auth status is denied, that means the client is performing this operation and it's already being handled
                     continue;
                 }
-                server.inner_mut().despawn_entity_worldless(&world_entity);
+                server.despawn_entity_worldless(&world_entity);
             }
         }
     }
 }
 
-fn before_receive_events_impl(main_world: &mut World, server: &mut ServerWrapper) {
+fn before_receive_events_impl(world_id: WorldId, main_world: &mut World, server: &mut ServerWrapper) {
 
     // Receive Events
-    let mut events = server.inner_mut().receive(main_world.proxy_mut());
+    let mut events = server.receive(main_world.proxy_mut());
     if !events.is_empty() {
 
         // Connect Event
@@ -174,14 +166,13 @@ fn before_receive_events_impl(main_world: &mut World, server: &mut ServerWrapper
                     .unwrap();
 
                 for (new_user_key, world_entity) in events.read::<naia_events::SpawnEntityEvent>() {
-                    let world_id = world_entity.world_id();
                     let entity = world_entity.entity();
                     spawned_world_entities.push((new_user_key, world_entity, entity));
-                    event_writer.send(bevy_events::SpawnEntityEvent(new_user_key, world_id, entity));
+                    event_writer.send(bevy_events::SpawnEntityEvent(new_user_key, entity));
                 }
             }
             for (new_user_key, world_entity, entity) in spawned_world_entities {
-                let EntityOwner::Client(existing_user_key) = server.inner().entity_owner(&world_entity) else {
+                let EntityOwner::Client(existing_user_key) = server.entity_owner(&world_entity) else {
                     panic!("spawned entity that doesn't belong to a client ... shouldn't be possible.");
                 };
                 if new_user_key != existing_user_key {
@@ -200,9 +191,11 @@ fn before_receive_events_impl(main_world: &mut World, server: &mut ServerWrapper
                 .get_resource_mut::<Events<bevy_events::DespawnEntityEvent>>()
                 .unwrap();
             for (user_key, world_entity) in events.read::<naia_events::DespawnEntityEvent>() {
-                let world_id = world_entity.world_id();
+                if world_entity.world_id() != world_id {
+                    panic!("despawning entity from a different world ... shouldn't be possible.");
+                }
                 let entity = world_entity.entity();
-                event_writer.send(bevy_events::DespawnEntityEvent(user_key, world_id, entity));
+                event_writer.send(bevy_events::DespawnEntityEvent(user_key, entity));
             }
         }
 
@@ -212,9 +205,11 @@ fn before_receive_events_impl(main_world: &mut World, server: &mut ServerWrapper
                 .get_resource_mut::<Events<bevy_events::PublishEntityEvent>>()
                 .unwrap();
             for (user_key, world_entity) in events.read::<naia_events::PublishEntityEvent>() {
-                let world_id = world_entity.world_id();
+                if world_entity.world_id() != world_id {
+                    panic!("despawning entity from a different world ... shouldn't be possible.");
+                }
                 let entity = world_entity.entity();
-                event_writer.send(bevy_events::PublishEntityEvent(user_key, world_id, entity));
+                event_writer.send(bevy_events::PublishEntityEvent(user_key, entity));
             }
         }
 
@@ -224,9 +219,11 @@ fn before_receive_events_impl(main_world: &mut World, server: &mut ServerWrapper
                 .get_resource_mut::<Events<bevy_events::UnpublishEntityEvent>>()
                 .unwrap();
             for (user_key, world_entity) in events.read::<naia_events::UnpublishEntityEvent>() {
-                let world_id = world_entity.world_id();
+                if world_entity.world_id() != world_id {
+                    panic!("despawning entity from a different world ... shouldn't be possible.");
+                }
                 let entity = world_entity.entity();
-                event_writer.send(bevy_events::UnpublishEntityEvent(user_key, world_id, entity));
+                event_writer.send(bevy_events::UnpublishEntityEvent(user_key, entity));
             }
         }
 
@@ -275,9 +272,11 @@ fn before_receive_events_impl(main_world: &mut World, server: &mut ServerWrapper
             for (kind, components) in inserts {
                 let mut new_components = Vec::new();
                 for (user_key, world_entity) in components {
-                    let world_id = world_entity.world_id();
+                    if world_entity.world_id() != world_id {
+                        panic!("despawning entity from a different world ... shouldn't be possible.");
+                    }
                     let entity = world_entity.entity();
-                    new_components.push((user_key, world_id, entity));
+                    new_components.push((user_key, entity));
                 }
                 new_inserts.insert(kind, new_components);
             }
@@ -294,9 +293,11 @@ fn before_receive_events_impl(main_world: &mut World, server: &mut ServerWrapper
             for (kind, components) in updates {
                 let mut new_components = Vec::new();
                 for (user_key, world_entity) in components {
-                    let world_id = world_entity.world_id();
+                    if world_entity.world_id() != world_id {
+                        panic!("despawning entity from a different world ... shouldn't be possible.");
+                    }
                     let entity = world_entity.entity();
-                    new_components.push((user_key, world_id, entity));
+                    new_components.push((user_key, entity));
                 }
                 new_updates.insert(kind, new_components);
             }
@@ -314,9 +315,11 @@ fn before_receive_events_impl(main_world: &mut World, server: &mut ServerWrapper
             for (kind, components) in removes {
                 let mut new_components = Vec::new();
                 for (user_key, world_entity, component) in components {
-                    let world_id = world_entity.world_id();
+                    if world_entity.world_id() != world_id {
+                        panic!("despawning entity from a different world ... shouldn't be possible.");
+                    }
                     let entity = world_entity.entity();
-                    new_components.push((user_key, world_id, entity, component));
+                    new_components.push((user_key, entity, component));
                 }
                 new_removes.insert(kind, new_components);
             }
@@ -354,7 +357,7 @@ pub fn send_packets(world: &mut World) {
                 }
 
                 if did_tick {
-                    server.inner_mut().send_all_updates(world.proxy());
+                    server.send_all_updates(world.proxy());
                 }
             },
         );

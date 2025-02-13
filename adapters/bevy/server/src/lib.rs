@@ -15,11 +15,16 @@ mod components;
 mod plugin;
 mod server;
 mod systems;
-mod sub_worlds;
 mod world_entity;
 mod world_proxy;
+mod user_scope;
+mod room;
+mod user;
+mod sub_server;
+mod main_server;
 
 pub use commands::CommandsExt;
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;
 pub use server::Server;
+pub use world_entity::WorldId;

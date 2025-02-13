@@ -6,7 +6,6 @@ use bevy_ecs::{schedule::IntoSystemConfigs};
 use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SendPackets, SharedPlugin};
 use naia_server::{Server, ServerConfig};
 
-use crate::world_entity::WorldEntity;
 use super::{
     events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
@@ -14,8 +13,8 @@ use super::{
         RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
     },
     server::ServerWrapper,
-    systems::{before_receive_events, send_packets, send_packets_init},
-    sub_worlds::SubWorlds,
+    systems::{main_world_before_receive_events, send_packets, send_packets_init},
+    world_entity::{WorldId, WorldEntity},
 };
 
 struct PluginConfig {
@@ -57,14 +56,14 @@ impl PluginType for Plugin {
         app.insert_resource(world_data);
 
         let server = Server::<WorldEntity>::new(config.server_config, config.protocol.into());
-        let server = ServerWrapper::wrap(server);
+        let server = ServerWrapper::main(server);
 
         app
             // SHARED PLUGIN //
             .add_plugins(SharedPlugin::<Singleton>::new())
             // RESOURCES //
             .insert_resource(server)
-            .init_resource::<SubWorlds>()
+            .insert_resource(WorldId::main())
             // EVENTS //
             .add_event::<ConnectEvent>()
             .add_event::<DisconnectEvent>()
@@ -83,7 +82,7 @@ impl PluginType for Plugin {
             // SYSTEM SETS //
             .configure_sets(Last, SendPackets)
             // SYSTEMS //
-            .add_systems(Update, before_receive_events.in_set(BeforeReceiveEvents))
+            .add_systems(Update, main_world_before_receive_events.in_set(BeforeReceiveEvents))
             .add_systems(Startup, send_packets_init)
             .add_systems(Update, send_packets.in_set(SendPackets));
     }

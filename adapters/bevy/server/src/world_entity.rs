@@ -1,8 +1,7 @@
-use bevy_ecs::entity::Entity;
-use bevy_ecs::system::Resource;
+use bevy_ecs::{system::Resource, entity::Entity};
 
 #[derive(Clone, Copy, Eq, PartialEq, Hash)]
-pub struct WorldEntity {
+pub(crate) struct WorldEntity {
     world_id: WorldId,
     entity: Entity,
 }
@@ -13,12 +12,12 @@ impl WorldEntity {
         Self { world_id: WorldId::main(), entity }
     }
 
-    pub fn sub_new(world_id: WorldId, entity: Entity) -> Self {
-        if world_id.is_main() {
-            panic!("WorldEntity::sub_new: world_id must be a sub-world id");
-        }
-        Self { world_id, entity }
-    }
+    // pub fn sub_new(world_id: WorldId, entity: Entity) -> Self {
+    //     if world_id.is_main() {
+    //         panic!("WorldEntity::sub_new: world_id must be a sub-world id");
+    //     }
+    //     Self { world_id, entity }
+    // }
 
     pub fn new(world_id: WorldId, entity: Entity) -> Self {
         Self { world_id, entity }
@@ -32,9 +31,9 @@ impl WorldEntity {
         self.entity
     }
 
-    pub fn world_is_main(&self) -> bool {
-        self.world_id.is_main()
-    }
+    // pub fn world_is_main(&self) -> bool {
+    //     self.world_id.is_main()
+    // }
 }
 
 #[derive(Resource, Clone, Copy, Eq, PartialEq, Hash)]
