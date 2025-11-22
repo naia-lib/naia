@@ -4,12 +4,16 @@
 //! auth flows, server address discovery, and HTTP serialization.
 
 use log::info;
-use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent};
+use naia_client::{Client as NaiaClient, ConnectEvent as ClientConnectEvent};
 use naia_server::{
-    AuthEvent, ConnectEvent as ServerConnectEvent, Server as NaiaServer, ServerConfig,
+    ConnectEvent as ServerConnectEvent, Server as NaiaServer, ServerConfig,
 };
+use naia_server::AuthEvent;
 use naia_shared::Instant;
-use naia_test::{local_socket_pair, protocol, Auth, TestEntity, TestWorld};
+use naia_test::{
+    local_socket_pair, protocol, Auth, TestEntity, TestWorld,
+    default_client_config, complete_handshake, update_client_server,
+};
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
@@ -33,12 +37,8 @@ fn test_connect_no_auth() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
-    // Use very short handshake interval for faster tests (0ms = immediate)
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
-
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(client_config, protocol);
+    let mut client = Client::new(default_client_config(), protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -54,58 +54,17 @@ fn test_connect_no_auth() {
 
     info!("Client connecting (connect() with auth set)");
 
-    let max_attempts = 100;
-    let mut connected = false;
-
-    for attempt in 1..=max_attempts {
-        if !client.connection_status().is_connected() {
-            client.receive_all_packets();
-            client.send_all_packets(client_world.proxy_mut());
-        } else {
-            let now = Instant::now();
-            client.receive_all_packets();
-            client.process_all_packets(client_world.proxy_mut(), &now);
-
-            let mut client_events = client.take_world_events();
-            for server_addr in client_events.read::<ClientConnectEvent>() {
-                info!("Client connected to: {}", server_addr);
-                connected = true;
-                break;
-            }
-        }
-
-        let now = Instant::now();
-        server.receive_all_packets();
-        server.process_all_packets(server_world.proxy_mut(), &now);
-
-        let mut server_events = server.take_world_events();
-
-        for (user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
-            info!("Server received auth, accepting connection for user: {:?}", user_key);
-            server.accept_connection(&user_key);
-            server.room_mut(&main_room_key).add_user(&user_key);
-        }
-
-        for user_key in server_events.read::<ServerConnectEvent>() {
-            info!("Server confirmed connection for user: {:?}", user_key);
-        }
-
-        server.send_all_packets(server_world.proxy());
-
-        if connected {
-            info!("Connection completed in {} attempts", attempt);
-            break;
-        }
-
-        if attempt % 10 == 0 {
-            info!("Attempt {}: still connecting...", attempt);
-        }
-    }
+    let user_key = complete_handshake(
+        &mut client,
+        &mut server,
+        &mut client_world,
+        &mut server_world,
+        &main_room_key,
+    );
 
     assert!(
-        connected,
-        "Client should have connected within {} attempts",
-        max_attempts
+        user_key.is_some(),
+        "Client should have connected"
     );
     info!("✓ Connection test succeeded");
 }
@@ -118,12 +77,8 @@ fn test_connect_with_auth() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
-    // Use very short handshake interval for faster tests (0ms = immediate)
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
-
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(client_config, protocol);
+    let mut client = Client::new(default_client_config(), protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -137,58 +92,17 @@ fn test_connect_with_auth() {
 
     info!("Client connecting with auth bytes");
 
-    let max_attempts = 100;
-    let mut connected = false;
-
-    for attempt in 1..=max_attempts {
-        if !client.connection_status().is_connected() {
-            client.receive_all_packets();
-            client.send_all_packets(client_world.proxy_mut());
-        } else {
-            let now = Instant::now();
-            client.receive_all_packets();
-            client.process_all_packets(client_world.proxy_mut(), &now);
-
-            let mut client_events = client.take_world_events();
-            for server_addr in client_events.read::<ClientConnectEvent>() {
-                info!("Client connected to: {}", server_addr);
-                connected = true;
-                break;
-            }
-        }
-
-        let now = Instant::now();
-        server.receive_all_packets();
-        server.process_all_packets(server_world.proxy_mut(), &now);
-
-        let mut server_events = server.take_world_events();
-
-        for (user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
-            info!("Server received auth, accepting connection for user: {:?}", user_key);
-            server.accept_connection(&user_key);
-            server.room_mut(&main_room_key).add_user(&user_key);
-        }
-
-        for user_key in server_events.read::<ServerConnectEvent>() {
-            info!("Server confirmed connection for user: {:?}", user_key);
-        }
-
-        server.send_all_packets(server_world.proxy());
-
-        if connected {
-            info!("Connection completed in {} attempts", attempt);
-            break;
-        }
-
-        if attempt % 10 == 0 {
-            info!("Attempt {}: still connecting...", attempt);
-        }
-    }
+    let user_key = complete_handshake(
+        &mut client,
+        &mut server,
+        &mut client_world,
+        &mut server_world,
+        &main_room_key,
+    );
 
     assert!(
-        connected,
-        "Client should have connected within {} attempts",
-        max_attempts
+        user_key.is_some(),
+        "Client should have connected"
     );
     info!("✓ Connection with auth bytes succeeded");
 }
@@ -201,12 +115,8 @@ fn test_connect_with_auth_headers() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
-    // Use very short handshake interval for faster tests (0ms = immediate)
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
-
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(client_config, protocol);
+    let mut client = Client::new(default_client_config(), protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -289,12 +199,8 @@ fn test_connect_with_auth_and_headers() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
-    // Use very short handshake interval for faster tests (0ms = immediate)
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
-
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(client_config, protocol);
+    let mut client = Client::new(default_client_config(), protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -376,12 +282,8 @@ fn test_auth_rejection_401() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
-    // Use very short handshake interval for faster tests (0ms = immediate)
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
-
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(client_config, protocol);
+    let mut client = Client::new(default_client_config(), protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -398,18 +300,7 @@ fn test_auth_rejection_401() {
     let mut rejected = false;
 
     for attempt in 1..=max_attempts {
-        if !client.connection_status().is_connected() {
-            client.receive_all_packets();
-            client.send_all_packets(client_world.proxy_mut());
-        } else {
-            let now = Instant::now();
-            client.receive_all_packets();
-            client.process_all_packets(client_world.proxy_mut(), &now);
-        }
-
-        let now = Instant::now();
-        server.receive_all_packets();
-        server.process_all_packets(server_world.proxy_mut(), &now);
+        update_client_server(&mut client, &mut server, &mut client_world, &mut server_world);
 
         let mut server_events = server.take_world_events();
 
@@ -419,8 +310,6 @@ fn test_auth_rejection_401() {
             server.reject_connection(&user_key);
             rejected = true;
         }
-
-        server.send_all_packets(server_world.proxy());
 
         // Check if client received rejection
         if rejected && !client.connection_status().is_connected() {
@@ -456,12 +345,8 @@ fn test_server_address_discovery() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
-    // Use very short handshake interval for faster tests (0ms = immediate)
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
-
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(client_config, protocol);
+    let mut client = Client::new(default_client_config(), protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -480,26 +365,15 @@ fn test_server_address_discovery() {
     let mut address_discovered = false;
 
     for attempt in 1..=max_attempts {
-        if !client.connection_status().is_connected() {
-            client.receive_all_packets();
-            client.send_all_packets(client_world.proxy_mut());
-        } else {
-            let now = Instant::now();
-            client.receive_all_packets();
-            client.process_all_packets(client_world.proxy_mut(), &now);
+        update_client_server(&mut client, &mut server, &mut client_world, &mut server_world);
 
-            let mut client_events = client.take_world_events();
-            for server_addr in client_events.read::<ClientConnectEvent>() {
-                info!("Client connected to: {}", server_addr);
-                connected = true;
-                address_discovered = true; // Address is discovered when connection completes
-                break;
-            }
+        let mut client_events = client.take_world_events();
+        for server_addr in client_events.read::<ClientConnectEvent>() {
+            info!("Client connected to: {}", server_addr);
+            connected = true;
+            address_discovered = true; // Address is discovered when connection completes
+            break;
         }
-
-        let now = Instant::now();
-        server.receive_all_packets();
-        server.process_all_packets(server_world.proxy_mut(), &now);
 
         let mut server_events = server.take_world_events();
 
@@ -512,8 +386,6 @@ fn test_server_address_discovery() {
         for user_key in server_events.read::<ServerConnectEvent>() {
             info!("Server confirmed connection for user: {:?}", user_key);
         }
-
-        server.send_all_packets(server_world.proxy());
 
         if connected {
             info!("Connection completed in {} attempts", attempt);
