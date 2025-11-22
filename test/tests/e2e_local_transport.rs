@@ -13,7 +13,9 @@ use naia_shared::Instant;
 use naia_test::{
     local_socket_pair, protocol, Auth, TestEntity, TestWorld,
     default_client_config, complete_handshake, update_client_server,
+    create_client_socket, create_server_socket, complete_handshake_with_name,
 };
+use local_transport::LocalTransportBuilder;
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
@@ -410,6 +412,107 @@ fn test_server_address_discovery() {
     // Verify client can send packets after address discovery
     // This is implicit - if connection succeeded, address was discovered
     info!("✓ Server address discovery test succeeded");
+}
+
+#[test]
+fn test_multiple_clients_connect() {
+    init_logger();
+    info!("=== TEST: Multiple Clients Connect to Same Server ===");
+    info!("This test verifies that the local transport supports multiple clients");
+    info!("connecting to the same server without interfering with each other");
+
+    let protocol = protocol();
+    let builder = LocalTransportBuilder::new();
+
+    let mut server = Server::new(ServerConfig::default(), protocol.clone());
+    let server_socket = create_server_socket(&builder);
+    server.listen(server_socket);
+    let main_room_key = server.make_room().key();
+
+    let mut client_a = Client::new(default_client_config(), protocol.clone());
+    let mut client_a_world = TestWorld::default();
+    let mut server_world = TestWorld::default();
+
+    // Connect Client A
+    info!("Connecting Client A...");
+    let client_a_socket = create_client_socket(&builder);
+    let auth_a = Auth::new("client_a", "password");
+    client_a.auth(auth_a);
+    client_a.connect(client_a_socket);
+
+    let user_key_a = complete_handshake_with_name(
+        &mut client_a,
+        &mut server,
+        &mut client_a_world,
+        &mut server_world,
+        &main_room_key,
+        "Client A",
+    );
+
+    assert!(
+        user_key_a.is_some(),
+        "Client A should have connected"
+    );
+    info!("✓ Client A connected");
+
+    // Connect Client B (to the same server)
+    info!("Connecting Client B...");
+    let mut client_b = Client::new(default_client_config(), protocol.clone());
+    let mut client_b_world = TestWorld::default();
+
+    let client_b_socket = create_client_socket(&builder);
+    let auth_b = Auth::new("client_b", "password");
+    client_b.auth(auth_b);
+    client_b.connect(client_b_socket);
+
+    let user_key_b = complete_handshake_with_name(
+        &mut client_b,
+        &mut server,
+        &mut client_b_world,
+        &mut server_world,
+        &main_room_key,
+        "Client B",
+    );
+
+    assert!(
+        user_key_b.is_some(),
+        "Client B should have connected"
+    );
+    assert_ne!(
+        user_key_a,
+        user_key_b,
+        "Client A and Client B should have different user keys"
+    );
+    info!("✓ Client B connected");
+
+    // Verify both clients are still connected after Client B connects
+    info!("Verifying both clients remain connected...");
+    for _ in 0..10 {
+        update_client_server(
+            &mut client_a,
+            &mut server,
+            &mut client_a_world,
+            &mut server_world,
+        );
+        update_client_server(
+            &mut client_b,
+            &mut server,
+            &mut client_b_world,
+            &mut server_world,
+        );
+    }
+
+    assert!(
+        client_a.connection_status().is_connected(),
+        "Client A should still be connected"
+    );
+    assert!(
+        client_b.connection_status().is_connected(),
+        "Client B should still be connected"
+    );
+    info!("✓ Both clients remain connected");
+
+    info!("✓ Multiple clients connection test succeeded");
 }
 
 // Note: HTTP serialization tests would be better as unit tests in local_transport crate

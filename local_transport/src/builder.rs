@@ -1,3 +1,7 @@
+use std::sync::{Arc, Mutex};
+
+use naia_shared::IdentityToken;
+
 use crate::hub::LocalTransportHub;
 use crate::shared::LocalTransportQueues;
 use crate::endpoint::{LocalServerEndpoint, LocalClientEndpoint};
@@ -30,8 +34,11 @@ impl LocalTransportBuilder {
         // For local transport, we know the server address immediately
         addr_cell.set_sync(self.hub.server_addr());
 
-        let socket = LocalClientSocket::new(
-            self.hub.shared().clone(),
+        // Each client gets its own identity token storage (not shared!)
+        let identity_token = Arc::new(Mutex::new(None));
+        let rejection_code = Arc::new(Mutex::new(None));
+
+        let socket = LocalClientSocket::new_with_tokens(
             client_addr,
             self.hub.server_addr(),
             auth_req_tx,
@@ -39,6 +46,8 @@ impl LocalTransportBuilder {
             client_data_tx,
             client_data_rx,
             addr_cell,
+            identity_token,
+            rejection_code,
         );
 
         LocalClientEndpoint::new(socket)
