@@ -33,8 +33,12 @@ fn test_connect_no_auth() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
+    // Use very short handshake interval for faster tests (0ms = immediate)
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
+
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(ClientConfig::default(), protocol);
+    let mut client = Client::new(client_config, protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -114,8 +118,12 @@ fn test_connect_with_auth() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
+    // Use very short handshake interval for faster tests (0ms = immediate)
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
+
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(ClientConfig::default(), protocol);
+    let mut client = Client::new(client_config, protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -193,19 +201,25 @@ fn test_connect_with_auth_headers() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
+    // Use very short handshake interval for faster tests (0ms = immediate)
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
+
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(ClientConfig::default(), protocol);
+    let mut client = Client::new(client_config, protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
     server.listen(server_socket);
     let main_room_key = server.make_room().key();
 
-    // Connect with auth headers only
+    // Connect with auth headers (and auth bytes - server requires auth bytes to create user)
+    let auth = Auth::new("test_user", "test_password");
     let headers = vec![
         ("X-Custom-Header".to_string(), "custom-value".to_string()),
         ("X-Another-Header".to_string(), "another-value".to_string()),
     ];
+    client.auth(auth);
     client.auth_headers(headers);
     client.connect(client_socket);
 
@@ -275,8 +289,12 @@ fn test_connect_with_auth_and_headers() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
+    // Use very short handshake interval for faster tests (0ms = immediate)
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
+
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(ClientConfig::default(), protocol);
+    let mut client = Client::new(client_config, protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -358,8 +376,12 @@ fn test_auth_rejection_401() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
+    // Use very short handshake interval for faster tests (0ms = immediate)
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
+
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(ClientConfig::default(), protocol);
+    let mut client = Client::new(client_config, protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 
@@ -434,8 +456,12 @@ fn test_server_address_discovery() {
     let protocol = protocol();
     let (client_socket, server_socket) = local_socket_pair();
 
+    // Use very short handshake interval for faster tests (0ms = immediate)
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
+
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    let mut client = Client::new(ClientConfig::default(), protocol);
+    let mut client = Client::new(client_config, protocol);
     let mut client_world = TestWorld::default();
     let mut server_world = TestWorld::default();
 

@@ -47,7 +47,8 @@ impl ServerAuthIo {
                 self.buffer[0..len].copy_from_slice(&auth_bytes);
                 Ok(Some((self.client_addr, &self.buffer[..len])))
             } else {
-                // No auth header present, return empty auth (for connect_with_auth_headers case)
+                // No auth header present, return None (matches UDP behavior)
+                // Server framework will break the loop, but the test should provide auth bytes
                 Ok(None)
             }
         } else {
