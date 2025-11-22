@@ -1,4 +1,4 @@
-use std::{collections::VecDeque, net::SocketAddr, sync::{Arc, Mutex}};
+use std::{net::SocketAddr, sync::{Arc, Mutex}};
 use naia_shared::IdentityToken;
 use tokio::sync::mpsc;
 
@@ -30,11 +30,9 @@ pub(crate) enum LocalAuthError {
     ParseError,
 }
 
-// Shared queues for data packets (auth has dedicated 1:1 channels now)
+// Shared state for transport (data packets now use channels too)
 #[derive(Clone)]
 pub(crate) struct LocalTransportQueues {
-    pub(crate) client_to_server: Arc<Mutex<VecDeque<Vec<u8>>>>,
-    pub(crate) server_to_client: Arc<Mutex<VecDeque<Vec<u8>>>>,
     pub(crate) identity_token: Arc<Mutex<Option<IdentityToken>>>,
     pub(crate) rejection_code: Arc<Mutex<Option<u16>>>,
     pub(crate) server_data_addr: SocketAddr, // For including in HTTP response
@@ -47,8 +45,6 @@ impl LocalTransportQueues {
         
         (
             Self {
-                client_to_server: Arc::new(Mutex::new(VecDeque::new())),
-                server_to_client: Arc::new(Mutex::new(VecDeque::new())),
                 identity_token: Arc::new(Mutex::new(None)),
                 rejection_code: Arc::new(Mutex::new(None)),
                 server_data_addr: server_addr,
@@ -57,6 +53,18 @@ impl LocalTransportQueues {
             server_addr,
         )
     }
+}
+
+// Helper to create data packet channels
+pub(crate) fn create_data_channels() -> (
+    mpsc::UnboundedSender<Vec<u8>>,  // client sends to server
+    mpsc::UnboundedReceiver<Vec<u8>>, // server receives from client
+    mpsc::UnboundedSender<Vec<u8>>,  // server sends to client
+    mpsc::UnboundedReceiver<Vec<u8>>, // client receives from server
+) {
+    let (client_tx, server_rx) = mpsc::unbounded_channel();
+    let (server_tx, client_rx) = mpsc::unbounded_channel();
+    (client_tx, server_rx, server_tx, client_rx)
 }
 
 // Helper to create 1:1 auth channels

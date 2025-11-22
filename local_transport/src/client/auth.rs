@@ -5,7 +5,7 @@ use naia_shared::IdentityToken;
 use tokio::sync::{mpsc, oneshot, oneshot::error::TryRecvError};
 
 use crate::runtime::get_runtime;
-use crate::shared::{ClientIdentityReceiverResult, LocalAuthError};
+use crate::shared::{ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError};
 use super::addr_cell::LocalAddrCell;
 
 // PendingRequest for async auth handling
@@ -69,7 +69,9 @@ impl PendingRequest {
             };
             
             // Update addr_cell asynchronously
+            // IMPORTANT: Update addr_cell BEFORE sending result so client can use it immediately
             addr_cell.recv(server_addr).await;
+            log::trace!("[LocalTransport] Updated addr_cell with server address: {}", server_addr);
             
             let _ = tx.send(Ok((status_code, identity_token)));
         });
@@ -114,7 +116,12 @@ impl ClientAuthIo {
     
     // Called by LocalClientSocket during connect
     pub(crate) fn connect(&mut self) {
-        // Create PendingRequest immediately (not lazily!)
+        // Create PendingRequest immediately (not lazily!) if one doesn't exist
+        if self.pending_req_opt.is_some() {
+            // Already created, skip
+            return;
+        }
+        
         // Take ownership of the receiver
         let auth_responses_rx = self.auth_responses_rx.take()
             .expect("auth_responses_rx already taken");
@@ -152,6 +159,17 @@ impl ClientAuthIo {
                     *self.rejection_code.lock().unwrap() = Some(status_code);
                     log::trace!("[LocalTransport] Client identity receiver: ErrorResponseCode({})", status_code);
                     return ClientIdentityReceiverResult::ErrorResponseCode(status_code);
+                }
+                
+                // Verify address is available before returning Success
+                match self.addr_cell.get() {
+                    ClientServerAddr::Finding => {
+                        log::trace!("[LocalTransport] Address not yet available, still waiting...");
+                        return ClientIdentityReceiverResult::Waiting;
+                    }
+                    ClientServerAddr::Found(addr) => {
+                        log::trace!("[LocalTransport] Address available: {}", addr);
+                    }
                 }
                 
                 *self.identity_token.lock().unwrap() = Some(id_token.clone());

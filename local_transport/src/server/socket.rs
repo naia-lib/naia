@@ -19,6 +19,8 @@ impl LocalServerSocket {
         _server_addr: SocketAddr,
         auth_requests_rx: mpsc::UnboundedReceiver<Vec<u8>>,
         auth_responses_tx: mpsc::UnboundedSender<Vec<u8>>,
+        data_tx: mpsc::UnboundedSender<Vec<u8>>,
+        data_rx: mpsc::UnboundedReceiver<Vec<u8>>,
     ) -> Self {
         let auth_io = Arc::new(Mutex::new(ServerAuthIo::new(
             Arc::new(Mutex::new(auth_requests_rx)),
@@ -28,8 +30,8 @@ impl LocalServerSocket {
 
         Self {
             auth_io,
-            sender: LocalServerSender::new(shared.server_to_client.clone(), client_addr),
-            receiver: LocalServerReceiver::new(shared.client_to_server.clone(), client_addr),
+            sender: LocalServerSender::new(data_tx, client_addr),
+            receiver: LocalServerReceiver::new(data_rx, client_addr),
         }
     }
 

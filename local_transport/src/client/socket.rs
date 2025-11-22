@@ -23,6 +23,8 @@ impl LocalClientSocket {
         _server_addr: SocketAddr,
         auth_requests_tx: mpsc::UnboundedSender<Vec<u8>>,
         auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+        data_tx: mpsc::UnboundedSender<Vec<u8>>,
+        data_rx: mpsc::UnboundedReceiver<Vec<u8>>,
         addr_cell: LocalAddrCell,
     ) -> Self {
         let auth_io = Arc::new(Mutex::new(ClientAuthIo::new(
@@ -34,8 +36,8 @@ impl LocalClientSocket {
 
         Self {
             auth_io,
-            sender: LocalClientSender::new(shared.client_to_server.clone(), addr_cell.clone()),
-            receiver: LocalClientReceiver::new(shared.server_to_client.clone(), addr_cell),
+            sender: LocalClientSender::new(data_tx, addr_cell.clone()),
+            receiver: LocalClientReceiver::new(data_rx, addr_cell),
             auth_requests_tx,
         }
     }
@@ -47,6 +49,9 @@ impl LocalClientSocket {
         LocalClientSender,
         LocalClientReceiver,
     ) {
+        // Note: connect() without auth doesn't create a PendingRequest.
+        // Only connect_with_auth*() methods create it after sending the auth request.
+        // This matches the expected behavior - if no auth request is sent, no response is expected.
         let LocalClientSocket { auth_io, sender, receiver, .. } = self;
         let identity = LocalClientIdentity::new(auth_io);
         (identity, sender, receiver)
