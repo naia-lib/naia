@@ -15,6 +15,7 @@ naia-client = { path = "../client" }
 naia-shared = { path = "../shared" }
 naia-server-socket = { path = "../socket/server" }
 naia-client-socket = { path = "../socket/client" }
+naia-demo-world = { path = "../demos/demo_utils/demo_world" }
 
 [dev-dependencies]
 proptest = "1.0"
