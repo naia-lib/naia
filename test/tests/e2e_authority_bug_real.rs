@@ -3,13 +3,13 @@
 //! This test uses REAL naia::Client<> and naia::Server<> instances with an
 //! in-memory socket implementation, following the pattern from demos/basic
 
-use log::info;
+use log::{info, debug, warn};
 use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent};
 use naia_server::{
     AuthEvent, ConnectEvent as ServerConnectEvent, DelegateEntityEvent, EntityAuthGrantEvent,
     Server as NaiaServer, ServerConfig,
 };
-use naia_shared::{Instant, WorldRefType};
+use naia_shared::{Instant, WorldRefType, GlobalEntity};
 use naia_test::{local_socket_pair, protocol, Auth, Position, TestEntity, TestWorld};
 
 type Client = NaiaClient<TestEntity>;
@@ -43,56 +43,6 @@ fn update_client_server(
     server.send_all_packets(server_world.proxy());
 }
 
-/// Helper to wait for a condition with timeout
-fn wait_for_condition<F>(
-    client: &mut Client,
-    server: &mut Server,
-    client_world: &mut TestWorld,
-    server_world: &mut TestWorld,
-    max_attempts: usize,
-    mut condition: F,
-    debug_msg: &str,
-) -> bool
-where
-    F: FnMut(&Client, &Server) -> bool,
-{
-    for attempt in 0..max_attempts {
-        update_client_server(client, server, client_world, server_world);
-        
-        if condition(client, server) {
-            return true;
-        }
-        
-        if attempt % 10 == 0 && attempt > 0 {
-            info!("{} - Attempt {}", debug_msg, attempt);
-        }
-    }
-    false
-}
-
-/// Test setup: creates client, server, and worlds with default config
-fn setup_test() -> (Client, Server, TestWorld, TestWorld, naia_server::RoomKey) {
-    let protocol = protocol();
-    let (client_socket, server_socket) = local_socket_pair();
-
-    let mut server = Server::new(ServerConfig::default(), protocol.clone());
-    
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
-    let mut client = Client::new(client_config, protocol);
-    let client_world = TestWorld::default();
-    let server_world = TestWorld::default();
-
-    server.listen(server_socket);
-    let main_room_key = server.make_room().key();
-
-    let auth = Auth::new("test_user", "test_password");
-    client.auth(auth);
-    client.connect(client_socket);
-
-    (client, server, client_world, server_world, main_room_key)
-}
-
 /// Helper to run N update cycles
 fn run_updates(
     client: &mut Client,
@@ -106,7 +56,7 @@ fn run_updates(
     }
 }
 
-/// Helper to wait for delegation event
+/// Helper to wait for a specific server event
 fn wait_for_delegation_event(
     client: &mut Client,
     server: &mut Server,
@@ -158,6 +108,105 @@ fn wait_for_authority_status(
         },
         debug_msg,
     )
+}
+
+/// Helper to wait for a condition with timeout
+fn wait_for_condition<F>(
+    client: &mut Client,
+    server: &mut Server,
+    client_world: &mut TestWorld,
+    server_world: &mut TestWorld,
+    max_attempts: usize,
+    mut condition: F,
+    debug_msg: &str,
+) -> bool
+where
+    F: FnMut(&Client, &Server) -> bool,
+{
+    for attempt in 0..max_attempts {
+        update_client_server(client, server, client_world, server_world);
+        
+        if condition(client, server) {
+            return true;
+        }
+        
+        if attempt % 10 == 0 && attempt > 0 {
+            info!("{} - Attempt {}", debug_msg, attempt);
+        }
+    }
+    false
+}
+
+/// Debug helper: Inspect authority state on both client and server
+fn inspect_authority_state(
+    client: &Client,
+    server: &Server,
+    client_entity: &TestEntity,
+    step: &str,
+) {
+    warn!("=== AUTHORITY STATE INSPECTION: {} ===", step);
+    
+    // Client-side state
+    let client_auth_status = client.entity_authority_status(client_entity);
+    warn!("  CLIENT authority status: {:?}", client_auth_status);
+    
+    // Try to get global entity from client
+    // Note: We can't easily access internal state, but we can check what the client reports
+    if let Some(status) = client_auth_status {
+        warn!("    → Client reports: {:?}", status);
+    } else {
+        warn!("    → Client reports: None (entity may not be delegated yet)");
+    }
+    
+    // Server-side state (if we could access it - this is harder without internal access)
+    // For now, we'll log what we can observe
+    warn!("  SERVER: Check server logs for authority status");
+    warn!("==========================================");
+}
+
+/// Debug helper: Log all server events for analysis
+fn log_server_events(server: &mut Server, step: &str) {
+    let mut server_events = server.take_world_events();
+    
+    // Check for various event types
+    let mut auth_grant_count = 0;
+    for _ in server_events.read::<EntityAuthGrantEvent>() {
+        auth_grant_count += 1;
+    }
+    if auth_grant_count > 0 {
+        warn!("[{}] SERVER: {} EntityAuthGrantEvent(s) detected", step, auth_grant_count);
+    }
+    
+    let mut delegate_count = 0;
+    for _ in server_events.read::<DelegateEntityEvent>() {
+        delegate_count += 1;
+    }
+    if delegate_count > 0 {
+        warn!("[{}] SERVER: {} DelegateEntityEvent(s) detected", step, delegate_count);
+    }
+}
+
+/// Test setup: creates client, server, and worlds with default config
+fn setup_test() -> (Client, Server, TestWorld, TestWorld, naia_server::RoomKey) {
+    let protocol = protocol();
+    let (client_socket, server_socket) = local_socket_pair();
+
+    let mut server = Server::new(ServerConfig::default(), protocol.clone());
+    
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
+    let mut client = Client::new(client_config, protocol);
+    let client_world = TestWorld::default();
+    let server_world = TestWorld::default();
+
+    server.listen(server_socket);
+    let main_room_key = server.make_room().key();
+
+    let auth = Auth::new("test_user", "test_password");
+    client.auth(auth);
+    client.connect(client_socket);
+
+    (client, server, client_world, server_world, main_room_key)
 }
 
 /// Helper to complete handshake
@@ -251,29 +300,58 @@ fn e2e_authority_release_and_reacquire() {
     
     info!("✓ Handshake complete");
     
-    // Step 2: Client creates entity, inserts component, and publishes
-    info!("\nStep 2: Client creating and publishing entity...");
+    // Step 2: Client creates entity (following Cyberlith pattern)
+    info!("\nStep 2: Client creating entity (following Cyberlith pattern)...");
+    
+    // Create entity - starts as Private
     let client_entity = client
         .spawn_entity(client_world.proxy_mut())
         .insert_component(Position::new(10.0, 20.0))
-        .configure_replication(naia_client::ReplicationConfig::Public)
         .id();
     
-    info!("Client created entity");
+    info!("Client created entity (starts as Private)");
     
-    // Wait for entity to sync to server
-    run_updates(&mut client, &mut server, &mut client_world, &mut server_world, 10);
+    // Check initial replication config
+    let initial_config = client.entity_replication_config(&client_entity);
+    warn!("  Initial replication config: {:?} (expected: Some(Private))", initial_config);
+    assert_eq!(initial_config, Some(naia_client::ReplicationConfig::Private), 
+        "Entity should start as Private");
     
-    assert!(server_world.proxy().entities().len() > 0, "Server should have received entity");
-    info!("✓ Entity published to server");
+    // Step 3: Configure to Delegated (Private → Delegated, which publishes first)
+    info!("\nStep 3: Configuring entity to Delegated (Private → Delegated)...");
+    inspect_authority_state(&client, &server, &client_entity, "BEFORE delegation");
     
-    // Step 3: Client enables delegation
-    info!("\nStep 3: Client enabling delegation...");
+    // This should: Private → Public (publish) → Delegated (enable delegation)
     client
         .entity_mut(client_world.proxy_mut(), &client_entity)
         .configure_replication(naia_client::ReplicationConfig::Delegated);
     
-    // Wait for delegation event
+    // Note: The replication config will transition Private → Public immediately,
+    // but will only become Delegated after MigrateResponse is received and processed.
+    // So we don't check for Delegated here - we'll check after migration completes.
+    
+    // Run updates to allow the entity to be transmitted to the server
+    info!("Running updates to transmit entity to server...");
+    for i in 0..10 {
+        update_client_server(&mut client, &mut server, &mut client_world, &mut server_world);
+        if server_world.proxy().entities().len() > 0 {
+            info!("  Server received entity at update {}", i);
+            break;
+        }
+    }
+    
+    assert!(server_world.proxy().entities().len() > 0, "Server should have received entity");
+    
+    // Verify entity is now Public (will become Delegated after MigrateResponse)
+    let config_after_publish = client.entity_replication_config(&client_entity);
+    warn!("  Replication config after publish: {:?} (should be Public)", config_after_publish);
+    assert_eq!(config_after_publish, Some(naia_client::ReplicationConfig::Public),
+        "Entity should be Public after publish, before delegation completes");
+    
+    info!("✓ Entity published (will become Delegated after MigrateResponse)");
+    
+    // Wait for delegation event (server processing)
+    info!("Waiting for server to process delegation...");
     let delegation_complete = wait_for_delegation_event(
         &mut client,
         &mut server,
@@ -284,29 +362,98 @@ fn e2e_authority_release_and_reacquire() {
     
     assert!(delegation_complete, "Delegation should complete");
     
-    // Run more loops to ensure migration completes
-    run_updates(&mut client, &mut server, &mut client_world, &mut server_world, 10);
+    // Run more loops to ensure migration completes and MigrateResponse is received
+    info!("\nRunning updates to complete migration and receive MigrateResponse...");
+    let mut migrate_response_received = false;
+    let mut replication_config_delegated = false;
     
+    for i in 0..30 {
+        update_client_server(&mut client, &mut server, &mut client_world, &mut server_world);
+        
+        // Check replication config - should become Delegated after MigrateResponse
+        let config = client.entity_replication_config(&client_entity);
+        if config == Some(naia_client::ReplicationConfig::Delegated) {
+            if !replication_config_delegated {
+                warn!("  ✓ Replication config is now Delegated at update {}", i);
+                replication_config_delegated = true;
+            }
+        }
+        
+        // Check authority status - should become Granted after MigrateResponse
+        let status = client.entity_authority_status(&client_entity);
+        if status == Some(naia_shared::EntityAuthStatus::Granted) {
+            if !migrate_response_received {
+                warn!("  ✓ MigrateResponse processed - authority set to Granted at update {}", i);
+                migrate_response_received = true;
+            }
+        }
+        
+        // If both conditions are met, we're done
+        if migrate_response_received && replication_config_delegated {
+            info!("✓ Migration complete - both replication config and authority status updated");
+            break;
+        }
+        
+        // Log progress every few iterations
+        if i % 5 == 0 {
+            warn!("  [Update {}] Config: {:?}, Authority: {:?}", i, config, status);
+        }
+    }
+    
+    if !migrate_response_received {
+        warn!("⚠️  MigrateResponse may not have been received/processed!");
+    }
+    if !replication_config_delegated {
+        warn!("⚠️  Replication config did not transition to Delegated!");
+    }
+    
+    inspect_authority_state(&client, &server, &client_entity, "AFTER migration");
     info!("✓ Delegation and migration complete");
     
     // Wait for authority to become Available OR Granted after migration  
     info!("\nWaiting for authority state to settle after migration...");
-    let authority_settled = wait_for_condition(
-        &mut client,
-        &mut server,
-        &mut client_world,
-        &mut server_world,
-        50,
-        |client, _| {
-            if let Some(auth_status) = client.entity_authority_status(&client_entity) {
-                auth_status == naia_shared::EntityAuthStatus::Granted ||
-                auth_status == naia_shared::EntityAuthStatus::Available
+    
+    // Detailed logging during wait
+    let mut authority_settled = false;
+    for attempt in 0..50 {
+        update_client_server(&mut client, &mut server, &mut client_world, &mut server_world);
+        
+        // Check client-side authority status
+        if let Some(auth_status) = client.entity_authority_status(&client_entity) {
+            if auth_status == naia_shared::EntityAuthStatus::Granted {
+                warn!("✓ Authority auto-granted at attempt {}", attempt);
+                authority_settled = true;
+                break;
+            } else if auth_status == naia_shared::EntityAuthStatus::Available {
+                warn!("✓ Authority is Available at attempt {}", attempt);
+                authority_settled = true;
+                break;
             } else {
-                false
+                if attempt % 5 == 0 {
+                    warn!("  [Attempt {}] Authority status: {:?} (waiting for Granted/Available)", attempt, auth_status);
+                    log_server_events(&mut server, &format!("Authority wait {}", attempt));
+                }
             }
-        },
-        "Waiting for authority to settle",
-    );
+        } else {
+            if attempt % 5 == 0 {
+                warn!("  [Attempt {}] Authority status: None (entity may not be delegated yet)", attempt);
+            }
+        }
+    }
+    
+    if !authority_settled {
+        warn!("⚠️  AUTHORITY DID NOT SETTLE - INVESTIGATING...");
+        inspect_authority_state(&client, &server, &client_entity, "FAILED SETTLEMENT");
+        
+        // Run a few more updates to see if anything changes
+        warn!("Running 10 more updates to see if status changes...");
+        for i in 0..10 {
+            update_client_server(&mut client, &mut server, &mut client_world, &mut server_world);
+            let status = client.entity_authority_status(&client_entity);
+            warn!("  [Extra update {}] Authority status: {:?}", i, status);
+            log_server_events(&mut server, &format!("Extra update {}", i));
+        }
+    }
     
     assert!(authority_settled, "Authority should settle after migration");
     
@@ -316,6 +463,8 @@ fn e2e_authority_release_and_reacquire() {
     // Ensure we have authority before releasing (either auto-granted or manually request)
     if initial_auth_status != naia_shared::EntityAuthStatus::Granted {
         info!("\nRequesting authority (it wasn't auto-granted)...");
+        inspect_authority_state(&client, &server, &client_entity, "BEFORE manual request");
+        
         client
             .entity_mut(client_world.proxy_mut(), &client_entity)
             .request_authority();
@@ -331,12 +480,16 @@ fn e2e_authority_release_and_reacquire() {
             "Waiting for authority grant",
         );
         
+        inspect_authority_state(&client, &server, &client_entity, "AFTER manual request");
+        
         assert!(authority_granted, "Client should have authority");
         info!("✓ Authority granted");
     }
     
     // Step 4: Client releases authority (deselect)
     info!("\nStep 4: Client releasing authority (deselect)...");
+    inspect_authority_state(&client, &server, &client_entity, "BEFORE release");
+    
     client
         .entity_mut(client_world.proxy_mut(), &client_entity)
         .release_authority();
@@ -347,6 +500,8 @@ fn e2e_authority_release_and_reacquire() {
     // Verify authority was released
     let auth_status = client.entity_authority_status(&client_entity);
     info!("Authority status after release: {:?}", auth_status);
+    inspect_authority_state(&client, &server, &client_entity, "AFTER release");
+    
     assert_ne!(
         auth_status,
         Some(naia_shared::EntityAuthStatus::Granted),
@@ -356,6 +511,8 @@ fn e2e_authority_release_and_reacquire() {
     
     // Step 5: Client requests authority AGAIN (reselect) ← THIS IS WHERE BUG #7 APPEARED
     info!("\nStep 5: Client requesting authority AGAIN (reselect - Bug #7 test)...");
+    inspect_authority_state(&client, &server, &client_entity, "BEFORE re-request");
+    
     client
         .entity_mut(client_world.proxy_mut(), &client_entity)
         .request_authority();
@@ -370,6 +527,8 @@ fn e2e_authority_release_and_reacquire() {
         50,
         "Waiting for authority re-grant",
     );
+    
+    inspect_authority_state(&client, &server, &client_entity, "AFTER re-request");
     
     assert!(
         authority_regranted, 
