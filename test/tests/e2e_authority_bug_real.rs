@@ -34,11 +34,13 @@ fn update_client_server(
     
     // Client update
     client.receive_all_packets();
+    client.take_tick_events(&now); // CRITICAL: Process jitter buffer
     client.process_all_packets(client_world.proxy_mut(), &now);
     client.send_all_packets(client_world.proxy_mut());
     
     // Server update
     server.receive_all_packets();
+    server.take_tick_events(&now); // CRITICAL: Process jitter buffer  
     server.process_all_packets(server_world.proxy_mut(), &now);
     server.send_all_packets(server_world.proxy());
 }
@@ -195,6 +197,7 @@ fn setup_test() -> (Client, Server, TestWorld, TestWorld, naia_server::RoomKey) 
     
     let mut client_config = ClientConfig::default();
     client_config.send_handshake_interval = std::time::Duration::from_millis(0);
+    client_config.bypass_jitter_buffer = true; // CRITICAL: Bypass jitter buffer for tests
     let mut client = Client::new(client_config, protocol);
     let client_world = TestWorld::default();
     let server_world = TestWorld::default();

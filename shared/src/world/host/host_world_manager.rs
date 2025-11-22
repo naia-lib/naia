@@ -68,11 +68,14 @@ impl HostWorldManager {
     ) -> Vec<EntityEvent> {
         if !incoming_messages.is_empty() {
             info!(
-                "HostWorldManager::take_incoming_events - received {} messages",
+                "📨 HostWorldManager::take_incoming_events - received {} messages",
                 incoming_messages.len()
             );
             for (id, msg) in &incoming_messages {
                 info!("  Message id={}, type={:?}", id, msg.get_type());
+                if matches!(msg, EntityMessage::MigrateResponse(_, _, _)) {
+                    info!("  🎯 Found MigrateResponse in incoming messages!");
+                }
             }
         }
 
@@ -80,10 +83,6 @@ impl HostWorldManager {
             &mut self.host_engine,
             incoming_messages,
         );
-
-        if !incoming_messages.is_empty() {
-            info!("HostWorldManager::take_incoming_events - after host_engine processing: {} messages", incoming_messages.len());
-        }
 
         self.process_incoming_messages(
             spawner,
@@ -298,10 +297,6 @@ impl HostWorldManager {
                 EntityMessage::MigrateResponse(_sub_id, client_host_entity, new_remote_entity) => {
                     // Client receives MigrateResponse from server telling it to migrate
                     // a client-created delegated entity from HostEntity to RemoteEntity
-                    info!(
-                        "CLIENT: Processing MigrateResponse: {:?} -> {:?}",
-                        client_host_entity, new_remote_entity
-                    );
 
                     // Look up the global entity from the client's HostEntity
                     let global_entity = *local_entity_map.global_entity_from_host(&client_host_entity)

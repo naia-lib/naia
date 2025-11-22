@@ -1618,15 +1618,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         };
 
-        // Step 2: Send EnableDelegation to transition AuthChannel state to Delegated
-        // CRITICAL: Must be AFTER migration (so HostEntity exists) but BEFORE MigrateResponse
+        // Step 2: Force the server's HostEntityChannel into Delegated state locally
+        // This allows MigrateResponse to be sent (requires Delegated state)
+        // We do NOT send EnableDelegation back to the client - they already sent it!
         connection
             .base
             .world_manager
-            .host_send_enable_delegation(global_entity);
+            .host_local_enable_delegation(&new_host_entity);
 
-        // Step 3: Send MigrateResponse to client (valid because entity is now Delegated)
-        // Pass the old RemoteEntity captured before migration
+        // Step 3: Send MigrateResponse to client
+        // This will be the FIRST message in the new HostEntityChannel sequence (subcommand_id=0)
         connection.base.world_manager.host_send_migrate_response(
             global_entity,
             &old_remote_entity,

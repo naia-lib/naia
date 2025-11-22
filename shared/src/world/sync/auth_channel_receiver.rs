@@ -122,8 +122,6 @@ impl AuthChannelReceiver {
                 panic!("Expected a subcommand ID in the message: {:?}", msg);
             };
 
-            // info!("AuthChannelReceiver::process_messages(peeked subcommand_id={}, next_subcommand_id={})", subcommand_id, self.next_subcommand_id);
-
             if subcommand_id != self.next_subcommand_id {
                 // If the subcommand ID does not match the next expected ID, we stop processing
                 break;
@@ -133,8 +131,6 @@ impl AuthChannelReceiver {
             self.next_subcommand_id = self.next_subcommand_id.wrapping_add(1);
 
             let (_, msg) = self.buffered_messages.pop_front().unwrap();
-
-            // info!("AuthChannelReceiver::process_messages(subcommand_id={}, msgType={:?})", subcommand_id, msg.get_type());
 
             self.incoming_messages.push(msg);
         }

@@ -16,8 +16,6 @@ impl AuthChannelSender {
     pub(crate) fn send_command(&mut self, mut command: EntityCommand) {
         command.set_subcommand_id(self.next_subcommand_id);
 
-        // info!("AuthChannelSender sending command. SubId: {:?}, Command: {:?}", self.next_subcommand_id, command);
-
         self.next_subcommand_id = self.next_subcommand_id.wrapping_add(1);
 
         self.outgoing_commands.push(command);

@@ -249,6 +249,15 @@ impl LocalWorldManager {
         self.host.send_command(&self.entity_map, command);
     }
 
+    // Force the HostEntityChannel into Delegated state without sending a message
+    // Used by server after migration to prepare channel for MigrateResponse
+    pub fn host_local_enable_delegation(&mut self, host_entity: &HostEntity) {
+        let Some(channel) = self.host.get_entity_channel_mut(host_entity) else {
+            panic!("Cannot enable delegation on non-existent HostEntity: {:?}", host_entity);
+        };
+        channel.local_enable_delegation();
+    }
+
     // only server sends this
     pub fn host_send_migrate_response(
         &mut self,
@@ -442,13 +451,11 @@ impl LocalWorldManager {
             match local_entity {
                 OwnedLocalEntity::Host(host_entity) => {
                     // Host entity message
-                    info!("  -> Routing to Host (HostEntity({}))", host_entity);
                     let host_entity = HostEntity::new(host_entity);
                     incoming_host_messages.push((id, incoming_message.with_entity(host_entity)));
                 }
                 OwnedLocalEntity::Remote(remote_entity) => {
                     // Remote entity message
-                    info!("  -> Routing to Remote (RemoteEntity({}))", remote_entity);
                     let remote_entity = RemoteEntity::new(remote_entity);
                     incoming_remote_messages
                         .push((id, incoming_message.with_entity(remote_entity)));
