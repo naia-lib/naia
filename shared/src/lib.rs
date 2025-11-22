@@ -50,8 +50,10 @@ mod world;
 mod wrapping_number;
 
 cfg_if! {
-    if #[any(cfg(feature = "transport_udp"), cfg(feature = "transport_local"))]{
-        pub mod transport_udp;
+    if #[cfg(feature = "transport_udp")]{
+        pub mod http_utils;
+    } else if #[cfg(feature = "transport_local")]{
+        pub mod http_utils;
     }
 }
 

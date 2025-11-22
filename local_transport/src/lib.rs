@@ -236,7 +236,7 @@ impl LocalServerAuthSender {
             .body(response_body.into_bytes())
             .unwrap();
         
-        let response_bytes = naia_shared::transport_udp::response_to_bytes(response);
+        let response_bytes = naia_shared::http_utils::response_to_bytes(response);
         
         // Store in auth_responses queue
         if let Ok(mut queue) = self.auth_responses.lock() {
@@ -256,7 +256,7 @@ impl LocalServerAuthSender {
             .body(Vec::new())
             .unwrap();
         
-        let response_bytes = naia_shared::transport_udp::response_to_bytes(response);
+        let response_bytes = naia_shared::http_utils::response_to_bytes(response);
         
         // Store in auth_responses queue
         if let Ok(mut queue) = self.auth_responses.lock() {
@@ -291,7 +291,7 @@ impl LocalServerAuthReceiver {
             log::trace!("[LocalTransport] Server received HTTP auth request");
             
             // Parse HTTP request
-            let request = naia_shared::transport_udp::bytes_to_request(&request_bytes);
+            let request = naia_shared::http_utils::bytes_to_request(&request_bytes);
             
             // Extract Authorization header if present
             if let Some(auth_header) = request.headers().get("Authorization") {
@@ -363,7 +363,7 @@ impl LocalClientSocket {
             .body(Vec::new())
             .unwrap();
         
-        let request_bytes = naia_shared::transport_udp::request_to_bytes(request);
+        let request_bytes = naia_shared::http_utils::request_to_bytes(request);
         
         if let Ok(mut queue) = self.auth_queue.lock() {
             queue.push_back(request_bytes);
@@ -390,7 +390,7 @@ impl LocalClientSocket {
         }
         
         let request = builder.body(Vec::new()).unwrap();
-        let request_bytes = naia_shared::transport_udp::request_to_bytes(request);
+        let request_bytes = naia_shared::http_utils::request_to_bytes(request);
         
         if let Ok(mut queue) = self.auth_queue.lock() {
             queue.push_back(request_bytes);
@@ -420,7 +420,7 @@ impl LocalClientSocket {
         }
         
         let request = builder.body(Vec::new()).unwrap();
-        let request_bytes = naia_shared::transport_udp::request_to_bytes(request);
+        let request_bytes = naia_shared::http_utils::request_to_bytes(request);
         
         if let Ok(mut queue) = self.auth_queue.lock() {
             queue.push_back(request_bytes);
@@ -523,7 +523,7 @@ impl LocalClientIdentity {
         if let Ok(mut queue) = self.auth_responses.lock() {
             if let Some(response_bytes) = queue.pop_front() {
                 log::trace!("[LocalTransport] Client received HTTP auth response");
-                let response = naia_shared::transport_udp::bytes_to_response(&response_bytes);
+                let response = naia_shared::http_utils::bytes_to_response(&response_bytes);
                 let status_code = response.status().as_u16();
                 
                 if status_code != 200 {

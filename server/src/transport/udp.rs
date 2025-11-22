@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use naia_shared::{transport_udp, IdentityToken, LinkConditionerConfig};
+use naia_shared::{http_utils, IdentityToken, LinkConditionerConfig};
 
 use super::{
     AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
@@ -185,7 +185,7 @@ impl AuthIo {
                 }
                 self.outgoing_streams.insert(addr, stream);
 
-                let request = transport_udp::bytes_to_request(&self.buffer[..recv_len]);
+                let request = http_utils::bytes_to_request(&self.buffer[..recv_len]);
                 if request.headers().contains_key("Authorization") {
                     let auth_bytes = request
                         .headers()
@@ -224,7 +224,7 @@ impl AuthIo {
                 .status(200)
                 .body(response_body_bytes)
                 .unwrap();
-            let response_bytes = transport_udp::response_to_bytes(response);
+            let response_bytes = http_utils::response_to_bytes(response);
             stream.write_all(&response_bytes).unwrap();
 
             stream.flush().unwrap();
@@ -241,7 +241,7 @@ impl AuthIo {
                 .status(401)
                 .body(Vec::new())
                 .unwrap();
-            let response_bytes = transport_udp::response_to_bytes(response);
+            let response_bytes = http_utils::response_to_bytes(response);
             stream.write_all(&response_bytes).unwrap();
 
             stream.flush().unwrap();
