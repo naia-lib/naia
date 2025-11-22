@@ -18,9 +18,13 @@ pub enum ClientServerAddr {
     Finding,
 }
 
+#[derive(Debug)]
 pub struct ClientSendError;
+#[derive(Debug)]
 pub struct ClientRecvError;
+#[derive(Debug)]
 pub struct ServerSendError;
+#[derive(Debug)]
 pub struct ServerRecvError;
 
 // Error type for local auth operations

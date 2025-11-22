@@ -1,40 +1,27 @@
 use std::{net::SocketAddr, sync::{Arc, Mutex}};
 
 use naia_shared::IdentityToken;
-use tokio::sync::mpsc;
 
-use crate::shared::{ServerRecvError, ServerSendError, FAKE_CLIENT_ADDR};
+use crate::shared::{ServerRecvError, ServerSendError};
+use crate::hub::LocalTransportHub;
 
-// ServerAuthIo - encapsulates all server auth logic  
+// ServerAuthIo - encapsulates all server auth logic (always uses hub-based multiplexing)
 pub(crate) struct ServerAuthIo {
-    auth_requests_rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
-    auth_responses_tx: mpsc::UnboundedSender<Vec<u8>>,
-    server_data_addr: SocketAddr,
+    hub: LocalTransportHub,
     buffer: [u8; 1472],
-    client_addr: SocketAddr,
 }
 
 impl ServerAuthIo {
-    pub(crate) fn new(
-        auth_requests_rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
-        auth_responses_tx: mpsc::UnboundedSender<Vec<u8>>,
-        server_data_addr: SocketAddr,
-    ) -> Self {
-        let client_addr: SocketAddr = FAKE_CLIENT_ADDR.parse().expect("invalid client addr");
+    pub(crate) fn new(hub: LocalTransportHub) -> Self {
         Self {
-            auth_requests_rx,
-            auth_responses_tx,
-            server_data_addr,
+            hub,
             buffer: [0; 1472],
-            client_addr,
         }
     }
     
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
-        // Try to receive from async channel (non-blocking)
-        let mut rx_guard = self.auth_requests_rx.lock().unwrap();
-        if let Ok(request_bytes) = rx_guard.try_recv() {
-            log::trace!("[LocalTransport] Server received HTTP auth request");
+        if let Some((client_addr, request_bytes)) = self.hub.try_recv_auth_request() {
+            log::trace!("[LocalTransport] Server received HTTP auth request from {}", client_addr);
             
             // Parse HTTP request
             let request = naia_shared::http_utils::bytes_to_request(&request_bytes);
@@ -45,10 +32,9 @@ impl ServerAuthIo {
                 let auth_bytes = base64::decode(auth_str).unwrap();
                 let len = auth_bytes.len();
                 self.buffer[0..len].copy_from_slice(&auth_bytes);
-                Ok(Some((self.client_addr, &self.buffer[..len])))
+                Ok(Some((client_addr, &self.buffer[..len])))
             } else {
-                // No auth header present, return None (matches UDP behavior)
-                // Server framework will break the loop, but the test should provide auth bytes
+                // No auth header present
                 Ok(None)
             }
         } else {
@@ -58,11 +44,11 @@ impl ServerAuthIo {
     
     fn accept(
         &mut self,
-        _address: &SocketAddr,
+        address: &SocketAddr,
         identity_token: &IdentityToken,
     ) -> Result<(), ServerSendError> {
         // Build HTTP 200 response with identity token and server address in body
-        let response_body = format!("{}\r\n{}", identity_token, self.server_data_addr);
+        let response_body = format!("{}\r\n{}", identity_token, self.hub.server_addr());
         let response = http::Response::builder()
             .status(200)
             .body(response_body.into_bytes())
@@ -70,15 +56,15 @@ impl ServerAuthIo {
         
         let response_bytes = naia_shared::http_utils::response_to_bytes(response);
         
-        // Send to mpsc channel (non-blocking)
-        self.auth_responses_tx.send(response_bytes)
+        // Send to the specific client via hub
+        self.hub.send_auth_response(address, response_bytes)
             .map_err(|_| ServerSendError)?;
-        log::debug!("[LocalTransport] Server sent HTTP 200 response with identity token");
+        log::debug!("[LocalTransport] Server sent HTTP 200 response with identity token to {}", address);
         
         Ok(())
     }
 
-    fn reject(&mut self, _address: &SocketAddr) -> Result<(), ServerSendError> {
+    fn reject(&mut self, address: &SocketAddr) -> Result<(), ServerSendError> {
         // Build HTTP 401 response
         let response = http::Response::builder()
             .status(401)
@@ -87,10 +73,10 @@ impl ServerAuthIo {
         
         let response_bytes = naia_shared::http_utils::response_to_bytes(response);
         
-        // Send to mpsc channel (non-blocking)
-        self.auth_responses_tx.send(response_bytes)
+        // Send to the specific client via hub
+        self.hub.send_auth_response(address, response_bytes)
             .map_err(|_| ServerSendError)?;
-        log::debug!("[LocalTransport] Server sent HTTP 401 rejection response");
+        log::debug!("[LocalTransport] Server sent HTTP 401 rejection response to {}", address);
         
         Ok(())
     }

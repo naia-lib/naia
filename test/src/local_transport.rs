@@ -1,12 +1,13 @@
 use naia_client::transport::local::Socket as LocalClientSocket;
 use naia_server::transport::local::Socket as LocalServerSocket;
 
-use local_transport::LocalSocketPair;
+use local_transport::LocalTransportBuilder;
 
 pub fn local_socket_pair() -> (LocalClientSocket, LocalServerSocket) {
-    let pair = LocalSocketPair::new();
+    let builder = LocalTransportBuilder::new();
+    let (server_endpoint, client_endpoint) = builder.single_connection();
     (
-        LocalClientSocket::new(pair.client_socket, None),
-        LocalServerSocket::new(pair.server_socket, None),
+        LocalClientSocket::new(client_endpoint.into_socket(), None),
+        LocalServerSocket::new(server_endpoint.into_socket(), None),
     )
 }

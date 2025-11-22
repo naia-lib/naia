@@ -1,61 +1,51 @@
 use std::{net::SocketAddr, sync::{Arc, Mutex}};
 
-use tokio::sync::mpsc;
-
 use crate::shared::{ServerRecvError, ServerSendError};
+use crate::hub::LocalTransportHub;
 
-// Server packet sender
+// Server packet sender (always uses hub-based multiplexing)
 #[derive(Clone)]
 pub struct LocalServerSender {
-    tx: mpsc::UnboundedSender<Vec<u8>>,
-    client_addr: SocketAddr,
+    hub: LocalTransportHub,
 }
 
 impl LocalServerSender {
-    pub(crate) fn new(tx: mpsc::UnboundedSender<Vec<u8>>, client_addr: SocketAddr) -> Self {
-        Self { tx, client_addr }
+    pub(crate) fn new(hub: LocalTransportHub) -> Self {
+        Self { hub }
     }
 
     pub fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), ServerSendError> {
-        if address != &self.client_addr {
-            return Err(ServerSendError);
-        }
-        // Send via unbounded channel (non-blocking)
-        self.tx.send(payload.to_vec())
+        self.hub.send_data(address, payload.to_vec())
             .map_err(|_| ServerSendError)?;
-        log::trace!("[LocalTransport] Server sent {} bytes", payload.len());
+        log::trace!("[LocalTransport] Server sent {} bytes to {}", payload.len(), address);
         Ok(())
     }
 }
 
-// Server packet receiver
+// Server packet receiver (always uses hub-based multiplexing)
 #[derive(Clone)]
 pub struct LocalServerReceiver {
-    rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
-    client_addr: SocketAddr,
-    last_payload: Arc<Mutex<Option<Box<[u8]>>>>,
+    hub: LocalTransportHub,
+    last_payload: Arc<Mutex<Option<(SocketAddr, Box<[u8]>)>>>,
 }
 
 impl LocalServerReceiver {
-    pub(crate) fn new(rx: mpsc::UnboundedReceiver<Vec<u8>>, client_addr: SocketAddr) -> Self {
+    pub(crate) fn new(hub: LocalTransportHub) -> Self {
         Self {
-            rx: Arc::new(Mutex::new(rx)),
-            client_addr,
+            hub,
             last_payload: Arc::new(Mutex::new(None)),
         }
     }
 
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
-        // Try to receive from channel (non-blocking)
-        let mut rx_guard = self.rx.lock().unwrap();
-        if let Ok(payload) = rx_guard.try_recv() {
-            log::trace!("[LocalTransport] Server received {} bytes", payload.len());
-            let boxed = payload.into_boxed_slice();
-            *self.last_payload.lock().unwrap() = Some(boxed);
+        if let Some((client_addr, bytes)) = self.hub.try_recv_data() {
+            log::trace!("[LocalTransport] Server received {} bytes from {}", bytes.len(), client_addr);
+            let boxed = bytes.into_boxed_slice();
+            *self.last_payload.lock().unwrap() = Some((client_addr, boxed));
             let payload_ref = self.last_payload.lock().unwrap();
-            let payload_slice = payload_ref.as_ref().unwrap().as_ref();
-            let static_ref: &'static [u8] = unsafe { std::mem::transmute(payload_slice) };
-            Ok(Some((self.client_addr, static_ref)))
+            let (addr, payload_slice) = payload_ref.as_ref().unwrap();
+            let static_ref: &'static [u8] = unsafe { std::mem::transmute(payload_slice.as_ref()) };
+            Ok(Some((*addr, static_ref)))
         } else {
             Ok(None)
         }

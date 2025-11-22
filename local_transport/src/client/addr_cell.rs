@@ -31,5 +31,15 @@ impl LocalAddrCell {
             Err(_) => ClientServerAddr::Finding,
         }
     }
+
+    /// Set the server address synchronously (for testing/local transport where we know it immediately)
+    pub(crate) fn set_sync(&self, addr: SocketAddr) {
+        // Use blocking write - this is fine for local transport tests
+        use crate::runtime::get_runtime;
+        get_runtime().block_on(async {
+            let mut cell = self.cell.write().await;
+            cell.0 = ClientServerAddr::Found(addr);
+        });
+    }
 }
 

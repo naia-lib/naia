@@ -5,9 +5,17 @@
 
 mod runtime;
 mod shared;
+mod hub;
+mod endpoint;
+mod builder;
 pub mod client;
 pub mod server;
 
+#[cfg(test)]
+mod tests;
+
+pub use endpoint::{LocalServerEndpoint, LocalClientEndpoint};
+pub use builder::LocalTransportBuilder;
 pub use shared::{
     ClientIdentityReceiverResult, ClientServerAddr,
     ClientSendError, ClientRecvError, ServerSendError, ServerRecvError,
@@ -15,53 +23,3 @@ pub use shared::{
 
 pub use client::{LocalClientSocket, LocalClientSender, LocalClientReceiver, LocalClientIdentity};
 pub use server::{LocalServerSocket, LocalServerSender, LocalServerReceiver, LocalServerAuthSender, LocalServerAuthReceiver};
-
-use client::LocalAddrCell;
-use shared::{create_auth_channels, create_data_channels, LocalTransportQueues};
-
-/// Paired sockets for the client and server sides.
-pub struct LocalSocketPair {
-    pub client_socket: LocalClientSocket,
-    pub server_socket: LocalServerSocket,
-}
-
-impl LocalSocketPair {
-    pub fn new() -> Self {
-        let (shared, client_addr, server_addr) = LocalTransportQueues::new();
-        
-        // Create 1:1 auth channels (not broadcast!)
-        let (auth_req_tx, auth_req_rx, auth_resp_tx, auth_resp_rx) = create_auth_channels();
-        
-        // Create 1:1 data channels (replacing VecDeque queues)
-        let (client_data_tx, server_data_rx, server_data_tx, client_data_rx) = create_data_channels();
-        
-        // Create addr_cell for client
-        let addr_cell = LocalAddrCell::new();
-        
-        let client = LocalClientSocket::new(
-            shared.clone(),
-            client_addr,
-            server_addr,
-            auth_req_tx,
-            auth_resp_rx, // Client owns the response receiver
-            client_data_tx,
-            client_data_rx,
-            addr_cell,
-        );
-        
-        let server = LocalServerSocket::new(
-            shared,
-            client_addr,
-            server_addr,
-            auth_req_rx, // Server owns the request receiver
-            auth_resp_tx,
-            server_data_tx,
-            server_data_rx,
-        );
-        
-        Self {
-            client_socket: client,
-            server_socket: server,
-        }
-    }
-}
