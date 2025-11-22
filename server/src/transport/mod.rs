@@ -6,9 +6,10 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "transport_udp")] {
         pub mod udp;
-        mod conditioner;
     } else {}
 }
+mod conditioner;
+pub use conditioner::ConditionedPacketReceiver;
 cfg_if! {
     if #[cfg(feature = "transport_local")] {
         pub mod local;

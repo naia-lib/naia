@@ -10,10 +10,9 @@ use crate::transport::{
     udp::{
         addr_cell::AddrCell,
         auth::{AuthIo, AuthReceiver},
-        conditioner::ConditionedPacketReceiver,
     },
-    IdentityReceiver, PacketReceiver, PacketSender as TransportSender, RecvError, SendError,
-    ServerAddr as TransportAddr, Socket as TransportSocket,
+    ConditionedPacketReceiver, IdentityReceiver, PacketReceiver, PacketSender as TransportSender,
+    RecvError, SendError, ServerAddr as TransportAddr, Socket as TransportSocket,
 };
 
 // Socket
@@ -77,7 +76,7 @@ impl Socket {
             UdpPacketReceiver::new(self.data_addr_cell.clone(), self.data_socket.clone());
         let packet_receiver: Box<dyn PacketReceiver> = {
             if let Some(config) = &self.config {
-                Box::new(ConditionedPacketReceiver::new(packet_receiver, config))
+                Box::new(ConditionedPacketReceiver::new(Box::new(packet_receiver), config))
             } else {
                 Box::new(packet_receiver)
             }

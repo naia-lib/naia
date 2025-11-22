@@ -8,8 +8,8 @@ use std::{
 use naia_shared::{transport_udp, IdentityToken, LinkConditionerConfig};
 
 use super::{
-    conditioner::ConditionedPacketReceiver, AuthReceiver as TransportAuthReceiver,
-    AuthSender as TransportAuthSender, PacketReceiver, PacketSender as TransportSender, RecvError,
+    AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
+    ConditionedPacketReceiver, PacketReceiver, PacketSender as TransportSender, RecvError,
     SendError, Socket as TransportSocket,
 };
 
@@ -71,7 +71,7 @@ impl TransportSocket for Socket {
 
         let packet_receiver: Box<dyn PacketReceiver> = {
             if let Some(config) = &self.config {
-                Box::new(ConditionedPacketReceiver::new(packet_receiver, config))
+                Box::new(ConditionedPacketReceiver::new(Box::new(packet_receiver), config))
             } else {
                 Box::new(packet_receiver)
             }
@@ -88,6 +88,7 @@ impl TransportSocket for Socket {
 
 // Packet Sender
 
+#[derive(Clone)]
 struct UdpPacketSender {
     socket: Arc<Mutex<UdpSocket>>,
 }

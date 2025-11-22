@@ -10,6 +10,40 @@ use naia_shared::IdentityToken;
 const FAKE_CLIENT_ADDR: &str = "127.0.0.1:12345";
 const FAKE_SERVER_ADDR: &str = "127.0.0.1:54321";
 
+// AddrCell equivalent for server address discovery
+// Uses Mutex for now (synchronous), can be upgraded to RwLock for full async support
+struct MaybeAddr(ClientServerAddr);
+
+#[derive(Clone)]
+pub struct LocalAddrCell {
+    cell: Arc<Mutex<MaybeAddr>>,
+}
+
+impl LocalAddrCell {
+    pub fn new() -> Self {
+        Self {
+            cell: Arc::new(Mutex::new(MaybeAddr(ClientServerAddr::Finding))),
+        }
+    }
+
+    pub fn recv(&self, addr: SocketAddr) {
+        let mut cell = self.cell.lock().unwrap();
+        cell.0 = ClientServerAddr::Found(addr);
+    }
+
+    pub async fn recv_async(&self, addr: SocketAddr) {
+        // For future async use (Phase 4)
+        self.recv(addr);
+    }
+
+    pub fn get(&self) -> ClientServerAddr {
+        match self.cell.try_lock() {
+            Ok(addr) => addr.0.clone(),
+            Err(_) => ClientServerAddr::Finding,
+        }
+    }
+}
+
 // Types matching transport layer signatures
 pub enum ClientIdentityReceiverResult {
     Waiting,
@@ -17,6 +51,7 @@ pub enum ClientIdentityReceiverResult {
     ErrorResponseCode(u16),
 }
 
+#[derive(Clone)]
 pub enum ClientServerAddr {
     Found(SocketAddr),
     Finding,
@@ -34,6 +69,7 @@ struct LocalTransportQueues {
     auth_requests: Arc<Mutex<VecDeque<Vec<u8>>>>,
     identity_token: Arc<Mutex<Option<IdentityToken>>>,
     rejection_code: Arc<Mutex<Option<u16>>>,
+    addr_cell: LocalAddrCell,
 }
 
 impl LocalTransportQueues {
@@ -47,6 +83,7 @@ impl LocalTransportQueues {
                 auth_requests: Arc::new(Mutex::new(VecDeque::new())),
                 identity_token: Arc::new(Mutex::new(None)),
                 rejection_code: Arc::new(Mutex::new(None)),
+                addr_cell: LocalAddrCell::new(),
             },
             client_addr,
             server_addr,
@@ -237,6 +274,7 @@ pub struct LocalClientSocket {
     identity: LocalClientIdentity,
     sender: LocalClientSender,
     receiver: LocalClientReceiver,
+    auth_queue: Arc<Mutex<VecDeque<Vec<u8>>>>,
 }
 
 impl LocalClientSocket {
@@ -244,8 +282,9 @@ impl LocalClientSocket {
         let identity = LocalClientIdentity::new(shared.clone(), client_addr, server_addr);
         Self {
             identity,
-            sender: LocalClientSender::new(shared.client_to_server.clone(), server_addr),
-            receiver: LocalClientReceiver::new(shared.server_to_client.clone(), server_addr),
+            sender: LocalClientSender::new(shared.client_to_server.clone(), shared.addr_cell.clone()),
+            receiver: LocalClientReceiver::new(shared.server_to_client.clone(), shared.addr_cell.clone()),
+            auth_queue: shared.auth_requests.clone(),
         }
     }
 
@@ -256,23 +295,46 @@ impl LocalClientSocket {
         LocalClientSender,
         LocalClientReceiver,
     ) {
-        let LocalClientSocket { identity, sender, receiver } = self;
+        let LocalClientSocket { identity, sender, receiver, .. } = self;
         (identity, sender, receiver)
+    }
+
+    pub fn connect_with_auth(
+        self,
+        auth_bytes: Vec<u8>,
+    ) -> (
+        LocalClientIdentity,
+        LocalClientSender,
+        LocalClientReceiver,
+    ) {
+        // Send auth bytes to server's auth receiver
+        if let Ok(mut queue) = self.auth_queue.lock() {
+            queue.push_back(auth_bytes);
+            log::trace!("[LocalTransport] Client sent auth bytes to server");
+        }
+        self.connect()
     }
 }
 
 #[derive(Clone)]
 pub struct LocalClientSender {
     queue: Arc<Mutex<VecDeque<Vec<u8>>>>,
-    server_addr: SocketAddr,
+    addr_cell: LocalAddrCell,
 }
 
 impl LocalClientSender {
-    fn new(queue: Arc<Mutex<VecDeque<Vec<u8>>>>, server_addr: SocketAddr) -> Self {
-        Self { queue, server_addr }
+    fn new(queue: Arc<Mutex<VecDeque<Vec<u8>>>>, addr_cell: LocalAddrCell) -> Self {
+        Self { queue, addr_cell }
     }
 
     pub fn send(&self, payload: &[u8]) -> Result<(), ClientSendError> {
+        // Check if server address is known before sending
+        match self.addr_cell.get() {
+            ClientServerAddr::Finding => {
+                return Err(ClientSendError);
+            }
+            ClientServerAddr::Found(_) => {}
+        }
         let mut queue = self.queue.lock().unwrap();
         queue.push_back(payload.to_vec());
         log::trace!("[LocalTransport] Client sent {} bytes", payload.len());
@@ -280,22 +342,22 @@ impl LocalClientSender {
     }
 
     pub fn server_addr(&self) -> ClientServerAddr {
-        ClientServerAddr::Found(self.server_addr)
+        self.addr_cell.get()
     }
 }
 
 #[derive(Clone)]
 pub struct LocalClientReceiver {
     queue: Arc<Mutex<VecDeque<Vec<u8>>>>,
-    server_addr: SocketAddr,
+    addr_cell: LocalAddrCell,
     last_payload: Arc<Mutex<Option<Box<[u8]>>>>,
 }
 
 impl LocalClientReceiver {
-    fn new(queue: Arc<Mutex<VecDeque<Vec<u8>>>>, server_addr: SocketAddr) -> Self {
+    fn new(queue: Arc<Mutex<VecDeque<Vec<u8>>>>, addr_cell: LocalAddrCell) -> Self {
         Self {
             queue,
-            server_addr,
+            addr_cell,
             last_payload: Arc::new(Mutex::new(None)),
         }
     }
@@ -316,7 +378,7 @@ impl LocalClientReceiver {
     }
 
     pub fn server_addr(&self) -> ClientServerAddr {
-        ClientServerAddr::Found(self.server_addr)
+        self.addr_cell.get()
     }
 }
 
@@ -325,22 +387,30 @@ pub struct LocalClientIdentity {
     identity_token: Arc<Mutex<Option<IdentityToken>>>,
     rejection_code: Arc<Mutex<Option<u16>>>,
     requested: Arc<Mutex<bool>>,
+    addr_cell: LocalAddrCell,
 }
 
 impl LocalClientIdentity {
-    fn new(shared: LocalTransportQueues, _client_addr: SocketAddr, _server_addr: SocketAddr) -> Self {
+    fn new(shared: LocalTransportQueues, _client_addr: SocketAddr, server_addr: SocketAddr) -> Self {
+        let addr_cell = shared.addr_cell.clone();
+        // Initialize server address synchronously for backward compatibility
+        // In Phase 4, this will be set via HTTP response parsing
+        addr_cell.recv(server_addr);
         Self {
             identity_token: shared.identity_token.clone(),
             rejection_code: shared.rejection_code.clone(),
             requested: Arc::new(Mutex::new(false)),
+            addr_cell,
         }
     }
 
     pub fn receive(&mut self) -> ClientIdentityReceiverResult {
         if let Some(code) = *self.rejection_code.lock().unwrap() {
+            log::trace!("[LocalTransport] Client identity receiver: ErrorResponseCode({})", code);
             return ClientIdentityReceiverResult::ErrorResponseCode(code);
         }
         if let Some(token) = self.identity_token.lock().unwrap().clone() {
+            log::trace!("[LocalTransport] Client identity receiver: Success(token={})", token);
             return ClientIdentityReceiverResult::Success(token);
         }
 
@@ -348,6 +418,8 @@ impl LocalClientIdentity {
         if !*requested {
             *requested = true;
             log::trace!("[LocalTransport] Client requesting identity");
+        } else {
+            log::trace!("[LocalTransport] Client identity receiver: Still waiting...");
         }
 
         ClientIdentityReceiverResult::Waiting
