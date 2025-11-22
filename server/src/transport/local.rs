@@ -1,8 +1,10 @@
 use std::net::SocketAddr;
 
+use naia_shared::LinkConditionerConfig;
+
 use crate::transport::{
     AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
-    PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
+    ConditionedPacketReceiver, PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     Socket as TransportSocket,
 };
 
@@ -13,11 +15,12 @@ use local_transport::{
 
 pub struct Socket {
     inner: Option<LocalServerSocket>,
+    config: Option<LinkConditionerConfig>,
 }
 
 impl Socket {
-    pub fn new(local: LocalServerSocket) -> Self {
-        Self { inner: Some(local) }
+    pub fn new(local: LocalServerSocket, config: Option<LinkConditionerConfig>) -> Self {
+        Self { inner: Some(local), config }
     }
 }
 
@@ -36,14 +39,24 @@ impl TransportSocket for Socket {
         Box<dyn TransportSender>,
         Box<dyn TransportReceiver>,
     ) {
-        let Socket { inner } = *self;
+        let Socket { inner, config } = *self;
         let local = inner.expect("server socket already taken");
         let (auth_sender, auth_receiver, sender, receiver) = local.listen_with_auth();
+        
+        let receiver: Box<dyn TransportReceiver> = {
+            let wrapped = LocalServerTransportReceiver(receiver);
+            if let Some(config) = &config {
+                Box::new(ConditionedPacketReceiver::new(Box::new(wrapped), config))
+            } else {
+                Box::new(wrapped)
+            }
+        };
+        
         (
             Box::new(LocalServerTransportAuthSender(auth_sender)),
             Box::new(LocalServerTransportAuthReceiver(auth_receiver)),
             Box::new(LocalServerTransportSender(sender)),
-            Box::new(LocalServerTransportReceiver(receiver)),
+            receiver,
         )
     }
 }

@@ -6,7 +6,7 @@ use local_transport::LocalSocketPair;
 pub fn local_socket_pair() -> (LocalClientSocket, LocalServerSocket) {
     let pair = LocalSocketPair::new();
     (
-        LocalClientSocket::new(pair.client_socket),
-        LocalServerSocket::new(pair.server_socket),
+        LocalClientSocket::new(pair.client_socket, None),
+        LocalServerSocket::new(pair.server_socket, None),
     )
 }
