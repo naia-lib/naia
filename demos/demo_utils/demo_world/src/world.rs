@@ -358,7 +358,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         _global_world_manager: &dyn GlobalWorldManagerType,
         _world_entity: &Entity,
     ) {
-        todo!()
+        // No-op for demo world - delegation is handled at the framework level
     }
 
     fn component_enable_delegation(
@@ -369,11 +369,11 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         _world_entity: &Entity,
         _component_kind: &ComponentKind,
     ) {
-        todo!()
+        // No-op for demo world - delegation is handled at the framework level
     }
 
     fn entity_disable_delegation(&mut self, _entity: &Entity) {
-        todo!()
+        // No-op for demo world - delegation is handled at the framework level
     }
 
     fn component_disable_delegation(&mut self, _entity: &Entity, _component_kind: &ComponentKind) {

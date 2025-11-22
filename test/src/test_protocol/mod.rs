@@ -10,10 +10,7 @@ pub struct Position {
 
 impl Position {
     pub fn new(x: f32, y: f32) -> Self {
-        Self {
-            x: Property::new_local(x),
-            y: Property::new_local(y),
-        }
+        Self::new_complete(x, y)
     }
 }
 
