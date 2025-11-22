@@ -9,11 +9,14 @@ use bevy::{
     },
 };
 
-use naia_bevy_client::{events::{
-    ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvent,
-    MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvents,
-    SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
-}, sequence_greater_than, Client, CommandsExt, Random, Replicate, ReplicationConfig, Tick};
+use naia_bevy_client::{
+    events::{
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvent,
+        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvents,
+        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
+    },
+    sequence_greater_than, Client, CommandsExt, Random, Replicate, ReplicationConfig, Tick,
+};
 
 use naia_bevy_demo_shared::{
     behavior as shared_behavior,

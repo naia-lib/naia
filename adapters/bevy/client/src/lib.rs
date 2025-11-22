@@ -1,7 +1,7 @@
 pub use naia_bevy_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, EntityAuthStatus, GameInstant,
     HandleTickEvents, HandleWorldEvents, Random, Replicate, ReplicateBundle, ResponseSendKey, Tick,
-    Timer, WorldUpdate
+    Timer, WorldUpdate,
 };
 pub use naia_client::{
     shared::{default_channels, Instant, Message, ResponseReceiveKey},

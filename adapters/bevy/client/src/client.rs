@@ -2,8 +2,8 @@ use std::{marker::PhantomData, net::SocketAddr, time::Duration};
 
 use bevy_ecs::{
     entity::Entity,
-    system::{ResMut, SystemParam},
     resource::Resource,
+    system::{ResMut, SystemParam},
 };
 
 use naia_bevy_shared::{

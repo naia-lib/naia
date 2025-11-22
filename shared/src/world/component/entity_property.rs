@@ -3,14 +3,17 @@ use std::hash::Hash;
 use log::{info, warn};
 use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 
-use crate::{world::entity::{
-    entity_converters::{
-        EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
-        LocalEntityAndGlobalEntityConverterMut,
-    },
-    global_entity::GlobalEntity,
-}, EntityAuthAccessor, PropertyMutator, RemoteEntity};
 use crate::world::local::local_entity::OwnedLocalEntity;
+use crate::{
+    world::entity::{
+        entity_converters::{
+            EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
+            LocalEntityAndGlobalEntityConverterMut,
+        },
+        global_entity::GlobalEntity,
+    },
+    EntityAuthAccessor, PropertyMutator, RemoteEntity,
+};
 
 #[derive(Clone)]
 enum EntityRelation {
@@ -466,7 +469,7 @@ impl EntityProperty {
                     // The RemoteEntity stored here might reference an old entity ID before migration
                     let owned_entity = OwnedLocalEntity::Remote(inner.remote_entity.value());
                     let redirected_entity = converter.apply_entity_redirect(&owned_entity);
-                    
+
                     if let Ok(global_entity) = redirected_entity.convert_to_global(converter) {
                         Some(global_entity)
                     } else {

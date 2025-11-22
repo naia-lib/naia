@@ -2,9 +2,8 @@ use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
     Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate,
-    Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType,
-    WorldRefType,
+    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate, Request,
+    Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -243,12 +242,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn client_request_authority(
-        &mut self,
-        origin_user: &UserKey,
-        world_entity: &E,
-    ) {
-        self.world_server.client_request_authority(origin_user, world_entity);
+    pub fn client_request_authority(&mut self, origin_user: &UserKey, world_entity: &E) {
+        self.world_server
+            .client_request_authority(origin_user, world_entity);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -272,7 +268,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Retrieves an EntityMut that exposes read and write operations for the
     /// Entity.
     /// Panics if the Entity does not exist.
-    pub fn entity_mut<W: WorldMutType<E>>(&'_ mut self, world: W, entity: &E) -> EntityMut<'_, E, W> {
+    pub fn entity_mut<W: WorldMutType<E>>(
+        &'_ mut self,
+        world: W,
+        entity: &E,
+    ) -> EntityMut<'_, E, W> {
         self.world_server.entity_mut(world, entity)
     }
 

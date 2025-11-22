@@ -1,18 +1,17 @@
 use log::warn;
 
-use crate::{
-    messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
-    world::host::host_world_manager::SubCommandId,
-    BitReader, ComponentKind, ComponentKinds, EntityAuthStatus, EntityMessage, EntityMessageType,
-    HostEntity, MessageIndex, OwnedLocalEntity, Serde, SerdeErr, Tick
-};
 use crate::world::local::local_entity::RemoteEntity;
 use crate::world::local::local_world_manager::LocalWorldManager;
+use crate::{
+    messages::channels::receivers::indexed_message_reader::IndexedMessageReader,
+    world::host::host_world_manager::SubCommandId, BitReader, ComponentKind, ComponentKinds,
+    EntityAuthStatus, EntityMessage, EntityMessageType, HostEntity, MessageIndex, OwnedLocalEntity,
+    Serde, SerdeErr, Tick,
+};
 
 pub struct WorldReader;
 
 impl WorldReader {
-
     // Reading
 
     fn read_message_index(
@@ -37,11 +36,7 @@ impl WorldReader {
         Self::read_updates(world_manager, component_kinds, tick, reader)?;
 
         // read entity messages
-        Self::read_messages(
-            world_manager,
-            component_kinds,
-            reader,
-        )?;
+        Self::read_messages(world_manager, component_kinds, reader)?;
 
         Ok(())
     }
@@ -98,14 +93,15 @@ impl WorldReader {
                 // apply redirect if entity was migrated
                 local_entity = world_manager.apply_entity_redirect(local_entity);
 
-                world_manager.receiver_buffer_message(message_id, EntityMessage::Despawn(local_entity));
+                world_manager
+                    .receiver_buffer_message(message_id, EntityMessage::Despawn(local_entity));
             }
             EntityMessageType::InsertComponent => {
                 // read local entity
                 let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
                 // apply redirect if entity was migrated
                 local_entity = world_manager.apply_entity_redirect(local_entity);
-                
+
                 // read component
                 let converter = world_manager.entity_converter();
                 let new_component = component_kinds.read(reader, converter)?;
@@ -126,7 +122,7 @@ impl WorldReader {
                 let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
                 // apply redirect if entity was migrated
                 local_entity = world_manager.apply_entity_redirect(local_entity);
-                
+
                 // read component kind
                 let component_kind = ComponentKind::de(component_kinds, reader)?;
 
@@ -136,7 +132,6 @@ impl WorldReader {
                 );
             }
             EntityMessageType::Publish => {
-
                 // read subcommand id
                 let sub_command_id = SubCommandId::de(reader)?;
 
@@ -145,10 +140,12 @@ impl WorldReader {
                 // apply redirect if entity was migrated
                 local_entity = world_manager.apply_entity_redirect(local_entity);
 
-                world_manager.receiver_buffer_message(message_id, EntityMessage::Publish(sub_command_id, local_entity));
+                world_manager.receiver_buffer_message(
+                    message_id,
+                    EntityMessage::Publish(sub_command_id, local_entity),
+                );
             }
             EntityMessageType::Unpublish => {
-
                 // read subcommand id
                 let sub_command_id = SubCommandId::de(reader)?;
 
@@ -157,10 +154,12 @@ impl WorldReader {
                 // apply redirect if entity was migrated
                 local_entity = world_manager.apply_entity_redirect(local_entity);
 
-                world_manager.receiver_buffer_message(message_id, EntityMessage::Unpublish(sub_command_id, local_entity));
+                world_manager.receiver_buffer_message(
+                    message_id,
+                    EntityMessage::Unpublish(sub_command_id, local_entity),
+                );
             }
             EntityMessageType::EnableDelegation => {
-
                 // read subcommand id
                 let sub_command_id = SubCommandId::de(reader)?;
 
@@ -169,10 +168,12 @@ impl WorldReader {
                 // apply redirect if entity was migrated
                 local_entity = world_manager.apply_entity_redirect(local_entity);
 
-                world_manager.receiver_buffer_message(message_id, EntityMessage::EnableDelegation(sub_command_id, local_entity));
+                world_manager.receiver_buffer_message(
+                    message_id,
+                    EntityMessage::EnableDelegation(sub_command_id, local_entity),
+                );
             }
             EntityMessageType::DisableDelegation => {
-
                 // this command is only ever received by clients, regarding server-owned entities
 
                 // read subcommand id
@@ -181,10 +182,12 @@ impl WorldReader {
                 // read remote entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                world_manager.receiver_buffer_message(message_id, EntityMessage::DisableDelegation(sub_command_id, remote_entity.copy_to_owned()));
+                world_manager.receiver_buffer_message(
+                    message_id,
+                    EntityMessage::DisableDelegation(sub_command_id, remote_entity.copy_to_owned()),
+                );
             }
             EntityMessageType::SetAuthority => {
-                
                 // this command is only ever received by clients, regarding server-owned entities
 
                 // read subcommand id
@@ -198,31 +201,30 @@ impl WorldReader {
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    EntityMessage::SetAuthority(sub_command_id, remote_entity.copy_to_owned(), auth_status),
+                    EntityMessage::SetAuthority(
+                        sub_command_id,
+                        remote_entity.copy_to_owned(),
+                        auth_status,
+                    ),
                 );
             }
-            
+
             // below are response-type messages
             EntityMessageType::RequestAuthority => {
-
                 // this command is only read by the server, regarding server-owned entities
 
                 // read subcommand id
                 let sub_command_id = SubCommandId::de(reader)?;
-                
+
                 // read host entity
                 let host_entity = HostEntity::de(reader)?;
 
                 world_manager.receiver_buffer_message(
                     message_id,
-                    EntityMessage::RequestAuthority(
-                        sub_command_id,
-                        host_entity.copy_to_owned(),
-                    ),
+                    EntityMessage::RequestAuthority(sub_command_id, host_entity.copy_to_owned()),
                 );
             }
             EntityMessageType::ReleaseAuthority => {
-
                 // this command is only read by the server, regarding server-owned entities
 
                 // read subcommand id
@@ -233,10 +235,12 @@ impl WorldReader {
                 // apply redirect if entity was migrated
                 local_entity = world_manager.apply_entity_redirect(local_entity);
 
-                world_manager.receiver_buffer_message(message_id, EntityMessage::ReleaseAuthority(sub_command_id, local_entity));
+                world_manager.receiver_buffer_message(
+                    message_id,
+                    EntityMessage::ReleaseAuthority(sub_command_id, local_entity),
+                );
             }
             EntityMessageType::EnableDelegationResponse => {
-                
                 // this command is only read by the server, regarding server-owned entities
 
                 // read subcommand id
@@ -245,18 +249,23 @@ impl WorldReader {
                 // read host entity
                 let host_entity = HostEntity::de(reader)?;
 
-                world_manager.receiver_buffer_message(message_id, EntityMessage::EnableDelegationResponse(sub_command_id, host_entity.copy_to_owned()));
+                world_manager.receiver_buffer_message(
+                    message_id,
+                    EntityMessage::EnableDelegationResponse(
+                        sub_command_id,
+                        host_entity.copy_to_owned(),
+                    ),
+                );
             }
             EntityMessageType::MigrateResponse => {
-                
                 // this command is only ever received by clients, regarding newly delegated server-owned entities
 
                 // read subcommand id
                 let sub_command_id = SubCommandId::de(reader)?;
-                
+
                 // read client's HostEntity (so client can look it up in entity_map!)
                 let client_host_entity = HostEntity::de(reader)?;
-                
+
                 // read new RemoteEntity (what the client will create)
                 let new_remote_entity = RemoteEntity::de(reader)?;
 
@@ -295,13 +304,7 @@ impl WorldReader {
             // apply redirect if entity was migrated
             local_entity = world_manager.apply_entity_redirect(local_entity);
 
-            Self::read_update(
-                world_manager,
-                component_kinds,
-                tick,
-                reader,
-                &local_entity,
-            )?;
+            Self::read_update(world_manager, component_kinds, tick, reader, &local_entity)?;
         }
 
         Ok(())
@@ -329,7 +332,10 @@ impl WorldReader {
                 // info!("read_update(): READ UPDATE for entity {:?}, component {:?}", local_entity, component_update.kind);
                 world_manager.insert_received_update(*tick, local_entity, component_update);
             } else {
-                warn!("read_update(): SKIPPED READ UPDATE for entity {:?}, component {:?}!", local_entity, component_update.kind);
+                warn!(
+                    "read_update(): SKIPPED READ UPDATE for entity {:?}, component {:?}!",
+                    local_entity, component_update.kind
+                );
             }
         }
 

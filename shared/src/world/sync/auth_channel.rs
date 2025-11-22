@@ -1,7 +1,9 @@
 use crate::{
-    world::sync::{remote_entity_channel::EntityChannelState, auth_channel_sender::AuthChannelSender, auth_channel_receiver::AuthChannelReceiver},
-    EntityAuthStatus, EntityCommand, EntityMessage,
-    EntityMessageType, HostType, MessageIndex,
+    world::sync::{
+        auth_channel_receiver::AuthChannelReceiver, auth_channel_sender::AuthChannelSender,
+        remote_entity_channel::EntityChannelState,
+    },
+    EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,41 +36,53 @@ impl AuthChannel {
         }
     }
 
-    pub(crate) fn validate_command(
-        &mut self,
-        command: &EntityCommand,
-    ) {
+    pub(crate) fn validate_command(&mut self, command: &EntityCommand) {
         let entity = command.entity();
 
         match command.get_type() {
             EntityMessageType::Publish => {
                 if self.state != EntityAuthChannelState::Unpublished {
-                    panic!("Cannot publish Entity: {:?} that is already published", entity);
+                    panic!(
+                        "Cannot publish Entity: {:?} that is already published",
+                        entity
+                    );
                 }
                 self.state = EntityAuthChannelState::Published;
             }
             EntityMessageType::Unpublish => {
                 if self.state != EntityAuthChannelState::Published {
-                    panic!("Cannot unpublish Entity: {:?} that is not published", entity);
+                    panic!(
+                        "Cannot unpublish Entity: {:?} that is not published",
+                        entity
+                    );
                 }
                 self.state = EntityAuthChannelState::Unpublished;
             }
             EntityMessageType::EnableDelegation => {
                 if self.state != EntityAuthChannelState::Published {
-                    panic!("Cannot enable delegation on Entity: {:?} that is not published", entity);
+                    panic!(
+                        "Cannot enable delegation on Entity: {:?} that is not published",
+                        entity
+                    );
                 }
                 self.state = EntityAuthChannelState::Delegated;
                 self.auth_status = Some(EntityAuthStatus::Available);
             }
             EntityMessageType::DisableDelegation => {
                 if self.state != EntityAuthChannelState::Delegated {
-                    panic!("Cannot disable delegation on Entity: {:?} that is not delegated", entity);
+                    panic!(
+                        "Cannot disable delegation on Entity: {:?} that is not delegated",
+                        entity
+                    );
                 }
                 self.state = EntityAuthChannelState::Published;
             }
             EntityMessageType::ReleaseAuthority => {
                 if self.state != EntityAuthChannelState::Delegated {
-                    panic!("Cannot release authority on Entity: {:?} that is not delegated", entity);
+                    panic!(
+                        "Cannot release authority on Entity: {:?} that is not delegated",
+                        entity
+                    );
                 }
 
                 // This is actually valid, because it should be possible for a client to ReleaseAuthority right after EnableDelegation, so that auth isn't automatically set to Granted
@@ -76,7 +90,10 @@ impl AuthChannel {
             }
             EntityMessageType::SetAuthority => {
                 if self.state != EntityAuthChannelState::Delegated {
-                    panic!("Cannot set authority on Entity: {:?} that is not delegated", entity);
+                    panic!(
+                        "Cannot set authority on Entity: {:?} that is not delegated",
+                        entity
+                    );
                 }
 
                 let EntityCommand::SetAuthority(_, _entity, next_status) = command else {
@@ -101,7 +118,10 @@ impl AuthChannel {
             EntityMessageType::RequestAuthority => {
                 // Client is requesting authority for a delegated entity
                 if self.state != EntityAuthChannelState::Delegated {
-                    panic!("Cannot request authority on Entity: {:?} that is not delegated", entity);
+                    panic!(
+                        "Cannot request authority on Entity: {:?} that is not delegated",
+                        entity
+                    );
                 }
                 // Auth status will be updated by server's SetAuthority response
             }
@@ -117,7 +137,10 @@ impl AuthChannel {
                 // This happens during delegation when entity ID changes
                 // Valid for delegated entities
                 if self.state != EntityAuthChannelState::Delegated {
-                    panic!("Cannot send MigrateResponse for Entity: {:?} that is not delegated", entity);
+                    panic!(
+                        "Cannot send MigrateResponse for Entity: {:?} that is not delegated",
+                        entity
+                    );
                 }
             }
             EntityMessageType::Noop => {
@@ -128,11 +151,8 @@ impl AuthChannel {
             }
         }
     }
-    
-    pub(crate) fn send_command(
-        &mut self,
-        command: EntityCommand,
-    ) {
+
+    pub(crate) fn send_command(&mut self, command: EntityCommand) {
         self.sender.send_command(command);
     }
 
@@ -145,12 +165,12 @@ impl AuthChannel {
     pub fn state(&self) -> EntityAuthChannelState {
         self.state
     }
-    
+
     /// Get current auth status (for testing)
     pub fn auth_status(&self) -> Option<EntityAuthStatus> {
         self.auth_status
     }
-    
+
     /// Check if in delegated state (for testing)
     pub fn is_delegated(&self) -> bool {
         self.state == EntityAuthChannelState::Delegated

@@ -7,10 +7,15 @@ use log::{info, warn};
 
 use naia_socket_shared::Instant;
 
-use crate::{world::{
-    entity::in_scope_entities::InScopeEntities,
-    remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistHandle, WaitlistStore},
-}, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity, RemoteEntity, Replicate, Tick, WorldMutType};
+use crate::{
+    world::{
+        entity::in_scope_entities::InScopeEntities,
+        remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistHandle, WaitlistStore},
+    },
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
+    EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity,
+    RemoteEntity, Replicate, Tick, WorldMutType,
+};
 
 pub struct RemoteWorldWaitlist {
     entity_waitlist: RemoteEntityWaitlist,
@@ -45,7 +50,7 @@ impl RemoteWorldWaitlist {
         entity: &RemoteEntity,
         component: Box<dyn Replicate>,
         component_kind: &ComponentKind,
-        entity_set: &HashSet<RemoteEntity>
+        entity_set: &HashSet<RemoteEntity>,
     ) {
         let handle = self.entity_waitlist.queue(
             in_scope_entities,
@@ -95,33 +100,28 @@ impl RemoteWorldWaitlist {
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: &RemoteEntity
+        entity: &RemoteEntity,
     ) {
         self.entity_waitlist.spawn_entity(in_scope_entities, entity);
     }
-    
-    pub fn despawn_entity(
-        &mut self,
-        entity: &RemoteEntity
-    ) {
+
+    pub fn despawn_entity(&mut self, entity: &RemoteEntity) {
         self.entity_waitlist.despawn_entity(entity);
     }
 
-    pub(crate) fn process_remove(&mut self, entity: &RemoteEntity, component_kind: &ComponentKind) -> bool {
+    pub(crate) fn process_remove(
+        &mut self,
+        entity: &RemoteEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
         // Remove from insert waitlist if it's there
-        if let Some(handle) = self
-            .insert_waitlist_map
-            .remove(&(*entity, *component_kind))
-        {
+        if let Some(handle) = self.insert_waitlist_map.remove(&(*entity, *component_kind)) {
             self.insert_waitlist_store.remove(&handle);
             self.entity_waitlist.remove_waiting_handle(&handle);
             return true;
         }
         // Remove Component from update waitlist if it's there
-        if let Some(handle_map) = self
-            .update_waitlist_map
-            .remove(&(*entity, *component_kind))
-        {
+        if let Some(handle_map) = self.update_waitlist_map.remove(&(*entity, *component_kind)) {
             for (_index, handle) in handle_map {
                 self.update_waitlist_store.remove(&handle);
                 self.entity_waitlist.remove_waiting_handle(&handle);
@@ -168,7 +168,6 @@ impl RemoteWorldWaitlist {
 
             // if it exists, queue the waiting part of the component update
             if let Some(waiting_updates) = waiting_updates_opt {
-
                 // Convert OwnedLocalEntity to RemoteEntity
                 let OwnedLocalEntity::Remote(remote_entity) = local_entity else {
                     panic!("Expected RemoteEntity");
@@ -176,38 +175,40 @@ impl RemoteWorldWaitlist {
                 let remote_entity = RemoteEntity::new(remote_entity);
 
                 for (waiting_remote_entity, waiting_field_update) in waiting_updates {
-                        let field_id = waiting_field_update.field_id();
+                    let field_id = waiting_field_update.field_id();
 
-                        // Have to convert the single waiting entity to a HashSet ..
-                        // TODO: make this more efficient
-                        let mut waiting_entities = HashSet::new();
-                        waiting_entities.insert(waiting_remote_entity);
+                    // Have to convert the single waiting entity to a HashSet ..
+                    // TODO: make this more efficient
+                    let mut waiting_entities = HashSet::new();
+                    waiting_entities.insert(waiting_remote_entity);
 
-                        let handle = self.entity_waitlist.queue(
-                            in_scope_entities,
-                            &waiting_entities,
-                            &mut self.update_waitlist_store,
-                            (tick, remote_entity, component_kind, waiting_field_update),
-                        );
-                        let component_field_key = (remote_entity, component_kind);
-                        if !self.update_waitlist_map.contains_key(&component_field_key) {
-                            self.update_waitlist_map
-                                .insert(component_field_key, HashMap::new());
-                        }
-                        let handle_map = self
-                            .update_waitlist_map
-                            .get_mut(&component_field_key)
-                            .unwrap();
-                        if let Some(old_handle) = handle_map.get(&field_id) {
-                            self.update_waitlist_store.remove(&handle);
-                            self.entity_waitlist.remove_waiting_handle(old_handle);
-                        }
-                        handle_map.insert(field_id, handle);
+                    let handle = self.entity_waitlist.queue(
+                        in_scope_entities,
+                        &waiting_entities,
+                        &mut self.update_waitlist_store,
+                        (tick, remote_entity, component_kind, waiting_field_update),
+                    );
+                    let component_field_key = (remote_entity, component_kind);
+                    if !self.update_waitlist_map.contains_key(&component_field_key) {
+                        self.update_waitlist_map
+                            .insert(component_field_key, HashMap::new());
+                    }
+                    let handle_map = self
+                        .update_waitlist_map
+                        .get_mut(&component_field_key)
+                        .unwrap();
+                    if let Some(old_handle) = handle_map.get(&field_id) {
+                        self.update_waitlist_store.remove(&handle);
+                        self.entity_waitlist.remove_waiting_handle(old_handle);
+                    }
+                    handle_map.insert(field_id, handle);
                 }
             }
             // if it exists, apply the ready part of the component update
             if let Some(ready_update) = ready_update_opt {
-                let global_entity = local_converter.owned_entity_to_global_entity(&local_entity).unwrap();
+                let global_entity = local_converter
+                    .owned_entity_to_global_entity(&local_entity)
+                    .unwrap();
                 let world_entity = world_converter
                     .global_entity_to_entity(&global_entity)
                     .unwrap();
@@ -230,7 +231,10 @@ impl RemoteWorldWaitlist {
         output
     }
 
-    pub(crate) fn process_waitlist_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    pub(crate) fn process_waitlist_updates<
+        E: Copy + Eq + Hash + Send + Sync,
+        W: WorldMutType<E>,
+    >(
         &mut self,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
@@ -257,7 +261,9 @@ impl RemoteWorldWaitlist {
                     self.update_waitlist_map.remove(&component_key);
                 }
 
-                let global_entity = local_converter.remote_entity_to_global_entity(&remote_entity).unwrap();
+                let global_entity = local_converter
+                    .remote_entity_to_global_entity(&remote_entity)
+                    .unwrap();
                 let world_entity = world_converter
                     .global_entity_to_entity(&global_entity)
                     .unwrap();

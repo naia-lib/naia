@@ -34,8 +34,11 @@
 
 use std::collections::VecDeque;
 
-use crate::{sequence_equal_or_less_than, world::sync::remote_entity_channel::EntityChannelState, ComponentKind, EntityMessage, EntityMessageType, MessageIndex};
 use crate::world::sync::ordered_ids::OrderedIds;
+use crate::{
+    sequence_equal_or_less_than, world::sync::remote_entity_channel::EntityChannelState,
+    ComponentKind, EntityMessage, EntityMessageType, MessageIndex,
+};
 
 pub(crate) struct RemoteComponentChannel {
     /// Current authoritative presence flag
@@ -78,9 +81,8 @@ impl RemoteComponentChannel {
         &mut self,
         entity_state: EntityChannelState,
         id: MessageIndex,
-        msg: EntityMessage<()>
+        msg: EntityMessage<()>,
     ) {
-
         if let Some(last_epoch_id) = self.last_epoch_id {
             if sequence_equal_or_less_than(id, last_epoch_id) {
                 // This message is older than the last insert message, ignore it
@@ -91,21 +93,22 @@ impl RemoteComponentChannel {
         let insert = match &msg {
             EntityMessage::InsertComponent(_, _) => true,
             EntityMessage::RemoveComponent(_, _) => false,
-            _ => panic!("ComponentChannel can only accept InsertComponent or RemoveComponent messages"),
+            _ => panic!(
+                "ComponentChannel can only accept InsertComponent or RemoveComponent messages"
+            ),
         };
 
         self.buffered_messages.push_back(id, insert);
-        
+
         self.process_messages(entity_state);
     }
-    
+
     pub(crate) fn process_messages(&mut self, entity_state: EntityChannelState) {
-        
         if entity_state != EntityChannelState::Spawned {
             // If the entity is not spawned, we cannot process any messages
             return;
         }
-        
+
         loop {
             let Some((id, insert)) = self.buffered_messages.peek_front() else {
                 break;
@@ -130,9 +133,11 @@ impl RemoteComponentChannel {
 
             let (_, insert) = self.buffered_messages.pop_front().unwrap();
             if insert {
-                self.incoming_messages.push_back(EntityMessageType::InsertComponent);
+                self.incoming_messages
+                    .push_back(EntityMessageType::InsertComponent);
             } else {
-                self.incoming_messages.push_back(EntityMessageType::RemoveComponent);
+                self.incoming_messages
+                    .push_back(EntityMessageType::RemoveComponent);
             }
         }
     }
@@ -150,14 +155,15 @@ impl RemoteComponentChannel {
         // Force-drain all buffered operations regardless of FSM state
         while let Some((id, insert)) = self.buffered_messages.pop_front() {
             if insert {
-                self.incoming_messages.push_back(EntityMessageType::InsertComponent);
+                self.incoming_messages
+                    .push_back(EntityMessageType::InsertComponent);
             } else {
-                self.incoming_messages.push_back(EntityMessageType::RemoveComponent);
+                self.incoming_messages
+                    .push_back(EntityMessageType::RemoveComponent);
             }
             // Update the inserted state to reflect the final operation
             self.inserted = insert;
             self.last_epoch_id = Some(id);
         }
     }
-
 }

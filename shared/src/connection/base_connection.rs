@@ -1,17 +1,25 @@
-use std::{collections::{HashMap, HashSet, VecDeque}, hash::Hash, net::SocketAddr};
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    hash::Hash,
+    net::SocketAddr,
+};
 
 use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{messages::{
-    channels::channel_kinds::ChannelKinds, message_manager::MessageManager
-}, types::{HostType, PacketIndex}, world::{
-    entity::entity_converters::GlobalWorldManagerType,
-    host::host_world_manager::CommandId,
-}, AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, GlobalEntity, MessageKinds, PacketNotifiable, PacketType, StandardHeader, Tick, Timer, WorldRefType};
 use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::world::world_reader::WorldReader;
 use crate::world::world_writer::WorldWriter;
+use crate::{
+    messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
+    types::{HostType, PacketIndex},
+    world::{
+        entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
+    },
+    AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
+    EntityCommand, GlobalEntity, MessageKinds, PacketNotifiable, PacketType, StandardHeader, Tick,
+    Timer, WorldRefType,
+};
 
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
@@ -34,7 +42,12 @@ impl BaseConnection {
     ) -> Self {
         Self {
             message_manager: MessageManager::new(host_type, channel_kinds),
-            world_manager: LocalWorldManager::new(address, host_type, user_key, global_world_manager),
+            world_manager: LocalWorldManager::new(
+                address,
+                host_type,
+                user_key,
+                global_world_manager,
+            ),
             ack_manager: AckManager::new(),
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
         }
@@ -72,7 +85,8 @@ impl BaseConnection {
         header: &StandardHeader,
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
-        let mut base_packet_notifiables: [&mut dyn PacketNotifiable; 2] = [&mut self.message_manager, &mut self.world_manager];
+        let mut base_packet_notifiables: [&mut dyn PacketNotifiable; 2] =
+            [&mut self.message_manager, &mut self.world_manager];
         self.ack_manager.process_incoming_header(
             header,
             &mut base_packet_notifiables,
@@ -97,7 +111,8 @@ impl BaseConnection {
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.world_manager.collect_messages(now, rtt_millis);
-        self.message_manager.collect_outgoing_messages(now, rtt_millis);
+        self.message_manager
+            .collect_outgoing_messages(now, rtt_millis);
     }
 
     fn write_messages(
@@ -109,7 +124,9 @@ impl BaseConnection {
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        let mut converter = self.world_manager.entity_converter_mut(global_world_manager);
+        let mut converter = self
+            .world_manager
+            .entity_converter_mut(global_world_manager);
         self.message_manager.write_messages(
             channel_kinds,
             message_kinds,
@@ -173,7 +190,6 @@ impl BaseConnection {
         read_world_events: bool,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-
         // read messages
         self.message_manager.read_messages(
             channel_kinds,
@@ -184,12 +200,7 @@ impl BaseConnection {
 
         // read world events
         if read_world_events {
-            WorldReader::read_world_events(
-                &mut self.world_manager,
-                component_kinds,
-                tick,
-                reader,
-            )?;
+            WorldReader::read_world_events(&mut self.world_manager, component_kinds, tick, reader)?;
         }
 
         Ok(())

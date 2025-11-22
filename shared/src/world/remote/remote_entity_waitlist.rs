@@ -32,7 +32,11 @@ impl RemoteEntityWaitlist {
         }
     }
 
-    fn required_entities_are_in_scope(&self, in_scope_entities: &dyn InScopeEntities<RemoteEntity>, entities: &HashSet<RemoteEntity>) -> bool {
+    fn required_entities_are_in_scope(
+        &self,
+        in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
+        entities: &HashSet<RemoteEntity>,
+    ) -> bool {
         for entity in entities {
             if !in_scope_entities.has_entity(entity) {
                 return false;
@@ -96,9 +100,8 @@ impl RemoteEntityWaitlist {
         &mut self,
         in_scope_entities: &dyn InScopeEntities<RemoteEntity>,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
-        entity: &RemoteEntity
+        entity: &RemoteEntity,
     ) {
-        
         // let remote_entity = converter.global_entity_to_remote_entity(global_entity).unwrap();
         // warn!("Waitlist is tracking in-scope entity ({:?}, {:?}) .. should have been added to GlobalWorldManager", remote_entity, global_entity);
 
@@ -123,7 +126,7 @@ impl RemoteEntityWaitlist {
             self.remove_waiting_handle(&outgoing_handle);
         }
     }
-    
+
     pub fn despawn_entity(&mut self, _entity: &RemoteEntity) {
         // stub
     }

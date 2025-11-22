@@ -3,9 +3,8 @@ use std::{
 };
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind,
-    GlobalResponseId, Message, MessageContainer, MessageKind, Replicate,
-    Request, ResponseSendKey, Tick,
+    Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind,
+    Replicate, Request, ResponseSendKey, Tick,
 };
 
 use crate::NaiaClientError;

@@ -9,7 +9,6 @@ pub enum OwnedLocalEntity {
 }
 
 impl OwnedLocalEntity {
-    
     pub fn new_host(id: HostEntity) -> Self {
         Self::Host(id.value())
     }
@@ -81,14 +80,14 @@ impl OwnedLocalEntity {
             OwnedLocalEntity::Remote(remote_entity) => OwnedLocalEntity::Host(*remote_entity),
         }
     }
-    
+
     pub fn host(&self) -> HostEntity {
         if !self.is_host() {
             panic!("Expected OwnedLocalEntity::Host, found OwnedLocalEntity::Remote");
         }
         HostEntity::new(self.value())
     }
-    
+
     pub fn remote(&self) -> RemoteEntity {
         if !self.is_remote() {
             panic!("Expected OwnedLocalEntity::Remote, found OwnedLocalEntity::Host");
@@ -151,7 +150,7 @@ impl RemoteEntity {
     pub fn ser(&self, writer: &mut dyn BitWrite) {
         UnsignedVariableInteger::<7>::new(self.value()).ser(writer);
     }
-    
+
     pub fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let value = UnsignedVariableInteger::<7>::de(reader)?.get();
         Ok(Self(value as u16))

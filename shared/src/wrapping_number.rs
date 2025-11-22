@@ -11,7 +11,7 @@ pub fn sequence_greater_than(s1: u16, s2: u16) -> bool {
 /// sequence_equal_or_greater_than(2,1) will return true
 /// sequence_equal_or_greater_than(1,1) will return true
 pub fn sequence_equal_or_greater_than(s1: u16, s2: u16) -> bool {
-    s1 == s2 || sequence_greater_than(s1, s2) 
+    s1 == s2 || sequence_greater_than(s1, s2)
 }
 
 /// Returns whether or not a wrapping number is greater than another

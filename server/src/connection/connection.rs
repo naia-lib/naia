@@ -1,9 +1,14 @@
-use std::{hash::Hash, net::SocketAddr};
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity, GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType};
+use naia_shared::{
+    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
+    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
+    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Serde,
+    SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -106,9 +111,9 @@ impl Connection {
         world: &mut W,
         incoming_events: &mut WorldEvents<E>,
     ) -> Vec<EntityEvent> {
-        
         // Receive Message Events
-        let (entity_converter, entity_waitlist) = self.base.world_manager.get_message_processor_helpers();
+        let (entity_converter, entity_waitlist) =
+            self.base.world_manager.get_message_processor_helpers();
         let messages = self.base.message_manager.receive_messages(
             message_kinds,
             now,
@@ -182,13 +187,10 @@ impl Connection {
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
         self.base.collect_messages(now, &rtt_millis);
-        let (mut host_world_events, mut update_events) = self.base.world_manager.take_outgoing_events(
-            now,
-            &rtt_millis,
-            world,
-            converter,
-            global_world_manager,
-        );
+        let (mut host_world_events, mut update_events) = self
+            .base
+            .world_manager
+            .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
 
         let mut any_sent = false;
         loop {
@@ -231,7 +233,10 @@ impl Connection {
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) -> bool {
-        if !host_world_events.is_empty() || !update_events.is_empty() || self.base.message_manager.has_outgoing_messages() {
+        if !host_world_events.is_empty()
+            || !update_events.is_empty()
+            || self.base.message_manager.has_outgoing_messages()
+        {
             let writer = self.write_packet(
                 channel_kinds,
                 message_kinds,

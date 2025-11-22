@@ -2,11 +2,11 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::BitWrite;
 
+use crate::world::local::local_entity::RemoteEntity;
 use crate::{
     world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     LocalEntityAndGlobalEntityConverter, Message, MessageKind, MessageKinds,
 };
-use crate::world::local::local_entity::RemoteEntity;
 
 #[derive(Clone)]
 pub struct MessageContainer {

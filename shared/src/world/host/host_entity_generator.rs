@@ -5,11 +5,9 @@ use std::{
 
 use naia_socket_shared::Instant;
 
-use crate::{
-    GlobalEntity, KeyGenerator
-};
 use crate::world::local::local_entity::{HostEntity, RemoteEntity};
 use crate::world::local::local_entity_map::LocalEntityMap;
+use crate::{GlobalEntity, KeyGenerator};
 
 pub struct HostEntityGenerator {
     user_key: u64,
@@ -44,7 +42,8 @@ impl HostEntityGenerator {
         }
         let host_entity = self.generate_host_entity();
         entity_map.insert_with_host_entity(*global_entity, host_entity);
-        self.reserved_host_entities.insert(*global_entity, host_entity);
+        self.reserved_host_entities
+            .insert(*global_entity, host_entity);
         host_entity
     }
 
@@ -79,7 +78,7 @@ impl HostEntityGenerator {
     pub(crate) fn remove_by_global_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
-        global_entity: &GlobalEntity
+        global_entity: &GlobalEntity,
     ) {
         let record = entity_map
             .remove_by_global_entity(global_entity)
@@ -90,7 +89,11 @@ impl HostEntityGenerator {
         }
     }
 
-    pub(crate) fn remove_by_host_entity(&mut self, converter: &mut LocalEntityMap, host_entity: &HostEntity) {
+    pub(crate) fn remove_by_host_entity(
+        &mut self,
+        converter: &mut LocalEntityMap,
+        host_entity: &HostEntity,
+    ) {
         let global_entity = *(converter
             .global_entity_from_host(host_entity)
             .expect("Attempting to despawn entity which does not exist!"));
@@ -100,7 +103,7 @@ impl HostEntityGenerator {
     pub fn remove_by_remote_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
-        remote_entity: &RemoteEntity
+        remote_entity: &RemoteEntity,
     ) -> GlobalEntity {
         let global_entity = *(entity_map
             .global_entity_from_remote(remote_entity)

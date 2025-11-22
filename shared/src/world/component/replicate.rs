@@ -2,6 +2,8 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
+use crate::world::update::component_update::ComponentUpdate;
+use crate::world::update::diff_mask::DiffMask;
 use crate::{
     messages::named::Named,
     world::{
@@ -15,8 +17,6 @@ use crate::{
     },
     ComponentFieldUpdate, LocalEntityAndGlobalEntityConverterMut, RemoteEntity,
 };
-use crate::world::update::component_update::ComponentUpdate;
-use crate::world::update::diff_mask::DiffMask;
 
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Create new Component from incoming bit stream

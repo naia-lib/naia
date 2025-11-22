@@ -1,12 +1,13 @@
 use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 
 use bevy_app::{App, Plugin as PluginType, Startup, Update};
-use bevy_ecs::{
-    entity::Entity,
-    schedule::{IntoScheduleConfigs},
-};
+use bevy_ecs::{entity::Entity, schedule::IntoScheduleConfigs};
 
-use naia_bevy_shared::{HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking, ProcessPackets, Protocol, ReceivePackets, SendPackets, SharedPlugin, TranslateTickEvents, TranslateWorldEvents, WorldData, WorldToHostSync, WorldUpdate};
+use naia_bevy_shared::{
+    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
+    ProcessPackets, Protocol, ReceivePackets, SendPackets, SharedPlugin, TranslateTickEvents,
+    TranslateWorldEvents, WorldData, WorldToHostSync, WorldUpdate,
+};
 use naia_client::{Client, ClientConfig};
 
 use crate::{component_event_registry::ComponentEventRegistry, events::RequestEvents};

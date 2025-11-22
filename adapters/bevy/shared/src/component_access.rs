@@ -1,9 +1,17 @@
 use std::marker::PhantomData;
 
 use bevy_app::{App, Update};
-use bevy_ecs::{component::{Component, Mutable}, entity::Entity, schedule::IntoScheduleConfigs, world::World};
+use bevy_ecs::{
+    component::{Component, Mutable},
+    entity::Entity,
+    schedule::IntoScheduleConfigs,
+    world::World,
+};
 
-use naia_shared::{ComponentKinds, EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicaDynMutWrapper, ReplicaDynRefWrapper, Replicate};
+use naia_shared::{
+    ComponentKinds, EntityAndGlobalEntityConverter, GlobalWorldManagerType, ReplicaDynMutWrapper,
+    ReplicaDynRefWrapper, Replicate,
+};
 
 use super::{
     change_detection::{on_component_added, on_component_removed},
@@ -185,8 +193,12 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
             //     "ComponentAccessor: Publishing Component {:?} for Entity {:?}",
             //     component_name, global_entity,
             // );
-            let mutator =
-                global_manager.register_component(component_kinds, &global_entity, &component_kind, diff_mask_size);
+            let mutator = global_manager.register_component(
+                component_kinds,
+                &global_entity,
+                &component_kind,
+                diff_mask_size,
+            );
             component_mut.publish(&mutator);
         }
     }

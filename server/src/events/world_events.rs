@@ -6,9 +6,8 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind,
-    GlobalResponseId, Message, MessageContainer, MessageKind, Replicate,
-    Request, ResponseSendKey,
+    Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind,
+    Replicate, Request, ResponseSendKey,
 };
 
 use crate::{user::UserKey, ConnectEvent, ErrorEvent, NaiaServerError};

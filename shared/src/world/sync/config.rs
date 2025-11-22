@@ -29,7 +29,6 @@ pub struct EngineConfig {
 
 impl Default for EngineConfig {
     fn default() -> Self {
-
         // Upper bound on un-ACKed packets (< 32_768).
         let max_in_flight: u16 = 32_767;
 

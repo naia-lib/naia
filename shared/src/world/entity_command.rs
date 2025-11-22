@@ -1,4 +1,7 @@
-use crate::{world::host::host_world_manager::SubCommandId, ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, HostEntity, RemoteEntity};
+use crate::{
+    world::host::host_world_manager::SubCommandId, ComponentKind, EntityAuthStatus,
+    EntityMessageType, GlobalEntity, HostEntity, RemoteEntity,
+};
 
 // TODO! make this agnostic to type of entity
 
@@ -9,7 +12,7 @@ pub enum EntityCommand {
     Despawn(GlobalEntity),
     InsertComponent(GlobalEntity, ComponentKind),
     RemoveComponent(GlobalEntity, ComponentKind),
-    
+
     // Former SystemChannel messages
     Publish(Option<SubCommandId>, GlobalEntity),
     Unpublish(Option<SubCommandId>, GlobalEntity),
@@ -71,18 +74,21 @@ impl EntityCommand {
 
     pub(crate) fn set_subcommand_id(&mut self, id: SubCommandId) {
         match self {
-            Self::Spawn(_) | Self::Despawn(_) | Self::InsertComponent(_, _) | Self::RemoveComponent(_, _) => {
+            Self::Spawn(_)
+            | Self::Despawn(_)
+            | Self::InsertComponent(_, _)
+            | Self::RemoveComponent(_, _) => {
                 panic!("Cannot set subcommand ID for a command that does not have one");
             }
-            Self::Publish(sub_id, _) | 
-            Self::Unpublish(sub_id, _) |
-            Self::EnableDelegation(sub_id, _) | 
-            Self::DisableDelegation(sub_id, _) |
-            Self::SetAuthority(sub_id, _, _) | 
-            Self::RequestAuthority(sub_id, _) |
-            Self::ReleaseAuthority(sub_id, _) |
-            Self::EnableDelegationResponse(sub_id, _) | 
-            Self::MigrateResponse(sub_id, _, _, _) => {
+            Self::Publish(sub_id, _)
+            | Self::Unpublish(sub_id, _)
+            | Self::EnableDelegation(sub_id, _)
+            | Self::DisableDelegation(sub_id, _)
+            | Self::SetAuthority(sub_id, _, _)
+            | Self::RequestAuthority(sub_id, _)
+            | Self::ReleaseAuthority(sub_id, _)
+            | Self::EnableDelegationResponse(sub_id, _)
+            | Self::MigrateResponse(sub_id, _, _, _) => {
                 *sub_id = Some(id);
             }
         }
@@ -93,15 +99,13 @@ impl EntityCommand {
         // Publish/Unpublish don't make sense for delegated entities
         // Delegation commands don't make sense post-delegation
         match self {
-            Self::Publish(_, _) | 
-            Self::Unpublish(_, _) |
-            Self::EnableDelegation(_, _) |
-            Self::DisableDelegation(_, _) => false,
-            
-            Self::InsertComponent(_, _) |
-            Self::RemoveComponent(_, _) |
-            Self::Despawn(_) => true,
-            
+            Self::Publish(_, _)
+            | Self::Unpublish(_, _)
+            | Self::EnableDelegation(_, _)
+            | Self::DisableDelegation(_, _) => false,
+
+            Self::InsertComponent(_, _) | Self::RemoveComponent(_, _) | Self::Despawn(_) => true,
+
             _ => false,
         }
     }

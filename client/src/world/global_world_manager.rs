@@ -5,7 +5,11 @@ use std::{
 
 use log::info;
 
-use naia_shared::{ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostType, InScopeEntities, MutChannelType, PropertyMutator, Replicate};
+use naia_shared::{
+    ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler,
+    GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostType, InScopeEntities,
+    MutChannelType, PropertyMutator, Replicate,
+};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -59,7 +63,8 @@ impl GlobalWorldManager {
             panic!("entity already initialized!");
         }
         // info!("Inserting entity record for {:?}", global_entity);
-        self.entity_records.insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Client));
+        self.entity_records
+            .insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Client));
     }
 
     // Despawn
@@ -112,8 +117,12 @@ impl GlobalWorldManager {
             .unwrap()
             .insert_component(component_kind);
 
-        let prop_mutator =
-            self.register_component(component_kinds, global_entity, &component_kind, diff_mask_length);
+        let prop_mutator = self.register_component(
+            component_kinds,
+            global_entity,
+            &component_kind,
+            diff_mask_length,
+        );
 
         component.set_mutator(&prop_mutator);
     }
@@ -178,8 +187,7 @@ impl GlobalWorldManager {
         if !self.entity_records.contains_key(global_entity) {
             panic!("entity does not exist!");
         }
-        self
-            .entity_records
+        self.entity_records
             .get_mut(global_entity)
             .unwrap()
             .remove_component(component_kind);
@@ -208,7 +216,7 @@ impl GlobalWorldManager {
         };
         record.set_replication_config(ReplicationConfig::Public);
     }
-    
+
     pub(crate) fn entity_has_component(
         &self,
         global_entity: &GlobalEntity,
@@ -350,7 +358,13 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             .as_ref()
             .write()
             .expect("DiffHandler should be initialized")
-            .register_component(component_kinds, self, global_entity, &component_kind, diff_mask_length);
+            .register_component(
+                component_kinds,
+                self,
+                global_entity,
+                &component_kind,
+                diff_mask_length,
+            );
 
         PropertyMutator::new(mut_sender)
     }

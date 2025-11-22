@@ -1,9 +1,9 @@
+use bevy_ecs::system::Command;
 use bevy_ecs::{
     entity::Entity,
     system::EntityCommands,
     world::{Mut, World},
 };
-use bevy_ecs::system::Command;
 use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldProxyMut};
 use naia_server::{ReplicationConfig, UserKey};
 

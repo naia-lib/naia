@@ -6,8 +6,11 @@ use std::{
     time::Duration,
 };
 
-use crate::{ComponentKind, DiffMask, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType, Instant, PacketIndex, WorldRefType};
 use crate::world::update::user_diff_handler::UserDiffHandler;
+use crate::{
+    ComponentKind, DiffMask, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType,
+    Instant, PacketIndex, WorldRefType,
+};
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 
@@ -53,7 +56,8 @@ impl EntityUpdateManager {
             }
 
             component_kinds.retain(|kind| {
-                world.has_component_of_kind(&world_entity, kind) && !self.diff_handler.diff_mask_is_clear(global_entity, kind)
+                world.has_component_of_kind(&world_entity, kind)
+                    && !self.diff_handler.diff_mask_is_clear(global_entity, kind)
             });
             !component_kinds.is_empty()
         });
@@ -62,15 +66,29 @@ impl EntityUpdateManager {
 
     // Main
 
-    pub fn diff_handler_has_component(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+    pub fn diff_handler_has_component(
+        &self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
         self.diff_handler.has_component(entity, component_kind)
     }
 
-    pub fn or_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind, new_diff_mask: &DiffMask) {
-        self.diff_handler.or_diff_mask(entity, component_kind, new_diff_mask);
+    pub fn or_diff_mask(
+        &mut self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+        new_diff_mask: &DiffMask,
+    ) {
+        self.diff_handler
+            .or_diff_mask(entity, component_kind, new_diff_mask);
     }
 
-    pub fn get_diff_mask(&'_ self, entity: &GlobalEntity, component_kind: &ComponentKind) -> RwLockReadGuard<'_, DiffMask> {
+    pub fn get_diff_mask(
+        &'_ self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> RwLockReadGuard<'_, DiffMask> {
         self.diff_handler.diff_mask(entity, component_kind)
     }
 
@@ -78,20 +96,14 @@ impl EntityUpdateManager {
         self.diff_handler.clear_diff_mask(entity, component_kind);
     }
 
-    pub fn register_component(
-        &mut self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
-        self.diff_handler.register_component(&self.address, entity, component_kind);
+    pub fn register_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+        self.diff_handler
+            .register_component(&self.address, entity, component_kind);
     }
 
-    pub fn deregister_component(
-        &mut self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) {
-        self.diff_handler.deregister_component(entity, component_kind);
+    pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+        self.diff_handler
+            .deregister_component(entity, component_kind);
     }
 
     // Collect
@@ -118,9 +130,7 @@ impl EntityUpdateManager {
         if let Some((_, diff_mask_map)) = self.sent_updates.remove(&dropped_packet_index) {
             for (component_index, diff_mask) in &diff_mask_map {
                 let (entity, component) = component_index;
-                if !self
-                    .diff_handler_has_component(entity, component)
-                {
+                if !self.diff_handler_has_component(entity, component) {
                     continue;
                 }
                 let mut new_diff_mask = diff_mask.clone();
@@ -144,10 +154,7 @@ impl EntityUpdateManager {
         }
     }
 
-    pub fn notify_packet_delivered(
-        &mut self,
-        packet_index: PacketIndex,
-    ) {
+    pub fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         self.sent_updates.remove(&packet_index);
     }
 
@@ -157,14 +164,13 @@ impl EntityUpdateManager {
         packet_index: &PacketIndex,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
-        diff_mask: DiffMask
+        diff_mask: DiffMask,
     ) {
         self.last_update_packet_index = *packet_index;
 
         // place diff mask in a special transmission record - like map
         if !self.sent_updates.contains_key(packet_index) {
-            self
-                .sent_updates
+            self.sent_updates
                 .insert(*packet_index, (now.clone(), HashMap::new()));
         }
         let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();

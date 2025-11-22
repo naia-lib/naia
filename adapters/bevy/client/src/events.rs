@@ -3,8 +3,8 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 use bevy_ecs::{
     entity::Entity,
     event::{Event, EventReader},
-    system::{SystemState},
     resource::Resource,
+    system::SystemState,
 };
 
 use naia_client::{shared::GlobalResponseId, NaiaClientError, WorldEvents};

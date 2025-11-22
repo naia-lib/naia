@@ -23,14 +23,16 @@ impl GlobalDiffHandler {
         component_kind: &ComponentKind,
         diff_mask_length: u8,
     ) -> MutSender {
-
         let name = component_kinds.kind_to_name(component_kind);
 
         if self
             .mut_receiver_builders
             .contains_key(&(*global_entity, *component_kind))
         {
-            panic!("GlobalDiffHandler: For Entity {:?}, Component {} cannot Register more than once!", global_entity, name);
+            panic!(
+                "GlobalDiffHandler: For Entity {:?}, Component {} cannot Register more than once!",
+                global_entity, name
+            );
         } else {
             // info!(
             //     "GlobalDiffHandler: Registering Component {:?} for Entity {:?}",
@@ -39,7 +41,7 @@ impl GlobalDiffHandler {
         }
 
         let (sender, builder) = MutChannel::new_channel(global_world_manager, diff_mask_length);
-        
+
         self.mut_receiver_builders
             .insert((*global_entity, *component_kind), builder);
 

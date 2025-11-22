@@ -1,6 +1,6 @@
 //! Authority & Delegation Channel  
 //! ==============================
-//! 
+//!
 //! Maintains the *authoritative‑owner* state for a single entity across an
 //! unordered‑reliable transport.  `AuthChannel` is a **tiny state machine**
 //! that filters, buffers, and eventually forwards only *causally‑legal*
@@ -47,8 +47,13 @@
 //! the canonical state graph above; thus consumers can apply events in
 //! arrival order without additional checks.
 
-use crate::{world::{host::host_world_manager::SubCommandId, sync::remote_entity_channel::EntityChannelState}, EntityMessage, MessageIndex};
 use crate::world::sync::ordered_ids::OrderedIds;
+use crate::{
+    world::{
+        host::host_world_manager::SubCommandId, sync::remote_entity_channel::EntityChannelState,
+    },
+    EntityMessage, MessageIndex,
+};
 
 pub(crate) struct AuthChannelReceiver {
     next_subcommand_id: SubCommandId,
@@ -76,14 +81,11 @@ impl AuthChannelReceiver {
         self.next_subcommand_id = 0;
     }
 
-    pub(crate) fn drain_messages_into(
-        &mut self,
-        outgoing_messages: &mut Vec<EntityMessage<()>>,
-    ) {
+    pub(crate) fn drain_messages_into(&mut self, outgoing_messages: &mut Vec<EntityMessage<()>>) {
         // Drain the auth channel and append the messages to the outgoing events
         outgoing_messages.append(&mut self.incoming_messages);
     }
-    
+
     pub(crate) fn buffer_pop_front_until_and_including(&mut self, id: MessageIndex) {
         self.buffered_messages.pop_front_until_and_including(id);
     }
@@ -102,28 +104,26 @@ impl AuthChannelReceiver {
         self.buffered_messages.push_back(id, msg);
         self.process_messages(entity_state_opt);
     }
-    
-    pub(crate) fn process_messages(&mut self, entity_state_opt: Option<EntityChannelState>) {
 
+    pub(crate) fn process_messages(&mut self, entity_state_opt: Option<EntityChannelState>) {
         if let Some(entity_state) = entity_state_opt {
             if entity_state != EntityChannelState::Spawned {
                 // If the entity is not spawned, we do not process any messages
                 return;
             }
         }
-        
-        loop {
 
+        loop {
             let Some((_, msg)) = self.buffered_messages.peek_front() else {
                 break;
             };
-            
+
             let Some(subcommand_id) = msg.subcommand_id() else {
                 panic!("Expected a subcommand ID in the message: {:?}", msg);
             };
 
             // info!("AuthChannelReceiver::process_messages(peeked subcommand_id={}, next_subcommand_id={})", subcommand_id, self.next_subcommand_id);
-            
+
             if subcommand_id != self.next_subcommand_id {
                 // If the subcommand ID does not match the next expected ID, we stop processing
                 break;

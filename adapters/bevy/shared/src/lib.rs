@@ -1,18 +1,18 @@
 pub use naia_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, BitWrite, FileBitWriter, BitWriter,
+    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, BitWrite, BitWriter,
     Channel, ChannelDirection, ChannelKind, ChannelMode, ComponentFieldUpdate, ComponentKind,
     ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask, EntityAndGlobalEntityConverter,
     EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, EntityProperty,
-    FakeEntityConverter, GameInstant, GlobalEntity, HostEntity, HostEntityAuthStatus, Instant,
-    LinkConditionerConfig, LocalEntityAndGlobalEntityConverter,
-    LocalEntityAndGlobalEntityConverterMut, MessageBevy as Message, MessageBuilder,
+    FakeEntityConverter, FileBitWriter, GameInstant, GlobalEntity, HostEntity,
+    HostEntityAuthStatus, Instant, LinkConditionerConfig, LocalEntityAndGlobalEntityConverter,
+    LocalEntityAndGlobalEntityConverterMut, LocalEntityMap, MessageBevy as Message, MessageBuilder,
     MessageContainer, MessageKind, MessageKinds, Named, OwnedBitReader, Property, PropertyMutate,
     PropertyMutator, Random, ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef,
     ReplicateBevy as Replicate, ReplicateBuilder, Request, Response, ResponseReceiveKey,
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeFloatConversion,
     SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger,
     Tick, TickBufferSettings, Timer, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
-    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES, LocalEntityMap,
+    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 mod bundle;
@@ -34,10 +34,10 @@ pub use components::{HostOwned, HostOwnedMap};
 pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
-pub use system_set::{WorldUpdate,
+pub use system_set::{
     HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
     ProcessPackets, ReceivePackets, SendPackets, TranslateTickEvents, TranslateWorldEvents,
-    WorldToHostSync,
+    WorldToHostSync, WorldUpdate,
 };
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};

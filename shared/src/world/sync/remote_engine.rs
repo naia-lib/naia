@@ -29,22 +29,27 @@
 //! avoid ambiguous wrapping (`u16` rolls over every 65536).
 //! *If you change these constants, do so symmetrically on both ends.*
 
-use std::{fmt::Debug, hash::Hash, collections::HashMap};
+use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use crate::{world::{sync::{remote_entity_channel::RemoteEntityChannel, config::EngineConfig}, entity::entity_message::EntityMessage}, EntityAuthStatus, EntityMessageType, HostType, InScopeEntities, MessageIndex, RemoteEntity};
 use crate::EntityCommand;
+use crate::{
+    world::{
+        entity::entity_message::EntityMessage,
+        sync::{config::EngineConfig, remote_entity_channel::RemoteEntityChannel},
+    },
+    EntityAuthStatus, EntityMessageType, HostType, InScopeEntities, MessageIndex, RemoteEntity,
+};
 
 pub struct RemoteEngine<E: Copy + Hash + Eq + Debug> {
     host_type: HostType,
     pub config: EngineConfig,
     entity_channels: HashMap<E, RemoteEntityChannel>,
-    
+
     incoming_events: Vec<EntityMessage<E>>,
     outgoing_commands: Vec<EntityCommand>,
 }
 
 impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
-
     pub(crate) fn new(host_type: HostType) -> Self {
         Self {
             host_type,
@@ -75,11 +80,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     ///
     /// *Non‑blocking*: may push zero or more *ordered* events into the
     /// engine’s outgoing buffer, but never touches the ECS directly.
-    pub fn receive_message(
-        &mut self,
-        id: MessageIndex,
-        msg: EntityMessage<E>,
-    ) {
+    pub fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<E>) {
         match msg.get_type() {
             EntityMessageType::Noop => {
                 return;
@@ -90,9 +91,10 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         let entity = msg.entity().unwrap();
 
         // If the entity channel does not exist, create it
-        let entity_channel = self.entity_channels
+        let entity_channel = self
+            .entity_channels
             .entry(entity)
-            .or_insert_with(|| { RemoteEntityChannel::new(self.host_type) });
+            .or_insert_with(|| RemoteEntityChannel::new(self.host_type));
 
         // if log {
         //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
@@ -101,13 +103,16 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         entity_channel.receive_message(id, msg.strip_entity());
         entity_channel.drain_incoming_messages_into(entity, &mut self.incoming_events);
     }
-    
+
     ///
     pub fn send_auth_command(&mut self, entity: E, command: EntityCommand) {
         if !self.entity_channels.contains_key(&entity) {
-            panic!("Cannot send a command to an entity that does not exist in the engine: {:?}", entity);
+            panic!(
+                "Cannot send a command to an entity that does not exist in the engine: {:?}",
+                entity
+            );
         }
-        
+
         let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
         entity_channel.send_command(command);
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
@@ -122,13 +127,17 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 
     /// Get auth status of an entity's channel (for testing)
     pub fn get_entity_auth_status(&self, entity: &E) -> Option<EntityAuthStatus> {
-        self.entity_channels.get(entity)
+        self.entity_channels
+            .get(entity)
             .and_then(|channel| channel.auth_status())
     }
 
     pub fn send_entity_command(&mut self, entity: E, command: EntityCommand) {
         if !self.entity_channels.contains_key(&entity) {
-            panic!("Cannot send a command to an entity that does not exist in the engine: {:?}", entity);
+            panic!(
+                "Cannot send a command to an entity that does not exist in the engine: {:?}",
+                entity
+            );
         }
 
         // Handle entity commands for RemoteEngine
@@ -157,7 +166,8 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     }
 
     pub(crate) fn remove_entity_channel(&mut self, entity: &E) -> RemoteEntityChannel {
-        self.entity_channels.remove(entity)
+        self.entity_channels
+            .remove(entity)
             .expect("Cannot remove entity channel that doesn't exist")
     }
 

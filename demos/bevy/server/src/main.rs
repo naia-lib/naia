@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy_app::{App, ScheduleRunnerPlugin, Startup, Update, TaskPoolPlugin};
+use bevy_app::{App, ScheduleRunnerPlugin, Startup, TaskPoolPlugin, Update};
 use bevy_diagnostic::FrameCountPlugin;
 use bevy_ecs::schedule::IntoScheduleConfigs;
 use bevy_log::{info, LogPlugin};

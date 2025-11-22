@@ -1,19 +1,19 @@
 //! BEVY ECS INTEGRATION MODULE
-//! 
+//!
 //! This module provides basic integration types for naia with Bevy's ECS.
-//! 
+//!
 //! **Note:** This module only depends on `bevy_ecs` (not full Bevy). For complete
 //! Bevy integration, use the `naia-bevy-client` and `naia-bevy-server` adapters.
-//! 
+//!
 //! # Usage
-//! 
+//!
 //! ```rust,ignore
 //! use naia_shared::bevy_integration::*;
 //! use bevy_ecs::prelude::*;
-//! 
+//!
 //! // In your Bevy app setup:
 //! app.insert_resource(NaiaEntityMapping::default());
-//! 
+//!
 //! // Spawn a replicated entity:
 //! commands.spawn((
 //!     Replicated,
@@ -23,11 +23,7 @@
 
 #[cfg(feature = "bevy_ecs")]
 mod bevy_integration_impl {
-    use bevy_ecs::{
-        entity::Entity as BevyEntity,
-        component::Component,
-        prelude::Resource,
-    };
+    use bevy_ecs::{component::Component, entity::Entity as BevyEntity, prelude::Resource};
     use std::collections::HashMap;
 
     use crate::GlobalEntity;
@@ -53,7 +49,7 @@ mod bevy_integration_impl {
     pub struct GlobalEntityId(pub GlobalEntity);
 
     /// Resource that manages the mapping between Bevy entities and global network entities
-    /// 
+    ///
     /// This resource maintains a bidirectional mapping to allow efficient lookups
     /// in both directions during entity replication and migration.
     #[derive(Resource, Default, Debug)]
@@ -69,13 +65,13 @@ mod bevy_integration_impl {
         pub fn new() -> Self {
             Self::default()
         }
-        
+
         /// Register a mapping between a Bevy entity and a GlobalEntity
         pub fn register(&mut self, bevy_entity: BevyEntity, global_entity: GlobalEntity) {
             self.bevy_to_global.insert(bevy_entity, global_entity);
             self.global_to_bevy.insert(global_entity, bevy_entity);
         }
-        
+
         /// Remove a mapping for a Bevy entity, returning the GlobalEntity if it existed
         pub fn unregister_bevy(&mut self, bevy_entity: BevyEntity) -> Option<GlobalEntity> {
             if let Some(global_entity) = self.bevy_to_global.remove(&bevy_entity) {
@@ -85,7 +81,7 @@ mod bevy_integration_impl {
                 None
             }
         }
-        
+
         /// Remove a mapping for a GlobalEntity, returning the Bevy entity if it existed
         pub fn unregister_global(&mut self, global_entity: GlobalEntity) -> Option<BevyEntity> {
             if let Some(bevy_entity) = self.global_to_bevy.remove(&global_entity) {
@@ -95,37 +91,37 @@ mod bevy_integration_impl {
                 None
             }
         }
-        
+
         /// Get the GlobalEntity for a Bevy entity
         pub fn get_global(&self, bevy_entity: BevyEntity) -> Option<GlobalEntity> {
             self.bevy_to_global.get(&bevy_entity).copied()
         }
-        
+
         /// Get the Bevy entity for a GlobalEntity
         pub fn get_bevy(&self, global_entity: GlobalEntity) -> Option<BevyEntity> {
             self.global_to_bevy.get(&global_entity).copied()
         }
-        
+
         /// Check if a Bevy entity is registered
         pub fn contains_bevy(&self, bevy_entity: BevyEntity) -> bool {
             self.bevy_to_global.contains_key(&bevy_entity)
         }
-        
+
         /// Check if a GlobalEntity is registered
         pub fn contains_global(&self, global_entity: GlobalEntity) -> bool {
             self.global_to_bevy.contains_key(&global_entity)
         }
-        
+
         /// Get the number of registered entities
         pub fn len(&self) -> usize {
             self.bevy_to_global.len()
         }
-        
+
         /// Check if the mapping is empty
         pub fn is_empty(&self) -> bool {
             self.bevy_to_global.is_empty()
         }
-        
+
         /// Clear all mappings
         pub fn clear(&mut self) {
             self.bevy_to_global.clear();
@@ -138,9 +134,5 @@ mod bevy_integration_impl {
 #[cfg(feature = "bevy_ecs")]
 #[allow(unused_imports)] // These are re-exported for external use
 pub use bevy_integration_impl::{
-    Replicated,
-    ServerAuthority,
-    ClientAuthority,
-    GlobalEntityId,
-    NaiaEntityMapping,
+    ClientAuthority, GlobalEntityId, NaiaEntityMapping, Replicated, ServerAuthority,
 };

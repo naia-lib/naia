@@ -97,7 +97,10 @@ impl WorldData {
         self.kind_to_accessor_map.get(component_kind)
     }
 
-    pub(crate) fn put_kind<R: Replicate + Component<Mutability = Mutable>>(&mut self, component_kind: &ComponentKind) {
+    pub(crate) fn put_kind<R: Replicate + Component<Mutability = Mutable>>(
+        &mut self,
+        component_kind: &ComponentKind,
+    ) {
         self.kind_to_accessor_map
             .insert(*component_kind, ComponentAccessor::<R>::create());
     }

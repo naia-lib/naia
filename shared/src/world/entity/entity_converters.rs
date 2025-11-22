@@ -3,17 +3,19 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use crate::{bigmap::BigMapKey, world::{
-    delegation::auth_channel::EntityAuthAccessor,
-    entity::{
-        error::EntityDoesNotExistError,
-        global_entity::GlobalEntity,
-    },
-}, ComponentKind, ComponentKinds, GlobalDiffHandler, HostEntityGenerator, InScopeEntities, LocalEntityMap, PropertyMutator};
 use crate::world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
 use crate::world::update::mut_channel::MutChannelType;
+use crate::{
+    bigmap::BigMapKey,
+    world::{
+        delegation::auth_channel::EntityAuthAccessor,
+        entity::{error::EntityDoesNotExistError, global_entity::GlobalEntity},
+    },
+    ComponentKind, ComponentKinds, GlobalDiffHandler, HostEntityGenerator, InScopeEntities,
+    LocalEntityMap, PropertyMutator,
+};
 
-pub trait GlobalWorldManagerType : InScopeEntities<GlobalEntity> {
+pub trait GlobalWorldManagerType: InScopeEntities<GlobalEntity> {
     fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>>;
     /// Whether or not a given user can receive a Message/Component with an EntityProperty relating to the given Entity
     fn entity_can_relate_to_user(&self, global_entity: &GlobalEntity, user_key: &u64) -> bool;
@@ -65,14 +67,15 @@ pub trait LocalEntityAndGlobalEntityConverter {
         owned_entity: &OwnedLocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         match owned_entity {
-            OwnedLocalEntity::Host(host_entity) => self.host_entity_to_global_entity(&HostEntity::new(*host_entity)),
-            OwnedLocalEntity::Remote(remote_entity) => self.remote_entity_to_global_entity(&RemoteEntity::new(*remote_entity)),
+            OwnedLocalEntity::Host(host_entity) => {
+                self.host_entity_to_global_entity(&HostEntity::new(*host_entity))
+            }
+            OwnedLocalEntity::Remote(remote_entity) => {
+                self.remote_entity_to_global_entity(&RemoteEntity::new(*remote_entity))
+            }
         }
     }
-    fn apply_entity_redirect(
-        &self,
-        entity: &OwnedLocalEntity,
-    ) -> OwnedLocalEntity;
+    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity;
 }
 
 pub struct FakeEntityConverter;
@@ -113,10 +116,7 @@ impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
         Ok(GlobalEntity::from_u64(0))
     }
 
-    fn apply_entity_redirect(
-        &self,
-        entity: &OwnedLocalEntity,
-    ) -> OwnedLocalEntity {
+    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
         *entity // No redirects in fake converter
     }
 }
@@ -204,10 +204,7 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
             .remote_entity_to_global_entity(remote_entity)
     }
 
-    fn apply_entity_redirect(
-        &self,
-        entity: &OwnedLocalEntity,
-    ) -> OwnedLocalEntity {
+    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
         self.local_entity_map
             .entity_converter()
             .apply_entity_redirect(entity)
@@ -233,7 +230,9 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, '
             return result;
         }
 
-        let host_entity = self.host_entity_generator.host_reserve_entity(self.local_entity_map, global_entity);
+        let host_entity = self
+            .host_entity_generator
+            .host_reserve_entity(self.local_entity_map, global_entity);
 
         // warn!("get_or_reserve_entity() `global_entity` {:?} is not owned by user, attempting to reserve. `host_entity`: {:?}", global_entity, host_entity);
 

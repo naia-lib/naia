@@ -1,4 +1,3 @@
-
 use crate::{HostEntity, OwnedLocalEntity, RemoteEntity};
 
 #[derive(Debug)]

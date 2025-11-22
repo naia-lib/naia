@@ -134,7 +134,6 @@ pub fn translate_world_events(world: &mut World) {
         // Receive Events
         let mut events = server.take_world_events();
         if !events.is_empty() {
-
             // Connect Event
             if events.has::<naia_events::ConnectEvent>() {
                 let mut event_writer = world
@@ -239,7 +238,9 @@ pub fn translate_world_events(world: &mut World) {
             // Delegate Entity Event
             if events.has::<naia_events::DelegateEntityEvent>() {
                 for (_, entity) in events.read::<naia_events::DelegateEntityEvent>() {
-                    world.entity_mut(entity).insert(HostOwned::new::<Singleton>());
+                    world
+                        .entity_mut(entity)
+                        .insert(HostOwned::new::<Singleton>());
                 }
             }
 

@@ -1,6 +1,12 @@
 use std::collections::HashMap;
 
-use crate::{world::local::{local_entity_record::LocalEntityRecord, local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}}, EntityDoesNotExistError, GlobalEntity, HostType, Instant, LocalEntityAndGlobalEntityConverter};
+use crate::{
+    world::local::{
+        local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+        local_entity_record::LocalEntityRecord,
+    },
+    EntityDoesNotExistError, GlobalEntity, HostType, Instant, LocalEntityAndGlobalEntityConverter,
+};
 
 pub struct LocalEntityMap {
     host_type: HostType,
@@ -66,10 +72,7 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
         Err(EntityDoesNotExistError)
     }
 
-    fn apply_entity_redirect(
-        &self,
-        entity: &OwnedLocalEntity,
-    ) -> OwnedLocalEntity {
+    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
         if let Some((new_entity, _timestamp)) = self.entity_redirects.get(entity) {
             *new_entity
         } else {
@@ -93,29 +96,51 @@ impl LocalEntityMap {
         self.host_type
     }
 
-    pub fn insert_with_host_entity(&mut self, global_entity: GlobalEntity, host_entity: HostEntity) {
+    pub fn insert_with_host_entity(
+        &mut self,
+        global_entity: GlobalEntity,
+        host_entity: HostEntity,
+    ) {
         if self.global_to_local.contains_key(&global_entity) {
-            panic!("Cannot overwrite inserted global entity: {:?}", global_entity);
+            panic!(
+                "Cannot overwrite inserted global entity: {:?}",
+                global_entity
+            );
         }
         if self.host_to_global.contains_key(&host_entity) {
             panic!("Cannot overwrite inserted host entity {:?}", host_entity);
         }
 
-        self.global_to_local.insert(global_entity, LocalEntityRecord::new_host_owned_entity(host_entity));
+        self.global_to_local.insert(
+            global_entity,
+            LocalEntityRecord::new_host_owned_entity(host_entity),
+        );
 
         self.host_to_global.insert(host_entity, global_entity);
     }
 
-    pub fn insert_with_remote_entity(&mut self, global_entity: GlobalEntity, remote_entity: RemoteEntity) {
-
+    pub fn insert_with_remote_entity(
+        &mut self,
+        global_entity: GlobalEntity,
+        remote_entity: RemoteEntity,
+    ) {
         if self.global_to_local.contains_key(&global_entity) {
-            panic!("Cannot overwrite inserted global entity: {:?}", global_entity);
+            panic!(
+                "Cannot overwrite inserted global entity: {:?}",
+                global_entity
+            );
         }
         if self.remote_to_global.contains_key(&remote_entity) {
-            panic!("Cannot overwrite inserted remote entity {:?}", remote_entity);
+            panic!(
+                "Cannot overwrite inserted remote entity {:?}",
+                remote_entity
+            );
         }
 
-        self.global_to_local.insert(global_entity, LocalEntityRecord::new_remote_owned_entity(remote_entity));
+        self.global_to_local.insert(
+            global_entity,
+            LocalEntityRecord::new_remote_owned_entity(remote_entity),
+        );
         self.remote_to_global.insert(remote_entity, global_entity);
     }
 
@@ -127,7 +152,10 @@ impl LocalEntityMap {
         self.host_to_global.get(host_entity)
     }
 
-    pub fn remove_by_global_entity(&mut self, global_entity: &GlobalEntity) -> Option<LocalEntityRecord> {
+    pub fn remove_by_global_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Option<LocalEntityRecord> {
         // info!("Removing global entity: {:?}", global_entity);
         let record_opt = self.global_to_local.remove(global_entity);
         if let Some(record) = &record_opt {
@@ -145,7 +173,10 @@ impl LocalEntityMap {
     pub(crate) fn remove_by_remote_entity(&mut self, remote_entity: &RemoteEntity) -> GlobalEntity {
         let global_entity = self.remote_to_global.remove(remote_entity);
         let Some(global_entity) = global_entity else {
-            panic!("Attempting to remove remote entity which does not exist: {:?}", remote_entity);
+            panic!(
+                "Attempting to remove remote entity which does not exist: {:?}",
+                remote_entity
+            );
         };
         self.remove_by_global_entity(&global_entity);
         global_entity
@@ -188,16 +219,13 @@ impl LocalEntityMap {
     pub fn install_entity_redirect(
         &mut self,
         old_entity: OwnedLocalEntity,
-        new_entity: OwnedLocalEntity
+        new_entity: OwnedLocalEntity,
     ) {
         let now = Instant::now();
         self.entity_redirects.insert(old_entity, (new_entity, now));
     }
 
-    pub(crate) fn apply_entity_redirect(
-        &self,
-        entity: &OwnedLocalEntity
-    ) -> OwnedLocalEntity {
+    pub(crate) fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
         self.entity_redirects
             .get(entity)
             .map(|(new_entity, _)| *new_entity)
@@ -207,8 +235,7 @@ impl LocalEntityMap {
     pub(crate) fn cleanup_old_redirects(&mut self, now: &Instant, ttl_seconds: u64) {
         use std::time::Duration;
         let ttl_duration = Duration::from_secs(ttl_seconds);
-        self.entity_redirects.retain(|_, (_, timestamp)| {
-            timestamp.elapsed(now) < ttl_duration
-        });
+        self.entity_redirects
+            .retain(|_, (_, timestamp)| timestamp.elapsed(now) < ttl_duration);
     }
 }

@@ -3,7 +3,12 @@ use std::hash::Hash;
 
 use log::warn;
 
-use naia_shared::{BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity, GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, OwnedBitReader, PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType};
+use naia_shared::{
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
+    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
+    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, OwnedBitReader, PacketType,
+    Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+};
 
 use crate::{
     connection::{
@@ -55,10 +60,10 @@ impl Connection {
         let existing_entities = global_world_manager.entities();
         for entity in existing_entities {
             let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
-            connection.base.world_manager.host_init_entity(
-                &entity,
-                component_kinds,
-            );
+            connection
+                .base
+                .world_manager
+                .host_init_entity(&entity, component_kinds);
         }
 
         connection
@@ -132,7 +137,8 @@ impl Connection {
         incoming_events: &mut WorldEvents<E>,
     ) -> Vec<EntityEvent> {
         // Receive Message Events
-        let (entity_converter, entity_waitlist) = self.base.world_manager.get_message_processor_helpers();
+        let (entity_converter, entity_waitlist) =
+            self.base.world_manager.get_message_processor_helpers();
         let messages = self.base.message_manager.receive_messages(
             &protocol.message_kinds,
             now,
@@ -190,13 +196,10 @@ impl Connection {
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,
         );
-        let (mut host_world_events, mut update_events) = self.base.world_manager.take_outgoing_events(
-            now,
-            &rtt_millis,
-            world,
-            converter,
-            global_world_manager,
-        );
+        let (mut host_world_events, mut update_events) = self
+            .base
+            .world_manager
+            .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
 
         let mut any_sent = false;
         loop {
@@ -232,7 +235,8 @@ impl Connection {
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) -> bool {
-        if !host_world_events.is_empty() || !update_events.is_empty()
+        if !host_world_events.is_empty()
+            || !update_events.is_empty()
             || self.base.message_manager.has_outgoing_messages()
             || self.tick_buffer.has_messages()
         {

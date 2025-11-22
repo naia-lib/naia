@@ -1,11 +1,14 @@
 use std::{fmt::Debug, hash::Hash};
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{RemoteEngine, HostEngine}, EntityMessage, HostEntity, MessageIndex};
+use crate::{
+    messages::channels::receivers::reliable_receiver::ReliableReceiver,
+    world::sync::{HostEngine, RemoteEngine},
+    EntityMessage, HostEntity, MessageIndex,
+};
 
 pub struct EntityMessageReceiver;
 
 impl EntityMessageReceiver {
-
     /// Buffer a read [`EntityMessage`] so that it can be processed later
     pub fn buffer_message<E: Copy + Hash + Eq + Debug>(
         receiver: &mut ReliableReceiver<EntityMessage<E>>,

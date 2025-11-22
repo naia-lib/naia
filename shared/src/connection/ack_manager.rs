@@ -1,9 +1,6 @@
 use std::collections::HashMap;
 
-use crate::{
-    types::PacketIndex,
-    wrapping_number::sequence_greater_than,
-};
+use crate::{types::PacketIndex, wrapping_number::sequence_greater_than};
 
 use super::{
     packet_notifiable::PacketNotifiable, packet_type::PacketType, sequence_buffer::SequenceBuffer,

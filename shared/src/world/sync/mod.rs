@@ -55,23 +55,23 @@
 //!
 //! Together they form a lock‑free, allocation‑conscious pipeline for syncing ECS worlds in distributed systems.
 
+mod auth_channel_receiver;
 mod config;
+mod remote_component_channel;
 mod remote_engine;
 pub mod remote_entity_channel;
-mod remote_component_channel;
-mod auth_channel_receiver;
 
+mod auth_channel_sender;
 mod host_engine;
 pub mod host_entity_channel;
-mod auth_channel_sender;
 
-pub use remote_engine::RemoteEngine;
-pub use remote_entity_channel::RemoteEntityChannel;
 pub use host_engine::HostEngine;
 pub use host_entity_channel::HostEntityChannel;
+pub use remote_engine::RemoteEngine;
+pub use remote_entity_channel::RemoteEntityChannel;
 
+pub mod auth_channel;
+pub mod bevy_integration;
+pub mod ordered_ids;
 #[cfg(test)]
 pub mod tests;
-pub mod auth_channel;
-pub mod ordered_ids;
-pub mod bevy_integration;

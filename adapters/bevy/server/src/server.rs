@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use bevy_ecs::{
     entity::Entity,
-    system::{ResMut, SystemParam},
     resource::Resource,
+    system::{ResMut, SystemParam},
     world::{Mut, World},
 };
 

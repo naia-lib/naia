@@ -35,9 +35,11 @@ impl UserDiffHandler {
         let Ok(global_handler) = self.global_diff_handler.as_ref().read() else {
             panic!("Be sure you can get self.global_diff_handler before calling this!");
         };
-        let Some(receiver) = global_handler
-            .receiver(address, entity, component_kind) else {
-            panic!("GlobalDiffHandler has not yet registered this {:?} for {:?}", component_kind, entity);
+        let Some(receiver) = global_handler.receiver(address, entity, component_kind) else {
+            panic!(
+                "GlobalDiffHandler has not yet registered this {:?} for {:?}",
+                component_kind, entity
+            );
         };
 
         self.receivers.insert((*entity, *component_kind), receiver);
@@ -73,7 +75,9 @@ impl UserDiffHandler {
         component_kind: &ComponentKind,
     ) -> bool {
         let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
-            warn!("diff_mask_is_clear(): Should not call this unless we're sure there's a receiver");
+            warn!(
+                "diff_mask_is_clear(): Should not call this unless we're sure there's a receiver"
+            );
             return true;
         };
         return receiver.diff_mask_is_clear();

@@ -9,7 +9,6 @@ use crate::{
             channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
             channel_kinds::ChannelKinds,
             default_channels::DefaultChannelsPlugin,
-
         },
         fragment::FragmentedMessage,
         message::Message,

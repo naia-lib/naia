@@ -5,7 +5,11 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{BigMapKey, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, InScopeEntities, MutChannelType, PropertyMutator, Replicate};
+use naia_shared::{
+    BigMapKey, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus,
+    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, InScopeEntities, MutChannelType,
+    PropertyMutator, Replicate,
+};
 
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
@@ -131,7 +135,8 @@ impl GlobalWorldManager {
     ) {
         let kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
-        let prop_mutator = self.register_component(component_kinds, global_entity, &kind, diff_mask_length);
+        let prop_mutator =
+            self.register_component(component_kinds, global_entity, &kind, diff_mask_length);
         component.set_mutator(&prop_mutator);
     }
 
@@ -387,7 +392,13 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             .as_ref()
             .write()
             .expect("DiffHandler should be initialized")
-            .register_component(component_kinds, self, global_entity, component_kind, diff_mask_length);
+            .register_component(
+                component_kinds,
+                self,
+                global_entity,
+                component_kind,
+                diff_mask_length,
+            );
 
         PropertyMutator::new(mut_sender)
     }

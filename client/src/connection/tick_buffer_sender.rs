@@ -1,8 +1,14 @@
 use std::collections::HashMap;
 
-use naia_shared::{BaseConnection, BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength, MessageContainer, PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick};
+use naia_shared::{
+    BaseConnection, BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength,
+    MessageContainer, PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick,
+};
 
-use crate::{world::global_world_manager::GlobalWorldManager, connection::channel_tick_buffer_sender::ChannelTickBufferSender};
+use crate::{
+    connection::channel_tick_buffer_sender::ChannelTickBufferSender,
+    world::global_world_manager::GlobalWorldManager,
+};
 
 pub struct TickBufferSender {
     channel_senders: HashMap<ChannelKind, ChannelTickBufferSender>,
@@ -65,7 +71,9 @@ impl TickBufferSender {
         host_tick: &Tick,
         has_written: &mut bool,
     ) {
-        let mut converter = connection.world_manager.entity_converter_mut(global_world_manager);
+        let mut converter = connection
+            .world_manager
+            .entity_converter_mut(global_world_manager);
 
         for (channel_kind, channel) in &mut self.channel_senders {
             if !channel.has_messages() {

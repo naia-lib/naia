@@ -1,6 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::{BigMap, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, RemoteEntity};
+use crate::{
+    BigMap, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, RemoteEntity,
+};
 
 pub struct GlobalEntityMap<E: Copy + Eq + Hash + Send + Sync> {
     entity_to_global_map: HashMap<E, GlobalEntity>,
@@ -33,7 +35,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Gl
                 //     global_entity
                 // );
                 return Err(EntityDoesNotExistError);
-            },
+            }
             None => Err(EntityDoesNotExistError),
         }
     }
@@ -61,7 +63,6 @@ pub trait GlobalEntitySpawner<E: Copy + Eq + Hash + Send + Sync>:
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityMap<E> {
     fn spawn(&mut self, world_entity: E, remote_entity_opt: Option<RemoteEntity>) -> GlobalEntity {
-
         let global_entity_opt;
 
         if let Some(remote_entity) = remote_entity_opt {
@@ -90,18 +91,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
             self.global_to_entity_map.insert(Some(world_entity))
         };
 
-        self.entity_to_global_map.insert(world_entity, global_entity);
+        self.entity_to_global_map
+            .insert(world_entity, global_entity);
 
         global_entity
     }
 
     fn reserve_global_entity(&mut self, remote_entity: RemoteEntity) -> GlobalEntity {
         if self.reserved_global_entities.contains_key(&remote_entity) {
-            panic!("Remote entity {:?} already has a reserved global entity", remote_entity);
+            panic!(
+                "Remote entity {:?} already has a reserved global entity",
+                remote_entity
+            );
         }
 
         let global_entity = self.global_to_entity_map.insert(None);
-        self.reserved_global_entities.insert(remote_entity, global_entity);
+        self.reserved_global_entities
+            .insert(remote_entity, global_entity);
 
         // warn!(
         //     "Reserving global entity {:?}, for remote entity {:?}",

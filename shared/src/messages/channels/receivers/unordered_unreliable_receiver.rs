@@ -5,11 +5,18 @@ use log::{info, warn};
 use naia_serde::{BitReader, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::{messages::{
-    channels::{receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver}, senders::request_sender::LocalRequestId},
-    message_kinds::MessageKinds,
-}, world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore}, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer};
 use crate::world::local::local_world_manager::LocalWorldManager;
+use crate::{
+    messages::{
+        channels::{
+            receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+            senders::request_sender::LocalRequestId,
+        },
+        message_kinds::MessageKinds,
+    },
+    world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
+    LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer,
+};
 
 pub struct UnorderedUnreliableReceiver {
     incoming_messages: VecDeque<MessageContainer>,
@@ -37,11 +44,19 @@ impl UnorderedUnreliableReceiver {
     fn recv_message(
         &mut self,
         local_world_manager: &mut LocalWorldManager,
-        message: MessageContainer
+        message: MessageContainer,
     ) {
         if let Some(remote_entity_set) = message.relations_waiting() {
-            warn!("Queuing waiting message {:?}! Waiting on entities: {:?}", message.name(), remote_entity_set);
-            local_world_manager.entity_waitlist_queue(&remote_entity_set, &mut self.waitlist_store, message);
+            warn!(
+                "Queuing waiting message {:?}! Waiting on entities: {:?}",
+                message.name(),
+                remote_entity_set
+            );
+            local_world_manager.entity_waitlist_queue(
+                &remote_entity_set,
+                &mut self.waitlist_store,
+                message,
+            );
             return;
         } else {
             info!("Received message {:?}!", message.name());
@@ -83,7 +98,11 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
                 break;
             }
 
-            let message = self.read_message(message_kinds, local_world_manager.entity_converter(), reader)?;
+            let message = self.read_message(
+                message_kinds,
+                local_world_manager.entity_converter(),
+                reader,
+            )?;
             self.recv_message(local_world_manager, message);
         }
 

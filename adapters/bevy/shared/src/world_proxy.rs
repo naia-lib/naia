@@ -5,7 +5,12 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 
-use naia_shared::{ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType};
+use naia_shared::{
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
+    EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType,
+};
 
 use super::{
     component_ref::{ComponentMut, ComponentRef},
@@ -65,7 +70,10 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
         has_component_of_kind(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicatedComponent>(&'_ self, entity: &Entity) -> Option<ReplicaRefWrapper<'_, R>> {
+    fn component<R: ReplicatedComponent>(
+        &'_ self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<'_, R>> {
         component(self.world, entity)
     }
 
@@ -107,7 +115,10 @@ impl<'w> WorldRefType<Entity> for WorldMut<'w> {
         has_component_of_kind(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicatedComponent>(&'_ self, entity: &Entity) -> Option<ReplicaRefWrapper<'_, R>> {
+    fn component<R: ReplicatedComponent>(
+        &'_ self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<'_, R>> {
         component(self.world, entity)
     }
 
@@ -339,7 +350,13 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 let Some(accessor) = data.component_access(component_kind) else {
                     panic!("ComponentKind has not been registered?");
                 };
-                accessor.component_publish(component_kinds, converter, global_world_manager, world, world_entity);
+                accessor.component_publish(
+                    component_kinds,
+                    converter,
+                    global_world_manager,
+                    world,
+                    world_entity,
+                );
             });
     }
 

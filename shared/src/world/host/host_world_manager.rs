@@ -1,9 +1,19 @@
-use std::{collections::{HashMap, HashSet}, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use log::info;
 
-use crate::{messages::channels::receivers::reliable_receiver::ReliableReceiver, world::sync::{RemoteEntityChannel, HostEntityChannel, HostEngine, RemoteEngine}, ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity, HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity, ShortMessageIndex, WorldMutType};
 use crate::world::update::entity_update_manager::EntityUpdateManager;
+use crate::{
+    messages::channels::receivers::reliable_receiver::ReliableReceiver,
+    world::sync::{HostEngine, HostEntityChannel, RemoteEngine, RemoteEntityChannel},
+    ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage,
+    EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity,
+    HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap,
+    MessageIndex, OwnedLocalEntity, ShortMessageIndex, WorldMutType,
+};
 
 pub type CommandId = MessageIndex;
 pub type SubCommandId = ShortMessageIndex;
@@ -13,7 +23,6 @@ pub type SubCommandId = ShortMessageIndex;
 /// Will use a reliable sender.
 /// Will wait for acks from the client to know the state of the client's ECS world ("remote")
 pub struct HostWorldManager {
-
     // host entity generator
     entity_generator: HostEntityGenerator,
 
@@ -25,7 +34,7 @@ pub struct HostWorldManager {
     // For Client, this contains the non-Delegated Entities that the Client has authority over, that have been delivered to the Server
     delivered_receiver: ReliableReceiver<EntityMessage<HostEntity>>,
     delivered_engine: RemoteEngine<HostEntity>,
-    incoming_events: Vec<EntityEvent>
+    incoming_events: Vec<EntityEvent>,
 }
 
 impl HostWorldManager {
@@ -58,7 +67,10 @@ impl HostWorldManager {
         incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
     ) -> Vec<EntityEvent> {
         if !incoming_messages.is_empty() {
-            info!("HostWorldManager::take_incoming_events - received {} messages", incoming_messages.len());
+            info!(
+                "HostWorldManager::take_incoming_events - received {} messages",
+                incoming_messages.len()
+            );
             for (id, msg) in &incoming_messages {
                 info!("  Message id={}, type={:?}", id, msg.get_type());
             }
@@ -68,7 +80,7 @@ impl HostWorldManager {
             &mut self.host_engine,
             incoming_messages,
         );
-        
+
         if !incoming_messages.is_empty() {
             info!("HostWorldManager::take_incoming_events - after host_engine processing: {} messages", incoming_messages.len());
         }
@@ -84,29 +96,29 @@ impl HostWorldManager {
         std::mem::take(&mut self.incoming_events)
     }
 
-    pub fn take_outgoing_commands(
-        &mut self,
-    ) -> Vec<EntityCommand> {
+    pub fn take_outgoing_commands(&mut self) -> Vec<EntityCommand> {
         self.host_engine.take_outgoing_commands()
     }
 
     pub(crate) fn host_generate_entity(&mut self) -> HostEntity {
         self.entity_generator.generate_host_entity()
     }
-    
+
     pub(crate) fn host_reserve_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
         global_entity: &GlobalEntity,
     ) -> HostEntity {
-        self.entity_generator.host_reserve_entity(entity_map, global_entity)
+        self.entity_generator
+            .host_reserve_entity(entity_map, global_entity)
     }
 
     pub(crate) fn host_removed_reserved_entity(
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Option<HostEntity> {
-        self.entity_generator.host_remove_reserved_entity(global_entity)
+        self.entity_generator
+            .host_remove_reserved_entity(global_entity)
     }
 
     pub(crate) fn has_entity(&self, host_entity: &HostEntity) -> bool {
@@ -121,10 +133,14 @@ impl HostWorldManager {
         component_kinds: Vec<ComponentKind>,
     ) {
         // add entity
-        self.host_engine.send_command(converter, EntityCommand::Spawn(*global_entity));
+        self.host_engine
+            .send_command(converter, EntityCommand::Spawn(*global_entity));
         // add components
         for component_kind in component_kinds {
-            self.host_engine.send_command(converter, EntityCommand::InsertComponent(*global_entity, component_kind));
+            self.host_engine.send_command(
+                converter,
+                EntityCommand::InsertComponent(*global_entity, component_kind),
+            );
         }
     }
 
@@ -140,7 +156,10 @@ impl HostWorldManager {
         self.host_engine.get_world()
     }
 
-    pub(crate) fn extract_entity_commands(&mut self, host_entity: &HostEntity) -> Vec<EntityCommand> {
+    pub(crate) fn extract_entity_commands(
+        &mut self,
+        host_entity: &HostEntity,
+    ) -> Vec<EntityCommand> {
         self.host_engine.extract_entity_commands(host_entity)
     }
 
@@ -148,26 +167,35 @@ impl HostWorldManager {
         self.delivered_engine.get_world()
     }
 
-    pub(crate) fn get_updatable_world(&self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
+    pub(crate) fn get_updatable_world(
+        &self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         let mut output = HashMap::new();
         for (host_entity, host_channel) in self.get_host_world() {
-
             let Some(delivered_channel) = self.get_delivered_world().get(host_entity) else {
                 continue;
             };
             let host_component_kinds = host_channel.component_kinds();
-            let joined_component_kinds = delivered_channel.component_kinds_intersection(host_component_kinds);
+            let joined_component_kinds =
+                delivered_channel.component_kinds_intersection(host_component_kinds);
             if joined_component_kinds.is_empty() {
                 continue;
             }
-            
-            let global_entity = converter.host_entity_to_global_entity(host_entity).expect("Host entity not found in local entity map");
+
+            let global_entity = converter
+                .host_entity_to_global_entity(host_entity)
+                .expect("Host entity not found in local entity map");
             output.insert(global_entity, joined_component_kinds);
         }
         output
     }
 
-    pub(crate) fn deliver_message(&mut self, command_id: CommandId, message: EntityMessage<HostEntity>) {
+    pub(crate) fn deliver_message(
+        &mut self,
+        command_id: CommandId,
+        message: EntityMessage<HostEntity>,
+    ) {
         self.delivered_receiver.buffer_message(command_id, message);
     }
 
@@ -176,18 +204,19 @@ impl HostWorldManager {
         local_entity_map: &mut LocalEntityMap,
         entity_update_manager: &mut EntityUpdateManager,
     ) {
-        let delivered_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)> = self.delivered_receiver.receive_messages();
-        
+        let delivered_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)> =
+            self.delivered_receiver.receive_messages();
+
         // Filter out MigrateResponse messages - they should not be processed by RemoteEngine
         // MigrateResponse is a client-only message that the server tracks for delivery but doesn't process
         let filtered_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)> = delivered_messages
             .into_iter()
             .filter(|(_, msg)| !matches!(msg, EntityMessage::MigrateResponse(_, _, _)))
             .collect();
-        
+
         for message in EntityMessageReceiver::remote_take_incoming_messages(
-            &mut self.delivered_engine, 
-            filtered_messages
+            &mut self.delivered_engine,
+            filtered_messages,
         ) {
             match message {
                 EntityMessage::Spawn(host_entity) => {
@@ -197,12 +226,24 @@ impl HostWorldManager {
                     self.on_delivered_despawn_entity(local_entity_map, &host_entity);
                 }
                 EntityMessage::InsertComponent(host_entity, component_kind) => {
-                    let global_entity = local_entity_map.global_entity_from_host(&host_entity).expect("Host entity not found in local entity map");
-                    self.on_delivered_insert_component(entity_update_manager, global_entity, &component_kind);
+                    let global_entity = local_entity_map
+                        .global_entity_from_host(&host_entity)
+                        .expect("Host entity not found in local entity map");
+                    self.on_delivered_insert_component(
+                        entity_update_manager,
+                        global_entity,
+                        &component_kind,
+                    );
                 }
                 EntityMessage::RemoveComponent(host_entity, component_kind) => {
-                    let global_entity = local_entity_map.global_entity_from_host(&host_entity).expect("Host entity not found in local entity map");
-                    self.on_delivered_remove_component(entity_update_manager, global_entity, &component_kind);
+                    let global_entity = local_entity_map
+                        .global_entity_from_host(&host_entity)
+                        .expect("Host entity not found in local entity map");
+                    self.on_delivered_remove_component(
+                        entity_update_manager,
+                        global_entity,
+                        &component_kind,
+                    );
                 }
                 EntityMessage::Noop => {
                     // do nothing
@@ -257,14 +298,20 @@ impl HostWorldManager {
                 EntityMessage::MigrateResponse(_sub_id, client_host_entity, new_remote_entity) => {
                     // Client receives MigrateResponse from server telling it to migrate
                     // a client-created delegated entity from HostEntity to RemoteEntity
-                    info!("CLIENT: Processing MigrateResponse: {:?} -> {:?}", client_host_entity, new_remote_entity);
-                    
+                    info!(
+                        "CLIENT: Processing MigrateResponse: {:?} -> {:?}",
+                        client_host_entity, new_remote_entity
+                    );
+
                     // Look up the global entity from the client's HostEntity
                     let global_entity = *local_entity_map.global_entity_from_host(&client_host_entity)
                         .expect("Host entity not found in local entity map during MigrateResponse processing");
-                    
+
                     // Create event for the client to process the migration
-                    self.incoming_events.push(EntityEvent::MigrateResponse(global_entity, new_remote_entity));
+                    self.incoming_events.push(EntityEvent::MigrateResponse(
+                        global_entity,
+                        new_remote_entity,
+                    ));
                 }
                 EntityMessage::Noop => {
                     // do nothing
@@ -281,10 +328,7 @@ impl HostWorldManager {
         }
     }
 
-    fn on_delivered_spawn_entity(
-        &mut self,
-        _host_entity: &HostEntity,
-    ) {
+    fn on_delivered_spawn_entity(&mut self, _host_entity: &HostEntity) {
         // stubbed
     }
 
@@ -293,7 +337,8 @@ impl HostWorldManager {
         local_entity_map: &mut LocalEntityMap,
         host_entity: &HostEntity,
     ) {
-        self.entity_generator.remove_by_host_entity(local_entity_map, host_entity);
+        self.entity_generator
+            .remove_by_host_entity(local_entity_map, host_entity);
     }
 
     fn on_delivered_insert_component(
@@ -314,11 +359,7 @@ impl HostWorldManager {
         entity_update_manager.deregister_component(global_entity, component_kind);
     }
 
-    pub(crate) fn insert_entity_channel(
-        &mut self,
-        entity: HostEntity,
-        channel: HostEntityChannel
-    ) {
+    pub(crate) fn insert_entity_channel(&mut self, entity: HostEntity, channel: HostEntityChannel) {
         self.host_engine.insert_entity_channel(entity, channel);
     }
 
@@ -326,7 +367,10 @@ impl HostWorldManager {
         self.host_engine.get_entity_channel(entity)
     }
 
-    pub(crate) fn get_entity_channel_mut(&mut self, entity: &HostEntity) -> Option<&mut HostEntityChannel> {
+    pub(crate) fn get_entity_channel_mut(
+        &mut self,
+        entity: &HostEntity,
+    ) -> Option<&mut HostEntityChannel> {
         self.host_engine.get_entity_channel_mut(entity)
     }
 
@@ -339,10 +383,11 @@ impl HostWorldManager {
         &mut self,
         local_entity_map: &mut LocalEntityMap,
         global_entity: GlobalEntity,
-        new_host_entity: HostEntity
+        new_host_entity: HostEntity,
     ) {
         // Step 1: Get the old RemoteEntity from the global entity
-        let old_remote_entity = local_entity_map.global_entity_to_remote_entity(&global_entity)
+        let old_remote_entity = local_entity_map
+            .global_entity_to_remote_entity(&global_entity)
             .expect("Global entity not found in local entity map");
 
         // Step 2: Force-drain all buffers in RemoteEntityChannel
@@ -361,11 +406,12 @@ impl HostWorldManager {
         // Note: For now, create with empty component set
         let new_host_channel = HostEntityChannel::new_with_components(
             HostType::Client, // TODO: Get actual host_type
-            HashSet::new() // TODO: Use extracted component_kinds
+            HashSet::new(),   // TODO: Use extracted component_kinds
         );
 
         // Step 6: Insert new HostEntityChannel into HostEngine
-        self.host_engine.insert_entity_channel(new_host_entity, new_host_channel);
+        self.host_engine
+            .insert_entity_channel(new_host_entity, new_host_channel);
 
         // Step 7: Update LocalEntityMap to point to new HostEntity
         local_entity_map.insert_with_host_entity(global_entity, new_host_entity);

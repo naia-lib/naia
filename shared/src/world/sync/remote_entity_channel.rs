@@ -74,9 +74,16 @@
 //! entity had its own perfect *ordered* stream—while the network enjoys the
 //! performance of a single unordered reliable channel.
 
-use std::{collections::{HashMap, HashSet}, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
-use crate::{sequence_less_than, world::sync::remote_component_channel::RemoteComponentChannel, ComponentKind, EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex};
+use crate::{
+    sequence_less_than, world::sync::remote_component_channel::RemoteComponentChannel,
+    ComponentKind, EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType,
+    MessageIndex,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum EntityChannelState {
@@ -87,10 +94,10 @@ pub(crate) enum EntityChannelState {
 pub struct RemoteEntityChannel {
     state: EntityChannelState,
     last_epoch_id: Option<MessageIndex>,
-    
+
     component_channels: HashMap<ComponentKind, RemoteComponentChannel>,
     auth_channel: AuthChannel,
-    
+
     buffered_messages: OrderedIds<EntityMessage<()>>,
     incoming_messages: Vec<EntityMessage<()>>,
     outgoing_commands: Vec<EntityCommand>,
@@ -101,10 +108,10 @@ impl RemoteEntityChannel {
         Self {
             state: EntityChannelState::Despawned,
             last_epoch_id: None,
-            
+
             component_channels: HashMap::new(),
             auth_channel: AuthChannel::new(host_type),
-            
+
             buffered_messages: OrderedIds::new(),
             incoming_messages: Vec::new(),
             outgoing_commands: Vec::new(),
@@ -130,19 +137,14 @@ impl RemoteEntityChannel {
     pub fn auth_status(&self) -> Option<EntityAuthStatus> {
         self.auth_channel.auth_status()
     }
-    
+
     /// Check if AuthChannel is in delegated state (for testing)
     pub fn is_delegated(&self) -> bool {
         self.auth_channel.is_delegated()
     }
 
-    pub(crate) fn receive_message(
-        &mut self,
-        id: MessageIndex,
-        msg: EntityMessage<()>,
-    ) {
+    pub(crate) fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
         if let Some(last_epoch_id) = self.last_epoch_id {
-
             if last_epoch_id == id {
                 panic!("EntityChannel received a message with the same id as the last epoch id. This should not happen. Message: {:?}", msg);
             }
@@ -158,15 +160,17 @@ impl RemoteEntityChannel {
         self.process_messages();
     }
 
-    pub fn send_command(
-        &mut self,
-        command: EntityCommand,
-    ) {
+    pub fn send_command(&mut self, command: EntityCommand) {
         self.auth_channel.send_command(command);
-        self.auth_channel.sender_drain_messages_into(&mut self.outgoing_commands);
+        self.auth_channel
+            .sender_drain_messages_into(&mut self.outgoing_commands);
     }
 
-    pub(crate) fn drain_incoming_messages_into<E: Copy + Hash + Eq>(&mut self, entity: E, outgoing_events: &mut Vec<EntityMessage<E>>) {
+    pub(crate) fn drain_incoming_messages_into<E: Copy + Hash + Eq>(
+        &mut self,
+        entity: E,
+        outgoing_events: &mut Vec<EntityMessage<E>>,
+    ) {
         // Drain the entity channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
         for rmsg in std::mem::take(&mut self.incoming_messages) {
@@ -193,7 +197,7 @@ impl RemoteEntityChannel {
 
     pub(crate) fn component_kinds_intersection(
         &self,
-        other_component_kinds: &HashSet<ComponentKind>
+        other_component_kinds: &HashSet<ComponentKind>,
     ) -> HashSet<ComponentKind> {
         intersection_keys(other_component_kinds, &self.component_channels)
     }
@@ -252,7 +256,6 @@ impl RemoteEntityChannel {
                 EntityMessageType::InsertComponent | EntityMessageType::RemoveComponent => {
 
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
-                    
                     let component_kind = msg.component_kind().unwrap();
                     let component_channel = self.component_channels
                         .entry(component_kind)
@@ -266,7 +269,6 @@ impl RemoteEntityChannel {
                 EntityMessageType::ReleaseAuthority | // NOTE: This should be possible because a client might want to release authority right after enabling delegation
                 EntityMessageType::SetAuthority => {
                     let (id, msg) = self.buffered_messages.pop_front().unwrap();
-                    
                     // info!("EntityChannelReceiver::process_messages(id={}, msgType={:?})", id, msg.get_type());
 
                     self.auth_channel.receiver_receive_message(Some(self.state), id, msg);
@@ -314,7 +316,8 @@ impl RemoteEntityChannel {
 
     pub(crate) fn insert_component(&mut self, component_kind: ComponentKind) {
         if !self.component_channels.contains_key(&component_kind) {
-            self.component_channels.insert(component_kind, RemoteComponentChannel::new());
+            self.component_channels
+                .insert(component_kind, RemoteComponentChannel::new());
         }
     }
 
@@ -333,7 +336,7 @@ impl RemoteEntityChannel {
     pub(crate) fn insert_component_channel_as_inserted(
         &mut self,
         component_kind: ComponentKind,
-        epoch_id: MessageIndex
+        epoch_id: MessageIndex,
     ) {
         let mut comp_channel = RemoteComponentChannel::new();
         comp_channel.set_inserted(true, epoch_id);
@@ -353,10 +356,7 @@ use std::hash::BuildHasher;
 use crate::world::sync::auth_channel::AuthChannel;
 use crate::world::sync::ordered_ids::OrderedIds;
 
-fn intersection_keys<K, V, SA, SB>(
-    a: &HashSet<K, SA>,
-    b: &HashMap<K, V, SB>,
-) -> HashSet<K, SA>
+fn intersection_keys<K, V, SA, SB>(a: &HashSet<K, SA>, b: &HashMap<K, V, SB>) -> HashSet<K, SA>
 where
     K: Eq + Hash + Copy,
     SA: BuildHasher + Clone,
@@ -367,11 +367,15 @@ where
 
     if a.len() <= b.len() {
         for &k in a {
-            if b.contains_key(&k) { out.insert(k); }
+            if b.contains_key(&k) {
+                out.insert(k);
+            }
         }
     } else {
         for &k in b.keys() {
-            if a.contains(&k) { out.insert(k); }
+            if a.contains(&k) {
+                out.insert(k);
+            }
         }
     }
     out

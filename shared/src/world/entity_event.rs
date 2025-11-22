@@ -1,8 +1,9 @@
-use crate::{ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, RemoteEntity, Replicate, Tick};
+use crate::{
+    ComponentKind, EntityAuthStatus, EntityMessageType, GlobalEntity, RemoteEntity, Replicate, Tick,
+};
 
 // ECS Lifecycle Events
 pub enum EntityEvent {
-    
     Spawn(GlobalEntity),
     Despawn(GlobalEntity),
     InsertComponent(GlobalEntity, ComponentKind),
@@ -14,7 +15,7 @@ pub enum EntityEvent {
     EnableDelegation(GlobalEntity),
     DisableDelegation(GlobalEntity),
     SetAuthority(GlobalEntity, EntityAuthStatus),
-    
+
     // These are not commands, they are something else
     RequestAuthority(GlobalEntity),
     ReleaseAuthority(GlobalEntity),
@@ -23,7 +24,6 @@ pub enum EntityEvent {
 }
 
 impl EntityEvent {
-
     pub fn to_type(&self) -> Option<EntityMessageType> {
         match self {
             Self::Spawn(_) => Some(EntityMessageType::Spawn),
