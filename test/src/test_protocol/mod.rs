@@ -1,6 +1,6 @@
+use crate::auth::Auth;
 /// Minimal test protocol for E2E testing
-
-use naia_shared::{Protocol, Property, Replicate};
+use naia_shared::{Property, Protocol, Replicate};
 
 #[derive(Replicate)]
 pub struct Position {
@@ -20,6 +20,7 @@ impl Position {
 pub fn protocol() -> Protocol {
     Protocol::builder()
         .add_component::<Position>()
+        .add_message::<Auth>()
+        .enable_client_authoritative_entities()
         .build()
 }
-

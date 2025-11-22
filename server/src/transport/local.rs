@@ -21,6 +21,12 @@ impl Socket {
     }
 }
 
+impl Into<Box<dyn TransportSocket>> for Socket {
+    fn into(self) -> Box<dyn TransportSocket> {
+        Box::new(self)
+    }
+}
+
 impl TransportSocket for Socket {
     fn listen(
         self: Box<Self>,

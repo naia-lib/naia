@@ -20,6 +20,12 @@ impl Socket {
     }
 }
 
+impl Into<Box<dyn TransportSocket>> for Socket {
+    fn into(self) -> Box<dyn TransportSocket> {
+        Box::new(self)
+    }
+}
+
 impl TransportSocket for Socket {
     fn connect(
         self: Box<Self>,
@@ -40,13 +46,20 @@ impl TransportSocket for Socket {
 
     fn connect_with_auth(
         self: Box<Self>,
-        _auth_bytes: Vec<u8>,
+        auth_bytes: Vec<u8>,
     ) -> (
         Box<dyn TransportIdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportReceiver>,
     ) {
-        self.connect()
+        let Socket { inner } = *self;
+        let local_socket = inner.expect("local socket already taken");
+        let (identity, sender, receiver) = local_socket.connect_with_auth(auth_bytes);
+        (
+            Box::new(LocalClientTransportIdentityReceiver(identity)),
+            Box::new(LocalClientTransportSender(sender)),
+            Box::new(LocalClientTransportReceiver(receiver)),
+        )
     }
 
     fn connect_with_auth_headers(

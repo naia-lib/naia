@@ -10,12 +10,14 @@ publish = false
 [features]
 
 [dependencies]
-naia-server = { path = "../server" }
-naia-client = { path = "../client" }
+naia-server = { path = "../server", features = ["transport_local"] }
+naia-client = { path = "../client", features = ["transport_local"] }
 naia-shared = { path = "../shared" }
 naia-server-socket = { path = "../socket/server" }
 naia-client-socket = { path = "../socket/client" }
 naia-demo-world = { path = "../demos/demo_utils/demo_world" }
+log = "0.4"
+local_transport = { path = "../local_transport" }
 
 [dev-dependencies]
 proptest = "1.0"
