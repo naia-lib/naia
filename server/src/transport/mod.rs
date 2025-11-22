@@ -9,6 +9,11 @@ cfg_if! {
         mod conditioner;
     } else {}
 }
+cfg_if! {
+    if #[cfg(feature = "transport_local")] {
+        pub mod local;
+    } else {}
+}
 
 mod channel;
 pub use channel::PacketChannel;

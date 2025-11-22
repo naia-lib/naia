@@ -8,6 +8,11 @@ cfg_if! {
         pub mod udp;
     } else {}
 }
+cfg_if! {
+    if #[cfg(feature = "transport_local")] {
+        pub mod local;
+    } else {}
+}
 
 mod server_addr;
 
