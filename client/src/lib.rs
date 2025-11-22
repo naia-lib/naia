@@ -36,6 +36,7 @@ mod world_events;
 pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;
 pub use command_history::CommandHistory;
+pub use connection::jitter_buffer::JitterBufferType;
 pub use error::NaiaClientError;
 pub use tick_events::{ClientTickEvent, ServerTickEvent};
 pub use world::{

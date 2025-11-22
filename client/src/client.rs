@@ -12,7 +12,7 @@ use naia_shared::{
     WorldMutType, WorldRefType,
 };
 
-use super::{client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents};
+use super::{client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents, JitterBufferType};
 use crate::{
     connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
     handshake::{HandshakeManager, HandshakeResult, Handshaker},
@@ -247,7 +247,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let (receiving_tick_happened, sending_tick_happened) =
             connection.time_manager.collect_ticks(&now);
 
-        if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
+        // If jitter buffer is in bypass mode, process packets immediately regardless of tick
+        // Otherwise, only process on tick boundaries
+        let should_read_packets = match self.client_config.jitter_buffer {
+            JitterBufferType::Bypass => true,
+            JitterBufferType::Real => receiving_tick_happened.is_some(),
+        };
+
+        if should_read_packets {
             // read packets on tick boundary, de-jittering
             if connection
                 .read_buffered_packets(
@@ -260,6 +267,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                 warn!("Error reading from buffered packet!");
             }
+        }
+
+        if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
 
             let mut index_tick = prev_receiving_tick.wrapping_add(1);
             loop {
@@ -1362,6 +1372,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 &self.protocol.channel_kinds,
                                 time_manager,
                                 &self.global_world_manager,
+                                self.client_config.jitter_buffer,
                             ));
                             self.on_connect();
 
@@ -1775,7 +1786,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
                 EntityEvent::MigrateResponse(global_entity, new_remote_entity) => {
                     info!(
-                        "CLIENT: Received MigrateResponse for {:?} -> RemoteEntity({:?})",
+                        "CLIENT: Received MigrateResponse for GlobalEntity({:?}) -> RemoteEntity({:?})",
                         global_entity, new_remote_entity
                     );
 

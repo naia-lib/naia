@@ -31,8 +31,6 @@
 
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
-use log::info;
-
 use crate::EntityCommand;
 use crate::{
     world::{

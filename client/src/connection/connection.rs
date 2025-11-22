@@ -6,13 +6,14 @@ use log::warn;
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
     ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
-    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, OwnedBitReader, PacketType,
+    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType,
     Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
     connection::{
-        io::Io, tick_buffer_sender::TickBufferSender, tick_queue::TickQueue,
+        io::Io, jitter_buffer::{JitterBuffer, JitterBufferType},
+        tick_buffer_sender::TickBufferSender,
         time_manager::TimeManager,
     },
     request::{GlobalRequestManager, GlobalResponseManager},
@@ -30,7 +31,7 @@ pub struct Connection {
     pub global_response_manager: GlobalResponseManager,
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
-    jitter_buffer: TickQueue<OwnedBitReader>,
+    jitter_buffer: JitterBuffer,
 }
 
 impl Connection {
@@ -39,6 +40,7 @@ impl Connection {
         channel_kinds: &ChannelKinds,
         time_manager: TimeManager,
         global_world_manager: &GlobalWorldManager,
+        jitter_buffer_type: JitterBufferType,
     ) -> Self {
         let mut connection = Self {
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
@@ -52,7 +54,7 @@ impl Connection {
             ),
             time_manager,
             tick_buffer: TickBufferSender::new(channel_kinds),
-            jitter_buffer: TickQueue::new(),
+            jitter_buffer: JitterBuffer::new(jitter_buffer_type),
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),
         };
@@ -108,6 +110,7 @@ impl Connection {
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
     ) -> Result<(), SerdeErr> {
+
         let receiving_tick = self.time_manager.client_receiving_tick;
 
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {

@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use log::{debug, info, warn};
+use log::{debug, warn};
 
 use naia_socket_shared::Instant;
 

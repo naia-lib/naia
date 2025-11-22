@@ -3,7 +3,12 @@
 //! This test uses REAL naia::Client<> and naia::Server<> instances with an
 //! in-memory socket implementation, following the pattern from demos/basic
 
+
+use std::time::Duration;
+
 use log::{info, warn};
+
+use naia_client::JitterBufferType;
 use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent};
 use naia_server::{
     AuthEvent, DelegateEntityEvent, EntityAuthGrantEvent,
@@ -196,8 +201,8 @@ fn setup_test() -> (Client, Server, TestWorld, TestWorld, naia_server::RoomKey) 
     let mut server = Server::new(ServerConfig::default(), protocol.clone());
     
     let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = std::time::Duration::from_millis(0);
-    client_config.bypass_jitter_buffer = true; // CRITICAL: Bypass jitter buffer for tests
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass; // CRITICAL: Bypass jitter buffer for tests
     let mut client = Client::new(client_config, protocol);
     let client_world = TestWorld::default();
     let server_world = TestWorld::default();
@@ -606,7 +611,7 @@ fn e2e_entity_id_collision_panic() {
     info!("=== E2E TEST: Entity ID Collision (Reproducing Editor Panic) ===");
 
     let (mut client, mut server, mut client_world, mut server_world, main_room_key) = setup_test();
-    let user_key = complete_handshake(
+    let _user_key = complete_handshake(
         &mut client, &mut server, &mut client_world, &mut server_world, &main_room_key,
     ).expect("Failed to establish connection");
     info!("✓ Handshake complete");
