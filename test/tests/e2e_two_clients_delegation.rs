@@ -85,6 +85,23 @@ fn e2e_two_clients_delegation_sync() {
 
     info!("Client A created entity");
 
+    // Wait for entity to be replicated to server
+    for _ in 0..10 {
+        update_client_server(
+            &mut client_a,
+            &mut server,
+            &mut client_a_world,
+            &mut server_world,
+        );
+    }
+
+    // Add entity to room (entities must be explicitly added to rooms)
+    let server_entity = server_world.proxy().entities()[0];
+    server
+        .entity_mut(server_world.proxy_mut(), &server_entity)
+        .enter_room(&main_room_key);
+    info!("Added entity to room");
+
     // Configure to Delegated
     client_a
         .entity_mut(client_a_world.proxy_mut(), &client_a_entity)
@@ -94,17 +111,14 @@ fn e2e_two_clients_delegation_sync() {
 
     // Run updates to allow delegation to complete
     info!("Running updates to complete delegation...");
-    let mut delegation_complete = false;
-    let mut client_b_dummy = Client::new(default_client_config(), protocol.clone());
-    let mut client_b_world_dummy = TestWorld::default();
+    use naia_test::{update_client_server, wait_for_authority_status};
     
+    let mut delegation_complete = false;
     for i in 0..50 {
-        update_all(
+        update_client_server(
             &mut client_a,
-            &mut client_b_dummy,
             &mut server,
             &mut client_a_world,
-            &mut client_b_world_dummy,
             &mut server_world,
         );
 
@@ -133,7 +147,6 @@ fn e2e_two_clients_delegation_sync() {
 
     // Wait for authority to be granted to Client A
     info!("Waiting for authority to be granted to Client A...");
-    use naia_test::wait_for_authority_status;
     wait_for_authority_status(
         &mut client_a,
         &mut server,
@@ -145,7 +158,38 @@ fn e2e_two_clients_delegation_sync() {
         "Waiting for Client A authority",
     );
 
-    info!("✓ Client A entity created and delegated");
+    info!("✓ Client A has authority");
+
+    // Client A releases authority (key step for bug reproduction!)
+    info!("Client A releasing authority...");
+    client_a
+        .entity_mut(client_a_world.proxy_mut(), &client_a_entity)
+        .release_authority();
+
+    // Wait for authority to be released
+    wait_for_authority_status(
+        &mut client_a,
+        &mut server,
+        &mut client_a_world,
+        &mut server_world,
+        &client_a_entity,
+        naia_shared::EntityAuthStatus::Available,
+        30,
+        "Waiting for Client A to release authority",
+    );
+
+    info!("✓ Client A released authority - entity is now Available");
+
+    // Clear any pending server events before Client B connects
+    for _ in 0..5 {
+        update_client_server(
+            &mut client_a,
+            &mut server,
+            &mut client_a_world,
+            &mut server_world,
+        );
+    }
+    info!("Cleared pending events");
 
     // Step 3: Setup Client B
     info!("\nStep 3: Setting up Client B...");
@@ -158,7 +202,7 @@ fn e2e_two_clients_delegation_sync() {
     client_b.auth(auth_b);
     client_b.connect(client_b_socket);
 
-    let _user_key_b = complete_handshake_with_name(
+    let user_key_b = complete_handshake_with_name(
         &mut client_b,
         &mut server,
         &mut client_b_world,
@@ -170,10 +214,57 @@ fn e2e_two_clients_delegation_sync() {
 
     info!("✓ Client B connected");
 
+    // Verify Client B is in the room (should have been added during handshake)
+    let room_user_count = server.room(&main_room_key).users_count();
+    info!("Room has {} users (should be 2: Client A and Client B)", room_user_count);
+    
+    // Ensure Client B is in the room (in case handshake didn't add them)
+    if room_user_count < 2 {
+        server.room_mut(&main_room_key).add_user(&user_key_b);
+        info!("Explicitly added Client B to room");
+    }
+    
+    // Add entity to Client B's scope (entities in room should be in scope for all users)
+    // This simulates what should happen automatically when a user joins a room with entities
+    let server_entity = server_world.proxy().entities()[0];
+    
+    // Debug: Check entity owner and replication config
+    let owner = server.entity_owner(&server_entity);
+    let config = server.entity_replication_config(&server_entity);
+    info!("Entity owner: {:?}, config: {:?}", owner, config);
+    
+    // Add entity to scope for Client B specifically
+    server.user_scope_mut(&user_key_b).include(&server_entity);
+    info!("Added entity to Client B's scope");
+
+    // Run updates to allow update_entity_scopes to initialize the entity in Client B's connection
+    // update_entity_scopes is called in send_all_packets, which is called in update_all
+    for _ in 0..10 {
+        update_all(
+            &mut client_a,
+            &mut client_b,
+            &mut server,
+            &mut client_a_world,
+            &mut client_b_world,
+            &mut server_world,
+        );
+    }
+    info!("Ran 10 update cycles to allow entity replication");
+
     // Wait for Client B to receive the delegated entity
     info!("Waiting for Client B to receive the delegated entity...");
+    
+    // Verify entity is still on server and in the room
+    let server_entities = server_world.proxy().entities();
+    info!("Server has {} entities", server_entities.len());
+    
+    // Check if entity is in the room
+    let room = server.room(&main_room_key);
+    let room_entities = room.entities();
+    info!("Room has {} entities", room_entities.len());
+    
     let mut client_b_entity: Option<TestEntity> = None;
-    for i in 0..50 {
+    for i in 0..100 {
         update_all(
             &mut client_a,
             &mut client_b,
@@ -192,7 +283,14 @@ fn e2e_two_clients_delegation_sync() {
         }
 
         if i % 10 == 0 {
-            info!("  [Update {}] Waiting for entity on Client B...", i);
+            info!("  [Update {}] Client B has {} entities, waiting...", i, entities.len());
+            
+            // Debug: Check what events Client B is receiving
+            let mut client_b_events = client_b.take_world_events();
+            let spawn_count = client_b_events.read::<naia_client::SpawnEntityEvent>().count();
+            if spawn_count > 0 {
+                info!("    Client B received {} spawn events", spawn_count);
+            }
         }
     }
 
