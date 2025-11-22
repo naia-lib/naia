@@ -4,10 +4,10 @@
 
 #![cfg(test)]
 
-mod engine;
-mod migration;
 mod bulletproof_migration;
-mod integration_migration;
-mod real_migration_tests;
-mod perfect_migration_tests;
 mod command_validation_tests;
+mod engine;
+mod integration_migration;
+mod migration;
+mod perfect_migration_tests;
+mod real_migration_tests;
