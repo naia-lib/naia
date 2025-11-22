@@ -515,3 +515,165 @@ fn e2e_authority_release_and_reacquire() {
     );
     info!("\n✓✓✓ SUCCESS: Bug #7 is fixed! Client can regain authority after release ✓✓✓");
 }
+
+#[test]
+fn e2e_multiple_entities_migration() {
+    init_logger();
+    info!("=== E2E TEST: Multiple Entities Migration (Reproducing duplicate RemoteEntity panic) ===");
+    
+    let (mut client, mut server, mut client_world, mut server_world, main_room_key) = setup_test();
+    
+    // Step 1: Complete handshake
+    info!("Step 1: Completing handshake...");
+    let _user_key = complete_handshake(
+        &mut client,
+        &mut server,
+        &mut client_world,
+        &mut server_world,
+        &main_room_key,
+    ).expect("Failed to establish connection");
+    
+    info!("✓ Handshake complete");
+    
+    // Step 2: Create TWO entities SIMULTANEOUSLY and delegate both at the same time
+    // This mimics the Cyberlith editor scenario: creating Vertex + Edge at the same time
+    info!("\nStep 2: Creating TWO entities SIMULTANEOUSLY and delegating both...");
+    
+    // Create first entity
+    let entity1 = client
+        .spawn_entity(client_world.proxy_mut())
+        .insert_component(Position::new(10.0, 20.0))
+        .id();
+    
+    // Create second entity IMMEDIATELY (simultaneously)
+    let entity2 = client
+        .spawn_entity(client_world.proxy_mut())
+        .insert_component(Position::new(30.0, 40.0))
+        .id();
+    
+    info!("Created two entities simultaneously");
+    
+    // Configure BOTH to Delegated in the SAME frame (before any updates)
+    // This mimics the editor creating Vertex + Edge and delegating both at once
+    client
+        .entity_mut(client_world.proxy_mut(), &entity1)
+        .configure_replication(naia_client::ReplicationConfig::Delegated);
+    
+    client
+        .entity_mut(client_world.proxy_mut(), &entity2)
+        .configure_replication(naia_client::ReplicationConfig::Delegated);
+    
+    info!("Configured both entities to Delegated in the same frame");
+    
+    // Run updates to process both migrations
+    info!("Running updates to process both MigrateResponse messages...");
+    for i in 0..50 {
+        update_client_server(&mut client, &mut server, &mut client_world, &mut server_world);
+        
+        let config1 = client.entity_replication_config(&entity1);
+        let config2 = client.entity_replication_config(&entity2);
+        
+        if i % 5 == 0 {
+            warn!("  [Update {}] Entity1 config: {:?}, Entity2 config: {:?}", i, config1, config2);
+        }
+        
+        // Both should become Delegated
+        if config1 == Some(naia_client::ReplicationConfig::Delegated) &&
+           config2 == Some(naia_client::ReplicationConfig::Delegated) {
+            info!("✓ Both entities migrated successfully at update {}", i);
+            break;
+        }
+    }
+    
+    // Verify both entities are Delegated
+    let final_config1 = client.entity_replication_config(&entity1);
+    let final_config2 = client.entity_replication_config(&entity2);
+    
+    assert_eq!(final_config1, Some(naia_client::ReplicationConfig::Delegated),
+        "Entity1 should be Delegated");
+    assert_eq!(final_config2, Some(naia_client::ReplicationConfig::Delegated),
+        "Entity2 should be Delegated");
+    
+    info!("✓✓✓ SUCCESS: Both entities migrated without panic! ✓✓✓");
+}
+
+/// Test that reproduces the "Cannot insert entity channel that already exists" panic
+/// This happens when the server's HostEntity ID space collides with RemoteEntity IDs
+/// the client already has from server-spawned entities.
+#[test]
+fn e2e_entity_id_collision_panic() {
+    init_logger();
+    info!("=== E2E TEST: Entity ID Collision (Reproducing Editor Panic) ===");
+
+    let (mut client, mut server, mut client_world, mut server_world, main_room_key) = setup_test();
+    let user_key = complete_handshake(
+        &mut client, &mut server, &mut client_world, &mut server_world, &main_room_key,
+    ).expect("Failed to establish connection");
+    info!("✓ Handshake complete");
+
+    // Step 1: Server spawns many entities to occupy RemoteEntity ID space on client
+    // This simulates a real application where the server has already spawned lots of entities
+    info!("\nStep 1: Server spawning 70 entities to occupy client's RemoteEntity ID space...");
+    for i in 0..70 {
+        let entity = server
+            .spawn_entity(server_world.proxy_mut())
+            .insert_component(Position::new(i as f32, i as f32))
+            .id();
+        server.room_mut(&main_room_key).add_entity(&entity);
+    }
+    
+    // Run updates to send all these entities to the client
+    for _ in 0..10 {
+        update_client_server(&mut client, &mut server, &mut client_world, &mut server_world);
+    }
+    
+    info!("✓ Server spawned 70 entities, client should have RemoteEntity(0) through RemoteEntity(69) allocated");
+
+    // Step 2: Client creates TWO entities (simulating Vertex + Edge in editor)
+    info!("\nStep 2: Client creating two entities (like Vertex + Edge)...");
+    let client_entity1 = client
+        .spawn_entity(client_world.proxy_mut())
+        .insert_component(Position::new(100.0, 200.0))
+        .id();
+    let client_entity2 = client
+        .spawn_entity(client_world.proxy_mut())
+        .insert_component(Position::new(300.0, 400.0))
+        .id();
+    
+    info!("Created client entities");
+
+    // Step 3: Configure both to Delegated immediately (same frame)
+    info!("\nStep 3: Configuring both entities to Delegated in the same frame...");
+    client
+        .entity_mut(client_world.proxy_mut(), &client_entity1)
+        .configure_replication(naia_client::ReplicationConfig::Delegated);
+    client
+        .entity_mut(client_world.proxy_mut(), &client_entity2)
+        .configure_replication(naia_client::ReplicationConfig::Delegated);
+
+    // Step 4: Run updates - this is where the panic should occur!
+    // The server will generate HostEntity IDs for these delegated entities
+    // If those IDs (e.g., 67, 68) collide with RemoteEntity IDs already on the client,
+    // we'll get the "Cannot insert entity channel that already exists" panic
+    info!("\nStep 4: Running updates to process delegation...");
+    info!("🔴 EXPECTING PANIC: Server's HostEntity ID will likely collide with client's existing RemoteEntity ID");
+    
+    for i in 0..50 {
+        update_client_server(&mut client, &mut server, &mut client_world, &mut server_world);
+        
+        let config1 = client.entity_replication_config(&client_entity1);
+        let config2 = client.entity_replication_config(&client_entity2);
+        
+        if i % 10 == 0 {
+            info!("  [Update {}] Entity1 config: {:?}, Entity2 config: {:?}", i, config1, config2);
+        }
+        
+        if config1 == Some(naia_client::ReplicationConfig::Delegated) &&
+           config2 == Some(naia_client::ReplicationConfig::Delegated) {
+            info!("✓ Both entities migrated at update {}", i);
+            break;
+        }
+    }
+
+    info!("\n✓✓✓ If we got here without panic, the bug is fixed! ✓✓✓");
+}

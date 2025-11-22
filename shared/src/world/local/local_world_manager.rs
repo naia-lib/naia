@@ -199,6 +199,10 @@ impl LocalWorldManager {
 
         // create new host entity, insert into local entity map
         let new_host_entity = self.host.host_generate_entity();
+        info!(
+            "🔴 SERVER: migrate_entity_remote_to_host: GlobalEntity({:?}), old_remote={:?}, NEW_HOST={:?}",
+            global_entity, old_remote_entity, new_host_entity
+        );
         self.entity_map
             .insert_with_host_entity(*global_entity, new_host_entity);
 
@@ -972,19 +976,42 @@ impl LocalWorldManager {
         // Insert into entity_map
         self.entity_map
             .insert_with_remote_entity(*global_entity, remote_entity);
-        // Create RemoteEntityChannel as delegated (this entity came from migration)
-        let mut channel = RemoteEntityChannel::new_delegated(self.entity_map.host_type());
-        // Set state to Spawned
-        // Use message ID 0 as a safe default for migrated entities
-        // This avoids conflicts with typical message IDs which start from 0 or 1
-        // Note: If the server sends a message with ID 0, it will conflict, but this is unlikely
-        channel.set_spawned(0);
-        // For each component_kind, add RemoteComponentChannel with inserted=true
-        for component_kind in component_kinds {
-            channel.insert_component_channel_as_inserted(component_kind, 0);
+
+        if self.remote.has_entity_channel(&remote_entity) {
+            // Case: Channel was auto-created by messages arriving before the MigrateResponse event was processed
+            // We need to upgrade this channel to be delegated and have the correct component state
+            info!(
+                "RemoteEntity({:?}) channel already exists (likely from out-of-order SetAuthority). Upgrading to Delegated.",
+                remote_entity
+            );
+            let channel = self.remote.get_entity_channel_mut(&remote_entity).unwrap();
+            
+            // Upgrade to delegated
+            channel.configure_as_delegated();
+            
+            // Set state to Spawned (if not already)
+            // Note: We don't want to overwrite if it's already Spawned, but for migration we assume it should be
+            channel.set_spawned(0);
+            
+            // Insert component channels
+            for component_kind in component_kinds {
+                channel.insert_component_channel_as_inserted(component_kind, 0);
+            }
+        } else {
+            // Normal Case: Create new delegated channel
+            let mut channel = RemoteEntityChannel::new_delegated(self.entity_map.host_type());
+            
+            // Set state to Spawned
+            channel.set_spawned(0);
+            
+            // For each component_kind, add RemoteComponentChannel with inserted=true
+            for component_kind in component_kinds {
+                channel.insert_component_channel_as_inserted(component_kind, 0);
+            }
+            
+            // Insert into remote engine
+            self.remote.insert_entity_channel(remote_entity, channel);
         }
-        // Insert into remote engine
-        self.remote.insert_entity_channel(remote_entity, channel);
     }
 
     pub fn install_entity_redirect(&mut self, old: OwnedLocalEntity, new: OwnedLocalEntity) {

@@ -31,6 +31,8 @@
 
 use std::{collections::HashMap, fmt::Debug, hash::Hash};
 
+use log::info;
+
 use crate::EntityCommand;
 use crate::{
     world::{
@@ -91,10 +93,10 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         let entity = msg.entity().unwrap();
 
         // If the entity channel does not exist, create it
-        let entity_channel = self
-            .entity_channels
-            .entry(entity)
-            .or_insert_with(|| RemoteEntityChannel::new(self.host_type));
+        if !self.entity_channels.contains_key(&entity) {
+            self.insert_entity_channel(entity, RemoteEntityChannel::new(self.host_type))
+        }
+        let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
 
         // if log {
         //     info!("Engine::accept_message(id={}, entity={:?}, msgType={:?})", id, entity, msg.get_type());
@@ -173,9 +175,17 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 
     pub(crate) fn insert_entity_channel(&mut self, entity: E, channel: RemoteEntityChannel) {
         if self.entity_channels.contains_key(&entity) {
-            panic!("Cannot insert entity channel that already exists");
+            panic!("Cannot insert entity channel that already exists for entity: {:?}", entity);
         }
         self.entity_channels.insert(entity, channel);
+    }
+
+    pub(crate) fn has_entity(&self, entity: &E) -> bool {
+        self.entity_channels.contains_key(entity)
+    }
+
+    pub(crate) fn get_entity_channel_mut(&mut self, entity: &E) -> Option<&mut RemoteEntityChannel> {
+        self.entity_channels.get_mut(entity)
     }
 
     pub(crate) fn get_world_mut(&mut self) -> &mut HashMap<E, RemoteEntityChannel> {

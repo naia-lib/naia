@@ -1,4 +1,4 @@
-use log::warn;
+use log::{info, warn};
 
 use crate::world::local::local_entity::RemoteEntity;
 use crate::world::local::local_world_manager::LocalWorldManager;

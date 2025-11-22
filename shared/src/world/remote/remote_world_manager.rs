@@ -3,7 +3,7 @@ use std::{
     hash::Hash,
 };
 
-use log::{debug, warn};
+use log::{debug, info, warn};
 
 use naia_socket_shared::Instant;
 
@@ -558,6 +558,17 @@ impl RemoteWorldManager {
     ) {
         self.remote_engine
             .insert_entity_channel(remote_entity, channel);
+    }
+
+    pub(crate) fn has_entity_channel(&self, remote_entity: &RemoteEntity) -> bool {
+        self.remote_engine.has_entity(remote_entity)
+    }
+
+    pub(crate) fn get_entity_channel_mut(
+        &mut self,
+        remote_entity: &RemoteEntity,
+    ) -> Option<&mut RemoteEntityChannel> {
+        self.remote_engine.get_entity_channel_mut(remote_entity)
     }
 
     /// Get auth status of a remote entity's channel (for testing)
