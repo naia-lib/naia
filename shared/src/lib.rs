@@ -50,10 +50,11 @@ mod world;
 mod wrapping_number;
 
 cfg_if! {
-    if #[cfg(feature = "transport_udp")]{
+    if #[any(cfg(feature = "transport_udp"), cfg(feature = "transport_local"))]{
         pub mod transport_udp;
     }
 }
+
 pub use backends::{Timer, Timestamp};
 pub use connection::{
     ack_manager::AckManager,

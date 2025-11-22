@@ -6,7 +6,7 @@ use crate::transport::{
 };
 
 use local_transport::{
-    ClientIdentityReceiverResult, ClientRecvError, ClientSendError, ClientServerAddr,
+    ClientIdentityReceiverResult, ClientServerAddr,
     LocalClientIdentity, LocalClientReceiver, LocalClientSender, LocalClientSocket,
 };
 
@@ -64,25 +64,39 @@ impl TransportSocket for Socket {
 
     fn connect_with_auth_headers(
         self: Box<Self>,
-        _auth_headers: Vec<(String, String)>,
+        auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn TransportIdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportReceiver>,
     ) {
-        self.connect()
+        let Socket { inner } = *self;
+        let local_socket = inner.expect("local socket already taken");
+        let (identity, sender, receiver) = local_socket.connect_with_auth_headers(auth_headers);
+        (
+            Box::new(LocalClientTransportIdentityReceiver(identity)),
+            Box::new(LocalClientTransportSender(sender)),
+            Box::new(LocalClientTransportReceiver(receiver)),
+        )
     }
 
     fn connect_with_auth_and_headers(
         self: Box<Self>,
-        _auth_bytes: Vec<u8>,
-        _auth_headers: Vec<(String, String)>,
+        auth_bytes: Vec<u8>,
+        auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn TransportIdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportReceiver>,
     ) {
-        self.connect()
+        let Socket { inner } = *self;
+        let local_socket = inner.expect("local socket already taken");
+        let (identity, sender, receiver) = local_socket.connect_with_auth_and_headers(auth_bytes, auth_headers);
+        (
+            Box::new(LocalClientTransportIdentityReceiver(identity)),
+            Box::new(LocalClientTransportSender(sender)),
+            Box::new(LocalClientTransportReceiver(receiver)),
+        )
     }
 }
 

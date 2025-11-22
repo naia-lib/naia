@@ -66,10 +66,12 @@ pub struct ServerRecvError;
 struct LocalTransportQueues {
     client_to_server: Arc<Mutex<VecDeque<Vec<u8>>>>,
     server_to_client: Arc<Mutex<VecDeque<Vec<u8>>>>,
-    auth_requests: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    auth_requests: Arc<Mutex<VecDeque<Vec<u8>>>>,  // Now stores HTTP request bytes
+    auth_responses: Arc<Mutex<VecDeque<Vec<u8>>>>, // Stores HTTP response bytes
     identity_token: Arc<Mutex<Option<IdentityToken>>>,
     rejection_code: Arc<Mutex<Option<u16>>>,
     addr_cell: LocalAddrCell,
+    server_data_addr: SocketAddr, // For including in HTTP response
 }
 
 impl LocalTransportQueues {
@@ -81,9 +83,11 @@ impl LocalTransportQueues {
                 client_to_server: Arc::new(Mutex::new(VecDeque::new())),
                 server_to_client: Arc::new(Mutex::new(VecDeque::new())),
                 auth_requests: Arc::new(Mutex::new(VecDeque::new())),
+                auth_responses: Arc::new(Mutex::new(VecDeque::new())),
                 identity_token: Arc::new(Mutex::new(None)),
                 rejection_code: Arc::new(Mutex::new(None)),
                 addr_cell: LocalAddrCell::new(),
+                server_data_addr: server_addr,
             },
             client_addr,
             server_addr,
@@ -210,6 +214,8 @@ impl LocalServerReceiver {
 pub struct LocalServerAuthSender {
     identity_token: Arc<Mutex<Option<IdentityToken>>>,
     rejection_code: Arc<Mutex<Option<u16>>>,
+    auth_responses: Arc<Mutex<VecDeque<Vec<u8>>>>,
+    server_data_addr: SocketAddr,
 }
 
 impl LocalServerAuthSender {
@@ -217,19 +223,48 @@ impl LocalServerAuthSender {
         Self {
             identity_token: shared.identity_token.clone(),
             rejection_code: shared.rejection_code.clone(),
+            auth_responses: shared.auth_responses.clone(),
+            server_data_addr: shared.server_data_addr,
         }
     }
 
     pub fn accept(&self, _address: &SocketAddr, identity_token: &IdentityToken) -> Result<(), ServerSendError> {
+        // Build HTTP 200 response with identity token and server address in body
+        let response_body = format!("{}\r\n{}", identity_token, self.server_data_addr);
+        let response = http::Response::builder()
+            .status(200)
+            .body(response_body.into_bytes())
+            .unwrap();
+        
+        let response_bytes = naia_shared::transport_udp::response_to_bytes(response);
+        
+        // Store in auth_responses queue
+        if let Ok(mut queue) = self.auth_responses.lock() {
+            queue.push_back(response_bytes);
+            log::debug!("[LocalTransport] Server sent HTTP 200 response with identity token");
+        }
+        
         *self.identity_token.lock().unwrap() = Some(identity_token.clone());
         *self.rejection_code.lock().unwrap() = None;
-        log::debug!("[LocalTransport] Server accepted identity");
         Ok(())
     }
 
     pub fn reject(&self, _address: &SocketAddr) -> Result<(), ServerSendError> {
+        // Build HTTP 401 response
+        let response = http::Response::builder()
+            .status(401)
+            .body(Vec::new())
+            .unwrap();
+        
+        let response_bytes = naia_shared::transport_udp::response_to_bytes(response);
+        
+        // Store in auth_responses queue
+        if let Ok(mut queue) = self.auth_responses.lock() {
+            queue.push_back(response_bytes);
+            log::debug!("[LocalTransport] Server sent HTTP 401 rejection response");
+        }
+        
         *self.rejection_code.lock().unwrap() = Some(401);
-        log::debug!("[LocalTransport] Server rejected connection");
         Ok(())
     }
 }
@@ -252,14 +287,26 @@ impl LocalServerAuthReceiver {
 
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
         let mut queue = self.queue.lock().unwrap();
-        if let Some(payload) = queue.pop_front() {
-            log::trace!("[LocalTransport] Server received auth request");
-            let boxed = payload.into_boxed_slice();
-            *self.last_payload.lock().unwrap() = Some(boxed);
-            let payload_ref = self.last_payload.lock().unwrap();
-            let payload_slice = payload_ref.as_ref().unwrap().as_ref();
-            let static_ref: &'static [u8] = unsafe { std::mem::transmute(payload_slice) };
-            Ok(Some((self.client_addr, static_ref)))
+        if let Some(request_bytes) = queue.pop_front() {
+            log::trace!("[LocalTransport] Server received HTTP auth request");
+            
+            // Parse HTTP request
+            let request = naia_shared::transport_udp::bytes_to_request(&request_bytes);
+            
+            // Extract Authorization header if present
+            if let Some(auth_header) = request.headers().get("Authorization") {
+                let auth_str = auth_header.to_str().unwrap();
+                let auth_bytes = base64::decode(auth_str).unwrap();
+                let boxed = auth_bytes.into_boxed_slice();
+                *self.last_payload.lock().unwrap() = Some(boxed);
+                let payload_ref = self.last_payload.lock().unwrap();
+                let payload_slice = payload_ref.as_ref().unwrap().as_ref();
+                let static_ref: &'static [u8] = unsafe { std::mem::transmute(payload_slice) };
+                Ok(Some((self.client_addr, static_ref)))
+            } else {
+                // No auth header present, return empty auth (for connect_with_auth_headers case)
+                Ok(None)
+            }
         } else {
             Ok(None)
         }
@@ -307,10 +354,77 @@ impl LocalClientSocket {
         LocalClientSender,
         LocalClientReceiver,
     ) {
-        // Send auth bytes to server's auth receiver
+        // Build HTTP POST request with Authorization header
+        let base64_encoded = base64::encode(&auth_bytes);
+        let request = http::Request::builder()
+            .method("POST")
+            .uri("/")
+            .header("Authorization", base64_encoded)
+            .body(Vec::new())
+            .unwrap();
+        
+        let request_bytes = naia_shared::transport_udp::request_to_bytes(request);
+        
         if let Ok(mut queue) = self.auth_queue.lock() {
-            queue.push_back(auth_bytes);
-            log::trace!("[LocalTransport] Client sent auth bytes to server");
+            queue.push_back(request_bytes);
+            log::trace!("[LocalTransport] Client sent HTTP auth request to server");
+        }
+        self.connect()
+    }
+
+    pub fn connect_with_auth_headers(
+        self,
+        auth_headers: Vec<(String, String)>,
+    ) -> (
+        LocalClientIdentity,
+        LocalClientSender,
+        LocalClientReceiver,
+    ) {
+        // Build HTTP POST request with custom headers
+        let mut builder = http::Request::builder()
+            .method("POST")
+            .uri("/");
+        
+        for (key, value) in auth_headers {
+            builder = builder.header(key, value);
+        }
+        
+        let request = builder.body(Vec::new()).unwrap();
+        let request_bytes = naia_shared::transport_udp::request_to_bytes(request);
+        
+        if let Ok(mut queue) = self.auth_queue.lock() {
+            queue.push_back(request_bytes);
+            log::trace!("[LocalTransport] Client sent HTTP auth request with headers to server");
+        }
+        self.connect()
+    }
+
+    pub fn connect_with_auth_and_headers(
+        self,
+        auth_bytes: Vec<u8>,
+        auth_headers: Vec<(String, String)>,
+    ) -> (
+        LocalClientIdentity,
+        LocalClientSender,
+        LocalClientReceiver,
+    ) {
+        // Build HTTP POST request with both auth and headers
+        let base64_encoded = base64::encode(&auth_bytes);
+        let mut builder = http::Request::builder()
+            .method("POST")
+            .uri("/")
+            .header("Authorization", base64_encoded);
+        
+        for (key, value) in auth_headers {
+            builder = builder.header(key, value);
+        }
+        
+        let request = builder.body(Vec::new()).unwrap();
+        let request_bytes = naia_shared::transport_udp::request_to_bytes(request);
+        
+        if let Ok(mut queue) = self.auth_queue.lock() {
+            queue.push_back(request_bytes);
+            log::trace!("[LocalTransport] Client sent HTTP auth request with auth and headers to server");
         }
         self.connect()
     }
@@ -388,27 +502,60 @@ pub struct LocalClientIdentity {
     rejection_code: Arc<Mutex<Option<u16>>>,
     requested: Arc<Mutex<bool>>,
     addr_cell: LocalAddrCell,
+    auth_responses: Arc<Mutex<VecDeque<Vec<u8>>>>,
 }
 
 impl LocalClientIdentity {
-    fn new(shared: LocalTransportQueues, _client_addr: SocketAddr, server_addr: SocketAddr) -> Self {
+    fn new(shared: LocalTransportQueues, _client_addr: SocketAddr, _server_addr: SocketAddr) -> Self {
         let addr_cell = shared.addr_cell.clone();
-        // Initialize server address synchronously for backward compatibility
-        // In Phase 4, this will be set via HTTP response parsing
-        addr_cell.recv(server_addr);
+        // Don't initialize server address here - it will be set via HTTP response parsing
         Self {
             identity_token: shared.identity_token.clone(),
             rejection_code: shared.rejection_code.clone(),
             requested: Arc::new(Mutex::new(false)),
             addr_cell,
+            auth_responses: shared.auth_responses.clone(),
         }
     }
 
     pub fn receive(&mut self) -> ClientIdentityReceiverResult {
+        // Check auth_responses queue for HTTP response
+        if let Ok(mut queue) = self.auth_responses.lock() {
+            if let Some(response_bytes) = queue.pop_front() {
+                log::trace!("[LocalTransport] Client received HTTP auth response");
+                let response = naia_shared::transport_udp::bytes_to_response(&response_bytes);
+                let status_code = response.status().as_u16();
+                
+                if status_code != 200 {
+                    *self.rejection_code.lock().unwrap() = Some(status_code);
+                    log::trace!("[LocalTransport] Client identity receiver: ErrorResponseCode({})", status_code);
+                    return ClientIdentityReceiverResult::ErrorResponseCode(status_code);
+                }
+                
+                // Parse response body: "identity_token\r\nserver_addr"
+                let body = String::from_utf8_lossy(response.body());
+                let mut parts = body.splitn(2, "\r\n");
+                let identity_token = parts.next().unwrap().to_string();
+                let server_addr_str = parts.next().unwrap();
+                let server_addr: SocketAddr = server_addr_str.parse().unwrap();
+                
+                // Update addr_cell with server address
+                self.addr_cell.recv(server_addr);
+                log::trace!("[LocalTransport] Client discovered server address: {}", server_addr);
+                
+                *self.identity_token.lock().unwrap() = Some(identity_token.clone());
+                log::trace!("[LocalTransport] Client identity receiver: Success(token={})", identity_token);
+                return ClientIdentityReceiverResult::Success(identity_token);
+            }
+        }
+        
+        // Check if rejection happened
         if let Some(code) = *self.rejection_code.lock().unwrap() {
             log::trace!("[LocalTransport] Client identity receiver: ErrorResponseCode({})", code);
             return ClientIdentityReceiverResult::ErrorResponseCode(code);
         }
+        
+        // Check if already received token (from previous call)
         if let Some(token) = self.identity_token.lock().unwrap().clone() {
             log::trace!("[LocalTransport] Client identity receiver: Success(token={})", token);
             return ClientIdentityReceiverResult::Success(token);

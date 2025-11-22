@@ -24,7 +24,7 @@ transport_udp = [
     "naia-shared/advanced_handshake", "naia-shared/transport_udp",
     "ring", "http", "base64", "url"
 ]
-transport_local = [ "local_transport" ]
+transport_local = [ "local_transport", "naia-shared/transport_local" ]
 
 [dependencies]
 naia-shared = { version = "0.24", path = "../shared" }
