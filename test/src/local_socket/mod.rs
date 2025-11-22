@@ -132,7 +132,7 @@ impl ClientPacketSender for LocalClientSender {
     fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
         let connected = *self.connected.lock().unwrap();
         if !connected {
-            return Err(NaiaClientSocketError::SendError(payload.len()));
+            return Err(NaiaClientSocketError::SendError);
         }
         
         let mut queue = self.queue.lock().unwrap();
@@ -190,7 +190,8 @@ impl ClientIdentityReceiver for LocalClientIdentity {
     fn receive(&mut self) -> naia_client_socket::IdentityReceiverResult {
         // For testing, we immediately "receive" the server's address
         // Only return once to simulate initial connection
-        None
+        use naia_client_socket::IdentityReceiverResult;
+        IdentityReceiverResult::Waiting
     }
 }
 

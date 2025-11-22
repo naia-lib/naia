@@ -1,7 +1,7 @@
 use std::{any::Any, collections::HashMap};
 
 use naia_shared::{
-    BigMap, ComponentFieldUpdate, ComponentKind, ComponentUpdate, EntityAndGlobalEntityConverter,
+    BigMap, ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter,
     GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper,
     ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType,
     WorldRefType,
@@ -303,6 +303,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_publish(
         &mut self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         world_entity: &Entity,
@@ -310,6 +311,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, world_entity) {
             WorldMutType::<Entity>::component_publish(
                 self,
+                component_kinds,
                 converter,
                 global_world_manager,
                 world_entity,
@@ -320,6 +322,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_publish(
         &mut self,
+        component_kinds: &ComponentKinds,
         converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         global_world_manager: &dyn GlobalWorldManagerType,
         world_entity: &Entity,
@@ -330,6 +333,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 let global_entity = converter.entity_to_global_entity(world_entity).unwrap();
                 let diff_mask_size = component.diff_mask_size();
                 let mutator = global_world_manager.register_component(
+                    component_kinds,
                     &global_entity,
                     &component_kind,
                     diff_mask_size,
@@ -349,6 +353,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_enable_delegation(
         &mut self,
+        _component_kinds: &ComponentKinds,
         _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         _global_world_manager: &dyn GlobalWorldManagerType,
         _world_entity: &Entity,
@@ -358,6 +363,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_enable_delegation(
         &mut self,
+        _component_kinds: &ComponentKinds,
         _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
         _global_world_manager: &dyn GlobalWorldManagerType,
         _world_entity: &Entity,
