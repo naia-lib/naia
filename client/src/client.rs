@@ -1789,6 +1789,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         }
 
                         // Update RemoteEntityChannel's internal AuthChannel status
+                        // After migration, grant authority back to the creating client
                         connection.base.world_manager.remote_receive_set_auth(
                             &global_entity,
                             EntityAuthStatus::Granted
