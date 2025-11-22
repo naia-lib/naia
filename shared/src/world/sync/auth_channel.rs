@@ -1,7 +1,10 @@
 use crate::{
-    world::sync::{
-        auth_channel_receiver::AuthChannelReceiver, auth_channel_sender::AuthChannelSender,
-        remote_entity_channel::EntityChannelState,
+    world::{
+        host::host_world_manager::SubCommandId,
+        sync::{
+            auth_channel_receiver::AuthChannelReceiver, auth_channel_sender::AuthChannelSender,
+            remote_entity_channel::EntityChannelState,
+        },
     },
     EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex,
 };
@@ -208,6 +211,11 @@ impl AuthChannel {
 
     pub(crate) fn receiver_process_messages(&mut self, entity_state: EntityChannelState) {
         self.receiver.process_messages(Some(entity_state));
+    }
+
+    /// Set the next expected subcommand_id in the receiver (used after migration to sync with server's sequence)
+    pub(crate) fn receiver_set_next_subcommand_id(&mut self, id: SubCommandId) {
+        self.receiver.set_next_subcommand_id(id);
     }
 
     /// Force the AuthChannel into Published state (used during migration setup)

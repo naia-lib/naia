@@ -81,6 +81,11 @@ impl AuthChannelReceiver {
         self.next_subcommand_id = 0;
     }
 
+    /// Set the next expected subcommand_id (used after migration to sync with server's sequence)
+    pub(crate) fn set_next_subcommand_id(&mut self, id: SubCommandId) {
+        self.next_subcommand_id = id;
+    }
+
     pub(crate) fn drain_messages_into(&mut self, outgoing_messages: &mut Vec<EntityMessage<()>>) {
         // Drain the auth channel and append the messages to the outgoing events
         outgoing_messages.append(&mut self.incoming_messages);

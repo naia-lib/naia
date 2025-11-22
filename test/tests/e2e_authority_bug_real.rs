@@ -3,13 +3,13 @@
 //! This test uses REAL naia::Client<> and naia::Server<> instances with an
 //! in-memory socket implementation, following the pattern from demos/basic
 
-use log::{info, debug, warn};
+use log::{info, warn};
 use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent};
 use naia_server::{
-    AuthEvent, ConnectEvent as ServerConnectEvent, DelegateEntityEvent, EntityAuthGrantEvent,
+    AuthEvent, DelegateEntityEvent, EntityAuthGrantEvent,
     Server as NaiaServer, ServerConfig,
 };
-use naia_shared::{Instant, WorldRefType, GlobalEntity};
+use naia_shared::{Instant, WorldRefType};
 use naia_test::{local_socket_pair, protocol, Auth, Position, TestEntity, TestWorld};
 
 type Client = NaiaClient<TestEntity>;
@@ -142,7 +142,7 @@ where
 /// Debug helper: Inspect authority state on both client and server
 fn inspect_authority_state(
     client: &Client,
-    server: &Server,
+    _server: &Server,
     client_entity: &TestEntity,
     step: &str,
 ) {
@@ -462,32 +462,8 @@ fn e2e_authority_release_and_reacquire() {
     
     let initial_auth_status = client.entity_authority_status(&client_entity).unwrap();
     info!("✓ Authority status after migration: {:?}", initial_auth_status);
-    
-    // Ensure we have authority before releasing (either auto-granted or manually request)
-    if initial_auth_status != naia_shared::EntityAuthStatus::Granted {
-        info!("\nRequesting authority (it wasn't auto-granted)...");
-        inspect_authority_state(&client, &server, &client_entity, "BEFORE manual request");
-        
-        client
-            .entity_mut(client_world.proxy_mut(), &client_entity)
-            .request_authority();
-        
-        let authority_granted = wait_for_authority_status(
-            &mut client,
-            &mut server,
-            &mut client_world,
-            &mut server_world,
-            &client_entity,
-            naia_shared::EntityAuthStatus::Granted,
-            50,
-            "Waiting for authority grant",
-        );
-        
-        inspect_authority_state(&client, &server, &client_entity, "AFTER manual request");
-        
-        assert!(authority_granted, "Client should have authority");
-        info!("✓ Authority granted");
-    }
+
+    assert_eq!(initial_auth_status, naia_shared::EntityAuthStatus::Granted);
     
     // Step 4: Client releases authority (deselect)
     info!("\nStep 4: Client releasing authority (deselect)...");

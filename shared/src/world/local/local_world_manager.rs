@@ -975,10 +975,13 @@ impl LocalWorldManager {
         // Create RemoteEntityChannel as delegated (this entity came from migration)
         let mut channel = RemoteEntityChannel::new_delegated(self.entity_map.host_type());
         // Set state to Spawned
-        channel.set_spawned(1); // Use dummy message ID
-                                // For each component_kind, add RemoteComponentChannel with inserted=true
+        // Use message ID 0 as a safe default for migrated entities
+        // This avoids conflicts with typical message IDs which start from 0 or 1
+        // Note: If the server sends a message with ID 0, it will conflict, but this is unlikely
+        channel.set_spawned(0);
+        // For each component_kind, add RemoteComponentChannel with inserted=true
         for component_kind in component_kinds {
-            channel.insert_component_channel_as_inserted(component_kind, 1);
+            channel.insert_component_channel_as_inserted(component_kind, 0);
         }
         // Insert into remote engine
         self.remote.insert_entity_channel(remote_entity, channel);

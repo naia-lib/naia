@@ -652,21 +652,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // are in each User's scope
         for (_user_key, user) in self.users.iter() {
             if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                let Ok(host_entity) = connection
-                    .base
-                    .world_manager
-                    .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
-                else {
+                // Check if entity exists on the client (as either HostEntity or RemoteEntity)
+                // After migration, the entity is a RemoteEntity on the client, but the server
+                // still sends from HostEntity perspective and the client's routing handles it
+                if !connection.base.world_manager.has_global_entity(global_entity) {
                     // entity is not mapped to this connection
-                    continue;
-                };
-
-                if !connection.base.world_manager.has_host_entity(&host_entity) {
                     continue;
                 }
 
                 // Send UpdateAuthority action through EntityActionEvent system
+                // The server always sends from HostEntity perspective, and the client's
+                // routing logic will handle converting it to the correct entity type
                 connection
                     .base
                     .world_manager
@@ -803,16 +799,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             let Some(connection) = self.user_connections.get_mut(&user.address()) else {
                 continue;
             };
-            let Ok(host_entity) = connection
-                .base
-                .world_manager
-                .entity_converter()
-                .global_entity_to_host_entity(&global_entity)
-            else {
+            // Check if entity exists on the client (as either HostEntity or RemoteEntity)
+            // After migration, the entity is a RemoteEntity on the client, but the server
+            // still sends from HostEntity perspective and the client's routing handles it
+            if !connection.base.world_manager.has_global_entity(&global_entity) {
                 // entity is not mapped to this connection
-                continue;
-            };
-            if !connection.base.world_manager.has_host_entity(&host_entity) {
                 continue;
             }
 
@@ -828,6 +819,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // }
 
             // Send UpdateAuthority action through EntityActionEvent system
+            // The server always sends from HostEntity perspective, and the client's
+            // routing logic will handle converting it to the correct entity type
             connection
                 .base
                 .world_manager
