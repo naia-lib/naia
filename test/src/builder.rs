@@ -1,6 +1,6 @@
 use std::{sync::{Arc, Mutex}, net::SocketAddr};
 
-use local_transport_client::{LocalAddrCell, LocalClientSocket};
+use naia_client::transport::local::{LocalAddrCell, LocalClientSocket};
 
 use naia_shared::transport::local::{LocalTransportHub, FAKE_SERVER_ADDR};
 

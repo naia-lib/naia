@@ -102,17 +102,17 @@ impl LocalClientSocket {
             .header("Authorization", base64_encoded)
             .body(Vec::new())
             .unwrap();
-        
+
         let request_bytes = naia_shared::transport::request_to_bytes(request);
-        
+
         // Send to async channel (non-blocking)
         if self.auth_requests_tx.send(request_bytes).is_ok() {
             log::trace!("[LocalTransport] Client sent HTTP auth request to server");
         }
-        
+
         // Create PendingRequest immediately (not lazily!)
         self.auth_io.lock().unwrap().connect();
-        
+
         self.connect()
     }
 
@@ -128,22 +128,22 @@ impl LocalClientSocket {
         let mut builder = http::Request::builder()
             .method("POST")
             .uri("/");
-        
+
         for (key, value) in auth_headers {
             builder = builder.header(key, value);
         }
-        
+
         let request = builder.body(Vec::new()).unwrap();
         let request_bytes = naia_shared::transport::request_to_bytes(request);
-        
+
         // Send to async channel (non-blocking)
         if self.auth_requests_tx.send(request_bytes).is_ok() {
             log::trace!("[LocalTransport] Client sent HTTP auth request with headers to server");
         }
-        
+
         // Create PendingRequest immediately
         self.auth_io.lock().unwrap().connect();
-        
+
         self.connect()
     }
 
@@ -162,23 +162,22 @@ impl LocalClientSocket {
             .method("POST")
             .uri("/")
             .header("Authorization", base64_encoded);
-        
+
         for (key, value) in auth_headers {
             builder = builder.header(key, value);
         }
-        
+
         let request = builder.body(Vec::new()).unwrap();
         let request_bytes = naia_shared::transport::request_to_bytes(request);
-        
+
         // Send to async channel (non-blocking)
         if self.auth_requests_tx.send(request_bytes).is_ok() {
             log::trace!("[LocalTransport] Client sent HTTP auth request with auth and headers to server");
         }
-        
+
         // Create PendingRequest immediately
         self.auth_io.lock().unwrap().connect();
-        
+
         self.connect()
     }
 }
-

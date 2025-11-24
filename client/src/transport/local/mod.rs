@@ -1,10 +1,11 @@
+mod socket;
+mod inner_socket;
 mod addr_cell;
 mod auth;
 mod data;
-mod socket;
 
 pub use addr_cell::LocalAddrCell;
 pub use auth::LocalClientIdentity;
 pub use data::{LocalClientReceiver, LocalClientSender};
-pub use socket::LocalClientSocket;
-
+pub use inner_socket::LocalClientSocket;
+pub use socket::Socket;

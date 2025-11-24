@@ -5,7 +5,7 @@ use crate::transport::{
     Socket as TransportSocket,
 };
 
-use local_transport_client::{
+use super::{
     LocalClientIdentity, LocalClientReceiver, LocalClientSender, LocalClientSocket,
 };
 
@@ -39,7 +39,7 @@ impl TransportSocket for Socket {
         let Socket { inner, config } = *self;
         let local_socket = inner.expect("local socket already taken");
         let (identity, sender, receiver) = local_socket.connect();
-        
+
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalClientTransportReceiver(receiver);
             if let Some(config) = &config {
@@ -48,7 +48,7 @@ impl TransportSocket for Socket {
                 Box::new(wrapped)
             }
         };
-        
+
         (
             Box::new(LocalClientTransportIdentityReceiver(identity)),
             Box::new(LocalClientTransportSender(sender)),
@@ -67,7 +67,7 @@ impl TransportSocket for Socket {
         let Socket { inner, config } = *self;
         let local_socket = inner.expect("local socket already taken");
         let (identity, sender, receiver) = local_socket.connect_with_auth(auth_bytes);
-        
+
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalClientTransportReceiver(receiver);
             if let Some(config) = &config {
@@ -76,7 +76,7 @@ impl TransportSocket for Socket {
                 Box::new(wrapped)
             }
         };
-        
+
         (
             Box::new(LocalClientTransportIdentityReceiver(identity)),
             Box::new(LocalClientTransportSender(sender)),
@@ -95,7 +95,7 @@ impl TransportSocket for Socket {
         let Socket { inner, config } = *self;
         let local_socket = inner.expect("local socket already taken");
         let (identity, sender, receiver) = local_socket.connect_with_auth_headers(auth_headers);
-        
+
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalClientTransportReceiver(receiver);
             if let Some(config) = &config {
@@ -104,7 +104,7 @@ impl TransportSocket for Socket {
                 Box::new(wrapped)
             }
         };
-        
+
         (
             Box::new(LocalClientTransportIdentityReceiver(identity)),
             Box::new(LocalClientTransportSender(sender)),
@@ -124,7 +124,7 @@ impl TransportSocket for Socket {
         let Socket { inner, config } = *self;
         let local_socket = inner.expect("local socket already taken");
         let (identity, sender, receiver) = local_socket.connect_with_auth_and_headers(auth_bytes, auth_headers);
-        
+
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalClientTransportReceiver(receiver);
             if let Some(config) = &config {
@@ -133,7 +133,7 @@ impl TransportSocket for Socket {
                 Box::new(wrapped)
             }
         };
-        
+
         (
             Box::new(LocalClientTransportIdentityReceiver(identity)),
             Box::new(LocalClientTransportSender(sender)),
