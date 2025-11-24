@@ -1,7 +1,9 @@
 use std::sync::{Arc, Mutex};
+
 use local_transport_client::LocalClientSocket;
 use local_transport_server::{ServerAuthIo, LocalServerAuthReceiver, LocalServerAuthSender, LocalServerReceiver, LocalServerSender, LocalServerSocket};
-use local_transport_shared::LocalTransportHub;
+
+use naia_shared::transport::local::LocalTransportHub;
 
 /// Server endpoint that manages multiple client connections via the hub
 pub struct LocalServerEndpoint {

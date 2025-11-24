@@ -1,9 +1,0 @@
-[package]
-name = "local_transport_shared"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-naia-shared = { path = "../shared", features = ["transport_local"] }
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"] }
-once_cell = "1"

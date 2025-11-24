@@ -5,8 +5,7 @@ use std::{
 };
 
 use tokio::sync::mpsc;
-
-use crate::shared::{create_auth_channels, create_data_channels};
+use crate::transport::local::shared::{create_auth_channels, create_data_channels};
 
 /// Per-client connection state stored in the hub
 /// Only stores server-side channels (what the server needs to receive/send)

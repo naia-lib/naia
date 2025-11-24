@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::{Arc, Mutex}};
 
-use local_transport_shared::{LocalTransportHub, ServerRecvError, ServerSendError};
+use naia_shared::transport::local::{LocalTransportHub, ServerRecvError, ServerSendError};
 
 // Server packet sender (always uses hub-based multiplexing)
 #[derive(Clone)]

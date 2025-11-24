@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use tokio::sync::RwLock;
 
-use local_transport_shared::ClientServerAddr;
+use naia_shared::transport::local::ClientServerAddr;
 
 // MaybeAddr wrapper
 struct MaybeAddr(pub(crate) ClientServerAddr);
@@ -35,7 +35,7 @@ impl LocalAddrCell {
     /// Set the server address synchronously (for testing/local transport where we know it immediately)
     pub fn set_sync(&self, addr: SocketAddr) {
         // Use blocking write - this is fine for local transport tests
-        use local_transport_shared::get_runtime;
+        use naia_shared::transport::local::get_runtime;
         get_runtime().block_on(async {
             let mut cell = self.cell.write().await;
             cell.0 = ClientServerAddr::Found(addr);

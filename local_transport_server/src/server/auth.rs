@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::{Arc, Mutex}};
 
 use naia_shared::IdentityToken;
 
-use local_transport_shared::{LocalTransportHub, ServerRecvError, ServerSendError};
+use naia_shared::transport::local::{LocalTransportHub, ServerRecvError, ServerSendError};
 
 // ServerAuthIo - encapsulates all server auth logic (always uses hub-based multiplexing)
 pub struct ServerAuthIo {
@@ -23,7 +23,7 @@ impl ServerAuthIo {
             log::trace!("[LocalTransport] Server received HTTP auth request from {}", client_addr);
             
             // Parse HTTP request
-            let request = naia_shared::http_utils::bytes_to_request(&request_bytes);
+            let request = naia_shared::transport::bytes_to_request(&request_bytes);
             
             // Extract Authorization header if present
             if let Some(auth_header) = request.headers().get("Authorization") {
@@ -53,7 +53,7 @@ impl ServerAuthIo {
             .body(response_body.into_bytes())
             .unwrap();
         
-        let response_bytes = naia_shared::http_utils::response_to_bytes(response);
+        let response_bytes = naia_shared::transport::response_to_bytes(response);
         
         // Send to the specific client via hub
         self.hub.send_auth_response(address, response_bytes)
@@ -70,7 +70,7 @@ impl ServerAuthIo {
             .body(Vec::new())
             .unwrap();
         
-        let response_bytes = naia_shared::http_utils::response_to_bytes(response);
+        let response_bytes = naia_shared::transport::response_to_bytes(response);
         
         // Send to the specific client via hub
         self.hub.send_auth_response(address, response_bytes)

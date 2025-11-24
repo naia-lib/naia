@@ -6,11 +6,10 @@ use crate::transport::{
 };
 
 use local_transport_client::{
-    ClientIdentityReceiverResult, ClientServerAddr,
     LocalClientIdentity, LocalClientReceiver, LocalClientSender, LocalClientSocket,
 };
 
-use naia_shared::LinkConditionerConfig;
+use naia_shared::{transport::local::{ClientIdentityReceiverResult, ClientServerAddr}, LinkConditionerConfig};
 
 pub struct Socket {
     inner: Option<LocalClientSocket>,

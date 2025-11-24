@@ -103,7 +103,7 @@ impl LocalClientSocket {
             .body(Vec::new())
             .unwrap();
         
-        let request_bytes = naia_shared::http_utils::request_to_bytes(request);
+        let request_bytes = naia_shared::transport::request_to_bytes(request);
         
         // Send to async channel (non-blocking)
         if self.auth_requests_tx.send(request_bytes).is_ok() {
@@ -134,7 +134,7 @@ impl LocalClientSocket {
         }
         
         let request = builder.body(Vec::new()).unwrap();
-        let request_bytes = naia_shared::http_utils::request_to_bytes(request);
+        let request_bytes = naia_shared::transport::request_to_bytes(request);
         
         // Send to async channel (non-blocking)
         if self.auth_requests_tx.send(request_bytes).is_ok() {
@@ -168,7 +168,7 @@ impl LocalClientSocket {
         }
         
         let request = builder.body(Vec::new()).unwrap();
-        let request_bytes = naia_shared::http_utils::request_to_bytes(request);
+        let request_bytes = naia_shared::transport::request_to_bytes(request);
         
         // Send to async channel (non-blocking)
         if self.auth_requests_tx.send(request_bytes).is_ok() {

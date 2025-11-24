@@ -1,8 +1,7 @@
 use std::net::SocketAddr;
 
-use naia_shared::IdentityToken;
-
 use tokio::sync::mpsc;
+use naia_socket_shared::IdentityToken;
 
 pub const FAKE_SERVER_ADDR: &str = "127.0.0.1:54321";
 

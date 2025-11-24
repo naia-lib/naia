@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc;
 
-use local_transport_shared::{ClientRecvError, ClientSendError, ClientServerAddr};
+use naia_shared::transport::local::{ClientRecvError, ClientSendError, ClientServerAddr};
 
 use super::addr_cell::LocalAddrCell;
 

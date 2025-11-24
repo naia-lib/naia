@@ -7,7 +7,7 @@ use tokio::sync::{mpsc, oneshot, oneshot::error::TryRecvError};
 
 use naia_shared::IdentityToken;
 
-use local_transport_shared::{get_runtime, ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError};
+use naia_shared::transport::local::{get_runtime, ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError};
 
 use super::addr_cell::LocalAddrCell;
 
@@ -36,7 +36,7 @@ impl PendingRequest {
             };
 
             // Parse HTTP response
-            let response = naia_shared::http_utils::bytes_to_response(&response_bytes);
+            let response = naia_shared::transport::bytes_to_response(&response_bytes);
             let status_code = response.status().as_u16();
             
             if status_code != 200 {
