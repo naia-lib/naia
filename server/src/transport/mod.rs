@@ -8,13 +8,14 @@ cfg_if! {
         pub mod udp;
     } else {}
 }
-mod conditioner;
-pub use conditioner::ConditionedPacketReceiver;
 cfg_if! {
     if #[cfg(feature = "transport_local")] {
         pub mod local;
     } else {}
 }
+
+mod conditioner;
+pub use conditioner::ConditionedPacketReceiver;
 
 mod channel;
 pub use channel::PacketChannel;
@@ -22,7 +23,6 @@ pub use channel::PacketChannel;
 pub use inner::{
     AuthReceiver, AuthSender, PacketReceiver, PacketSender, RecvError, SendError, Socket,
 };
-
 mod inner {
 
     use std::net::SocketAddr;

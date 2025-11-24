@@ -1,7 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use local_transport_server::{ServerAuthIo, LocalServerAuthReceiver, LocalServerAuthSender, LocalServerReceiver, LocalServerSender, LocalServerSocket};
-
+use naia_server::transport::local::{ServerAuthIo, LocalServerAuthReceiver, LocalServerAuthSender, LocalServerReceiver, LocalServerSender, LocalServerSocket};
 use naia_client::transport::local::LocalClientSocket;
 use naia_shared::transport::local::LocalTransportHub;
 

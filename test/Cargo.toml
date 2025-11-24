@@ -14,8 +14,6 @@ naia-server = { path = "../server", features = ["transport_local"] }
 naia-client = { path = "../client", features = ["transport_local"] }
 naia-shared = { path = "../shared" }
 
-local_transport_server = { path = "../local_transport_server" }
-
 naia-demo-world = { path = "../demos/demo_utils/demo_world" }
 
 log = "0.4"

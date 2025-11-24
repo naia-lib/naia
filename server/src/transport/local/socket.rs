@@ -8,7 +8,7 @@ use crate::transport::{
     Socket as TransportSocket,
 };
 
-use local_transport_server::{
+use super::{
     LocalServerAuthReceiver, LocalServerAuthSender, LocalServerReceiver, LocalServerSender,
     LocalServerSocket,
 };
@@ -42,7 +42,7 @@ impl TransportSocket for Socket {
         let Socket { inner, config } = *self;
         let local = inner.expect("server socket already taken");
         let (auth_sender, auth_receiver, sender, receiver) = local.listen_with_auth();
-        
+
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalServerTransportReceiver(receiver);
             if let Some(config) = &config {
@@ -51,7 +51,7 @@ impl TransportSocket for Socket {
                 Box::new(wrapped)
             }
         };
-        
+
         (
             Box::new(LocalServerTransportAuthSender(auth_sender)),
             Box::new(LocalServerTransportAuthReceiver(auth_receiver)),
