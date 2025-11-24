@@ -1,15 +1,13 @@
+
+use naia_shared::{transport::local::{ClientIdentityReceiverResult, ClientServerAddr}, LinkConditionerConfig};
+
 use crate::transport::{
     ConditionedPacketReceiver, IdentityReceiver as TransportIdentityReceiver,
     IdentityReceiverResult as TransportIdentityReceiverResult, PacketReceiver as TransportReceiver,
     PacketSender as TransportSender, RecvError, SendError, ServerAddr as TransportServerAddr,
     Socket as TransportSocket,
+    local::{LocalClientSocket, auth::LocalClientIdentity, data::{LocalClientReceiver, LocalClientSender}},
 };
-
-use super::{
-    LocalClientIdentity, LocalClientReceiver, LocalClientSender, LocalClientSocket,
-};
-
-use naia_shared::{transport::local::{ClientIdentityReceiverResult, ClientServerAddr}, LinkConditionerConfig};
 
 pub struct Socket {
     inner: Option<LocalClientSocket>,
