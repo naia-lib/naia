@@ -1,7 +1,0 @@
-# Seeds for failure cases proptest has generated in the past. It is
-# automatically read and these particular cases re-run before any
-# novel cases are generated.
-#
-# It is recommended to check this file in to source control so that
-# everyone who runs the test benefits from these saved cases.
-cc 2678fcb388e97bceeda2094232045151e1a3c58df5cc68b1053bea3560144594 # shrinks to entities = [(GlobalEntity(7322), RemoteEntity(1), RemoteEntity(2)), (GlobalEntity(7322), RemoteEntity(3), RemoteEntity(4))]
