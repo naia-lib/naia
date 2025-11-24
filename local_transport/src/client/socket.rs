@@ -3,7 +3,7 @@ use std::{net::SocketAddr, sync::{Arc, Mutex}};
 use naia_shared::IdentityToken;
 use tokio::sync::mpsc;
 
-use crate::shared::LocalTransportQueues;
+// use crate::shared::LocalTransportQueues;
 use super::{
     addr_cell::LocalAddrCell,
     auth::{ClientAuthIo, LocalClientIdentity},
@@ -18,30 +18,30 @@ pub struct LocalClientSocket {
 }
 
 impl LocalClientSocket {
-    pub(crate) fn new(
-        shared: LocalTransportQueues,
-        _client_addr: SocketAddr,
-        _server_addr: SocketAddr,
-        auth_requests_tx: mpsc::UnboundedSender<Vec<u8>>,
-        auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
-        data_tx: mpsc::UnboundedSender<Vec<u8>>,
-        data_rx: mpsc::UnboundedReceiver<Vec<u8>>,
-        addr_cell: LocalAddrCell,
-    ) -> Self {
-        let auth_io = Arc::new(Mutex::new(ClientAuthIo::new(
-            auth_responses_rx,
-            addr_cell.clone(),
-            shared.identity_token.clone(),
-            shared.rejection_code.clone(),
-        )));
-
-        Self {
-            auth_io,
-            sender: LocalClientSender::new(data_tx, addr_cell.clone()),
-            receiver: LocalClientReceiver::new(data_rx, addr_cell),
-            auth_requests_tx,
-        }
-    }
+    // pub(crate) fn new(
+    //     shared: LocalTransportQueues,
+    //     _client_addr: SocketAddr,
+    //     _server_addr: SocketAddr,
+    //     auth_requests_tx: mpsc::UnboundedSender<Vec<u8>>,
+    //     auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+    //     data_tx: mpsc::UnboundedSender<Vec<u8>>,
+    //     data_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+    //     addr_cell: LocalAddrCell,
+    // ) -> Self {
+    //     let auth_io = Arc::new(Mutex::new(ClientAuthIo::new(
+    //         auth_responses_rx,
+    //         addr_cell.clone(),
+    //         shared.identity_token.clone(),
+    //         shared.rejection_code.clone(),
+    //     )));
+    //
+    //     Self {
+    //         auth_io,
+    //         sender: LocalClientSender::new(data_tx, addr_cell.clone()),
+    //         receiver: LocalClientReceiver::new(data_rx, addr_cell),
+    //         auth_requests_tx,
+    //     }
+    // }
 
     /// Create a new client socket with per-client identity token storage
     /// This is used when multiple clients need to connect to the same server

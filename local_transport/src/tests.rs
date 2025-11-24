@@ -1,26 +1,6 @@
 use super::*;
 
 #[test]
-fn test_builder_single_connection() {
-    // Test that builder.single_connection() works (replaces LocalSocketPair)
-    let builder = LocalTransportBuilder::new();
-    let (_server_endpoint, client_endpoint) = builder.single_connection();
-    
-    // Verify we can extract the sockets
-    let _client_socket = client_endpoint.into_socket();
-}
-
-#[test]
-fn test_builder_single_client() {
-    // Test that builder can create a single client-server pair
-    let builder = LocalTransportBuilder::new();
-    let (_server_endpoint, client_endpoint) = builder.single_connection();
-    
-    // Verify we can extract the client socket
-    let _client_socket = client_endpoint.into_socket();
-}
-
-#[test]
 fn test_builder_multiple_clients() {
     // Test that builder can create multiple clients
     let builder = LocalTransportBuilder::new();

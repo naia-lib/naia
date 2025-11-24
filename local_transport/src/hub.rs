@@ -6,7 +6,7 @@ use std::{
 
 use tokio::sync::mpsc;
 
-use crate::shared::{LocalTransportQueues, create_auth_channels, create_data_channels};
+use crate::shared::{create_auth_channels, create_data_channels};
 
 /// Per-client connection state stored in the hub
 /// Only stores server-side channels (what the server needs to receive/send)
@@ -25,16 +25,16 @@ struct ClientConnection {
 /// Shared transport hub managing multiple client connections
 #[derive(Clone)]
 pub(crate) struct LocalTransportHub {
-    shared: LocalTransportQueues,
+    // shared: LocalTransportQueues,
     server_addr: SocketAddr,
     connections: Arc<Mutex<HashMap<SocketAddr, ClientConnection>>>,
     next_client_id: Arc<Mutex<u16>>,
 }
 
 impl LocalTransportHub {
-    pub fn new(shared: LocalTransportQueues, server_addr: SocketAddr) -> Self {
+    pub fn new(server_addr: SocketAddr) -> Self {
         Self {
-            shared,
+            // shared,
             server_addr,
             connections: Arc::new(Mutex::new(HashMap::new())),
             next_client_id: Arc::new(Mutex::new(1)),
@@ -86,11 +86,11 @@ impl LocalTransportHub {
             client_data_rx,
         )
     }
-
-    /// Get the shared queues (for identity token, etc.)
-    pub fn shared(&self) -> &LocalTransportQueues {
-        &self.shared
-    }
+    //
+    // /// Get the shared queues (for identity token, etc.)
+    // pub fn shared(&self) -> &LocalTransportQueues {
+    //     &self.shared
+    // }
 
     /// Get the server address
     pub fn server_addr(&self) -> SocketAddr {
@@ -141,9 +141,9 @@ impl LocalTransportHub {
         }
     }
 
-    /// Get all client addresses
-    pub fn get_client_addresses(&self) -> Vec<SocketAddr> {
-        self.connections.lock().unwrap().keys().cloned().collect()
-    }
+    // /// Get all client addresses
+    // pub fn get_client_addresses(&self) -> Vec<SocketAddr> {
+    //     self.connections.lock().unwrap().keys().cloned().collect()
+    // }
 }
 

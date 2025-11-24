@@ -1,11 +1,12 @@
-use std::sync::{Arc, Mutex};
+use std::{sync::{Arc, Mutex}, net::SocketAddr};
 
-use naia_shared::IdentityToken;
+use crate::{
+    client::{LocalClientSocket, LocalAddrCell},
+    endpoint::{LocalServerEndpoint, LocalClientEndpoint},
+    shared::{FAKE_SERVER_ADDR},
+    hub::LocalTransportHub,
+};
 
-use crate::hub::LocalTransportHub;
-use crate::shared::LocalTransportQueues;
-use crate::endpoint::{LocalServerEndpoint, LocalClientEndpoint};
-use crate::client::{LocalClientSocket, LocalAddrCell};
 
 /// Builder for creating local transport endpoints
 pub struct LocalTransportBuilder {
@@ -15,8 +16,8 @@ pub struct LocalTransportBuilder {
 impl LocalTransportBuilder {
     /// Create a new builder with a shared transport hub
     pub fn new() -> Self {
-        let (shared, _client_addr, server_addr) = LocalTransportQueues::new();
-        let hub = LocalTransportHub::new(shared, server_addr);
+        let server_addr: SocketAddr = FAKE_SERVER_ADDR.parse().expect("invalid server addr");
+        let hub = LocalTransportHub::new(server_addr);
         Self { hub }
     }
 
@@ -51,13 +52,6 @@ impl LocalTransportBuilder {
         );
 
         LocalClientEndpoint::new(socket)
-    }
-
-    /// Convenience method for single-client setup (backwards compatibility)
-    pub fn single_connection(&self) -> (LocalServerEndpoint, LocalClientEndpoint) {
-        let server = self.server_endpoint();
-        let client = self.connect_client();
-        (server, client)
     }
 }
 
