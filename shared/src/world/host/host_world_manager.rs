@@ -3,12 +3,9 @@ use std::{
     hash::Hash,
 };
 
-use log::info;
-
-use crate::world::update::entity_update_manager::EntityUpdateManager;
 use crate::{
     messages::channels::receivers::reliable_receiver::ReliableReceiver,
-    world::sync::{HostEngine, HostEntityChannel, RemoteEngine, RemoteEntityChannel},
+    world::{update::entity_update_manager::EntityUpdateManager, sync::{HostEngine, HostEntityChannel, RemoteEngine, RemoteEntityChannel}},
     ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage,
     EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity,
     HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap,
@@ -66,18 +63,6 @@ impl HostWorldManager {
         world: &mut W,
         incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
     ) -> Vec<EntityEvent> {
-        if !incoming_messages.is_empty() {
-            info!(
-                "📨 HostWorldManager::take_incoming_events - received {} messages",
-                incoming_messages.len()
-            );
-            for (id, msg) in &incoming_messages {
-                info!("  Message id={}, type={:?}", id, msg.get_type());
-                if matches!(msg, EntityMessage::MigrateResponse(_, _, _)) {
-                    info!("  🎯 Found MigrateResponse in incoming messages!");
-                }
-            }
-        }
 
         let incoming_messages = EntityMessageReceiver::host_take_incoming_events(
             &mut self.host_engine,

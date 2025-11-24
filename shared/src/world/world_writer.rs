@@ -4,12 +4,10 @@ use std::{
     hash::Hash,
 };
 
-use log::debug;
-
-use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     world::{
+        local::local_world_manager::LocalWorldManager,
         entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
     },
     BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength,
@@ -572,8 +570,6 @@ impl WorldWriter {
                 old_remote_entity,
                 new_host_entity_value,
             ) => {
-                debug!("Writing MigrateResponse to packet: global={:?}, old_remote={:?}, new_host={:?}", 
-                    _global_entity, old_remote_entity, new_host_entity_value);
 
                 // this command is only ever sent by the server, regarding newly delegated server-owned entities, to clients
 

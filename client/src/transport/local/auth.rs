@@ -1,13 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use log::warn;
-
-
 use tokio::sync::{mpsc, oneshot, oneshot::error::TryRecvError};
 
-use naia_shared::IdentityToken;
-
-use naia_shared::transport::local::{get_runtime, ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError};
+use naia_shared::{transport::local::{get_runtime, ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError}, IdentityToken};
 
 use super::addr_cell::LocalAddrCell;
 
@@ -74,8 +69,7 @@ impl PendingRequest {
             // Update addr_cell asynchronously
             // IMPORTANT: Update addr_cell BEFORE sending result so client can use it immediately
             addr_cell.recv(server_addr).await;
-            log::trace!("[LocalTransport] Updated addr_cell with server address: {}", server_addr);
-            
+
             let _ = tx.send(Ok((status_code, identity_token)));
         });
 
@@ -133,19 +127,16 @@ impl ClientAuthIo {
             auth_responses_rx,
             self.addr_cell.clone(),
         ));
-        log::trace!("[LocalTransport] Client created PendingRequest for auth");
     }
     
     fn receive(&mut self) -> ClientIdentityReceiverResult {
         // Check if already received token (from previous call)
         if let Some(token) = self.identity_token.lock().unwrap().clone() {
-            log::trace!("[LocalTransport] Client identity receiver: Success(token={})", token);
             return ClientIdentityReceiverResult::Success(token);
         }
         
         // Check if rejection happened
         if let Some(code) = *self.rejection_code.lock().unwrap() {
-            log::trace!("[LocalTransport] Client identity receiver: ErrorResponseCode({})", code);
             return ClientIdentityReceiverResult::ErrorResponseCode(code);
         }
         
@@ -160,31 +151,24 @@ impl ClientAuthIo {
             Ok(Some((status_code, id_token))) => {
                 if status_code != 200 {
                     *self.rejection_code.lock().unwrap() = Some(status_code);
-                    log::trace!("[LocalTransport] Client identity receiver: ErrorResponseCode({})", status_code);
                     return ClientIdentityReceiverResult::ErrorResponseCode(status_code);
                 }
                 
                 // Verify address is available before returning Success
                 match self.addr_cell.get() {
                     ClientServerAddr::Finding => {
-                        log::trace!("[LocalTransport] Address not yet available, still waiting...");
                         return ClientIdentityReceiverResult::Waiting;
                     }
-                    ClientServerAddr::Found(addr) => {
-                        log::trace!("[LocalTransport] Address available: {}", addr);
-                    }
+                    ClientServerAddr::Found(_addr) => {}
                 }
                 
                 *self.identity_token.lock().unwrap() = Some(id_token.clone());
-                log::trace!("[LocalTransport] Client identity receiver: Success(token={})", id_token);
                 ClientIdentityReceiverResult::Success(id_token)
             }
             Ok(None) => {
-                log::trace!("[LocalTransport] Client identity receiver: Still waiting...");
                 ClientIdentityReceiverResult::Waiting
             }
-            Err(e) => {
-                warn!("[LocalTransport] Unexpected auth error: {:?}", e);
+            Err(_e) => {
                 ClientIdentityReceiverResult::ErrorResponseCode(500)
             }
         }

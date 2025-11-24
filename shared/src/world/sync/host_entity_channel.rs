@@ -95,12 +95,7 @@ impl HostEntityChannel {
     }
 
     pub(crate) fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<()>) {
-        use log::info;
-        let subcommand_id = msg.subcommand_id();
-        info!("🟡 HostEntityChannel::receive_message(id={}, msgType={:?}, subcommand_id={:?})", 
-            id, msg.get_type(), subcommand_id);
         self.buffered_messages.push_back(id, msg);
-
         self.process_messages();
     }
 

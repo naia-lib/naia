@@ -3,15 +3,15 @@ use std::{
     hash::Hash,
 };
 
-use log::{debug, warn};
+use log::warn;
 
 use naia_socket_shared::Instant;
 
-use crate::world::entity_event::EntityEvent;
-use crate::world::host::host_world_manager::CommandId;
-use crate::world::local::local_entity::RemoteEntity;
 use crate::{
     world::{
+        local::local_entity::RemoteEntity,
+        entity_event::EntityEvent,
+        host::host_world_manager::CommandId,
         entity::in_scope_entities::InScopeEntities,
         remote::{
             remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
@@ -340,13 +340,8 @@ impl RemoteWorldManager {
                     // do nothing
                 }
                 msg => {
-                    let msg_type = msg.get_type();
-                    debug!(
-                        "remote_world_manager processing message type: {:?}",
-                        msg_type
-                    );
+                    // let msg_type = msg.get_type();
                     let event = msg.to_event(local_entity_map);
-                    debug!("  Successfully converted to event");
                     self.incoming_events.push(event);
                 }
             }

@@ -199,10 +199,7 @@ impl LocalWorldManager {
 
         // create new host entity, insert into local entity map
         let new_host_entity = self.host.host_generate_entity();
-        info!(
-            "🔴 SERVER: migrate_entity_remote_to_host: GlobalEntity({:?}), old_remote={:?}, NEW_HOST={:?}",
-            global_entity, old_remote_entity, new_host_entity
-        );
+
         self.entity_map
             .insert_with_host_entity(*global_entity, new_host_entity);
 
@@ -271,10 +268,6 @@ impl LocalWorldManager {
     ) {
         // EntityCommand::MigrateResponse signature: (subid, global, RemoteEntity, HostEntity)
         // These types are from SERVER perspective and will be reinterpreted by CLIENT
-        info!(
-            "SERVER: Sending MigrateResponse for {:?}: old_remote={:?}, new_host={:?}",
-            global_entity, old_remote_entity, new_host_entity
-        );
         let command = EntityCommand::MigrateResponse(
             None,
             *global_entity,
@@ -390,14 +383,14 @@ impl LocalWorldManager {
         id: MessageIndex,
         msg: EntityMessage<OwnedLocalEntity>,
     ) {
-        if msg.get_type() != EntityMessageType::Noop {
-            use log::info;
-            info!(
-                "LocalWorldManager::receiver_buffer_message(id={}, msg_type={:?})",
-                id,
-                msg.get_type()
-            );
-        }
+        // if msg.get_type() != EntityMessageType::Noop {
+        //     use log::info;
+        //     info!(
+        //         "LocalWorldManager::receiver_buffer_message(id={}, msg_type={:?})",
+        //         id,
+        //         msg.get_type()
+        //     );
+        // }
 
         self.receiver.buffer_message(id, msg);
     }
@@ -438,13 +431,13 @@ impl LocalWorldManager {
             if incoming_message.get_type() == EntityMessageType::Noop {
                 continue; // skip noop messages
             }
-
-            use log::info;
-            info!(
-                "LocalWorldManager::take_incoming_events - processing message: id={}, type={:?}",
-                id,
-                incoming_message.get_type()
-            );
+            
+            // use log::info;
+            // info!(
+            //     "LocalWorldManager::take_incoming_events - processing message: id={}, type={:?}",
+            //     id,
+            //     incoming_message.get_type()
+            // );
 
             let Some(local_entity) = incoming_message.entity() else {
                 panic!(

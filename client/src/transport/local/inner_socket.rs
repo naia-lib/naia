@@ -106,9 +106,7 @@ impl LocalClientSocket {
         let request_bytes = naia_shared::transport::request_to_bytes(request);
 
         // Send to async channel (non-blocking)
-        if self.auth_requests_tx.send(request_bytes).is_ok() {
-            log::trace!("[LocalTransport] Client sent HTTP auth request to server");
-        }
+        if self.auth_requests_tx.send(request_bytes).is_ok() {}
 
         // Create PendingRequest immediately (not lazily!)
         self.auth_io.lock().unwrap().connect();
@@ -137,9 +135,7 @@ impl LocalClientSocket {
         let request_bytes = naia_shared::transport::request_to_bytes(request);
 
         // Send to async channel (non-blocking)
-        if self.auth_requests_tx.send(request_bytes).is_ok() {
-            log::trace!("[LocalTransport] Client sent HTTP auth request with headers to server");
-        }
+        if self.auth_requests_tx.send(request_bytes).is_ok() {}
 
         // Create PendingRequest immediately
         self.auth_io.lock().unwrap().connect();
@@ -171,9 +167,7 @@ impl LocalClientSocket {
         let request_bytes = naia_shared::transport::request_to_bytes(request);
 
         // Send to async channel (non-blocking)
-        if self.auth_requests_tx.send(request_bytes).is_ok() {
-            log::trace!("[LocalTransport] Client sent HTTP auth request with auth and headers to server");
-        }
+        if self.auth_requests_tx.send(request_bytes).is_ok() {}
 
         // Create PendingRequest immediately
         self.auth_io.lock().unwrap().connect();

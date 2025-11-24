@@ -22,17 +22,13 @@ impl LocalClientSender {
         // Check if server address is known before sending
         match self.addr_cell.get() {
             ClientServerAddr::Finding => {
-                log::trace!("[LocalTransport] Cannot send: server address not yet discovered");
                 return Err(ClientSendError);
             }
-            ClientServerAddr::Found(addr) => {
-                log::trace!("[LocalTransport] Sending {} bytes to server at {}", payload.len(), addr);
-            }
+            ClientServerAddr::Found(_addr) => {}
         }
         // Send via unbounded channel (non-blocking)
         self.tx.send(payload.to_vec())
             .map_err(|_| ClientSendError)?;
-        log::trace!("[LocalTransport] Client sent {} bytes", payload.len());
         Ok(())
     }
 
@@ -62,7 +58,6 @@ impl LocalClientReceiver {
         // Try to receive from channel (non-blocking)
         let mut rx_guard = self.rx.lock().unwrap();
         if let Ok(payload) = rx_guard.try_recv() {
-            log::trace!("[LocalTransport] Client received {} bytes", payload.len());
             let boxed = payload.into_boxed_slice();
             *self.last_payload.lock().unwrap() = Some(boxed);
             let payload_ref = self.last_payload.lock().unwrap();

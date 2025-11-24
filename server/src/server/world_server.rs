@@ -1524,11 +1524,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         world_entity: &E,
         client_key: &UserKey,
     ) {
-        info!(
-            "SERVER: enable_delegation_client_owned_entity for {:?}",
-            global_entity
-        );
-
         let Some(entity_owner) = self.global_world_manager.entity_owner(global_entity) else {
             panic!("entity should have an owner at this point");
         };

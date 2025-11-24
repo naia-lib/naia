@@ -16,7 +16,6 @@ impl LocalServerSender {
     pub fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), ServerSendError> {
         self.hub.send_data(address, payload.to_vec())
             .map_err(|_| ServerSendError)?;
-        log::trace!("[LocalTransport] Server sent {} bytes to {}", payload.len(), address);
         Ok(())
     }
 }
@@ -38,7 +37,6 @@ impl LocalServerReceiver {
 
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
         if let Some((client_addr, bytes)) = self.hub.try_recv_data() {
-            log::trace!("[LocalTransport] Server received {} bytes from {}", bytes.len(), client_addr);
             let boxed = bytes.into_boxed_slice();
             *self.last_payload.lock().unwrap() = Some((client_addr, boxed));
             let payload_ref = self.last_payload.lock().unwrap();

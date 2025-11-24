@@ -20,8 +20,7 @@ impl ServerAuthIo {
     
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
         if let Some((client_addr, request_bytes)) = self.hub.try_recv_auth_request() {
-            log::trace!("[LocalTransport] Server received HTTP auth request from {}", client_addr);
-            
+
             // Parse HTTP request
             let request = naia_shared::transport::bytes_to_request(&request_bytes);
             
@@ -58,8 +57,7 @@ impl ServerAuthIo {
         // Send to the specific client via hub
         self.hub.send_auth_response(address, response_bytes)
             .map_err(|_| ServerSendError)?;
-        log::debug!("[LocalTransport] Server sent HTTP 200 response with identity token to {}", address);
-        
+
         Ok(())
     }
 
@@ -75,8 +73,7 @@ impl ServerAuthIo {
         // Send to the specific client via hub
         self.hub.send_auth_response(address, response_bytes)
             .map_err(|_| ServerSendError)?;
-        log::debug!("[LocalTransport] Server sent HTTP 401 rejection response to {}", address);
-        
+
         Ok(())
     }
 }
