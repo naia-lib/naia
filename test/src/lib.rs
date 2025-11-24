@@ -1,12 +1,12 @@
-mod auth;
 pub mod helpers;
+pub mod harness;
 pub mod test_protocol;
 mod builder;
 mod endpoint;
 
-pub use auth::Auth;
 pub use helpers::*;
-pub use test_protocol::{protocol, Position};
+pub use harness::Scenario;
+pub use test_protocol::{protocol, Position, Auth};
 pub use builder::LocalTransportBuilder;
 pub use endpoint::{LocalClientEndpoint, LocalServerEndpoint};
 

@@ -39,15 +39,14 @@ pub fn default_client_config() -> ClientConfig {
     config
 }
 
-/// Update a single client and server
-pub fn update_client_server(
+/// Update a single client and server at a specific time
+pub fn update_client_server_at(
+    now: Instant,
     client: &mut Client,
     server: &mut Server,
     client_world: &mut TestWorld,
     server_world: &mut TestWorld,
 ) {
-    let now = Instant::now();
-
     // Client update
     if client.connection_status().is_connected() {
         client.receive_all_packets();
@@ -66,8 +65,20 @@ pub fn update_client_server(
     server.send_all_packets(server_world.proxy());
 }
 
-/// Update two clients and a server
-pub fn update_all(
+/// Update a single client and server
+pub fn update_client_server(
+    client: &mut Client,
+    server: &mut Server,
+    client_world: &mut TestWorld,
+    server_world: &mut TestWorld,
+) {
+    let now = Instant::now();
+    update_client_server_at(now, client, server, client_world, server_world);
+}
+
+/// Update two clients and a server at a specific time
+pub fn update_all_at(
+    now: Instant,
     client_a: &mut Client,
     client_b: &mut Client,
     server: &mut Server,
@@ -75,8 +86,6 @@ pub fn update_all(
     client_b_world: &mut TestWorld,
     server_world: &mut TestWorld,
 ) {
-    let now = Instant::now();
-
     // Client A update
     if client_a.connection_status().is_connected() {
         client_a.receive_all_packets();
@@ -104,6 +113,19 @@ pub fn update_all(
     server.take_tick_events(&now);
     server.process_all_packets(server_world.proxy_mut(), &now);
     server.send_all_packets(server_world.proxy());
+}
+
+/// Update two clients and a server
+pub fn update_all(
+    client_a: &mut Client,
+    client_b: &mut Client,
+    server: &mut Server,
+    client_a_world: &mut TestWorld,
+    client_b_world: &mut TestWorld,
+    server_world: &mut TestWorld,
+) {
+    let now = Instant::now();
+    update_all_at(now, client_a, client_b, server, client_a_world, client_b_world, server_world);
 }
 
 /// Run N update cycles for a single client-server pair

@@ -1,6 +1,20 @@
-use crate::auth::Auth;
 /// Minimal test protocol for E2E testing
-use naia_shared::{Property, Protocol, Replicate};
+use naia_shared::{Property, Protocol, Replicate, Message};
+
+#[derive(Message)]
+pub struct Auth {
+    pub username: String,
+    pub password: String,
+}
+
+impl Auth {
+    pub fn new(username: &str, password: &str) -> Self {
+        Self {
+            username: username.to_string(),
+            password: password.to_string(),
+        }
+    }
+}
 
 #[derive(Replicate)]
 pub struct Position {
