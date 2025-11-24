@@ -9,14 +9,12 @@
 use std::time::Duration;
 
 use log::info;
-use naia_client::JitterBufferType;
-use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent};
-use naia_server::{AuthEvent, DelegateEntityEvent, Server as NaiaServer};
+
 use naia_shared::Instant;
-use crate::{Auth, TestEntity, TestWorld};
-use local_transport::LocalTransportBuilder;
-use naia_client::transport::local::Socket as LocalClientSocket;
-use naia_server::transport::local::Socket as LocalServerSocket;
+use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent, transport::local::Socket as LocalClientSocket, JitterBufferType};
+use naia_server::{AuthEvent, DelegateEntityEvent, Server as NaiaServer, transport::local::Socket as LocalServerSocket};
+
+use crate::{Auth, LocalTransportBuilder, TestEntity, TestWorld};
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;

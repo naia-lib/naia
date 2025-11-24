@@ -20,12 +20,7 @@ use naia_server::{
     Server as NaiaServer, ServerConfig,
 };
 use naia_shared::WorldRefType;
-use naia_test::{
-    protocol, Auth, Position, TestEntity, TestWorld,
-    create_client_socket, create_server_socket, default_client_config,
-    update_all, complete_handshake_with_name,
-};
-use local_transport::LocalTransportBuilder;
+use naia_test::{protocol, Auth, Position, TestEntity, TestWorld, create_client_socket, create_server_socket, default_client_config, update_all, complete_handshake_with_name, LocalTransportBuilder};
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;

@@ -4,7 +4,7 @@ use naia_shared::IdentityToken;
 
 use tokio::sync::mpsc;
 
-pub(crate) const FAKE_SERVER_ADDR: &str = "127.0.0.1:54321";
+pub const FAKE_SERVER_ADDR: &str = "127.0.0.1:54321";
 
 // Types matching transport layer signatures
 pub enum ClientIdentityReceiverResult {
@@ -30,7 +30,7 @@ pub struct ServerRecvError;
 
 // Error type for local auth operations
 #[derive(Debug)]
-pub(crate) enum LocalAuthError {
+pub enum LocalAuthError {
     ChannelClosed,
     ParseError,
 }

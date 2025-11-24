@@ -1,8 +1,7 @@
 use std::sync::{Arc, Mutex};
-
-use crate::hub::LocalTransportHub;
-use crate::client::LocalClientSocket;
-use crate::server::{LocalServerAuthReceiver, LocalServerAuthSender, LocalServerReceiver, LocalServerSender, LocalServerSocket, ServerAuthIo};
+use local_transport_client::LocalClientSocket;
+use local_transport_server::{ServerAuthIo, LocalServerAuthReceiver, LocalServerAuthSender, LocalServerReceiver, LocalServerSender, LocalServerSocket};
+use local_transport_shared::LocalTransportHub;
 
 /// Server endpoint that manages multiple client connections via the hub
 pub struct LocalServerEndpoint {
@@ -10,7 +9,7 @@ pub struct LocalServerEndpoint {
 }
 
 impl LocalServerEndpoint {
-    pub(crate) fn new(hub: LocalTransportHub) -> Self {
+    pub fn new(hub: LocalTransportHub) -> Self {
         Self { hub }
     }
 
@@ -47,7 +46,7 @@ pub struct LocalClientEndpoint {
 }
 
 impl LocalClientEndpoint {
-    pub(crate) fn new(socket: LocalClientSocket) -> Self {
+    pub fn new(socket: LocalClientSocket) -> Self {
         Self { socket }
     }
 

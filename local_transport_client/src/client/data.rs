@@ -2,7 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc;
 
-use crate::shared::{ClientRecvError, ClientSendError, ClientServerAddr};
+use local_transport_shared::{ClientRecvError, ClientSendError, ClientServerAddr};
+
 use super::addr_cell::LocalAddrCell;
 
 // Client packet sender

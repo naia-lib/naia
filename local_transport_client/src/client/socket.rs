@@ -45,7 +45,7 @@ impl LocalClientSocket {
 
     /// Create a new client socket with per-client identity token storage
     /// This is used when multiple clients need to connect to the same server
-    pub(crate) fn new_with_tokens(
+    pub fn new_with_tokens(
         _client_addr: SocketAddr,
         _server_addr: SocketAddr,
         auth_requests_tx: mpsc::UnboundedSender<Vec<u8>>,

@@ -5,7 +5,7 @@ use crate::transport::{
     Socket as TransportSocket,
 };
 
-use local_transport::{
+use local_transport_client::{
     ClientIdentityReceiverResult, ClientServerAddr,
     LocalClientIdentity, LocalClientReceiver, LocalClientSender, LocalClientSocket,
 };

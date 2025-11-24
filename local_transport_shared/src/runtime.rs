@@ -4,7 +4,7 @@ use once_cell::sync::Lazy;
 use tokio::runtime::{Builder, Handle};
 
 // Global Tokio runtime handle
-pub(crate) fn get_runtime() -> Handle {
+pub fn get_runtime() -> Handle {
     static GLOBAL: Lazy<Handle> = Lazy::new(|| {
         let runtime = Builder::new_multi_thread()
             .enable_all()

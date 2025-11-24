@@ -1,6 +1,7 @@
 use std::sync::{Arc, Mutex};
 
-use crate::hub::LocalTransportHub;
+use local_transport_shared::LocalTransportHub;
+
 use super::auth::{LocalServerAuthReceiver, LocalServerAuthSender, ServerAuthIo};
 use super::data::{LocalServerReceiver, LocalServerSender};
 
@@ -9,7 +10,7 @@ pub struct LocalServerSocket {
 }
 
 impl LocalServerSocket {
-    pub(crate) fn new(hub: LocalTransportHub) -> Self {
+    pub fn new(hub: LocalTransportHub) -> Self {
         Self { hub }
     }
 

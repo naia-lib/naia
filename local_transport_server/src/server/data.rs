@@ -1,7 +1,6 @@
 use std::{net::SocketAddr, sync::{Arc, Mutex}};
 
-use crate::shared::{ServerRecvError, ServerSendError};
-use crate::hub::LocalTransportHub;
+use local_transport_shared::{LocalTransportHub, ServerRecvError, ServerSendError};
 
 // Server packet sender (always uses hub-based multiplexing)
 #[derive(Clone)]
@@ -10,7 +9,7 @@ pub struct LocalServerSender {
 }
 
 impl LocalServerSender {
-    pub(crate) fn new(hub: LocalTransportHub) -> Self {
+    pub fn new(hub: LocalTransportHub) -> Self {
         Self { hub }
     }
 
@@ -30,7 +29,7 @@ pub struct LocalServerReceiver {
 }
 
 impl LocalServerReceiver {
-    pub(crate) fn new(hub: LocalTransportHub) -> Self {
+    pub fn new(hub: LocalTransportHub) -> Self {
         Self {
             hub,
             last_payload: Arc::new(Mutex::new(None)),

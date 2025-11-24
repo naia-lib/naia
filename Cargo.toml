@@ -38,7 +38,9 @@ members = [
     "demos/socket/client/app",
     "demos/socket/client/wasm_bindgen",
     "demos/socket/client/miniquad",
-    "local_transport",
+    "local_transport_shared",
+    "local_transport_server",
+    "local_transport_client",
 ]
 # Do not put demos in the default-members, since they may use conflicting dependencies / feature flags
 default-members = [

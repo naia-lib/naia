@@ -1,11 +1,14 @@
 use std::sync::{Arc, Mutex};
 
 use log::warn;
-use naia_shared::IdentityToken;
+
+
 use tokio::sync::{mpsc, oneshot, oneshot::error::TryRecvError};
 
-use crate::runtime::get_runtime;
-use crate::shared::{ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError};
+use naia_shared::IdentityToken;
+
+use local_transport_shared::{get_runtime, ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError};
+
 use super::addr_cell::LocalAddrCell;
 
 // PendingRequest for async auth handling

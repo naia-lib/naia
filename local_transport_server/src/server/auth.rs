@@ -2,17 +2,16 @@ use std::{net::SocketAddr, sync::{Arc, Mutex}};
 
 use naia_shared::IdentityToken;
 
-use crate::shared::{ServerRecvError, ServerSendError};
-use crate::hub::LocalTransportHub;
+use local_transport_shared::{LocalTransportHub, ServerRecvError, ServerSendError};
 
 // ServerAuthIo - encapsulates all server auth logic (always uses hub-based multiplexing)
-pub(crate) struct ServerAuthIo {
+pub struct ServerAuthIo {
     hub: LocalTransportHub,
     buffer: [u8; 1472],
 }
 
 impl ServerAuthIo {
-    pub(crate) fn new(hub: LocalTransportHub) -> Self {
+    pub fn new(hub: LocalTransportHub) -> Self {
         Self {
             hub,
             buffer: [0; 1472],
@@ -89,7 +88,7 @@ pub struct LocalServerAuthSender {
 }
 
 impl LocalServerAuthSender {
-    pub(crate) fn new(auth_io: Arc<Mutex<ServerAuthIo>>) -> Self {
+    pub fn new(auth_io: Arc<Mutex<ServerAuthIo>>) -> Self {
         Self { auth_io }
     }
 
@@ -110,7 +109,7 @@ pub struct LocalServerAuthReceiver {
 }
 
 impl LocalServerAuthReceiver {
-    pub(crate) fn new(auth_io: Arc<Mutex<ServerAuthIo>>) -> Self {
+    pub fn new(auth_io: Arc<Mutex<ServerAuthIo>>) -> Self {
         Self {
             auth_io,
             buffer: Box::new([0; 1472]),

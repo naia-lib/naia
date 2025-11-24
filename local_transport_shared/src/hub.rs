@@ -24,7 +24,7 @@ struct ClientConnection {
 
 /// Shared transport hub managing multiple client connections
 #[derive(Clone)]
-pub(crate) struct LocalTransportHub {
+pub struct LocalTransportHub {
     // shared: LocalTransportQueues,
     server_addr: SocketAddr,
     connections: Arc<Mutex<HashMap<SocketAddr, ClientConnection>>>,

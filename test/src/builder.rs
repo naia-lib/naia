@@ -1,12 +1,9 @@
 use std::{sync::{Arc, Mutex}, net::SocketAddr};
 
-use crate::{
-    client::{LocalClientSocket, LocalAddrCell},
-    endpoint::{LocalServerEndpoint, LocalClientEndpoint},
-    shared::{FAKE_SERVER_ADDR},
-    hub::LocalTransportHub,
-};
+use local_transport_client::{LocalAddrCell, LocalClientSocket};
+use local_transport_shared::{LocalTransportHub, FAKE_SERVER_ADDR};
 
+use crate::{LocalClientEndpoint, LocalServerEndpoint};
 
 /// Builder for creating local transport endpoints
 pub struct LocalTransportBuilder {

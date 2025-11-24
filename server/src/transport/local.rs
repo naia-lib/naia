@@ -8,7 +8,7 @@ use crate::transport::{
     Socket as TransportSocket,
 };
 
-use local_transport::{
+use local_transport_server::{
     LocalServerAuthReceiver, LocalServerAuthSender, LocalServerReceiver, LocalServerSender,
     LocalServerSocket,
 };
