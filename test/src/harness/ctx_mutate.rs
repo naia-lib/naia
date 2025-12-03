@@ -1,5 +1,6 @@
 use naia_client::ReplicationConfig;
 use naia_shared::{EntityAuthStatus, WorldRefType, WorldMutType};
+use naia_server::ReplicationConfig as ServerReplicationConfig;
 
 use crate::{TestEntity, TestWorld, Position};
 use crate::helpers::update_all_at;
@@ -54,6 +55,38 @@ impl<'a> ServerCtxMutate<'a> {
             .expect("EntityKey not mapped to server entity after auto-discovery");
 
         let user_key = self.scenario.user_key(client);
+        
+        // Get main room key (copy it since RoomKey is Copy)
+        let main_room = *self.scenario.main_room_key().expect("main room should exist");
+        
+        // Entity must be in a room for scope to work
+        // Also, client-spawned entities need to be Public to be visible to other clients
+        // Add entity to main room if not already there, configure as Public, then add to user's scope
+        {
+            let server = self.scenario.server_mut();
+            if !server.room_mut(&main_room).has_entity(&server_entity) {
+                server.room_mut(&main_room).add_entity(&server_entity);
+            }
+        }
+        
+        // Configure entity as Public (separate scope to avoid borrow conflicts)
+        {
+            let server = self.scenario.server_mut();
+            let config = server.entity_replication_config(&server_entity);
+            if config != Some(ServerReplicationConfig::Public) {
+                drop(server); // Explicitly drop server borrow
+                let world_mut = self.scenario.server_world_mut();
+                let mut proxy = world_mut.proxy_mut();
+                let server = self.scenario.server_mut();
+                server.configure_entity_replication(
+                    &mut proxy,
+                    &server_entity,
+                    ServerReplicationConfig::Public,
+                );
+            }
+        }
+        
+        // Add entity to user's scope
         self.scenario
             .server_mut()
             .user_scope_mut(&user_key)

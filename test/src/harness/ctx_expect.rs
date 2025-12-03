@@ -166,17 +166,29 @@ impl<'a> ExpectCtx<'a> {
     fn auto_discover_client_entity(&mut self, client_key: ClientKey, entity_key: EntityKey) -> bool {
         let state = self.scenario.client_state_mut(client_key);
         let entities = state.world.proxy().entities();
+        
+        // Use first entity that isn't already mapped to another key for this client
         if !entities.is_empty()
             && !self
                 .scenario
                 .entity_registry()
                 .has_client_entity(entity_key, client_key)
         {
-            // Map first entity to this key
-            let first_entity = entities[0];
+            let mut candidate = None;
+            for entity in &entities {
+                // Check if this entity is already mapped to a different key for this client
+                if !self.scenario.entity_registry()
+                    .is_client_entity_mapped_to_different_key(*entity, client_key, entity_key)
+                {
+                    candidate = Some(*entity);
+                    break;
+                }
+            }
+            // If all entities are mapped, just use the first one (fallback)
+            let entity_to_map = candidate.unwrap_or(entities[0]);
             self.scenario
                 .entity_registry_mut()
-                .map_client_entity(entity_key, client_key, first_entity);
+                .map_client_entity(entity_key, client_key, entity_to_map);
             true
         } else {
             false
