@@ -42,17 +42,35 @@ impl<'a> ServerCtxMutate<'a> {
 
     /// Include an entity in scope for a client
     pub fn include_in_scope(&mut self, client: ClientKey, entity: EntityKey) {
+        // Auto-discover server entity if not mapped yet
+        if !self.scenario.entity_registry().has_server_entity(entity) {
+            self.auto_discover_server_entity(entity);
+        }
+
         let server_entity = self
             .scenario
             .entity_registry()
             .get_server_entity(entity)
-            .expect("EntityKey not mapped to server entity");
+            .expect("EntityKey not mapped to server entity after auto-discovery");
 
         let user_key = self.scenario.user_key(client);
         self.scenario
             .server_mut()
             .user_scope_mut(&user_key)
             .include(&server_entity);
+    }
+
+    /// Auto-discover server entity using simple heuristic (first entity)
+    fn auto_discover_server_entity(&mut self, entity_key: EntityKey) {
+        let entities = self.scenario.server_world_mut().proxy().entities();
+        if !entities.is_empty() {
+            // Map first entity to this key
+            // Note: This is a simple heuristic; in real tests, you might want more sophisticated matching
+            let first_entity = entities[0];
+            self.scenario
+                .entity_registry_mut()
+                .map_server_entity(entity_key, first_entity);
+        }
     }
 }
 

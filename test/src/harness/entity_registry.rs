@@ -70,5 +70,22 @@ impl EntityRegistry {
     pub fn has_client_entity(&self, entity_key: EntityKey, client_key: ClientKey) -> bool {
         self.client_entities.contains_key(&(entity_key, client_key))
     }
+
+    /// Check if a server entity is already mapped to any key
+    pub fn is_server_entity_mapped(&self, entity: TestEntity) -> bool {
+        self.server_entities.values().any(|&e| e == entity)
+    }
+
+    /// Check if a client entity is already mapped to a different key for this client
+    pub fn is_client_entity_mapped_to_different_key(
+        &self,
+        entity: TestEntity,
+        client_key: ClientKey,
+        exclude_entity_key: EntityKey,
+    ) -> bool {
+        self.client_entities
+            .iter()
+            .any(|((ek, ck), &e)| *ck == client_key && ek != &exclude_entity_key && e == entity)
+    }
 }
 

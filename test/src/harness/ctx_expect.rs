@@ -224,9 +224,21 @@ impl<'a> ExpectCtx<'a> {
                 if !self.scenario.entity_registry().has_server_entity(entity_key)
                     && !entities.is_empty()
                 {
+                    // Use first entity that isn't already mapped to another key
+                    // Simple heuristic: if only one entity, use it; otherwise use first unmapped one
+                    let mut candidate = None;
+                    for entity in &entities {
+                        // Check if this entity is already mapped to a different key
+                        if !self.scenario.entity_registry().is_server_entity_mapped(*entity) {
+                            candidate = Some(*entity);
+                            break;
+                        }
+                    }
+                    // If all entities are mapped, just use the first one (fallback)
+                    let entity_to_map = candidate.unwrap_or(entities[0]);
                     self.scenario
                         .entity_registry_mut()
-                        .map_server_entity(entity_key, entities[0]);
+                        .map_server_entity(entity_key, entity_to_map);
                 }
             }
         }
@@ -247,9 +259,22 @@ impl<'a> ExpectCtx<'a> {
                         let state = self.scenario.client_state_mut(client_key);
                         let entities = state.world.proxy().entities();
                         if !entities.is_empty() {
+                            // Use first entity that isn't already mapped to another key for this client
+                            let mut candidate = None;
+                            for entity in &entities {
+                                // Check if this entity is already mapped to a different key for this client
+                                if !self.scenario.entity_registry()
+                                    .is_client_entity_mapped_to_different_key(*entity, client_key, entity_key)
+                                {
+                                    candidate = Some(*entity);
+                                    break;
+                                }
+                            }
+                            // If all entities are mapped, just use the first one (fallback)
+                            let entity_to_map = candidate.unwrap_or(entities[0]);
                             self.scenario
                                 .entity_registry_mut()
-                                .map_client_entity(entity_key, client_key, entities[0]);
+                                .map_client_entity(entity_key, client_key, entity_to_map);
                         }
                     }
                 }
