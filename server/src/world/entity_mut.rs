@@ -92,3 +92,19 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self
     }
 }
+
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+        
+        use naia_shared::LocalEntity;
+
+        use crate::UserKey;
+
+        impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
+            
+            pub fn local_entity(&self, user_key: &UserKey) -> LocalEntity {
+                self.server.world_to_local_entity(user_key, &self.entity)
+            }
+        }
+    }
+}

@@ -1983,6 +1983,23 @@ cfg_if! {
                 
                 world_entity
             }
+            
+            pub(crate) fn world_to_local_entity(
+                &self,
+                world_entity: &E,
+            ) -> LocalEntity {
+                let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
+                
+                let connection = self
+                    .server_connection
+                    .as_ref()
+                    .expect("Server connection does not exist");
+                let converter = connection.base.world_manager.entity_converter();
+                let owned_entity = converter.global_entity_to_owned_entity(&global_entity).unwrap();
+
+                LocalEntity::from(owned_entity)
+
+            }
         }
     }
 }

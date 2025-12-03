@@ -2583,7 +2583,7 @@ cfg_if! {
                 return self.entity_mut(world, &world_entity);
             }
 
-            fn local_to_world_entity(
+            pub(crate) fn local_to_world_entity(
                 &self,
                 user_key: &UserKey,
                 local_entity: &LocalEntity
@@ -2603,6 +2603,25 @@ cfg_if! {
                     .expect("GlobalEntity does not map to world entity");
 
                 world_entity
+            }
+
+            pub(crate) fn world_to_local_entity(
+                &self,
+                user_key: &UserKey,
+                world_entity: &E,
+            ) -> LocalEntity {
+                let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
+
+                let user = self.users.get(user_key).expect("User does not exist");
+                let connection = self
+                    .user_connections
+                    .get(&user.address())
+                    .expect("User connection does not exist");
+                let converter = connection.base.world_manager.entity_converter();
+                let owned_entity = converter.global_entity_to_owned_entity(&global_entity).unwrap();
+
+                LocalEntity::from(owned_entity)
+
             }
         }
     }

@@ -13,7 +13,7 @@ pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> 
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
     pub(crate) fn new(client: &'s mut Client<E>, world: W, entity: &E) -> Self {
-        EntityMut {
+        Self {
             client,
             world,
             entity: *entity,
@@ -77,5 +77,19 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.client.entity_release_authority(&self.entity);
 
         self
+    }
+}
+
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+
+        use naia_shared::LocalEntity;
+
+        impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
+
+            pub fn local_entity(&self) -> LocalEntity {
+                self.client.world_to_local_entity(&self.entity)
+            }
+        }
     }
 }
