@@ -62,6 +62,8 @@ impl<'a> ServerCtxMutate<'a> {
         // Entity must be in a room for scope to work
         // Also, client-spawned entities need to be Public to be visible to other clients
         // Add entity to main room if not already there, configure as Public, then add to user's scope
+        
+        // Step 1: Add entity to room
         {
             let server = self.scenario.server_mut();
             if !server.room_mut(&main_room).has_entity(&server_entity) {
@@ -69,17 +71,17 @@ impl<'a> ServerCtxMutate<'a> {
             }
         }
         
-        // Configure entity as Public (separate scope to avoid borrow conflicts)
+        // Step 2: Ensure entity is Public on the server side
+        // Even though we configured it as Public on the client, we need to ensure
+        // the server has processed the publish message and the entity is actually Public
+        // before including it in scope for other clients
         {
             let server = self.scenario.server_mut();
             let config = server.entity_replication_config(&server_entity);
             if config != Some(ServerReplicationConfig::Public) {
-                drop(server); // Explicitly drop server borrow
-                let world_mut = self.scenario.server_world_mut();
-                let mut proxy = world_mut.proxy_mut();
-                let server = self.scenario.server_mut();
-                server.configure_entity_replication(
-                    &mut proxy,
+                // Entity isn't Public yet on server - configure it here
+                // This can happen if the client's publish message hasn't been processed yet
+                self.scenario.configure_entity_replication(
                     &server_entity,
                     ServerReplicationConfig::Public,
                 );
@@ -97,12 +99,22 @@ impl<'a> ServerCtxMutate<'a> {
     fn auto_discover_server_entity(&mut self, entity_key: EntityKey) {
         let entities = self.scenario.server_world_mut().proxy().entities();
         if !entities.is_empty() {
-            // Map first entity to this key
-            // Note: This is a simple heuristic; in real tests, you might want more sophisticated matching
-            let first_entity = entities[0];
+            // Use first entity that isn't already mapped to another key
+            let mut candidate = None;
+            for entity in &entities {
+                // Check if this entity is already mapped to a different key
+                if !self.scenario.entity_registry().is_server_entity_mapped(*entity) {
+                    candidate = Some(*entity);
+                    break;
+                }
+            }
+            // If all entities are mapped, just use the first one (fallback)
+            let entity_to_map = candidate.unwrap_or(entities[0]);
             self.scenario
                 .entity_registry_mut()
-                .map_server_entity(entity_key, first_entity);
+                .map_server_entity(entity_key, entity_to_map);
+        } else {
+            panic!("Auto-discovery failed: no entities found on server world for EntityKey {:?}", entity_key);
         }
     }
 }
@@ -164,6 +176,10 @@ impl<'a> SpawnBuilder<'a> {
         if let Some(pos) = self.position {
             entity_mut.insert_component(pos);
         }
+
+        // Configure entity as Public so it can be replicated to other clients
+        // This must be done on the client side, not the server side
+        entity_mut.configure_replication(ReplicationConfig::Public);
 
         let entity = entity_mut.id();
 

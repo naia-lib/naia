@@ -124,6 +124,21 @@ impl Scenario {
         &mut self.entity_registry
     }
 
+    /// Configure entity replication config (helper to avoid borrow conflicts)
+    pub(crate) fn configure_entity_replication(
+        &mut self,
+        entity: &TestEntity,
+        config: naia_server::ReplicationConfig,
+    ) {
+        let server = self.server.as_mut().expect("server not started");
+        let current_config = server.entity_replication_config(entity);
+        if current_config != Some(config) {
+            let world_mut = &mut self.server_world;
+            let mut proxy = world_mut.proxy_mut();
+            server.configure_entity_replication(&mut proxy, entity, config);
+        }
+    }
+
     pub(crate) fn entity_registry(&self) -> &EntityRegistry {
         &self.entity_registry
     }
