@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use naia_shared::Instant;
 use naia_client::Client as NaiaClient;
 use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events};
@@ -10,207 +12,212 @@ use crate::{
 use naia_shared::WorldRefType;
 use crate::helpers::{update_client_server_at, update_all_at};
 
+use super::keys::{ClientKey, EntityKey};
+use super::entity_registry::EntityRegistry;
+
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
+
+pub(crate) struct ClientState {
+    pub(crate) client: Client,
+    pub(crate) world: TestWorld,
+    pub(crate) user_key: UserKey,
+}
 
 pub struct Scenario {
     now: Instant,
     builder: LocalTransportBuilder,
-    server: Server,
+    server: Option<Server>,
     server_world: TestWorld,
-    main_room: RoomKey,
-    client_a: Option<(Client, TestWorld, UserKey)>,
-    client_b: Option<(Client, TestWorld, UserKey)>,
+    main_room: Option<RoomKey>,
+    clients: HashMap<ClientKey, ClientState>,
+    entity_registry: EntityRegistry,
+    next_client_key: u32,
     protocol: naia_shared::Protocol,
 }
 
 impl Scenario {
     pub fn new(protocol: naia_shared::Protocol) -> Self {
-        let builder = LocalTransportBuilder::default();
-        let mut server = Server::new(ServerConfig::default(), protocol.clone());
-        let server_socket = create_server_socket(&builder);
-        server.listen(server_socket);
-        let main_room = server.make_room().key();
-
         Self {
             now: Instant::now(),
-            builder,
-            server,
+            builder: LocalTransportBuilder::default(),
+            server: None,
             server_world: TestWorld::default(),
-            main_room,
-            client_a: None,
-            client_b: None,
+            main_room: None,
+            clients: HashMap::new(),
+            entity_registry: EntityRegistry::new(),
+            next_client_key: 1,
             protocol,
         }
     }
 
-    pub fn main_room_key(&self) -> &RoomKey {
-        &self.main_room
+    pub fn server_start(&mut self) {
+        if self.server.is_some() {
+            panic!("server_start() called multiple times");
+        }
+
+        let mut server = Server::new(ServerConfig::default(), self.protocol.clone());
+        let server_socket = create_server_socket(&self.builder);
+        server.listen(server_socket);
+        let main_room = server.make_room().key();
+
+        self.server = Some(server);
+        self.main_room = Some(main_room);
     }
 
-    pub fn server(&mut self) -> (&mut Server, &mut TestWorld) {
-        (&mut self.server, &mut self.server_world)
-    }
+    pub fn client_connect(&mut self, auth: Auth, display_name: &str) -> ClientKey {
+        if self.server.is_none() {
+            panic!("server_start() must be called before client_connect()");
+        }
 
-    pub fn connect_client_a(&mut self, name: &str, auth: Auth) -> UserKey {
+        let client_key = ClientKey::new(self.next_client_key);
+        self.next_client_key += 1;
+
         let mut client = Client::new(default_client_config(), self.protocol.clone());
         let mut world = TestWorld::default();
         let socket = create_client_socket(&self.builder);
         client.auth(auth);
         client.connect(socket);
 
+        let server = self.server.as_mut().unwrap();
+        let main_room = self.main_room.as_ref().unwrap();
         let user_key = complete_handshake_with_name(
             &mut client,
-            &mut self.server,
+            server,
             &mut world,
             &mut self.server_world,
-            &self.main_room,
-            name,
+            main_room,
+            display_name,
         )
-        .expect("client A should connect");
+        .expect("client should connect");
 
-        self.client_a = Some((client, world, user_key));
-        user_key
+        self.clients.insert(
+            client_key,
+            ClientState {
+                client,
+                world,
+                user_key,
+            },
+        );
+
+        client_key
     }
 
-    pub fn connect_b(&mut self, name: &str, auth: Auth) -> UserKey {
-        let mut client = Client::new(default_client_config(), self.protocol.clone());
-        let mut world = TestWorld::default();
-        let socket = create_client_socket(&self.builder);
-        client.auth(auth);
-        client.connect(socket);
-
-        let user_key = complete_handshake_with_name(
-            &mut client,
-            &mut self.server,
-            &mut world,
-            &mut self.server_world,
-            &self.main_room,
-            name,
-        )
-        .expect("client B should connect");
-
-        self.client_b = Some((client, world, user_key));
-        user_key
+    pub fn main_room_key(&self) -> Option<&RoomKey> {
+        self.main_room.as_ref()
     }
 
-    fn tick_once_1c(&mut self) {
+    // Internal helper methods for context types
+    pub(crate) fn server_mut(&mut self) -> &mut Server {
+        self.server.as_mut().expect("server not started")
+    }
+
+    pub(crate) fn server_world_mut(&mut self) -> &mut TestWorld {
+        &mut self.server_world
+    }
+
+    pub(crate) fn client_state_mut(&mut self, client_key: ClientKey) -> &mut ClientState {
+        self.clients.get_mut(&client_key).expect("client not found")
+    }
+
+    pub(crate) fn entity_registry_mut(&mut self) -> &mut EntityRegistry {
+        &mut self.entity_registry
+    }
+
+    pub(crate) fn entity_registry(&self) -> &EntityRegistry {
+        &self.entity_registry
+    }
+
+    /// Tick the simulation once - updates all clients and server
+    pub(crate) fn tick_once(&mut self) {
         let now = self.now.clone();
-        let (client, world, _) = self.client_a.as_mut().unwrap();
-        update_client_server_at(now, client, &mut self.server, world, &mut self.server_world);
-        self.now = Instant::now(); // simplest tonight; later you can advance deterministically
-    }
+        let server = self.server.as_mut().expect("server not started");
+        let client_count = self.clients.len();
 
-    fn tick_once_2c(&mut self) {
-        let now = self.now.clone();
-        let (ca, wa, _) = self.client_a.as_mut().unwrap();
-        let (cb, wb, _) = self.client_b.as_mut().unwrap();
-        update_all_at(now, ca, cb, &mut self.server, wa, wb, &mut self.server_world);
+        // Handle different client counts explicitly
+        match client_count {
+            0 => {
+                // Just update server
+                server.receive_all_packets();
+                server.take_tick_events(&now);
+                server.process_all_packets(self.server_world.proxy_mut(), &now);
+                server.send_all_packets(self.server_world.proxy());
+            }
+            1 => {
+                let state = self.clients.values_mut().next().unwrap();
+                update_client_server_at(
+                    now,
+                    &mut state.client,
+                    server,
+                    &mut state.world,
+                    &mut self.server_world,
+                );
+            }
+            2 => {
+                let mut iter = self.clients.values_mut();
+                let state_a = iter.next().unwrap();
+                let state_b = iter.next().unwrap();
+                update_all_at(
+                    now,
+                    &mut state_a.client,
+                    &mut state_b.client,
+                    server,
+                    &mut state_a.world,
+                    &mut state_b.world,
+                    &mut self.server_world,
+                );
+            }
+            _ => {
+                // For 3+ clients, update each client-server pair sequentially
+                // This is not ideal but works for now
+                for state in self.clients.values_mut() {
+                    update_client_server_at(
+                        now,
+                        &mut state.client,
+                        server,
+                        &mut state.world,
+                        &mut self.server_world,
+                    );
+                }
+            }
+        }
+
         self.now = Instant::now();
     }
 
     pub fn tick(&mut self, n: usize) {
         for _ in 0..n {
-            if self.client_b.is_some() {
-                self.tick_once_2c();
-            } else {
-                self.tick_once_1c();
-            }
+            self.tick_once();
         }
     }
 
-    pub fn tick_until<F>(&mut self, max: usize, label: &str, mut f: F)
-    where
-        F: FnMut(&mut Scenario) -> bool,
-    {
-        for i in 0..max {
-            self.tick(1);
-            if f(self) {
-                return;
-            }
-            if i == max - 1 {
-                panic!("tick_until timeout: {}", label);
-            }
-        }
+    pub(crate) fn take_server_events(&mut self) -> Events<TestEntity> {
+        self.server.as_mut().expect("server not started").take_world_events()
     }
 
-    pub fn tick_until_map<T, F>(&mut self, max: usize, label: &str, mut f: F) -> Option<T>
-    where
-        F: FnMut(&mut Scenario) -> Option<T>,
-    {
-        for i in 0..max {
-            self.tick(1);
-            if let Some(result) = f(self) {
-                return Some(result);
-            }
-            if i == max - 1 {
-                panic!("tick_until_map timeout: {}", label);
-            }
-        }
-        None
+    pub(crate) fn user_key(&self, client_key: ClientKey) -> UserKey {
+        self.clients
+            .get(&client_key)
+            .expect("client not found")
+            .user_key
     }
 
-    // Convenience accessors you need immediately:
-    pub fn client_a(&mut self) -> (&mut Client, &mut TestWorld) {
-        let (c, w, _) = self.client_a.as_mut().unwrap();
-        (c, w)
+    /// Perform actions in a mutate phase
+    pub fn mutate<R>(&mut self, f: impl FnOnce(&mut super::ctx_mutate::CtxMutate) -> R) -> R {
+        use super::ctx_mutate::CtxMutate;
+        let mut ctx = CtxMutate::new(self);
+        let result = f(&mut ctx);
+        // Tick at least once after actions to propagate immediate effects
+        self.tick_once();
+        result
     }
 
-    pub fn client_b(&mut self) -> (&mut Client, &mut TestWorld) {
-        let (c, w, _) = self.client_b.as_mut().unwrap();
-        (c, w)
+    /// Register expectations and wait until they all pass or timeout
+    pub fn expect(&mut self, f: impl FnOnce(&mut super::ctx_expect::ExpectCtx)) {
+        use super::ctx_expect::ExpectCtx;
+        let mut ctx = ExpectCtx::new(self, 50); // Default max_ticks
+        f(&mut ctx);
+        ctx.run();
     }
-
-    pub fn take_server_events(&mut self) -> Events<TestEntity> {
-        self.server.take_world_events()
-    }
-
-    pub fn include_in_scope_b(&mut self, server_entity: &TestEntity, user_key_b: &UserKey) {
-        self.server.user_scope_mut(user_key_b).include(server_entity);
-        self.tick(1); // kick update_entity_scopes
-    }
-
-    /// Check if server has at least one entity
-    pub fn server_has_entity(&self) -> bool {
-        !self.server_world.proxy().entities().is_empty()
-    }
-
-    /// Get the first entity from the server world (panics if empty)
-    pub fn server_first_entity(&self) -> TestEntity {
-        let ents = self.server_world.proxy().entities();
-        assert!(!ents.is_empty(), "Server should have at least one entity");
-        ents[0]
-    }
-
-    /// Get the first entity from client B's world (returns None if empty)
-    pub fn client_b_first_entity(&self) -> Option<TestEntity> {
-        if let Some((_, world, _)) = &self.client_b {
-            world.proxy().entities().get(0).cloned()
-        } else {
-            None
-        }
-    }
-
-    /// Check if client B has a specific entity
-    pub fn b_has_entity(&self, entity: &TestEntity) -> bool {
-        if let Some((_, world, _)) = &self.client_b {
-            world.proxy().has_entity(entity)
-        } else {
-            false
-        }
-    }
-
-    /// Get the position component of an entity on client A
-    pub fn a_entity_position(&self, entity: &TestEntity) -> Option<(f32, f32)> {
-        if let Some((_client, world, _)) = &self.client_a {
-            world
-                .proxy()
-                .component::<Position>(entity)
-                .map(|p| (*p.x, *p.y))
-        } else {
-            None
-        }
-    }
-
 }
 
