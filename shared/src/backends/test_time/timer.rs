@@ -29,6 +29,14 @@ impl Timer {
     /// elapsed since the last "reset")
     pub fn ringing(&self) -> bool {
         let now = Instant::now();
+        
+        // Special case: zero duration timers should ring immediately after ring_manual()
+        if self.duration.as_millis() == 0 {
+            // If last is not after now (i.e., last <= now), the timer should ring
+            // This handles the case where ring_manual() set last to be in the past
+            return !now.is_after(&self.last) || now == self.last;
+        }
+        
         // Handle case where time might go backwards (shouldn't happen, but be safe)
         if now.is_after(&self.last) {
             self.last.elapsed(&now) > self.duration
@@ -39,8 +47,16 @@ impl Timer {
 
     /// Manually causes the Timer to enter into a "Ringing" state
     pub fn ring_manual(&mut self) {
-        let mut last = self.last.clone();
-        last.subtract_millis(self.duration.as_millis() as u32);
-        self.last = last;
+        if self.duration.as_millis() > 0 {
+            let mut last = self.last.clone();
+            last.subtract_millis(self.duration.as_millis() as u32);
+            self.last = last;
+        } else {
+            // For zero duration, set last to be in the past so ringing() returns true
+            // Subtract 1ms to ensure last is definitely in the past
+            let mut last = Instant::now();
+            last.subtract_millis(1);
+            self.last = last;
+        }
     }
 }

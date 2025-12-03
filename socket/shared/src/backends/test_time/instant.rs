@@ -34,6 +34,19 @@ impl TestClock {
     pub fn reset() {
         SIMULATED_CLOCK.store(u64::MAX, Ordering::SeqCst);
     }
+
+    /// Get the current simulated time in milliseconds
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the clock has not been initialized.
+    pub fn current_time_ms() -> u64 {
+        let millis = SIMULATED_CLOCK.load(Ordering::SeqCst);
+        if millis == u64::MAX {
+            panic!("test clock not initialized! Call TestClock::init() first.");
+        }
+        millis
+    }
 }
 
 /// Represents a specific moment in simulated test time
