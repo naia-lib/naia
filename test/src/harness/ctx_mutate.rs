@@ -1,5 +1,5 @@
 use naia_client::ReplicationConfig;
-use naia_shared::EntityAuthStatus;
+use naia_shared::{EntityAuthStatus, WorldRefType, WorldMutType};
 
 use crate::{TestEntity, TestWorld, Position};
 use crate::helpers::update_all_at;
@@ -106,7 +106,7 @@ impl<'a> SpawnBuilder<'a> {
     /// Finalize the spawn and return the EntityKey
     pub fn track(self) -> EntityKey {
         let state = self.scenario.client_state_mut(self.client_key);
-        let entity_mut = state
+        let mut entity_mut = state
             .client
             .spawn_entity(state.world.proxy_mut());
 
@@ -156,44 +156,37 @@ impl<'a> ClientEntityMut<'a> {
 
     /// Configure replication to use delegated/authority-based replication
     pub fn delegate(self) {
-        let state = self.scenario.client_state_mut(self.client_key);
         let entity = self.get_entity();
+        let state = self.scenario.client_state_mut(self.client_key);
+        let mut world_mut = state.world.proxy_mut();
         state
             .client
-            .configure_entity_replication(state.world.proxy_mut(), &entity, ReplicationConfig::Delegated);
+            .configure_entity_replication(&mut world_mut, &entity, ReplicationConfig::Delegated);
     }
 
     /// Request authority over this entity
     pub fn request_auth(self) {
-        let state = self.scenario.client_state_mut(self.client_key);
         let entity = self.get_entity();
+        let state = self.scenario.client_state_mut(self.client_key);
         state.client.entity_request_authority(&entity);
     }
 
     /// Release authority over this entity
     pub fn release_auth(self) {
-        let state = self.scenario.client_state_mut(self.client_key);
         let entity = self.get_entity();
+        let state = self.scenario.client_state_mut(self.client_key);
         state.client.entity_release_authority(&entity);
     }
 
     /// Set/update the position of the entity
     pub fn set_position(self, position: Position) {
-        let state = self.scenario.client_state_mut(self.client_key);
         let entity = self.get_entity();
+        let state = self.scenario.client_state_mut(self.client_key);
         
-        if state.world.proxy().has_component::<Position>(&entity) {
-            // Update existing component
-            if let Some(mut pos) = state.world.proxy_mut().component_mut::<Position>(&entity) {
-                *pos.x = *position.x;
-                *pos.y = *position.y;
-            }
-        } else {
-            // Insert new component
-            state
-                .client
-                .insert_component(state.world.proxy_mut(), &entity, position);
-        }
+        // Use EntityMut which handles both insert and update
+        let mut world_mut = state.world.proxy_mut();
+        let mut entity_mut = state.client.entity_mut(world_mut, &entity);
+        entity_mut.insert_component(position);
     }
 }
 

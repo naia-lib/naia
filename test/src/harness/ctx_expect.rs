@@ -41,14 +41,17 @@ impl<'a> ExpectCtx<'a> {
     }
 
     /// Register server-side expectations
-    pub fn server(&mut self, f: impl FnOnce(&mut ServerExpectCtx)) {
-        let mut ctx = ServerExpectCtx::new(self);
+    pub fn server(&mut self, f: impl FnOnce(&mut ServerExpectCtx<'_, 'a>)) {
+        let mut ctx = ServerExpectCtx { expect_ctx: self };
         f(&mut ctx);
     }
 
     /// Register client-side expectations
-    pub fn client(&mut self, client: ClientKey, f: impl FnOnce(&mut ClientExpectCtx)) {
-        let mut ctx = ClientExpectCtx::new(self, client);
+    pub fn client(&mut self, client: ClientKey, f: impl FnOnce(&mut ClientExpectCtx<'_, 'a>)) {
+        let mut ctx = ClientExpectCtx {
+            expect_ctx: self,
+            client_key: client,
+        };
         f(&mut ctx);
     }
 
@@ -72,7 +75,7 @@ impl<'a> ExpectCtx<'a> {
                 }
             }
             Expectation::ServerEvent(type_id, _label) => {
-                let events = self.scenario.take_server_events();
+                let mut events = self.scenario.take_server_events();
                 // Check if any event of this type exists
                 // For now, just check for DelegateEntityEvent
                 if *type_id == TypeId::of::<DelegateEntityEvent>() {
@@ -198,7 +201,8 @@ impl<'a> ExpectCtx<'a> {
             if tick == self.max_ticks - 1 {
                 // Timeout - panic with descriptive error
                 let mut failed = Vec::new();
-                for expectation in &self.expectations {
+                let expectations_clone = self.expectations.clone();
+                for expectation in &expectations_clone {
                     if !self.evaluate_expectation(expectation) {
                         failed.push(format!("{:?}", expectation));
                     }
@@ -256,15 +260,11 @@ impl<'a> ExpectCtx<'a> {
 }
 
 /// Context for server-side expectations
-pub struct ServerExpectCtx<'a> {
-    expect_ctx: &'a mut ExpectCtx<'a>,
+pub struct ServerExpectCtx<'b, 'a: 'b> {
+    expect_ctx: &'b mut ExpectCtx<'a>,
 }
 
-impl<'a> ServerExpectCtx<'a> {
-    pub(crate) fn new(expect_ctx: &'a mut ExpectCtx<'a>) -> Self {
-        Self { expect_ctx }
-    }
-
+impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
     /// Expect that the server has replicated/created a concrete entity
     pub fn has_entity(&mut self, entity: EntityKey) {
         self.expect_ctx
@@ -280,19 +280,12 @@ impl<'a> ServerExpectCtx<'a> {
 }
 
 /// Context for client-side expectations
-pub struct ClientExpectCtx<'a> {
-    expect_ctx: &'a mut ExpectCtx<'a>,
+pub struct ClientExpectCtx<'b, 'a: 'b> {
+    expect_ctx: &'b mut ExpectCtx<'a>,
     client_key: ClientKey,
 }
 
-impl<'a> ClientExpectCtx<'a> {
-    pub(crate) fn new(expect_ctx: &'a mut ExpectCtx<'a>, client_key: ClientKey) -> Self {
-        Self {
-            expect_ctx,
-            client_key,
-        }
-    }
-
+impl<'b, 'a: 'b> ClientExpectCtx<'b, 'a> {
     /// Expect that this client will eventually see the logical entity
     pub fn sees(&mut self, entity: EntityKey) {
         self.expect_ctx
@@ -300,33 +293,26 @@ impl<'a> ClientExpectCtx<'a> {
     }
 
     /// Return an expectation view for that logical entity on this client
-    pub fn entity(&mut self, entity: EntityKey) -> ClientEntityExpect<'a> {
+    pub fn entity(&mut self, entity: EntityKey) -> ClientEntityExpect<'b, 'a> {
         // Ensure mapping exists (implicitly calling sees if needed)
         self.sees(entity);
-        ClientEntityExpect::new(self.expect_ctx, self.client_key, entity)
+        // Use the same lifetime as expect_ctx
+        ClientEntityExpect {
+            expect_ctx: self.expect_ctx,
+            client_key: self.client_key,
+            entity_key: entity,
+        }
     }
 }
 
 /// Expectation view for a specific entity on a client
-pub struct ClientEntityExpect<'a> {
-    expect_ctx: &'a mut ExpectCtx<'a>,
+pub struct ClientEntityExpect<'b, 'a: 'b> {
+    expect_ctx: &'b mut ExpectCtx<'a>,
     client_key: ClientKey,
     entity_key: EntityKey,
 }
 
-impl<'a> ClientEntityExpect<'a> {
-    pub(crate) fn new(
-        expect_ctx: &'a mut ExpectCtx<'a>,
-        client_key: ClientKey,
-        entity_key: EntityKey,
-    ) -> Self {
-        Self {
-            expect_ctx,
-            client_key,
-            entity_key,
-        }
-    }
-
+impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
     /// Assert that the client's replication configuration for this entity is Delegated
     pub fn replication_is_delegated(self) {
         self.expect_ctx.add_expectation(Expectation::ClientReplicationIsDelegated(
@@ -354,4 +340,5 @@ impl<'a> ClientEntityExpect<'a> {
         ));
     }
 }
+
 

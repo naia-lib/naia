@@ -130,7 +130,8 @@ impl Scenario {
 
     /// Tick the simulation once - updates all clients and server
     pub(crate) fn tick_once(&mut self) {
-        let now = self.now.clone();
+        // Use current time for this tick (we update self.now at the end)
+        let now = Instant::now();
         let server = self.server.as_mut().expect("server not started");
         let client_count = self.clients.len();
 
@@ -170,9 +171,11 @@ impl Scenario {
             _ => {
                 // For 3+ clients, update each client-server pair sequentially
                 // This is not ideal but works for now
+                // Note: We use Instant::now() for each iteration since now is moved
                 for state in self.clients.values_mut() {
+                    let iter_now = Instant::now();
                     update_client_server_at(
-                        now,
+                        iter_now,
                         &mut state.client,
                         server,
                         &mut state.world,
