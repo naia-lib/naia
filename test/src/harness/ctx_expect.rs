@@ -293,7 +293,7 @@ impl<'b, 'a: 'b> ClientExpectCtx<'b, 'a> {
     }
 
     /// Return an expectation view for that logical entity on this client
-    pub fn entity(&mut self, entity: EntityKey) -> ClientEntityExpect<'b, 'a> {
+    pub fn entity(&mut self, entity: EntityKey) -> ClientEntityExpect<'_, 'a> {
         // Ensure mapping exists (implicitly calling sees if needed)
         self.sees(entity);
         // Use the same lifetime as expect_ctx

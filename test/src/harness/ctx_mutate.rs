@@ -71,12 +71,12 @@ impl<'a> ClientCtxMutate<'a> {
     }
 
     /// Begin spawning a new entity
-    pub fn spawn(&mut self) -> SpawnBuilder<'a> {
+    pub fn spawn(&mut self) -> SpawnBuilder<'_> {
         SpawnBuilder::new(self.scenario, self.client_key)
     }
 
     /// Get a mutable view of an entity
-    pub fn entity(&mut self, entity: EntityKey) -> ClientEntityMut<'a> {
+    pub fn entity(&mut self, entity: EntityKey) -> ClientEntityMut<'_> {
         ClientEntityMut::new(self.scenario, self.client_key, entity)
     }
 }
