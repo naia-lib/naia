@@ -1,6 +1,6 @@
 # Scenario Test Harness API Spec
 
-This spec defines a high-level, opinionated test harness API for end-to-end tests of a client/server networking library (e.g. `naia`). It is designed to be implemented inside the `naia_test` crate and used by integration tests to express behaviors in terms of **logical entities**, **client roles**, and **do/expect** phases.
+This spec defines a high-level, opinionated test harness API for end-to-end tests of a client/server networking library (e.g. `naia`). It is designed to be implemented inside the `naia_test` crate and used by integration tests to express behaviors in terms of **logical entities**, **client roles**, and **mutate/expect** phases.
 
 The spec is intentionally high-level and does not prescribe internal data structures beyond what is necessary for the public API and semantics. A Cursor agent should implement the described API and accompanying tests to validate its behavior.
 
@@ -10,7 +10,7 @@ The spec is intentionally high-level and does not prescribe internal data struct
 
 - Provide a clean, expressive API for E2E tests that follow the rhythm:
 
-  - **Do phase**: perform actions on server and clients.
+  - **Mutate phase**: perform actions on server and clients.
   - **Expect phase**: advance the simulation until all expectations pass (or timeout).
 
 - Hide low-level mechanics (instant, ticking, local transport, per-actor entity IDs) behind a small, consistent surface.
@@ -37,7 +37,7 @@ The spec is intentionally high-level and does not prescribe internal data struct
 
   - `server_start()` – boot the server.
   - `client_connect()` – connect a client to the server and register it with a `ClientKey`.
-  - `do(|DoCtx| { ... })` – perform actions.
+  - `mutate(|MutateCtx| { ... })` – perform actions.
   - `expect(|ExpectCtx| { ... })` – assert on outcomes; repeatedly tick until all expectations succeed or a max tick count is reached.
 
 ### 2.2 ClientKey
@@ -49,7 +49,7 @@ The spec is intentionally high-level and does not prescribe internal data struct
 ### 2.3 EntityKey
 
 - A small, copyable key representing a **logical game entity** in the test.
-- Returned by a `spawn().track()` call during a `DoCtx` client action.
+- Returned by a `spawn().track()` call during a `MutateCtx` client action.
 - Internally mapped to server-side and client-side entity IDs as replication progresses.
 - Tests only ever see this logical key; they never see per-actor entity IDs.
 
@@ -85,10 +85,10 @@ All types and functions listed here are intended as public or crate-visible API 
 
 Context types (scoped to the harness):
 
-- `struct DoCtx<'a>`
+- `struct MutateCtx<'a>`
 - `struct ExpectCtx<'a>`
-- `struct ServerDoCtx<'a>`
-- `struct ClientDoCtx<'a>`
+- `struct ServerMutateCtx<'a>`
+- `struct ClientMutateCtx<'a>`
 - `struct ServerExpectCtx<'a>`
 - `struct ClientExpectCtx<'a>`
 - Entity views/builders used inside contexts:
@@ -100,7 +100,7 @@ The exact module layout is up to the agent; a reasonable structure is:
 
 - `naia_test::harness::scenario::Scenario`
 - `naia_test::harness::keys::{ClientKey, EntityKey}`
-- `naia_test::harness::ctx_do::*`
+- `naia_test::harness::ctx_mutate::*`
 - `naia_test::harness::ctx_expect::*`
 
 ### 3.2 Scenario lifecycle and setup
@@ -123,35 +123,35 @@ Required methods on `Scenario`:
 
   - Creates a new client, assigns it a `ClientKey`.
   - Performs handshake/auth with the server and joins the main room (or whatever is appropriate for your test setup).
-  - Returns the `ClientKey` for use in `DoCtx` / `ExpectCtx`.
+  - Returns the `ClientKey` for use in `MutateCtx` / `ExpectCtx`.
   - Order of calls defines client ordering but not semantics.
 
-### 3.3 Do phase API
+### 3.3 Mutate phase API
 
-`Scenario::do`:
+`Scenario::mutate`:
 
-- `fn do<R>(&mut self, f: impl FnOnce(&mut DoCtx) -> R) -> R`
+- `fn mutate<R>(&mut self, f: impl FnOnce(&mut MutateCtx) -> R) -> R`
 
 Behavior:
 
-- Creates a `DoCtx` view over the scenario.
+- Creates a `MutateCtx` view over the scenario.
 - Executes the closure exactly once.
 - After the closure returns, `Scenario` **must tick** the simulation at least once to process any queued actions (e.g., send/receive messages, replication).
 - Implementation may choose to tick exactly once or a small fixed number; tests should not rely on that detail.
 
-`DoCtx` provides:
+`MutateCtx` provides:
 
-- `fn server<R>(&mut self, f: impl FnOnce(&mut ServerDoCtx) -> R) -> R`
+- `fn server<R>(&mut self, f: impl FnOnce(&mut ServerMutateCtx) -> R) -> R`
 
-  - Gives a mutable server context for this do-phase.
-  - May be called multiple times within a single `do`.
+  - Gives a mutable server context for this mutate-phase.
+  - May be called multiple times within a single `mutate`.
 
-- `fn client<R>(&mut self, client: ClientKey, f: impl FnOnce(&mut ClientDoCtx) -> R) -> R`
+- `fn client<R>(&mut self, client: ClientKey, f: impl FnOnce(&mut ClientMutateCtx) -> R) -> R`
 
   - Gives a mutable client context for the given `ClientKey`.
-  - May be called multiple times within a single `do`.
+  - May be called multiple times within a single `mutate`.
 
-#### ServerDoCtx requirements
+#### ServerMutateCtx requirements
 
 Minimal required operations (expandable later):
 
@@ -162,7 +162,7 @@ Minimal required operations (expandable later):
 
 (Additional server-side mutating operations can be added later as needed; for this spec, only scope management is required.)
 
-#### ClientDoCtx requirements
+#### ClientMutateCtx requirements
 
 Operations on the client’s world:
 
@@ -267,10 +267,10 @@ Minimal expectations for current usage:
   - Expect that the server will (eventually) have the entity in the main room.
   - Either:
 
-    - `DoCtx`’s server operations should perform the actual `enter_room`, and `enter_main_room` is not needed here, or
+    - `MutateCtx`’s server operations should perform the actual `enter_room`, and `enter_main_room` is not needed here, or
     - `enter_main_room` is treated as an expect-time effect with a corresponding predicate.
   
-  For simplicity in this spec, assume `enter_main_room` will be used in `DoCtx` (server) as a pure action, not an expectation. If you keep it as part of `ServerExpectCtx`, it must be purely an expectation (“the entity is now in the main room”), not a mutating operation.
+  For simplicity in this spec, assume `enter_main_room` will be used in `MutateCtx` (server) as a pure action, not an expectation. If you keep it as part of `ServerExpectCtx`, it must be purely an expectation (“the entity is now in the main room”), not a mutating operation.
 
 - `fn event<T: 'static>(&mut self, label: &str)`
 
@@ -321,7 +321,7 @@ Implementation details (how to read replication/auth/position from the underlyin
 ## 5. Tick semantics
 
 - `Scenario` must own the ticking mechanism and **tests should never call tick directly** for behavior checks.
-- `Scenario::do` must tick at least once after actions to propagate immediate effects.
+- `Scenario::mutate` must tick at least once after actions to propagate immediate effects.
 - `Scenario::expect` must:
 
   - Run a loop up to `max_ticks`:
@@ -351,9 +351,9 @@ Flow:
 
   - `let a = scenario.client_connect(Auth::new("client_a","password"), "Client A");`
 
-- Do phase:
+- Mutate phase:
 
-  - `let ent = scenario.do(|ctx| { ctx.client(a, |c| c.spawn().with_position(Position::new(1.0, 2.0)).track()) });`
+  - `let ent = scenario.mutate(|ctx| { ctx.client(a, |c| c.spawn().with_position(Position::new(1.0, 2.0)).track()) });`
 
 - Expect phase:
 
@@ -370,10 +370,10 @@ Name: `harness_two_clients_entity_mapping`
 Flow:
 
 - Setup scenario with server and two clients `a` and `b`.
-- In a do-phase:
+- In a mutate-phase:
 
   - Client `a` spawns and tracks an entity `ent`.
-  - Server includes `b` in scope for `ent` (via `ServerDoCtx::include_in_scope`).
+  - Server includes `b` in scope for `ent` (via `ServerMutateCtx::include_in_scope`).
 
 - Expect phase:
 
@@ -382,7 +382,7 @@ Flow:
 - Additional expect:
 
   - Assert that server has entity `ent`.
-  - Assert that both `a` and `b` report the same logical entity position after a client `a` position change in a subsequent `do` + `expect`.
+  - Assert that both `a` and `b` report the same logical entity position after a client `a` position change in a subsequent `mutate` + `expect`.
 
 ### 6.3 Test: delegating authority from A to B (smoke test)
 
@@ -391,19 +391,19 @@ Name: `harness_delegation_flow_smoke`
 Flow (high-level, matching the bug scenario):
 
 1. Setup server + connect clients `a` and `b`.
-2. In a do-phase, client `a` spawns entity `ent` and sets initial position.
+2. In a mutate-phase, client `a` spawns entity `ent` and sets initial position.
 3. Expect:
 
    - Server has entity `ent`.
 
-4. Do: server includes `b` in scope for `ent`.
-5. Do: client `a` configures `ent` as delegated.
+4. Mutate: server includes `b` in scope for `ent`.
+5. Mutate: client `a` configures `ent` as delegated.
 6. Expect:
 
    - Server sees a `DelegateEntityEvent` for this entity.
    - Client `a` sees replicated entity `ent` as delegated and `auth_is(Granted)`.
 
-7. Do: client `a` releases authority.
+7. Mutate: client `a` releases authority.
 8. Expect:
 
    - Client `a` sees `auth_is(Available)`.
@@ -413,13 +413,13 @@ Flow (high-level, matching the bug scenario):
    - Client `b` sees `ent` (via `sees(ent)`).
    - Client `b` sees `ent` as delegated and `auth_is(Available)`.
 
-10. Do: client `b` requests authority for `ent`.
+10. Mutate: client `b` requests authority for `ent`.
 11. Expect:
 
    - Client `b` sees `auth_is(Granted)`.
    - Client `a` still sees `auth_is(Available)`.
 
-12. Do: client `b` sets new position for `ent` (e.g., `(100.0, 200.0)`).
+12. Mutate: client `b` sets new position for `ent` (e.g., `(100.0, 200.0)`).
 13. Expect:
 
    - Client `a` eventually sees `position_is(100.0, 200.0)` for `ent`.
@@ -427,9 +427,9 @@ Flow (high-level, matching the bug scenario):
 All of the above should be expressible using only:
 
 - `Scenario::new`, `server_start`, `client_connect`
-- `do(|DoCtx| { ... })`
+- `mutate(|MutateCtx| { ... })`
 - `expect(|ExpectCtx| { ... })`
-- `ServerDoCtx`, `ClientDoCtx`
+- `ServerMutateCtx`, `ClientMutateCtx`
 - `ServerExpectCtx`, `ClientExpectCtx`
 - `ClientEntityMut`, `ClientEntityExpect`
 - `EntityKey`, `ClientKey`
