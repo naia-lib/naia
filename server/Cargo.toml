@@ -26,6 +26,7 @@ transport_udp = [
 ]
 transport_local = [ "http", "base64", "naia-shared/transport_local" ]
 interior_visibility = [ "naia-shared/interior_visibility" ]
+test_time = [ "naia-shared/test_time" ]
 
 [dependencies]
 naia-shared = { version = "0.24", path = "../shared" }

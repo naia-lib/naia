@@ -17,7 +17,7 @@ impl Timer {
     /// Creates a new Timer with a given Duration
     pub fn new(duration: Duration) -> Self {
         unsafe {
-            Timer {
+            Self {
                 last: naia_now(),
                 duration: duration.as_millis() as f64,
             }

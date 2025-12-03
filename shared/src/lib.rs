@@ -35,6 +35,9 @@ pub use naia_socket_shared::{
     Random, SocketConfig, TimeQueue,
 };
 
+#[cfg(feature = "test_time")]
+pub use naia_socket_shared::TestClock;
+
 mod backends;
 mod bigmap;
 mod connection;

@@ -10,9 +10,9 @@ publish = false
 [features]
 
 [dependencies]
-naia-server = { path = "../server", features = ["transport_local", "interior_visibility"] }
-naia-client = { path = "../client", features = ["transport_local", "interior_visibility"] }
-naia-shared = { path = "../shared", features = ["transport_local", "interior_visibility"] }
+naia-server = { path = "../server", features = ["transport_local", "interior_visibility", "test_time"] }
+naia-client = { path = "../client", features = ["transport_local", "interior_visibility", "test_time"] }
+naia-shared = { path = "../shared", features = ["transport_local", "interior_visibility", "test_time"] }
 
 naia-demo-world = { path = "../demos/demo_utils/demo_world" }
 

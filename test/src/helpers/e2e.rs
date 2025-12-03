@@ -8,9 +8,9 @@
 
 use std::time::Duration;
 
-use log::info;
+use log::{info, warn};
 
-use naia_shared::Instant;
+use naia_shared::{Instant, TestClock};
 use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent, transport::local::Socket as LocalClientSocket, JitterBufferType};
 use naia_server::{AuthEvent, DelegateEntityEvent, Server as NaiaServer, transport::local::Socket as LocalServerSocket};
 
@@ -165,11 +165,30 @@ pub fn complete_handshake_with_name(
     let mut connected = false;
 
     for attempt in 1..=100 {
+        // Advance simulated time for each handshake attempt
+        TestClock::advance(16); // Advance by one tick (16ms)
+        let now = Instant::now();
+        
+        // Process server side first to receive client packets
+        server.receive_all_packets();
+        server.take_tick_events(&now);
+        server.process_all_packets(server_world.proxy_mut(), &now);
+
+        let mut server_events = server.take_world_events();
+        for (user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
+            info!("Server accepting connection for {}: {:?}", client_name, user_key);
+            server.accept_connection(&user_key);
+            server.room_mut(main_room_key).add_user(&user_key);
+            user_key_opt = Some(user_key);
+        }
+        server.send_all_packets(server_world.proxy());
+        
+        // Then process client side
         if !client.connection_status().is_connected() {
+            // For handshake, receive then send to allow handshake manager to process
             client.receive_all_packets();
             client.send_all_packets(client_world.proxy_mut());
         } else {
-            let now = Instant::now();
             client.receive_all_packets();
             client.process_all_packets(client_world.proxy_mut(), &now);
 
@@ -177,33 +196,22 @@ pub fn complete_handshake_with_name(
             for _ in client_events.read::<ClientConnectEvent>() {
                 info!("{} connected in {} attempts", client_name, attempt);
                 connected = true;
-                break;
             }
         }
 
-        let now = Instant::now();
-        server.receive_all_packets();
-        server.process_all_packets(server_world.proxy_mut(), &now);
-
-        let mut server_events = server.take_world_events();
-
-        for (user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
-            info!("Server accepting connection for {}: {:?}", client_name, user_key);
-            server.accept_connection(&user_key);
-            server.room_mut(main_room_key).add_user(&user_key);
-            user_key_opt = Some(user_key);
-        }
-
-        server.send_all_packets(server_world.proxy());
-
-        if connected {
+        if connected && user_key_opt.is_some() {
             break;
         }
     }
 
-    if connected {
+    if connected && user_key_opt.is_some() {
         user_key_opt
     } else {
+        if !connected {
+            warn!("{} handshake failed: client never connected after 100 attempts", client_name);
+        } else if user_key_opt.is_none() {
+            warn!("{} handshake failed: client connected but server never accepted (user_key_opt is None)", client_name);
+        }
         None
     }
 }
@@ -288,4 +296,5 @@ pub fn wait_for_delegation_event(
     }
     false
 }
+
 

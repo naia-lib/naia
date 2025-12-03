@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_shared::Instant;
+use naia_shared::{TestClock, Instant};
 use naia_client::Client as NaiaClient;
 use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events};
 
@@ -37,6 +37,9 @@ pub struct Scenario {
 
 impl Scenario {
     pub fn new(protocol: naia_shared::Protocol) -> Self {
+        // Initialize simulated clock for deterministic test time
+        TestClock::init(0);
+        
         Self {
             now: Instant::now(),
             builder: LocalTransportBuilder::default(),
@@ -159,6 +162,9 @@ impl Scenario {
 
     /// Tick the simulation once - updates all clients and server
     pub(crate) fn tick_once(&mut self) {
+        // Advance simulated clock by 16ms (default tick duration for ~60 FPS)
+        TestClock::advance(16);
+        
         // Use current time for this tick (we update self.now at the end)
         let now = Instant::now();
         let server = self.server.as_mut().expect("server not started");
