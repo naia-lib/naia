@@ -231,11 +231,10 @@ impl Scenario {
     }
 
     /// Register expectations and wait until they all pass or timeout
-    pub fn expect(&mut self, f: impl FnOnce(&mut super::expect_ctx::ExpectCtx)) {
+    pub fn expect(&mut self, f: impl FnMut(&mut super::expect_ctx::ExpectCtx) -> bool) {
         use super::expect_ctx::ExpectCtx;
         let mut ctx = ExpectCtx::new(self, 50); // Default max_ticks
-        f(&mut ctx);
-        ctx.run();
+        ctx.run(f);
     }
 }
 

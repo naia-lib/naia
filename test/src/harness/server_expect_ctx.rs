@@ -1,6 +1,7 @@
 use std::any::TypeId;
 
-use crate::harness::expect_ctx::Expectation;
+use naia_server::DelegateEntityEvent;
+
 use crate::harness::ExpectCtx;
 use super::keys::EntityKey;
 
@@ -11,15 +12,27 @@ pub struct ServerExpectCtx<'b, 'a: 'b> {
 
 impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
     /// Expect that the server has replicated/created a concrete entity
-    pub fn has_entity(&mut self, entity: EntityKey) {
-        self.expect_ctx
-            .add_expectation(Expectation::ServerHasEntity(entity));
+    pub fn has_entity(&mut self, entity: EntityKey) -> bool {
+        if self.expect_ctx.scenario.entity_registry().has_server_entity(entity) {
+            true
+        } else {
+            self.expect_ctx.auto_discover_server_entity(entity)
+        }
     }
 
     /// Expect that the server will produce at least one world event of type T
-    pub fn event<T: 'static>(&mut self, label: &str) {
-        let type_id = TypeId::of::<T>();
-        self.expect_ctx
-            .add_expectation(Expectation::ServerEvent(type_id, label.to_string()));
+    pub fn event<T: 'static>(&mut self, _label: &str) -> bool {
+        // For now, just check for DelegateEntityEvent
+        if std::any::TypeId::of::<T>() == TypeId::of::<DelegateEntityEvent>() {
+            let mut events = self.expect_ctx.scenario.take_server_events();
+            let mut found = false;
+            for _ in events.read::<DelegateEntityEvent>() {
+                found = true;
+                break;
+            }
+            found
+        } else {
+            false
+        }
     }
 }

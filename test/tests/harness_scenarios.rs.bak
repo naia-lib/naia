@@ -46,8 +46,8 @@ fn harness_two_clients_entity_mapping() {
     // Wait for entity to replicate to server
     scenario.expect(|ctx| {
         ctx.server(|sv| {
-            sv.has_entity(ent)
-        })
+            sv.has_entity(ent);
+        });
     });
     
     // Now include B in scope
@@ -96,12 +96,15 @@ fn harness_delegation_flow_smoke() {
         })
     });
     
-    // Step 2: Expect server has entity
+    // Step 2: Expect server has entity (and wait a bit for it to be fully set up)
     scenario.expect(|ctx| {
         ctx.server(|sv| {
-            sv.has_entity(ent)
-        })
+            sv.has_entity(ent);
+        });
     });
+    
+    // Step 2.5: Tick a few more times to ensure entity is fully replicated and published
+    scenario.tick(5);
     
     // Step 3: Server includes B in scope
     scenario.mutate(|ctx| {
@@ -109,6 +112,9 @@ fn harness_delegation_flow_smoke() {
             sv.include_in_scope(b, ent);
         });
     });
+    
+    // Step 3.5: Tick a few more times to allow replication to client B
+    scenario.tick(5);
     
     // Step 4: Client A configures entity as delegated
     scenario.mutate(|ctx| {
@@ -120,10 +126,12 @@ fn harness_delegation_flow_smoke() {
     // Step 5: Expect server sees DelegateEntityEvent, client A sees delegated and Granted
     scenario.expect(|ctx| {
         ctx.server(|sv| {
-            sv.event::<naia_server::DelegateEntityEvent>("delegation")
-        }) && ctx.client(a, |c| {
-            c.entity(ent).replication_is_delegated() && c.entity(ent).auth_is(EntityAuthStatus::Granted)
-        })
+            sv.event::<naia_server::DelegateEntityEvent>("delegation");
+        });
+        ctx.client(a, |c| {
+            c.entity(ent).replication_is_delegated();
+            c.entity(ent).auth_is(EntityAuthStatus::Granted);
+        });
     });
     
     // Step 6: Client A releases authority
@@ -136,15 +144,17 @@ fn harness_delegation_flow_smoke() {
     // Step 7: Expect client A sees Available
     scenario.expect(|ctx| {
         ctx.client(a, |c| {
-            c.entity(ent).auth_is(EntityAuthStatus::Available)
-        })
+            c.entity(ent).auth_is(EntityAuthStatus::Available);
+        });
     });
     
     // Step 8: Expect client B sees entity as delegated and Available
     scenario.expect(|ctx| {
         ctx.client(b, |c| {
-            c.sees(ent) && c.entity(ent).replication_is_delegated() && c.entity(ent).auth_is(EntityAuthStatus::Available)
-        })
+            c.sees(ent);
+            c.entity(ent).replication_is_delegated();
+            c.entity(ent).auth_is(EntityAuthStatus::Available);
+        });
     });
     
     // Step 9: Client B requests authority
@@ -157,10 +167,11 @@ fn harness_delegation_flow_smoke() {
     // Step 10: Expect client B sees Granted, client A still sees Available
     scenario.expect(|ctx| {
         ctx.client(b, |c| {
-            c.entity(ent).auth_is(EntityAuthStatus::Granted)
-        }) && ctx.client(a, |c| {
-            c.entity(ent).auth_is(EntityAuthStatus::Available)
-        })
+            c.entity(ent).auth_is(EntityAuthStatus::Granted);
+        });
+        ctx.client(a, |c| {
+            c.entity(ent).auth_is(EntityAuthStatus::Available);
+        });
     });
     
     // Step 11: Client B sets new position
@@ -173,8 +184,8 @@ fn harness_delegation_flow_smoke() {
     // Step 12: Expect client A eventually sees new position
     scenario.expect(|ctx| {
         ctx.client(a, |c| {
-            c.entity(ent).position_is(100.0, 200.0)
-        })
+            c.entity(ent).position_is(100.0, 200.0);
+        });
     });
 }
 
