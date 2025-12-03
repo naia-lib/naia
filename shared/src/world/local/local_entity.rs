@@ -28,7 +28,7 @@ impl OwnedLocalEntity {
         !self.is_host()
     }
 
-    fn value(&self) -> u16 {
+    pub(crate) fn value(&self) -> u16 {
         match self {
             Self::Host(value) => *value,
             Self::Remote(value) => *value,

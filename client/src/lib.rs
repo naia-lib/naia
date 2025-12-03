@@ -33,6 +33,12 @@ mod tick_events;
 mod world;
 mod world_events;
 
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+        pub use naia_shared::LocalEntity;
+    }
+}
+
 pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;
 pub use command_history::CommandHistory;

@@ -2512,3 +2512,98 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Wo
         self.global_entity_map.entity_to_global_entity(world_entity)
     }
 }
+
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+
+        use naia_shared::{LocalEntity, OwnedLocalEntity};
+
+        impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
+            /// Returns all LocalEntity IDs for entities replicated to the given user.
+            ///
+            /// Returns the set of LocalEntity IDs that currently exist for that user
+            /// (i.e., all entities replicated to that user).
+            /// The ordering doesn't matter.
+            ///
+            /// # Panics
+            ///
+            /// Panics if the user does not exist.
+            pub fn local_entities(&self, user_key: &UserKey) -> Vec<LocalEntity> {
+                let user = self.users.get(user_key).expect("User does not exist");
+                let connection = self
+                    .user_connections
+                    .get(&user.address())
+                    .expect("User connection does not exist");
+
+                connection.base.world_manager.local_entities()
+            }
+
+            /// Retrieves an EntityRef that exposes read-only operations for the Entity
+            /// identified by the given LocalEntity for the specified user.
+            ///
+            /// # Panics
+            ///
+            /// Panics if:
+            /// - The user does not exist
+            /// - The LocalEntity doesn't exist for that user
+            /// - The entity does not exist in the world
+            pub fn local_entity<W: WorldRefType<E>>(
+                &self,
+                world: W,
+                user_key: &UserKey,
+                local_entity: &LocalEntity,
+            ) -> EntityRef<'_, E, W> {
+
+                let world_entity = self.local_to_world_entity(user_key, local_entity);
+                if !world.has_entity(&world_entity) {
+                    panic!("No Entity exists for given LocalEntity!");
+                }
+                return self.entity(world, &world_entity);
+            }
+
+            /// Retrieves an EntityMut that exposes read and write operations for the Entity
+            /// identified by the given LocalEntity for the specified user.
+            ///
+            /// # Panics
+            ///
+            /// Panics if:
+            /// - The user does not exist
+            /// - The LocalEntity doesn't exist for that user
+            /// - The entity does not exist in the world
+            pub fn local_entity_mut<W: WorldMutType<E>>(
+                &mut self,
+                world: W,
+                user_key: &UserKey,
+                local_entity: &LocalEntity,
+            ) -> EntityMut<'_, E, W> {
+                let world_entity = self.local_to_world_entity(user_key, local_entity);
+                if !world.has_entity(&world_entity) {
+                    panic!("No Entity exists for given LocalEntity!");
+                }
+                return self.entity_mut(world, &world_entity);
+            }
+
+            fn local_to_world_entity(
+                &self,
+                user_key: &UserKey,
+                local_entity: &LocalEntity
+            ) -> E {
+                let user = self.users.get(user_key).expect("User does not exist");
+                let connection = self
+                    .user_connections
+                    .get(&user.address())
+                    .expect("User connection does not exist");
+                let converter = connection.base.world_manager.entity_converter();
+
+                let owned_local_entity: OwnedLocalEntity = (*local_entity).into();
+                let global_entity = converter.owned_entity_to_global_entity(&owned_local_entity).unwrap();
+                let world_entity = self
+                    .global_entity_map
+                    .global_entity_to_entity(&global_entity)
+                    .expect("GlobalEntity does not map to world entity");
+
+                world_entity
+            }
+        }
+    }
+}

@@ -37,6 +37,12 @@ mod user;
 mod user_scope;
 mod world;
 
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+        pub use naia_shared::LocalEntity;
+    }
+}
+
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;
 pub use events::{

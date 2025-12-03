@@ -1031,3 +1031,20 @@ impl PacketNotifiable for LocalWorldManager {
         self.updater.notify_packet_delivered(packet_index);
     }
 }
+
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+
+        use crate::LocalEntity;
+
+        impl LocalWorldManager {
+
+            pub fn local_entities(&self) -> Vec<LocalEntity> {
+                self.entity_map
+                .iter()
+                .map(|(_, record)| LocalEntity::from(record.owned_entity()))
+                .collect::<Vec<LocalEntity>>()
+            }
+        }
+    }
+}

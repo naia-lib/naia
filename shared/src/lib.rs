@@ -55,6 +55,12 @@ cfg_if! {
     }
 }
 
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+        pub use world::local::LocalEntity;
+    }
+}
+
 pub use backends::{Timer, Timestamp};
 pub use connection::{
     ack_manager::AckManager,

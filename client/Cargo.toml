@@ -27,6 +27,7 @@ transport_udp = [
     "local_ipaddress", "once_cell", "base64", "tokio", "reqwest",
 ]
 transport_local = [ "tokio", "http", "base64", "naia-shared/transport_local" ]
+interior_visibility = [ "naia-shared/interior_visibility" ]
 
 [dependencies]
 naia-shared = { version = "0.24", path = "../shared" }

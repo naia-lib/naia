@@ -1,10 +1,6 @@
 use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
-use naia_shared::{
-    Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate, Request,
-    Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
-};
+use naia_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType};
 
 use crate::{
     connection::tick_buffer_messages::TickBufferMessages,
@@ -443,5 +439,63 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Se
         world_entity: &E,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.world_server.entity_to_global_entity(world_entity)
+    }
+}
+
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+        
+        use naia_shared::LocalEntity;
+        
+        impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
+            /// Returns all LocalEntity IDs for entities replicated to the given user.
+            ///
+            /// Returns the set of LocalEntity IDs that currently exist for that user
+            /// (i.e., all entities replicated to that user).
+            /// The ordering doesn't matter.
+            ///
+            /// # Panics
+            ///
+            /// Panics if the user does not exist.
+            pub fn local_entities(&self, user_key: &UserKey) -> Vec<LocalEntity> {
+                self.world_server.local_entities(user_key)
+            }
+        
+            /// Retrieves an EntityRef that exposes read-only operations for the Entity
+            /// identified by the given LocalEntity for the specified user.
+            ///
+            /// # Panics
+            ///
+            /// Panics if:
+            /// - The user does not exist
+            /// - The LocalEntity doesn't exist for that user
+            /// - The entity does not exist in the world
+            pub fn local_entity<W: WorldRefType<E>>(
+                &self,
+                world: W,
+                user_key: &UserKey,
+                local_entity: &LocalEntity,
+            ) -> EntityRef<'_, E, W> {
+                self.world_server.local_entity(world, user_key, local_entity)
+            }
+        
+            /// Retrieves an EntityMut that exposes read and write operations for the Entity
+            /// identified by the given LocalEntity for the specified user.
+            ///
+            /// # Panics
+            ///
+            /// Panics if:
+            /// - The user does not exist
+            /// - The LocalEntity doesn't exist for that user
+            /// - The entity does not exist in the world
+            pub fn local_entity_mut<W: WorldMutType<E>>(
+                &mut self,
+                world: W,
+                user_key: &UserKey,
+                local_entity: &LocalEntity,
+            ) -> EntityMut<'_, E, W> {
+                self.world_server.local_entity_mut(world, user_key, local_entity)
+            }
+        }
     }
 }

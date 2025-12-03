@@ -25,6 +25,7 @@ transport_udp = [
     "ring", "http", "base64", "url"
 ]
 transport_local = [ "http", "base64", "naia-shared/transport_local" ]
+interior_visibility = [ "naia-shared/interior_visibility" ]
 
 [dependencies]
 naia-shared = { version = "0.24", path = "../shared" }
