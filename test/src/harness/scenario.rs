@@ -221,9 +221,9 @@ impl Scenario {
     }
 
     /// Perform actions in a mutate phase
-    pub fn mutate<R>(&mut self, f: impl FnOnce(&mut super::ctx_mutate::CtxMutate) -> R) -> R {
-        use super::ctx_mutate::CtxMutate;
-        let mut ctx = CtxMutate::new(self);
+    pub fn mutate<R>(&mut self, f: impl FnOnce(&mut super::mutate_ctx::MutateCtx) -> R) -> R {
+        use super::mutate_ctx::MutateCtx;
+        let mut ctx = MutateCtx::new(self);
         let result = f(&mut ctx);
         // Tick at least once after actions to propagate immediate effects
         self.tick_once();
@@ -231,8 +231,8 @@ impl Scenario {
     }
 
     /// Register expectations and wait until they all pass or timeout
-    pub fn expect(&mut self, f: impl FnOnce(&mut super::ctx_expect::ExpectCtx)) {
-        use super::ctx_expect::ExpectCtx;
+    pub fn expect(&mut self, f: impl FnOnce(&mut super::expect_ctx::ExpectCtx)) {
+        use super::expect_ctx::ExpectCtx;
         let mut ctx = ExpectCtx::new(self, 50); // Default max_ticks
         f(&mut ctx);
         ctx.run();

@@ -36,13 +36,21 @@ fn harness_two_clients_entity_mapping() {
     let a = scenario.client_connect(Auth::new("client_a", "password"), "Client A");
     let b = scenario.client_connect(Auth::new("client_b", "password"), "Client B");
     
-    // Mutate phase: client A spawns entity, server includes B in scope
+    // Mutate phase: client A spawns entity
     let ent = scenario.mutate(|ctx| {
         ctx.client(a, |c| {
             c.spawn().with_position(Position::new(10.0, 20.0)).track()
         })
     });
     
+    // Wait for entity to replicate to server
+    scenario.expect(|ctx| {
+        ctx.server(|sv| {
+            sv.has_entity(ent);
+        });
+    });
+    
+    // Now include B in scope
     scenario.mutate(|ctx| {
         ctx.server(|sv| {
             sv.include_in_scope(b, ent);
@@ -89,12 +97,15 @@ fn harness_delegation_flow_smoke() {
         })
     });
     
-    // Step 2: Expect server has entity
+    // Step 2: Expect server has entity (and wait a bit for it to be fully set up)
     scenario.expect(|ctx| {
         ctx.server(|sv| {
             sv.has_entity(ent);
         });
     });
+    
+    // Step 2.5: Tick a few more times to ensure entity is fully replicated and published
+    scenario.tick(5);
     
     // Step 3: Server includes B in scope
     scenario.mutate(|ctx| {
@@ -102,6 +113,9 @@ fn harness_delegation_flow_smoke() {
             sv.include_in_scope(b, ent);
         });
     });
+    
+    // Step 3.5: Tick a few more times to allow replication to client B
+    scenario.tick(5);
     
     // Step 4: Client A configures entity as delegated
     scenario.mutate(|ctx| {
