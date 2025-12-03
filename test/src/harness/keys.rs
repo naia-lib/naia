@@ -17,12 +17,9 @@ impl ClientKey {
 pub struct EntityKey(u32);
 
 impl EntityKey {
+    // Private constructor - only EntityRegistry should create EntityKeys
     pub(crate) fn new(id: u32) -> Self {
         Self(id)
-    }
-
-    pub(crate) fn id(&self) -> u32 {
-        self.0
     }
 }
 

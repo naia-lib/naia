@@ -5,11 +5,10 @@ use naia_client::Client as NaiaClient;
 use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events};
 
 use crate::{
-    TestWorld, Auth, TestEntity, Position, LocalTransportBuilder,
+    TestWorld, Auth, TestEntity, LocalTransportBuilder,
     create_client_socket, create_server_socket, default_client_config,
     complete_handshake_with_name,
 };
-use naia_shared::WorldRefType;
 use crate::helpers::{update_client_server_at, update_all_at};
 
 use super::keys::{ClientKey, EntityKey};
@@ -108,8 +107,16 @@ impl Scenario {
     }
 
     // Internal helper methods for context types
+    pub(crate) fn server(&self) -> &Server {
+        self.server.as_ref().expect("server not started")
+    }
+
     pub(crate) fn server_mut(&mut self) -> &mut Server {
         self.server.as_mut().expect("server not started")
+    }
+
+    pub(crate) fn server_world(&self) -> &TestWorld {
+        &self.server_world
     }
 
     pub(crate) fn server_world_mut(&mut self) -> &mut TestWorld {
@@ -122,6 +129,13 @@ impl Scenario {
 
     pub(crate) fn entity_registry_mut(&mut self) -> &mut EntityRegistry {
         &mut self.entity_registry
+    }
+
+    /// Get server entity ID for a LocalEntity and UserKey
+    pub(crate) fn server_entity_for_local(&self, user_key: UserKey, local_entity: &naia_shared::LocalEntity) -> Option<TestEntity> {
+        let server = self.server.as_ref()?;
+        let server_ref = server.local_entity(self.server_world.proxy(), &user_key, local_entity);
+        Some(server_ref.id())
     }
 
     /// Configure entity replication config (helper to avoid borrow conflicts)
@@ -218,6 +232,19 @@ impl Scenario {
             .get(&client_key)
             .expect("client not found")
             .user_key
+    }
+
+    /// Get server host entity for an EntityKey
+    pub(crate) fn server_host_entity(&self, entity_key: EntityKey) -> Option<TestEntity> {
+        self.entity_registry.host_world(entity_key)
+    }
+
+    /// Get LocalEntity for an EntityKey and UserKey
+    pub(crate) fn local_entity_for(&self, entity_key: EntityKey, user_key: UserKey) -> Option<naia_shared::LocalEntity> {
+        let host_entity = self.entity_registry.host_world(entity_key)?;
+        let server = self.server.as_ref()?;
+        let host_ref = server.entity(self.server_world.proxy(), &host_entity);
+        Some(host_ref.local_entity(&user_key))
     }
 
     /// Perform actions in a mutate phase

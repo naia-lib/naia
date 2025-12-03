@@ -55,6 +55,8 @@ impl<'a> ClientSpawnBuilder<'a> {
     /// Finalize the spawn and return the EntityKey
     pub fn track(self) -> EntityKey {
         let state = self.scenario.client_state_mut(self.client_key);
+        
+        // Spawn entity on client
         let mut entity_mut = state
             .client
             .spawn_entity(state.world.proxy_mut());
@@ -67,13 +69,38 @@ impl<'a> ClientSpawnBuilder<'a> {
         // This must be done on the client side, not the server side
         entity_mut.configure_replication(ReplicationConfig::Public);
 
-        let entity = entity_mut.id();
+        let client_entity = entity_mut.id();
+        
+        // Get LocalEntity immediately from the client entity
+        let client_ref = state.client.entity(state.world.proxy(), &client_entity);
+        let local_entity = client_ref.local_entity();
 
-        // Allocate EntityKey and register in registry
+        // Allocate EntityKey
         let entity_key = self.scenario.entity_registry_mut().allocate_entity_key();
-        self.scenario
-            .entity_registry_mut()
-            .register_spawning_client(entity_key, self.client_key, entity);
+        
+        // Tick until server has entity with matching LocalEntity, then register it
+        let user_key = self.scenario.user_key(self.client_key);
+        loop {
+            self.scenario.tick_once();
+            
+            // Check if server has entity with this LocalEntity for this user
+            let has_local_entity = {
+                let server = self.scenario.server();
+                let server_local_entities = server.local_entities(&user_key);
+                server_local_entities.contains(&local_entity)
+            };
+            
+            if has_local_entity {
+                // Get server entity via LocalEntity
+                let server_entity = self.scenario.server_entity_for_local(user_key, &local_entity)
+                    .expect("Server should have entity with matching LocalEntity");
+                
+                // Register server host entity
+                self.scenario.entity_registry_mut()
+                    .register_host_entity(entity_key, server_entity);
+                break;
+            }
+        }
 
         entity_key
     }
@@ -99,16 +126,19 @@ impl<'a> ClientEntityMut<'a> {
         }
     }
 
-    /// Get the client-side entity ID
-    fn get_entity(&self) -> TestEntity {
-        self.scenario
-            .entity_registry()
-            .get_client_entity(self.entity_key, self.client_key)
-            .expect("EntityKey not mapped to client entity")
+    /// Get the client-side entity via LocalEntity
+    fn get_entity(&mut self) -> TestEntity {
+        let user_key = self.scenario.user_key(self.client_key);
+        let local_entity = self.scenario.local_entity_for(self.entity_key, user_key)
+            .expect("EntityKey not registered or not replicated to client");
+        let state = self.scenario.client_state_mut(self.client_key);
+        let world_proxy = state.world.proxy();
+        let client_ref = state.client.local_entity(world_proxy, &local_entity);
+        client_ref.id()
     }
 
     /// Configure replication to use delegated/authority-based replication
-    pub fn delegate(self) {
+    pub fn delegate(mut self) {
         let entity = self.get_entity();
         let state = self.scenario.client_state_mut(self.client_key);
         let mut world_mut = state.world.proxy_mut();
@@ -118,21 +148,21 @@ impl<'a> ClientEntityMut<'a> {
     }
 
     /// Request authority over this entity
-    pub fn request_auth(self) {
+    pub fn request_auth(mut self) {
         let entity = self.get_entity();
         let state = self.scenario.client_state_mut(self.client_key);
         state.client.entity_request_authority(&entity);
     }
 
     /// Release authority over this entity
-    pub fn release_auth(self) {
+    pub fn release_auth(mut self) {
         let entity = self.get_entity();
         let state = self.scenario.client_state_mut(self.client_key);
         state.client.entity_release_authority(&entity);
     }
 
     /// Set/update the position of the entity
-    pub fn set_position(self, position: Position) {
+    pub fn set_position(mut self, position: Position) {
         let entity = self.get_entity();
         let state = self.scenario.client_state_mut(self.client_key);
         

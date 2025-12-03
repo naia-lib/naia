@@ -13,11 +13,7 @@ pub struct ServerExpectCtx<'b, 'a: 'b> {
 impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
     /// Expect that the server has replicated/created a concrete entity
     pub fn has_entity(&mut self, entity: EntityKey) -> bool {
-        if self.expect_ctx.scenario.entity_registry().has_server_entity(entity) {
-            true
-        } else {
-            self.expect_ctx.auto_discover_server_entity(entity)
-        }
+        self.expect_ctx.scenario.server_host_entity(entity).is_some()
     }
 
     /// Expect that the server will produce at least one world event of type T

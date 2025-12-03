@@ -16,16 +16,9 @@ impl<'a> ServerMutateCtx<'a> {
 
     /// Include an entity in scope for a client
     pub fn include_in_scope(&mut self, client: ClientKey, entity: EntityKey) {
-        // Auto-discover server entity if not mapped yet
-        if !self.scenario.entity_registry().has_server_entity(entity) {
-            self.auto_discover_server_entity(entity);
-        }
-
-        let server_entity = self
-            .scenario
-            .entity_registry()
-            .get_server_entity(entity)
-            .expect("EntityKey not mapped to server entity after auto-discovery");
+        // Get server host entity from registry
+        let server_entity = self.scenario.server_host_entity(entity)
+            .expect("EntityKey not registered with host entity");
 
         let user_key = self.scenario.user_key(client);
         
@@ -66,28 +59,5 @@ impl<'a> ServerMutateCtx<'a> {
             .server_mut()
             .user_scope_mut(&user_key)
             .include(&server_entity);
-    }
-
-    /// Auto-discover server entity using simple heuristic (first entity)
-    fn auto_discover_server_entity(&mut self, entity_key: EntityKey) {
-        let entities = self.scenario.server_world_mut().proxy().entities();
-        if !entities.is_empty() {
-            // Use first entity that isn't already mapped to another key
-            let mut candidate = None;
-            for entity in &entities {
-                // Check if this entity is already mapped to a different key
-                if !self.scenario.entity_registry().is_server_entity_mapped(*entity) {
-                    candidate = Some(*entity);
-                    break;
-                }
-            }
-            // If all entities are mapped, just use the first one (fallback)
-            let entity_to_map = candidate.unwrap_or(entities[0]);
-            self.scenario
-                .entity_registry_mut()
-                .map_server_entity(entity_key, entity_to_map);
-        } else {
-            panic!("Auto-discovery failed: no entities found on server world for EntityKey {:?}", entity_key);
-        }
     }
 }

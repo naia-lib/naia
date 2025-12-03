@@ -12,10 +12,13 @@ pub struct ClientExpectCtx<'b, 'a: 'b> {
 impl<'b, 'a: 'b> ClientExpectCtx<'b, 'a> {
     /// Expect that this client will eventually see the logical entity
     pub fn sees(&mut self, entity: EntityKey) -> bool {
-        if self.expect_ctx.scenario.entity_registry().has_client_entity(entity, self.client_key) {
-            true
+        let user_key = self.expect_ctx.scenario.user_key(self.client_key);
+        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(entity, user_key) {
+            let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
+            let local_entities = state.client.local_entities();
+            local_entities.contains(&local_entity)
         } else {
-            self.expect_ctx.auto_discover_client_entity(self.client_key, entity)
+            false
         }
     }
 
@@ -42,15 +45,15 @@ pub struct ClientEntityExpect<'b, 'a: 'b> {
 impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
     /// Assert that the client's replication configuration for this entity is Delegated
     pub fn replication_is_delegated(self) -> bool {
-        if let Some(entity) = self.expect_ctx.scenario.entity_registry()
-            .get_client_entity(self.entity_key, self.client_key)
-        {
+        let user_key = self.expect_ctx.scenario.user_key(self.client_key);
+        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(self.entity_key, user_key) {
             let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
-            state
-                .client
-                .entity_replication_config(&entity)
+            let world_proxy = state.world.proxy();
+            let client_ref = state.client.local_entity(world_proxy, &local_entity);
+            let result = client_ref.replication_config()
                 .map(|config| config.is_delegated())
-                .unwrap_or(false)
+                .unwrap_or(false);
+            result
         } else {
             false
         }
@@ -58,11 +61,13 @@ impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
 
     /// Assert that the client's authority status for this entity equals expected
     pub fn auth_is(self, expected: EntityAuthStatus) -> bool {
-        if let Some(entity) = self.expect_ctx.scenario.entity_registry()
-            .get_client_entity(self.entity_key, self.client_key)
-        {
+        let user_key = self.expect_ctx.scenario.user_key(self.client_key);
+        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(self.entity_key, user_key) {
             let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
-            state.client.entity_authority_status(&entity) == Some(expected)
+            let world_proxy = state.world.proxy();
+            let client_ref = state.client.local_entity(world_proxy, &local_entity);
+            let result = client_ref.authority() == Some(expected);
+            result
         } else {
             false
         }
@@ -70,15 +75,17 @@ impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
 
     /// Assert that the client's position for this entity equals (expected_x, expected_y)
     pub fn position_is(self, expected_x: f32, expected_y: f32) -> bool {
-        if let Some(entity) = self.expect_ctx.scenario.entity_registry()
-            .get_client_entity(self.entity_key, self.client_key)
-        {
+        let user_key = self.expect_ctx.scenario.user_key(self.client_key);
+        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(self.entity_key, user_key) {
             let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
-            if let Some(pos) = state.world.proxy().component::<Position>(&entity) {
+            let world_proxy = state.world.proxy();
+            let client_ref = state.client.local_entity(world_proxy, &local_entity);
+            let result = if let Some(pos) = client_ref.component::<Position>() {
                 (*pos.x - expected_x).abs() < 0.001 && (*pos.y - expected_y).abs() < 0.001
             } else {
                 false
-            }
+            };
+            result
         } else {
             false
         }
