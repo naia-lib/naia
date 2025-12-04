@@ -1,5 +1,5 @@
 use naia_test::{
-    harness::{Scenario, ClientKey, EntityKey},
+    harness::Scenario,
     protocol, Auth, Position,
 };
 use naia_shared::EntityAuthStatus;
@@ -14,7 +14,7 @@ fn harness_single_client_spawn_replicates_to_server() {
     
     // Mutate phase: client spawns entity
     let ent = scenario.mutate(|ctx| {
-        ctx.client(a, |c| {
+        ctx.client_with_ctx(a, |c| {
             c.spawn().with_position(Position::new(1.0, 2.0)).track()
         })
     });
@@ -38,7 +38,7 @@ fn harness_two_clients_entity_mapping() {
     
     // Mutate phase: client A spawns entity
     let ent = scenario.mutate(|ctx| {
-        ctx.client(a, |c| {
+        ctx.client_with_ctx(a, |c| {
             c.spawn().with_position(Position::new(10.0, 20.0)).track()
         })
     });
@@ -66,7 +66,7 @@ fn harness_two_clients_entity_mapping() {
     
     // Additional expect: both clients report same position after A changes it
     scenario.mutate(|ctx| {
-        ctx.client(a, |c| {
+        ctx.client_with_ctx(a, |c| {
             c.entity(ent).set_position(Position::new(100.0, 200.0));
         });
     });
@@ -91,7 +91,7 @@ fn harness_delegation_flow_smoke() {
     
     // Step 1: Client A spawns entity
     let ent = scenario.mutate(|ctx| {
-        ctx.client(a, |c| {
+        ctx.client_with_ctx(a, |c| {
             c.spawn().with_position(Position::new(10.0, 20.0)).track()
         })
     });
@@ -112,7 +112,7 @@ fn harness_delegation_flow_smoke() {
     
     // Step 4: Client A configures entity as delegated
     scenario.mutate(|ctx| {
-        ctx.client(a, |c| {
+        ctx.client_with_ctx(a, |c| {
             c.entity(ent).delegate();
         });
     });
@@ -128,7 +128,7 @@ fn harness_delegation_flow_smoke() {
     
     // Step 6: Client A releases authority
     scenario.mutate(|ctx| {
-        ctx.client(a, |c| {
+        ctx.client_with_ctx(a, |c| {
             c.entity(ent).release_auth();
         });
     });
@@ -149,7 +149,7 @@ fn harness_delegation_flow_smoke() {
     
     // Step 9: Client B requests authority
     scenario.mutate(|ctx| {
-        ctx.client(b, |c| {
+        ctx.client_with_ctx(b, |c| {
             c.entity(ent).request_auth();
         });
     });
@@ -165,7 +165,7 @@ fn harness_delegation_flow_smoke() {
     
     // Step 11: Client B sets new position
     scenario.mutate(|ctx| {
-        ctx.client(b, |c| {
+        ctx.client_with_ctx(b, |c| {
             c.entity(ent).set_position(Position::new(100.0, 200.0));
         });
     });

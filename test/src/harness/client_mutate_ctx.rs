@@ -1,5 +1,4 @@
 use naia_client::ReplicationConfig;
-use naia_shared::WorldMutType;
 
 use crate::{TestEntity, Position};
 use super::scenario::Scenario;
@@ -119,8 +118,6 @@ impl<'a> ClientSpawnBuilder<'a> {
                 }
             }
         }
-
-        entity_key
     }
 }
 
@@ -186,7 +183,7 @@ impl<'a> ClientEntityMut<'a> {
         let state = self.scenario.client_state_mut(self.client_key);
         
         // Use EntityMut which handles both insert and update
-        let mut world_mut = state.world.proxy_mut();
+        let world_mut = state.world.proxy_mut();
         let mut entity_mut = state.client.entity_mut(world_mut, &entity);
         entity_mut.insert_component(position);
     }

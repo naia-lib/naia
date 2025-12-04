@@ -1,4 +1,4 @@
-use naia_shared::{EntityAuthStatus, WorldRefType};
+use naia_shared::EntityAuthStatus;
 
 use crate::{Position, harness::ExpectCtx};
 use super::keys::{ClientKey, EntityKey};

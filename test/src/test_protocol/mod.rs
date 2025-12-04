@@ -1,5 +1,6 @@
 /// Minimal test protocol for E2E testing
 use naia_shared::{Property, Protocol, Replicate, Message};
+use bevy_ecs::prelude::Component;
 
 #[derive(Message)]
 pub struct Auth {
@@ -16,7 +17,7 @@ impl Auth {
     }
 }
 
-#[derive(Replicate)]
+#[derive(Component, Replicate)]
 pub struct Position {
     pub x: Property<f32>,
     pub y: Property<f32>,

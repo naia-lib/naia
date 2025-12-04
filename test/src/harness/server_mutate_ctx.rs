@@ -1,5 +1,4 @@
 use naia_server::ReplicationConfig as ServerReplicationConfig;
-use naia_shared::WorldRefType;
 
 use super::scenario::Scenario;
 use super::keys::{ClientKey, EntityKey};

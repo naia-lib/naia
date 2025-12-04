@@ -1,14 +1,7 @@
-use naia_shared::{EntityAuthStatus, WorldRefType};
-use naia_server::DelegateEntityEvent;
-
-use crate::Position;
 use crate::harness::client_expect_ctx::ClientExpectCtx;
 use crate::harness::server_expect_ctx::ServerExpectCtx;
 use super::scenario::Scenario;
-use super::keys::{ClientKey, EntityKey};
-
-// Import WorldRefType trait to use entities() method
-use naia_shared::WorldRefType as _;
+use super::keys::ClientKey;
 
 /// Context for evaluating expectations in an expect phase
 pub struct ExpectCtx<'a> {

@@ -1,16 +1,15 @@
 use std::collections::HashMap;
+use std::time::Duration;
+
+use log::{info, warn};
 
 use naia_shared::{TestClock, Instant};
-use naia_client::Client as NaiaClient;
-use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events};
+use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::Socket as LocalClientSocket};
+use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, transport::local::Socket as LocalServerSocket};
 
 use crate::{
     TestWorld, Auth, TestEntity, LocalTransportBuilder,
-    create_client_socket, create_server_socket, default_client_config,
-    complete_handshake_with_name,
 };
-use crate::helpers::{update_client_server_at, update_all_at};
-
 use super::keys::{ClientKey, EntityKey};
 use super::entity_registry::EntityRegistry;
 
@@ -33,6 +32,7 @@ pub struct Scenario {
     entity_registry: EntityRegistry,
     next_client_key: u32,
     protocol: naia_shared::Protocol,
+    client_user_map: HashMap<ClientKey, UserKey>,
 }
 
 impl Scenario {
@@ -50,6 +50,7 @@ impl Scenario {
             entity_registry: EntityRegistry::new(),
             next_client_key: 1,
             protocol,
+            client_user_map: HashMap::new(),
         }
     }
 
@@ -101,6 +102,9 @@ impl Scenario {
                 user_key,
             },
         );
+        
+        // Update client-user mapping for Users handle
+        self.client_user_map.insert(client_key, user_key);
 
         client_key
     }
@@ -122,23 +126,57 @@ impl Scenario {
         &self.server_world
     }
 
-    pub(crate) fn server_world_mut(&mut self) -> &mut TestWorld {
-        &mut self.server_world
-    }
-
     pub(crate) fn client_state_mut(&mut self, client_key: ClientKey) -> &mut ClientState {
         self.clients.get_mut(&client_key).expect("client not found")
     }
 
-    pub(crate) fn entity_registry_mut(&mut self) -> &mut EntityRegistry {
-        &mut self.entity_registry
+    /// Get client-side EntityRef by EntityKey
+    /// This helper encapsulates the LocalEntity lookup and EntityRef creation
+    /// to avoid double-borrow issues in ClientMut
+    pub(crate) fn client_entity_ref<'s>(
+        &'s mut self,
+        client_key: ClientKey,
+        user_key: UserKey,
+        key: EntityKey,
+    ) -> Option<naia_client::EntityRef<'s, TestEntity, naia_demo_world::WorldRef<'s>>> {
+        let local_entity = self.local_entity_for(key, user_key)?;
+
+        // Single mutable borrow of Scenario -> &mut ClientState
+        let state = self.client_state_mut(client_key);
+
+        // Short-lived shared borrows inside a block
+        let world_ref = state.world.proxy();
+        state.client.local_entity(world_ref, &local_entity)
     }
 
-    /// Get server entity ID for a LocalEntity and UserKey
-    pub(crate) fn server_entity_for_local(&self, user_key: UserKey, local_entity: &naia_shared::LocalEntity) -> Option<TestEntity> {
-        let server = self.server.as_ref()?;
-        let server_ref = server.local_entity(self.server_world.proxy(), &user_key, local_entity)?;
-        Some(server_ref.id())
+    /// Get client-side EntityMut by EntityKey
+    /// This helper encapsulates the LocalEntity lookup and EntityMut creation
+    /// to avoid double-borrow issues in ClientMut
+    pub(crate) fn client_entity_mut<'s>(
+        &'s mut self,
+        client_key: ClientKey,
+        user_key: UserKey,
+        key: EntityKey,
+    ) -> Option<naia_client::EntityMut<'s, TestEntity, naia_demo_world::WorldMut<'s>>> {
+        let local_entity = self.local_entity_for(key, user_key)?;
+
+        // Single mutable borrow of Scenario -> &mut ClientState
+        let state = self.client_state_mut(client_key);
+
+        // First, derive the underlying entity id in a tight scope
+        let entity = {
+            let world_ref = state.world.proxy();                    // &TestWorld
+            let client_ref = state.client.local_entity(world_ref, &local_entity)?;
+            client_ref.id()
+        }; // world_ref and client_ref dropped here
+
+        // Then get a mutable world proxy and EntityMut
+        let world_mut = state.world.proxy_mut();                   // &mut TestWorld → WorldMut<'_>
+        Some(state.client.entity_mut(world_mut, &entity))
+    }
+
+    pub(crate) fn entity_registry_mut(&mut self) -> &mut EntityRegistry {
+        &mut self.entity_registry
     }
 
     /// Configure entity replication config (helper to avoid borrow conflicts)
@@ -154,10 +192,6 @@ impl Scenario {
             let mut proxy = world_mut.proxy_mut();
             server.configure_entity_replication(&mut proxy, entity, config);
         }
-    }
-
-    pub(crate) fn entity_registry(&self) -> &EntityRegistry {
-        &self.entity_registry
     }
 
     /// Tick the simulation once - updates all clients and server
@@ -283,6 +317,223 @@ impl Scenario {
         use super::expect_ctx::ExpectCtx;
         let mut ctx = ExpectCtx::new(self, 50); // Default max_ticks
         ctx.run(f);
+    }
+
+    /// Split borrow fields needed for ServerMut
+    /// Returns disjoint mutable references to server, world, registry, and users
+    pub(crate) fn split_for_server_mut(
+        &mut self,
+    ) -> (
+        &mut Server,
+        &mut TestWorld,
+        &mut EntityRegistry,
+        super::users::Users<'_>,
+    ) {
+        let server = self.server.as_mut().expect("server not started");
+        let world = &mut self.server_world;
+        let registry = &mut self.entity_registry;
+        let users = super::users::Users {
+            mapping: &self.client_user_map,
+        };
+        (server, world, registry, users)
+    }
+
+    /// Internal helper: wait for server to register client-spawned entity
+    /// Reuses existing ClientSpawnBuilder::track() logic
+    pub(crate) fn spawn_and_track_client_entity(
+        &mut self,
+        entity_key: EntityKey,
+        client_key: ClientKey,
+        local_entity: naia_shared::LocalEntity,
+    ) {
+        let user_key = self.user_key(client_key);
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: usize = 200;
+
+        loop {
+            attempts += 1;
+            if attempts > MAX_ATTEMPTS {
+                panic!(
+                    "spawn_and_track_client_entity() timed out after {} ticks waiting for server to have entity with LocalEntity {:?}",
+                    MAX_ATTEMPTS, local_entity
+                );
+            }
+
+            self.tick_once();
+
+            // Check if server has SpawnEntityEvent for this user
+            let mut server_events = self.take_server_events();
+            for (spawn_user_key, spawn_entity) in server_events.read::<naia_server::SpawnEntityEvent>() {
+                if spawn_user_key == user_key {
+                    // Found the spawn event - this is the server's entity for the client-spawned entity
+                    // Verify it exists in the server world and register it
+                    let server = self.server();
+                    let server_world = self.server_world();
+                    if server.entities(server_world.proxy()).contains(&spawn_entity) {
+                        // Register the server entity - this is the host entity for this EntityKey
+                        self.entity_registry_mut()
+                            .register_host_entity(entity_key, spawn_entity);
+                        return;
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+/// Create a client socket from the builder
+pub fn create_client_socket(builder: &LocalTransportBuilder) -> LocalClientSocket {
+    let client_endpoint = builder.connect_client();
+    LocalClientSocket::new(client_endpoint.into_socket(), None)
+}
+
+/// Create a server socket from the builder
+pub fn create_server_socket(builder: &LocalTransportBuilder) -> LocalServerSocket {
+    let server_endpoint = builder.server_endpoint();
+    LocalServerSocket::new(server_endpoint.into_socket(), None)
+}
+
+/// Create default client config for tests (fast handshake, no jitter buffer)
+pub fn default_client_config() -> ClientConfig {
+    let mut config = ClientConfig::default();
+    config.send_handshake_interval = Duration::from_millis(0);
+    config.jitter_buffer = JitterBufferType::Bypass;
+    config
+}
+
+/// Update a single client and server at a specific time
+pub fn update_client_server_at(
+    now: Instant,
+    client: &mut Client,
+    server: &mut Server,
+    client_world: &mut TestWorld,
+    server_world: &mut TestWorld,
+) {
+    // Client update
+    if client.connection_status().is_connected() {
+        client.receive_all_packets();
+        client.take_tick_events(&now);
+        client.process_all_packets(client_world.proxy_mut(), &now);
+        client.send_all_packets(client_world.proxy_mut());
+    } else {
+        client.receive_all_packets();
+        client.send_all_packets(client_world.proxy_mut());
+    }
+
+    // Server update
+    server.receive_all_packets();
+    server.take_tick_events(&now);
+    server.process_all_packets(server_world.proxy_mut(), &now);
+    server.send_all_packets(server_world.proxy());
+}
+
+/// Update two clients and a server at a specific time
+pub fn update_all_at(
+    now: Instant,
+    client_a: &mut Client,
+    client_b: &mut Client,
+    server: &mut Server,
+    client_a_world: &mut TestWorld,
+    client_b_world: &mut TestWorld,
+    server_world: &mut TestWorld,
+) {
+    // Client A update
+    if client_a.connection_status().is_connected() {
+        client_a.receive_all_packets();
+        client_a.take_tick_events(&now);
+        client_a.process_all_packets(client_a_world.proxy_mut(), &now);
+        client_a.send_all_packets(client_a_world.proxy_mut());
+    } else {
+        client_a.receive_all_packets();
+        client_a.send_all_packets(client_a_world.proxy_mut());
+    }
+
+    // Client B update
+    if client_b.connection_status().is_connected() {
+        client_b.receive_all_packets();
+        client_b.take_tick_events(&now);
+        client_b.process_all_packets(client_b_world.proxy_mut(), &now);
+        client_b.send_all_packets(client_b_world.proxy_mut());
+    } else {
+        client_b.receive_all_packets();
+        client_b.send_all_packets(client_b_world.proxy_mut());
+    }
+
+    // Server update
+    server.receive_all_packets();
+    server.take_tick_events(&now);
+    server.process_all_packets(server_world.proxy_mut(), &now);
+    server.send_all_packets(server_world.proxy());
+}
+
+/// Complete handshake for a client with a custom name for logging
+pub fn complete_handshake_with_name(
+    client: &mut Client,
+    server: &mut Server,
+    client_world: &mut TestWorld,
+    server_world: &mut TestWorld,
+    main_room_key: &naia_server::RoomKey,
+    client_name: &str,
+) -> Option<naia_server::UserKey> {
+    let mut user_key_opt = None;
+    let mut connected = false;
+
+    for attempt in 1..=100 {
+        // Advance simulated time for each handshake attempt
+        TestClock::advance(16); // Advance by one tick (16ms)
+        let now = Instant::now();
+
+        // Process server side first to receive client packets
+        server.receive_all_packets();
+        server.take_tick_events(&now);
+        server.process_all_packets(server_world.proxy_mut(), &now);
+
+        let mut server_events = server.take_world_events();
+        for (user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
+            info!("Server accepting connection for {}: {:?}", client_name, user_key);
+            server.accept_connection(&user_key);
+            server.room_mut(main_room_key).add_user(&user_key);
+            user_key_opt = Some(user_key);
+        }
+        server.send_all_packets(server_world.proxy());
+
+        // Then process client side
+        let was_connected = client.connection_status().is_connected();
+        if !was_connected {
+            // For handshake, receive then send to allow handshake manager to process
+            client.receive_all_packets();
+            client.send_all_packets(client_world.proxy_mut());
+
+            // Check for connection event even during handshake
+            // (the handshake manager may have completed the connection)
+            let mut client_events = client.take_world_events();
+            for _ in client_events.read::<ClientConnectEvent>() {
+                info!("{} connected in {} attempts", client_name, attempt);
+                connected = true;
+            }
+        } else {
+            // If client is already connected, process normally
+            client.receive_all_packets();
+            client.process_all_packets(client_world.proxy_mut(), &now);
+            client.take_tick_events(&now);
+            client.send_all_packets(client_world.proxy_mut());
+        }
+
+        if connected && user_key_opt.is_some() {
+            break;
+        }
+    }
+
+    if connected && user_key_opt.is_some() {
+        user_key_opt
+    } else {
+        if !connected {
+            warn!("{} handshake failed: client never connected after 100 attempts", client_name);
+        } else if user_key_opt.is_none() {
+            warn!("{} handshake failed: client connected but server never accepted after 100 attempts", client_name);
+        }
+        None
     }
 }
 

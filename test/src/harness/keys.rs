@@ -6,10 +6,6 @@ impl ClientKey {
     pub(crate) fn new(id: u32) -> Self {
         Self(id)
     }
-
-    pub(crate) fn id(&self) -> u32 {
-        self.0
-    }
 }
 
 /// EntityKey - A copyable, comparable key representing a logical game entity in tests
