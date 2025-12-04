@@ -29,9 +29,9 @@ impl<'scenario> ClientMut<'scenario> {
 
     /// Spawn a client entity, configure it, wait for server registration, return EntityKey
     /// Synchronous: waits for server to have entity before returning
-    pub fn spawn<F, R>(&mut self, f: F) -> (EntityKey, R)
+    pub fn spawn<F>(&mut self, f: F) -> EntityKey
     where
-        F: for<'a> FnOnce(EntityMut<'a, TestEntity, WorldMut<'a>>) -> R,
+        F: for<'a> FnOnce(EntityMut<'a, TestEntity, WorldMut<'a>>),
     {
         // Use a single borrow of state and scoped blocks to manage borrows
         let state = self.scenario.client_state_mut(self.client_key);
@@ -44,7 +44,7 @@ impl<'scenario> ClientMut<'scenario> {
             .expect("Client-spawned entity should have LocalEntity immediately");
         
         // 3. Call closure with EntityMut (this consumes entity_mut, dropping its borrows)
-        let result = f(entity_mut);
+        f(entity_mut);
         // Now entity_mut is dropped, so we can borrow scenario again
         
         // 4. Allocate EntityKey
@@ -58,25 +58,25 @@ impl<'scenario> ClientMut<'scenario> {
         self.scenario.spawn_and_track_client_entity(entity_key, self.client_key, local_entity);
 
         // 7. Return (EntityKey, R)
-        (entity_key, result)
+        entity_key
     }
 
     /// Get read-only entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
-    pub fn entity<'b>(
-        &'b mut self,
+    pub fn entity(
+        &'_ mut self,
         key: EntityKey,
-    ) -> Option<EntityRef<'b, TestEntity, WorldRef<'b>>> {
+    ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         // Delegate to Scenario helper to avoid double-borrow issues
         self.scenario.client_entity_ref(self.client_key, self.user_key, key)
     }
 
     /// Get mutable entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
-    pub fn entity_mut<'b>(
-        &'b mut self,
+    pub fn entity_mut(
+        &'_ mut self,
         key: EntityKey,
-    ) -> Option<EntityMut<'b, TestEntity, WorldMut<'b>>> {
+    ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
         // Delegate to Scenario helper to avoid double-borrow issues
         // The helper uses a single client_state_mut() call with scoped borrows
         self.scenario.client_entity_mut(self.client_key, self.user_key, key)

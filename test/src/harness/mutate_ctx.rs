@@ -1,5 +1,3 @@
-use crate::harness::ClientMutateCtx;
-use crate::harness::server_mutate_ctx::ServerMutateCtx;
 use super::scenario::Scenario;
 use super::keys::{ClientKey};
 use super::server_mut::ServerMut;
@@ -15,30 +13,19 @@ impl<'a> MutateCtx<'a> {
         Self { scenario }
     }
 
-    /// Get server-side mutation handle
-    pub fn server_mut(&mut self) -> ServerMut<'_> {
+    /// Perform server-side actions
+    pub fn server<R>(&mut self, f: impl FnOnce(&mut ServerMut<'_>) -> R) -> R {
         let (server, world, registry, users) = self.scenario.split_for_server_mut();
-        ServerMut::new(server, world, registry, users)
-    }
-
-    /// Get client-side mutation handle
-    pub fn client(&mut self, client_key: ClientKey) -> ClientMut<'_> {
-        // Get user_key without mutably borrowing scenario
-        let user_key = self.scenario.user_key(client_key);
-        // ClientMut holds &mut Scenario directly and borrows fields internally
-        ClientMut::new(self.scenario, client_key, user_key)
-    }
-
-    /// Perform server-side actions (old API - kept for backward compatibility)
-    pub fn server<R>(&mut self, f: impl FnOnce(&mut ServerMutateCtx) -> R) -> R {
-        let mut ctx = ServerMutateCtx::new(self.scenario);
+        let mut ctx = ServerMut::new(server, world, registry, users);
         f(&mut ctx)
     }
 
-    /// Perform client-side actions (old API - kept for backward compatibility)
-    /// Note: This conflicts with the new `client()` method, so it's renamed to `client_with_ctx`
-    pub fn client_with_ctx<R>(&mut self, client: ClientKey, f: impl FnOnce(&mut ClientMutateCtx) -> R) -> R {
-        let mut ctx = ClientMutateCtx::new(self.scenario, client);
+    /// Perform client-side actions
+    pub fn client<R>(&mut self, client_key: ClientKey, f: impl FnOnce(&mut ClientMut<'_>) -> R) -> R {
+        // Get user_key without mutably borrowing scenario
+        let user_key = self.scenario.user_key(client_key);
+        // ClientMut holds &mut Scenario directly and borrows fields internally
+        let mut ctx = ClientMut::new(self.scenario, client_key, user_key);
         f(&mut ctx)
     }
 }

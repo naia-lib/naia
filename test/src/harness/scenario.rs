@@ -113,19 +113,6 @@ impl Scenario {
         self.main_room.as_ref()
     }
 
-    // Internal helper methods for context types
-    pub(crate) fn server(&self) -> &Server {
-        self.server.as_ref().expect("server not started")
-    }
-
-    pub(crate) fn server_mut(&mut self) -> &mut Server {
-        self.server.as_mut().expect("server not started")
-    }
-
-    pub(crate) fn server_world(&self) -> &TestWorld {
-        &self.server_world
-    }
-
     pub(crate) fn client_state_mut(&mut self, client_key: ClientKey) -> &mut ClientState {
         self.clients.get_mut(&client_key).expect("client not found")
     }
@@ -133,12 +120,12 @@ impl Scenario {
     /// Get client-side EntityRef by EntityKey
     /// This helper encapsulates the LocalEntity lookup and EntityRef creation
     /// to avoid double-borrow issues in ClientMut
-    pub(crate) fn client_entity_ref<'s>(
-        &'s mut self,
+    pub(crate) fn client_entity_ref(
+        &'_ mut self,
         client_key: ClientKey,
         user_key: UserKey,
         key: EntityKey,
-    ) -> Option<naia_client::EntityRef<'s, TestEntity, naia_demo_world::WorldRef<'s>>> {
+    ) -> Option<naia_client::EntityRef<'_, TestEntity, naia_demo_world::WorldRef<'_>>> {
         let local_entity = self.local_entity_for(key, user_key)?;
 
         // Single mutable borrow of Scenario -> &mut ClientState
@@ -152,12 +139,12 @@ impl Scenario {
     /// Get client-side EntityMut by EntityKey
     /// This helper encapsulates the LocalEntity lookup and EntityMut creation
     /// to avoid double-borrow issues in ClientMut
-    pub(crate) fn client_entity_mut<'s>(
-        &'s mut self,
+    pub(crate) fn client_entity_mut(
+        &'_ mut self,
         client_key: ClientKey,
         user_key: UserKey,
         key: EntityKey,
-    ) -> Option<naia_client::EntityMut<'s, TestEntity, naia_demo_world::WorldMut<'s>>> {
+    ) -> Option<naia_client::EntityMut<'_, TestEntity, naia_demo_world::WorldMut<'_>>> {
         let local_entity = self.local_entity_for(key, user_key)?;
 
         // Single mutable borrow of Scenario -> &mut ClientState
@@ -179,88 +166,29 @@ impl Scenario {
         &mut self.entity_registry
     }
 
-    /// Configure entity replication config (helper to avoid borrow conflicts)
-    pub(crate) fn configure_entity_replication(
-        &mut self,
-        entity: &TestEntity,
-        config: naia_server::ReplicationConfig,
-    ) {
-        let server = self.server.as_mut().expect("server not started");
-        let current_config = server.entity_replication_config(entity);
-        if current_config != Some(config) {
-            let world_mut = &mut self.server_world;
-            let mut proxy = world_mut.proxy_mut();
-            server.configure_entity_replication(&mut proxy, entity, config);
-        }
-    }
-
     /// Tick the simulation once - updates all clients and server
     pub(crate) fn tick_once(&mut self) {
         // Advance simulated clock by 16ms (default tick duration for ~60 FPS)
         TestClock::advance(16);
+        let now = Instant::now();
         
         // Use current time for this tick (we update self.now at the end)
-        let now = Instant::now();
         let server = self.server.as_mut().expect("server not started");
-        let client_count = self.clients.len();
 
-        // Handle different client counts explicitly
-        match client_count {
-            0 => {
-                // Just update server
-                server.receive_all_packets();
-                server.take_tick_events(&now);
-                server.process_all_packets(self.server_world.proxy_mut(), &now);
-                server.send_all_packets(self.server_world.proxy());
-            }
-            1 => {
-                let state = self.clients.values_mut().next().unwrap();
-                update_client_server_at(
-                    now,
-                    &mut state.client,
-                    server,
-                    &mut state.world,
-                    &mut self.server_world,
-                );
-            }
-            2 => {
-                let mut iter = self.clients.values_mut();
-                let state_a = iter.next().unwrap();
-                let state_b = iter.next().unwrap();
-                update_all_at(
-                    now,
-                    &mut state_a.client,
-                    &mut state_b.client,
-                    server,
-                    &mut state_a.world,
-                    &mut state_b.world,
-                    &mut self.server_world,
-                );
-            }
-            _ => {
-                // For 3+ clients, update each client-server pair sequentially
-                // This is not ideal but works for now
-                // Note: We use Instant::now() for each iteration since now is moved
-                for state in self.clients.values_mut() {
-                    let iter_now = Instant::now();
-                    update_client_server_at(
-                        iter_now,
-                        &mut state.client,
-                        server,
-                        &mut state.world,
-                        &mut self.server_world,
-                    );
-                }
-            }
+        // update each client-server pair sequentially
+        // This is not ideal but works for now
+        // Note: We use Instant::now() for each iteration since now is moved
+        for state in self.clients.values_mut() {
+            update_client_server_at(
+                now.clone(),
+                &mut state.client,
+                server,
+                &mut state.world,
+                &mut self.server_world,
+            );
         }
 
         self.now = Instant::now();
-    }
-
-    pub fn tick(&mut self, n: usize) {
-        for _ in 0..n {
-            self.tick_once();
-        }
     }
 
     pub(crate) fn take_server_events(&mut self) -> Events<TestEntity> {
@@ -367,9 +295,8 @@ impl Scenario {
                 if spawn_user_key == user_key {
                     // Found the spawn event - this is the server's entity for the client-spawned entity
                     // Verify it exists in the server world and register it
-                    let server = self.server();
-                    let server_world = self.server_world();
-                    if server.entities(server_world.proxy()).contains(&spawn_entity) {
+                    let server = self.server.as_ref().expect("server not started");
+                    if server.entities(self.server_world.proxy()).contains(&spawn_entity) {
                         // Register the server entity - this is the host entity for this EntityKey
                         self.entity_registry_mut()
                             .register_host_entity(entity_key, spawn_entity);
@@ -383,19 +310,19 @@ impl Scenario {
 
 
 /// Create a client socket from the builder
-pub fn create_client_socket(builder: &LocalTransportBuilder) -> LocalClientSocket {
+fn create_client_socket(builder: &LocalTransportBuilder) -> LocalClientSocket {
     let client_endpoint = builder.connect_client();
     LocalClientSocket::new(client_endpoint.into_socket(), None)
 }
 
 /// Create a server socket from the builder
-pub fn create_server_socket(builder: &LocalTransportBuilder) -> LocalServerSocket {
+fn create_server_socket(builder: &LocalTransportBuilder) -> LocalServerSocket {
     let server_endpoint = builder.server_endpoint();
     LocalServerSocket::new(server_endpoint.into_socket(), None)
 }
 
 /// Create default client config for tests (fast handshake, no jitter buffer)
-pub fn default_client_config() -> ClientConfig {
+fn default_client_config() -> ClientConfig {
     let mut config = ClientConfig::default();
     config.send_handshake_interval = Duration::from_millis(0);
     config.jitter_buffer = JitterBufferType::Bypass;
@@ -403,7 +330,7 @@ pub fn default_client_config() -> ClientConfig {
 }
 
 /// Update a single client and server at a specific time
-pub fn update_client_server_at(
+fn update_client_server_at(
     now: Instant,
     client: &mut Client,
     server: &mut Server,
@@ -419,45 +346,6 @@ pub fn update_client_server_at(
     } else {
         client.receive_all_packets();
         client.send_all_packets(client_world.proxy_mut());
-    }
-
-    // Server update
-    server.receive_all_packets();
-    server.take_tick_events(&now);
-    server.process_all_packets(server_world.proxy_mut(), &now);
-    server.send_all_packets(server_world.proxy());
-}
-
-/// Update two clients and a server at a specific time
-pub fn update_all_at(
-    now: Instant,
-    client_a: &mut Client,
-    client_b: &mut Client,
-    server: &mut Server,
-    client_a_world: &mut TestWorld,
-    client_b_world: &mut TestWorld,
-    server_world: &mut TestWorld,
-) {
-    // Client A update
-    if client_a.connection_status().is_connected() {
-        client_a.receive_all_packets();
-        client_a.take_tick_events(&now);
-        client_a.process_all_packets(client_a_world.proxy_mut(), &now);
-        client_a.send_all_packets(client_a_world.proxy_mut());
-    } else {
-        client_a.receive_all_packets();
-        client_a.send_all_packets(client_a_world.proxy_mut());
-    }
-
-    // Client B update
-    if client_b.connection_status().is_connected() {
-        client_b.receive_all_packets();
-        client_b.take_tick_events(&now);
-        client_b.process_all_packets(client_b_world.proxy_mut(), &now);
-        client_b.send_all_packets(client_b_world.proxy_mut());
-    } else {
-        client_b.receive_all_packets();
-        client_b.send_all_packets(client_b_world.proxy_mut());
     }
 
     // Server update
