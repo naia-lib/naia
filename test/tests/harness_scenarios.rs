@@ -7,9 +7,9 @@ use naia_test::{
 #[test]
 fn harness_single_client_spawn_replicates_to_server() {
     let mut scenario = Scenario::new(protocol());
-    scenario.server_start();
     
-    let client_a_key = scenario.client_connect(Auth::new("client_a", "password"), "Client A");
+    scenario.server_start();
+    let client_a_key = scenario.client_connect("Client A", Auth::new("client_a", "password"));
     
     // Mutate phase: client spawns entity
     let entity_a = scenario.mutate(|ctx| {

@@ -68,7 +68,7 @@ impl Scenario {
         self.main_room = Some(main_room);
     }
 
-    pub fn client_connect(&mut self, auth: Auth, display_name: &str) -> ClientKey {
+    pub fn client_connect(&mut self, display_name: &str, auth: Auth) -> ClientKey {
         if self.server.is_none() {
             panic!("server_start() must be called before client_connect()");
         }

@@ -10,14 +10,14 @@ type Server = naia_server::Server<TestEntity>;
 
 /// Lightweight handle for server-side mutations
 /// Provides direct pass-through to core Server API with EntityKey resolution
-pub struct ServerMut<'scenario> {
+pub struct ServerMutateCtx<'scenario> {
     server: &'scenario mut Server,
     world: &'scenario mut crate::TestWorld,
     registry: &'scenario mut EntityRegistry,
     users: Users<'scenario>,
 }
 
-impl<'scenario> ServerMut<'scenario> {
+impl<'scenario> ServerMutateCtx<'scenario> {
     pub(crate) fn new(
         server: &'scenario mut Server,
         world: &'scenario mut crate::TestWorld,

@@ -7,13 +7,13 @@ use super::keys::{ClientKey, EntityKey};
 
 /// Lightweight handle for client-side mutations
 /// Provides direct pass-through to core Client API with EntityKey resolution
-pub struct ClientMut<'scenario> {
+pub struct ClientMutateCtx<'scenario> {
     scenario: &'scenario mut Scenario,
     client_key: ClientKey,
     user_key: naia_server::UserKey,
 }
 
-impl<'scenario> ClientMut<'scenario> {
+impl<'scenario> ClientMutateCtx<'scenario> {
     pub(crate) fn new(
         scenario: &'scenario mut Scenario,
         client_key: ClientKey,
