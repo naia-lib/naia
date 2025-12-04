@@ -464,9 +464,7 @@ cfg_if! {
             /// Retrieves an EntityRef that exposes read-only operations for the Entity
             /// identified by the given LocalEntity for the specified user.
             ///
-            /// # Panics
-            ///
-            /// Panics if:
+            /// Returns `None` if:
             /// - The user does not exist
             /// - The LocalEntity doesn't exist for that user
             /// - The entity does not exist in the world
@@ -475,16 +473,14 @@ cfg_if! {
                 world: W,
                 user_key: &UserKey,
                 local_entity: &LocalEntity,
-            ) -> EntityRef<'_, E, W> {
+            ) -> Option<EntityRef<'_, E, W>> {
                 self.world_server.local_entity(world, user_key, local_entity)
             }
         
             /// Retrieves an EntityMut that exposes read and write operations for the Entity
             /// identified by the given LocalEntity for the specified user.
             ///
-            /// # Panics
-            ///
-            /// Panics if:
+            /// Returns `None` if:
             /// - The user does not exist
             /// - The LocalEntity doesn't exist for that user
             /// - The entity does not exist in the world
@@ -493,7 +489,7 @@ cfg_if! {
                 world: W,
                 user_key: &UserKey,
                 local_entity: &LocalEntity,
-            ) -> EntityMut<'_, E, W> {
+            ) -> Option<EntityMut<'_, E, W>> {
                 self.world_server.local_entity_mut(world, user_key, local_entity)
             }
         }

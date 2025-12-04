@@ -87,7 +87,7 @@ cfg_if! {
 
         impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
 
-            pub fn local_entity(&self) -> LocalEntity {
+            pub fn local_entity(&self) -> Option<LocalEntity> {
                 self.client.world_to_local_entity(&self.entity)
             }
         }

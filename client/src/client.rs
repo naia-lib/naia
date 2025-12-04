@@ -1928,7 +1928,7 @@ cfg_if! {
             /// Retrieves an EntityRef that exposes read-only operations for the Entity
             /// identified by the given LocalEntity for the server.
             ///
-            /// # Panics if
+            /// Returns `None` if:
             /// - The server is not connected
             /// - The LocalEntity doesn't exist for the server
             /// - The entity does not exist in the world
@@ -1936,19 +1936,18 @@ cfg_if! {
                 &self,
                 world: W,
                 local_entity: &LocalEntity,
-            ) -> EntityRef<'_, E, W> {
-
-                let world_entity = self.local_to_world_entity(local_entity);
+            ) -> Option<EntityRef<'_, E, W>> {
+                let world_entity = self.local_to_world_entity(local_entity)?;
                 if !world.has_entity(&world_entity) {
-                    panic!("No Entity exists for given LocalEntity!");
+                    return None;
                 }
-                return self.entity(world, &world_entity);
+                Some(self.entity(world, &world_entity))
             }
 
             /// Retrieves an EntityMut that exposes read and write operations for the Entity
             /// identified by the given LocalEntity for the server.
             ///
-            /// # Panics if
+            /// Returns `None` if:
             /// - The server is not connected
             /// - The LocalEntity doesn't exist for the server
             /// - The entity does not exist in the world
@@ -1956,49 +1955,42 @@ cfg_if! {
                 &mut self,
                 world: W,
                 local_entity: &LocalEntity,
-            ) -> EntityMut<'_, E, W> {
-                let world_entity = self.local_to_world_entity(local_entity);
+            ) -> Option<EntityMut<'_, E, W>> {
+                let world_entity = self.local_to_world_entity(local_entity)?;
                 if !world.has_entity(&world_entity) {
-                    panic!("No Entity exists for given LocalEntity!");
+                    return None;
                 }
-                return self.entity_mut(world, &world_entity);
+                Some(self.entity_mut(world, &world_entity))
             }
             
             fn local_to_world_entity(
                 &self,
                 local_entity: &LocalEntity
-            ) -> E {
-                let connection = self
-                    .server_connection
-                    .as_ref()
-                    .expect("Server connection does not exist");
+            ) -> Option<E> {
+                let connection = self.server_connection.as_ref()?;
                 let converter = connection.base.world_manager.entity_converter();
 
                 let owned_local_entity: OwnedLocalEntity = (*local_entity).into();
-                let global_entity = converter.owned_entity_to_global_entity(&owned_local_entity).unwrap();
+                let global_entity = converter.owned_entity_to_global_entity(&owned_local_entity).ok()?;
                 let world_entity = self
                     .global_entity_map
                     .global_entity_to_entity(&global_entity)
-                    .expect("GlobalEntity does not map to world entity");
+                    .ok()?;
                 
-                world_entity
+                Some(world_entity)
             }
             
             pub(crate) fn world_to_local_entity(
                 &self,
                 world_entity: &E,
-            ) -> LocalEntity {
-                let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).unwrap();
+            ) -> Option<LocalEntity> {
+                let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).ok()?;
                 
-                let connection = self
-                    .server_connection
-                    .as_ref()
-                    .expect("Server connection does not exist");
+                let connection = self.server_connection.as_ref()?;
                 let converter = connection.base.world_manager.entity_converter();
-                let owned_entity = converter.global_entity_to_owned_entity(&global_entity).unwrap();
+                let owned_entity = converter.global_entity_to_owned_entity(&global_entity).ok()?;
 
-                LocalEntity::from(owned_entity)
-
+                Some(LocalEntity::from(owned_entity))
             }
         }
     }

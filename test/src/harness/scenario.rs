@@ -137,7 +137,7 @@ impl Scenario {
     /// Get server entity ID for a LocalEntity and UserKey
     pub(crate) fn server_entity_for_local(&self, user_key: UserKey, local_entity: &naia_shared::LocalEntity) -> Option<TestEntity> {
         let server = self.server.as_ref()?;
-        let server_ref = server.local_entity(self.server_world.proxy(), &user_key, local_entity);
+        let server_ref = server.local_entity(self.server_world.proxy(), &user_key, local_entity)?;
         Some(server_ref.id())
     }
 
@@ -246,11 +246,26 @@ impl Scenario {
     }
 
     /// Get LocalEntity for an EntityKey and UserKey
+    /// For client-spawned entities, if the user_key matches the spawning client, use their LocalEntity directly
+    /// For other clients, get LocalEntity from server's perspective
+    /// This will return None if the entity hasn't been replicated to that user yet
     pub(crate) fn local_entity_for(&self, entity_key: EntityKey, user_key: UserKey) -> Option<naia_shared::LocalEntity> {
+        // Check if this is a client-spawned entity and if the user_key matches the spawning client
+        if let Some((spawning_client_key, spawning_local_entity)) = self.entity_registry.spawning_client(entity_key) {
+            let spawning_user_key = self.user_key(spawning_client_key);
+            if user_key == spawning_user_key {
+                // This is the spawning client - use their LocalEntity directly
+                return Some(spawning_local_entity);
+            }
+        }
+        
+        // For other clients or server-spawned entities, get LocalEntity from server's perspective
+        // This will return None if the entity hasn't been replicated to that user yet
+        // The expect() loop will keep ticking until replication completes and this returns Some
         let host_entity = self.entity_registry.host_world(entity_key)?;
         let server = self.server.as_ref()?;
         let host_ref = server.entity(self.server_world.proxy(), &host_entity);
-        Some(host_ref.local_entity(&user_key))
+        host_ref.local_entity(&user_key) // Now returns Option, so propagate it
     }
 
     /// Perform actions in a mutate phase

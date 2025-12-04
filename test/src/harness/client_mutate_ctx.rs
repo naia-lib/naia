@@ -73,32 +73,50 @@ impl<'a> ClientSpawnBuilder<'a> {
         
         // Get LocalEntity immediately from the client entity
         let client_ref = state.client.entity(state.world.proxy(), &client_entity);
-        let local_entity = client_ref.local_entity();
+        let local_entity = client_ref.local_entity()
+            .expect("Client-spawned entity should have LocalEntity immediately");
 
         // Allocate EntityKey
         let entity_key = self.scenario.entity_registry_mut().allocate_entity_key();
         
-        // Tick until server has entity with matching LocalEntity, then register it
+        // Register the spawning client and their LocalEntity for direct lookup
+        // This allows us to get the LocalEntity directly from the client later
+        self.scenario.entity_registry_mut()
+            .register_spawning_client(entity_key, self.client_key, local_entity);
+        
+        // Tick until server has entity, then register it
+        // For client-spawned entities, the server receives a SpawnEntityEvent
+        // The SpawnEntityEvent contains the server's entity ID directly
         let user_key = self.scenario.user_key(self.client_key);
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: usize = 200;
+        
         loop {
+            attempts += 1;
+            if attempts > MAX_ATTEMPTS {
+                panic!("ClientSpawnBuilder::track() timed out after {} ticks waiting for server to have entity with LocalEntity {:?}", MAX_ATTEMPTS, local_entity);
+            }
+            
             self.scenario.tick_once();
             
-            // Check if server has entity with this LocalEntity for this user
-            let has_local_entity = {
-                let server = self.scenario.server();
-                let server_local_entities = server.local_entities(&user_key);
-                server_local_entities.contains(&local_entity)
-            };
-            
-            if has_local_entity {
-                // Get server entity via LocalEntity
-                let server_entity = self.scenario.server_entity_for_local(user_key, &local_entity)
-                    .expect("Server should have entity with matching LocalEntity");
-                
-                // Register server host entity
-                self.scenario.entity_registry_mut()
-                    .register_host_entity(entity_key, server_entity);
-                break;
+            // Check if server has SpawnEntityEvent for this user
+            // The SpawnEntityEvent contains the server entity directly - use it!
+            // Note: The LocalEntity on the server will be "Remote" while on the client it's "Host",
+            // but they represent the same logical entity, so we can't compare them directly.
+            let mut server_events = self.scenario.take_server_events();
+            for (spawn_user_key, spawn_entity) in server_events.read::<naia_server::SpawnEntityEvent>() {
+                if spawn_user_key == user_key {
+                    // Found the spawn event - this is the server's entity for the client-spawned entity
+                    // Verify it exists in the server world and register it
+                    let server = self.scenario.server();
+                    let server_world = self.scenario.server_world();
+                    if server.entities(server_world.proxy()).contains(&spawn_entity) {
+                        // Register the server entity - this is the host entity for this EntityKey
+                        self.scenario.entity_registry_mut()
+                            .register_host_entity(entity_key, spawn_entity);
+                        return entity_key;
+                    }
+                }
             }
         }
 
@@ -133,7 +151,8 @@ impl<'a> ClientEntityMut<'a> {
             .expect("EntityKey not registered or not replicated to client");
         let state = self.scenario.client_state_mut(self.client_key);
         let world_proxy = state.world.proxy();
-        let client_ref = state.client.local_entity(world_proxy, &local_entity);
+        let client_ref = state.client.local_entity(world_proxy, &local_entity)
+            .expect("Entity should exist on client with this LocalEntity");
         client_ref.id()
     }
 

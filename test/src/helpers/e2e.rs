@@ -8,7 +8,7 @@
 
 use std::time::Duration;
 
-use log::{info, warn};
+use log::warn;
 
 use naia_shared::{Instant, TestClock};
 use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent, transport::local::Socket as LocalClientSocket, JitterBufferType};
@@ -184,19 +184,25 @@ pub fn complete_handshake_with_name(
         server.send_all_packets(server_world.proxy());
         
         // Then process client side
-        if !client.connection_status().is_connected() {
+        let was_connected = client.connection_status().is_connected();
+        if !was_connected {
             // For handshake, receive then send to allow handshake manager to process
             client.receive_all_packets();
             client.send_all_packets(client_world.proxy_mut());
-        } else {
-            client.receive_all_packets();
-            client.process_all_packets(client_world.proxy_mut(), &now);
-
+            
+            // Check for connection event even during handshake
+            // (the handshake manager may have completed the connection)
             let mut client_events = client.take_world_events();
             for _ in client_events.read::<ClientConnectEvent>() {
                 info!("{} connected in {} attempts", client_name, attempt);
                 connected = true;
             }
+        } else {
+            // If client is already connected, process normally
+            client.receive_all_packets();
+            client.process_all_packets(client_world.proxy_mut(), &now);
+            client.take_tick_events(&now);
+            client.send_all_packets(client_world.proxy_mut());
         }
 
         if connected && user_key_opt.is_some() {
@@ -210,7 +216,7 @@ pub fn complete_handshake_with_name(
         if !connected {
             warn!("{} handshake failed: client never connected after 100 attempts", client_name);
         } else if user_key_opt.is_none() {
-            warn!("{} handshake failed: client connected but server never accepted (user_key_opt is None)", client_name);
+            warn!("{} handshake failed: client connected but server never accepted after 100 attempts", client_name);
         }
         None
     }
@@ -234,10 +240,6 @@ where
 
         if condition(client, server) {
             return true;
-        }
-
-        if attempt % 10 == 0 && attempt > 0 {
-            info!("{} - Attempt {}", debug_msg, attempt);
         }
     }
     false
@@ -286,12 +288,7 @@ pub fn wait_for_delegation_event(
         }
 
         if found {
-            info!("Server received delegation event at attempt {}", attempt);
             return true;
-        }
-
-        if attempt % 10 == 0 && attempt > 0 {
-            info!("Waiting for delegation event - Attempt {}", attempt);
         }
     }
     false

@@ -49,11 +49,13 @@ impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
         if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(self.entity_key, user_key) {
             let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
             let world_proxy = state.world.proxy();
-            let client_ref = state.client.local_entity(world_proxy, &local_entity);
-            let result = client_ref.replication_config()
-                .map(|config| config.is_delegated())
-                .unwrap_or(false);
-            result
+            if let Some(client_ref) = state.client.local_entity(world_proxy, &local_entity) {
+                client_ref.replication_config()
+                    .map(|config| config.is_delegated())
+                    .unwrap_or(false)
+            } else {
+                false
+            }
         } else {
             false
         }
@@ -65,9 +67,11 @@ impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
         if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(self.entity_key, user_key) {
             let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
             let world_proxy = state.world.proxy();
-            let client_ref = state.client.local_entity(world_proxy, &local_entity);
-            let result = client_ref.authority() == Some(expected);
-            result
+            if let Some(client_ref) = state.client.local_entity(world_proxy, &local_entity) {
+                client_ref.authority() == Some(expected)
+            } else {
+                false
+            }
         } else {
             false
         }
@@ -79,13 +83,15 @@ impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
         if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(self.entity_key, user_key) {
             let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
             let world_proxy = state.world.proxy();
-            let client_ref = state.client.local_entity(world_proxy, &local_entity);
-            let result = if let Some(pos) = client_ref.component::<Position>() {
-                (*pos.x - expected_x).abs() < 0.001 && (*pos.y - expected_y).abs() < 0.001
+            if let Some(client_ref) = state.client.local_entity(world_proxy, &local_entity) {
+                if let Some(pos) = client_ref.component::<Position>() {
+                    (*pos.x - expected_x).abs() < 0.001 && (*pos.y - expected_y).abs() < 0.001
+                } else {
+                    false
+                }
             } else {
                 false
-            };
-            result
+            }
         } else {
             false
         }
