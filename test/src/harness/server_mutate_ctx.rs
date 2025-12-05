@@ -100,8 +100,7 @@ impl<'scenario> ServerMutateCtx<'scenario> {
         // Note: user_scope_mut doesn't take a world parameter
         self.server.user_scope_mut(&user_key).include(&entity);
         
-        // Note: LocalEntity mapping will be registered in tick_once() when the entity
-        // is actually replicated to the client (after host_init_entity() is called)
+        // Note: LocalEntity mapping will be registered in tick_once() when Client B receives SpawnEntityEvent
     }
 }
 

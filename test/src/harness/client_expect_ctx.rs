@@ -18,7 +18,8 @@ impl<'b, 'a: 'b> ClientExpectCtx<'b, 'a> {
             let local_entities = state.client.local_entities();
             local_entities.contains(&local_entity)
         } else {
-            panic!("no local entity for entity: {:?} and user: {:?}", entity, user_key);
+            // Return false so the expect loop can keep ticking until the entity is replicated
+            false
         }
     }
 

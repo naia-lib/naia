@@ -53,6 +53,8 @@ impl<'scenario> ClientMutateCtx<'scenario> {
 
         // 5. Register spawning client's TestEntity and LocalEntity mapping immediately
         // This allows the server to look up the EntityKey when it receives the spawn event
+        println!("[CLIENT_SPAWN] Client {:?} spawned entity: EntityKey={:?}, LocalEntity={:?}", 
+            self.client_key, entity_key, local_entity);
         self.scenario.entity_registry_mut()
             .register_client_entity(entity_key, self.client_key, client_entity, local_entity);
 
