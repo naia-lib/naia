@@ -39,7 +39,8 @@ impl<'scenario> ClientMutateCtx<'scenario> {
         // 1. Spawn entity via Client API
         let entity_mut = state.client.spawn_entity(state.world.proxy_mut());
         
-        // 2. Get LocalEntity from the spawned entity (EntityMut has local_entity() method)
+        // 2. Get entity ID and LocalEntity before closure consumes entity_mut
+        let client_entity = entity_mut.id();
         let local_entity = entity_mut.local_entity()
             .expect("Client-spawned entity should have LocalEntity immediately");
         
@@ -50,14 +51,12 @@ impl<'scenario> ClientMutateCtx<'scenario> {
         // 4. Allocate EntityKey
         let entity_key = self.scenario.entity_registry_mut().allocate_entity_key();
 
-        // 5. Register spawning client mapping
+        // 5. Register spawning client's TestEntity and LocalEntity mapping immediately
+        // This allows the server to look up the EntityKey when it receives the spawn event
         self.scenario.entity_registry_mut()
-            .register_spawning_client(entity_key, self.client_key, local_entity);
+            .register_client_entity(entity_key, self.client_key, client_entity, local_entity);
 
-        // 6. Call scenario.spawn_and_track_client_entity() to wait for server
-        self.scenario.spawn_and_track_client_entity(entity_key, self.client_key, local_entity);
-
-        // 7. Return (EntityKey, R)
+        // 7. Return EntityKey - server entity will be registered automatically in tick_once()
         entity_key
     }
 

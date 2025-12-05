@@ -171,21 +171,107 @@ impl Scenario {
         // Advance simulated clock by 16ms (default tick duration for ~60 FPS)
         TestClock::advance(16);
         let now = Instant::now();
-        
-        // Use current time for this tick (we update self.now at the end)
-        let server = self.server.as_mut().expect("server not started");
+
+        // Collect client spawns to register after all updates complete
+        let mut spawns_to_register = Vec::new();
 
         // update each client-server pair sequentially
         // This is not ideal but works for now
         // Note: We use Instant::now() for each iteration since now is moved
-        for state in self.clients.values_mut() {
-            update_client_server_at(
-                now.clone(),
-                &mut state.client,
-                server,
-                &mut state.world,
-                &mut self.server_world,
-            );
+        let mut server_spawn_data = Vec::new();
+        {
+            let server = self.server.as_mut().expect("server not started");
+            for (client_key, state) in self.clients.iter_mut() {
+                update_client_server_at(
+                    now.clone(),
+                    &mut state.client,
+                    server,
+                    &mut state.world,
+                    &mut self.server_world,
+                );
+
+                // Collect spawn events for this client
+                let mut client_events = state.client.take_world_events();
+
+                // Process SpawnEntityEvent for this client
+                for spawned_entity in client_events.read::<naia_client::SpawnEntityEvent>() {
+                    // Get the client's LocalEntity for this entity
+                    let world_ref = state.world.proxy();
+                    let client_ref = state.client.entity(world_ref, &spawned_entity);
+
+                    if let Some(local_entity) = client_ref.local_entity() {
+                        // Look up EntityKey via LocalEntity mapping
+                        // We'll do the actual lookup after dropping the state borrow
+                        spawns_to_register.push((*client_key, local_entity, spawned_entity));
+                    }
+                }
+            }
+
+            // Collect server events before dropping server borrow
+            let mut server_events = server.take_world_events();
+            for (spawn_user_key, spawn_entity) in server_events.read::<naia_server::SpawnEntityEvent>() {
+                server_spawn_data.push((spawn_user_key, spawn_entity));
+            }
+        }
+
+    // Process server spawn events to register server entities and LocalEntity mappings
+        let mut server_entities_to_register = Vec::new();
+        let mut server_local_entity_mappings = Vec::new();
+        
+        for (spawn_user_key, spawn_entity) in server_spawn_data {
+            // Find the ClientKey for this UserKey (immutable borrow of self)
+            let client_key = self.client_key_for_user(spawn_user_key);
+            
+            if let Some(client_key) = client_key {
+                // Get the server's LocalEntity for this user (need server borrow)
+                let server_local_entity = {
+                    let server = self.server.as_ref().expect("server not started");
+                    let world_ref = self.server_world.proxy();
+                    let server_ref = server.entity(world_ref, &spawn_entity);
+                    server_ref.local_entity(&spawn_user_key)
+                };
+                
+                if let Some(local_entity) = server_local_entity {
+                    // Try to find EntityKey via client's LocalEntity mapping (for client-spawned entities)
+                    // The LocalEntity is the same on server and client for the same user
+                    if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(client_key, local_entity) {
+                        // This is a client-spawned entity - register the server entity
+                        server_entities_to_register.push((entity_key, spawn_entity));
+                    } else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(spawn_entity) {
+                        // This is a server-spawned entity - register the LocalEntity mapping
+                        server_local_entity_mappings.push((entity_key, client_key, local_entity));
+                    }
+                }
+            }
+        }
+        
+        // Now register all the client entities (all borrows are dropped)
+        for (client_key, local_entity, client_entity) in spawns_to_register {
+            if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(client_key, local_entity) {
+                // EntityKey found via LocalEntity mapping - register the client entity
+                // Note: LocalEntity mapping already exists, we just need to register the TestEntity
+                let record = self.entity_registry_mut().get_or_create_record(entity_key);
+                record.client_entities.insert(client_key, Some(client_entity));
+            }
+            // If EntityKey not found, the entity hasn't been registered on server yet
+            // It will be registered in a future tick when server processes it
+        }
+        
+        // Register server entities for client-spawned entities
+        for (entity_key, server_entity) in server_entities_to_register {
+            self.entity_registry_mut()
+                .register_server_entity(entity_key, server_entity);
+        }
+        
+        // Register LocalEntity mappings for server-spawned entities
+        // Note: For server-spawned entities, we only register the LocalEntity mapping here
+        // The client entity will be registered later when the client receives SpawnEntityEvent
+        for (entity_key, client_key, local_entity) in server_local_entity_mappings {
+            // Only register if not already registered (avoid duplicates)
+            if self.entity_registry.entity_key_for_client_entity(client_key, local_entity).is_none() {
+                self.entity_registry_mut()
+                    .register_client_local_entity_mapping(entity_key, client_key, local_entity);
+            }
         }
 
         self.now = Instant::now();
@@ -204,30 +290,43 @@ impl Scenario {
 
     /// Get server host entity for an EntityKey
     pub(crate) fn server_host_entity(&self, entity_key: EntityKey) -> Option<TestEntity> {
-        self.entity_registry.host_world(entity_key)
+        self.entity_registry.server_entity(entity_key)
     }
 
     /// Get LocalEntity for an EntityKey and UserKey
-    /// For client-spawned entities, if the user_key matches the spawning client, use their LocalEntity directly
-    /// For other clients, get LocalEntity from server's perspective
-    /// This will return None if the entity hasn't been replicated to that user yet
+    /// Uses EntityRegistry as source of truth - checks client entities first, then falls back to server lookup
     pub(crate) fn local_entity_for(&self, entity_key: EntityKey, user_key: UserKey) -> Option<naia_shared::LocalEntity> {
-        // Check if this is a client-spawned entity and if the user_key matches the spawning client
-        if let Some((spawning_client_key, spawning_local_entity)) = self.entity_registry.spawning_client(entity_key) {
-            let spawning_user_key = self.user_key(spawning_client_key);
-            if user_key == spawning_user_key {
-                // This is the spawning client - use their LocalEntity directly
-                return Some(spawning_local_entity);
+        // Find the client_key for this user_key
+        let client_key = self.client_key_for_user(user_key)?;
+        
+        // Check if client's TestEntity is registered in EntityRegistry
+        if let Some(client_entity) = self.entity_registry.client_entity(entity_key, client_key) {
+            // Client entity is registered - get LocalEntity from client using the TestEntity
+            // Note: client.entity() will panic if entity doesn't exist, but if it's registered it should exist
+            let state = self.clients.get(&client_key)?;
+            let world_ref = state.world.proxy();
+            // Try to get LocalEntity - if entity doesn't exist, this will panic, but that's OK
+            // because if it's registered in EntityRegistry, it should exist
+            let client_ref = state.client.entity(world_ref, &client_entity);
+            if let Some(local_entity) = client_ref.local_entity() {
+                return Some(local_entity);
             }
         }
         
-        // For other clients or server-spawned entities, get LocalEntity from server's perspective
+        // Fallback: get LocalEntity from server's perspective
         // This will return None if the entity hasn't been replicated to that user yet
         // The expect() loop will keep ticking until replication completes and this returns Some
-        let host_entity = self.entity_registry.host_world(entity_key)?;
+        let server_entity = self.entity_registry.server_entity(entity_key)?;
         let server = self.server.as_ref()?;
-        let host_ref = server.entity(self.server_world.proxy(), &host_entity);
-        host_ref.local_entity(&user_key) // Now returns Option, so propagate it
+        let server_ref = server.entity(self.server_world.proxy(), &server_entity);
+        server_ref.local_entity(&user_key) // Now returns Option, so propagate it
+    }
+    
+    /// Get ClientKey for a UserKey (reverse lookup)
+    fn client_key_for_user(&self, user_key: UserKey) -> Option<ClientKey> {
+        self.clients.iter()
+            .find(|(_, state)| state.user_key == user_key)
+            .map(|(key, _)| *key)
     }
 
     /// Perform actions in a mutate phase
@@ -266,46 +365,6 @@ impl Scenario {
         (server, world, registry, users)
     }
 
-    /// Internal helper: wait for server to register client-spawned entity
-    /// Reuses existing ClientSpawnBuilder::track() logic
-    pub(crate) fn spawn_and_track_client_entity(
-        &mut self,
-        entity_key: EntityKey,
-        client_key: ClientKey,
-        local_entity: naia_shared::LocalEntity,
-    ) {
-        let user_key = self.user_key(client_key);
-        let mut attempts = 0;
-        const MAX_ATTEMPTS: usize = 200;
-
-        loop {
-            attempts += 1;
-            if attempts > MAX_ATTEMPTS {
-                panic!(
-                    "spawn_and_track_client_entity() timed out after {} ticks waiting for server to have entity with LocalEntity {:?}",
-                    MAX_ATTEMPTS, local_entity
-                );
-            }
-
-            self.tick_once();
-
-            // Check if server has SpawnEntityEvent for this user
-            let mut server_events = self.take_server_events();
-            for (spawn_user_key, spawn_entity) in server_events.read::<naia_server::SpawnEntityEvent>() {
-                if spawn_user_key == user_key {
-                    // Found the spawn event - this is the server's entity for the client-spawned entity
-                    // Verify it exists in the server world and register it
-                    let server = self.server.as_ref().expect("server not started");
-                    if server.entities(self.server_world.proxy()).contains(&spawn_entity) {
-                        // Register the server entity - this is the host entity for this EntityKey
-                        self.entity_registry_mut()
-                            .register_host_entity(entity_key, spawn_entity);
-                        return;
-                    }
-                }
-            }
-        }
-    }
 }
 
 

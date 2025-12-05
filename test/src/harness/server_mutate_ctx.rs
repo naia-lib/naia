@@ -1,4 +1,4 @@
-use naia_server::{EntityMut, EntityRef, RoomKey};
+use naia_server::{EntityMut, EntityRef};
 use naia_demo_world::{WorldRef, WorldMut};
 
 use crate::TestEntity;
@@ -43,9 +43,9 @@ impl<'scenario> ServerMutateCtx<'scenario> {
         // 2. Allocate EntityKey
         let entity_key = self.registry.allocate_entity_key();
 
-        // 3. Register host entity
+        // 3. Register server entity
         let entity = entity_mut.id();
-        self.registry.register_host_entity(entity_key, entity);
+        self.registry.register_server_entity(entity_key, entity);
 
         // 4. Call closure with EntityMut
         let result = f(entity_mut);
@@ -61,7 +61,7 @@ impl<'scenario> ServerMutateCtx<'scenario> {
         key: EntityKey,
     ) -> Option<EntityRef<'b, TestEntity, WorldRef<'b>>> {
         // 1. Resolve EntityKey to TestEntity
-        let entity = self.registry.host_world(key)?;
+        let entity = self.registry.server_entity(key)?;
 
         // 2. Get WorldRef with method lifetime
         let world_ref = self.world.proxy();
@@ -77,7 +77,7 @@ impl<'scenario> ServerMutateCtx<'scenario> {
         key: EntityKey,
     ) -> Option<EntityMut<'b, TestEntity, WorldMut<'b>>> {
         // 1. Resolve EntityKey to TestEntity
-        let entity = self.registry.host_world(key)?;
+        let entity = self.registry.server_entity(key)?;
 
         // 2. Get WorldMut with method lifetime
         let world_mut = self.world.proxy_mut();
@@ -93,12 +93,15 @@ impl<'scenario> ServerMutateCtx<'scenario> {
             .expect("ClientKey not found in users mapping");
 
         // 2. Resolve entity_key to TestEntity
-        let entity = self.registry.host_world(entity_key)
-            .expect("EntityKey not registered with host entity");
+        let entity = self.registry.server_entity(entity_key)
+            .expect("EntityKey not registered with server entity");
         
         // 3. Call server.user_scope_mut().include()
         // Note: user_scope_mut doesn't take a world parameter
         self.server.user_scope_mut(&user_key).include(&entity);
+        
+        // Note: LocalEntity mapping will be registered in tick_once() when the entity
+        // is actually replicated to the client (after host_init_entity() is called)
     }
 }
 
