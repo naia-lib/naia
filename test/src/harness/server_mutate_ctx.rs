@@ -1,4 +1,4 @@
-use naia_server::{EntityMut, EntityRef};
+use naia_server::{EntityMut, EntityRef, RoomKey};
 use naia_demo_world::{WorldRef, WorldMut};
 
 use crate::TestEntity;

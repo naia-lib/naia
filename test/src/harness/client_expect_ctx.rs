@@ -18,7 +18,7 @@ impl<'b, 'a: 'b> ClientExpectCtx<'b, 'a> {
             let local_entities = state.client.local_entities();
             local_entities.contains(&local_entity)
         } else {
-            false
+            panic!("no local entity for entity: {:?} and user: {:?}", entity, user_key);
         }
     }
 

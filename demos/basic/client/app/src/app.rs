@@ -42,7 +42,7 @@ impl App {
 
         client.connect(socket);
 
-        App {
+        Self {
             client,
             world: World::default(),
             message_count: 0,
