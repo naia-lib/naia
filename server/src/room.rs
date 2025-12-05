@@ -8,7 +8,7 @@ use naia_shared::{BigMapKey, Channel, ChannelKind, GlobalEntity, Message};
 use super::{server::WorldServer, user::UserKey};
 
 // RoomKey
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct RoomKey(u64);
 
 impl BigMapKey for RoomKey {

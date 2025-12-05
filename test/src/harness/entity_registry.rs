@@ -74,25 +74,19 @@ impl EntityRegistry {
 
     /// Register a server host world entity for an EntityKey
     pub fn register_server_entity(&mut self, entity_key: EntityKey, entity: TestEntity) {
-        println!("[ENTITY_REGISTRY] register_server_entity: EntityKey={:?}", 
-            entity_key);
         let record = self.get_or_create_record(entity_key);
         record.server_entity = Some(entity);
         // Also register reverse mapping for fast lookup
         self.server_entity_to_entity_key.insert(entity, entity_key);
-        println!("[ENTITY_REGISTRY] Registered server entity");
     }
 
     /// Register a client's TestEntity and LocalEntity mapping for an EntityKey
     /// This stores both the TestEntity and the reverse LocalEntity -> EntityKey mapping
     pub fn register_client_entity(&mut self, entity_key: EntityKey, client_key: ClientKey, entity: TestEntity, local_entity: LocalEntity) {
-        println!("[ENTITY_REGISTRY] register_client_entity: EntityKey={:?}, ClientKey={:?}, LocalEntity={:?}", 
-            entity_key, client_key, local_entity);
         let record = self.get_or_create_record(entity_key);
         record.client_entities.insert(client_key, Some(entity));
         // Also register reverse mapping for fast lookup
         self.client_entity_to_entity_key.insert((client_key, local_entity), entity_key);
-        println!("[ENTITY_REGISTRY] Registered client entity and LocalEntity mapping");
     }
 
 

@@ -5,7 +5,7 @@ use log::{info, warn};
 
 use naia_shared::{TestClock, Instant};
 use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::Socket as LocalClientSocket};
-use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, transport::local::Socket as LocalServerSocket};
+use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, ConnectEvent, transport::local::Socket as LocalServerSocket};
 
 use crate::{
     TestWorld, Auth, TestEntity, LocalTransportBuilder,
@@ -194,26 +194,15 @@ impl Scenario {
                 let mut client_events = state.client.take_world_events();
                 
                 // Process SpawnEntityEvent for this client
-                let mut spawn_events: Vec<_> = client_events.read::<naia_client::SpawnEntityEvent>().collect();
-                if !spawn_events.is_empty() {
-                    println!("[CLIENT_SPAWN_EVENT] Client {:?} received {} SpawnEntityEvent(s)", 
-                        client_key, spawn_events.len());
-                }
-                
-                for spawned_entity in spawn_events {
+                for spawned_entity in client_events.read::<naia_client::SpawnEntityEvent>() {
                     // Get the client's LocalEntity for this entity
                     let world_ref = state.world.proxy();
                     let client_ref = state.client.entity(world_ref, &spawned_entity);
                     
                     if let Some(local_entity) = client_ref.local_entity() {
-                        println!("[CLIENT_SPAWN_EVENT] Client {:?} processing SpawnEntityEvent: LocalEntity={:?}", 
-                            client_key, local_entity);
                         // Look up EntityKey via LocalEntity mapping
                         // We'll do the actual lookup after dropping the state borrow
                         spawns_to_register.push((*client_key, local_entity, spawned_entity));
-                    } else {
-                        println!("[CLIENT_SPAWN_EVENT] Client {:?} received SpawnEntityEvent but no LocalEntity", 
-                            client_key);
                     }
                 }
             }
@@ -221,8 +210,6 @@ impl Scenario {
             // Collect server events before dropping server borrow
             let mut server_events = server.take_world_events();
             for (spawn_user_key, spawn_entity) in server_events.read::<naia_server::SpawnEntityEvent>() {
-                println!("[SERVER_SPAWN_EVENT] Server received SpawnEntityEvent: UserKey={:?}", 
-                    spawn_user_key);
                 server_spawn_data.push((spawn_user_key, spawn_entity));
             }
         }
@@ -245,34 +232,20 @@ impl Scenario {
                 };
                 
                 if let Some(local_entity) = server_local_entity {
-                    println!("[SERVER_SPAWN_PROCESS] Processing spawn: UserKey={:?}, ClientKey={:?}, LocalEntity={:?}", 
-                        spawn_user_key, client_key, local_entity);
                     // Try to find EntityKey via client's LocalEntity mapping (for client-spawned entities)
                     // The LocalEntity is the same on server and client for the same user
                     if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(client_key, local_entity) {
-                        println!("[SERVER_SPAWN_PROCESS] Found EntityKey via client LocalEntity mapping: EntityKey={:?} (client-spawned)", 
-                            entity_key);
                         // This is a client-spawned entity - register the server entity
                         server_entities_to_register.push((entity_key, spawn_entity));
                     } else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(spawn_entity) {
-                        println!("[SERVER_SPAWN_PROCESS] Found EntityKey via server entity: EntityKey={:?} (server-spawned)", 
-                            entity_key);
                         // This is a server-spawned entity - register the LocalEntity mapping
                         server_local_entity_mappings.push((entity_key, client_key, local_entity));
                     } else if let Some(entity_key) = self.entity_registry.find_pending_client_spawned_entity(client_key) {
-                        println!("[SERVER_SPAWN_PROCESS] Found EntityKey for pending client-spawned entity: EntityKey={:?}", 
-                            entity_key);
                         // This is a client-spawned entity that we haven't registered on server yet
                         server_entities_to_register.push((entity_key, spawn_entity));
                         // Also register the server's LocalEntity mapping for this client
                         server_local_entity_mappings.push((entity_key, client_key, local_entity));
-                    } else {
-                        println!("[SERVER_SPAWN_PROCESS] Could not find EntityKey for spawn: UserKey={:?}, ClientKey={:?}, LocalEntity={:?}", 
-                            spawn_user_key, client_key, local_entity);
                     }
-                } else {
-                    println!("[SERVER_SPAWN_PROCESS] No LocalEntity for spawn: UserKey={:?}, ClientKey={:?}", 
-                        spawn_user_key, client_key);
                 }
             }
         }
@@ -319,23 +292,16 @@ impl Scenario {
             };
             
             if let Some(entity_key) = entity_key {
-                println!("[CLIENT_ENTITY_REGISTER] Registering client entity: EntityKey={:?}, ClientKey={:?}, LocalEntity={:?}", 
-                    entity_key, client_key, local_entity);
                 // Register the client entity and LocalEntity mapping
                 self.entity_registry_mut()
                     .register_client_entity(entity_key, client_key, client_entity, local_entity);
-            } else {
-                println!("[CLIENT_ENTITY_REGISTER] Could not find EntityKey for client spawn event: ClientKey={:?}, LocalEntity={:?}", 
-                    client_key, local_entity);
-                // If EntityKey not found, the entity hasn't been registered on server yet
-                // It will be registered in a future tick when server processes it
             }
+            // If EntityKey not found, the entity hasn't been registered on server yet
+            // It will be registered in a future tick when server processes it
         }
         
         // Register server entities for client-spawned entities
         for (entity_key, server_entity) in server_entities_to_register {
-            println!("[SERVER_ENTITY_REGISTER] Registering server entity for client-spawned entity: EntityKey={:?}", 
-                entity_key);
             self.entity_registry_mut()
                 .register_server_entity(entity_key, server_entity);
         }
@@ -346,13 +312,8 @@ impl Scenario {
         for (entity_key, client_key, local_entity) in server_local_entity_mappings {
             // Only register if not already registered (avoid duplicates)
             if self.entity_registry.entity_key_for_client_entity(client_key, local_entity).is_none() {
-                println!("[SERVER_LOCAL_ENTITY_REGISTER] Registering LocalEntity mapping for server-spawned entity: EntityKey={:?}, ClientKey={:?}, LocalEntity={:?}", 
-                    entity_key, client_key, local_entity);
                 self.entity_registry_mut()
                     .register_client_local_entity_mapping(entity_key, client_key, local_entity);
-            } else {
-                println!("[SERVER_LOCAL_ENTITY_REGISTER] LocalEntity mapping already exists: EntityKey={:?}, ClientKey={:?}, LocalEntity={:?}", 
-                    entity_key, client_key, local_entity);
             }
         }
 
@@ -522,8 +483,20 @@ pub fn complete_handshake_with_name(
         for (user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
             info!("Server accepting connection for {}: {:?}", client_name, user_key);
             server.accept_connection(&user_key);
-            server.room_mut(main_room_key).add_user(&user_key);
             user_key_opt = Some(user_key);
+        }
+        
+        // After accept_connection, receive_all_packets will process ConnectEvent and add user to WorldServer
+        // We need to call receive_all_packets again to process the ConnectEvent, then add user to room
+        server.receive_all_packets();
+        server.process_all_packets(server_world.proxy_mut(), &now);
+        
+        // Now check if user exists in WorldServer and add them to room
+        if let Some(user_key) = user_key_opt {
+            if server.user_exists(&user_key) {
+                info!("Server adding user to room for {}: {:?}", client_name, user_key);
+                server.room_mut(main_room_key).add_user(&user_key);
+            }
         }
         server.send_all_packets(server_world.proxy());
 
