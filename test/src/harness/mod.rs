@@ -12,6 +12,7 @@ mod builder;
 mod user_scope;
 mod user;
 mod room;
+mod client_state;
 
 pub use scenario::Scenario;
 pub use keys::{ClientKey, EntityKey};

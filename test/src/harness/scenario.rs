@@ -7,58 +7,10 @@ use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConn
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, transport::local::Socket as LocalServerSocket, SpawnEntityEvent as ServerSpawnEntityEvent};
 
-use crate::{TestWorld, Auth, TestEntity, harness::{users::Users, mutate_ctx::MutateCtx, ExpectCtx, ClientKey, EntityKey, builder::LocalTransportBuilder, entity_registry::EntityRegistry}};
+use crate::{TestWorld, Auth, TestEntity, harness::{client_state::ClientState, users::Users, mutate_ctx::MutateCtx, ExpectCtx, ClientKey, EntityKey, builder::LocalTransportBuilder, entity_registry::EntityRegistry}};
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
-
-pub(crate) struct ClientState {
-    client: Client,
-    world: TestWorld,
-    user_key: UserKey,
-}
-
-impl ClientState {
-    pub(crate) fn new(client: Client, world: TestWorld, user_key: UserKey) -> Self {
-        Self { client, world, user_key }
-    }
-
-    /// Get mutable reference to the client
-    pub(crate) fn client_mut(&mut self) -> &mut Client {
-        &mut self.client
-    }
-
-    /// Get reference to the client
-    pub(crate) fn client(&self) -> &Client {
-        &self.client
-    }
-
-    /// Get mutable reference to the world
-    pub(crate) fn world_mut(&mut self) -> &mut TestWorld {
-        &mut self.world
-    }
-
-    /// Get reference to the world
-    pub(crate) fn world(&self) -> &TestWorld {
-        &self.world
-    }
-
-    /// Get the user key
-    pub(crate) fn user_key(&self) -> UserKey {
-        self.user_key
-    }
-
-    /// Get mutable references to both client and world
-    /// This is a workaround for borrow checker limitations when both are needed
-    pub(crate) fn client_and_world_mut(&mut self) -> (&mut Client, &mut TestWorld) {
-        // Safe because Client and TestWorld are different fields
-        unsafe {
-            let client_ptr = &mut self.client as *mut Client;
-            let world_ptr = &mut self.world as *mut TestWorld;
-            (&mut *client_ptr, &mut *world_ptr)
-        }
-    }
-}
 
 pub struct Scenario {
     now: Instant,
@@ -382,7 +334,7 @@ impl Scenario {
         self.clients
             .get(&client_key)
             .expect("client not found")
-            .user_key
+            .user_key()
     }
 
     /// Get server host entity for an EntityKey
@@ -432,7 +384,7 @@ impl Scenario {
     /// Get ClientKey for a UserKey (reverse lookup)
     pub(crate) fn client_key_for_user(&self, user_key: &UserKey) -> Option<ClientKey> {
         self.clients.iter()
-            .find(|(_, state)| state.user_key == *user_key)
+            .find(|(_, state)| state.user_key() == *user_key)
             .map(|(key, _)| *key)
     }
 
