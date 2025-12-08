@@ -1,10 +1,7 @@
 use naia_server::{EntityMut, EntityRef};
 use naia_demo_world::{WorldRef, WorldMut};
 
-use crate::TestEntity;
-use super::keys::{ClientKey, EntityKey};
-use super::entity_registry::EntityRegistry;
-use super::users::Users;
+use crate::{harness::{EntityKey, ClientKey, users::Users, entity_registry::EntityRegistry}, TestEntity, TestWorld};
 
 type Server = naia_server::Server<TestEntity>;
 
@@ -12,7 +9,7 @@ type Server = naia_server::Server<TestEntity>;
 /// Provides direct pass-through to core Server API with EntityKey resolution
 pub struct ServerMutateCtx<'scenario> {
     server: &'scenario mut Server,
-    world: &'scenario mut crate::TestWorld,
+    world: &'scenario mut TestWorld,
     registry: &'scenario mut EntityRegistry,
     users: Users<'scenario>,
 }
@@ -20,7 +17,7 @@ pub struct ServerMutateCtx<'scenario> {
 impl<'scenario> ServerMutateCtx<'scenario> {
     pub(crate) fn new(
         server: &'scenario mut Server,
-        world: &'scenario mut crate::TestWorld,
+        world: &'scenario mut TestWorld,
         registry: &'scenario mut EntityRegistry,
         users: Users<'scenario>,
     ) -> Self {
@@ -56,10 +53,10 @@ impl<'scenario> ServerMutateCtx<'scenario> {
 
     /// Get read-only entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
-    pub fn entity<'b>(
-        &'b mut self,
+    pub fn entity(
+        &'_ mut self,
         key: EntityKey,
-    ) -> Option<EntityRef<'b, TestEntity, WorldRef<'b>>> {
+    ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         // 1. Resolve EntityKey to TestEntity
         let entity = self.registry.server_entity(key)?;
 
@@ -72,10 +69,10 @@ impl<'scenario> ServerMutateCtx<'scenario> {
 
     /// Get mutable entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
-    pub fn entity_mut<'b>(
-        &'b mut self,
+    pub fn entity_mut(
+        &'_ mut self,
         key: EntityKey,
-    ) -> Option<EntityMut<'b, TestEntity, WorldMut<'b>>> {
+    ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
         // 1. Resolve EntityKey to TestEntity
         let entity = self.registry.server_entity(key)?;
 
@@ -99,8 +96,6 @@ impl<'scenario> ServerMutateCtx<'scenario> {
         // 3. Call server.user_scope_mut().include()
         // Note: user_scope_mut doesn't take a world parameter
         self.server.user_scope_mut(&user_key).include(&entity);
-        
-        // Note: LocalEntity mapping will be registered in tick_once() when Client B receives SpawnEntityEvent
     }
 }
 

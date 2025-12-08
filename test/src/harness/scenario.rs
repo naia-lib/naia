@@ -2,11 +2,15 @@ use std::{time::Duration, collections::HashMap};
 
 use log::{info, warn};
 
-use naia_shared::{TestClock, Instant};
-use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::Socket as LocalClientSocket};
-use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, transport::local::Socket as LocalServerSocket};
+use naia_shared::{TestClock, Instant, Protocol, OwnedLocalEntity, LocalEntity};
+use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::Socket as LocalClientSocket, EntityRef, EntityMut, SpawnEntityEvent as ClientSpawnEntityEvent};
+use naia_demo_world::{WorldMut, WorldRef};
+use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, transport::local::Socket as LocalServerSocket, SpawnEntityEvent as ServerSpawnEntityEvent};
 
 use crate::{TestWorld, Auth, TestEntity, harness::{ClientKey, EntityKey, builder::LocalTransportBuilder, entity_registry::EntityRegistry}};
+use crate::harness::ExpectCtx;
+use crate::harness::mutate_ctx::MutateCtx;
+use crate::harness::users::Users;
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
@@ -26,12 +30,12 @@ pub struct Scenario {
     clients: HashMap<ClientKey, ClientState>,
     entity_registry: EntityRegistry,
     next_client_key: u32,
-    protocol: naia_shared::Protocol,
+    protocol: Protocol,
     client_user_map: HashMap<ClientKey, UserKey>,
 }
 
 impl Scenario {
-    pub fn new(protocol: naia_shared::Protocol) -> Self {
+    pub fn new(protocol: Protocol) -> Self {
         // Initialize simulated clock for deterministic test time
         TestClock::init(0);
         
@@ -120,7 +124,7 @@ impl Scenario {
         client_key: ClientKey,
         user_key: UserKey,
         key: EntityKey,
-    ) -> Option<naia_client::EntityRef<'_, TestEntity, naia_demo_world::WorldRef<'_>>> {
+    ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         let local_entity = self.local_entity_for(key, user_key)?;
 
         // Single mutable borrow of Scenario -> &mut ClientState
@@ -139,7 +143,7 @@ impl Scenario {
         client_key: ClientKey,
         user_key: UserKey,
         key: EntityKey,
-    ) -> Option<naia_client::EntityMut<'_, TestEntity, naia_demo_world::WorldMut<'_>>> {
+    ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
         let local_entity = self.local_entity_for(key, user_key)?;
 
         // Single mutable borrow of Scenario -> &mut ClientState
@@ -189,7 +193,7 @@ impl Scenario {
                 let mut client_events = state.client.take_world_events();
                 
                 // Process SpawnEntityEvent for this client
-                for spawned_entity in client_events.read::<naia_client::SpawnEntityEvent>() {
+                for spawned_entity in client_events.read::<ClientSpawnEntityEvent>() {
                     // Get the client's LocalEntity for this entity
                     let world_ref = state.world.proxy();
                     let client_ref = state.client.entity(world_ref, &spawned_entity);
@@ -204,12 +208,12 @@ impl Scenario {
 
             // Collect server events before dropping server borrow
             let mut server_events = server.take_world_events();
-            for (spawn_user_key, spawn_entity) in server_events.read::<naia_server::SpawnEntityEvent>() {
+            for (spawn_user_key, spawn_entity) in server_events.read::<ServerSpawnEntityEvent>() {
                 server_spawn_data.push((spawn_user_key, spawn_entity));
             }
         }
 
-    // Process server spawn events to register server entities and LocalEntity mappings
+        // Process server spawn events to register server entities and LocalEntity mappings
         let mut server_entities_to_register = Vec::new();
         let mut server_local_entity_mappings = Vec::new();
         
@@ -256,10 +260,10 @@ impl Scenario {
                 // The server's LocalEntity for UserKey(1) will have the same value as Client B's LocalEntity
                 let user_key = self.user_key(client_key);
                 let local_entity_value = {
-                    let owned: naia_shared::OwnedLocalEntity = local_entity.into();
+                    let owned: OwnedLocalEntity = local_entity.into();
                     // value() is pub(crate), so we need to match to extract the value
                     match owned {
-                        naia_shared::OwnedLocalEntity::Host(v) | naia_shared::OwnedLocalEntity::Remote(v) => v,
+                        OwnedLocalEntity::Host(v) | OwnedLocalEntity::Remote(v) => v,
                     }
                 };
                 
@@ -273,9 +277,9 @@ impl Scenario {
                         let server_ref = server.entity(world_ref, &server_entity);
                         if let Some(server_local_entity) = server_ref.local_entity(&user_key) {
                             let server_value = {
-                                let owned: naia_shared::OwnedLocalEntity = server_local_entity.into();
+                                let owned: OwnedLocalEntity = server_local_entity.into();
                                 match owned {
-                                    naia_shared::OwnedLocalEntity::Host(v) | naia_shared::OwnedLocalEntity::Remote(v) => v,
+                                    OwnedLocalEntity::Host(v) | OwnedLocalEntity::Remote(v) => v,
                                 }
                             };
                             if server_value == local_entity_value {
@@ -333,7 +337,7 @@ impl Scenario {
 
     /// Get LocalEntity for an EntityKey and UserKey
     /// Uses EntityRegistry as source of truth - checks client entities first, then falls back to server lookup
-    pub(crate) fn local_entity_for(&self, entity_key: EntityKey, user_key: UserKey) -> Option<naia_shared::LocalEntity> {
+    pub(crate) fn local_entity_for(&self, entity_key: EntityKey, user_key: UserKey) -> Option<LocalEntity> {
         // Find the client_key for this user_key
         let client_key = self.client_key_for_user(user_key)?;
         
@@ -368,8 +372,7 @@ impl Scenario {
     }
 
     /// Perform actions in a mutate phase
-    pub fn mutate<R>(&mut self, f: impl FnOnce(&mut super::mutate_ctx::MutateCtx) -> R) -> R {
-        use super::mutate_ctx::MutateCtx;
+    pub fn mutate<R>(&mut self, f: impl FnOnce(&mut MutateCtx) -> R) -> R {
         let mut ctx = MutateCtx::new(self);
         let result = f(&mut ctx);
         // Tick at least once after actions to propagate immediate effects
@@ -378,8 +381,7 @@ impl Scenario {
     }
 
     /// Register expectations and wait until they all pass or timeout
-    pub fn expect(&mut self, f: impl FnMut(&mut super::expect_ctx::ExpectCtx) -> bool) {
-        use super::expect_ctx::ExpectCtx;
+    pub fn expect(&mut self, f: impl FnMut(&mut ExpectCtx) -> bool) {
         let mut ctx = ExpectCtx::new(self, 50); // Default max_ticks
         ctx.run(f);
     }
@@ -392,12 +394,12 @@ impl Scenario {
         &mut Server,
         &mut TestWorld,
         &mut EntityRegistry,
-        super::users::Users<'_>,
+        Users<'_>,
     ) {
         let server = self.server.as_mut().expect("server not started");
         let world = &mut self.server_world;
         let registry = &mut self.entity_registry;
-        let users = super::users::Users {
+        let users = Users {
             mapping: &self.client_user_map,
         };
         (server, world, registry, users)
@@ -458,9 +460,9 @@ pub fn complete_handshake_with_name(
     server: &mut Server,
     client_world: &mut TestWorld,
     server_world: &mut TestWorld,
-    main_room_key: &naia_server::RoomKey,
+    main_room_key: &RoomKey,
     client_name: &str,
-) -> Option<naia_server::UserKey> {
+) -> Option<UserKey> {
     let mut user_key_opt = None;
     let mut connected = false;
 

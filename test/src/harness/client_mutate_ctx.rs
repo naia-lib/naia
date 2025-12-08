@@ -1,23 +1,22 @@
 use naia_client::{EntityMut, EntityRef};
 use naia_demo_world::{WorldRef, WorldMut};
+use naia_server::UserKey;
 
-use crate::TestEntity;
-use super::scenario::Scenario;
-use super::keys::{ClientKey, EntityKey};
+use crate::{harness::{ClientKey, EntityKey}, Scenario, TestEntity};
 
 /// Lightweight handle for client-side mutations
 /// Provides direct pass-through to core Client API with EntityKey resolution
 pub struct ClientMutateCtx<'scenario> {
     scenario: &'scenario mut Scenario,
     client_key: ClientKey,
-    user_key: naia_server::UserKey,
+    user_key: UserKey,
 }
 
 impl<'scenario> ClientMutateCtx<'scenario> {
     pub(crate) fn new(
         scenario: &'scenario mut Scenario,
         client_key: ClientKey,
-        user_key: naia_server::UserKey,
+        user_key: UserKey,
     ) -> Self {
         // ClientMut holds &mut Scenario directly and borrows fields internally when needed
         Self {
