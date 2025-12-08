@@ -11,10 +11,10 @@ pub struct ClientExpectCtx<'b, 'a: 'b> {
 
 impl<'b, 'a: 'b> ClientExpectCtx<'b, 'a> {
     /// Expect that this client will eventually see the logical entity
-    pub fn sees(&mut self, entity: EntityKey) -> bool {
-        let user_key = self.expect_ctx.scenario.user_key(self.client_key);
-        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(entity, user_key) {
-            let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
+    pub fn sees(&mut self, entity: &EntityKey) -> bool {
+        let user_key = self.expect_ctx.scenario.user_key(&self.client_key);
+        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(entity, &user_key) {
+            let state = self.expect_ctx.scenario.client_state_mut(&self.client_key);
             let local_entities = state.client.local_entities();
             local_entities.contains(&local_entity)
         } else {
@@ -24,14 +24,14 @@ impl<'b, 'a: 'b> ClientExpectCtx<'b, 'a> {
     }
 
     /// Return an expectation view for that logical entity on this client
-    pub fn entity(&mut self, entity: EntityKey) -> ClientEntityExpect<'_, 'a> {
+    pub fn entity(&mut self, entity: &EntityKey) -> ClientEntityExpect<'_, 'a> {
         // Ensure mapping exists (implicitly calling sees if needed)
         self.sees(entity);
         // Use the same lifetime as expect_ctx
         ClientEntityExpect {
             expect_ctx: self.expect_ctx,
             client_key: self.client_key,
-            entity_key: entity,
+            entity_key: *entity,
         }
     }
 }
@@ -46,9 +46,9 @@ pub struct ClientEntityExpect<'b, 'a: 'b> {
 impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
     /// Assert that the client's replication configuration for this entity is Delegated
     pub fn replication_is_delegated(self) -> bool {
-        let user_key = self.expect_ctx.scenario.user_key(self.client_key);
-        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(self.entity_key, user_key) {
-            let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
+        let user_key = self.expect_ctx.scenario.user_key(&self.client_key);
+        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(&self.entity_key, &user_key) {
+            let state = self.expect_ctx.scenario.client_state_mut(&self.client_key);
             let world_proxy = state.world.proxy();
             if let Some(client_ref) = state.client.local_entity(world_proxy, &local_entity) {
                 client_ref.replication_config()
@@ -64,9 +64,9 @@ impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
 
     /// Assert that the client's authority status for this entity equals expected
     pub fn auth_is(self, expected: EntityAuthStatus) -> bool {
-        let user_key = self.expect_ctx.scenario.user_key(self.client_key);
-        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(self.entity_key, user_key) {
-            let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
+        let user_key = self.expect_ctx.scenario.user_key(&self.client_key);
+        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(&self.entity_key, &user_key) {
+            let state = self.expect_ctx.scenario.client_state_mut(&self.client_key);
             let world_proxy = state.world.proxy();
             if let Some(client_ref) = state.client.local_entity(world_proxy, &local_entity) {
                 client_ref.authority() == Some(expected)
@@ -80,9 +80,9 @@ impl<'b, 'a: 'b> ClientEntityExpect<'b, 'a> {
 
     /// Assert that the client's position for this entity equals (expected_x, expected_y)
     pub fn position_is(self, expected_x: f32, expected_y: f32) -> bool {
-        let user_key = self.expect_ctx.scenario.user_key(self.client_key);
-        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(self.entity_key, user_key) {
-            let state = self.expect_ctx.scenario.client_state_mut(self.client_key);
+        let user_key = self.expect_ctx.scenario.user_key(&self.client_key);
+        if let Some(local_entity) = self.expect_ctx.scenario.local_entity_for(&self.entity_key, &user_key) {
+            let state = self.expect_ctx.scenario.client_state_mut(&self.client_key);
             let world_proxy = state.world.proxy();
             if let Some(client_ref) = state.client.local_entity(world_proxy, &local_entity) {
                 if let Some(pos) = client_ref.component::<Position>() {

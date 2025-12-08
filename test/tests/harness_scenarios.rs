@@ -25,7 +25,7 @@ fn harness_single_client_spawn_replicates_to_server() {
     // Expect phase: server has entity
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            server.has_entity(entity_a)
+            server.has_entity(&entity_a)
         })
     });
 }
@@ -53,29 +53,29 @@ fn harness_two_clients_entity_mapping() {
     // Wait for entity to replicate to server
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            server.has_entity(entity_a)
+            server.has_entity(&entity_a)
         })
     });
 
     // Now include B in scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.entity_mut(entity_a).unwrap().enter_room(&room_key);
-            server.include_in_scope(client_b_key, entity_a);
+            server.entity_mut(&entity_a).unwrap().enter_room(&room_key);
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity_a);
         });
     });
 
     // Expect phase: client B sees entity
     scenario.expect(|ctx| {
         ctx.client(client_b_key, |client_b| {
-            client_b.sees(entity_a)
+            client_b.sees(&entity_a)
         })
     });
 
     // Additional expect: both clients report same position after A changes it
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
-            if let Some(mut entity_a_mut) = client_a.entity_mut(entity_a) {
+            if let Some(mut entity_a_mut) = client_a.entity_mut(&entity_a) {
                 entity_a_mut.insert_component(Position::new(100.0, 200.0));
             }
         });
@@ -83,9 +83,9 @@ fn harness_two_clients_entity_mapping() {
 
     scenario.expect(|ctx| {
         ctx.client(client_a_key, |client_a| {
-            client_a.entity(entity_a).position_is(100.0, 200.0)
+            client_a.entity(&entity_a).position_is(100.0, 200.0)
         }) && ctx.client(client_b_key, |client_b| {
-            client_b.entity(entity_a).position_is(100.0, 200.0)
+            client_b.entity(&entity_a).position_is(100.0, 200.0)
         })
     });
 }

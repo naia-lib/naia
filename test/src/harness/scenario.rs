@@ -7,10 +7,7 @@ use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConn
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, transport::local::Socket as LocalServerSocket, SpawnEntityEvent as ServerSpawnEntityEvent};
 
-use crate::{TestWorld, Auth, TestEntity, harness::{ClientKey, EntityKey, builder::LocalTransportBuilder, entity_registry::EntityRegistry}};
-use crate::harness::ExpectCtx;
-use crate::harness::mutate_ctx::MutateCtx;
-use crate::harness::users::Users;
+use crate::{TestWorld, Auth, TestEntity, harness::{users::Users, mutate_ctx::MutateCtx, ExpectCtx, ClientKey, EntityKey, builder::LocalTransportBuilder, entity_registry::EntityRegistry}};
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
@@ -112,7 +109,7 @@ impl Scenario {
         self.main_room.as_ref()
     }
 
-    pub(crate) fn client_state_mut(&mut self, client_key: ClientKey) -> &mut ClientState {
+    pub(crate) fn client_state_mut(&mut self, client_key: &ClientKey) -> &mut ClientState {
         self.clients.get_mut(&client_key).expect("client not found")
     }
 
@@ -121,9 +118,9 @@ impl Scenario {
     /// to avoid double-borrow issues in ClientMut
     pub(crate) fn client_entity_ref(
         &'_ mut self,
-        client_key: ClientKey,
-        user_key: UserKey,
-        key: EntityKey,
+        client_key: &ClientKey,
+        user_key: &UserKey,
+        key: &EntityKey,
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         let local_entity = self.local_entity_for(key, user_key)?;
 
@@ -140,9 +137,9 @@ impl Scenario {
     /// to avoid double-borrow issues in ClientMut
     pub(crate) fn client_entity_mut(
         &'_ mut self,
-        client_key: ClientKey,
-        user_key: UserKey,
-        key: EntityKey,
+        client_key: &ClientKey,
+        user_key: &UserKey,
+        key: &EntityKey,
     ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
         let local_entity = self.local_entity_for(key, user_key)?;
 
@@ -218,10 +215,8 @@ impl Scenario {
         let mut server_local_entity_mappings = Vec::new();
         
         for (spawn_user_key, spawn_entity) in server_spawn_data {
-            // Find the ClientKey for this UserKey (immutable borrow of self)
-            let client_key = self.client_key_for_user(spawn_user_key);
-            
-            if let Some(client_key) = client_key {
+            // Find the ClientKey for this UserKey
+            if let Some(client_key) = self.client_key_for_user(&spawn_user_key) {
                 // Get the server's LocalEntity for this user (need server borrow)
                 let server_local_entity = {
                     let server = self.server.as_ref().expect("server not started");
@@ -233,13 +228,13 @@ impl Scenario {
                 if let Some(local_entity) = server_local_entity {
                     // Try to find EntityKey via client's LocalEntity mapping (for client-spawned entities)
                     // The LocalEntity is the same on server and client for the same user
-                    if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(client_key, local_entity) {
+                    if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
                         // This is a client-spawned entity - register the server entity
                         server_entities_to_register.push((entity_key, spawn_entity));
-                    } else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(spawn_entity) {
+                    } else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(&spawn_entity) {
                         // This is a server-spawned entity - register the LocalEntity mapping
                         server_local_entity_mappings.push((entity_key, client_key, local_entity));
-                    } else if let Some(entity_key) = self.entity_registry.find_pending_client_spawned_entity(client_key) {
+                    } else if let Some(entity_key) = self.entity_registry.find_pending_client_spawned_entity(&client_key) {
                         // This is a client-spawned entity that we haven't registered on server yet
                         server_entities_to_register.push((entity_key, spawn_entity));
                         // Also register the server's LocalEntity mapping for this client
@@ -252,13 +247,13 @@ impl Scenario {
         // Now register all the client entities (all borrows are dropped)
         for (client_key, local_entity, client_entity) in spawns_to_register {
             // Try to find EntityKey via LocalEntity mapping first
-            let entity_key = if let Some(ek) = self.entity_registry.entity_key_for_client_entity(client_key, local_entity) {
+            let entity_key = if let Some(ek) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
                 Some(ek)
             } else {
                 // If not found, try to find by matching LocalEntity value with server's LocalEntity
                 // This handles the case where Client B receives a SpawnEntityEvent for an entity spawned by Client A
                 // The server's LocalEntity for UserKey(1) will have the same value as Client B's LocalEntity
-                let user_key = self.user_key(client_key);
+                let user_key = self.user_key(&client_key);
                 let local_entity_value = {
                     let owned: OwnedLocalEntity = local_entity.into();
                     // value() is pub(crate), so we need to match to extract the value
@@ -293,7 +288,7 @@ impl Scenario {
             if let Some(entity_key) = entity_key {
                 // Register the client entity and LocalEntity mapping
                 self.entity_registry_mut()
-                    .register_client_entity(entity_key, client_key, client_entity, local_entity);
+                    .register_client_entity(&entity_key, &client_key, &client_entity, &local_entity);
             }
             // If EntityKey not found, the entity hasn't been registered on server yet
             // It will be registered in a future tick when server processes it
@@ -302,7 +297,7 @@ impl Scenario {
         // Register server entities for client-spawned entities
         for (entity_key, server_entity) in server_entities_to_register {
             self.entity_registry_mut()
-                .register_server_entity(entity_key, server_entity);
+                .register_server_entity(&entity_key, &server_entity);
         }
         
         // Register LocalEntity mappings for server-spawned entities
@@ -310,9 +305,9 @@ impl Scenario {
         // The client entity will be registered later when the client receives SpawnEntityEvent
         for (entity_key, client_key, local_entity) in server_local_entity_mappings {
             // Only register if not already registered (avoid duplicates)
-            if self.entity_registry.entity_key_for_client_entity(client_key, local_entity).is_none() {
+            if self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity).is_none() {
                 self.entity_registry_mut()
-                    .register_client_local_entity_mapping(entity_key, client_key, local_entity);
+                    .register_client_local_entity_mapping(&entity_key, &client_key, &local_entity);
             }
         }
 
@@ -323,7 +318,7 @@ impl Scenario {
         self.server.as_mut().expect("server not started").take_world_events()
     }
 
-    pub(crate) fn user_key(&self, client_key: ClientKey) -> UserKey {
+    pub(crate) fn user_key(&self, client_key: &ClientKey) -> UserKey {
         self.clients
             .get(&client_key)
             .expect("client not found")
@@ -331,18 +326,28 @@ impl Scenario {
     }
 
     /// Get server host entity for an EntityKey
-    pub(crate) fn server_host_entity(&self, entity_key: EntityKey) -> Option<TestEntity> {
+    pub(crate) fn server_host_entity(&self, entity_key: &EntityKey) -> Option<TestEntity> {
         self.entity_registry.server_entity(entity_key)
+    }
+
+    /// Get UserKey for a ClientKey
+    pub(crate) fn user_key_for_client(&self, client_key: &ClientKey) -> Option<UserKey> {
+        self.client_user_map.get(&client_key).copied()
+    }
+
+    /// Get immutable access to server and registry for expect operations
+    pub(crate) fn server_and_registry(&self) -> Option<(&Server, &EntityRegistry)> {
+        Some((self.server.as_ref()?, &self.entity_registry))
     }
 
     /// Get LocalEntity for an EntityKey and UserKey
     /// Uses EntityRegistry as source of truth - checks client entities first, then falls back to server lookup
-    pub(crate) fn local_entity_for(&self, entity_key: EntityKey, user_key: UserKey) -> Option<LocalEntity> {
+    pub(crate) fn local_entity_for(&self, entity_key: &EntityKey, user_key: &UserKey) -> Option<LocalEntity> {
         // Find the client_key for this user_key
         let client_key = self.client_key_for_user(user_key)?;
         
         // Check if client's TestEntity is registered in EntityRegistry
-        if let Some(client_entity) = self.entity_registry.client_entity(entity_key, client_key) {
+        if let Some(client_entity) = self.entity_registry.client_entity(entity_key, &client_key) {
             // Client entity is registered - get LocalEntity from client using the TestEntity
             // Note: client.entity() will panic if entity doesn't exist, but if it's registered it should exist
             let state = self.clients.get(&client_key)?;
@@ -365,9 +370,9 @@ impl Scenario {
     }
     
     /// Get ClientKey for a UserKey (reverse lookup)
-    fn client_key_for_user(&self, user_key: UserKey) -> Option<ClientKey> {
+    fn client_key_for_user(&self, user_key: &UserKey) -> Option<ClientKey> {
         self.clients.iter()
-            .find(|(_, state)| state.user_key == user_key)
+            .find(|(_, state)| state.user_key == *user_key)
             .map(|(key, _)| *key)
     }
 

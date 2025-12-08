@@ -33,7 +33,7 @@ impl<'scenario> ClientMutateCtx<'scenario> {
         F: for<'a> FnOnce(EntityMut<'a, TestEntity, WorldMut<'a>>),
     {
         // Use a single borrow of state and scoped blocks to manage borrows
-        let state = self.scenario.client_state_mut(self.client_key);
+        let state = self.scenario.client_state_mut(&self.client_key);
         
         // 1. Spawn entity via Client API
         let entity_mut = state.client.spawn_entity(state.world.proxy_mut());
@@ -53,7 +53,7 @@ impl<'scenario> ClientMutateCtx<'scenario> {
         // 5. Register spawning client's TestEntity and LocalEntity mapping immediately
         // This allows the server to look up the EntityKey when it receives the spawn event
         self.scenario.entity_registry_mut()
-            .register_client_entity(entity_key, self.client_key, client_entity, local_entity);
+            .register_client_entity(&entity_key, &self.client_key, &client_entity, &local_entity);
 
         // 7. Return EntityKey - server entity will be registered automatically in tick_once()
         entity_key
@@ -63,21 +63,21 @@ impl<'scenario> ClientMutateCtx<'scenario> {
     /// Uses method lifetime 'b, not struct lifetime 'scenario
     pub fn entity(
         &'_ mut self,
-        key: EntityKey,
+        key: &EntityKey,
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         // Delegate to Scenario helper to avoid double-borrow issues
-        self.scenario.client_entity_ref(self.client_key, self.user_key, key)
+        self.scenario.client_entity_ref(&self.client_key, &self.user_key, key)
     }
 
     /// Get mutable entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
     pub fn entity_mut(
         &'_ mut self,
-        key: EntityKey,
+        key: &EntityKey,
     ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
         // Delegate to Scenario helper to avoid double-borrow issues
         // The helper uses a single client_state_mut() call with scoped borrows
-        self.scenario.client_entity_mut(self.client_key, self.user_key, key)
+        self.scenario.client_entity_mut(&self.client_key, &self.user_key, key)
     }
 }
 

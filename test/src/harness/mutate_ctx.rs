@@ -23,7 +23,7 @@ impl<'a> MutateCtx<'a> {
     /// Perform client-side actions
     pub fn client<R>(&mut self, client_key: ClientKey, f: impl FnOnce(&mut ClientMutateCtx<'_>) -> R) -> R {
         // Get user_key without mutably borrowing scenario
-        let user_key = self.scenario.user_key(client_key);
+        let user_key = self.scenario.user_key(&client_key);
         // ClientMut holds &mut Scenario directly and borrows fields internally
         let mut ctx = ClientMutateCtx::new(self.scenario, client_key, user_key);
         f(&mut ctx)

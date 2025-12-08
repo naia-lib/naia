@@ -10,6 +10,7 @@ mod server_mutate_ctx;
 mod client_mutate_ctx;
 mod builder;
 mod endpoint;
+mod user_scope;
 
 pub use scenario::Scenario;
 pub use keys::{ClientKey, EntityKey};

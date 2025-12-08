@@ -1,7 +1,7 @@
 use naia_server::{EntityMut, EntityRef};
 use naia_demo_world::{WorldRef, WorldMut};
 
-use crate::{harness::{EntityKey, ClientKey, users::Users, entity_registry::EntityRegistry}, TestEntity, TestWorld};
+use crate::{harness::{EntityKey, ClientKey, users::Users, entity_registry::EntityRegistry, user_scope::{UserScopeRef, UserScopeMut}}, TestEntity, TestWorld};
 
 type Server = naia_server::Server<TestEntity>;
 
@@ -42,7 +42,7 @@ impl<'scenario> ServerMutateCtx<'scenario> {
 
         // 3. Register server entity
         let entity = entity_mut.id();
-        self.registry.register_server_entity(entity_key, entity);
+        self.registry.register_server_entity(&entity_key, &entity);
 
         // 4. Call closure with EntityMut
         let result = f(entity_mut);
@@ -55,7 +55,7 @@ impl<'scenario> ServerMutateCtx<'scenario> {
     /// Uses method lifetime 'b, not struct lifetime 'scenario
     pub fn entity(
         &'_ mut self,
-        key: EntityKey,
+        key: &EntityKey,
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         // 1. Resolve EntityKey to TestEntity
         let entity = self.registry.server_entity(key)?;
@@ -71,7 +71,7 @@ impl<'scenario> ServerMutateCtx<'scenario> {
     /// Uses method lifetime 'b, not struct lifetime 'scenario
     pub fn entity_mut(
         &'_ mut self,
-        key: EntityKey,
+        key: &EntityKey,
     ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
         // 1. Resolve EntityKey to TestEntity
         let entity = self.registry.server_entity(key)?;
@@ -83,19 +83,32 @@ impl<'scenario> ServerMutateCtx<'scenario> {
         Some(self.server.entity_mut(world_mut, &entity))
     }
 
-    /// Helper: include entity in client's scope
-    pub fn include_in_scope(&mut self, client_key: ClientKey, entity_key: EntityKey) {
+    /// Returns a HarnessUserScopeRef, which is used to query whether a given user has
+    /// entities in scope. Takes ClientKey and converts it to UserKey internally.
+    /// The returned scope works with EntityKey instead of TestEntity.
+    pub fn user_scope(&'_ self, client_key: &ClientKey) -> Option<UserScopeRef<'_>> {
         // 1. Get UserKey via users handle
-        let user_key = self.users.user_for_client(client_key)
-            .expect("ClientKey not found in users mapping");
+        let user_key = self.users.user_for_client(*client_key)?;
 
-        // 2. Resolve entity_key to TestEntity
-        let entity = self.registry.server_entity(entity_key)
-            .expect("EntityKey not registered with server entity");
-        
-        // 3. Call server.user_scope_mut().include()
-        // Note: user_scope_mut doesn't take a world parameter
-        self.server.user_scope_mut(&user_key).include(&entity);
+        // 2. Call server.user_scope() to get the underlying scope
+        let scope = self.server.user_scope(&user_key);
+
+        // 3. Wrap it with the harness type that handles EntityKey conversion
+        Some(UserScopeRef::new(scope, self.registry))
+    }
+
+    /// Returns a HarnessUserScopeMut, which is used to include/exclude Entities for a
+    /// given User. Takes ClientKey and converts it to UserKey internally.
+    /// The returned scope works with EntityKey instead of TestEntity.
+    pub fn user_scope_mut(&'_ mut self, client_key: &ClientKey) -> Option<UserScopeMut<'_>> {
+        // 1. Get UserKey via users handle
+        let user_key = self.users.user_for_client(*client_key)?;
+
+        // 2. Call server.user_scope_mut() to get the underlying scope
+        let scope = self.server.user_scope_mut(&user_key);
+
+        // 3. Wrap it with the harness type that handles EntityKey conversion
+        Some(UserScopeMut::new(scope, self.registry))
     }
 }
 
