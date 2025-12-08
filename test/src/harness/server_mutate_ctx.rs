@@ -55,7 +55,7 @@ impl<'scenario> ServerMutateCtx<'scenario> {
     /// Get read-only entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
     pub fn entity(
-        &'_ mut self,
+        &'_ self,
         key: &EntityKey,
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         // 1. Resolve EntityKey to TestEntity

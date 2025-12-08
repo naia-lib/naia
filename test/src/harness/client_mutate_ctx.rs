@@ -65,7 +65,7 @@ impl<'scenario> ClientMutateCtx<'scenario> {
     /// Get read-only entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
     pub fn entity(
-        &'_ mut self,
+        &'_ self,
         key: &EntityKey,
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         // Delegate to Scenario helper to avoid double-borrow issues
