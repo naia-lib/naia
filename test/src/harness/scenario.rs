@@ -1,17 +1,12 @@
-use std::collections::HashMap;
-use std::time::Duration;
+use std::{time::Duration, collections::HashMap};
 
 use log::{info, warn};
 
 use naia_shared::{TestClock, Instant};
 use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::Socket as LocalClientSocket};
-use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, ConnectEvent, transport::local::Socket as LocalServerSocket};
+use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, transport::local::Socket as LocalServerSocket};
 
-use crate::{
-    TestWorld, Auth, TestEntity, LocalTransportBuilder,
-};
-use super::keys::{ClientKey, EntityKey};
-use super::entity_registry::EntityRegistry;
+use crate::{TestWorld, Auth, TestEntity, harness::{ClientKey, EntityKey, builder::LocalTransportBuilder, entity_registry::EntityRegistry}};
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;

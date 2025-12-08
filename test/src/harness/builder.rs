@@ -3,8 +3,7 @@ use std::{sync::{Arc, Mutex}, net::SocketAddr};
 use naia_client::transport::local::{LocalAddrCell, LocalClientSocket};
 
 use naia_shared::transport::local::{LocalTransportHub, FAKE_SERVER_ADDR};
-
-use crate::{LocalClientEndpoint, LocalServerEndpoint};
+use crate::harness::endpoint::{LocalClientEndpoint, LocalServerEndpoint};
 
 /// Builder for creating local transport endpoints
 pub struct LocalTransportBuilder {

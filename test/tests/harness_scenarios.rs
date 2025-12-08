@@ -1,6 +1,6 @@
 use naia_client::ReplicationConfig;
 use naia_test::{
-    harness::Scenario,
+    Scenario,
     protocol, Auth, Position,
 };
 
@@ -38,7 +38,7 @@ fn harness_two_clients_entity_mapping() {
 
     let client_a_key = scenario.client_connect("Client A", Auth::new("client_a", "password"));
     let client_b_key = scenario.client_connect("Client B", Auth::new("client_b", "password"));
-    
+
     let room_key = *scenario.main_room_key().unwrap();
 
     // Mutate phase: client A spawns entity A

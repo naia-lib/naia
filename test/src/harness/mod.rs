@@ -1,21 +1,17 @@
-pub mod scenario;
-pub mod keys;
-pub mod entity_registry;
-pub mod mutate_ctx;
-pub mod expect_ctx;
-pub mod server_expect_ctx;
-pub mod client_expect_ctx;
-pub mod users;
-pub mod server_mutate_ctx;
-pub mod client_mutate_ctx;
+mod scenario;
+mod keys;
+mod entity_registry;
+mod mutate_ctx;
+mod expect_ctx;
+mod server_expect_ctx;
+mod client_expect_ctx;
+mod users;
+mod server_mutate_ctx;
+mod client_mutate_ctx;
+mod builder;
+mod endpoint;
 
 pub use scenario::Scenario;
 pub use keys::{ClientKey, EntityKey};
-pub use mutate_ctx::MutateCtx;
 pub use expect_ctx::ExpectCtx;
-pub use server_expect_ctx::ServerExpectCtx;
-pub use client_expect_ctx::{ClientExpectCtx, ClientEntityExpect};
-pub use users::Users;
-pub use server_mutate_ctx::ServerMutateCtx;
-pub use client_mutate_ctx::ClientMutateCtx;
 

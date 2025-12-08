@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use crate::TestEntity;
-use super::keys::{EntityKey, ClientKey};
 use naia_shared::LocalEntity;
-use log;
+
+use crate::{TestEntity, harness::{ClientKey, EntityKey}};
 
 /// Record tracking all entity mappings for a logical EntityKey
 /// Each EntityKey MUST have at least one Some(TestEntity) - either server_entity or at least one client_entity
@@ -21,11 +20,6 @@ impl EntityKeyRecord {
             server_entity: None,
             client_entities: HashMap::new(),
         }
-    }
-
-    /// Check if at least one entity mapping exists (invariant: must always be true)
-    pub fn has_any_entity(&self) -> bool {
-        self.server_entity.is_some() || self.client_entities.values().any(|e| e.is_some())
     }
 }
 
@@ -101,21 +95,6 @@ impl EntityRegistry {
             .client_entities.get(&client_key)
             .and_then(|opt| opt.as_ref().copied())
     }
-
-
-    /// Check if server entity mapping exists
-    pub fn has_server_entity(&self, entity_key: EntityKey) -> bool {
-        self.entity_map.get(&entity_key).map(|r| r.server_entity.is_some()).unwrap_or(false)
-    }
-
-    /// Check if client entity mapping exists
-    pub fn has_client_entity(&self, entity_key: EntityKey, client_key: ClientKey) -> bool {
-        self.entity_map.get(&entity_key)
-            .and_then(|r| r.client_entities.get(&client_key))
-            .map(|e| e.is_some())
-            .unwrap_or(false)
-    }
-
 
     /// Look up EntityKey from a client's LocalEntity
     /// Returns None if the mapping doesn't exist yet (entity hasn't been replicated to that client)
