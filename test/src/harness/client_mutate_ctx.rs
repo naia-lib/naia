@@ -39,7 +39,10 @@ impl<'scenario> ClientMutateCtx<'scenario> {
         let state = self.scenario.client_state_mut(&self.client_key);
         
         // 1. Spawn entity via Client API
-        let entity_mut = state.client.spawn_entity(state.world.proxy_mut());
+        // Get mutable references to both client and world
+        let (client_mut, world_mut) = state.client_and_world_mut();
+        let world_mut_proxy = world_mut.proxy_mut();
+        let entity_mut = client_mut.spawn_entity(world_mut_proxy);
         
         // 2. Get entity ID and LocalEntity before closure consumes entity_mut
         let client_entity = entity_mut.id();
@@ -88,19 +91,19 @@ impl<'scenario> ClientMutateCtx<'scenario> {
     /// Get server address
     pub fn server_address(&self) -> Result<SocketAddr, NaiaClientError> {
         let state = self.scenario.client_state(&self.client_key);
-        state.client.server_address()
+        state.client().server_address()
     }
 
     /// Get connection status
     pub fn connection_status(&self) -> ConnectionStatus {
         let state = self.scenario.client_state(&self.client_key);
-        state.client.connection_status()
+        state.client().connection_status()
     }
 
     /// Disconnect from server
     pub fn disconnect(&mut self) {
         let state = self.scenario.client_state_mut(&self.client_key);
-        state.client.disconnect();
+        state.client_mut().disconnect();
     }
 
     // Entity Operations
@@ -118,7 +121,7 @@ impl<'scenario> ClientMutateCtx<'scenario> {
         let registry = self.scenario.entity_registry();
         let client_entity = registry.client_entity(entity, &self.client_key)?;
         let state = self.scenario.client_state(&self.client_key);
-        Some(state.client.entity_owner(&client_entity))
+        Some(state.client().entity_owner(&client_entity))
     }
 
     // Message Operations
@@ -126,7 +129,7 @@ impl<'scenario> ClientMutateCtx<'scenario> {
     /// Send message to server
     pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
         let state = self.scenario.client_state_mut(&self.client_key);
-        state.client.send_message::<C, M>(message);
+        state.client_mut().send_message::<C, M>(message);
     }
 
     /// Send request to server
@@ -135,25 +138,25 @@ impl<'scenario> ClientMutateCtx<'scenario> {
         request: &Q,
     ) -> Result<ResponseReceiveKey<Q::Response>, NaiaClientError> {
         let state = self.scenario.client_state_mut(&self.client_key);
-        state.client.send_request::<C, Q>(request)
+        state.client_mut().send_request::<C, Q>(request)
     }
 
     /// Send response
     pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
         let state = self.scenario.client_state_mut(&self.client_key);
-        state.client.send_response(response_key, response)
+        state.client_mut().send_response(response_key, response)
     }
 
     /// Receive response
     pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<S> {
         let state = self.scenario.client_state_mut(&self.client_key);
-        state.client.receive_response(response_key)
+        state.client_mut().receive_response(response_key)
     }
 
     /// Send tick-buffered message
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
         let state = self.scenario.client_state_mut(&self.client_key);
-        state.client.send_tick_buffer_message::<C, M>(tick, message);
+        state.client_mut().send_tick_buffer_message::<C, M>(tick, message);
     }
 }
 

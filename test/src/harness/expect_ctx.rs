@@ -1,11 +1,8 @@
-use crate::harness::client_expect_ctx::ClientExpectCtx;
-use crate::harness::server_expect_ctx::ServerExpectCtx;
-use super::scenario::Scenario;
-use super::keys::ClientKey;
+use crate::harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx};
 
 /// Context for evaluating expectations in an expect phase
 pub struct ExpectCtx<'a> {
-    pub(crate) scenario: &'a mut Scenario,
+    scenario: &'a mut Scenario,
     max_ticks: usize,
 }
 
@@ -24,16 +21,13 @@ impl<'a> ExpectCtx<'a> {
 
     /// Register server-side expectations
     pub fn server(&mut self, mut f: impl FnMut(&mut ServerExpectCtx<'_, 'a>) -> bool) -> bool {
-        let mut ctx = ServerExpectCtx { expect_ctx: self };
+        let mut ctx = ServerExpectCtx::new(self);
         f(&mut ctx)
     }
 
     /// Register client-side expectations
     pub fn client(&mut self, client: ClientKey, mut f: impl FnMut(&mut ClientExpectCtx<'_, 'a>) -> bool) -> bool {
-        let mut ctx = ClientExpectCtx {
-            expect_ctx: self,
-            client_key: client,
-        };
+        let mut ctx = ClientExpectCtx::new(self, client);
         f(&mut ctx)
     }
 
@@ -56,6 +50,16 @@ impl<'a> ExpectCtx<'a> {
                 );
             }
         }
+    }
+
+    /// Get mutable reference to the scenario
+    pub(crate) fn scenario_mut(&mut self) -> &mut Scenario {
+        self.scenario
+    }
+
+    /// Get reference to the scenario
+    pub(crate) fn scenario(&self) -> &Scenario {
+        self.scenario
     }
 
 }

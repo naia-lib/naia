@@ -5,18 +5,21 @@ use crate::{harness::{ExpectCtx, user_scope::UserScopeRef, EntityKey, ClientKey}
 
 /// Context for server-side expectations
 pub struct ServerExpectCtx<'b, 'a: 'b> {
-    pub(crate) expect_ctx: &'b mut ExpectCtx<'a>,
+    expect_ctx: &'b mut ExpectCtx<'a>,
 }
 
 impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
+    pub(crate) fn new(expect_ctx: &'b mut ExpectCtx<'a>) -> Self {
+        Self { expect_ctx }
+    }
     /// Expect that the server has replicated/created a concrete entity
     pub fn has_entity(&mut self, entity: &EntityKey) -> bool {
-        self.expect_ctx.scenario.server_host_entity(entity).is_some()
+        self.expect_ctx.scenario().server_host_entity(entity).is_some()
     }
 
     /// Get read-only entity access by EntityKey
     pub fn entity(&'_ self, key: &EntityKey) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
-        let scenario = &self.expect_ctx.scenario;
+        let scenario = self.expect_ctx.scenario();
         let entity = scenario.entity_registry().server_entity(key)?;
         let (server, _) = scenario.server_and_registry()?;
         let world_ref = scenario.server_world_ref();
@@ -30,7 +33,7 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
         T: Event<TestEntity>,
         <T as Event<TestEntity>>::Iter: Iterator,
     {
-        let mut events = self.expect_ctx.scenario.take_server_events();
+        let mut events = self.expect_ctx.scenario_mut().take_server_events();
         for _ in events.read::<T>() {
             return true;
         }
@@ -41,7 +44,7 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
     /// T must implement Event<TestEntity>
     /// Note: This consumes events via take_server_events()
     pub fn has_event<T: Event<TestEntity>>(&mut self) -> bool {
-        let events = self.expect_ctx.scenario.take_server_events();
+        let events = self.expect_ctx.scenario_mut().take_server_events();
         events.has::<T>()
     }
 
@@ -53,7 +56,7 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
         T: Event<TestEntity>,
         <T as Event<TestEntity>>::Iter: Iterator,
     {
-        let mut events = self.expect_ctx.scenario.take_server_events();
+        let mut events = self.expect_ctx.scenario_mut().take_server_events();
         let mut count = 0;
         for _ in events.read::<T>() {
             count += 1;
@@ -65,7 +68,7 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
     /// entities in scope. Takes ClientKey and converts it to UserKey internally.
     /// The returned scope works with EntityKey instead of TestEntity.
     pub fn user_scope(&self, client_key: &ClientKey) -> Option<UserScopeRef<'_>> {
-        let scenario = &self.expect_ctx.scenario;
+        let scenario = self.expect_ctx.scenario();
         
         // 1. Get UserKey via helper method
         let user_key = scenario.user_key_for_client(client_key)?;
@@ -82,7 +85,7 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
 
     /// Get all entities as EntityKeys
     pub fn entities(&self) -> Vec<EntityKey> {
-        let scenario = &self.expect_ctx.scenario;
+        let scenario = self.expect_ctx.scenario();
         let (server, registry) = scenario.server_and_registry().unwrap();
         let world_ref = scenario.server_world_ref();
         let server_entities = server.entities(world_ref);
@@ -93,7 +96,7 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
 
     /// Get entity owner for an entity
     pub fn entity_owner(&self, entity: &EntityKey) -> Option<EntityOwner> {
-        let scenario = &self.expect_ctx.scenario;
+        let scenario = self.expect_ctx.scenario();
         let server_entity = scenario.entity_registry().server_entity(entity)?;
         let (server, _) = scenario.server_and_registry()?;
         Some(server.entity_owner(&server_entity))
@@ -101,7 +104,7 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
 
     /// Check if user exists for a ClientKey
     pub fn user_exists(&self, client_key: &ClientKey) -> bool {
-        let scenario = &self.expect_ctx.scenario;
+        let scenario = self.expect_ctx.scenario();
         let Some(user_key) = scenario.user_key_for_client(client_key) else {
             return false;
         };
@@ -113,7 +116,7 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
 
     /// Get read-only user access for a ClientKey
     pub fn user(&'_ self, client_key: &ClientKey) -> Option<UserRef<'_, TestEntity>> {
-        let scenario = &self.expect_ctx.scenario;
+        let scenario = self.expect_ctx.scenario();
         let user_key = scenario.user_key_for_client(client_key)?;
         let (server, _) = scenario.server_and_registry()?;
         Some(server.user(&user_key))
@@ -121,7 +124,7 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
 
     /// Get all ClientKeys for connected users
     pub fn user_keys(&self) -> Vec<ClientKey> {
-        let scenario = &self.expect_ctx.scenario;
+        let scenario = self.expect_ctx.scenario();
         let (server, _) = scenario.server_and_registry().unwrap();
         let user_keys = server.user_keys();
         user_keys.iter()
@@ -131,31 +134,31 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
 
     /// Get count of connected users
     pub fn users_count(&self) -> usize {
-        let (server, _) = self.expect_ctx.scenario.server_and_registry().unwrap();
+        let (server, _) = self.expect_ctx.scenario().server_and_registry().unwrap();
         server.users_count()
     }
 
     /// Check if room exists
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        let (server, _) = self.expect_ctx.scenario.server_and_registry().unwrap();
+        let (server, _) = self.expect_ctx.scenario().server_and_registry().unwrap();
         server.room_exists(room_key)
     }
 
     /// Get read-only room access
     pub fn room(&'_ self, room_key: &RoomKey) -> Option<RoomRef<'_, TestEntity>> {
-        let (server, _) = self.expect_ctx.scenario.server_and_registry()?;
+        let (server, _) = self.expect_ctx.scenario().server_and_registry()?;
         Some(server.room(room_key))
     }
 
     /// Get all room keys
     pub fn room_keys(&self) -> Vec<RoomKey> {
-        let (server, _) = self.expect_ctx.scenario.server_and_registry().unwrap();
+        let (server, _) = self.expect_ctx.scenario().server_and_registry().unwrap();
         server.room_keys()
     }
 
     /// Get count of rooms
     pub fn rooms_count(&self) -> usize {
-        let (server, _) = self.expect_ctx.scenario.server_and_registry().unwrap();
+        let (server, _) = self.expect_ctx.scenario().server_and_registry().unwrap();
         server.rooms_count()
     }
 }

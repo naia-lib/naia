@@ -7,10 +7,14 @@ use super::keys::ClientKey;
 /// Lightweight handle for ClientKey -> UserKey mapping
 /// Allows ServerMut to map ClientKey to UserKey without holding full Scenario reference
 pub struct Users<'a> {
-    pub(crate) mapping: &'a HashMap<ClientKey, UserKey>,
+    mapping: &'a HashMap<ClientKey, UserKey>,
 }
 
 impl<'a> Users<'a> {
+    pub(crate) fn new(mapping: &'a HashMap<ClientKey, UserKey>) -> Self {
+        Self { mapping }
+    }
+
     pub fn user_for_client(&self, client_key: ClientKey) -> Option<UserKey> {
         self.mapping.get(&client_key).copied()
     }

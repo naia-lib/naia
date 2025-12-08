@@ -13,9 +13,51 @@ type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
 
 pub(crate) struct ClientState {
-    pub(crate) client: Client,
-    pub(crate) world: TestWorld,
-    pub(crate) user_key: UserKey,
+    client: Client,
+    world: TestWorld,
+    user_key: UserKey,
+}
+
+impl ClientState {
+    pub(crate) fn new(client: Client, world: TestWorld, user_key: UserKey) -> Self {
+        Self { client, world, user_key }
+    }
+
+    /// Get mutable reference to the client
+    pub(crate) fn client_mut(&mut self) -> &mut Client {
+        &mut self.client
+    }
+
+    /// Get reference to the client
+    pub(crate) fn client(&self) -> &Client {
+        &self.client
+    }
+
+    /// Get mutable reference to the world
+    pub(crate) fn world_mut(&mut self) -> &mut TestWorld {
+        &mut self.world
+    }
+
+    /// Get reference to the world
+    pub(crate) fn world(&self) -> &TestWorld {
+        &self.world
+    }
+
+    /// Get the user key
+    pub(crate) fn user_key(&self) -> UserKey {
+        self.user_key
+    }
+
+    /// Get mutable references to both client and world
+    /// This is a workaround for borrow checker limitations when both are needed
+    pub(crate) fn client_and_world_mut(&mut self) -> (&mut Client, &mut TestWorld) {
+        // Safe because Client and TestWorld are different fields
+        unsafe {
+            let client_ptr = &mut self.client as *mut Client;
+            let world_ptr = &mut self.world as *mut TestWorld;
+            (&mut *client_ptr, &mut *world_ptr)
+        }
+    }
 }
 
 pub struct Scenario {
@@ -92,11 +134,7 @@ impl Scenario {
 
         self.clients.insert(
             client_key,
-            ClientState {
-                client,
-                world,
-                user_key,
-            },
+            ClientState::new(client, world, user_key),
         );
         
         // Update client-user mapping for Users handle
@@ -132,8 +170,8 @@ impl Scenario {
         let state = self.client_state_ref(client_key);
 
         // Short-lived shared borrows inside a block
-        let world_ref = state.world.proxy();
-        state.client.local_entity(world_ref, &local_entity)
+        let world_ref = state.world().proxy();
+        state.client().local_entity(world_ref, &local_entity)
     }
 
     /// Get client-side EntityMut by EntityKey
@@ -152,14 +190,16 @@ impl Scenario {
 
         // First, derive the underlying entity id in a tight scope
         let entity = {
-            let world_ref = state.world.proxy();                    // &TestWorld
-            let client_ref = state.client.local_entity(world_ref, &local_entity)?;
+            let world_ref = state.world().proxy();                    // &TestWorld
+            let client_ref = state.client().local_entity(world_ref, &local_entity)?;
             client_ref.id()
         }; // world_ref and client_ref dropped here
 
         // Then get a mutable world proxy and EntityMut
-        let world_mut = state.world.proxy_mut();                   // &mut TestWorld → WorldMut<'_>
-        Some(state.client.entity_mut(world_mut, &entity))
+        // We need to get both mutable references, so we'll use a helper that takes both
+        let (client_mut, world_mut) = state.client_and_world_mut();
+        let world_mut_proxy = world_mut.proxy_mut();
+        Some(client_mut.entity_mut(world_mut_proxy, &entity))
     }
 
     pub(crate) fn entity_registry_mut(&mut self) -> &mut EntityRegistry {
@@ -197,22 +237,23 @@ impl Scenario {
         {
             let server = self.server.as_mut().expect("server not started");
             for (client_key, state) in self.clients.iter_mut() {
+                let (client, world) = state.client_and_world_mut();
                 update_client_server_at(
                     now.clone(),
-                    &mut state.client,
+                    client,
                     server,
-                    &mut state.world,
+                    world,
                     &mut self.server_world,
                 );
 
                 // Collect spawn events for this client
-                let mut client_events = state.client.take_world_events();
+                let mut client_events = state.client_mut().take_world_events();
                 
                 // Process SpawnEntityEvent for this client
                 for spawned_entity in client_events.read::<ClientSpawnEntityEvent>() {
                     // Get the client's LocalEntity for this entity
-                    let world_ref = state.world.proxy();
-                    let client_ref = state.client.entity(world_ref, &spawned_entity);
+                    let world_ref = state.world().proxy();
+                    let client_ref = state.client().entity(world_ref, &spawned_entity);
                     
                     if let Some(local_entity) = client_ref.local_entity() {
                         // Look up EntityKey via LocalEntity mapping
@@ -370,10 +411,10 @@ impl Scenario {
             // Client entity is registered - get LocalEntity from client using the TestEntity
             // Note: client.entity() will panic if entity doesn't exist, but if it's registered it should exist
             let state = self.clients.get(&client_key)?;
-            let world_ref = state.world.proxy();
+            let world_ref = state.world().proxy();
             // Try to get LocalEntity - if entity doesn't exist, this will panic, but that's OK
             // because if it's registered in EntityRegistry, it should exist
-            let client_ref = state.client.entity(world_ref, &client_entity);
+            let client_ref = state.client().entity(world_ref, &client_entity);
             if let Some(local_entity) = client_ref.local_entity() {
                 return Some(local_entity);
             }
@@ -423,9 +464,7 @@ impl Scenario {
         let server = self.server.as_mut().expect("server not started");
         let world = &mut self.server_world;
         let registry = &mut self.entity_registry;
-        let users = Users {
-            mapping: &self.client_user_map,
-        };
+        let users = Users::new(&self.client_user_map);
         (server, world, registry, users)
     }
 

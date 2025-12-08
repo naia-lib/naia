@@ -8,10 +8,10 @@ use crate::{TestEntity, harness::{ClientKey, EntityKey}};
 /// Each EntityKey MUST have at least one Some(TestEntity) - either server_entity or at least one client_entity
 pub struct EntityKeyRecord {
     /// Server host world entity (None for client-spawned entities until they replicate to server)
-    pub server_entity: Option<TestEntity>,
+    server_entity: Option<TestEntity>,
     /// Client world entities - each client gets their own TestEntity for this logical entity
     /// The LocalEntity is the same for Server<->Client pairs, but different between clients
-    pub client_entities: HashMap<ClientKey, Option<TestEntity>>,
+    client_entities: HashMap<ClientKey, Option<TestEntity>>,
 }
 
 impl EntityKeyRecord {
