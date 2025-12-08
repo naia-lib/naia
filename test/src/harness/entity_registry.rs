@@ -6,7 +6,7 @@ use crate::{TestEntity, harness::{ClientKey, EntityKey}};
 
 /// Record tracking all entity mappings for a logical EntityKey
 /// Each EntityKey MUST have at least one Some(TestEntity) - either server_entity or at least one client_entity
-pub struct EntityKeyRecord {
+struct EntityKeyRecord {
     /// Server host world entity (None for client-spawned entities until they replicate to server)
     server_entity: Option<TestEntity>,
     /// Client world entities - each client gets their own TestEntity for this logical entity
@@ -15,7 +15,7 @@ pub struct EntityKeyRecord {
 }
 
 impl EntityKeyRecord {
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self {
             server_entity: None,
             client_entities: HashMap::new(),
@@ -56,7 +56,7 @@ impl EntityRegistry {
     }
 
     /// Get or create the record for an EntityKey
-    pub(crate) fn get_or_create_record(&mut self, entity_key: &EntityKey) -> &mut EntityKeyRecord {
+    fn get_or_create_record(&mut self, entity_key: &EntityKey) -> &mut EntityKeyRecord {
         self.entity_map.entry(*entity_key).or_insert_with(EntityKeyRecord::new)
     }
     
