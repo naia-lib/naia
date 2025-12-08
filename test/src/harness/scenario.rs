@@ -435,13 +435,13 @@ impl Scenario {
 /// Create a client socket from the builder
 fn create_client_socket(builder: &LocalTransportBuilder) -> LocalClientSocket {
     let client_endpoint = builder.connect_client();
-    LocalClientSocket::new(client_endpoint.into_socket(), None)
+    LocalClientSocket::new(client_endpoint, None)
 }
 
 /// Create a server socket from the builder
 fn create_server_socket(builder: &LocalTransportBuilder) -> LocalServerSocket {
     let server_endpoint = builder.server_endpoint();
-    LocalServerSocket::new(server_endpoint.into_socket(), None)
+    LocalServerSocket::new(server_endpoint, None)
 }
 
 /// Create default client config for tests (fast handshake, no jitter buffer)

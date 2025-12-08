@@ -5,6 +5,7 @@ use std::{
 };
 
 use tokio::sync::mpsc;
+
 use crate::transport::local::shared::{create_auth_channels, create_data_channels};
 
 /// Per-client connection state stored in the hub
@@ -24,7 +25,6 @@ struct ClientConnection {
 /// Shared transport hub managing multiple client connections
 #[derive(Clone)]
 pub struct LocalTransportHub {
-    // shared: LocalTransportQueues,
     server_addr: SocketAddr,
     connections: Arc<Mutex<HashMap<SocketAddr, ClientConnection>>>,
     next_client_id: Arc<Mutex<u16>>,

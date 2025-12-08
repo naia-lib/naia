@@ -1,9 +1,8 @@
 use std::{sync::{Arc, Mutex}, net::SocketAddr};
 
 use naia_client::transport::local::{LocalAddrCell, LocalClientSocket};
-
+use naia_server::transport::local::LocalServerSocket;
 use naia_shared::transport::local::{LocalTransportHub, FAKE_SERVER_ADDR};
-use crate::harness::endpoint::{LocalClientEndpoint, LocalServerEndpoint};
 
 /// Builder for creating local transport endpoints
 pub struct LocalTransportBuilder {
@@ -19,12 +18,12 @@ impl LocalTransportBuilder {
     }
 
     /// Get the server endpoint
-    pub fn server_endpoint(&self) -> LocalServerEndpoint {
-        LocalServerEndpoint::new(self.hub.clone())
+    pub fn server_endpoint(&self) -> LocalServerSocket {
+        LocalServerSocket::new(self.hub.clone())
     }
 
     /// Create a new client endpoint and register it with the hub
-    pub fn connect_client(&self) -> LocalClientEndpoint {
+    pub fn connect_client(&self) -> LocalClientSocket {
         let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) = 
             self.hub.register_client();
         
@@ -36,7 +35,7 @@ impl LocalTransportBuilder {
         let identity_token = Arc::new(Mutex::new(None));
         let rejection_code = Arc::new(Mutex::new(None));
 
-        let socket = LocalClientSocket::new_with_tokens(
+        LocalClientSocket::new_with_tokens(
             client_addr,
             self.hub.server_addr(),
             auth_req_tx,
@@ -46,9 +45,7 @@ impl LocalTransportBuilder {
             addr_cell,
             identity_token,
             rejection_code,
-        );
-
-        LocalClientEndpoint::new(socket)
+        )
     }
 }
 
