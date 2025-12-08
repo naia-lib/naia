@@ -82,10 +82,28 @@ fn harness_two_clients_entity_mapping() {
     });
 
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |client_a| {
-            client_a.entity(&entity_a).position_is(100.0, 200.0)
-        }) && ctx.client(client_b_key, |client_b| {
-            client_b.entity(&entity_a).position_is(100.0, 200.0)
-        })
+        let client_a_ok = ctx.client(client_a_key, |client_a| {
+            if let Some(entity_ref) = client_a.entity(&entity_a) {
+                if let Some(pos) = entity_ref.component::<Position>() {
+                    (*pos.x - 100.0).abs() < 0.001 && (*pos.y - 200.0).abs() < 0.001
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        });
+        let client_b_ok = ctx.client(client_b_key, |client_b| {
+            if let Some(entity_ref) = client_b.entity(&entity_a) {
+                if let Some(pos) = entity_ref.component::<Position>() {
+                    (*pos.x - 100.0).abs() < 0.001 && (*pos.y - 200.0).abs() < 0.001
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        });
+        client_a_ok && client_b_ok
     });
 }

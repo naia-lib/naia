@@ -162,6 +162,21 @@ impl Scenario {
         &mut self.entity_registry
     }
 
+    /// Get read-only access to entity registry
+    pub(crate) fn entity_registry(&self) -> &EntityRegistry {
+        &self.entity_registry
+    }
+
+    /// Get read-only access to server world
+    pub(crate) fn server_world_ref(&self) -> WorldRef<'_> {
+        self.server_world.proxy()
+    }
+
+    /// Get read-only access to client state
+    pub(crate) fn client_state(&self, client_key: &ClientKey) -> &ClientState {
+        self.clients.get(client_key).expect("client not found")
+    }
+
     /// Tick the simulation once - updates all clients and server
     pub(crate) fn tick_once(&mut self) {
         // Advance simulated clock by 16ms (default tick duration for ~60 FPS)
@@ -370,7 +385,7 @@ impl Scenario {
     }
     
     /// Get ClientKey for a UserKey (reverse lookup)
-    fn client_key_for_user(&self, user_key: &UserKey) -> Option<ClientKey> {
+    pub(crate) fn client_key_for_user(&self, user_key: &UserKey) -> Option<ClientKey> {
         self.clients.iter()
             .find(|(_, state)| state.user_key == *user_key)
             .map(|(key, _)| *key)

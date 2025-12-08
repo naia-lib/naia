@@ -129,5 +129,16 @@ impl EntityRegistry {
                 record.server_entity.map(|entity| (*key, entity))
             })
     }
+
+    /// Get all EntityKeys that have a client entity registered for the given ClientKey
+    pub fn client_entity_keys(&self, client_key: &ClientKey) -> Vec<EntityKey> {
+        self.entity_map.iter()
+            .filter_map(|(key, record)| {
+                record.client_entities.get(client_key)
+                    .and_then(|opt| opt.as_ref())
+                    .map(|_| *key)
+            })
+            .collect()
+    }
 }
 
