@@ -109,6 +109,10 @@ impl Scenario {
         self.main_room.as_ref()
     }
 
+    pub(crate) fn client_state_ref(&self, client_key: &ClientKey) -> &ClientState {
+        self.clients.get(&client_key).expect("client not found")
+    }
+
     pub(crate) fn client_state_mut(&mut self, client_key: &ClientKey) -> &mut ClientState {
         self.clients.get_mut(&client_key).expect("client not found")
     }
@@ -117,7 +121,7 @@ impl Scenario {
     /// This helper encapsulates the LocalEntity lookup and EntityRef creation
     /// to avoid double-borrow issues in ClientMut
     pub(crate) fn client_entity_ref(
-        &'_ mut self,
+        &'_ self,
         client_key: &ClientKey,
         user_key: &UserKey,
         key: &EntityKey,
@@ -125,7 +129,7 @@ impl Scenario {
         let local_entity = self.local_entity_for(key, user_key)?;
 
         // Single mutable borrow of Scenario -> &mut ClientState
-        let state = self.client_state_mut(client_key);
+        let state = self.client_state_ref(client_key);
 
         // Short-lived shared borrows inside a block
         let world_ref = state.world.proxy();

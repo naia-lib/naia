@@ -1,9 +1,7 @@
-use naia_server::{EntityRef, Event, EntityOwner, ReplicationConfig, UserRef, RoomRef, RoomKey};
-use naia_shared::EntityAuthStatus;
+use naia_server::{EntityRef, Event, EntityOwner, UserRef, RoomRef, RoomKey};
 use naia_demo_world::WorldRef;
 
-use crate::harness::{ExpectCtx, user_scope::UserScopeRef, EntityKey, ClientKey};
-use crate::TestEntity;
+use crate::{harness::{ExpectCtx, user_scope::UserScopeRef, EntityKey, ClientKey}, TestEntity};
 
 /// Context for server-side expectations
 pub struct ServerExpectCtx<'b, 'a: 'b> {
@@ -99,22 +97,6 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
         let server_entity = scenario.entity_registry().server_entity(entity)?;
         let (server, _) = scenario.server_and_registry()?;
         Some(server.entity_owner(&server_entity))
-    }
-
-    /// Get replication config for an entity
-    pub fn entity_replication_config(&self, entity: &EntityKey) -> Option<ReplicationConfig> {
-        let scenario = &self.expect_ctx.scenario;
-        let server_entity = scenario.entity_registry().server_entity(entity)?;
-        let (server, _) = scenario.server_and_registry()?;
-        server.entity_replication_config(&server_entity)
-    }
-
-    /// Get authority status for an entity
-    pub fn entity_authority_status(&self, entity: &EntityKey) -> Option<EntityAuthStatus> {
-        let scenario = &self.expect_ctx.scenario;
-        let server_entity = scenario.entity_registry().server_entity(entity)?;
-        let (server, _) = scenario.server_and_registry()?;
-        server.entity_authority_status(&server_entity)
     }
 
     /// Check if user exists for a ClientKey

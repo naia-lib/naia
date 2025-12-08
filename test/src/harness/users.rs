@@ -14,5 +14,12 @@ impl<'a> Users<'a> {
     pub fn user_for_client(&self, client_key: ClientKey) -> Option<UserKey> {
         self.mapping.get(&client_key).copied()
     }
+
+    /// Reverse lookup: find ClientKey for a given UserKey
+    pub(crate) fn client_for_user(&self, user_key: &UserKey) -> Option<ClientKey> {
+        self.mapping.iter()
+            .find(|(_, &uk)| uk == *user_key)
+            .map(|(ck, _)| *ck)
+    }
 }
 

@@ -68,7 +68,7 @@ fn harness_two_clients_entity_mapping() {
     // Expect phase: client B sees entity
     scenario.expect(|ctx| {
         ctx.client(client_b_key, |client_b| {
-            client_b.sees(&entity_a)
+            client_b.has_entity(&entity_a)
         })
     });
 
