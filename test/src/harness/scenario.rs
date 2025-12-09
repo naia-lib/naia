@@ -2,12 +2,14 @@ use std::{time::Duration, collections::HashMap};
 
 use log::{info, warn};
 
-use naia_shared::{TestClock, Instant, Protocol, OwnedLocalEntity, LocalEntity};
-use naia_client::{Client as NaiaClient, ClientConfig, WorldEvents as ClientEvents, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::Socket as LocalClientSocket, EntityRef, EntityMut, SpawnEntityEvent as ClientSpawnEntityEvent};
+use std::{sync::{Arc, Mutex}, net::SocketAddr};
+
+use naia_shared::{TestClock, Instant, Protocol, OwnedLocalEntity, LocalEntity, transport::local::{LocalTransportHub, FAKE_SERVER_ADDR}};
+use naia_client::{Client as NaiaClient, ClientConfig, WorldEvents as ClientEvents, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::{Socket as LocalClientSocket, LocalAddrCell}, EntityRef, EntityMut, SpawnEntityEvent as ClientSpawnEntityEvent};
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events as ServerEvents, AuthEvent, transport::local::Socket as LocalServerSocket, SpawnEntityEvent as ServerSpawnEntityEvent};
 
-use crate::{TestWorld, Auth, TestEntity, harness::{client_state::ClientState, users::Users, mutate_ctx::MutateCtx, ExpectCtx, ClientKey, EntityKey, builder::LocalTransportBuilder, entity_registry::EntityRegistry}};
+use crate::{TestWorld, Auth, TestEntity, harness::{client_state::ClientState, users::Users, mutate_ctx::MutateCtx, ExpectCtx, ClientKey, EntityKey, entity_registry::EntityRegistry}};
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
@@ -30,7 +32,7 @@ fn extract_local_entity_value(local_entity: &LocalEntity) -> u16 {
 }
 
 pub struct Scenario {
-    builder: LocalTransportBuilder,
+    hub: LocalTransportHub,
     server: Option<Server>,
     server_world: TestWorld,
     main_room: Option<RoomKey>,
@@ -49,8 +51,11 @@ impl Scenario {
         // Initialize simulated clock for deterministic test time
         TestClock::init(0);
         
+        let server_addr: SocketAddr = FAKE_SERVER_ADDR.parse().expect("invalid server addr");
+        let hub = LocalTransportHub::new(server_addr);
+        
         Self {
-            builder: LocalTransportBuilder::default(),
+            hub,
             server: None,
             server_world: TestWorld::default(),
             main_room: None,
@@ -69,7 +74,7 @@ impl Scenario {
         }
 
         let mut server = Server::new(ServerConfig::default(), self.protocol.clone());
-        let server_socket = create_server_socket(&self.builder);
+        let server_socket = create_server_socket(&self.hub);
         server.listen(server_socket);
         let main_room = server.make_room().key();
 
@@ -87,7 +92,7 @@ impl Scenario {
 
         let mut client = Client::new(default_client_config(), self.protocol.clone());
         let mut world = TestWorld::default();
-        let socket = create_client_socket(&self.builder);
+        let socket = create_client_socket(&self.hub);
         client.auth(auth);
         client.connect(socket);
 
@@ -494,16 +499,38 @@ impl Scenario {
 }
 
 
-/// Create a client socket from the builder
-fn create_client_socket(builder: &LocalTransportBuilder) -> LocalClientSocket {
-    let client_endpoint = builder.connect_client();
-    LocalClientSocket::new(client_endpoint, None)
+/// Create a client socket from the transport hub
+fn create_client_socket(hub: &LocalTransportHub) -> LocalClientSocket {
+    let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) = 
+        hub.register_client();
+    
+    let addr_cell = LocalAddrCell::new();
+    // For local transport, we know the server address immediately
+    addr_cell.set_sync(hub.server_addr());
+
+    // Each client gets its own identity token storage (not shared!)
+    let identity_token = Arc::new(Mutex::new(None));
+    let rejection_code = Arc::new(Mutex::new(None));
+
+    // Use the inner socket type from the module
+    let inner_socket = naia_client::transport::local::LocalClientSocket::new_with_tokens(
+        client_addr,
+        hub.server_addr(),
+        auth_req_tx,
+        auth_resp_rx,
+        client_data_tx,
+        client_data_rx,
+        addr_cell,
+        identity_token,
+        rejection_code,
+    );
+    LocalClientSocket::new(inner_socket, None)
 }
 
-/// Create a server socket from the builder
-fn create_server_socket(builder: &LocalTransportBuilder) -> LocalServerSocket {
-    let server_endpoint = builder.server_endpoint();
-    LocalServerSocket::new(server_endpoint, None)
+/// Create a server socket from the transport hub
+fn create_server_socket(hub: &LocalTransportHub) -> LocalServerSocket {
+    let inner_socket = naia_server::transport::local::LocalServerSocket::new(hub.clone());
+    LocalServerSocket::new(inner_socket, None)
 }
 
 /// Create default client config for tests (fast handshake, no jitter buffer)

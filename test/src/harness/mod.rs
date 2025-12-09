@@ -8,7 +8,6 @@ mod client_expect_ctx;
 mod users;
 mod server_mutate_ctx;
 mod client_mutate_ctx;
-mod builder;
 mod user_scope;
 mod user;
 mod room;
