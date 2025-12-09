@@ -15,8 +15,9 @@ use crate::{TestEntity, harness::{ClientKey, EntityKey}};
 struct EntityKeyRecord {
     /// Server host world entity (None for client-spawned entities until they replicate to server)
     server_entity: Option<TestEntity>,
-    /// Client world entities - each client gets their own TestEntity for this logical entity
-    /// The LocalEntity is the same for Server<->Client pairs, but different between clients
+    /// Client world entities - primarily stores the host client's TestEntity
+    /// Remote clients are primarily identified via reverse LocalEntity mappings in `client_entity_to_entity_key`
+    /// The LocalEntity is the same for Server<->Client pairs (same user), but different between clients
     client_entities: HashMap<ClientKey, TestEntity>,
 }
 
@@ -33,6 +34,21 @@ impl EntityKeyRecord {
 /// 
 /// Maps logical EntityKeys (test harness abstraction) to their concrete
 /// server and client TestEntity instances in the naia world.
+/// 
+/// # Entity Storage Patterns
+/// 
+/// - **Host client entities**: The host client's `TestEntity` is reliably stored in
+///   `client_entities` map for direct lookup.
+/// 
+/// - **Remote client entities**: Remote clients are primarily identified via reverse
+///   `(ClientKey, LocalEntity) -> EntityKey` mappings in `client_entity_to_entity_key`.
+///   Remote clients may not have entries in `client_entities`; they rely on LocalEntity
+///   mappings for entity resolution.
+/// 
+/// - **LocalEntity as join key**: LocalEntity equality (for a given user) is the primary
+///   join key across server and clients. The same logical entity has the same LocalEntity
+///   value for Server<->Client pairs (same user), but different LocalEntity values
+///   between different clients viewing the same entity.
 /// 
 /// # Lifecycle and Invariants
 /// 
@@ -70,10 +86,6 @@ impl EntityKeyRecord {
 ///   at a time. If the same client tries to register multiple pending spawns, the second
 ///   registration will verify it's for the same EntityKey.
 /// 
-/// - **LocalEntity consistency**: The same logical entity has the same LocalEntity value
-///   for Server<->Client pairs (same user), but different LocalEntity values between
-///   different clients viewing the same entity.
-/// 
 /// ## Assumptions
 /// 
 /// - Entity despawn is not currently supported - no cleanup methods exist.
@@ -82,8 +94,9 @@ pub struct EntityRegistry {
     next_entity_key: u32,
     entity_map: HashMap<EntityKey, EntityKeyRecord>,
     /// Reverse mapping: (ClientKey, LocalEntity) -> EntityKey
-    /// Used to match entities when clients receive SpawnEntityEvent
-    /// LocalEntity is the same for Server<->Client pairs (same user), different between clients
+    /// Primary lookup mechanism for remote clients when they receive SpawnEntityEvent.
+    /// LocalEntity is the same for Server<->Client pairs (same user), different between clients.
+    /// This is the primary way remote clients are identified; they may not have entries in `client_entities`.
     client_entity_to_entity_key: HashMap<(ClientKey, LocalEntity), EntityKey>,
     /// Reverse mapping: server TestEntity -> EntityKey
     /// Used to quickly find EntityKey when processing server SpawnEntityEvent
@@ -122,17 +135,18 @@ impl EntityRegistry {
         self.entity_map.entry(*entity_key).or_insert_with(EntityKeyRecord::new)
     }
     
-    /// Register just the LocalEntity mapping (for server-spawned entities where client entity isn't available yet)
-    /// The client entity will be registered later when the client receives SpawnEntityEvent
+    /// Register LocalEntity mapping for server-spawned entities.
+    /// 
+    /// Used when client entity isn't available yet. Client entity registration happens later
+    /// when the client receives SpawnEntityEvent.
     pub fn register_client_local_entity_mapping(&mut self, entity_key: &EntityKey, client_key: &ClientKey, local_entity: &LocalEntity) {
         self.client_entity_to_entity_key.insert((*client_key, *local_entity), *entity_key);
     }
 
-    /// Register a server host world entity for an EntityKey
+    /// Register a server host world entity for an EntityKey.
     pub fn register_server_entity(&mut self, entity_key: &EntityKey, entity: &TestEntity) {
         let record = self.get_or_create_record(entity_key);
         record.server_entity = Some(*entity);
-        // Also register reverse mapping for fast lookup
         self.server_entity_to_entity_key.insert(*entity, *entity_key);
         // Remove from pending if this was a client-spawned entity that just replicated to server
         self.pending_client_spawns.retain(|_, k| k != entity_key);
@@ -140,26 +154,25 @@ impl EntityRegistry {
 
     /// Register a client's TestEntity and LocalEntity mapping for an EntityKey.
     /// 
-    /// This stores both the TestEntity and the reverse LocalEntity -> EntityKey mapping.
+    /// Stores both the TestEntity and the reverse LocalEntity -> EntityKey mapping.
     /// 
     /// If this is a client-spawned entity (no server entity yet), it is tracked in
     /// `pending_client_spawns` for deterministic lookup when the server receives the spawn event.
     /// 
-    /// Note: If multiple client entities are registered for the same client before server
-    /// replication, only the most recent is tracked as pending (enforces "one pending per client").
+    /// Enforces "one pending per client": if multiple client entities are registered for the same
+    /// client before server replication, only the most recent is tracked as pending.
     pub fn register_client_entity(&mut self, entity_key: &EntityKey, client_key: &ClientKey, entity: &TestEntity, local_entity: &LocalEntity) {
         let record = self.get_or_create_record(entity_key);
         let was_pending = record.server_entity.is_none();
         record.client_entities.insert(*client_key, *entity);
-        // Also register reverse mapping for fast lookup
         self.client_entity_to_entity_key.insert((*client_key, *local_entity), *entity_key);
-        // Track pending client-spawned entities (client entity registered but no server entity yet)
+        
+        // Track pending client-spawned entities (no server entity yet)
         if was_pending {
-            // Only insert if not already pending (idempotent behavior)
             if !self.pending_client_spawns.contains_key(client_key) {
                 self.pending_client_spawns.insert(*client_key, *entity_key);
             } else {
-                // Already pending - verify it's the same EntityKey
+                // Verify idempotency: same EntityKey
                 let existing = self.pending_client_spawns.get(client_key);
                 assert_eq!(
                     existing,
@@ -184,14 +197,16 @@ impl EntityRegistry {
             .copied()
     }
 
-    /// Look up EntityKey from a client's LocalEntity
-    /// Returns None if the mapping doesn't exist yet (entity hasn't been replicated to that client)
+    /// Look up EntityKey from a client's LocalEntity.
+    /// 
+    /// Returns None if the mapping doesn't exist yet (entity hasn't been replicated to that client).
     pub fn entity_key_for_client_entity(&self, client_key: &ClientKey, local_entity: &LocalEntity) -> Option<EntityKey> {
         self.client_entity_to_entity_key.get(&(*client_key, *local_entity)).copied()
     }
     
-    /// Look up EntityKey from a server TestEntity
-    /// Returns None if the server entity isn't registered yet
+    /// Look up EntityKey from a server TestEntity.
+    /// 
+    /// Returns None if the server entity isn't registered yet.
     pub fn entity_key_for_server_entity(&self, server_entity: &TestEntity) -> Option<EntityKey> {
         self.server_entity_to_entity_key.get(&server_entity).copied()
     }

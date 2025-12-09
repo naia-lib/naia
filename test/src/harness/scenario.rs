@@ -127,9 +127,9 @@ impl Scenario {
         self.clients.get_mut(&client_key).expect("client not found")
     }
 
-    /// Get client-side EntityRef by EntityKey
-    /// This helper encapsulates the LocalEntity lookup and EntityRef creation
-    /// to avoid double-borrow issues in ClientMut
+    /// Get client-side EntityRef by EntityKey.
+    /// 
+    /// Encapsulates LocalEntity lookup and EntityRef creation to avoid double-borrow issues.
     pub(crate) fn client_entity_ref(
         &'_ self,
         client_key: &ClientKey,
@@ -138,17 +138,14 @@ impl Scenario {
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         let local_entity = self.local_entity_for(key, user_key)?;
 
-        // Single mutable borrow of Scenario -> &mut ClientState
         let state = self.client_state_ref(client_key);
-
-        // Short-lived shared borrows inside a block
         let world_ref = state.world().proxy();
         state.client().local_entity(world_ref, &local_entity)
     }
 
-    /// Get client-side EntityMut by EntityKey
-    /// This helper encapsulates the LocalEntity lookup and EntityMut creation
-    /// to avoid double-borrow issues in ClientMut
+    /// Get client-side EntityMut by EntityKey.
+    /// 
+    /// Encapsulates LocalEntity lookup and EntityMut creation to avoid double-borrow issues.
     pub(crate) fn client_entity_mut(
         &'_ mut self,
         client_key: &ClientKey,
@@ -156,19 +153,15 @@ impl Scenario {
         key: &EntityKey,
     ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
         let local_entity = self.local_entity_for(key, user_key)?;
-
-        // Single mutable borrow of Scenario -> &mut ClientState
         let state = self.client_state_mut(client_key);
 
-        // First, derive the underlying entity id in a tight scope
+        // Derive entity ID in tight scope to drop borrows before getting mutable references
         let entity = {
-            let world_ref = state.world().proxy();                    // &TestWorld
+            let world_ref = state.world().proxy();
             let client_ref = state.client().local_entity(world_ref, &local_entity)?;
             client_ref.id()
-        }; // world_ref and client_ref dropped here
+        };
 
-        // Then get a mutable world proxy and EntityMut
-        // We need to get both mutable references, so we'll use a helper that takes both
         let (client_mut, world_mut) = state.client_and_world_mut();
         let world_mut_proxy = world_mut.proxy_mut();
         Some(client_mut.entity_mut(world_mut_proxy, &entity))
@@ -240,20 +233,16 @@ impl Scenario {
         TestClock::advance(16);
         let now = Instant::now();
 
-        // Collect client spawns to register after all updates complete
         let mut spawns_to_register = Vec::new();
+        let mut server_spawn_data = Vec::new();
 
         // === Phase A: Update Clients and Server ===
-        // update each client-server pair sequentially
-        // This is not ideal but works for now
-        // Note: We clone `now` for each iteration to pass to update_client_server_at
-        let mut server_spawn_data = Vec::new();
         {
             let server = self.server.as_mut().expect("server not started");
             for (client_key, state) in self.clients.iter_mut() {
                 let (client, world) = state.client_and_world_mut();
                 update_client_server_at(
-                    now.clone(),
+                    &now,
                     client,
                     server,
                     world,
@@ -261,26 +250,21 @@ impl Scenario {
                 );
 
                 // === Phase B: Collect Client Spawn Events (per-client) ===
-                // Collect spawn events for this client
                 let mut client_events = state.client_mut().take_world_events();
                 
-                // Process SpawnEntityEvent for this client
                 for spawned_entity in client_events.read::<ClientSpawnEntityEvent>() {
-                    // Get the client's LocalEntity for this entity
                     let world_ref = state.world().proxy();
                     let client_ref = state.client().entity(world_ref, &spawned_entity);
                     
                     if let Some(local_entity) = client_ref.local_entity() {
-                        // Look up EntityKey via LocalEntity mapping
-                        // We'll do the actual lookup after dropping the state borrow
+                        // Defer EntityKey lookup until after borrows are dropped (Phase D)
                         spawns_to_register.push((*client_key, local_entity, spawned_entity));
                     }
                 }
             }
 
             // === Phase C: Collect Server Spawn Events (once per tick) ===
-            // CRITICAL: This must be called exactly once per tick, after all client updates
-            // Collect server events before dropping server borrow
+            // CRITICAL: Must be called exactly once per tick, after all client updates
             let mut server_events = server.take_world_events();
             for (spawn_user_key, spawn_entity) in server_events.read::<ServerSpawnEntityEvent>() {
                 server_spawn_data.push((spawn_user_key, spawn_entity));
@@ -288,14 +272,12 @@ impl Scenario {
         }
 
         // === Phase C (continued): Process Server Spawn Events ===
-        // Process server spawn events to register server entities and LocalEntity mappings
         let mut server_entities_to_register = Vec::new();
         let mut server_local_entity_mappings = Vec::new();
         
         for (spawn_user_key, spawn_entity) in server_spawn_data {
-            // Find the ClientKey for this UserKey
             if let Some(client_key) = self.client_key_for_user(&spawn_user_key) {
-                // Get the server's LocalEntity for this user (need server borrow)
+                // Get server's LocalEntity for this user (LocalEntity is shared between server and client for same user)
                 let server_local_entity = {
                     let server = self.server.as_ref().expect("server not started");
                     let world_ref = self.server_world.proxy();
@@ -304,19 +286,16 @@ impl Scenario {
                 };
                 
                 if let Some(local_entity) = server_local_entity {
-                    // Try to find EntityKey via client's LocalEntity mapping (for client-spawned entities)
-                    // The LocalEntity is the same on server and client for the same user
+                    // Match EntityKey: client-spawned (via client mapping), server-spawned (via server mapping), or pending
                     if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
-                        // This is a client-spawned entity - register the server entity
+                        // Client-spawned entity that replicated to server
                         server_entities_to_register.push((entity_key, spawn_entity));
                     } else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(&spawn_entity) {
-                        // This is a server-spawned entity - register the LocalEntity mapping
+                        // Server-spawned entity - register LocalEntity mapping for this client
                         server_local_entity_mappings.push((entity_key, client_key, local_entity));
                     } else if let Some(entity_key) = self.entity_registry.remove_pending_client_spawn(&client_key) {
-                        // This is a client-spawned entity that we haven't registered on server yet
-                        // Remove from pending spawns to ensure it's consumed
+                        // Client-spawned entity not yet registered on server - consume pending entry
                         server_entities_to_register.push((entity_key, spawn_entity));
-                        // Also register the server's LocalEntity mapping for this client
                         server_local_entity_mappings.push((entity_key, client_key, local_entity));
                     }
                 }
@@ -324,46 +303,33 @@ impl Scenario {
         }
         
         // === Phase C (continued): Register Server Entities ===
-        // Register server entities BEFORE processing client spawn events (Phase D)
-        // This ensures server entities are available when we try to match client spawn events
+        // Register server entities before Phase D to ensure they're available for client spawn matching
         self.apply_server_entity_registrations(server_entities_to_register);
         
         // Register LocalEntity mappings for server-spawned entities
-        // Note: For server-spawned entities, we only register the LocalEntity mapping here
-        // The client entity will be registered later when the client receives SpawnEntityEvent
+        // Client entity registration happens later when client receives SpawnEntityEvent
         self.apply_local_entity_mappings(server_local_entity_mappings);
         
         // === Phase D: Apply All Registry Updates ===
-        // All borrows are dropped - safe to mutate registry and apply all updates
-        // Register all the client entities
+        // All borrows dropped - safe to mutate registry
         for (client_key, local_entity, client_entity) in spawns_to_register {
             let local_entity_value = extract_local_entity_value(&local_entity);
-            // First check if we already know which EntityKey this (client, local_entity) belongs to
-            // This handles the host client's own spawns (registered in mutate phase)
-            if let Some(existing_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
-                // Registry already knows this mapping - skip further processing
-                // This is expected for the host client's own spawns (registered in mutate phase)
-                // The registry's idempotency ensures duplicate calls are safe, but we avoid
-                // unnecessary work and potential issues with server state not yet reflecting the entity
+            
+            // Skip if already registered (e.g., host client's own spawns from mutate phase)
+            if let Some(_existing_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
                 continue;
             }
             
-            // No existing mapping - this is a remote client receiving a replicated spawn
-            // Infer EntityKey from server LocalEntity matching
+            // Infer EntityKey by matching client's LocalEntity with server's LocalEntity for this user
             let user_key = self.user_key(&client_key);
-            let entity_key = {
-                // Match via server's LocalEntity for this user
-                // The server's LocalEntity for this user should match the client's LocalEntity value
-                
+            let (entity_key, server_entities_count) = {
                 let server = self.server.as_ref().expect("server not started");
                 let mut matched_key = None;
-                
-                // Collect all server entities first (since we might iterate multiple times)
                 let server_entities: Vec<_> = self.entity_registry.server_entities_iter().collect();
+                let count = server_entities.len();
                 
-                // Try to match by server's LocalEntity for this user
+                // Match by LocalEntity value (same for server-client pairs, different between clients)
                 for (ek, server_entity) in &server_entities {
-                    // Get server's LocalEntity for this user
                     let world_ref = self.server_world.proxy();
                     let server_ref = server.entity(world_ref, server_entity);
                     if let Some(server_local_entity) = server_ref.local_entity(&user_key) {
@@ -375,24 +341,24 @@ impl Scenario {
                     }
                 }
                 
-                // Fallback: If no match found and there's exactly one server entity, use it.
-                // This handles the common case where there's one entity being replicated to multiple clients.
-                // The server's LocalEntity for this user might not be available immediately after scope inclusion.
-                if matched_key.is_none() && server_entities.len() == 1 {
-                    let (ek, _) = server_entities[0];
-                    matched_key = Some(ek);
-                }
-                
-                matched_key
+                (matched_key, count)
             };
             
             if let Some(entity_key) = entity_key {
-                // Register the client entity and LocalEntity mapping
                 self.entity_registry_mut()
                     .register_client_entity(&entity_key, &client_key, &client_entity, &local_entity);
+            } else {
+                // Debug instrumentation: flag unexpected mapping failures
+                // This triggers in debug builds when no LocalEntity match is found after checking all server entities
+                debug_assert!(
+                    false,
+                    "Phase D: Failed to resolve EntityKey for client {:?} with LocalEntity value {} (checked {} server entities). \
+                     This may indicate a mapping lifecycle violation - entity should resolve in a future tick.",
+                    client_key, local_entity_value, server_entities_count
+                );
+                // If no LocalEntity match found, leave EntityKey unresolved - will be handled in future tick
+                // when the mapping becomes available (strictly deterministic, no guessing)
             }
-            // If EntityKey not found, the entity hasn't been registered on server yet
-            // It will be registered in a future tick when server processes it
         }
     }
 
@@ -422,37 +388,32 @@ impl Scenario {
         Some((self.server.as_ref()?, &self.entity_registry))
     }
 
-    /// Get LocalEntity for an EntityKey and UserKey
-    /// Uses EntityRegistry as source of truth - checks client entities first, then falls back to server lookup
+    /// Get LocalEntity for an EntityKey and UserKey.
+    /// 
+    /// Uses EntityRegistry as source of truth: checks client entities first, then falls back to server lookup.
     pub(crate) fn local_entity_for(&self, entity_key: &EntityKey, user_key: &UserKey) -> Option<LocalEntity> {
-        // Find the client_key for this user_key
         let client_key = self.client_key_for_user(user_key)?;
         
-        // Check if client's TestEntity is registered in EntityRegistry
+        // Try client entity first (if registered)
         if let Some(client_entity) = self.entity_registry.client_entity(entity_key, &client_key) {
-            // Client entity is registered - get LocalEntity from client using the TestEntity
-            // Note: client.entity() will panic if entity doesn't exist, but if it's registered it should exist
             let state = self.clients.get(&client_key)?;
             let world_ref = state.world().proxy();
-            // Try to get LocalEntity - if entity doesn't exist, this will panic, but that's OK
-            // because if it's registered in EntityRegistry, it should exist
             let client_ref = state.client().entity(world_ref, &client_entity);
             if let Some(local_entity) = client_ref.local_entity() {
                 return Some(local_entity);
             }
         }
         
-        // Fallback: get LocalEntity from server's perspective
-        // This will return None if the entity hasn't been replicated to that user yet
-        // The expect() loop will keep ticking until replication completes and this returns Some
+        // Fallback: server's perspective (returns None if entity hasn't replicated to this user yet)
         let server_entity = self.entity_registry.server_entity(entity_key)?;
         let server = self.server.as_ref()?;
         let server_ref = server.entity(self.server_world.proxy(), &server_entity);
         server_ref.local_entity(&user_key)
     }
     
-    /// Get ClientKey for a UserKey (reverse lookup)
-    /// Uses the reverse map for O(1) lookup instead of iterating clients
+    /// Get ClientKey for a UserKey (reverse lookup).
+    /// 
+    /// Uses reverse map for O(1) lookup instead of iterating clients.
     pub(crate) fn client_key_for_user(&self, user_key: &UserKey) -> Option<ClientKey> {
         self.user_to_client_map.get(user_key).copied()
     }
@@ -491,8 +452,8 @@ impl Scenario {
 
     /// Apply server entity registrations (pure registry operation).
     /// 
-    /// This helper only touches `EntityRegistry` and does not call `take_world_events()`
-    /// or modify client/server/world state. Safe to call after all borrows are dropped.
+    /// Only touches `EntityRegistry`; does not call `take_world_events()` or modify client/server/world state.
+    /// Safe to call after all borrows are dropped.
     fn apply_server_entity_registrations(&mut self, server_entities: Vec<(EntityKey, TestEntity)>) {
         for (entity_key, server_entity) in server_entities {
             self.entity_registry_mut()
@@ -502,11 +463,11 @@ impl Scenario {
 
     /// Apply LocalEntity mappings for server-spawned entities (pure registry operation).
     /// 
-    /// This helper only touches `EntityRegistry` and does not call `take_world_events()`
-    /// or modify client/server/world state. Safe to call after all borrows are dropped.
+    /// Only touches `EntityRegistry`; does not call `take_world_events()` or modify client/server/world state.
+    /// Safe to call after all borrows are dropped.
     fn apply_local_entity_mappings(&mut self, mappings: Vec<(EntityKey, ClientKey, LocalEntity)>) {
         for (entity_key, client_key, local_entity) in mappings {
-            // Only register if not already registered (avoid duplicates)
+            // Skip if already registered (idempotent)
             if self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity).is_none() {
                 self.entity_registry_mut()
                     .register_client_local_entity_mapping(&entity_key, &client_key, &local_entity);
@@ -539,7 +500,7 @@ fn default_client_config() -> ClientConfig {
 
 /// Update a single client and server at a specific time
 fn update_client_server_at(
-    now: Instant,
+    now: &Instant,
     client: &mut Client,
     server: &mut Server,
     client_world: &mut TestWorld,
@@ -548,8 +509,8 @@ fn update_client_server_at(
     // Client update
     if client.connection_status().is_connected() {
         client.receive_all_packets();
-        client.take_tick_events(&now);
-        client.process_all_packets(client_world.proxy_mut(), &now);
+        client.take_tick_events(now);
+        client.process_all_packets(client_world.proxy_mut(), now);
         client.send_all_packets(client_world.proxy_mut());
     } else {
         client.receive_all_packets();
@@ -558,8 +519,8 @@ fn update_client_server_at(
 
     // Server update
     server.receive_all_packets();
-    server.take_tick_events(&now);
-    server.process_all_packets(server_world.proxy_mut(), &now);
+    server.take_tick_events(now);
+    server.process_all_packets(server_world.proxy_mut(), now);
     server.send_all_packets(server_world.proxy());
 }
 
@@ -572,16 +533,15 @@ pub fn complete_handshake_with_name(
     main_room_key: &RoomKey,
     client_name: &str,
 ) -> Option<UserKey> {
-    let mut user_key_opt = None;
+        let mut user_key_opt = None;
     let mut connected = false;
     let mut user_added_to_room = false;
 
     for attempt in 1..=100 {
-        // Advance simulated time for each handshake attempt
-        TestClock::advance(16); // Advance by one tick (16ms)
+        TestClock::advance(16);
         let now = Instant::now();
 
-        // Process server side first to receive client packets  
+        // Process server side first to receive client packets
         server.receive_all_packets();
         server.take_tick_events(&now);
         server.process_all_packets(server_world.proxy_mut(), &now);
@@ -595,35 +555,31 @@ pub fn complete_handshake_with_name(
         
         server.send_all_packets(server_world.proxy());
         
-        // Try to add user to room (ONCE) - this will succeed once ConnectEvent is processed
-        // NOTE: add_user requires the user to exist in world_server.users (added by ConnectEvent in receive_all_packets)
-        // ConnectEvent may not be processed until AFTER this iteration, so we keep checking
+        // Add user to room once ConnectEvent is processed
+        // NOTE: add_user requires user to exist in world_server.users (added by ConnectEvent)
+        // ConnectEvent may not be processed until after this iteration, so we retry each attempt
         if let Some(user_key) = user_key_opt {
-            if !user_added_to_room {
+            if !user_added_to_room && server.user_exists(&user_key) {
                 server.room_mut(main_room_key).add_user(&user_key);
-                // Check if it actually worked (will fail if ConnectEvent hasn't been processed yet)
                 if server.room(main_room_key).has_user(&user_key) {
                     user_added_to_room = true;
                 }
             }
         }
 
-        // Then process client side
+        // Process client side
         let was_connected = client.connection_status().is_connected();
         if !was_connected {
-            // For handshake, receive then send to allow handshake manager to process
             client.receive_all_packets();
             client.send_all_packets(client_world.proxy_mut());
 
-            // Check for connection event even during handshake
-            // (the handshake manager may have completed the connection)
+            // Check for connection event (handshake manager may have completed connection)
             let mut client_events = client.take_world_events();
             for _ in client_events.read::<ClientConnectEvent>() {
                 info!("{} connected in {} attempts", client_name, attempt);
                 connected = true;
             }
         } else {
-            // If client is already connected, process normally
             client.receive_all_packets();
             client.process_all_packets(client_world.proxy_mut(), &now);
             client.take_tick_events(&now);
