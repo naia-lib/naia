@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use naia_shared::{EntityAuthStatus, ReplicaRefWrapper, ReplicatedComponent, WorldRefType};
 
-use crate::{server::WorldServer, ReplicationConfig};
+use crate::{server::WorldServer, ReplicationConfig, EntityOwner};
 
 // EntityRef
 pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> {
@@ -38,6 +38,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
 
     pub fn authority(&self) -> Option<EntityAuthStatus> {
         self.server.entity_authority_status(&self.entity)
+    }
+
+    pub fn owner(&self) -> EntityOwner {
+        self.server.entity_owner(&self.entity)
     }
 }
 

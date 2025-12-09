@@ -1,4 +1,4 @@
-use naia_server::{EntityMut, EntityRef, EntityOwner, RoomKey, NaiaServerError, TickBufferMessages};
+use naia_server::{EntityMut, EntityRef, RoomKey, NaiaServerError, TickBufferMessages};
 use naia_demo_world::{WorldRef, WorldMut};
 use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick};
 
@@ -100,14 +100,6 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         server_entities.iter()
             .filter_map(|e| registry.entity_key_for_server_entity(e))
             .collect()
-    }
-
-    /// Get entity owner
-    pub fn entity_owner(&self, entity: &EntityKey) -> Option<EntityOwner> {
-        let scenario = self.ctx.scenario();
-        let entity = scenario.entity_registry().server_entity(entity)?;
-        let (server, _) = scenario.server_and_registry()?;
-        Some(server.entity_owner(&entity))
     }
 
     // User Operations

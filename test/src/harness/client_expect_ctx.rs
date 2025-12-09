@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use naia_demo_world::WorldRef;
-use naia_client::{EntityRef, ConnectionStatus, NaiaClientError, EntityOwner};
+use naia_client::{EntityRef, ConnectionStatus, NaiaClientError};
 
 use crate::{TestEntity, harness::{ExpectCtx, EntityKey, ClientKey}};
 
@@ -30,14 +30,6 @@ impl<'a, 'scenario: 'a> ClientExpectCtx<'a, 'scenario> {
     pub fn entities(&self) -> Vec<EntityKey> {
         let registry = self.ctx.scenario().entity_registry();
         registry.client_entity_keys(&self.client_key)
-    }
-
-    /// Get entity owner for an entity
-    pub fn entity_owner(&self, entity: &EntityKey) -> Option<EntityOwner> {
-        let registry = self.ctx.scenario().entity_registry();
-        let client_entity = registry.client_entity(entity, &self.client_key)?;
-        let state = self.ctx.scenario().client_state(&self.client_key);
-        Some(state.client().entity_owner(&client_entity))
     }
 
     /// Get server address

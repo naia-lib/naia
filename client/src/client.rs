@@ -576,7 +576,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         world.entities()
     }
 
-    pub fn entity_owner(&self, world_entity: &E) -> EntityOwner {
+    pub(crate) fn entity_owner(&self, world_entity: &E) -> EntityOwner {
         if let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) {
             if let Some(owner) = self.global_world_manager.entity_owner(&global_entity) {
                 return owner;

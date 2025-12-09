@@ -1,4 +1,4 @@
-use naia_server::{EntityRef, EntityOwner, UserRef, RoomRef, RoomKey};
+use naia_server::{EntityRef, UserRef, RoomRef, RoomKey};
 use naia_demo_world::WorldRef;
 
 use crate::{harness::{ExpectCtx, user_scope::UserScopeRef, EntityKey, ClientKey}, TestEntity};
@@ -54,14 +54,6 @@ impl<'a, 'scenario: 'a> ServerExpectCtx<'a, 'scenario> {
         server_entities.iter()
             .filter_map(|e| registry.entity_key_for_server_entity(e))
             .collect()
-    }
-
-    /// Get entity owner for an entity
-    pub fn entity_owner(&self, entity: &EntityKey) -> Option<EntityOwner> {
-        let scenario = self.ctx.scenario();
-        let server_entity = scenario.entity_registry().server_entity(entity)?;
-        let (server, _) = scenario.server_and_registry()?;
-        Some(server.entity_owner(&server_entity))
     }
 
     /// Check if user exists for a ClientKey

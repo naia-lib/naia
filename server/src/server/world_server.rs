@@ -931,6 +931,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         world.entities()
     }
 
+    // This intended to be used by adapter crates
     pub fn entity_owner(&self, world_entity: &E) -> EntityOwner {
         let global_entity = self
             .global_entity_map

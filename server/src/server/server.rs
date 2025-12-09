@@ -2,17 +2,7 @@ use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType};
 
-use crate::{
-    connection::tick_buffer_messages::TickBufferMessages,
-    events::main_events::WorldPacketEvent,
-    server::{main_server::MainServer, world_server::WorldServer},
-    transport::Socket,
-    transport::{PacketChannel, PacketSender},
-    world::{entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef},
-    ConnectEvent, DisconnectEvent, Events, MainEvents, NaiaServerError, ReplicationConfig, RoomKey,
-    RoomMut, RoomRef, ServerConfig, TickEvents, UserKey, UserMut, UserRef, UserScopeMut,
-    UserScopeRef,
-};
+use crate::{connection::tick_buffer_messages::TickBufferMessages, events::main_events::WorldPacketEvent, server::{main_server::MainServer, world_server::WorldServer}, transport::Socket, transport::{PacketChannel, PacketSender}, world::{entity_mut::EntityMut, entity_ref::EntityRef}, ConnectEvent, DisconnectEvent, EntityOwner, Events, MainEvents, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -277,6 +267,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.entities(world)
     }
 
+    // This intended to be used by adapter crates, do not use!
     pub fn entity_owner(&self, world_entity: &E) -> EntityOwner {
         self.world_server.entity_owner(world_entity)
     }

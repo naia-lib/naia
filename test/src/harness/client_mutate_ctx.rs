@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use naia_client::{EntityMut, EntityRef, EntityOwner, NaiaClientError, ConnectionStatus};
+use naia_client::{EntityMut, EntityRef, NaiaClientError, ConnectionStatus};
 use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick};
 use naia_demo_world::{WorldRef, WorldMut};
 
@@ -109,14 +109,6 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
         // For client entities, we need to look them up via LocalEntity
         // Since we don't have LocalEntity here, use the registry's client_entity_keys method
         registry.client_entity_keys(&self.client_key)
-    }
-
-    /// Get entity owner
-    pub fn entity_owner(&self, entity: &EntityKey) -> Option<EntityOwner> {
-        let registry = self.ctx.scenario().entity_registry();
-        let client_entity = registry.client_entity(entity, &self.client_key)?;
-        let state = self.ctx.scenario().client_state(&self.client_key);
-        Some(state.client().entity_owner(&client_entity))
     }
 
     // Message Operations
