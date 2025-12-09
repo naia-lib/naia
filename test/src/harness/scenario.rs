@@ -3,9 +3,9 @@ use std::{time::Duration, collections::HashMap};
 use log::{info, warn};
 
 use naia_shared::{TestClock, Instant, Protocol, OwnedLocalEntity, LocalEntity};
-use naia_client::{Client as NaiaClient, ClientConfig, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::Socket as LocalClientSocket, EntityRef, EntityMut, SpawnEntityEvent as ClientSpawnEntityEvent};
+use naia_client::{Client as NaiaClient, ClientConfig, WorldEvents as ClientEvents, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::Socket as LocalClientSocket, EntityRef, EntityMut, SpawnEntityEvent as ClientSpawnEntityEvent};
 use naia_demo_world::{WorldMut, WorldRef};
-use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events, AuthEvent, transport::local::Socket as LocalServerSocket, SpawnEntityEvent as ServerSpawnEntityEvent};
+use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events as ServerEvents, AuthEvent, transport::local::Socket as LocalServerSocket, SpawnEntityEvent as ServerSpawnEntityEvent};
 
 use crate::{TestWorld, Auth, TestEntity, harness::{client_state::ClientState, users::Users, mutate_ctx::MutateCtx, ExpectCtx, ClientKey, EntityKey, builder::LocalTransportBuilder, entity_registry::EntityRegistry}};
 
@@ -133,12 +133,12 @@ impl Scenario {
     pub(crate) fn client_entity_ref(
         &'_ self,
         client_key: &ClientKey,
-        user_key: &UserKey,
         key: &EntityKey,
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
-        let local_entity = self.local_entity_for(key, user_key)?;
 
         let state = self.client_state_ref(client_key);
+        let user_key = state.user_key();
+        let local_entity = self.local_entity_for(key, &user_key)?;
         let world_ref = state.world().proxy();
         state.client().local_entity(world_ref, &local_entity)
     }
@@ -149,10 +149,12 @@ impl Scenario {
     pub(crate) fn client_entity_mut(
         &'_ mut self,
         client_key: &ClientKey,
-        user_key: &UserKey,
         key: &EntityKey,
     ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
-        let local_entity = self.local_entity_for(key, user_key)?;
+
+        let user_key = self.client_state_ref(client_key).user_key();
+        let local_entity = self.local_entity_for(key, &user_key)?;
+
         let state = self.client_state_mut(client_key);
 
         // Derive entity ID in tight scope to drop borrows before getting mutable references
@@ -362,8 +364,17 @@ impl Scenario {
         }
     }
 
-    pub(crate) fn take_server_events(&mut self) -> Events<TestEntity> {
+    pub(crate) fn take_server_events(&mut self) -> ServerEvents<TestEntity> {
         self.server.as_mut().expect("server not started").take_world_events()
+    }
+
+    pub(crate) fn take_client_events(&mut self) -> HashMap<ClientKey, ClientEvents<TestEntity>> {
+        let mut map = HashMap::new();
+        for (client_key, client_state) in self.clients.iter_mut() {
+            let client_events = client_state.client_mut().take_world_events();
+            map.insert(*client_key, client_events);
+        }
+        map
     }
 
     pub(crate) fn user_key(&self, client_key: &ClientKey) -> UserKey {
@@ -418,6 +429,11 @@ impl Scenario {
         self.user_to_client_map.get(user_key).copied()
     }
 
+    /// Get client_user_map for creating Users handle
+    pub(crate) fn client_users(&'_ self) -> Users<'_> {
+        Users::new(&self.client_user_map)
+    }
+
     /// Perform actions in a mutate phase
     pub fn mutate<R>(&mut self, f: impl FnOnce(&mut MutateCtx) -> R) -> R {
         let mut ctx = MutateCtx::new(self);
@@ -428,7 +444,7 @@ impl Scenario {
     }
 
     /// Register expectations and wait until they all pass or timeout
-    pub fn expect(&mut self, f: impl FnMut(&mut ExpectCtx) -> bool) {
+    pub fn expect(&mut self, f: impl FnMut(&ExpectCtx) -> bool) {
         let mut ctx = ExpectCtx::new(self, 50); // Default max_ticks
         ctx.run(f);
     }
@@ -436,11 +452,11 @@ impl Scenario {
     /// Split borrow fields needed for ServerMut
     /// Returns disjoint mutable references to server, world, registry, and users
     pub(crate) fn split_for_server_mut(
-        &mut self,
+        &'_ mut self,
     ) -> (
         &mut Server,
-        &mut TestWorld,
-        &mut EntityRegistry,
+        &'_ mut TestWorld,
+        &'_ mut EntityRegistry,
         Users<'_>,
     ) {
         let server = self.server.as_mut().expect("server not started");

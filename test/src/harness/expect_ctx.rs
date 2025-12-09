@@ -1,9 +1,16 @@
-use crate::harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx};
+use std::collections::HashMap;
+
+use naia_server::Events as ServerEvents;
+use naia_client::WorldEvents as ClientEvents;
+
+use crate::{TestEntity, harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx}};
 
 /// Context for evaluating expectations in an expect phase
 pub struct ExpectCtx<'a> {
     scenario: &'a mut Scenario,
     max_ticks: usize,
+    server_events: Option<ServerEvents<TestEntity>>,
+    client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>
 }
 
 impl<'a> ExpectCtx<'a> {
@@ -11,6 +18,8 @@ impl<'a> ExpectCtx<'a> {
         Self {
             scenario,
             max_ticks,
+            server_events: None,
+            client_events_map: HashMap::new()
         }
     }
 
@@ -20,23 +29,27 @@ impl<'a> ExpectCtx<'a> {
     }
 
     /// Register server-side expectations
-    pub fn server(&mut self, mut f: impl FnMut(&mut ServerExpectCtx<'_, 'a>) -> bool) -> bool {
-        let mut ctx = ServerExpectCtx::new(self);
-        f(&mut ctx)
+    pub fn server(&self, f: impl Fn(&ServerExpectCtx<'_, 'a>) -> bool) -> bool {
+        let ctx = ServerExpectCtx::new(self);
+        f(&ctx)
     }
 
     /// Register client-side expectations
-    pub fn client(&mut self, client: ClientKey, mut f: impl FnMut(&mut ClientExpectCtx<'_, 'a>) -> bool) -> bool {
-        let mut ctx = ClientExpectCtx::new(self, client);
-        f(&mut ctx)
+    pub fn client(&self, client: ClientKey, f: impl Fn(&ClientExpectCtx<'_, 'a>) -> bool) -> bool {
+        let ctx = ClientExpectCtx::new(self, client);
+        f(&ctx)
     }
 
     pub(crate) fn run<F>(&mut self, mut f: F)
     where
-        F: FnMut(&mut Self) -> bool,
+        F: FnMut(&Self) -> bool,
     {
         for tick in 0..self.max_ticks {
             self.scenario.tick_once();
+
+            // Collect server events after each tick
+            self.server_events = Some(self.scenario.take_server_events());
+            self.client_events_map = self.scenario.take_client_events();
 
             // Evaluate the closure - if it returns true, all expectations passed
             if f(self) {
@@ -52,14 +65,8 @@ impl<'a> ExpectCtx<'a> {
         }
     }
 
-    /// Get mutable reference to the scenario
-    pub(crate) fn scenario_mut(&mut self) -> &mut Scenario {
-        self.scenario
-    }
-
     /// Get reference to the scenario
     pub(crate) fn scenario(&self) -> &Scenario {
         self.scenario
     }
-
 }

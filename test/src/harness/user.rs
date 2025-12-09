@@ -7,11 +7,11 @@ use crate::{TestEntity, harness::{ClientKey, users::Users}};
 /// Harness wrapper for UserRef that works with ClientKey instead of UserKey
 pub struct UserRef<'a> {
     user: NaiaUserRef<'a, TestEntity>,
-    users: &'a Users<'a>,
+    users: Users<'a>,
 }
 
 impl<'a> UserRef<'a> {
-    pub(crate) fn new(user: NaiaUserRef<'a, TestEntity>, users: &'a Users<'a>) -> Self {
+    pub(crate) fn new(user: NaiaUserRef<'a, TestEntity>, users: Users<'a>) -> Self {
         Self { user, users }
     }
 
@@ -40,11 +40,11 @@ impl<'a> UserRef<'a> {
 /// Harness wrapper for UserMut that works with ClientKey instead of UserKey
 pub struct UserMut<'a> {
     user: NaiaUserMut<'a, TestEntity>,
-    users: &'a Users<'a>,
+    users: Users<'a>,
 }
 
 impl<'a> UserMut<'a> {
-    pub(crate) fn new(user: NaiaUserMut<'a, TestEntity>, users: &'a Users<'a>) -> Self {
+    pub(crate) fn new(user: NaiaUserMut<'a, TestEntity>, users: Users<'a>) -> Self {
         Self { user, users }
     }
 

@@ -1,19 +1,19 @@
-use naia_server::{EntityRef, Event, EntityOwner, UserRef, RoomRef, RoomKey};
+use naia_server::{EntityRef, EntityOwner, UserRef, RoomRef, RoomKey};
 use naia_demo_world::WorldRef;
 
 use crate::{harness::{ExpectCtx, user_scope::UserScopeRef, EntityKey, ClientKey}, TestEntity};
 
 /// Context for server-side expectations
-pub struct ServerExpectCtx<'b, 'a: 'b> {
-    ctx: &'b mut ExpectCtx<'a>,
+pub struct ServerExpectCtx<'a, 'scenario: 'a> {
+    ctx: &'a ExpectCtx<'scenario>,
 }
 
-impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
-    pub(crate) fn new(expect_ctx: &'b mut ExpectCtx<'a>) -> Self {
-        Self { ctx: expect_ctx }
+impl<'a, 'scenario: 'a> ServerExpectCtx<'a, 'scenario> {
+    pub(crate) fn new(ctx: &'a ExpectCtx<'scenario>) -> Self {
+        Self { ctx }
     }
     /// Expect that the server has replicated/created a concrete entity
-    pub fn has_entity(&mut self, entity: &EntityKey) -> bool {
+    pub fn has_entity(&self, entity: &EntityKey) -> bool {
         self.ctx.scenario().server_host_entity(entity).is_some()
     }
 
@@ -24,44 +24,6 @@ impl<'b, 'a: 'b> ServerExpectCtx<'b, 'a> {
         let (server, _) = scenario.server_and_registry()?;
         let world_ref = scenario.server_world_ref();
         Some(server.entity(world_ref, &entity))
-    }
-
-    /// Expect that the server will produce at least one event of type T
-    /// T must implement Event<TestEntity>
-    pub fn event<T>(&mut self, _label: &str) -> bool 
-    where
-        T: Event<TestEntity>,
-        <T as Event<TestEntity>>::Iter: Iterator,
-    {
-        let mut events = self.ctx.scenario_mut().take_server_events();
-        for _ in events.read::<T>() {
-            return true;
-        }
-        false
-    }
-
-    /// Check if server has at least one event of type T
-    /// T must implement Event<TestEntity>
-    /// Note: This consumes events via take_server_events()
-    pub fn has_event<T: Event<TestEntity>>(&mut self) -> bool {
-        let events = self.ctx.scenario_mut().take_server_events();
-        events.has::<T>()
-    }
-
-    /// Count occurrences of event type T
-    /// T must implement Event<TestEntity>
-    /// Note: This consumes events via take_server_events()
-    pub fn event_count<T>(&mut self) -> usize 
-    where
-        T: Event<TestEntity>,
-        <T as Event<TestEntity>>::Iter: Iterator,
-    {
-        let mut events = self.ctx.scenario_mut().take_server_events();
-        let mut count = 0;
-        for _ in events.read::<T>() {
-            count += 1;
-        }
-        count
     }
 
     /// Returns a HarnessUserScopeRef, which is used to query whether a given user has

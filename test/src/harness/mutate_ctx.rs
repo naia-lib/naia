@@ -13,19 +13,23 @@ impl<'a> MutateCtx<'a> {
         Self { scenario }
     }
 
+    pub(crate) fn scenario(&self) -> &Scenario {
+        self.scenario
+    }
+
+    pub(crate) fn scenario_mut(&mut self) -> &mut Scenario {
+        self.scenario
+    }
+
     /// Perform server-side actions
-    pub fn server<R>(&mut self, f: impl FnOnce(&mut ServerMutateCtx<'_>) -> R) -> R {
-        let (server, world, registry, users) = self.scenario.split_for_server_mut();
-        let mut ctx = ServerMutateCtx::new(server, world, registry, users);
+    pub fn server<R>(&mut self, f: impl FnOnce(&mut ServerMutateCtx<'_, '_>) -> R) -> R {
+        let mut ctx = ServerMutateCtx::new(self);
         f(&mut ctx)
     }
 
     /// Perform client-side actions
-    pub fn client<R>(&mut self, client_key: ClientKey, f: impl FnOnce(&mut ClientMutateCtx<'_>) -> R) -> R {
-        // Get user_key without mutably borrowing scenario
-        let user_key = self.scenario.user_key(&client_key);
-        // ClientMut holds &mut Scenario directly and borrows fields internally
-        let mut ctx = ClientMutateCtx::new(self.scenario, client_key, user_key);
+    pub fn client<R>(&mut self, client_key: ClientKey, f: impl FnOnce(&mut ClientMutateCtx<'_, '_>) -> R) -> R {
+        let mut ctx = ClientMutateCtx::new(self, client_key);
         f(&mut ctx)
     }
 }

@@ -2,48 +2,36 @@ use naia_server::{EntityMut, EntityRef, EntityOwner, RoomKey, NaiaServerError, T
 use naia_demo_world::{WorldRef, WorldMut};
 use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick};
 
-use crate::{harness::{EntityKey, ClientKey, users::Users, entity_registry::EntityRegistry, user_scope::{UserScopeRef, UserScopeMut}, user::{UserRef, UserMut}, room::{RoomRef, RoomMut}}, TestEntity, TestWorld};
-
-type Server = naia_server::Server<TestEntity>;
+use crate::{harness::{EntityKey, ClientKey, user_scope::{UserScopeRef, UserScopeMut}, user::{UserRef, UserMut}, room::{RoomRef, RoomMut}, mutate_ctx::MutateCtx}, TestEntity};
 
 /// Lightweight handle for server-side mutations
 /// Provides direct pass-through to core Server API with EntityKey resolution
-pub struct ServerMutateCtx<'scenario> {
-    server: &'scenario mut Server,
-    world: &'scenario mut TestWorld,
-    registry: &'scenario mut EntityRegistry,
-    users: Users<'scenario>,
+pub struct ServerMutateCtx<'a, 'scenario: 'a> {
+    ctx: &'a mut MutateCtx<'scenario>,
 }
 
-impl<'scenario> ServerMutateCtx<'scenario> {
-    pub(crate) fn new(
-        server: &'scenario mut Server,
-        world: &'scenario mut TestWorld,
-        registry: &'scenario mut EntityRegistry,
-        users: Users<'scenario>,
-    ) -> Self {
-        Self {
-            server,
-            world,
-            registry,
-            users,
-        }
+impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
+    pub(crate) fn new(ctx: &'a mut MutateCtx<'scenario>) -> Self {
+        Self { ctx }
     }
 
     /// Spawn a server entity, configure it, and return EntityKey
     pub fn spawn<F, R>(&mut self, f: F) -> (EntityKey, R)
     where
-        F: for<'a> FnOnce(EntityMut<'a, TestEntity, WorldMut<'a>>) -> R,
+        F: for<'b> FnOnce(EntityMut<'b, TestEntity, WorldMut<'b>>) -> R,
     {
+        let scenario = self.ctx.scenario_mut();
+        let (server, world, registry, _) = scenario.split_for_server_mut();
+        
         // 1. Spawn entity via Server API
-        let entity_mut = self.server.spawn_entity(self.world.proxy_mut());
+        let entity_mut = server.spawn_entity(world.proxy_mut());
 
         // 2. Allocate EntityKey
-        let entity_key = self.registry.allocate_entity_key();
+        let entity_key = registry.allocate_entity_key();
 
         // 3. Register server entity
         let entity = entity_mut.id();
-        self.registry.register_server_entity(&entity_key, &entity);
+        registry.register_server_entity(&entity_key, &entity);
 
         // 4. Call closure with EntityMut
         let result = f(entity_mut);
@@ -58,14 +46,11 @@ impl<'scenario> ServerMutateCtx<'scenario> {
         &'_ self,
         key: &EntityKey,
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
-        // 1. Resolve EntityKey to TestEntity
-        let entity = self.registry.server_entity(key)?;
-
-        // 2. Get WorldRef with method lifetime
-        let world_ref = self.world.proxy();
-
-        // 3. Call server.entity() and return
-        Some(self.server.entity(world_ref, &entity))
+        let scenario = self.ctx.scenario();
+        let entity = scenario.entity_registry().server_entity(key)?;
+        let (server, _) = scenario.server_and_registry()?;
+        let world_ref = scenario.server_world_ref();
+        Some(server.entity(world_ref, &entity))
     }
 
     /// Get mutable entity access by EntityKey
@@ -74,67 +59,69 @@ impl<'scenario> ServerMutateCtx<'scenario> {
         &'_ mut self,
         key: &EntityKey,
     ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
-        // 1. Resolve EntityKey to TestEntity
-        let entity = self.registry.server_entity(key)?;
-
-        // 2. Get WorldMut with method lifetime
-        let world_mut = self.world.proxy_mut();
-
-        // 3. Call server.entity_mut() and return
-        Some(self.server.entity_mut(world_mut, &entity))
+        let scenario = self.ctx.scenario_mut();
+        let entity = scenario.entity_registry().server_entity(key)?;
+        let (server, world, _, _) = scenario.split_for_server_mut();
+        let world_mut = world.proxy_mut();
+        Some(server.entity_mut(world_mut, &entity))
     }
 
     /// Returns a HarnessUserScopeRef, which is used to query whether a given user has
     /// entities in scope. Takes ClientKey and converts it to UserKey internally.
     /// The returned scope works with EntityKey instead of TestEntity.
     pub fn user_scope(&'_ self, client_key: &ClientKey) -> Option<UserScopeRef<'_>> {
-        // 1. Get UserKey via users handle
-        let user_key = self.users.user_for_client(*client_key)?;
-
-        // 2. Call server.user_scope() to get the underlying scope
-        let scope = self.server.user_scope(&user_key);
-
-        // 3. Wrap it with the harness type that handles EntityKey conversion
-        Some(UserScopeRef::new(scope, self.registry))
+        let scenario = self.ctx.scenario();
+        let users = scenario.client_users();
+        let user_key = users.user_for_client(*client_key)?;
+        let (server, registry) = scenario.server_and_registry()?;
+        let scope = server.user_scope(&user_key);
+        Some(UserScopeRef::new(scope, registry))
     }
 
     /// Returns a HarnessUserScopeMut, which is used to include/exclude Entities for a
     /// given User. Takes ClientKey and converts it to UserKey internally.
     /// The returned scope works with EntityKey instead of TestEntity.
     pub fn user_scope_mut(&'_ mut self, client_key: &ClientKey) -> Option<UserScopeMut<'_>> {
-        // 1. Get UserKey via users handle
-        let user_key = self.users.user_for_client(*client_key)?;
-
-        // 2. Call server.user_scope_mut() to get the underlying scope
-        let scope = self.server.user_scope_mut(&user_key);
-
-        // 3. Wrap it with the harness type that handles EntityKey conversion
-        Some(UserScopeMut::new(scope, self.registry))
+        let scenario = self.ctx.scenario_mut();
+        let user_key = scenario.user_key_for_client(client_key)?;
+        let (server, _, registry, _) = scenario.split_for_server_mut();
+        let scope = server.user_scope_mut(&user_key);
+        Some(UserScopeMut::new(scope, registry))
     }
 
     // Entity Operations
 
     /// Get all entities as EntityKeys
     pub fn entities(&self) -> Vec<EntityKey> {
-        let world_ref = self.world.proxy();
-        let server_entities = self.server.entities(world_ref);
+        let scenario = self.ctx.scenario();
+        let (server, registry) = scenario.server_and_registry().unwrap();
+        let world_ref = scenario.server_world_ref();
+        let server_entities = server.entities(world_ref);
         server_entities.iter()
-            .filter_map(|e| self.registry.entity_key_for_server_entity(e))
+            .filter_map(|e| registry.entity_key_for_server_entity(e))
             .collect()
     }
 
     /// Get entity owner
     pub fn entity_owner(&self, entity: &EntityKey) -> Option<EntityOwner> {
-        let entity = self.registry.server_entity(entity)?;
-        Some(self.server.entity_owner(&entity))
+        let scenario = self.ctx.scenario();
+        let entity = scenario.entity_registry().server_entity(entity)?;
+        let (server, _) = scenario.server_and_registry()?;
+        Some(server.entity_owner(&entity))
     }
 
     // User Operations
 
     /// Check if user exists
     pub fn user_exists(&self, client_key: &ClientKey) -> bool {
-        if let Some(user_key) = self.users.user_for_client(*client_key) {
-            self.server.user_exists(&user_key)
+        let scenario = self.ctx.scenario();
+        let users = scenario.client_users();
+        if let Some(user_key) = users.user_for_client(*client_key) {
+            if let Some((server, _)) = scenario.server_and_registry() {
+                server.user_exists(&user_key)
+            } else {
+                false
+            }
         } else {
             false
         }
@@ -142,42 +129,55 @@ impl<'scenario> ServerMutateCtx<'scenario> {
 
     /// Get UserRef wrapper
     pub fn user(&'_ self, client_key: &ClientKey) -> Option<UserRef<'_>> {
-        let user_key = self.users.user_for_client(*client_key)?;
-        let user = self.server.user(&user_key);
-        Some(UserRef::new(user, &self.users))
+        let scenario = self.ctx.scenario();
+        let user_key = scenario.user_key_for_client(client_key)?;
+        let users = scenario.client_users();
+        let (server, _) = scenario.server_and_registry()?;
+        let user = server.user(&user_key);
+        Some(UserRef::new(user, users))
     }
 
     /// Get UserMut wrapper
     pub fn user_mut(&'_ mut self, client_key: &ClientKey) -> Option<UserMut<'_>> {
-        let user_key = self.users.user_for_client(*client_key)?;
-        let user = self.server.user_mut(&user_key);
-        Some(UserMut::new(user, &self.users))
+        let scenario = self.ctx.scenario_mut();
+        let user_key = scenario.user_key_for_client(client_key)?;
+        let (server, _, _, users) = scenario.split_for_server_mut();
+        let user = server.user_mut(&user_key);
+        Some(UserMut::new(user, users))
     }
 
     /// Get all user keys as ClientKeys
     pub fn user_keys(&self) -> Vec<ClientKey> {
-        self.server.user_keys()
+        let scenario = self.ctx.scenario();
+        let (server, _) = scenario.server_and_registry().unwrap();
+        let users = scenario.client_users();
+        server.user_keys()
             .iter()
-            .filter_map(|uk| self.users.client_for_user(uk))
+            .filter_map(|uk| users.client_for_user(uk))
             .collect()
     }
 
     /// Get user count
     pub fn users_count(&self) -> usize {
-        self.server.users_count()
+        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        server.users_count()
     }
 
     /// Accept connection
     pub fn accept_connection(&mut self, client_key: &ClientKey) {
-        if let Some(user_key) = self.users.user_for_client(*client_key) {
-            self.server.accept_connection(&user_key);
+        let scenario = self.ctx.scenario_mut();
+        if let Some(user_key) = scenario.user_key_for_client(client_key) {
+            let (server, _, _, _) = scenario.split_for_server_mut();
+            server.accept_connection(&user_key);
         }
     }
 
     /// Reject connection
     pub fn reject_connection(&mut self, client_key: &ClientKey) {
-        if let Some(user_key) = self.users.user_for_client(*client_key) {
-            self.server.reject_connection(&user_key);
+        let scenario = self.ctx.scenario_mut();
+        if let Some(user_key) = scenario.user_key_for_client(client_key) {
+            let (server, _, _, _) = scenario.split_for_server_mut();
+            server.reject_connection(&user_key);
         }
     }
 
@@ -185,20 +185,26 @@ impl<'scenario> ServerMutateCtx<'scenario> {
 
     /// Create a new room
     pub fn make_room(&'_ mut self) -> RoomMut<'_> {
-        let room = self.server.make_room();
-        RoomMut::new(room, self.registry, &self.users)
+        let scenario = self.ctx.scenario_mut();
+        let (server, _, registry, users) = scenario.split_for_server_mut();
+        let room = server.make_room();
+        RoomMut::new(room, registry, users)
     }
 
     /// Check if room exists
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        self.server.room_exists(room_key)
+        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        server.room_exists(room_key)
     }
 
     /// Get RoomRef wrapper
     pub fn room(&'_ self, room_key: &RoomKey) -> Option<RoomRef<'_>> {
-        if self.server.room_exists(room_key) {
-            let room = self.server.room(room_key);
-            Some(RoomRef::new(room, self.registry, &self.users))
+        let scenario = self.ctx.scenario();
+        let (server, registry) = scenario.server_and_registry()?;
+        let users = scenario.client_users();
+        if server.room_exists(room_key) {
+            let room = server.room(room_key);
+            Some(RoomRef::new(room, registry, users))
         } else {
             None
         }
@@ -206,9 +212,15 @@ impl<'scenario> ServerMutateCtx<'scenario> {
 
     /// Get RoomMut wrapper
     pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> Option<RoomMut<'_>> {
-        if self.server.room_exists(room_key) {
-            let room = self.server.room_mut(room_key);
-            Some(RoomMut::new(room, self.registry, &self.users))
+        let scenario = self.ctx.scenario_mut();
+        // Check if room exists before splitting
+        let exists = scenario.server_and_registry()
+            .map(|(server, _)| server.room_exists(room_key))
+            .unwrap_or(false);
+        if exists {
+            let (server, _, registry, users) = scenario.split_for_server_mut();
+            let room = server.room_mut(room_key);
+            Some(RoomMut::new(room, registry, users))
         } else {
             None
         }
@@ -216,26 +228,31 @@ impl<'scenario> ServerMutateCtx<'scenario> {
 
     /// Get all room keys
     pub fn room_keys(&self) -> Vec<RoomKey> {
-        self.server.room_keys()
+        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        server.room_keys()
     }
 
     /// Get room count
     pub fn rooms_count(&self) -> usize {
-        self.server.rooms_count()
+        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        server.rooms_count()
     }
 
     // Message Operations
 
     /// Send message to user
     pub fn send_message<C: Channel, M: Message>(&mut self, client_key: &ClientKey, message: &M) {
-        if let Some(user_key) = self.users.user_for_client(*client_key) {
-            self.server.send_message::<C, M>(&user_key, message);
+        let scenario = self.ctx.scenario_mut();
+        if let Some(user_key) = scenario.user_key_for_client(client_key) {
+            let (server, _, _, _) = scenario.split_for_server_mut();
+            server.send_message::<C, M>(&user_key, message);
         }
     }
 
     /// Broadcast message to all users
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
-        self.server.broadcast_message::<C, M>(message);
+        let (server, _, _, _) = self.ctx.scenario_mut().split_for_server_mut();
+        server.broadcast_message::<C, M>(message);
     }
 
     /// Send request to user
@@ -244,8 +261,10 @@ impl<'scenario> ServerMutateCtx<'scenario> {
         client_key: &ClientKey,
         request: &Q,
     ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
-        if let Some(user_key) = self.users.user_for_client(*client_key) {
-            self.server.send_request::<C, Q>(&user_key, request)
+        let scenario = self.ctx.scenario_mut();
+        if let Some(user_key) = scenario.user_key_for_client(client_key) {
+            let (server, _, _, _) = scenario.split_for_server_mut();
+            server.send_request::<C, Q>(&user_key, request)
         } else {
             Err(NaiaServerError::Message("user does not exist".to_string()))
         }
@@ -253,21 +272,25 @@ impl<'scenario> ServerMutateCtx<'scenario> {
 
     /// Send response
     pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
-        self.server.send_response(response_key, response)
+        let (server, _, _, _) = self.ctx.scenario_mut().split_for_server_mut();
+        server.send_response(response_key, response)
     }
 
     /// Receive response
     pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<(ClientKey, S)> {
-        self.server.receive_response(response_key)
+        let scenario = self.ctx.scenario_mut();
+        let (server, _, _, users) = scenario.split_for_server_mut();
+        server.receive_response(response_key)
             .and_then(|(user_key, response)| {
-                self.users.client_for_user(&user_key)
+                users.client_for_user(&user_key)
                     .map(|client_key| (client_key, response))
             })
     }
 
     /// Receive tick-buffered messages
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
-        self.server.receive_tick_buffer_messages(tick)
+        let (server, _, _, _) = self.ctx.scenario_mut().split_for_server_mut();
+        server.receive_tick_buffer_messages(tick)
     }
 }
 

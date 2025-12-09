@@ -7,14 +7,14 @@ use crate::{TestEntity, harness::{EntityKey, ClientKey, entity_registry::EntityR
 pub struct RoomRef<'a> {
     room: NaiaRoomRef<'a, TestEntity>,
     registry: &'a EntityRegistry,
-    users: &'a Users<'a>,
+    users: Users<'a>,
 }
 
 impl<'a> RoomRef<'a> {
     pub(crate) fn new(
         room: NaiaRoomRef<'a, TestEntity>,
         registry: &'a EntityRegistry,
-        users: &'a Users<'a>,
+        users: Users<'a>,
     ) -> Self {
         Self { room, registry, users }
     }
@@ -74,14 +74,14 @@ impl<'a> RoomRef<'a> {
 pub struct RoomMut<'a> {
     room: NaiaRoomMut<'a, TestEntity>,
     registry: &'a EntityRegistry,
-    users: &'a Users<'a>,
+    users: Users<'a>,
 }
 
 impl<'a> RoomMut<'a> {
     pub(crate) fn new(
         room: NaiaRoomMut<'a, TestEntity>,
         registry: &'a EntityRegistry,
-        users: &'a Users<'a>,
+        users: Users<'a>,
     ) -> Self {
         Self { room, registry, users }
     }
