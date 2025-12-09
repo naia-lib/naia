@@ -32,14 +32,9 @@ impl ClientState {
     }
 
     /// Get mutable references to both client and world
-    /// This is a workaround for borrow checker limitations when both are needed
+    /// The compiler understands these are disjoint fields and allows this pattern
     pub(crate) fn client_and_world_mut(&mut self) -> (&mut Client, &mut TestWorld) {
-        // Safe because Client and TestWorld are different fields
-        unsafe {
-            let client_ptr = &mut self.client as *mut Client;
-            let world_ptr = &mut self.world as *mut TestWorld;
-            (&mut *client_ptr, &mut *world_ptr)
-        }
+        (&mut self.client, &mut self.world)
     }
 
     pub(crate) fn user_key(&self) -> UserKey {

@@ -60,7 +60,10 @@ fn harness_two_clients_entity_mapping() {
     // Now include B in scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
+            // Ensure entity is in room
             server.entity_mut(&entity_a).unwrap().enter_room(&room_key);
+            
+            // Include entity in Client B's scope
             server.user_scope_mut(&client_b_key).unwrap().include(&entity_a);
         });
     });
