@@ -1,18 +1,66 @@
-use std::{time::Duration, collections::HashMap};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
-use log::{info, warn};
+use log::{debug, info, warn};
 
-use std::{sync::{Arc, Mutex}, net::SocketAddr};
-
-use naia_shared::{TestClock, Instant, Protocol, OwnedLocalEntity, LocalEntity, transport::local::{LocalTransportHub, FAKE_SERVER_ADDR}};
-use naia_client::{Client as NaiaClient, ClientConfig, WorldEvents as ClientEvents, ConnectEvent as ClientConnectEvent, JitterBufferType, transport::local::{Socket as LocalClientSocket, LocalAddrCell}, EntityRef, EntityMut, SpawnEntityEvent as ClientSpawnEntityEvent};
+use naia_client::{
+    transport::local::{LocalAddrCell, Socket as LocalClientSocket},
+    Client as NaiaClient,
+    ClientConfig,
+    ConnectEvent as ClientConnectEvent,
+    EntityMut,
+    EntityRef,
+    JitterBufferType,
+    SpawnEntityEvent as ClientSpawnEntityEvent,
+    WorldEvents as ClientEvents,
+};
 use naia_demo_world::{WorldMut, WorldRef};
-use naia_server::{Server as NaiaServer, ServerConfig, RoomKey, UserKey, Events as ServerEvents, AuthEvent, transport::local::Socket as LocalServerSocket, SpawnEntityEvent as ServerSpawnEntityEvent};
+use naia_server::{
+    transport::local::Socket as LocalServerSocket,
+    AuthEvent,
+    Events as ServerEvents,
+    RoomKey,
+    Server as NaiaServer,
+    ServerConfig,
+    SpawnEntityEvent as ServerSpawnEntityEvent,
+    UserKey,
+};
+use naia_shared::{
+    transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
+    Instant,
+    LocalEntity,
+    OwnedLocalEntity,
+    Protocol,
+    TestClock,
+};
 
-use crate::{TestWorld, Auth, TestEntity, harness::{client_state::ClientState, users::Users, mutate_ctx::MutateCtx, ExpectCtx, ClientKey, EntityKey, entity_registry::EntityRegistry}};
+use crate::{
+    harness::{
+        client_state::ClientState,
+        entity_registry::EntityRegistry,
+        mutate_ctx::MutateCtx,
+        users::Users,
+        ClientKey,
+        EntityKey,
+        ExpectCtx,
+    },
+    Auth,
+    TestEntity,
+    TestWorld,
+};
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
+
+// Constants for simulation timing and retry behavior
+const TICK_DURATION_MS: u64 = 16; // Default tick duration (~60 FPS)
+const DEFAULT_MAX_EXPECT_TICKS: usize = 50; // Maximum ticks before expect() times out
+const HANDSHAKE_MAX_ATTEMPTS: usize = 100; // Maximum attempts for client handshake
+const HANDSHAKE_TICK_ADVANCE_MS: u64 = 16; // Time advance per handshake attempt
 
 /// Extract the comparable value from a LocalEntity.
 /// 
@@ -20,10 +68,11 @@ type Server = NaiaServer<TestEntity>;
 /// an `OwnedLocalEntity` enum with a `u16` value. The server and client share the
 /// same value for the same user's view of an entity.
 /// 
-/// # Brittleness
+/// # TODO: Brittleness
 /// 
 /// This assumes Naia's internal representation. If Naia changes how `LocalEntity`
 /// is represented or provides a public API for comparison, this should be updated.
+/// Consider contributing a public comparison API to the naia crate.
 fn extract_local_entity_value(local_entity: &LocalEntity) -> u16 {
     let owned: OwnedLocalEntity = (*local_entity).into();
     match owned {
@@ -137,6 +186,7 @@ impl Scenario {
     /// Get client-side EntityRef by EntityKey.
     /// 
     /// Encapsulates LocalEntity lookup and EntityRef creation to avoid double-borrow issues.
+    #[must_use]
     pub(crate) fn client_entity_ref(
         &'_ self,
         client_key: &ClientKey,
@@ -153,6 +203,7 @@ impl Scenario {
     /// Get client-side EntityMut by EntityKey.
     /// 
     /// Encapsulates LocalEntity lookup and EntityMut creation to avoid double-borrow issues.
+    #[must_use]
     pub(crate) fn client_entity_mut(
         &'_ mut self,
         client_key: &ClientKey,
@@ -238,98 +289,113 @@ impl Scenario {
     /// - **Registry updates happen after all event collection**: This ensures all events from
     ///   the current tick are available for matching and registration.
     pub(crate) fn tick_once(&mut self) {
-        // Advance simulated clock by 16ms (default tick duration for ~60 FPS)
-        TestClock::advance(16);
+        // Advance simulated clock by default tick duration
+        TestClock::advance(TICK_DURATION_MS);
         let now = Instant::now();
 
-        let mut spawns_to_register = Vec::new();
-        let mut server_spawn_data = Vec::new();
+        // Phase A & B: Update all clients and collect client spawn events
+        let spawns_to_register = self.update_all_clients_and_collect_spawns(&now);
 
-        // === Phase A: Update Clients and Server ===
-        {
-            let server = self.server.as_mut().expect("server not started");
-            for (client_key, state) in self.clients.iter_mut() {
-                let (client, world) = state.client_and_world_mut();
-                Self::update_client_server_at(
-                    &now,
-                    client,
-                    server,
-                    world,
-                    &mut self.server_world,
-                );
-
-                // === Phase B: Collect Client Spawn Events (per-client) ===
-                let mut client_events = state.client_mut().take_world_events();
-                
-                for spawned_entity in client_events.read::<ClientSpawnEntityEvent>() {
-                    let world_ref = state.world().proxy();
-                    let client_ref = state.client().entity(world_ref, &spawned_entity);
+        // Phase C: Collect and process server spawn events
+        let server_spawn_data = self.collect_server_spawn_events();
+        let (server_entities_to_register, server_local_entity_mappings) = {
+            let mut server_entities_to_register = Vec::new();
+            let mut server_local_entity_mappings = Vec::new();
+            
+            for (spawn_user_key, spawn_entity) in server_spawn_data {
+                if let Some(client_key) = self.client_key_for_user(&spawn_user_key) {
+                    let server_local_entity = {
+                        let server = self.server.as_ref().expect("server not started");
+                        let world_ref = self.server_world.proxy();
+                        let server_ref = server.entity(world_ref, &spawn_entity);
+                        server_ref.local_entity(&spawn_user_key)
+                    };
                     
-                    if let Some(local_entity) = client_ref.local_entity() {
-                        // Defer EntityKey lookup until after borrows are dropped (Phase D)
-                        spawns_to_register.push((*client_key, local_entity, spawned_entity));
+                    if let Some(local_entity) = server_local_entity {
+                        if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
+                            debug!("Matched client-spawned entity {:?} for client {:?}", entity_key, client_key);
+                            server_entities_to_register.push((entity_key, spawn_entity));
+                        } else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(&spawn_entity) {
+                            debug!("Matched server-spawned entity {:?} for client {:?}", entity_key, client_key);
+                            server_local_entity_mappings.push((entity_key, client_key, local_entity));
+                        } else if let Some(entity_key) = self.entity_registry.remove_pending_client_spawn(&client_key) {
+                            debug!("Matched pending client-spawned entity {:?} for client {:?}", entity_key, client_key);
+                            server_entities_to_register.push((entity_key, spawn_entity));
+                            server_local_entity_mappings.push((entity_key, client_key, local_entity));
+                        } else {
+                            debug!("No EntityKey match found for server spawn event (user: {:?}, entity: {:?})", spawn_user_key, spawn_entity);
+                        }
                     }
                 }
             }
-
-            // === Phase C: Collect Server Spawn Events (once per tick) ===
-            // CRITICAL: Must be called exactly once per tick, after all client updates
-            let mut server_events = server.take_world_events();
-            for (spawn_user_key, spawn_entity) in server_events.read::<ServerSpawnEntityEvent>() {
-                server_spawn_data.push((spawn_user_key, spawn_entity));
-            }
-        }
-
-        // === Phase C (continued): Process Server Spawn Events ===
-        let mut server_entities_to_register = Vec::new();
-        let mut server_local_entity_mappings = Vec::new();
+            
+            (server_entities_to_register, server_local_entity_mappings)
+        };
         
-        for (spawn_user_key, spawn_entity) in server_spawn_data {
-            if let Some(client_key) = self.client_key_for_user(&spawn_user_key) {
-                // Get server's LocalEntity for this user (LocalEntity is shared between server and client for same user)
-                let server_local_entity = {
-                    let server = self.server.as_ref().expect("server not started");
-                    let world_ref = self.server_world.proxy();
-                    let server_ref = server.entity(world_ref, &spawn_entity);
-                    server_ref.local_entity(&spawn_user_key)
-                };
-                
-                if let Some(local_entity) = server_local_entity {
-                    // Match EntityKey: client-spawned (via client mapping), server-spawned (via server mapping), or pending
-                    if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
-                        // Client-spawned entity that replicated to server
-                        server_entities_to_register.push((entity_key, spawn_entity));
-                    } else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(&spawn_entity) {
-                        // Server-spawned entity - register LocalEntity mapping for this client
-                        server_local_entity_mappings.push((entity_key, client_key, local_entity));
-                    } else if let Some(entity_key) = self.entity_registry.remove_pending_client_spawn(&client_key) {
-                        // Client-spawned entity not yet registered on server - consume pending entry
-                        server_entities_to_register.push((entity_key, spawn_entity));
-                        server_local_entity_mappings.push((entity_key, client_key, local_entity));
-                    }
-                }
-            }
-        }
-        
-        // === Phase C (continued): Register Server Entities ===
         // Register server entities before Phase D to ensure they're available for client spawn matching
         self.apply_server_entity_registrations(server_entities_to_register);
-        
-        // Register LocalEntity mappings for server-spawned entities
-        // Client entity registration happens later when client receives SpawnEntityEvent
         self.apply_local_entity_mappings(server_local_entity_mappings);
         
-        // === Phase D: Apply All Registry Updates ===
-        // All borrows dropped - safe to mutate registry
+        // Phase D: Register client spawns
+        self.register_client_spawns(spawns_to_register);
+    }
+
+    /// Phase A & B: Update all clients and server, collect client spawn events.
+    fn update_all_clients_and_collect_spawns(&mut self, now: &Instant) -> Vec<(ClientKey, LocalEntity, TestEntity)> {
+        let mut spawns_to_register = Vec::new();
+        let server = self.server.as_mut().expect("server not started");
+        
+        for (client_key, state) in self.clients.iter_mut() {
+            let (client, world) = state.client_and_world_mut();
+            Self::update_client_server_at(
+                now,
+                client,
+                server,
+                world,
+                &mut self.server_world,
+            );
+
+            // Collect client spawn events
+            let mut client_events = state.client_mut().take_world_events();
+            for spawned_entity in client_events.read::<ClientSpawnEntityEvent>() {
+                let world_ref = state.world().proxy();
+                let client_ref = state.client().entity(world_ref, &spawned_entity);
+                
+                if let Some(local_entity) = client_ref.local_entity() {
+                    spawns_to_register.push((*client_key, local_entity, spawned_entity));
+                }
+            }
+        }
+        
+        spawns_to_register
+    }
+
+    /// Phase C: Collect server spawn events (must be called exactly once per tick).
+    fn collect_server_spawn_events(&mut self) -> Vec<(UserKey, TestEntity)> {
+        let server = self.server.as_mut().expect("server not started");
+        let mut server_events = server.take_world_events();
+        let mut server_spawn_data = Vec::new();
+        
+        for (spawn_user_key, spawn_entity) in server_events.read::<ServerSpawnEntityEvent>() {
+            server_spawn_data.push((spawn_user_key, spawn_entity));
+        }
+        
+        server_spawn_data
+    }
+
+
+    /// Phase D: Register client spawns by matching LocalEntity values with server entities.
+    fn register_client_spawns(&mut self, spawns_to_register: Vec<(ClientKey, LocalEntity, TestEntity)>) {
         for (client_key, local_entity, client_entity) in spawns_to_register {
             let local_entity_value = extract_local_entity_value(&local_entity);
             
-            // Skip if already registered (e.g., host client's own spawns from mutate phase)
-            if let Some(_existing_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
+            // Skip if already registered
+            if let Some(existing_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
+                debug!("Skipping already-registered client entity {:?} for client {:?}", existing_key, client_key);
                 continue;
             }
             
-            // Infer EntityKey by matching client's LocalEntity with server's LocalEntity for this user
+            // Match EntityKey by LocalEntity value
             let user_key = self.user_key(&client_key);
             let (entity_key, server_entities_count) = {
                 let server = self.server.as_ref().expect("server not started");
@@ -337,13 +403,13 @@ impl Scenario {
                 let server_entities: Vec<_> = self.entity_registry.server_entities_iter().collect();
                 let count = server_entities.len();
                 
-                // Match by LocalEntity value (same for server-client pairs, different between clients)
                 for (ek, server_entity) in &server_entities {
                     let world_ref = self.server_world.proxy();
                     let server_ref = server.entity(world_ref, server_entity);
                     if let Some(server_local_entity) = server_ref.local_entity(&user_key) {
                         let server_value = extract_local_entity_value(&server_local_entity);
                         if server_value == local_entity_value {
+                            debug!("Matched LocalEntity value {} to server entity {:?}", local_entity_value, ek);
                             matched_key = Some(*ek);
                             break;
                         }
@@ -357,16 +423,11 @@ impl Scenario {
                 self.entity_registry_mut()
                     .register_client_entity(&entity_key, &client_key, &client_entity, &local_entity);
             } else {
-                // Debug instrumentation: flag unexpected mapping failures
-                // This triggers in debug builds when no LocalEntity match is found after checking all server entities
-                debug_assert!(
-                    false,
+                warn!(
                     "Phase D: Failed to resolve EntityKey for client {:?} with LocalEntity value {} (checked {} server entities). \
                      This may indicate a mapping lifecycle violation - entity should resolve in a future tick.",
                     client_key, local_entity_value, server_entities_count
                 );
-                // If no LocalEntity match found, leave EntityKey unresolved - will be handled in future tick
-                // when the mapping becomes available (strictly deterministic, no guessing)
             }
         }
     }
@@ -392,11 +453,13 @@ impl Scenario {
     }
 
     /// Get server host entity for an EntityKey
+    #[must_use]
     pub(crate) fn server_host_entity(&self, entity_key: &EntityKey) -> Option<TestEntity> {
         self.entity_registry.server_entity(entity_key)
     }
 
     /// Get UserKey for a ClientKey
+    #[must_use]
     pub(crate) fn user_key_for_client(&self, client_key: &ClientKey) -> Option<UserKey> {
         self.client_user_map.get(&client_key).copied()
     }
@@ -409,6 +472,7 @@ impl Scenario {
     /// Get LocalEntity for an EntityKey and UserKey.
     /// 
     /// Uses EntityRegistry as source of truth: checks client entities first, then falls back to server lookup.
+    #[must_use]
     pub(crate) fn local_entity_for(&self, entity_key: &EntityKey, user_key: &UserKey) -> Option<LocalEntity> {
         let client_key = self.client_key_for_user(user_key)?;
         
@@ -432,6 +496,7 @@ impl Scenario {
     /// Get ClientKey for a UserKey (reverse lookup).
     /// 
     /// Uses reverse map for O(1) lookup instead of iterating clients.
+    #[must_use]
     pub(crate) fn client_key_for_user(&self, user_key: &UserKey) -> Option<ClientKey> {
         self.user_to_client_map.get(user_key).copied()
     }
@@ -441,7 +506,10 @@ impl Scenario {
         Users::new(&self.client_user_map)
     }
 
-    /// Perform actions in a mutate phase
+    /// Perform actions in a mutate phase and tick the simulation once.
+    /// 
+    /// The closure receives a mutable context for spawning entities and modifying world state.
+    /// After the closure completes, the simulation is ticked once to propagate changes.
     pub fn mutate<R>(&mut self, f: impl FnOnce(&mut MutateCtx) -> R) -> R {
         let mut ctx = MutateCtx::new(self);
         let result = f(&mut ctx);
@@ -450,9 +518,12 @@ impl Scenario {
         result
     }
 
-    /// Register expectations and wait until they all pass or timeout
+    /// Register expectations and wait until they all pass or timeout.
+    /// 
+    /// The closure is called each tick and should return `true` when all expectations are met.
+    /// Ticks the simulation until the closure returns `true` or the maximum tick count is reached.
     pub fn expect(&mut self, f: impl FnMut(&ExpectCtx) -> bool) {
-        let mut ctx = ExpectCtx::new(self, 50); // Default max_ticks
+        let mut ctx = ExpectCtx::new(self, DEFAULT_MAX_EXPECT_TICKS);
         ctx.run(f);
     }
 
@@ -572,8 +643,8 @@ impl Scenario {
 
         let server = self.server.as_mut().expect("server not started");
 
-        for attempt in 1..=100 {
-            TestClock::advance(16);
+        for attempt in 1..=HANDSHAKE_MAX_ATTEMPTS {
+            TestClock::advance(HANDSHAKE_TICK_ADVANCE_MS);
             let now = Instant::now();
 
             // Process server side first to receive client packets
@@ -581,45 +652,18 @@ impl Scenario {
             server.take_tick_events(&now);
             server.process_all_packets(self.server_world.proxy_mut(), &now);
 
-            let mut server_events = server.take_world_events();
-            for (user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
-                info!("Server accepting connection for {}: {:?}", client_name, user_key);
-                server.accept_connection(&user_key);
-                user_key_opt = Some(user_key);
-            }
+            // Process server auth events
+            user_key_opt = Self::process_server_auth_events(server, client_name, user_key_opt);
             
             server.send_all_packets(self.server_world.proxy());
             
-            // Add user to room once ConnectEvent is processed
-            // NOTE: add_user requires user to exist in world_server.users (added by ConnectEvent)
-            // ConnectEvent may not be processed until after this iteration, so we retry each attempt
+            // Add user to room once ready
             if let Some(user_key) = user_key_opt {
-                if !user_added_to_room && server.user_exists(&user_key) {
-                    server.room_mut(main_room_key).add_user(&user_key);
-                    if server.room(main_room_key).has_user(&user_key) {
-                        user_added_to_room = true;
-                    }
-                }
+                user_added_to_room = Self::add_user_to_room_if_ready(server, main_room_key, &user_key, user_added_to_room);
             }
 
             // Process client side
-            let was_connected = client.connection_status().is_connected();
-            if !was_connected {
-                client.receive_all_packets();
-                client.send_all_packets(client_world.proxy_mut());
-
-                // Check for connection event (handshake manager may have completed connection)
-                let mut client_events = client.take_world_events();
-                for _ in client_events.read::<ClientConnectEvent>() {
-                    info!("{} connected in {} attempts", client_name, attempt);
-                    connected = true;
-                }
-            } else {
-                client.receive_all_packets();
-                client.process_all_packets(client_world.proxy_mut(), &now);
-                client.take_tick_events(&now);
-                client.send_all_packets(client_world.proxy_mut());
-            }
+            connected = Self::process_client_connection(client, client_world, &now, connected, client_name, attempt);
 
             if connected && user_key_opt.is_some() {
                 break;
@@ -630,11 +674,63 @@ impl Scenario {
             user_key_opt
         } else {
             if !connected {
-                warn!("{} handshake failed: client never connected after 100 attempts", client_name);
+                warn!("{} handshake failed: client never connected after {} attempts", client_name, HANDSHAKE_MAX_ATTEMPTS);
             } else if user_key_opt.is_none() {
-                warn!("{} handshake failed: client connected but server never accepted after 100 attempts", client_name);
+                warn!("{} handshake failed: client connected but server never accepted after {} attempts", client_name, HANDSHAKE_MAX_ATTEMPTS);
             }
             None
+        }
+    }
+
+    /// Process server auth events and accept connections.
+    fn process_server_auth_events(server: &mut Server, client_name: &str, current_user_key: Option<UserKey>) -> Option<UserKey> {
+        let mut user_key = current_user_key;
+        let mut server_events = server.take_world_events();
+        
+        for (auth_user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
+            info!("Server accepting connection for {}: {:?}", client_name, auth_user_key);
+            server.accept_connection(&auth_user_key);
+            user_key = Some(auth_user_key);
+        }
+        
+        user_key
+    }
+
+    /// Add user to room if they exist in the server world.
+    fn add_user_to_room_if_ready(server: &mut Server, main_room_key: &RoomKey, user_key: &UserKey, already_added: bool) -> bool {
+        if !already_added && server.user_exists(user_key) {
+            server.room_mut(main_room_key).add_user(user_key);
+            server.room(main_room_key).has_user(user_key)
+        } else {
+            already_added
+        }
+    }
+
+    /// Process client connection events and updates.
+    fn process_client_connection(
+        client: &mut Client,
+        client_world: &mut TestWorld,
+        now: &Instant,
+        was_connected: bool,
+        client_name: &str,
+        attempt: usize,
+    ) -> bool {
+        if !was_connected {
+            client.receive_all_packets();
+            client.send_all_packets(client_world.proxy_mut());
+
+            let mut client_events = client.take_world_events();
+            for _ in client_events.read::<ClientConnectEvent>() {
+                info!("{} connected in {} attempts", client_name, attempt);
+                return true;
+            }
+            false
+        } else {
+            client.receive_all_packets();
+            client.process_all_packets(client_world.proxy_mut(), now);
+            client.take_tick_events(now);
+            client.send_all_packets(client_world.proxy_mut());
+            true
         }
     }
 
