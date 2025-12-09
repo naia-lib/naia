@@ -16,16 +16,16 @@ impl ClientState {
         Self { client, world, user_key }
     }
 
-    /// Get mutable reference to the client
-    pub(crate) fn client_mut(&mut self) -> &mut Client {
-        &mut self.client
-    }
-
     /// Get reference to the client
     pub(crate) fn client(&self) -> &Client {
         &self.client
     }
 
+    /// Get mutable reference to the client
+    pub(crate) fn client_mut(&mut self) -> &mut Client {
+        &mut self.client
+    }
+    
     /// Get reference to the world
     pub(crate) fn world(&self) -> &TestWorld {
         &self.world
