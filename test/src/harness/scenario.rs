@@ -74,7 +74,7 @@ impl Scenario {
         }
 
         let mut server = Server::new(ServerConfig::default(), self.protocol.clone());
-        let server_socket = create_server_socket(&self.hub);
+        let server_socket = self.create_server_socket();
         server.listen(server_socket);
         let main_room = server.make_room().key();
 
@@ -90,20 +90,22 @@ impl Scenario {
         let client_key = ClientKey::new(self.next_client_key);
         self.next_client_key += 1;
 
-        let mut client = Client::new(default_client_config(), self.protocol.clone());
+        // Create client config for tests (fast handshake, no jitter buffer)
+        let mut config = ClientConfig::default();
+        config.send_handshake_interval = Duration::from_millis(0);
+        config.jitter_buffer = JitterBufferType::Bypass;
+
+        let mut client = Client::new(config, self.protocol.clone());
         let mut world = TestWorld::default();
-        let socket = create_client_socket(&self.hub);
+        let socket = self.create_client_socket();
         client.auth(auth);
         client.connect(socket);
 
-        let server = self.server.as_mut().unwrap();
-        let main_room = self.main_room.as_ref().unwrap();
-        let user_key = complete_handshake_with_name(
+        let main_room = *self.main_room.as_ref().unwrap();
+        let user_key = self.complete_handshake_with_name(
             &mut client,
-            server,
             &mut world,
-            &mut self.server_world,
-            main_room,
+            &main_room,
             display_name,
         )
         .expect("client should connect");
@@ -248,7 +250,7 @@ impl Scenario {
             let server = self.server.as_mut().expect("server not started");
             for (client_key, state) in self.clients.iter_mut() {
                 let (client, world) = state.client_and_world_mut();
-                update_client_server_at(
+                Self::update_client_server_at(
                     &now,
                     client,
                     server,
@@ -496,153 +498,144 @@ impl Scenario {
         }
     }
 
-}
+    /// Create a client socket from the transport hub
+    fn create_client_socket(&self) -> LocalClientSocket {
+        let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) = 
+            self.hub.register_client();
+        
+        let addr_cell = LocalAddrCell::new();
+        // For local transport, we know the server address immediately
+        addr_cell.set_sync(self.hub.server_addr());
 
+        // Each client gets its own identity token storage (not shared!)
+        let identity_token = Arc::new(Mutex::new(None));
+        let rejection_code = Arc::new(Mutex::new(None));
 
-/// Create a client socket from the transport hub
-fn create_client_socket(hub: &LocalTransportHub) -> LocalClientSocket {
-    let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) = 
-        hub.register_client();
-    
-    let addr_cell = LocalAddrCell::new();
-    // For local transport, we know the server address immediately
-    addr_cell.set_sync(hub.server_addr());
-
-    // Each client gets its own identity token storage (not shared!)
-    let identity_token = Arc::new(Mutex::new(None));
-    let rejection_code = Arc::new(Mutex::new(None));
-
-    // Use the inner socket type from the module
-    let inner_socket = naia_client::transport::local::LocalClientSocket::new_with_tokens(
-        client_addr,
-        hub.server_addr(),
-        auth_req_tx,
-        auth_resp_rx,
-        client_data_tx,
-        client_data_rx,
-        addr_cell,
-        identity_token,
-        rejection_code,
-    );
-    LocalClientSocket::new(inner_socket, None)
-}
-
-/// Create a server socket from the transport hub
-fn create_server_socket(hub: &LocalTransportHub) -> LocalServerSocket {
-    let inner_socket = naia_server::transport::local::LocalServerSocket::new(hub.clone());
-    LocalServerSocket::new(inner_socket, None)
-}
-
-/// Create default client config for tests (fast handshake, no jitter buffer)
-fn default_client_config() -> ClientConfig {
-    let mut config = ClientConfig::default();
-    config.send_handshake_interval = Duration::from_millis(0);
-    config.jitter_buffer = JitterBufferType::Bypass;
-    config
-}
-
-/// Update a single client and server at a specific time
-fn update_client_server_at(
-    now: &Instant,
-    client: &mut Client,
-    server: &mut Server,
-    client_world: &mut TestWorld,
-    server_world: &mut TestWorld,
-) {
-    // Client update
-    if client.connection_status().is_connected() {
-        client.receive_all_packets();
-        client.take_tick_events(now);
-        client.process_all_packets(client_world.proxy_mut(), now);
-        client.send_all_packets(client_world.proxy_mut());
-    } else {
-        client.receive_all_packets();
-        client.send_all_packets(client_world.proxy_mut());
+        // Use the inner socket type from the module
+        let inner_socket = naia_client::transport::local::LocalClientSocket::new_with_tokens(
+            client_addr,
+            self.hub.server_addr(),
+            auth_req_tx,
+            auth_resp_rx,
+            client_data_tx,
+            client_data_rx,
+            addr_cell,
+            identity_token,
+            rejection_code,
+        );
+        LocalClientSocket::new(inner_socket, None)
     }
 
-    // Server update
-    server.receive_all_packets();
-    server.take_tick_events(now);
-    server.process_all_packets(server_world.proxy_mut(), now);
-    server.send_all_packets(server_world.proxy());
-}
+    /// Create a server socket from the transport hub
+    fn create_server_socket(&self) -> LocalServerSocket {
+        let inner_socket = naia_server::transport::local::LocalServerSocket::new(self.hub.clone());
+        LocalServerSocket::new(inner_socket, None)
+    }
 
-/// Complete handshake for a client with a custom name for logging
-pub fn complete_handshake_with_name(
-    client: &mut Client,
-    server: &mut Server,
-    client_world: &mut TestWorld,
-    server_world: &mut TestWorld,
-    main_room_key: &RoomKey,
-    client_name: &str,
-) -> Option<UserKey> {
-        let mut user_key_opt = None;
-    let mut connected = false;
-    let mut user_added_to_room = false;
-
-    for attempt in 1..=100 {
-        TestClock::advance(16);
-        let now = Instant::now();
-
-        // Process server side first to receive client packets
-        server.receive_all_packets();
-        server.take_tick_events(&now);
-        server.process_all_packets(server_world.proxy_mut(), &now);
-
-        let mut server_events = server.take_world_events();
-        for (user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
-            info!("Server accepting connection for {}: {:?}", client_name, user_key);
-            server.accept_connection(&user_key);
-            user_key_opt = Some(user_key);
-        }
-        
-        server.send_all_packets(server_world.proxy());
-        
-        // Add user to room once ConnectEvent is processed
-        // NOTE: add_user requires user to exist in world_server.users (added by ConnectEvent)
-        // ConnectEvent may not be processed until after this iteration, so we retry each attempt
-        if let Some(user_key) = user_key_opt {
-            if !user_added_to_room && server.user_exists(&user_key) {
-                server.room_mut(main_room_key).add_user(&user_key);
-                if server.room(main_room_key).has_user(&user_key) {
-                    user_added_to_room = true;
-                }
-            }
-        }
-
-        // Process client side
-        let was_connected = client.connection_status().is_connected();
-        if !was_connected {
+    /// Update a single client and server at a specific time
+    fn update_client_server_at(
+        now: &Instant,
+        client: &mut Client,
+        server: &mut Server,
+        client_world: &mut TestWorld,
+        server_world: &mut TestWorld,
+    ) {
+        // Client update
+        if client.connection_status().is_connected() {
             client.receive_all_packets();
+            client.take_tick_events(now);
+            client.process_all_packets(client_world.proxy_mut(), now);
             client.send_all_packets(client_world.proxy_mut());
-
-            // Check for connection event (handshake manager may have completed connection)
-            let mut client_events = client.take_world_events();
-            for _ in client_events.read::<ClientConnectEvent>() {
-                info!("{} connected in {} attempts", client_name, attempt);
-                connected = true;
-            }
         } else {
             client.receive_all_packets();
-            client.process_all_packets(client_world.proxy_mut(), &now);
-            client.take_tick_events(&now);
             client.send_all_packets(client_world.proxy_mut());
+        }
+
+        // Server update
+        server.receive_all_packets();
+        server.take_tick_events(now);
+        server.process_all_packets(server_world.proxy_mut(), now);
+        server.send_all_packets(server_world.proxy());
+    }
+
+    /// Complete handshake for a client with a custom name for logging
+    fn complete_handshake_with_name(
+        &mut self,
+        client: &mut Client,
+        client_world: &mut TestWorld,
+        main_room_key: &RoomKey,
+        client_name: &str,
+    ) -> Option<UserKey> {
+        let mut user_key_opt = None;
+        let mut connected = false;
+        let mut user_added_to_room = false;
+
+        let server = self.server.as_mut().expect("server not started");
+
+        for attempt in 1..=100 {
+            TestClock::advance(16);
+            let now = Instant::now();
+
+            // Process server side first to receive client packets
+            server.receive_all_packets();
+            server.take_tick_events(&now);
+            server.process_all_packets(self.server_world.proxy_mut(), &now);
+
+            let mut server_events = server.take_world_events();
+            for (user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
+                info!("Server accepting connection for {}: {:?}", client_name, user_key);
+                server.accept_connection(&user_key);
+                user_key_opt = Some(user_key);
+            }
+            
+            server.send_all_packets(self.server_world.proxy());
+            
+            // Add user to room once ConnectEvent is processed
+            // NOTE: add_user requires user to exist in world_server.users (added by ConnectEvent)
+            // ConnectEvent may not be processed until after this iteration, so we retry each attempt
+            if let Some(user_key) = user_key_opt {
+                if !user_added_to_room && server.user_exists(&user_key) {
+                    server.room_mut(main_room_key).add_user(&user_key);
+                    if server.room(main_room_key).has_user(&user_key) {
+                        user_added_to_room = true;
+                    }
+                }
+            }
+
+            // Process client side
+            let was_connected = client.connection_status().is_connected();
+            if !was_connected {
+                client.receive_all_packets();
+                client.send_all_packets(client_world.proxy_mut());
+
+                // Check for connection event (handshake manager may have completed connection)
+                let mut client_events = client.take_world_events();
+                for _ in client_events.read::<ClientConnectEvent>() {
+                    info!("{} connected in {} attempts", client_name, attempt);
+                    connected = true;
+                }
+            } else {
+                client.receive_all_packets();
+                client.process_all_packets(client_world.proxy_mut(), &now);
+                client.take_tick_events(&now);
+                client.send_all_packets(client_world.proxy_mut());
+            }
+
+            if connected && user_key_opt.is_some() {
+                break;
+            }
         }
 
         if connected && user_key_opt.is_some() {
-            break;
+            user_key_opt
+        } else {
+            if !connected {
+                warn!("{} handshake failed: client never connected after 100 attempts", client_name);
+            } else if user_key_opt.is_none() {
+                warn!("{} handshake failed: client connected but server never accepted after 100 attempts", client_name);
+            }
+            None
         }
     }
 
-    if connected && user_key_opt.is_some() {
-        user_key_opt
-    } else {
-        if !connected {
-            warn!("{} handshake failed: client never connected after 100 attempts", client_name);
-        } else if user_key_opt.is_none() {
-            warn!("{} handshake failed: client connected but server never accepted after 100 attempts", client_name);
-        }
-        None
-    }
 }
-
