@@ -84,7 +84,6 @@ pub struct Scenario {
     hub: LocalTransportHub,
     server: Option<Server>,
     server_world: TestWorld,
-    main_room: Option<RoomKey>,
     clients: HashMap<ClientKey, ClientState>,
     entity_registry: EntityRegistry,
     next_client_key: u32,
@@ -107,7 +106,6 @@ impl Scenario {
             hub,
             server: None,
             server_world: TestWorld::default(),
-            main_room: None,
             clients: HashMap::new(),
             entity_registry: EntityRegistry::new(),
             next_client_key: 1,
@@ -125,15 +123,13 @@ impl Scenario {
         let mut server = Server::new(ServerConfig::default(), self.protocol.clone());
         let server_socket = self.create_server_socket();
         server.listen(server_socket);
-        let main_room = server.make_room().key();
 
         self.server = Some(server);
-        self.main_room = Some(main_room);
     }
 
-    pub fn client_connect(&mut self, display_name: &str, auth: Auth) -> ClientKey {
+    pub fn client_start(&mut self, display_name: &str, auth: Auth) -> ClientKey {
         if self.server.is_none() {
-            panic!("server_start() must be called before client_connect()");
+            panic!("server_start() must be called before client_start()");
         }
 
         let client_key = ClientKey::new(self.next_client_key);
@@ -150,7 +146,6 @@ impl Scenario {
         client.auth(auth);
         client.connect(socket);
 
-        let main_room = *self.main_room.as_ref().unwrap();
         let user_key = self.complete_handshake_with_name(
             &mut client,
             &mut world,
@@ -161,7 +156,7 @@ impl Scenario {
 
         self.clients.insert(
             client_key,
-            ClientState::new(client, world, user_key),
+            ClientState::new(client, world),
         );
         
         // Update bidirectional client-user mappings
@@ -169,10 +164,6 @@ impl Scenario {
         self.user_to_client_map.insert(user_key, client_key);
 
         client_key
-    }
-
-    pub fn main_room_key(&self) -> Option<&RoomKey> {
-        self.main_room.as_ref()
     }
 
     pub(crate) fn client_state_ref(&self, client_key: &ClientKey) -> &ClientState {

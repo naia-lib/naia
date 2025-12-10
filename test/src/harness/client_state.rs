@@ -8,12 +8,12 @@ type Client = NaiaClient<TestEntity>;
 pub(crate) struct ClientState {
     client: Client,
     world: TestWorld,
-    user_key: UserKey,
+    user_key_opt: Option<UserKey>,
 }
 
 impl ClientState {
-    pub(crate) fn new(client: Client, world: TestWorld, user_key: UserKey) -> Self {
-        Self { client, world, user_key }
+    pub(crate) fn new(client: Client, world: TestWorld) -> Self {
+        Self { client, world, user_key_opt: None }
     }
 
     /// Get reference to the client
@@ -37,7 +37,11 @@ impl ClientState {
         (&mut self.client, &mut self.world)
     }
 
+    pub(crate) fn set_user_key(&mut self, user_key: UserKey) {
+        self.user_key_opt = Some(user_key);
+    }
+
     pub(crate) fn user_key(&self) -> UserKey {
-        self.user_key
+        self.user_key_opt.unwrap()
     }
 }
