@@ -1,5 +1,7 @@
-use naia_client::ReplicationConfig;
-use naia_server::{AuthEvent, ConnectEvent as ServerConnectEvent, RoomKey};
+use std::time::Duration;
+
+use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig};
+use naia_server::{AuthEvent, ConnectEvent as ServerConnectEvent, RoomKey, ServerConfig};
 use naia_test::{
     Scenario, ClientKey,
     protocol, Auth, Position,
@@ -10,7 +12,7 @@ use naia_test::{
 fn harness_single_client_spawn_replicates_to_server() {
     let mut scenario = Scenario::new(protocol());
 
-    scenario.server_start();
+    scenario.server_start(ServerConfig::default());
 
     let room_key = make_room(&mut scenario);
 
@@ -39,7 +41,7 @@ fn harness_single_client_spawn_replicates_to_server() {
 fn harness_two_clients_entity_mapping() {
     let mut scenario = Scenario::new(protocol());
 
-    scenario.server_start();
+    scenario.server_start(ServerConfig::default());
 
     let room_key = make_room(&mut scenario);
 
@@ -125,7 +127,12 @@ fn make_room(scenario: &mut Scenario) -> RoomKey {
 }
 
 fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str, client_auth: Auth) -> ClientKey {
-    let client_key = scenario.client_start(client_name, client_auth.clone());
+    // Create client config for tests (fast handshake, no jitter buffer)
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    
+    let client_key = scenario.client_start(client_name, client_auth.clone(), client_config);
 
     // Client: read auth event
     scenario.expect(|ctx| {

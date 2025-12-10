@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     net::SocketAddr,
     sync::{Arc, Mutex},
-    time::Duration,
 };
 
 use log::{debug, warn};
@@ -13,7 +12,6 @@ use naia_client::{
     ClientConfig,
     EntityMut,
     EntityRef,
-    JitterBufferType,
     SpawnEntityEvent as ClientSpawnEntityEvent,
     WorldEvents as ClientEvents,
 };
@@ -95,19 +93,19 @@ impl Scenario {
         }
     }
 
-    pub fn server_start(&mut self) {
+    pub fn server_start(&mut self, server_config: ServerConfig) {
         if self.server.is_some() {
             panic!("server_start() called multiple times");
         }
 
-        let mut server = Server::new(ServerConfig::default(), self.protocol.clone());
+        let mut server = Server::new(server_config, self.protocol.clone());
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
         server.listen(server_socket);
 
         self.server = Some(server);
     }
 
-    pub fn client_start(&mut self, _display_name: &str, auth: Auth) -> ClientKey {
+    pub fn client_start(&mut self, _display_name: &str, auth: Auth, client_config: ClientConfig) -> ClientKey {
         if self.server.is_none() {
             panic!("server_start() must be called before client_start()");
         }
@@ -115,12 +113,7 @@ impl Scenario {
         let client_key = ClientKey::new(self.next_client_key);
         self.next_client_key += 1;
 
-        // Create client config for tests (fast handshake, no jitter buffer)
-        let mut config = ClientConfig::default();
-        config.send_handshake_interval = Duration::from_millis(0);
-        config.jitter_buffer = JitterBufferType::Bypass;
-
-        let mut client = Client::new(config, self.protocol.clone());
+        let mut client = Client::new(client_config, self.protocol.clone());
         let world = TestWorld::default();
         let socket = self.create_client_socket();
         
