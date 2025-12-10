@@ -1,6 +1,7 @@
 use naia_client::ReplicationConfig;
+use naia_server::{AuthEvent, ConnectEvent as ServerConnectEvent, RoomKey};
 use naia_test::{
-    Scenario,
+    Scenario, ClientKey,
     protocol, Auth, Position,
 };
 
@@ -10,7 +11,10 @@ fn harness_single_client_spawn_replicates_to_server() {
     let mut scenario = Scenario::new(protocol());
 
     scenario.server_start();
-    let client_a_key = scenario.client_connect("Client A", Auth::new("client_a", "password"));
+
+    let room_key = make_room(&mut scenario);
+
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"));
     
     // Mutate phase: client spawns entity
     let entity_a = scenario.mutate(|ctx| {
@@ -34,12 +38,13 @@ fn harness_single_client_spawn_replicates_to_server() {
 #[test]
 fn harness_two_clients_entity_mapping() {
     let mut scenario = Scenario::new(protocol());
+
     scenario.server_start();
 
-    let client_a_key = scenario.client_connect("Client A", Auth::new("client_a", "password"));
-    let client_b_key = scenario.client_connect("Client B", Auth::new("client_b", "password"));
+    let room_key = make_room(&mut scenario);
 
-    let room_key = *scenario.main_room_key().unwrap();
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"));
+    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"));
 
     // Mutate phase: client A spawns entity A
     let entity_a = scenario.mutate(|ctx| {
@@ -109,4 +114,56 @@ fn harness_two_clients_entity_mapping() {
         });
         (client_a_ok && client_b_ok).then_some(())
     });
+}
+
+fn make_room(scenario: &mut Scenario) -> RoomKey {
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.make_room().key()
+        })
+    })
+}
+
+fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str, client_auth: Auth) -> ClientKey {
+    let client_key = scenario.client_start(client_name, client_auth);
+
+    // Client: read auth event
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            let (incoming_client_key, incoming_auth) = server.read_event::<AuthEvent<Auth>>();
+            if incoming_client_key == client_key && incoming_auth.username == "client_a" && incoming_auth.password == "password" {
+                return Some(incoming_client_key);
+            } else {
+                return None;
+            }
+        })
+    });
+
+    // Server: accept connection
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+
+    // Server: read connect event
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            let client_key = server.read_event::<ServerConnectEvent>();
+            if client_key == client_key {
+                return Some(());
+            } else {
+                return None;
+            }
+        })
+    });
+
+    // Server: add client to room
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).expect("room to exist").add_user(&client_key);
+        });
+    });
+
+    client_key
 }
