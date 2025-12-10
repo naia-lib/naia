@@ -26,7 +26,7 @@ impl<'a> RoomRef<'a> {
 
     /// Check if a user (by ClientKey) is in this room
     pub fn has_user(&self, client_key: &ClientKey) -> bool {
-        if let Some(user_key) = self.users.user_for_client(*client_key) {
+        if let Some(user_key) = self.users.client_to_user_key(client_key) {
             self.room.has_user(&user_key)
         } else {
             false
@@ -41,7 +41,7 @@ impl<'a> RoomRef<'a> {
     /// Get all user keys (as ClientKeys) in this room
     pub fn user_keys(&self) -> Vec<ClientKey> {
         self.room.user_keys()
-            .filter_map(|uk| self.users.client_for_user(uk))
+            .filter_map(|uk| self.users.user_to_client_key(uk))
             .collect()
     }
 
@@ -98,7 +98,7 @@ impl<'a> RoomMut<'a> {
 
     /// Check if a user (by ClientKey) is in this room
     pub fn has_user(&self, client_key: &ClientKey) -> bool {
-        if let Some(user_key) = self.users.user_for_client(*client_key) {
+        if let Some(user_key) = self.users.client_to_user_key(client_key) {
             self.room.has_user(&user_key)
         } else {
             false
@@ -107,7 +107,7 @@ impl<'a> RoomMut<'a> {
 
     /// Add a user (by ClientKey) to this room
     pub fn add_user(&mut self, client_key: &ClientKey) -> &mut Self {
-        if let Some(user_key) = self.users.user_for_client(*client_key) {
+        if let Some(user_key) = self.users.client_to_user_key(client_key) {
             self.room.add_user(&user_key);
         }
         self
@@ -115,7 +115,7 @@ impl<'a> RoomMut<'a> {
 
     /// Remove a user (by ClientKey) from this room
     pub fn remove_user(&mut self, client_key: &ClientKey) -> &mut Self {
-        if let Some(user_key) = self.users.user_for_client(*client_key) {
+        if let Some(user_key) = self.users.client_to_user_key(client_key) {
             self.room.remove_user(&user_key);
         }
         self
@@ -129,7 +129,7 @@ impl<'a> RoomMut<'a> {
     /// Get all user keys (as ClientKeys) in this room
     pub fn user_keys(&self) -> Vec<ClientKey> {
         self.room.user_keys()
-            .filter_map(|uk| self.users.client_for_user(uk))
+            .filter_map(|uk| self.users.user_to_client_key(uk))
             .collect()
     }
 

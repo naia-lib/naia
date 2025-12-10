@@ -45,7 +45,7 @@ impl<'a> ServerExpectCtx<'a> {
     }
     /// Expect that the server has replicated/created a concrete entity
     pub fn has_entity(&self, entity: &EntityKey) -> bool {
-        self.scenario.server_host_entity(entity).is_some()
+        self.scenario.entity_registry().server_entity(entity).is_some()
     }
 
     /// Get read-only entity access by EntityKey
@@ -61,7 +61,7 @@ impl<'a> ServerExpectCtx<'a> {
     /// The returned scope works with EntityKey instead of TestEntity.
     pub fn user_scope(&self, client_key: &ClientKey) -> Option<UserScopeRef<'_>> {
         // 1. Get UserKey via helper method
-        let user_key = self.scenario.user_key_for_client(client_key)?;
+        let user_key = self.scenario.client_to_user_key(client_key)?;
 
         // 2. Get server and registry immutably
         let (server, registry) = self.scenario.server_and_registry()?;
@@ -85,7 +85,7 @@ impl<'a> ServerExpectCtx<'a> {
 
     /// Check if user exists for a ClientKey
     pub fn user_exists(&self, client_key: &ClientKey) -> bool {
-        let Some(user_key) = self.scenario.user_key_for_client(client_key) else {
+        let Some(user_key) = self.scenario.client_to_user_key(client_key) else {
             return false;
         };
         let Some((server, _)) = self.scenario.server_and_registry() else {
@@ -96,7 +96,7 @@ impl<'a> ServerExpectCtx<'a> {
 
     /// Get read-only user access for a ClientKey
     pub fn user(&'_ self, client_key: &ClientKey) -> Option<UserRef<'_, TestEntity>> {
-        let user_key = self.scenario.user_key_for_client(client_key)?;
+        let user_key = self.scenario.client_to_user_key(client_key)?;
         let (server, _) = self.scenario.server_and_registry()?;
         Some(server.user(&user_key))
     }
@@ -106,7 +106,7 @@ impl<'a> ServerExpectCtx<'a> {
         let (server, _) = self.scenario.server_and_registry().unwrap();
         let user_keys = server.user_keys();
         user_keys.iter()
-            .filter_map(|uk| self.scenario.client_key_for_user(uk))
+            .filter_map(|uk| self.scenario.user_to_client_key(uk))
             .collect()
     }
 

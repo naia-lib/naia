@@ -41,7 +41,7 @@ impl ClientState {
         self.user_key_opt = Some(user_key);
     }
 
-    pub(crate) fn user_key(&self) -> UserKey {
-        self.user_key_opt.unwrap()
+    pub(crate) fn user_key(&self) -> Option<UserKey> {
+        self.user_key_opt
     }
 }

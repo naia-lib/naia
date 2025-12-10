@@ -72,7 +72,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     pub fn user_scope(&'_ self, client_key: &ClientKey) -> Option<UserScopeRef<'_>> {
         let scenario = self.ctx.scenario();
         let users = scenario.client_users();
-        let user_key = users.user_for_client(*client_key)?;
+        let user_key = users.client_to_user_key(client_key)?;
         let (server, registry) = scenario.server_and_registry()?;
         let scope = server.user_scope(&user_key);
         Some(UserScopeRef::new(scope, registry))
@@ -83,7 +83,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// The returned scope works with EntityKey instead of TestEntity.
     pub fn user_scope_mut(&'_ mut self, client_key: &ClientKey) -> Option<UserScopeMut<'_>> {
         let scenario = self.ctx.scenario_mut();
-        let user_key = scenario.user_key_for_client(client_key)?;
+        let user_key = scenario.client_to_user_key(client_key)?;
         let (server, _, registry, _) = scenario.split_for_server_mut();
         let scope = server.user_scope_mut(&user_key);
         Some(UserScopeMut::new(scope, registry))
@@ -108,7 +108,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     pub fn user_exists(&self, client_key: &ClientKey) -> bool {
         let scenario = self.ctx.scenario();
         let users = scenario.client_users();
-        if let Some(user_key) = users.user_for_client(*client_key) {
+        if let Some(user_key) = users.client_to_user_key(client_key) {
             if let Some((server, _)) = scenario.server_and_registry() {
                 server.user_exists(&user_key)
             } else {
@@ -122,7 +122,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// Get UserRef wrapper
     pub fn user(&'_ self, client_key: &ClientKey) -> Option<UserRef<'_>> {
         let scenario = self.ctx.scenario();
-        let user_key = scenario.user_key_for_client(client_key)?;
+        let user_key = scenario.client_to_user_key(client_key)?;
         let users = scenario.client_users();
         let (server, _) = scenario.server_and_registry()?;
         let user = server.user(&user_key);
@@ -132,7 +132,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// Get UserMut wrapper
     pub fn user_mut(&'_ mut self, client_key: &ClientKey) -> Option<UserMut<'_>> {
         let scenario = self.ctx.scenario_mut();
-        let user_key = scenario.user_key_for_client(client_key)?;
+        let user_key = scenario.client_to_user_key(client_key)?;
         let (server, _, _, users) = scenario.split_for_server_mut();
         let user = server.user_mut(&user_key);
         Some(UserMut::new(user, users))
@@ -145,7 +145,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let users = scenario.client_users();
         server.user_keys()
             .iter()
-            .filter_map(|uk| users.client_for_user(uk))
+            .filter_map(|uk| users.user_to_client_key(uk))
             .collect()
     }
 
@@ -161,7 +161,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// Panics if the mapping doesn't exist.
     pub fn accept_connection(&mut self, client_key: &ClientKey) {
         let scenario = self.ctx.scenario_mut();
-        let user_key = scenario.user_key(client_key); // Panics if not mapped
+        let user_key = scenario.client_to_user_key(client_key).unwrap();
         let (server, _, _, _) = scenario.split_for_server_mut();
         server.accept_connection(&user_key);
     }
@@ -169,7 +169,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// Reject connection
     pub fn reject_connection(&mut self, client_key: &ClientKey) {
         let scenario = self.ctx.scenario_mut();
-        if let Some(user_key) = scenario.user_key_for_client(client_key) {
+        if let Some(user_key) = scenario.client_to_user_key(client_key) {
             let (server, _, _, _) = scenario.split_for_server_mut();
             server.reject_connection(&user_key);
         }
@@ -237,7 +237,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// Send message to user
     pub fn send_message<C: Channel, M: Message>(&mut self, client_key: &ClientKey, message: &M) {
         let scenario = self.ctx.scenario_mut();
-        if let Some(user_key) = scenario.user_key_for_client(client_key) {
+        if let Some(user_key) = scenario.client_to_user_key(client_key) {
             let (server, _, _, _) = scenario.split_for_server_mut();
             server.send_message::<C, M>(&user_key, message);
         }
@@ -256,7 +256,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         request: &Q,
     ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
         let scenario = self.ctx.scenario_mut();
-        if let Some(user_key) = scenario.user_key_for_client(client_key) {
+        if let Some(user_key) = scenario.client_to_user_key(client_key) {
             let (server, _, _, _) = scenario.split_for_server_mut();
             server.send_request::<C, Q>(&user_key, request)
         } else {
@@ -276,7 +276,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let (server, _, _, users) = scenario.split_for_server_mut();
         server.receive_response(response_key)
             .and_then(|(user_key, response)| {
-                users.client_for_user(&user_key)
+                users.user_to_client_key(&user_key)
                     .map(|client_key| (client_key, response))
             })
     }

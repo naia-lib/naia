@@ -18,7 +18,7 @@ impl<'a> UserRef<'a> {
     /// Get the ClientKey for this user
     pub fn key(&self) -> Option<ClientKey> {
         let user_key = self.user.key();
-        self.users.client_for_user(&user_key)
+        self.users.user_to_client_key(&user_key)
     }
 
     /// Get the socket address of this user
@@ -51,7 +51,7 @@ impl<'a> UserMut<'a> {
     /// Get the ClientKey for this user
     pub fn key(&self) -> Option<ClientKey> {
         let user_key = self.user.key();
-        self.users.client_for_user(&user_key)
+        self.users.user_to_client_key(&user_key)
     }
 
     /// Get the socket address of this user

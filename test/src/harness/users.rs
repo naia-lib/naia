@@ -2,28 +2,34 @@ use std::collections::HashMap;
 
 use naia_server::UserKey;
 
+use crate::harness::client_state::ClientState;
 use super::keys::ClientKey;
 
 /// Lightweight handle for ClientKey -> UserKey mapping
 /// Allows ServerMut to map ClientKey to UserKey without holding full Scenario reference
 pub struct Users<'a> {
-    mapping: &'a HashMap<ClientKey, UserKey>,
+    client_to_user: &'a HashMap<ClientKey, ClientState>,
+    user_to_client: &'a HashMap<UserKey, ClientKey>,
 }
 
 impl<'a> Users<'a> {
-    pub(crate) fn new(mapping: &'a HashMap<ClientKey, UserKey>) -> Self {
-        Self { mapping }
+    pub(crate) fn new(
+        client_to_user: &'a HashMap<ClientKey, ClientState>,
+        user_to_client: &'a HashMap<UserKey, ClientKey>,
+    ) -> Self {
+        Self {
+            client_to_user,
+            user_to_client,
+        }
     }
 
-    pub fn user_for_client(&self, client_key: ClientKey) -> Option<UserKey> {
-        self.mapping.get(&client_key).copied()
+    pub fn client_to_user_key(&self, client_key: &ClientKey) -> Option<UserKey> {
+        self.client_to_user.get(&client_key)?.user_key()
     }
 
     /// Reverse lookup: find ClientKey for a given UserKey
-    pub(crate) fn client_for_user(&self, user_key: &UserKey) -> Option<ClientKey> {
-        self.mapping.iter()
-            .find(|(_, &uk)| uk == *user_key)
-            .map(|(ck, _)| *ck)
+    pub(crate) fn user_to_client_key(&self, user_key: &UserKey) -> Option<ClientKey> {
+        self.user_to_client.get(user_key).cloned()
     }
 }
 
