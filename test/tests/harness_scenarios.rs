@@ -130,12 +130,12 @@ fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str
     // Client: read auth event
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            let (incoming_client_key, incoming_auth) = server.read_event::<AuthEvent<Auth>>();
-            if incoming_client_key == client_key && incoming_auth.username == "client_a" && incoming_auth.password == "password" {
-                return Some(incoming_client_key);
-            } else {
-                return None;
+            if let Some((incoming_client_key, incoming_auth)) = server.read_event::<AuthEvent<Auth>>() {
+                if incoming_client_key == client_key && incoming_auth.username == "client_a" && incoming_auth.password == "password" {
+                    return Some(incoming_client_key);
+                }
             }
+            return None;
         })
     });
 
@@ -149,12 +149,12 @@ fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str
     // Server: read connect event
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            let client_key = server.read_event::<ServerConnectEvent>();
-            if client_key == client_key {
-                return Some(());
-            } else {
-                return None;
+            if let Some(client_key) = server.read_event::<ServerConnectEvent>() {
+                if client_key == client_key {
+                    return Some(());
+                }
             }
+            return None;
         })
     });
 
