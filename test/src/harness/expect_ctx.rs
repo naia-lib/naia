@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use naia_server::Events as ServerEvents;
 use naia_client::WorldEvents as ClientEvents;
 
 use crate::{TestEntity, harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx}};
@@ -9,7 +8,6 @@ use crate::{TestEntity, harness::{keys::ClientKey, scenario::Scenario, server_ex
 pub struct ExpectCtx<'a> {
     scenario: &'a mut Scenario,
     max_ticks: usize,
-    server_events: Option<ServerEvents<TestEntity>>,
     client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>
 }
 
@@ -18,7 +16,6 @@ impl<'a> ExpectCtx<'a> {
         Self {
             scenario,
             max_ticks,
-            server_events: None,
             client_events_map: HashMap::new()
         }
     }
@@ -47,8 +44,7 @@ impl<'a> ExpectCtx<'a> {
         for tick in 0..self.max_ticks {
             self.scenario.tick_once();
 
-            // Collect server events after each tick
-            self.server_events = Some(self.scenario.take_server_events());
+            // Collect client events after each tick (server events are now in scenario.server_tick_events())
             self.client_events_map = self.scenario.take_client_events();
 
             // Evaluate the closure - if it returns true, all expectations passed

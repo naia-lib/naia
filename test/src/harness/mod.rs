@@ -13,7 +13,7 @@ mod user;
 mod room;
 mod client_state;
 
-pub use scenario::Scenario;
+pub use scenario::{Scenario, ServerTickEvents};
 pub use keys::{ClientKey, EntityKey};
 pub use expect_ctx::ExpectCtx;
 

@@ -1,7 +1,7 @@
-use naia_server::{EntityRef, UserRef, RoomRef, RoomKey};
+use naia_server::{EntityRef, UserRef, RoomRef, RoomKey, UserKey};
 use naia_demo_world::WorldRef;
 
-use crate::{harness::{ExpectCtx, user_scope::UserScopeRef, EntityKey, ClientKey}, TestEntity};
+use crate::{harness::{ExpectCtx, user_scope::UserScopeRef, EntityKey, ClientKey, scenario::ServerTickEvents}, Auth, TestEntity};
 
 /// Context for server-side expectations
 pub struct ServerExpectCtx<'a, 'scenario: 'a> {
@@ -114,5 +114,37 @@ impl<'a, 'scenario: 'a> ServerExpectCtx<'a, 'scenario> {
     pub fn rooms_count(&self) -> usize {
         let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
         server.rooms_count()
+    }
+
+    /// Inspect server tick events (auth, connect, disconnect, errors)
+    pub fn server_main<F>(&self, f: F) -> bool
+    where
+        F: FnOnce(&ServerTickEvents) -> bool,
+    {
+        f(self.ctx.scenario().server_tick_events())
+    }
+
+    /// Check if auth events were seen matching a predicate
+    pub fn saw_auth<F>(&self, f: F) -> bool
+    where
+        F: FnOnce(&[(UserKey, Auth)]) -> bool,
+    {
+        f(&self.ctx.scenario().server_tick_events().auths)
+    }
+
+    /// Check if connect events were seen matching a predicate
+    pub fn saw_connects<F>(&self, f: F) -> bool
+    where
+        F: FnOnce(&[UserKey]) -> bool,
+    {
+        f(&self.ctx.scenario().server_tick_events().connects)
+    }
+
+    /// Check if disconnect events were seen matching a predicate
+    pub fn saw_disconnects<F>(&self, f: F) -> bool
+    where
+        F: FnOnce(&[UserKey]) -> bool,
+    {
+        f(&self.ctx.scenario().server_tick_events().disconnects)
     }
 }
