@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use naia_demo_world::WorldRef;
-use naia_client::{EntityRef, ConnectionStatus, NaiaClientError, WorldEvents as ClientEvents};
+use naia_client::{EntityRef, ConnectionStatus, NaiaClientError, WorldEvents as ClientEvents, RejectEvent};
 
 use crate::{TestEntity, harness::{scenario::Scenario, EntityKey, ClientKey}};
 
@@ -72,6 +72,24 @@ impl<'a> ClientExpectCtx<'a> {
     pub fn rejection_code(&self) -> Option<u16> {
         let state = self.scenario.client_state(&self.client_key);
         state.rejection_code()
+    }
+
+    /// Check if the client was explicitly rejected by the server
+    /// 
+    /// Returns true if:
+    /// - A rejection code (typically 401) was received, OR
+    /// - A RejectEvent is present in the current tick's events
+    pub fn is_rejected(&self) -> bool {
+        // Check if rejection code is present (401 or other error codes)
+        if let Some(code) = self.rejection_code() {
+            // 401 is the standard rejection code, but other error codes also indicate rejection
+            if code == 401 || code >= 400 {
+                return true;
+            }
+        }
+        
+        // Check if RejectEvent is present in current events
+        self.events.has::<RejectEvent>()
     }
 }
 

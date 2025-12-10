@@ -175,6 +175,24 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         }
     }
 
+    /// Disconnect a user from the server
+    /// 
+    /// This requests a server-side disconnect of the user identified by the given ClientKey.
+    /// The user will be disconnected in the next tick.
+    /// 
+    /// Requires that the ClientKey has been mapped to a UserKey (via reading AuthEvent).
+    /// Returns false if the mapping doesn't exist, true otherwise.
+    pub fn disconnect_user(&mut self, client_key: &ClientKey) -> bool {
+        // Use the user_mut() method to get UserMut and call disconnect on it
+        // This handles the ClientKey -> UserKey conversion internally
+        if let Some(mut user) = self.user_mut(client_key) {
+            user.disconnect();
+            true
+        } else {
+            false
+        }
+    }
+
     // Room Operations
 
     /// Create a new room
