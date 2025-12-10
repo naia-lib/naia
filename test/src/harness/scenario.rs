@@ -177,8 +177,15 @@ impl Scenario {
                         pending_auth.username == auth.username &&
                             pending_auth.password == auth.password)
                 {
-                    // Establish mapping
-                    self.register_client_user(client_key, user_key);
+                    // Update ClientState
+                    if let Some(state) = self.clients.get_mut(&client_key) {
+                        state.set_user_key(user_key);
+                    }
+                    // Update bidirectional maps
+                    self.user_to_client_map.insert(user_key, client_key);
+                    // Remove from pending (handshake complete)
+                    self.pending_auths.remove(&client_key);
+
                     // Store translated event
                     auth_events.push((client_key, auth));
                 }
@@ -548,20 +555,6 @@ impl Scenario {
             map.insert(*client_key, client_events);
         }
         map
-    }
-
-    /// Register a ClientKey ↔ UserKey mapping after handshake
-    /// 
-    /// This is called internally when AuthEvent is processed and matched to a ClientKey.
-    fn register_client_user(&mut self, client_key: ClientKey, user_key: UserKey) {
-        // Update ClientState
-        if let Some(state) = self.clients.get_mut(&client_key) {
-            state.set_user_key(user_key);
-        }
-        // Update bidirectional maps
-        self.user_to_client_map.insert(user_key, client_key);
-        // Remove from pending (handshake complete)
-        self.pending_auths.remove(&client_key);
     }
 
     /// Split borrow fields needed for ServerMut
