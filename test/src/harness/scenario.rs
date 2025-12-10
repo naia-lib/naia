@@ -520,11 +520,30 @@ impl Scenario {
 
     /// Register expectations and wait until they all pass or timeout.
     /// 
-    /// The closure is called each tick and should return `true` when all expectations are met.
-    /// Ticks the simulation until the closure returns `true` or the maximum tick count is reached.
-    pub fn expect(&mut self, f: impl FnMut(&ExpectCtx) -> bool) {
-        let mut ctx = ExpectCtx::new(self, DEFAULT_MAX_EXPECT_TICKS);
-        ctx.run(f);
+    /// The closure is called each tick and should return `Some(T)` when expectations are met.
+    /// Ticks the simulation until the closure returns `Some(value)` or the maximum tick count is reached.
+    pub fn expect<T>(&mut self, mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
+        for _tick_count in 1..=DEFAULT_MAX_EXPECT_TICKS {
+            // Tick simulation once
+            self.tick_once();
+            
+            // Collect per-tick events (EXACTLY once per tick)
+            let server_events = self.take_server_events();
+            let client_events_map = self.take_client_events();
+            
+            // Create immutable ExpectCtx for this tick
+            let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
+            
+            // Call user closure
+            if let Some(value) = f(&mut ctx) {
+                return value;
+            }
+        }
+        
+        panic!(
+            "Scenario::expect timed out after {} ticks without satisfying condition",
+            DEFAULT_MAX_EXPECT_TICKS
+        );
     }
 
     /// Split borrow fields needed for ServerMut

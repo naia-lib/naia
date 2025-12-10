@@ -25,7 +25,7 @@ fn harness_single_client_spawn_replicates_to_server() {
     // Expect phase: server has entity
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            server.has_entity(&entity_a)
+            server.has_entity(&entity_a).then_some(())
         })
     });
 }
@@ -53,7 +53,7 @@ fn harness_two_clients_entity_mapping() {
     // Wait for entity to replicate to server
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            server.has_entity(&entity_a)
+            server.has_entity(&entity_a).then_some(())
         })
     });
 
@@ -71,7 +71,7 @@ fn harness_two_clients_entity_mapping() {
     // Expect phase: client B sees entity
     scenario.expect(|ctx| {
         ctx.client(client_b_key, |client_b| {
-            client_b.has_entity(&entity_a)
+            client_b.has_entity(&entity_a).then_some(())
         })
     });
 
@@ -107,6 +107,6 @@ fn harness_two_clients_entity_mapping() {
                 false
             }
         });
-        client_a_ok && client_b_ok
+        (client_a_ok && client_b_ok).then_some(())
     });
 }

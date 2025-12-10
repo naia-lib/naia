@@ -6,67 +6,49 @@ use naia_client::WorldEvents as ClientEvents;
 use crate::{TestEntity, harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx}};
 
 /// Context for evaluating expectations in an expect phase
+/// 
+/// This is an immutable, per-tick read-only view that exposes:
+/// - read-only server/client/world access
+/// - the server/client events for that tick
 pub struct ExpectCtx<'a> {
-    scenario: &'a mut Scenario,
-    max_ticks: usize,
-    server_events: Option<ServerEvents<TestEntity>>,
-    client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>
+    scenario: &'a Scenario,
+    server_events: ServerEvents<TestEntity>,
+    client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>,
 }
 
 impl<'a> ExpectCtx<'a> {
-    pub(crate) fn new(scenario: &'a mut Scenario, max_ticks: usize) -> Self {
+    pub(crate) fn new(
+        scenario: &'a Scenario,
+        server_events: ServerEvents<TestEntity>,
+        client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>,
+    ) -> Self {
         Self {
             scenario,
-            max_ticks,
-            server_events: None,
-            client_events_map: HashMap::new()
+            server_events,
+            client_events_map,
         }
     }
 
-    /// Override the default maximum tick budget
-    pub fn ticks(&mut self, max_ticks: usize) {
-        self.max_ticks = max_ticks;
+    /// Access server-side expectations with per-tick events
+    pub fn server<R>(&mut self, f: impl FnOnce(&mut ServerExpectCtx<'_>) -> R) -> R {
+        let mut server_expect = ServerExpectCtx::new(
+            self.scenario,
+            &mut self.server_events,
+        );
+        f(&mut server_expect)
     }
 
-    /// Register server-side expectations
-    pub fn server(&self, f: impl Fn(&ServerExpectCtx<'_, 'a>) -> bool) -> bool {
-        let ctx = ServerExpectCtx::new(self);
-        f(&ctx)
-    }
-
-    /// Register client-side expectations
-    pub fn client(&self, client: ClientKey, f: impl Fn(&ClientExpectCtx<'_, 'a>) -> bool) -> bool {
-        let ctx = ClientExpectCtx::new(self, client);
-        f(&ctx)
-    }
-
-    pub(crate) fn run<F>(&mut self, mut f: F)
-    where
-        F: FnMut(&Self) -> bool,
-    {
-        for tick in 0..self.max_ticks {
-            self.scenario.tick_once();
-
-            // Collect server events after each tick
-            self.server_events = Some(self.scenario.take_server_events());
-            self.client_events_map = self.scenario.take_client_events();
-
-            // Evaluate the closure - if it returns true, all expectations passed
-            if f(self) {
-                return;
-            }
-
-            if tick == self.max_ticks - 1 {
-                panic!(
-                    "Expect phase timed out after {} ticks",
-                    self.max_ticks
-                );
-            }
-        }
-    }
-
-    /// Get reference to the scenario
-    pub(crate) fn scenario(&self) -> &Scenario {
-        self.scenario
+    /// Access client-side expectations with per-tick events
+    pub fn client<R>(&mut self, client_key: ClientKey, f: impl FnOnce(&mut ClientExpectCtx<'_>) -> R) -> R {
+        let client_events = self.client_events_map
+            .entry(client_key)
+            .or_insert_with(ClientEvents::default);
+        
+        let mut client_expect = ClientExpectCtx::new(
+            self.scenario,
+            client_key,
+            client_events,
+        );
+        f(&mut client_expect)
     }
 }
