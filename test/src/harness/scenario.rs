@@ -5,13 +5,12 @@ use std::{
     time::Duration,
 };
 
-use log::{debug, info, warn};
+use log::{debug, warn};
 
 use naia_client::{
     transport::local::{LocalAddrCell, Socket as LocalClientSocket},
     Client as NaiaClient,
     ClientConfig,
-    ConnectEvent as ClientConnectEvent,
     EntityMut,
     EntityRef,
     JitterBufferType,
@@ -22,8 +21,8 @@ use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{
     transport::local::Socket as LocalServerSocket,
     AuthEvent,
+    ConnectEvent,
     Events as ServerEvents,
-    RoomKey,
     Server as NaiaServer,
     ServerConfig,
     SpawnEntityEvent as ServerSpawnEntityEvent,
@@ -59,8 +58,6 @@ type Server = NaiaServer<TestEntity>;
 // Constants for simulation timing and retry behavior
 const TICK_DURATION_MS: u64 = 16; // Default tick duration (~60 FPS)
 const DEFAULT_MAX_EXPECT_TICKS: usize = 50; // Maximum ticks before expect() times out
-const HANDSHAKE_MAX_ATTEMPTS: usize = 100; // Maximum attempts for client handshake
-const HANDSHAKE_TICK_ADVANCE_MS: u64 = 16; // Time advance per handshake attempt
 
 /// Extract the comparable value from a LocalEntity.
 /// 
@@ -92,6 +89,8 @@ pub struct Scenario {
     client_user_map: HashMap<ClientKey, UserKey>,
     /// Reverse mapping: UserKey -> ClientKey (for O(1) reverse lookups)
     user_to_client_map: HashMap<UserKey, ClientKey>,
+    /// Pending auth payloads for clients that have started connecting but not yet authenticated
+    pending_auths: HashMap<ClientKey, Auth>,
 }
 
 impl Scenario {
@@ -112,6 +111,7 @@ impl Scenario {
             protocol,
             client_user_map: HashMap::new(),
             user_to_client_map: HashMap::new(),
+            pending_auths: HashMap::new(),
         }
     }
 
@@ -127,7 +127,7 @@ impl Scenario {
         self.server = Some(server);
     }
 
-    pub fn client_start(&mut self, display_name: &str, auth: Auth) -> ClientKey {
+    pub fn client_start(&mut self, _display_name: &str, auth: Auth) -> ClientKey {
         if self.server.is_none() {
             panic!("server_start() must be called before client_start()");
         }
@@ -141,27 +141,20 @@ impl Scenario {
         config.jitter_buffer = JitterBufferType::Bypass;
 
         let mut client = Client::new(config, self.protocol.clone());
-        let mut world = TestWorld::default();
+        let world = TestWorld::default();
         let socket = self.create_client_socket();
+        
+        // Store auth in pending_auths for later matching with AuthEvent
+        self.pending_auths.insert(client_key, auth.clone());
+        
         client.auth(auth);
         client.connect(socket);
 
-        let user_key = self.complete_handshake_with_name(
-            &mut client,
-            &mut world,
-            &main_room,
-            display_name,
-        )
-        .expect("client should connect");
-
+        // Insert client state without user_key (will be set when AuthEvent is processed)
         self.clients.insert(
             client_key,
             ClientState::new(client, world),
         );
-        
-        // Update bidirectional client-user mappings
-        self.client_user_map.insert(client_key, user_key);
-        self.user_to_client_map.insert(user_key, client_key);
 
         client_key
     }
@@ -279,16 +272,50 @@ impl Scenario {
     /// 
     /// - **Registry updates happen after all event collection**: This ensures all events from
     ///   the current tick are available for matching and registration.
-    pub(crate) fn tick_once(&mut self) {
+    /// Update simulation without draining events (for expect() to handle events)
+    fn tick_network_only(&mut self) {
         // Advance simulated clock by default tick duration
         TestClock::advance(TICK_DURATION_MS);
         let now = Instant::now();
 
-        // Phase A & B: Update all clients and collect client spawn events
-        let spawns_to_register = self.update_all_clients_and_collect_spawns(&now);
+        // Update all clients and server network
+        let server = self.server.as_mut().expect("server not started");
+        
+        for (_client_key, state) in self.clients.iter_mut() {
+            let (client, world) = state.client_and_world_mut();
+            Self::update_client_server_at(
+                &now,
+                client,
+                server,
+                world,
+                &mut self.server_world,
+            );
+        }
+    }
 
-        // Phase C: Collect and process server spawn events
-        let server_spawn_data = self.collect_server_spawn_events();
+    /// Process spawn events from collected events and update entity registry
+    fn process_spawn_events(
+        &mut self,
+        server_events: &mut ServerEvents<TestEntity>,
+        client_events_map: &mut HashMap<ClientKey, ClientEvents<TestEntity>>,
+    ) {
+        // Collect client spawn events
+        let mut spawns_to_register = Vec::new();
+        for (client_key, client_events) in client_events_map.iter_mut() {
+            for spawned_entity in client_events.read::<ClientSpawnEntityEvent>() {
+                let state = self.clients.get(client_key).expect("client not found");
+                let world_ref = state.world().proxy();
+                let client_ref = state.client().entity(world_ref, &spawned_entity);
+                
+                if let Some(local_entity) = client_ref.local_entity() {
+                    spawns_to_register.push((*client_key, local_entity, spawned_entity));
+                }
+            }
+        }
+
+        // Collect server spawn events
+        let server_spawn_data = Self::extract_server_spawn_events(server_events);
+        
         let (server_entities_to_register, server_local_entity_mappings) = {
             let mut server_entities_to_register = Vec::new();
             let mut server_local_entity_mappings = Vec::new();
@@ -331,40 +358,9 @@ impl Scenario {
         self.register_client_spawns(spawns_to_register);
     }
 
-    /// Phase A & B: Update all clients and server, collect client spawn events.
-    fn update_all_clients_and_collect_spawns(&mut self, now: &Instant) -> Vec<(ClientKey, LocalEntity, TestEntity)> {
-        let mut spawns_to_register = Vec::new();
-        let server = self.server.as_mut().expect("server not started");
-        
-        for (client_key, state) in self.clients.iter_mut() {
-            let (client, world) = state.client_and_world_mut();
-            Self::update_client_server_at(
-                now,
-                client,
-                server,
-                world,
-                &mut self.server_world,
-            );
 
-            // Collect client spawn events
-            let mut client_events = state.client_mut().take_world_events();
-            for spawned_entity in client_events.read::<ClientSpawnEntityEvent>() {
-                let world_ref = state.world().proxy();
-                let client_ref = state.client().entity(world_ref, &spawned_entity);
-                
-                if let Some(local_entity) = client_ref.local_entity() {
-                    spawns_to_register.push((*client_key, local_entity, spawned_entity));
-                }
-            }
-        }
-        
-        spawns_to_register
-    }
-
-    /// Phase C: Collect server spawn events (must be called exactly once per tick).
-    fn collect_server_spawn_events(&mut self) -> Vec<(UserKey, TestEntity)> {
-        let server = self.server.as_mut().expect("server not started");
-        let mut server_events = server.take_world_events();
+    /// Phase C: Extract server spawn events from already-collected events.
+    fn extract_server_spawn_events(server_events: &mut ServerEvents<TestEntity>) -> Vec<(UserKey, TestEntity)> {
         let mut server_spawn_data = Vec::new();
         
         for (spawn_user_key, spawn_entity) in server_events.read::<ServerSpawnEntityEvent>() {
@@ -443,6 +439,21 @@ impl Scenario {
             .user_key()
     }
 
+    /// Register a ClientKey ↔ UserKey mapping after handshake
+    /// 
+    /// This is called internally when AuthEvent is processed and matched to a ClientKey.
+    fn register_client_user(&mut self, client_key: ClientKey, user_key: UserKey) {
+        // Update ClientState
+        if let Some(state) = self.clients.get_mut(&client_key) {
+            state.set_user_key(user_key);
+        }
+        // Update bidirectional maps
+        self.client_user_map.insert(client_key, user_key);
+        self.user_to_client_map.insert(user_key, client_key);
+        // Remove from pending (handshake complete)
+        self.pending_auths.remove(&client_key);
+    }
+
     /// Get server host entity for an EntityKey
     #[must_use]
     pub(crate) fn server_host_entity(&self, entity_key: &EntityKey) -> Option<TestEntity> {
@@ -497,15 +508,16 @@ impl Scenario {
         Users::new(&self.client_user_map)
     }
 
-    /// Perform actions in a mutate phase and tick the simulation once.
+    /// Perform actions in a mutate phase and propagate changes.
     /// 
     /// The closure receives a mutable context for spawning entities and modifying world state.
-    /// After the closure completes, the simulation is ticked once to propagate changes.
+    /// After the closure completes, updates the network to propagate changes (like entity spawns)
+    /// but does not drain events - events are only drained by `expect()`.
     pub fn mutate<R>(&mut self, f: impl FnOnce(&mut MutateCtx) -> R) -> R {
         let mut ctx = MutateCtx::new(self);
         let result = f(&mut ctx);
-        // Tick at least once after actions to propagate immediate effects
-        self.tick_once();
+        // Update network to propagate immediate effects without draining events
+        self.tick_network_only();
         result
     }
 
@@ -515,15 +527,42 @@ impl Scenario {
     /// Ticks the simulation until the closure returns `Some(value)` or the maximum tick count is reached.
     pub fn expect<T>(&mut self, mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
         for _tick_count in 1..=DEFAULT_MAX_EXPECT_TICKS {
-            // Tick simulation once
-            self.tick_once();
+            // Update network without draining events
+            self.tick_network_only();
             
             // Collect per-tick events (EXACTLY once per tick)
-            let server_events = self.take_server_events();
-            let client_events_map = self.take_client_events();
+            let mut server_events = self.take_server_events();
+            let mut client_events_map = self.take_client_events();
             
-            // Create immutable ExpectCtx for this tick
-            let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
+            // Process spawn events for entity registration
+            self.process_spawn_events(&mut server_events, &mut client_events_map);
+            
+            // Process AuthEvents: match to ClientKey and establish mapping
+            let mut auth_events = Vec::new();
+            for (user_key, auth) in server_events.read::<AuthEvent<Auth>>() {
+                // Find ClientKey by matching Auth payload
+                if let Some((&client_key, _)) = self.pending_auths.iter()
+                    .find(|(_, pending_auth)| 
+                        pending_auth.username == auth.username && 
+                        pending_auth.password == auth.password) 
+                {
+                    // Establish mapping
+                    self.register_client_user(client_key, user_key);
+                    // Store translated event
+                    auth_events.push((client_key, auth));
+                }
+            }
+            
+            // Process ConnectEvents: translate UserKey to ClientKey
+            let mut connect_events = Vec::new();
+            for user_key in server_events.read::<ConnectEvent>() {
+                if let Some(&client_key) = self.user_to_client_map.get(&user_key) {
+                    connect_events.push(client_key);
+                }
+            }
+            
+            // Create immutable ExpectCtx for this tick with translated events
+            let mut ctx = ExpectCtx::new(self, server_events, client_events_map, auth_events, connect_events);
             
             // Call user closure
             if let Some(value) = f(&mut ctx) {
@@ -639,109 +678,5 @@ impl Scenario {
         server.send_all_packets(server_world.proxy());
     }
 
-    /// Complete handshake for a client with a custom name for logging
-    fn complete_handshake_with_name(
-        &mut self,
-        client: &mut Client,
-        client_world: &mut TestWorld,
-        main_room_key: &RoomKey,
-        client_name: &str,
-    ) -> Option<UserKey> {
-        let mut user_key_opt = None;
-        let mut connected = false;
-        let mut user_added_to_room = false;
-
-        let server = self.server.as_mut().expect("server not started");
-
-        for attempt in 1..=HANDSHAKE_MAX_ATTEMPTS {
-            TestClock::advance(HANDSHAKE_TICK_ADVANCE_MS);
-            let now = Instant::now();
-
-            // Process server side first to receive client packets
-            server.receive_all_packets();
-            server.take_tick_events(&now);
-            server.process_all_packets(self.server_world.proxy_mut(), &now);
-
-            // Process server auth events
-            user_key_opt = Self::process_server_auth_events(server, client_name, user_key_opt);
-            
-            server.send_all_packets(self.server_world.proxy());
-            
-            // Add user to room once ready
-            if let Some(user_key) = user_key_opt {
-                user_added_to_room = Self::add_user_to_room_if_ready(server, main_room_key, &user_key, user_added_to_room);
-            }
-
-            // Process client side
-            connected = Self::process_client_connection(client, client_world, &now, connected, client_name, attempt);
-
-            if connected && user_key_opt.is_some() {
-                break;
-            }
-        }
-
-        if connected && user_key_opt.is_some() {
-            user_key_opt
-        } else {
-            if !connected {
-                warn!("{} handshake failed: client never connected after {} attempts", client_name, HANDSHAKE_MAX_ATTEMPTS);
-            } else if user_key_opt.is_none() {
-                warn!("{} handshake failed: client connected but server never accepted after {} attempts", client_name, HANDSHAKE_MAX_ATTEMPTS);
-            }
-            None
-        }
-    }
-
-    /// Process server auth events and accept connections.
-    fn process_server_auth_events(server: &mut Server, client_name: &str, current_user_key: Option<UserKey>) -> Option<UserKey> {
-        let mut user_key = current_user_key;
-        let mut server_events = server.take_world_events();
-        
-        for (auth_user_key, _auth) in server_events.read::<AuthEvent<Auth>>() {
-            info!("Server accepting connection for {}: {:?}", client_name, auth_user_key);
-            server.accept_connection(&auth_user_key);
-            user_key = Some(auth_user_key);
-        }
-        
-        user_key
-    }
-
-    /// Add user to room if they exist in the server world.
-    fn add_user_to_room_if_ready(server: &mut Server, main_room_key: &RoomKey, user_key: &UserKey, already_added: bool) -> bool {
-        if !already_added && server.user_exists(user_key) {
-            server.room_mut(main_room_key).add_user(user_key);
-            server.room(main_room_key).has_user(user_key)
-        } else {
-            already_added
-        }
-    }
-
-    /// Process client connection events and updates.
-    fn process_client_connection(
-        client: &mut Client,
-        client_world: &mut TestWorld,
-        now: &Instant,
-        was_connected: bool,
-        client_name: &str,
-        attempt: usize,
-    ) -> bool {
-        if !was_connected {
-            client.receive_all_packets();
-            client.send_all_packets(client_world.proxy_mut());
-
-            let mut client_events = client.take_world_events();
-            for _ in client_events.read::<ClientConnectEvent>() {
-                info!("{} connected in {} attempts", client_name, attempt);
-                return true;
-            }
-            false
-        } else {
-            client.receive_all_packets();
-            client.process_all_packets(client_world.proxy_mut(), now);
-            client.take_tick_events(now);
-            client.send_all_packets(client_world.proxy_mut());
-            true
-        }
-    }
 
 }

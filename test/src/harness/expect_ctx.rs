@@ -3,17 +3,20 @@ use std::collections::HashMap;
 use naia_server::Events as ServerEvents;
 use naia_client::WorldEvents as ClientEvents;
 
-use crate::{TestEntity, harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx}};
+use crate::{TestEntity, Auth, harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx}};
 
 /// Context for evaluating expectations in an expect phase
 /// 
 /// This is an immutable, per-tick read-only view that exposes:
 /// - read-only server/client/world access
 /// - the server/client events for that tick
+/// - pre-translated events (AuthEvent/ConnectEvent as ClientKey)
 pub struct ExpectCtx<'a> {
     scenario: &'a Scenario,
     server_events: ServerEvents<TestEntity>,
     client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>,
+    auth_events: Vec<(ClientKey, Auth)>,
+    connect_events: Vec<ClientKey>,
 }
 
 impl<'a> ExpectCtx<'a> {
@@ -21,11 +24,15 @@ impl<'a> ExpectCtx<'a> {
         scenario: &'a Scenario,
         server_events: ServerEvents<TestEntity>,
         client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>,
+        auth_events: Vec<(ClientKey, Auth)>,
+        connect_events: Vec<ClientKey>,
     ) -> Self {
         Self {
             scenario,
             server_events,
             client_events_map,
+            auth_events,
+            connect_events,
         }
     }
 
@@ -34,6 +41,8 @@ impl<'a> ExpectCtx<'a> {
         let mut server_expect = ServerExpectCtx::new(
             self.scenario,
             &mut self.server_events,
+            &mut self.auth_events,
+            &mut self.connect_events,
         );
         f(&mut server_expect)
     }

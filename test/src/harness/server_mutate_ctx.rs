@@ -155,13 +155,15 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         server.users_count()
     }
 
-    /// Accept connection
+    /// Accept connection for a client
+    /// 
+    /// Requires that the ClientKey has been mapped to a UserKey (via reading AuthEvent).
+    /// Panics if the mapping doesn't exist.
     pub fn accept_connection(&mut self, client_key: &ClientKey) {
         let scenario = self.ctx.scenario_mut();
-        if let Some(user_key) = scenario.user_key_for_client(client_key) {
-            let (server, _, _, _) = scenario.split_for_server_mut();
-            server.accept_connection(&user_key);
-        }
+        let user_key = scenario.user_key(client_key); // Panics if not mapped
+        let (server, _, _, _) = scenario.split_for_server_mut();
+        server.accept_connection(&user_key);
     }
 
     /// Reject connection

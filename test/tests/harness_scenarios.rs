@@ -125,13 +125,13 @@ fn make_room(scenario: &mut Scenario) -> RoomKey {
 }
 
 fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str, client_auth: Auth) -> ClientKey {
-    let client_key = scenario.client_start(client_name, client_auth);
+    let client_key = scenario.client_start(client_name, client_auth.clone());
 
     // Client: read auth event
     scenario.expect(|ctx| {
         ctx.server(|server| {
             if let Some((incoming_client_key, incoming_auth)) = server.read_event::<AuthEvent<Auth>>() {
-                if incoming_client_key == client_key && incoming_auth.username == "client_a" && incoming_auth.password == "password" {
+                if incoming_client_key == client_key && incoming_auth == client_auth {
                     return Some(incoming_client_key);
                 }
             }
