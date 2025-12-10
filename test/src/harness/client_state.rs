@@ -1,5 +1,8 @@
+use std::sync::{Arc, Mutex};
+
 use naia_client::{Client as NaiaClient};
 use naia_server::UserKey;
+use naia_shared::IdentityToken;
 
 use crate::{TestWorld, TestEntity};
 
@@ -9,11 +12,26 @@ pub(crate) struct ClientState {
     client: Client,
     world: TestWorld,
     user_key_opt: Option<UserKey>,
+    /// Shared handle to the identity token received from the server
+    identity_token: Arc<Mutex<Option<IdentityToken>>>,
+    /// Shared handle to the rejection code (if any) returned by the handshake
+    rejection_code: Arc<Mutex<Option<u16>>>,
 }
 
 impl ClientState {
-    pub(crate) fn new(client: Client, world: TestWorld) -> Self {
-        Self { client, world, user_key_opt: None }
+    pub(crate) fn new(
+        client: Client,
+        world: TestWorld,
+        identity_token: Arc<Mutex<Option<IdentityToken>>>,
+        rejection_code: Arc<Mutex<Option<u16>>>,
+    ) -> Self {
+        Self {
+            client,
+            world,
+            user_key_opt: None,
+            identity_token,
+            rejection_code,
+        }
     }
 
     /// Get reference to the client
@@ -43,5 +61,23 @@ impl ClientState {
 
     pub(crate) fn user_key(&self) -> Option<UserKey> {
         self.user_key_opt
+    }
+
+    /// Get the last identity token provided by the server to this client
+    /// Returns None if no token has been received yet
+    pub(crate) fn identity_token(&self) -> Option<IdentityToken> {
+        self.identity_token.lock().unwrap().clone()
+    }
+
+    /// Get the last rejection code (if any) returned by the handshake
+    /// Returns None if no rejection occurred
+    pub(crate) fn rejection_code(&self) -> Option<u16> {
+        *self.rejection_code.lock().unwrap()
+    }
+
+    /// Get a reference to the identity token handle for mutation
+    /// This is used internally by ClientMutateCtx to allow setting tokens
+    pub(crate) fn identity_token_handle(&self) -> &Arc<Mutex<Option<IdentityToken>>> {
+        &self.identity_token
     }
 }

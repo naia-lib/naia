@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use naia_client::{EntityMut, EntityRef, NaiaClientError, ConnectionStatus};
-use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick};
+use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick, IdentityToken};
 use naia_demo_world::{WorldRef, WorldMut};
 
 use crate::{harness::{ClientKey, EntityKey, mutate_ctx::MutateCtx}, TestEntity};
@@ -144,6 +144,58 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
         let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
         state.client_mut().send_tick_buffer_message::<C, M>(tick, message);
+    }
+
+    /// Manually set the identity token for this client
+    /// 
+    /// This allows tests to inject a token before connecting, or to tamper with/reuse
+    /// a token for negative testing scenarios. The token will be used when the client
+    /// attempts to connect.
+    /// 
+    /// # Examples
+    /// 
+    /// ```rust,ignore
+    /// // Set a token before connecting
+    /// scenario.mutate(|ctx| {
+    ///     ctx.client(client_key, |c| {
+    ///         c.set_identity_token("test_token_123".to_string());
+    ///     });
+    /// });
+    /// 
+    /// // Tamper with a received token
+    /// scenario.mutate(|ctx| {
+    ///     ctx.client(client_key, |c| {
+    ///         if let Some(token) = c.identity_token() {
+    ///             let tampered = format!("{}_tampered", token);
+    ///             c.set_identity_token(tampered);
+    ///         }
+    ///     });
+    /// });
+    /// ```
+    pub fn set_identity_token(&mut self, token: IdentityToken) {
+        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        *state.identity_token_handle().lock().unwrap() = Some(token);
+    }
+
+    /// Get the current identity token (if any) for this client
+    /// 
+    /// Returns the token that was either:
+    /// - Received from the server during handshake
+    /// - Manually set via `set_identity_token()`
+    /// 
+    /// Returns None if no token has been set or received yet.
+    pub fn identity_token(&self) -> Option<IdentityToken> {
+        let state = self.ctx.scenario().client_state(&self.client_key);
+        state.identity_token()
+    }
+
+    /// Clear the identity token for this client
+    /// 
+    /// Useful for testing scenarios where you want to simulate a client
+    /// without a token or reset the token state.
+    pub fn clear_identity_token(&mut self) {
+        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        *state.identity_token_handle().lock().unwrap() = None;
     }
 }
 

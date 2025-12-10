@@ -59,6 +59,20 @@ impl<'a> ClientExpectCtx<'a> {
         let state = self.scenario.client_state(&self.client_key);
         state.client().connection_status()
     }
+
+    /// Get the last identity token provided by the server to this client
+    /// Returns None if no token has been received yet
+    pub fn identity_token(&self) -> Option<naia_shared::IdentityToken> {
+        let state = self.scenario.client_state(&self.client_key);
+        state.identity_token()
+    }
+
+    /// Get the last rejection code (if any) returned by the handshake
+    /// Returns None if no rejection occurred
+    pub fn rejection_code(&self) -> Option<u16> {
+        let state = self.scenario.client_state(&self.client_key);
+        state.rejection_code()
+    }
 }
 
 

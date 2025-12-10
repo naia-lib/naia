@@ -115,7 +115,7 @@ impl Scenario {
 
         let mut client = Client::new(client_config, self.protocol.clone());
         let world = TestWorld::default();
-        let socket = self.create_client_socket();
+        let (socket, identity_token, rejection_code) = self.create_client_socket();
         
         // Store auth in pending_auths for later matching with AuthEvent
         self.pending_auths.insert(client_key, auth.clone());
@@ -126,7 +126,7 @@ impl Scenario {
         // Insert client state without user_key (will be set when AuthEvent is processed)
         self.clients.insert(
             client_key,
-            ClientState::new(client, world),
+            ClientState::new(client, world, identity_token, rejection_code),
         );
 
         client_key
@@ -568,7 +568,8 @@ impl Scenario {
     }
 
     /// Create a client socket from the transport hub
-    fn create_client_socket(&self) -> ClientSocket {
+    /// Returns the socket along with handles to identity_token and rejection_code
+    fn create_client_socket(&self) -> (ClientSocket, Arc<Mutex<Option<naia_shared::IdentityToken>>>, Arc<Mutex<Option<u16>>>) {
         let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) = 
             self.hub.register_client();
         
@@ -589,10 +590,11 @@ impl Scenario {
             client_data_tx,
             client_data_rx,
             addr_cell,
-            identity_token,
-            rejection_code,
+            identity_token.clone(),
+            rejection_code.clone(),
         );
-        ClientSocket::new(inner_socket, None)
+        let socket = ClientSocket::new(inner_socket, None);
+        (socket, identity_token, rejection_code)
     }
 
     /// Update a single client and server at a specific time

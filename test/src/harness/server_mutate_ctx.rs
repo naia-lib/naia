@@ -1,6 +1,6 @@
 use naia_server::{EntityMut, EntityRef, RoomKey, NaiaServerError, TickBufferMessages};
 use naia_demo_world::{WorldRef, WorldMut};
-use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick};
+use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick, generate_identity_token, IdentityToken};
 
 use crate::{harness::{EntityKey, ClientKey, user_scope::{UserScopeRef, UserScopeMut}, user::{UserRef, UserMut}, room::{RoomRef, RoomMut}, mutate_ctx::MutateCtx}, TestEntity};
 
@@ -285,6 +285,15 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
         let (server, _, _, _) = self.ctx.scenario_mut().split_for_server_mut();
         server.receive_tick_buffer_messages(tick)
+    }
+
+    /// Generate a new identity token
+    /// 
+    /// This is a thin wrapper around Naia's public API for generating identity tokens.
+    /// Useful for creating tokens that can be used in tests, including negative tests
+    /// where you want to test with malformed, expired, or reused tokens.
+    pub fn generate_identity_token(&self) -> IdentityToken {
+        generate_identity_token()
     }
 }
 
