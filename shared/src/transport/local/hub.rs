@@ -28,6 +28,7 @@ pub struct LocalTransportHub {
     server_addr: SocketAddr,
     connections: Arc<Mutex<HashMap<SocketAddr, ClientConnection>>>,
     next_client_id: Arc<Mutex<u16>>,
+    traffic_paused: Arc<Mutex<bool>>,
 }
 
 impl LocalTransportHub {
@@ -37,6 +38,7 @@ impl LocalTransportHub {
             server_addr,
             connections: Arc::new(Mutex::new(HashMap::new())),
             next_client_id: Arc::new(Mutex::new(1)),
+            traffic_paused: Arc::new(Mutex::new(false)),
         }
     }
 
@@ -97,11 +99,17 @@ impl LocalTransportHub {
     }
 
     /// Try to receive an auth request from any client (returns (client_addr, bytes))
+    /// Returns None if traffic is paused (packets are dropped)
     pub fn try_recv_auth_request(&self) -> Option<(SocketAddr, Vec<u8>)> {
+        let paused = *self.traffic_paused.lock().unwrap(); // Single check
         let connections = self.connections.lock().unwrap();
+        
         for (addr, conn) in connections.iter() {
             let mut rx_guard = conn.auth_req_rx.lock().unwrap();
-            if let Ok(bytes) = rx_guard.try_recv() {
+            if paused {
+                // Drain ALL packets when paused, not just one
+                while rx_guard.try_recv().is_ok() {}
+            } else if let Ok(bytes) = rx_guard.try_recv() {
                 return Some((*addr, bytes));
             }
         }
@@ -109,11 +117,17 @@ impl LocalTransportHub {
     }
 
     /// Try to receive a data packet from any client (returns (client_addr, bytes))
+    /// Returns None if traffic is paused (packets are dropped)
     pub fn try_recv_data(&self) -> Option<(SocketAddr, Vec<u8>)> {
+        let paused = *self.traffic_paused.lock().unwrap(); // Single check
         let connections = self.connections.lock().unwrap();
+        
         for (addr, conn) in connections.iter() {
             let mut rx_guard = conn.server_data_rx.lock().unwrap();
-            if let Ok(bytes) = rx_guard.try_recv() {
+            if paused {
+                // Drain ALL packets when paused, not just one
+                while rx_guard.try_recv().is_ok() {}
+            } else if let Ok(bytes) = rx_guard.try_recv() {
                 return Some((*addr, bytes));
             }
         }
@@ -121,7 +135,13 @@ impl LocalTransportHub {
     }
 
     /// Send auth response to a specific client
+    /// Returns Err(()) if traffic is paused (packets are dropped)
     pub fn send_auth_response(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
+        let paused = *self.traffic_paused.lock().unwrap(); // Single check
+        if paused {
+            return Err(()); // Drop packet
+        }
+        
         let connections = self.connections.lock().unwrap();
         if let Some(conn) = connections.get(client_addr) {
             conn.auth_resp_tx.send(bytes).map_err(|_| ())
@@ -131,7 +151,13 @@ impl LocalTransportHub {
     }
 
     /// Send data packet to a specific client
+    /// Returns Err(()) if traffic is paused (packets are dropped)
     pub fn send_data(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
+        let paused = *self.traffic_paused.lock().unwrap(); // Single check
+        if paused {
+            return Err(()); // Drop packet
+        }
+        
         let connections = self.connections.lock().unwrap();
         if let Some(conn) = connections.get(client_addr) {
             conn.server_data_tx.send(bytes).map_err(|_| ())
@@ -140,9 +166,19 @@ impl LocalTransportHub {
         }
     }
 
-    // /// Get all client addresses
-    // pub fn get_client_addresses(&self) -> Vec<SocketAddr> {
-    //     self.connections.lock().unwrap().keys().cloned().collect()
-    // }
+    /// Pause all traffic (drop all packets)
+    pub fn pause_traffic(&self) {
+        *self.traffic_paused.lock().unwrap() = true;
+    }
+
+    /// Resume normal traffic delivery
+    pub fn resume_traffic(&self) {
+        *self.traffic_paused.lock().unwrap() = false;
+    }
+
+    /// Check if traffic is paused
+    pub fn is_traffic_paused(&self) -> bool {
+        *self.traffic_paused.lock().unwrap()
+    }
 }
 

@@ -3,7 +3,7 @@ use bevy_ecs::prelude::Component;
 
 use naia_shared::{Property, Protocol, Replicate, Message};
 
-#[derive(Message, PartialEq, Eq)]
+#[derive(Message, PartialEq, Eq, Hash)]
 pub struct Auth {
     pub username: String,
     pub password: String,

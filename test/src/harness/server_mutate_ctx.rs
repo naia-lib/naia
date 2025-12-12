@@ -1,8 +1,9 @@
+use log::warn;
 use naia_server::{EntityMut, EntityRef, RoomKey, NaiaServerError, TickBufferMessages};
 use naia_demo_world::{WorldRef, WorldMut};
 use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick, generate_identity_token, IdentityToken};
 
-use crate::{harness::{EntityKey, ClientKey, user_scope::{UserScopeRef, UserScopeMut}, user::{UserRef, UserMut}, room::{RoomRef, RoomMut}, mutate_ctx::MutateCtx}, TestEntity};
+use crate::{harness::{EntityKey, ClientKey, user_scope::{UserScopeRef, UserScopeMut}, user::{UserRef, UserMut}, room::{RoomRef, RoomMut}, mutate_ctx::MutateCtx, auth_policy::AuthDecision}, TestEntity, Auth};
 
 /// Lightweight handle for server-side mutations
 /// Provides direct pass-through to core Server API with EntityKey resolution
@@ -167,11 +168,18 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Reject connection
+    /// 
+    /// # Note
+    /// 
+    /// This method silently fails if the ClientKey has no associated UserKey
+    /// (e.g., if the client hasn't authenticated yet). A warning is logged in this case.
     pub fn reject_connection(&mut self, client_key: &ClientKey) {
         let scenario = self.ctx.scenario_mut();
         if let Some(user_key) = scenario.client_to_user_key(client_key) {
             let (server, _, _, _) = scenario.split_for_server_mut();
             server.reject_connection(&user_key);
+        } else {
+            warn!("reject_connection failed: ClientKey {:?} has no associated UserKey (may not be authenticated yet)", client_key);
         }
     }
 
@@ -180,8 +188,14 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// This requests a server-side disconnect of the user identified by the given ClientKey.
     /// The user will be disconnected in the next tick.
     /// 
-    /// Requires that the ClientKey has been mapped to a UserKey (via reading AuthEvent).
-    /// Returns false if the mapping doesn't exist, true otherwise.
+    /// # Returns
+    /// 
+    /// Returns `true` if the disconnect was queued successfully, `false` if the ClientKey
+    /// has no associated UserKey (e.g., not authenticated yet or already disconnected).
+    /// 
+    /// # Note
+    /// 
+    /// A warning is logged if the operation fails, which can help diagnose test issues.
     pub fn disconnect_user(&mut self, client_key: &ClientKey) -> bool {
         // Use the user_mut() method to get UserMut and call disconnect on it
         // This handles the ClientKey -> UserKey conversion internally
@@ -189,6 +203,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
             user.disconnect();
             true
         } else {
+            warn!("disconnect_user failed: ClientKey {:?} has no associated UserKey (may not be authenticated yet or already disconnected)", client_key);
             false
         }
     }

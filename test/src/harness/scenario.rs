@@ -252,6 +252,33 @@ impl Scenario {
         self.clients.get_mut(&client_key).expect("client not found")
     }
 
+    /// Pause all network traffic (drop all packets)
+    /// 
+    /// This is useful for testing timeout behavior. The TestClock will continue
+    /// to advance via `tick()`, but no packets will be delivered.
+    /// 
+    /// # Examples
+    /// 
+    /// ```rust,ignore
+    /// // Pause traffic to test timeout
+    /// scenario.pause_traffic();
+    /// // ... wait for timeout ...
+    /// scenario.resume_traffic();
+    /// ```
+    pub fn pause_traffic(&mut self) {
+        self.hub.pause_traffic();
+    }
+
+    /// Resume normal network traffic delivery
+    pub fn resume_traffic(&mut self) {
+        self.hub.resume_traffic();
+    }
+
+    /// Check if traffic is currently paused
+    pub fn is_traffic_paused(&self) -> bool {
+        self.hub.is_traffic_paused()
+    }
+
     /// Get client-side EntityRef by EntityKey.
     /// 
     /// Encapsulates LocalEntity lookup and EntityRef creation to avoid double-borrow issues.
