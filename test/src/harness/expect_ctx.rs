@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use naia_server::Events as ServerEvents;
 use naia_client::WorldEvents as ClientEvents;
 
-use crate::{TestEntity, Auth, harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx}};
+use crate::{TestEntity, harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx}};
 
 /// Context for evaluating expectations in an expect phase
 /// 

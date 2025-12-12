@@ -3,7 +3,7 @@ use std::net::SocketAddr;
 use naia_demo_world::WorldRef;
 use naia_client::{EntityRef, ConnectionStatus, NaiaClientError, WorldEvents as ClientEvents, RejectEvent};
 
-use crate::{TestEntity, harness::{scenario::Scenario, EntityKey, ClientKey}};
+use crate::{TestEntity, harness::{events::TranslatableEvent, scenario::Scenario, EntityKey, ClientKey}};
 
 /// Context for client-side expectations with per-tick events
 pub struct ClientExpectCtx<'a> {
@@ -25,11 +25,13 @@ impl<'a> ClientExpectCtx<'a> {
         }
     }
 
-    /// Access the per-tick client events
-    /// 
-    /// Events are consumed as they are read, following Naia's normal event semantics.
-    pub fn events(&mut self) -> &mut ClientEvents<TestEntity> {
-        self.events
+    /// Read a translated event
+    pub fn read_event<E>(&mut self) -> Option<E::Output>
+    where
+        E: TranslatableEvent<ClientExpectCtx<'a>> + naia_client::WorldEvent<TestEntity>,
+        <E as naia_client::WorldEvent<TestEntity>>::Iter: Iterator<Item = <E as TranslatableEvent<ClientExpectCtx<'a>>>::Input>,
+    {
+        self.events.read::<E>().find_map(|event| E::translate_item(self, event))
     }
 
     pub fn has_entity(&self, entity: &EntityKey) -> bool {

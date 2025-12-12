@@ -1,9 +1,10 @@
 use log::warn;
+
 use naia_server::{EntityMut, EntityRef, RoomKey, NaiaServerError, TickBufferMessages};
 use naia_demo_world::{WorldRef, WorldMut};
 use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick, generate_identity_token, IdentityToken};
 
-use crate::{harness::{EntityKey, ClientKey, user_scope::{UserScopeRef, UserScopeMut}, user::{UserRef, UserMut}, room::{RoomRef, RoomMut}, mutate_ctx::MutateCtx, auth_policy::AuthDecision}, TestEntity, Auth};
+use crate::{harness::{EntityKey, ClientKey, user_scope::{UserScopeRef, UserScopeMut}, user::{UserRef, UserMut}, room::{RoomRef, RoomMut}, mutate_ctx::MutateCtx}, TestEntity};
 
 /// Lightweight handle for server-side mutations
 /// Provides direct pass-through to core Server API with EntityKey resolution

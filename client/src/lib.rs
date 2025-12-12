@@ -44,7 +44,7 @@ pub use client_config::ClientConfig;
 pub use command_history::CommandHistory;
 pub use connection::jitter_buffer::JitterBufferType;
 pub use error::NaiaClientError;
-pub use tick_events::{ClientTickEvent, ServerTickEvent};
+pub use tick_events::{ClientTickEvent, ServerTickEvent, TickEvents, TickEvent};
 pub use world::{
     entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef, replication_config::ReplicationConfig,
 };
@@ -52,5 +52,5 @@ pub use world_events::{
     ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
     EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
     PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvent, SpawnEntityEvent,
-    UnpublishEntityEvent, UpdateComponentEvent, WorldEvents,
+    UnpublishEntityEvent, UpdateComponentEvent, WorldEvents, WorldEvent
 };
