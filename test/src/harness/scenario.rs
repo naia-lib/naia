@@ -193,7 +193,7 @@ impl Scenario {
             }
 
             // Create immutable ExpectCtx for this tick with translated events
-            let mut ctx = ExpectCtx::new(self, server_events, client_events_map, auth_events, connect_events);
+            let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
 
             // Call user closure
             if let Some(value) = f(&mut ctx) {

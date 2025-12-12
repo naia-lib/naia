@@ -137,7 +137,7 @@ fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str
     // Client: read auth event
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            if let Some((incoming_client_key, incoming_auth)) = server.read_event::<AuthEvent<Auth>>() {
+            if let Some((incoming_client_key, incoming_auth)) = server.read_event::<AuthEvent<Auth>>().next() {
                 if incoming_client_key == client_key && incoming_auth == client_auth {
                     return Some(incoming_client_key);
                 }

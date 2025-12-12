@@ -7,22 +7,16 @@ use crate::{harness::{scenario::Scenario, user_scope::UserScopeRef, EntityKey, C
 pub struct ServerExpectCtx<'a> {
     scenario: &'a Scenario,
     events: &'a mut ServerEvents<TestEntity>,
-    auth_events: &'a mut Vec<(ClientKey, Auth)>,
-    connect_events: &'a mut Vec<ClientKey>,
 }
 
 impl<'a> ServerExpectCtx<'a> {
     pub(crate) fn new(
         scenario: &'a Scenario,
         events: &'a mut ServerEvents<TestEntity>,
-        auth_events: &'a mut Vec<(ClientKey, Auth)>,
-        connect_events: &'a mut Vec<ClientKey>,
     ) -> Self {
         Self {
             scenario,
             events,
-            auth_events,
-            connect_events,
         }
     }
 
@@ -138,25 +132,5 @@ impl<'a> ServerExpectCtx<'a> {
     pub fn rooms_count(&self) -> usize {
         let (server, _) = self.scenario.server_and_registry().unwrap();
         server.rooms_count()
-    }
-}
-
-/// Trait for event types that can be read from ServerExpectCtx
-pub trait HarnessEvent {
-    type HarnessReturn;
-    fn read_from_ctx(ctx: &mut ServerExpectCtx) -> Option<Self::HarnessReturn>;
-}
-
-impl HarnessEvent for AuthEvent<Auth> {
-    type HarnessReturn = (ClientKey, Auth);
-    fn read_from_ctx(ctx: &mut ServerExpectCtx) -> Option<Self::HarnessReturn> {
-        ctx.auth_events.pop()
-    }
-}
-
-impl HarnessEvent for ConnectEvent {
-    type HarnessReturn = ClientKey;
-    fn read_from_ctx(ctx: &mut ServerExpectCtx) -> Option<Self::HarnessReturn> {
-        ctx.connect_events.pop()
     }
 }

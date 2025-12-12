@@ -15,8 +15,6 @@ pub struct ExpectCtx<'a> {
     scenario: &'a Scenario,
     server_events: ServerEvents<TestEntity>,
     client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>,
-    auth_events: Vec<(ClientKey, Auth)>,
-    connect_events: Vec<ClientKey>,
 }
 
 impl<'a> ExpectCtx<'a> {
@@ -24,15 +22,11 @@ impl<'a> ExpectCtx<'a> {
         scenario: &'a Scenario,
         server_events: ServerEvents<TestEntity>,
         client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>,
-        auth_events: Vec<(ClientKey, Auth)>,
-        connect_events: Vec<ClientKey>,
     ) -> Self {
         Self {
             scenario,
             server_events,
             client_events_map,
-            auth_events,
-            connect_events,
         }
     }
 
@@ -41,8 +35,6 @@ impl<'a> ExpectCtx<'a> {
         let mut server_expect = ServerExpectCtx::new(
             self.scenario,
             &mut self.server_events,
-            &mut self.auth_events,
-            &mut self.connect_events,
         );
         f(&mut server_expect)
     }
