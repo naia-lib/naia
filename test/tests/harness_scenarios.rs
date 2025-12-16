@@ -1,10 +1,11 @@
 use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig};
-use naia_server::{AuthEvent, ConnectEvent as ServerConnectEvent, RoomKey, ServerConfig};
+use naia_server::{RoomKey, ServerConfig};
 use naia_test::{
     Scenario, ClientKey,
     protocol, Auth, Position,
+    AuthEvent, ConnectEvent,
 };
 
 /// Test: single client spawn replicates to server
@@ -134,13 +135,17 @@ fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str
     
     let client_key = scenario.client_start(client_name, client_auth.clone(), client_config);
 
-    // Client: read auth event
+    // Server: read auth event
     scenario.expect(|ctx| {
         ctx.server(|server| {
+            println!("DEBUG: Checking for auth event...");
             if let Some((incoming_client_key, incoming_auth)) = server.read_event::<AuthEvent<Auth>>() {
+                println!("DEBUG: Got auth event! client_key={:?}", incoming_client_key);
                 if incoming_client_key == client_key && incoming_auth == client_auth {
                     return Some(incoming_client_key);
                 }
+            } else {
+                println!("DEBUG: No auth event found");
             }
             return None;
         })
@@ -156,8 +161,8 @@ fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str
     // Server: read connect event
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            if let Some(client_key) = server.read_event::<ServerConnectEvent>() {
-                if client_key == client_key {
+            if let Some(incoming_client_key) = server.read_event::<ConnectEvent>() {
+                if incoming_client_key == client_key {
                     return Some(());
                 }
             }

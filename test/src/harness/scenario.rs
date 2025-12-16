@@ -12,18 +12,14 @@ use naia_client::{
     ClientConfig,
     EntityMut,
     EntityRef,
-    SpawnEntityEvent as ClientSpawnEntityEvent,
-    WorldEvents as ClientEvents,
+    TickEvents as ClientTickEvents,
+    WorldEvents as ClientWorldEvents,
 };
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{
     transport::local::{Socket as ServerSocket, LocalServerSocket},
-    AuthEvent,
-    ConnectEvent as ServerConnectEvent,
-    Events as ServerEvents,
     Server as NaiaServer,
     ServerConfig,
-    SpawnEntityEvent as ServerSpawnEntityEvent,
     UserKey,
 };
 use naia_shared::{
@@ -49,6 +45,8 @@ use crate::{
     TestEntity,
     TestWorld,
 };
+use crate::harness::client_events::ClientEvents;
+use crate::harness::server_events::ServerEvents;
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
@@ -155,42 +153,9 @@ impl Scenario {
             self.tick();
 
             // Collect per-tick events (EXACTLY once per tick)
-            let mut server_events = self.server.as_mut().expect("server not started").take_world_events();
-            let mut client_events_map = self.take_client_events();
-
-            // Process spawn events for entity registration
-            self.process_spawn_events(&mut server_events, &mut client_events_map);
-
-            // Process AuthEvents: match to ClientKey and establish mapping
-            let mut auth_events = Vec::new();
-            for (user_key, auth) in server_events.read::<AuthEvent<Auth>>() {
-                // Find ClientKey by matching Auth payload
-                if let Some((&client_key, _)) = self.pending_auths.iter()
-                    .find(|(_, pending_auth)|
-                        pending_auth.username == auth.username &&
-                            pending_auth.password == auth.password)
-                {
-                    // Update ClientState
-                    if let Some(state) = self.clients.get_mut(&client_key) {
-                        state.set_user_key(user_key);
-                    }
-                    // Update bidirectional maps
-                    self.user_to_client_map.insert(user_key, client_key);
-                    // Remove from pending (handshake complete)
-                    self.pending_auths.remove(&client_key);
-
-                    // Store translated event
-                    auth_events.push((client_key, auth));
-                }
-            }
-
-            // Process ConnectEvents: translate UserKey to ClientKey
-            let mut connect_events = Vec::new();
-            for user_key in server_events.read::<ServerConnectEvent>() {
-                if let Some(&client_key) = self.user_to_client_map.get(&user_key) {
-                    connect_events.push(client_key);
-                }
-            }
+            // Event registration happens inside take_server_events/take_client_events via callbacks
+            let server_events = self.take_server_events();
+            let client_events_map = self.take_client_events();
 
             // Create immutable ExpectCtx for this tick with translated events
             let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
@@ -214,6 +179,111 @@ impl Scenario {
 
     pub(crate) fn entity_registry_mut(&mut self) -> &mut EntityRegistry {
         &mut self.entity_registry
+    }
+
+    /// Helper for ServerEvents: Register auth event and map UserKey to ClientKey
+    /// Returns (ClientKey, MessageContainer) if successful
+    pub(crate) fn register_auth_event(
+        &mut self,
+        user_key: UserKey,
+        message_container: naia_shared::MessageContainer,
+    ) -> Option<(ClientKey, naia_shared::MessageContainer)> {
+        // Check if already mapped
+        if let Some(client_key) = self.user_to_client_key(&user_key) {
+            return Some((client_key, message_container));
+        }
+        
+        // Match by auth payload (for Auth type specifically)
+        use crate::Auth;
+        if let Ok(boxed_auth) = Box::<dyn std::any::Any + 'static>::downcast::<Auth>(message_container.to_boxed_any()) {
+            let auth = *boxed_auth;
+            
+            // Find matching ClientKey in pending_auths
+            if let Some((&client_key, _)) = self.pending_auths.iter()
+                .find(|(_, pending_auth)| {
+                    pending_auth.username == auth.username &&
+                    pending_auth.password == auth.password
+                })
+            {
+                // Update ClientState with UserKey
+                if let Some(state) = self.clients.get_mut(&client_key) {
+                    state.set_user_key(user_key);
+                }
+                // Update bidirectional maps
+                self.user_to_client_map.insert(user_key, client_key);
+                // Remove from pending (handshake complete)
+                self.pending_auths.remove(&client_key);
+                
+                // Re-create MessageContainer
+                let auth_container = naia_shared::MessageContainer::from_read(Box::new(auth) as Box<dyn naia_shared::Message>);
+                return Some((client_key, auth_container));
+            }
+        }
+        
+        None
+    }
+
+    /// Helper for ServerEvents: Register spawn entity and map to EntityKey
+    /// Returns (ClientKey, EntityKey) if successful
+    pub(crate) fn register_spawn_entity(
+        &mut self,
+        user_key: UserKey,
+        server_entity: TestEntity,
+    ) -> Option<(ClientKey, EntityKey)> {
+        let client_key = self.user_to_client_key(&user_key)?;
+        
+        let server_local_entity = {
+            let server = self.server.as_ref()?;
+            let world_ref = self.server_world.proxy();
+            let server_ref = server.entity(world_ref, &server_entity);
+            server_ref.local_entity(&user_key)?
+        };
+        
+        // Try to match EntityKey:
+        // 1. Check if client entity already registered (client-spawned)
+        if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &server_local_entity) {
+            debug!("Matched client-spawned entity {:?} for client {:?}", entity_key, client_key);
+            self.entity_registry_mut().register_server_entity(&entity_key, &server_entity);
+            self.entity_registry_mut().register_client_local_entity_mapping(&entity_key, &client_key, &server_local_entity);
+            return Some((client_key, entity_key));
+        }
+        // 2. Check if server entity already registered (server-spawned)
+        else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(&server_entity) {
+            debug!("Matched server-spawned entity {:?} for client {:?}", entity_key, client_key);
+            self.entity_registry_mut().register_client_local_entity_mapping(&entity_key, &client_key, &server_local_entity);
+            return Some((client_key, entity_key));
+        }
+        // 3. Check pending client spawns (client-spawned, not yet registered on server)
+        else if let Some(pending_entity_key) = self.entity_registry_mut().remove_pending_client_spawn(&client_key) {
+            debug!("Matched pending client-spawned entity {:?} for client {:?}", pending_entity_key, client_key);
+            self.entity_registry_mut().register_server_entity(&pending_entity_key, &server_entity);
+            self.entity_registry_mut().register_client_local_entity_mapping(&pending_entity_key, &client_key, &server_local_entity);
+            return Some((client_key, pending_entity_key));
+        }
+        
+        debug!("No EntityKey match found for server spawn event (client: {:?}, entity: {:?})", client_key, server_entity);
+        None
+    }
+
+    /// Helper for ClientEvents: Register client entity and return EntityKey
+    pub(crate) fn register_client_entity_event(
+        &mut self,
+        client_key: &ClientKey,
+        entity: &TestEntity,
+    ) -> Option<EntityKey> {
+        let state = self.client_state(client_key);
+        let user_key = state.user_key()?;
+        let world_ref = state.world().proxy();
+        let client_ref = state.client().entity(world_ref, entity);
+        let local_entity = client_ref.local_entity()?;
+        let entity_key = self.entity_registry().entity_key_for_client_entity(client_key, &local_entity)?;
+        
+        // Register client entity if not already registered
+        if self.entity_registry().client_entity(&entity_key, client_key).is_none() {
+            self.entity_registry_mut().register_client_entity(&entity_key, client_key, entity, &local_entity);
+        }
+        
+        Some(entity_key)
     }
 
     /// Get immutable access to server and registry for expect operations
@@ -410,96 +480,7 @@ impl Scenario {
         }
     }
 
-    /// Process spawn events from collected events and update entity registry
-    fn process_spawn_events(
-        &mut self,
-        server_events: &mut ServerEvents<TestEntity>,
-        client_events_map: &mut HashMap<ClientKey, ClientEvents<TestEntity>>,
-    ) {
-        // Collect client spawn events
-        let mut spawns_to_register = Vec::new();
-        for (client_key, client_events) in client_events_map.iter_mut() {
-            for spawned_entity in client_events.read::<ClientSpawnEntityEvent>() {
-                let state = self.clients.get(client_key).expect("client not found");
-                let world_ref = state.world().proxy();
-                let client_ref = state.client().entity(world_ref, &spawned_entity);
-                
-                if let Some(local_entity) = client_ref.local_entity() {
-                    spawns_to_register.push((*client_key, local_entity, spawned_entity));
-                }
-            }
-        }
-
-        // Collect server spawn events
-        let server_spawn_data = Self::extract_server_spawn_events(server_events);
-        
-        let (server_entities_to_register, server_local_entity_mappings) = {
-            let mut server_entities_to_register = Vec::new();
-            let mut server_local_entity_mappings = Vec::new();
-            
-            for (spawn_user_key, spawn_entity) in server_spawn_data {
-                if let Some(client_key) = self.user_to_client_key(&spawn_user_key) {
-                    let server_local_entity = {
-                        let server = self.server.as_ref().expect("server not started");
-                        let world_ref = self.server_world.proxy();
-                        let server_ref = server.entity(world_ref, &spawn_entity);
-                        server_ref.local_entity(&spawn_user_key)
-                    };
-                    
-                    if let Some(local_entity) = server_local_entity {
-                        if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
-                            debug!("Matched client-spawned entity {:?} for client {:?}", entity_key, client_key);
-                            server_entities_to_register.push((entity_key, spawn_entity));
-                        } else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(&spawn_entity) {
-                            debug!("Matched server-spawned entity {:?} for client {:?}", entity_key, client_key);
-                            server_local_entity_mappings.push((entity_key, client_key, local_entity));
-                        } else if let Some(entity_key) = self.entity_registry.remove_pending_client_spawn(&client_key) {
-                            debug!("Matched pending client-spawned entity {:?} for client {:?}", entity_key, client_key);
-                            server_entities_to_register.push((entity_key, spawn_entity));
-                            server_local_entity_mappings.push((entity_key, client_key, local_entity));
-                        } else {
-                            debug!("No EntityKey match found for server spawn event (user: {:?}, entity: {:?})", spawn_user_key, spawn_entity);
-                        }
-                    }
-                }
-            }
-            
-            (server_entities_to_register, server_local_entity_mappings)
-        };
-        
-        // Register server entities before Phase D to ensure they're available for client spawn matching
-        for (entity_key, server_entity) in server_entities_to_register {
-            self.entity_registry_mut()
-                .register_server_entity(&entity_key, &server_entity);
-        }
-
-        // apply client mappings
-        for (entity_key, client_key, local_entity) in server_local_entity_mappings {
-            // Skip if already registered (idempotent)
-            if self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity).is_none() {
-                self.entity_registry_mut()
-                    .register_client_local_entity_mapping(&entity_key, &client_key, &local_entity);
-            }
-        }
-        
-        // Phase D: Register client spawns
-        self.register_client_spawns(spawns_to_register);
-    }
-
-
-    /// Phase C: Extract server spawn events from already-collected events.
-    fn extract_server_spawn_events(server_events: &mut ServerEvents<TestEntity>) -> Vec<(UserKey, TestEntity)> {
-        let mut server_spawn_data = Vec::new();
-        
-        for (spawn_user_key, spawn_entity) in server_events.read::<ServerSpawnEntityEvent>() {
-            server_spawn_data.push((spawn_user_key, spawn_entity));
-        }
-        
-        server_spawn_data
-    }
-
-
-    /// Phase D: Register client spawns by matching LocalEntity values with server entities.
+    /// Register client spawns by matching LocalEntity values with server entities.
     fn register_client_spawns(&mut self, spawns_to_register: Vec<(ClientKey, LocalEntity, TestEntity)>) {
         for (client_key, local_entity, client_entity) in spawns_to_register {
             let local_entity_value = Self::extract_local_entity_value(&local_entity);
@@ -568,11 +549,31 @@ impl Scenario {
         }
     }
 
-    pub(crate) fn take_client_events(&mut self) -> HashMap<ClientKey, ClientEvents<TestEntity>> {
+    pub(crate) fn take_server_events(&mut self) -> ServerEvents {
+        let server = self.server.as_mut().expect("server not started");
+        let now = Instant::now();
+        let mut events = server.take_world_events();
+        let tick_events = server.take_tick_events(&now);
+        let auths = events.take_auths();
+        
+        ServerEvents::new(self, auths, tick_events, events)
+    }
+
+    pub(crate) fn take_client_events(&mut self) -> HashMap<ClientKey, ClientEvents> {
         let mut map = HashMap::new();
+        let now = Instant::now();
+        // Collect events first to avoid borrow conflicts
+        let mut events_data: Vec<(ClientKey, ClientWorldEvents<TestEntity>, ClientTickEvents)> = Vec::new();
         for (client_key, client_state) in self.clients.iter_mut() {
-            let client_events = client_state.client_mut().take_world_events();
-            map.insert(*client_key, client_events);
+            let client = client_state.client_mut();
+            let tick_events = client.take_tick_events(&now);
+            let world_events = client.take_world_events();
+            events_data.push((*client_key, world_events, tick_events));
+        }
+        // Now process events (no longer borrowing self.clients)
+        for (client_key, world_events, tick_events) in events_data {
+            let client_events = ClientEvents::new(self, client_key, world_events, tick_events);
+            map.insert(client_key, client_events);
         }
         map
     }

@@ -54,66 +54,57 @@ impl Default for ClientEvents {
 
 impl ClientEvents {
     pub fn new(
-        scenario: &Scenario,
+        scenario: &mut Scenario,
         client_key: ClientKey,
         mut world_events: WorldEvents<TestEntity>,
-        mut tick_events: TickEvents) -> Self
-    {
-        // Convert TestEntity to EntityKey for world events
-        let convert_entity = |scenario: &Scenario, client_key: &ClientKey, entity: &TestEntity| -> Option<EntityKey> {
-            let state = scenario.client_state(client_key);
-            let _user_key = state.user_key()?;
-            let world_ref = state.world().proxy();
-            let client_ref = state.client().entity(world_ref, entity);
-            let local_entity = client_ref.local_entity()?;
-            scenario.entity_registry().entity_key_for_client_entity(client_key, &local_entity)
-        };
+        mut tick_events: TickEvents,
+    ) -> Self {
 
         let mut spawns = Vec::new();
         for entity in world_events.read::<naia_client::SpawnEntityEvent>() {
-            if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                 spawns.push(entity_key);
             }
         }
 
         let mut despawns = Vec::new();
         for entity in world_events.read::<naia_client::DespawnEntityEvent>() {
-            if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                 despawns.push(entity_key);
             }
         }
 
         let mut publishes = Vec::new();
         for entity in world_events.read::<naia_client::PublishEntityEvent>() {
-            if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                 publishes.push(entity_key);
             }
         }
 
         let mut unpublishes = Vec::new();
         for entity in world_events.read::<naia_client::UnpublishEntityEvent>() {
-            if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                 unpublishes.push(entity_key);
             }
         }
 
         let mut auth_grants = Vec::new();
         for entity in world_events.read::<naia_client::EntityAuthGrantedEvent>() {
-            if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                 auth_grants.push(entity_key);
             }
         }
 
         let mut auth_denies = Vec::new();
         for entity in world_events.read::<naia_client::EntityAuthDeniedEvent>() {
-            if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                 auth_denies.push(entity_key);
             }
         }
 
         let mut auth_resets = Vec::new();
         for entity in world_events.read::<naia_client::EntityAuthResetEvent>() {
-            if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                 auth_resets.push(entity_key);
             }
         }
@@ -122,7 +113,7 @@ impl ClientEvents {
         for (component_kind, entities) in world_events.take_inserts().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for entity in entities {
-                if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+                if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                     entity_keys.push(entity_key);
                 }
             }
@@ -135,7 +126,7 @@ impl ClientEvents {
         for (component_kind, entity_data) in world_events.take_removes().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for (entity, component) in entity_data {
-                if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+                if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                     entity_keys.push((entity_key, component));
                 }
             }
@@ -148,7 +139,7 @@ impl ClientEvents {
         for (component_kind, entity_data) in world_events.take_updates().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for (tick, entity) in entity_data {
-                if let Some(entity_key) = convert_entity(scenario, &client_key, &entity) {
+                if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
                     entity_keys.push((tick, entity_key));
                 }
             }

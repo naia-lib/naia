@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 
-use naia_server::{NaiaServerError, TickEvents, Events};
+use naia_server::{NaiaServerError, TickEvents, Events, UserKey};
 use naia_shared::{ChannelKind, ComponentKind, GlobalResponseId, MessageContainer, MessageKind, Replicate, Tick, Message};
 
 use crate::{ClientKey, Scenario, TestEntity};
+use crate::harness::entity_registry::EntityRegistry;
 
 pub(crate) struct ServerEvents {
     auths: HashMap<MessageKind, Vec<(ClientKey, MessageContainer)>>,
@@ -32,43 +33,18 @@ use crate::harness::EntityKey;
 
 impl ServerEvents {
     pub fn new(
-        scenario: &Scenario,
+        scenario: &mut Scenario,
         auths: HashMap<MessageKind, Vec<(naia_server::UserKey, MessageContainer)>>,
         mut tick_events: TickEvents,
-        mut events: Events<TestEntity>
+        mut events: Events<TestEntity>,
     ) -> Self {
-        // Convert UserKey to ClientKey
-        let user_to_client = |scenario: &Scenario, user_key: &naia_server::UserKey| -> Option<ClientKey> {
-            scenario.user_to_client_key(user_key)
-        };
-
-        // Convert TestEntity to EntityKey
-        let entity_to_key = |scenario: &Scenario, entity: &TestEntity| -> Option<EntityKey> {
-            scenario.entity_registry().entity_key_for_server_entity(entity)
-        };
-
-        // Convert main events: auths
-        // Auth events arrive before UserKey->ClientKey mapping exists, so we need to match by auth payload
-        // We'll store them with UserKey for now, and match in AuthEvent::iter by deserializing
-        // But we need scenario access in iter... Let's store UserKey alongside for matching
+        // Convert main events: auths (use helper method)
         let mut client_auths = HashMap::new();
         for (message_kind, user_auths) in auths {
             let mut client_auth_list = Vec::new();
             for (user_key, message_container) in user_auths {
-                // Try to find ClientKey by UserKey first (if user is already authenticated)
-                if let Some(client_key) = user_to_client(scenario, &user_key) {
-                    client_auth_list.push((client_key, message_container));
-                } else {
-                    // No UserKey mapping yet - we'll need to match by payload in AuthEvent::iter
-                    // But we can't access scenario there. So we need a different approach.
-                    // Let's match here by deserializing the auth message and comparing with pending_auths
-                    // We need to know it's an Auth message, so we can try to downcast
-                    // Actually, the message_kind tells us it's the right type, so we can deserialize
-                    // But we need the concrete type. Let's store with a special marker.
-                    // Actually, simplest: store with UserKey=0 as marker, match in scenario when reading
-                    // But that's hacky. Better: store UserKey and match in a helper that has scenario access
-                    // Actually, let's just skip unmatched auths for now - they should be rare
-                    // and the test will fail if they're not matched, which will help us debug
+                if let Some((client_key, auth_container)) = scenario.register_auth_event(user_key, message_container) {
+                    client_auth_list.push((client_key, auth_container));
                 }
             }
             if !client_auth_list.is_empty() {
@@ -79,7 +55,7 @@ impl ServerEvents {
         // Convert main events: connections (from world_events in combined Events)
         let mut connections = Vec::new();
         for user_key in events.read::<naia_server::ConnectEvent>() {
-            if let Some(client_key) = user_to_client(scenario, &user_key) {
+            if let Some(client_key) = scenario.user_to_client_key(&user_key) {
                 connections.push(client_key);
             }
         }
@@ -90,7 +66,7 @@ impl ServerEvents {
         // Convert world events: disconnections
         let mut disconnections = Vec::new();
         for (user_key, _addr) in events.read::<naia_server::DisconnectEvent>() {
-            if let Some(client_key) = user_to_client(scenario, &user_key) {
+            if let Some(client_key) = scenario.user_to_client_key(&user_key) {
                 disconnections.push(client_key);
             }
         }
@@ -102,7 +78,7 @@ impl ServerEvents {
             for (message_kind, user_messages) in channel_messages {
                 let mut client_message_list = Vec::new();
                 for (user_key, message_container) in user_messages {
-                    if let Some(client_key) = user_to_client(scenario, &user_key) {
+                    if let Some(client_key) = scenario.user_to_client_key(&user_key) {
                         client_message_list.push((client_key, message_container));
                     }
                 }
@@ -122,7 +98,7 @@ impl ServerEvents {
             for (message_kind, user_requests) in channel_requests {
                 let mut client_request_list = Vec::new();
                 for (user_key, response_id, message_container) in user_requests {
-                    if let Some(client_key) = user_to_client(scenario, &user_key) {
+                    if let Some(client_key) = scenario.user_to_client_key(&user_key) {
                         client_request_list.push((client_key, response_id, message_container));
                     }
                 }
@@ -135,21 +111,19 @@ impl ServerEvents {
             }
         }
 
-        // Convert world events: spawns
+        // Convert world events: spawns (use helper method)
         let mut spawns = Vec::new();
-        for (user_key, entity) in events.read::<naia_server::SpawnEntityEvent>() {
-            if let Some(client_key) = user_to_client(scenario, &user_key) {
-                if let Some(entity_key) = entity_to_key(scenario, &entity) {
-                    spawns.push((client_key, entity_key));
-                }
+        for (user_key, server_entity) in events.read::<naia_server::SpawnEntityEvent>() {
+            if let Some((client_key, entity_key)) = scenario.register_spawn_entity(user_key, server_entity) {
+                spawns.push((client_key, entity_key));
             }
         }
 
         // Convert world events: despawns
         let mut despawns = Vec::new();
         for (user_key, entity) in events.read::<naia_server::DespawnEntityEvent>() {
-            if let Some(client_key) = user_to_client(scenario, &user_key) {
-                if let Some(entity_key) = entity_to_key(scenario, &entity) {
+            if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+                if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&entity) {
                     despawns.push((client_key, entity_key));
                 }
             }
@@ -158,8 +132,8 @@ impl ServerEvents {
         // Convert world events: publishes
         let mut publishes = Vec::new();
         for (user_key, entity) in events.read::<naia_server::PublishEntityEvent>() {
-            if let Some(client_key) = user_to_client(scenario, &user_key) {
-                if let Some(entity_key) = entity_to_key(scenario, &entity) {
+            if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+                if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&entity) {
                     publishes.push((client_key, entity_key));
                 }
             }
@@ -168,8 +142,8 @@ impl ServerEvents {
         // Convert world events: unpublishes
         let mut unpublishes = Vec::new();
         for (user_key, entity) in events.read::<naia_server::UnpublishEntityEvent>() {
-            if let Some(client_key) = user_to_client(scenario, &user_key) {
-                if let Some(entity_key) = entity_to_key(scenario, &entity) {
+            if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+                if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&entity) {
                     unpublishes.push((client_key, entity_key));
                 }
             }
@@ -178,8 +152,8 @@ impl ServerEvents {
         // Convert world events: delegates
         let mut delegates = Vec::new();
         for (user_key, entity) in events.read::<naia_server::DelegateEntityEvent>() {
-            if let Some(client_key) = user_to_client(scenario, &user_key) {
-                if let Some(entity_key) = entity_to_key(scenario, &entity) {
+            if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+                if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&entity) {
                     delegates.push((client_key, entity_key));
                 }
             }
@@ -188,8 +162,8 @@ impl ServerEvents {
         // Convert world events: auth_grants
         let mut auth_grants = Vec::new();
         for (user_key, entity) in events.read::<naia_server::EntityAuthGrantEvent>() {
-            if let Some(client_key) = user_to_client(scenario, &user_key) {
-                if let Some(entity_key) = entity_to_key(scenario, &entity) {
+            if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+                if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&entity) {
                     auth_grants.push((client_key, entity_key));
                 }
             }
@@ -198,7 +172,7 @@ impl ServerEvents {
         // Convert world events: auth_resets
         let mut auth_resets = Vec::new();
         for entity in events.read::<naia_server::EntityAuthResetEvent>() {
-            if let Some(entity_key) = entity_to_key(scenario, &entity) {
+            if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&entity) {
                 auth_resets.push(entity_key);
             }
         }
@@ -209,8 +183,8 @@ impl ServerEvents {
             for (component_kind, entity_data) in inserts_data {
             let mut client_entities = Vec::new();
             for (user_key, entity) in entity_data {
-                if let Some(client_key) = user_to_client(scenario, &user_key) {
-                    if let Some(entity_key) = entity_to_key(scenario, &entity) {
+                if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+                    if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&entity) {
                         client_entities.push((client_key, entity_key));
                     }
                 }
@@ -227,8 +201,8 @@ impl ServerEvents {
             for (component_kind, entity_data) in removes_data {
             let mut client_entities = Vec::new();
             for (user_key, entity, component) in entity_data {
-                if let Some(client_key) = user_to_client(scenario, &user_key) {
-                    if let Some(entity_key) = entity_to_key(scenario, &entity) {
+                if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+                    if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&entity) {
                         client_entities.push((client_key, entity_key, component));
                     }
                 }
@@ -245,8 +219,8 @@ impl ServerEvents {
             for (component_kind, entity_data) in updates_data {
             let mut client_entities = Vec::new();
             for (user_key, entity) in entity_data {
-                if let Some(client_key) = user_to_client(scenario, &user_key) {
-                    if let Some(entity_key) = entity_to_key(scenario, &entity) {
+                if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+                    if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&entity) {
                         client_entities.push((client_key, entity_key));
                     }
                 }
