@@ -153,9 +153,11 @@ impl Scenario {
             self.tick();
 
             // Collect per-tick events (EXACTLY once per tick)
-            // Event registration happens inside take_server_events/take_client_events via callbacks
-            let server_events = self.take_server_events();
-            let client_events_map = self.take_client_events();
+            let mut server_events = self.take_server_events();
+            let mut client_events_map = self.take_client_events();
+
+            // Process spawn events to match client-spawned entities with server entities
+            self.process_spawn_events(&mut server_events, &mut client_events_map);
 
             // Create immutable ExpectCtx for this tick with translated events
             let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
@@ -230,6 +232,7 @@ impl Scenario {
         user_key: UserKey,
         server_entity: TestEntity,
     ) -> Option<(ClientKey, EntityKey)> {
+        
         let client_key = self.user_to_client_key(&user_key)?;
         
         let server_local_entity = {
@@ -242,26 +245,21 @@ impl Scenario {
         // Try to match EntityKey:
         // 1. Check if client entity already registered (client-spawned)
         if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &server_local_entity) {
-            debug!("Matched client-spawned entity {:?} for client {:?}", entity_key, client_key);
             self.entity_registry_mut().register_server_entity(&entity_key, &server_entity);
             self.entity_registry_mut().register_client_local_entity_mapping(&entity_key, &client_key, &server_local_entity);
             return Some((client_key, entity_key));
         }
         // 2. Check if server entity already registered (server-spawned)
-        else if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(&server_entity) {
-            debug!("Matched server-spawned entity {:?} for client {:?}", entity_key, client_key);
+        if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(&server_entity) {
             self.entity_registry_mut().register_client_local_entity_mapping(&entity_key, &client_key, &server_local_entity);
             return Some((client_key, entity_key));
         }
         // 3. Check pending client spawns (client-spawned, not yet registered on server)
-        else if let Some(pending_entity_key) = self.entity_registry_mut().remove_pending_client_spawn(&client_key) {
-            debug!("Matched pending client-spawned entity {:?} for client {:?}", pending_entity_key, client_key);
+        if let Some(pending_entity_key) = self.entity_registry_mut().remove_pending_client_spawn(&client_key) {
             self.entity_registry_mut().register_server_entity(&pending_entity_key, &server_entity);
             self.entity_registry_mut().register_client_local_entity_mapping(&pending_entity_key, &client_key, &server_local_entity);
             return Some((client_key, pending_entity_key));
         }
-        
-        debug!("No EntityKey match found for server spawn event (client: {:?}, entity: {:?})", client_key, server_entity);
         None
     }
 
@@ -272,7 +270,7 @@ impl Scenario {
         entity: &TestEntity,
     ) -> Option<EntityKey> {
         let state = self.client_state(client_key);
-        let user_key = state.user_key()?;
+        let _user_key = state.user_key()?;
         let world_ref = state.world().proxy();
         let client_ref = state.client().entity(world_ref, entity);
         let local_entity = client_ref.local_entity()?;
@@ -478,6 +476,42 @@ impl Scenario {
                 &mut self.server_world,
             );
         }
+    }
+
+    /// Process spawn events to match and register client-spawned entities with server entities
+    fn process_spawn_events(
+        &mut self,
+        _server_events: &mut ServerEvents,
+        client_events_map: &mut HashMap<ClientKey, ClientEvents>,
+    ) {
+        // Collect client spawn events (client-side SpawnEntityEvent means client spawned it)
+        let mut spawns_to_register = Vec::new();
+        for (client_key, _client_events) in client_events_map.iter_mut() {
+            // Check for new client spawns in this tick
+            // These are entities the client created that we need to match with server
+            let state = self.clients.get(client_key).expect("client not found");
+            let client = state.client();
+            
+            // Get all entities that exist on this client
+            let entities = {
+                let world_ref = state.world().proxy();
+                client.entities(&world_ref)
+            };
+            
+            for entity in entities {
+                let world_ref = state.world().proxy();
+                let client_ref = client.entity(world_ref, &entity);
+                if let Some(local_entity) = client_ref.local_entity() {
+                    // Check if this entity is already registered in our registry
+                    if self.entity_registry.entity_key_for_client_entity(client_key, &local_entity).is_none() {
+                        // This is a new client entity - add to list for matching
+                        spawns_to_register.push((*client_key, local_entity, entity));
+                    }
+                }
+            }
+        }
+        
+        self.register_client_spawns(spawns_to_register);
     }
 
     /// Register client spawns by matching LocalEntity values with server entities.
