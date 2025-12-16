@@ -12,9 +12,12 @@ mod user_scope;
 mod user;
 mod room;
 mod client_state;
-mod events;
+mod server_events;
+mod client_events;
 
 pub use scenario::Scenario;
 pub use keys::{ClientKey, EntityKey};
 pub use expect_ctx::ExpectCtx;
+pub use server_events::{AuthEvent, ConnectEvent};
+pub use client_events::RejectEvent;
 

@@ -1,18 +1,18 @@
-use naia_server::{EntityRef, UserRef, RoomRef, RoomKey, Events as ServerEvents};
+use naia_server::{EntityRef, UserRef, RoomRef, RoomKey};
 use naia_demo_world::WorldRef;
 
-use crate::{harness::{events::TranslatableEvent, scenario::Scenario, user_scope::UserScopeRef, EntityKey, ClientKey}, TestEntity};
+use crate::{harness::{scenario::Scenario, user_scope::UserScopeRef, EntityKey, ClientKey, server_events::{ServerEvents, ServerEvent}}, TestEntity};
 
 /// Context for server-side expectations with per-tick events
 pub struct ServerExpectCtx<'a> {
     scenario: &'a Scenario,
-    events: &'a mut ServerEvents<TestEntity>,
+    events: &'a mut ServerEvents,
 }
 
 impl<'a> ServerExpectCtx<'a> {
     pub(crate) fn new(
         scenario: &'a Scenario,
-        events: &'a mut ServerEvents<TestEntity>,
+        events: &'a mut ServerEvents,
     ) -> Self {
         Self {
             scenario,
@@ -23,14 +23,13 @@ impl<'a> ServerExpectCtx<'a> {
     pub fn scenario(&self) -> &Scenario {
         self.scenario
     }
-
-    /// Read a translated event
-    pub fn read_event<E>(&mut self) -> Option<E::Output>
+    
+    /// Read an event (returns first event if any)
+    pub fn read_event<V: ServerEvent>(&mut self) -> Option<V::Item> 
     where
-        E: TranslatableEvent<ServerExpectCtx<'a>> + naia_server::Event<TestEntity>,
-        <E as naia_server::Event<TestEntity>>::Iter: Iterator<Item = <E as TranslatableEvent<ServerExpectCtx<'a>>>::Input>,
+        V::Iter: Iterator<Item = V::Item>,
     {
-        self.events.read::<E>().find_map(|event| E::translate_item(self, event))
+        self.events.read::<V>().next()
     }
 
     /// Expect that the server has replicated/created a concrete entity

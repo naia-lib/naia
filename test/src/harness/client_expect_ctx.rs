@@ -1,22 +1,22 @@
 use std::net::SocketAddr;
 
 use naia_demo_world::WorldRef;
-use naia_client::{EntityRef, ConnectionStatus, NaiaClientError, WorldEvents as ClientEvents, RejectEvent};
+use naia_client::{EntityRef, ConnectionStatus, NaiaClientError};
 
-use crate::{TestEntity, harness::{events::TranslatableEvent, scenario::Scenario, EntityKey, ClientKey}};
+use crate::{TestEntity, harness::{client_events::{ClientEvents, ClientEvent, RejectEvent}, scenario::Scenario, EntityKey, ClientKey}};
 
 /// Context for client-side expectations with per-tick events
 pub struct ClientExpectCtx<'a> {
     scenario: &'a Scenario,
     client_key: ClientKey,
-    events: &'a mut ClientEvents<TestEntity>,
+    events: &'a mut ClientEvents,
 }
 
 impl<'a> ClientExpectCtx<'a> {
     pub(crate) fn new(
         scenario: &'a Scenario,
         client_key: ClientKey,
-        events: &'a mut ClientEvents<TestEntity>,
+        events: &'a mut ClientEvents,
     ) -> Self {
         Self {
             scenario,
@@ -25,13 +25,12 @@ impl<'a> ClientExpectCtx<'a> {
         }
     }
 
-    /// Read a translated event
-    pub fn read_event<E>(&mut self) -> Option<E::Output>
+    /// Read an event (returns first event if any)
+    pub fn read_event<V: ClientEvent>(&mut self) -> Option<V::Item>
     where
-        E: TranslatableEvent<ClientExpectCtx<'a>> + naia_client::WorldEvent<TestEntity>,
-        <E as naia_client::WorldEvent<TestEntity>>::Iter: Iterator<Item = <E as TranslatableEvent<ClientExpectCtx<'a>>>::Input>,
+        V::Iter: Iterator<Item = V::Item>,
     {
-        self.events.read::<E>().find_map(|event| E::translate_item(self, event))
+        self.events.read::<V>().next()
     }
 
     pub fn has_entity(&self, entity: &EntityKey) -> bool {

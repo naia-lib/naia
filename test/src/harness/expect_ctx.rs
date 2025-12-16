@@ -1,9 +1,8 @@
 use std::collections::HashMap;
 
-use naia_server::Events as ServerEvents;
-use naia_client::WorldEvents as ClientEvents;
-
-use crate::{TestEntity, harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx}};
+use crate::{harness::{keys::ClientKey, scenario::Scenario, server_expect_ctx::ServerExpectCtx, client_expect_ctx::ClientExpectCtx}};
+use crate::harness::client_events::ClientEvents;
+use crate::harness::server_events::ServerEvents;
 
 /// Context for evaluating expectations in an expect phase
 /// 
@@ -13,15 +12,15 @@ use crate::{TestEntity, harness::{keys::ClientKey, scenario::Scenario, server_ex
 /// - pre-translated events (AuthEvent/ConnectEvent as ClientKey)
 pub struct ExpectCtx<'a> {
     scenario: &'a Scenario,
-    server_events: ServerEvents<TestEntity>,
-    client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>,
+    server_events: ServerEvents,
+    client_events_map: HashMap<ClientKey, ClientEvents>,
 }
 
 impl<'a> ExpectCtx<'a> {
     pub(crate) fn new(
         scenario: &'a Scenario,
-        server_events: ServerEvents<TestEntity>,
-        client_events_map: HashMap<ClientKey, ClientEvents<TestEntity>>,
+        server_events: ServerEvents,
+        client_events_map: HashMap<ClientKey, ClientEvents>,
     ) -> Self {
         Self {
             scenario,
