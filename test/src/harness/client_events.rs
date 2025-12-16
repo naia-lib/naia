@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 
+use log::{debug, warn};
 use naia_client::{NaiaClientError, TickEvents, WorldEvents};
-use naia_shared::{ChannelKind, ComponentKind, GlobalResponseId, MessageContainer, MessageKind, Replicate, Tick};
+use naia_shared::{ChannelKind, ComponentKind, GlobalResponseId, MessageContainer, MessageKind, Replicate, Tick, LocalEntity, OwnedLocalEntity};
 
 use crate::{Scenario, TestEntity};
 use crate::harness::{EntityKey, ClientKey};
+use crate::harness::server_events::ServerEvents;
 
 pub(crate) struct ClientEvents {
     connections: Vec<()>,
@@ -62,49 +64,49 @@ impl ClientEvents {
 
         let mut spawns = Vec::new();
         for entity in world_events.read::<naia_client::SpawnEntityEvent>() {
-            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+            if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                 spawns.push(entity_key);
             }
         }
 
         let mut despawns = Vec::new();
         for entity in world_events.read::<naia_client::DespawnEntityEvent>() {
-            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+            if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                 despawns.push(entity_key);
             }
         }
 
         let mut publishes = Vec::new();
         for entity in world_events.read::<naia_client::PublishEntityEvent>() {
-            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+            if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                 publishes.push(entity_key);
             }
         }
 
         let mut unpublishes = Vec::new();
         for entity in world_events.read::<naia_client::UnpublishEntityEvent>() {
-            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+            if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                 unpublishes.push(entity_key);
             }
         }
 
         let mut auth_grants = Vec::new();
         for entity in world_events.read::<naia_client::EntityAuthGrantedEvent>() {
-            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+            if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                 auth_grants.push(entity_key);
             }
         }
 
         let mut auth_denies = Vec::new();
         for entity in world_events.read::<naia_client::EntityAuthDeniedEvent>() {
-            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+            if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                 auth_denies.push(entity_key);
             }
         }
 
         let mut auth_resets = Vec::new();
         for entity in world_events.read::<naia_client::EntityAuthResetEvent>() {
-            if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+            if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                 auth_resets.push(entity_key);
             }
         }
@@ -113,7 +115,7 @@ impl ClientEvents {
         for (component_kind, entities) in world_events.take_inserts().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for entity in entities {
-                if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+                if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                     entity_keys.push(entity_key);
                 }
             }
@@ -126,7 +128,7 @@ impl ClientEvents {
         for (component_kind, entity_data) in world_events.take_removes().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for (entity, component) in entity_data {
-                if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+                if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                     entity_keys.push((entity_key, component));
                 }
             }
@@ -139,7 +141,7 @@ impl ClientEvents {
         for (component_kind, entity_data) in world_events.take_updates().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for (tick, entity) in entity_data {
-                if let Some(entity_key) = scenario.register_client_entity_event(&client_key, &entity) {
+                if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
                     entity_keys.push((tick, entity_key));
                 }
             }
@@ -392,5 +394,131 @@ impl ClientEvent for ServerTickEvent {
 
     fn has(events: &ClientEvents) -> bool {
         !events.server_ticks.is_empty()
+    }
+}
+
+/// Register client entity and return EntityKey
+pub(crate) fn register_client_entity_event(
+    scenario: &mut Scenario,
+    client_key: &ClientKey,
+    entity: &TestEntity,
+) -> Option<EntityKey> {
+    let state = scenario.client_state(client_key);
+    let _user_key = state.user_key()?;
+    let world_ref = state.world().proxy();
+    let client_ref = state.client().entity(world_ref, entity);
+    let local_entity = client_ref.local_entity()?;
+    let entity_key = scenario.entity_registry().entity_key_for_client_entity(client_key, &local_entity)?;
+    
+    // Register client entity if not already registered
+    if scenario.entity_registry().client_entity(&entity_key, client_key).is_none() {
+        scenario.entity_registry_mut().register_client_entity(&entity_key, client_key, entity, &local_entity);
+    }
+    
+    Some(entity_key)
+}
+
+/// Process spawn events to match and register client-spawned entities with server entities
+pub(crate) fn process_spawn_events(
+    scenario: &mut Scenario,
+    _server_events: &mut ServerEvents,
+    client_events_map: &mut HashMap<ClientKey, ClientEvents>,
+) {
+    // Collect client spawn events (client-side SpawnEntityEvent means client spawned it)
+    let mut spawns_to_register = Vec::new();
+    for (client_key, _client_events) in client_events_map.iter_mut() {
+        // Check for new client spawns in this tick
+        // These are entities the client created that we need to match with server
+        let state = scenario.clients().get(client_key).expect("client not found");
+        let client = state.client();
+        
+        // Get all entities that exist on this client
+        let entities = {
+            let world_ref = state.world().proxy();
+            client.entities(&world_ref)
+        };
+        
+        for entity in entities {
+            let world_ref = state.world().proxy();
+            let client_ref = client.entity(world_ref, &entity);
+            if let Some(local_entity) = client_ref.local_entity() {
+                // Check if this entity is already registered in our registry
+                if scenario.entity_registry().entity_key_for_client_entity(client_key, &local_entity).is_none() {
+                    // This is a new client entity - add to list for matching
+                    spawns_to_register.push((*client_key, local_entity, entity));
+                }
+            }
+        }
+    }
+    
+    register_client_spawns(scenario, spawns_to_register);
+}
+
+/// Register client spawns by matching LocalEntity values with server entities.
+fn register_client_spawns(scenario: &mut Scenario, spawns_to_register: Vec<(ClientKey, LocalEntity, TestEntity)>) {
+    for (client_key, local_entity, client_entity) in spawns_to_register {
+        let local_entity_value = extract_local_entity_value(&local_entity);
+        
+        // Skip if already registered
+        if let Some(existing_key) = scenario.entity_registry().entity_key_for_client_entity(&client_key, &local_entity) {
+            debug!("Skipping already-registered client entity {:?} for client {:?}", existing_key, client_key);
+            continue;
+        }
+        
+        // Match EntityKey by LocalEntity value
+        let (entity_key, server_entities_count) = {
+            let server_entities: Vec<_> = scenario.entity_registry().server_entities_iter().collect();
+            let count = server_entities.len();
+
+            let mut matched_key = None;
+
+            if let Some(user_key) = scenario.client_to_user_key(&client_key) {
+                let server = scenario.server().as_ref().expect("server not started");
+
+                for (ek, server_entity) in &server_entities {
+                    let world_ref = scenario.server_world_ref();
+                    let server_ref = server.entity(world_ref, server_entity);
+                    if let Some(server_local_entity) = server_ref.local_entity(&user_key) {
+                        let server_value = extract_local_entity_value(&server_local_entity);
+                        if server_value == local_entity_value {
+                            debug!("Matched LocalEntity value {} to server entity {:?}", local_entity_value, ek);
+                            matched_key = Some(*ek);
+                            break;
+                        }
+                    }
+                }
+            }
+
+            (matched_key, count)
+        };
+        
+        if let Some(entity_key) = entity_key {
+            scenario.entity_registry_mut()
+                .register_client_entity(&entity_key, &client_key, &client_entity, &local_entity);
+        } else {
+            warn!(
+                "Phase D: Failed to resolve EntityKey for client {:?} with LocalEntity value {} (checked {} server entities). \
+                 This may indicate a mapping lifecycle violation - entity should resolve in a future tick.",
+                client_key, local_entity_value, server_entities_count
+            );
+        }
+    }
+}
+
+/// Extract the comparable value from a LocalEntity.
+///
+/// This relies on Naia's current internal representation where `LocalEntity` wraps
+/// an `OwnedLocalEntity` enum with a `u16` value. The server and client share the
+/// same value for the same user's view of an entity.
+///
+/// # TODO: Brittleness
+///
+/// This assumes Naia's internal representation. If Naia changes how `LocalEntity`
+/// is represented or provides a public API for comparison, this should be updated.
+/// Consider contributing a public comparison API to the naia crate.
+fn extract_local_entity_value(local_entity: &LocalEntity) -> u16 {
+    let owned: OwnedLocalEntity = (*local_entity).into();
+    match owned {
+        OwnedLocalEntity::Host(v) | OwnedLocalEntity::Remote(v) => v,
     }
 }

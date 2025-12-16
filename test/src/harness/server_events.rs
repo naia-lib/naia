@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use naia_server::{NaiaServerError, TickEvents, Events, UserKey};
+use naia_server::{NaiaServerError, TickEvents, Events};
 use naia_shared::{ChannelKind, ComponentKind, GlobalResponseId, MessageContainer, MessageKind, Replicate, Tick, Message};
 
 use crate::{ClientKey, Scenario, TestEntity};
-use crate::harness::entity_registry::EntityRegistry;
+use crate::harness::EntityKey;
 
 pub(crate) struct ServerEvents {
     auths: HashMap<MessageKind, Vec<(ClientKey, MessageContainer)>>,
@@ -29,8 +29,6 @@ pub(crate) struct ServerEvents {
     ticks: Vec<Tick>,
 }
 
-use crate::harness::EntityKey;
-
 impl ServerEvents {
     pub fn new(
         scenario: &mut Scenario,
@@ -43,7 +41,7 @@ impl ServerEvents {
         for (message_kind, user_auths) in auths {
             let mut client_auth_list = Vec::new();
             for (user_key, message_container) in user_auths {
-                if let Some((client_key, auth_container)) = scenario.register_auth_event(user_key, message_container) {
+                if let Some((client_key, auth_container)) = register_auth_event(scenario, user_key, message_container) {
                     client_auth_list.push((client_key, auth_container));
                 }
             }
@@ -114,7 +112,7 @@ impl ServerEvents {
         // Convert world events: spawns (use helper method)
         let mut spawns = Vec::new();
         for (user_key, server_entity) in events.read::<naia_server::SpawnEntityEvent>() {
-            if let Some((client_key, entity_key)) = scenario.register_spawn_entity(user_key, server_entity) {
+            if let Some((client_key, entity_key)) = register_spawn_entity(scenario, user_key, server_entity) {
                 spawns.push((client_key, entity_key));
             }
         }
@@ -398,4 +396,83 @@ impl ServerEvent for TickEvent {
     fn has(events: &ServerEvents) -> bool {
         !events.ticks.is_empty()
     }
+}
+
+/// Register auth event and map UserKey to ClientKey
+/// Returns (ClientKey, MessageContainer) if successful
+pub(crate) fn register_auth_event(
+    scenario: &mut Scenario,
+    user_key: naia_server::UserKey,
+    message_container: MessageContainer,
+) -> Option<(ClientKey, MessageContainer)> {
+    // Check if already mapped
+    if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+        return Some((client_key, message_container));
+    }
+    
+    // Match by auth payload (for Auth type specifically)
+    use crate::Auth;
+    if let Ok(boxed_auth) = Box::<dyn std::any::Any + 'static>::downcast::<Auth>(message_container.to_boxed_any()) {
+        let auth = *boxed_auth;
+        
+        // Find matching ClientKey in pending_auths
+        if let Some((&client_key, _)) = scenario.pending_auths().iter()
+            .find(|(_, pending_auth)| {
+                pending_auth.username == auth.username &&
+                pending_auth.password == auth.password
+            })
+        {
+            // Update ClientState with UserKey
+            if let Some(state) = scenario.clients_mut().get_mut(&client_key) {
+                state.set_user_key(user_key);
+            }
+            // Update bidirectional maps
+            scenario.user_to_client_map_mut().insert(user_key, client_key);
+            // Remove from pending (handshake complete)
+            scenario.pending_auths_mut().remove(&client_key);
+            
+            // Re-create MessageContainer
+            let auth_container = MessageContainer::from_read(Box::new(auth) as Box<dyn naia_shared::Message>);
+            return Some((client_key, auth_container));
+        }
+    }
+    
+    None
+}
+
+/// Register spawn entity and map to EntityKey
+/// Returns (ClientKey, EntityKey) if successful
+pub(crate) fn register_spawn_entity(
+    scenario: &mut Scenario,
+    user_key: naia_server::UserKey,
+    server_entity: TestEntity,
+) -> Option<(ClientKey, EntityKey)> {
+    let client_key = scenario.user_to_client_key(&user_key)?;
+    
+    let server_local_entity = {
+        let server = scenario.server().as_ref()?;
+        let world_ref = scenario.server_world_ref();
+        let server_ref = server.entity(world_ref, &server_entity);
+        server_ref.local_entity(&user_key)?
+    };
+    
+    // Try to match EntityKey:
+    // 1. Check if client entity already registered (client-spawned)
+    if let Some(entity_key) = scenario.entity_registry().entity_key_for_client_entity(&client_key, &server_local_entity) {
+        scenario.entity_registry_mut().register_server_entity(&entity_key, &server_entity);
+        scenario.entity_registry_mut().register_client_local_entity_mapping(&entity_key, &client_key, &server_local_entity);
+        return Some((client_key, entity_key));
+    }
+    // 2. Check if server entity already registered (server-spawned)
+    if let Some(entity_key) = scenario.entity_registry().entity_key_for_server_entity(&server_entity) {
+        scenario.entity_registry_mut().register_client_local_entity_mapping(&entity_key, &client_key, &server_local_entity);
+        return Some((client_key, entity_key));
+    }
+    // 3. Check pending client spawns (client-spawned, not yet registered on server)
+    if let Some(pending_entity_key) = scenario.entity_registry_mut().remove_pending_client_spawn(&client_key) {
+        scenario.entity_registry_mut().register_server_entity(&pending_entity_key, &server_entity);
+        scenario.entity_registry_mut().register_client_local_entity_mapping(&pending_entity_key, &client_key, &server_local_entity);
+        return Some((client_key, pending_entity_key));
+    }
+    None
 }

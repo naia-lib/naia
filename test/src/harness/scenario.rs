@@ -45,7 +45,7 @@ use crate::{
     TestEntity,
     TestWorld,
 };
-use crate::harness::client_events::ClientEvents;
+use crate::harness::client_events::{ClientEvents, process_spawn_events};
 use crate::harness::server_events::ServerEvents;
 
 type Client = NaiaClient<TestEntity>;
@@ -157,7 +157,7 @@ impl Scenario {
             let mut client_events_map = self.take_client_events();
 
             // Process spawn events to match client-spawned entities with server entities
-            self.process_spawn_events(&mut server_events, &mut client_events_map);
+            crate::harness::client_events::process_spawn_events(self, &mut server_events, &mut client_events_map);
 
             // Create immutable ExpectCtx for this tick with translated events
             let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
@@ -183,105 +183,32 @@ impl Scenario {
         &mut self.entity_registry
     }
 
-    /// Helper for ServerEvents: Register auth event and map UserKey to ClientKey
-    /// Returns (ClientKey, MessageContainer) if successful
-    pub(crate) fn register_auth_event(
-        &mut self,
-        user_key: UserKey,
-        message_container: naia_shared::MessageContainer,
-    ) -> Option<(ClientKey, naia_shared::MessageContainer)> {
-        // Check if already mapped
-        if let Some(client_key) = self.user_to_client_key(&user_key) {
-            return Some((client_key, message_container));
-        }
-        
-        // Match by auth payload (for Auth type specifically)
-        use crate::Auth;
-        if let Ok(boxed_auth) = Box::<dyn std::any::Any + 'static>::downcast::<Auth>(message_container.to_boxed_any()) {
-            let auth = *boxed_auth;
-            
-            // Find matching ClientKey in pending_auths
-            if let Some((&client_key, _)) = self.pending_auths.iter()
-                .find(|(_, pending_auth)| {
-                    pending_auth.username == auth.username &&
-                    pending_auth.password == auth.password
-                })
-            {
-                // Update ClientState with UserKey
-                if let Some(state) = self.clients.get_mut(&client_key) {
-                    state.set_user_key(user_key);
-                }
-                // Update bidirectional maps
-                self.user_to_client_map.insert(user_key, client_key);
-                // Remove from pending (handshake complete)
-                self.pending_auths.remove(&client_key);
-                
-                // Re-create MessageContainer
-                let auth_container = naia_shared::MessageContainer::from_read(Box::new(auth) as Box<dyn naia_shared::Message>);
-                return Some((client_key, auth_container));
-            }
-        }
-        
-        None
+    pub(crate) fn server(&self) -> &Option<Server> {
+        &self.server
     }
 
-    /// Helper for ServerEvents: Register spawn entity and map to EntityKey
-    /// Returns (ClientKey, EntityKey) if successful
-    pub(crate) fn register_spawn_entity(
-        &mut self,
-        user_key: UserKey,
-        server_entity: TestEntity,
-    ) -> Option<(ClientKey, EntityKey)> {
-        
-        let client_key = self.user_to_client_key(&user_key)?;
-        
-        let server_local_entity = {
-            let server = self.server.as_ref()?;
-            let world_ref = self.server_world.proxy();
-            let server_ref = server.entity(world_ref, &server_entity);
-            server_ref.local_entity(&user_key)?
-        };
-        
-        // Try to match EntityKey:
-        // 1. Check if client entity already registered (client-spawned)
-        if let Some(entity_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &server_local_entity) {
-            self.entity_registry_mut().register_server_entity(&entity_key, &server_entity);
-            self.entity_registry_mut().register_client_local_entity_mapping(&entity_key, &client_key, &server_local_entity);
-            return Some((client_key, entity_key));
-        }
-        // 2. Check if server entity already registered (server-spawned)
-        if let Some(entity_key) = self.entity_registry.entity_key_for_server_entity(&server_entity) {
-            self.entity_registry_mut().register_client_local_entity_mapping(&entity_key, &client_key, &server_local_entity);
-            return Some((client_key, entity_key));
-        }
-        // 3. Check pending client spawns (client-spawned, not yet registered on server)
-        if let Some(pending_entity_key) = self.entity_registry_mut().remove_pending_client_spawn(&client_key) {
-            self.entity_registry_mut().register_server_entity(&pending_entity_key, &server_entity);
-            self.entity_registry_mut().register_client_local_entity_mapping(&pending_entity_key, &client_key, &server_local_entity);
-            return Some((client_key, pending_entity_key));
-        }
-        None
+    pub(crate) fn server_world(&self) -> &TestWorld {
+        &self.server_world
     }
 
-    /// Helper for ClientEvents: Register client entity and return EntityKey
-    pub(crate) fn register_client_entity_event(
-        &mut self,
-        client_key: &ClientKey,
-        entity: &TestEntity,
-    ) -> Option<EntityKey> {
-        let state = self.client_state(client_key);
-        let _user_key = state.user_key()?;
-        let world_ref = state.world().proxy();
-        let client_ref = state.client().entity(world_ref, entity);
-        let local_entity = client_ref.local_entity()?;
-        let entity_key = self.entity_registry().entity_key_for_client_entity(client_key, &local_entity)?;
-        
-        // Register client entity if not already registered
-        if self.entity_registry().client_entity(&entity_key, client_key).is_none() {
-            self.entity_registry_mut().register_client_entity(&entity_key, client_key, entity, &local_entity);
-        }
-        
-        Some(entity_key)
+    pub(crate) fn clients_mut(&mut self) -> &mut HashMap<ClientKey, ClientState> {
+        &mut self.clients
+    }
+
+    pub(crate) fn user_to_client_map_mut(&mut self) -> &mut HashMap<UserKey, ClientKey> {
+        &mut self.user_to_client_map
+    }
+
+    pub(crate) fn pending_auths(&self) -> &HashMap<ClientKey, Auth> {
+        &self.pending_auths
+    }
+
+    pub(crate) fn pending_auths_mut(&mut self) -> &mut HashMap<ClientKey, Auth> {
+        &mut self.pending_auths
+    }
+
+    pub(crate) fn clients(&self) -> &HashMap<ClientKey, ClientState> {
+        &self.clients
     }
 
     /// Get immutable access to server and registry for expect operations
@@ -478,110 +405,6 @@ impl Scenario {
         }
     }
 
-    /// Process spawn events to match and register client-spawned entities with server entities
-    fn process_spawn_events(
-        &mut self,
-        _server_events: &mut ServerEvents,
-        client_events_map: &mut HashMap<ClientKey, ClientEvents>,
-    ) {
-        // Collect client spawn events (client-side SpawnEntityEvent means client spawned it)
-        let mut spawns_to_register = Vec::new();
-        for (client_key, _client_events) in client_events_map.iter_mut() {
-            // Check for new client spawns in this tick
-            // These are entities the client created that we need to match with server
-            let state = self.clients.get(client_key).expect("client not found");
-            let client = state.client();
-            
-            // Get all entities that exist on this client
-            let entities = {
-                let world_ref = state.world().proxy();
-                client.entities(&world_ref)
-            };
-            
-            for entity in entities {
-                let world_ref = state.world().proxy();
-                let client_ref = client.entity(world_ref, &entity);
-                if let Some(local_entity) = client_ref.local_entity() {
-                    // Check if this entity is already registered in our registry
-                    if self.entity_registry.entity_key_for_client_entity(client_key, &local_entity).is_none() {
-                        // This is a new client entity - add to list for matching
-                        spawns_to_register.push((*client_key, local_entity, entity));
-                    }
-                }
-            }
-        }
-        
-        self.register_client_spawns(spawns_to_register);
-    }
-
-    /// Register client spawns by matching LocalEntity values with server entities.
-    fn register_client_spawns(&mut self, spawns_to_register: Vec<(ClientKey, LocalEntity, TestEntity)>) {
-        for (client_key, local_entity, client_entity) in spawns_to_register {
-            let local_entity_value = Self::extract_local_entity_value(&local_entity);
-            
-            // Skip if already registered
-            if let Some(existing_key) = self.entity_registry.entity_key_for_client_entity(&client_key, &local_entity) {
-                debug!("Skipping already-registered client entity {:?} for client {:?}", existing_key, client_key);
-                continue;
-            }
-            
-            // Match EntityKey by LocalEntity value
-            let (entity_key, server_entities_count) = {
-                let server_entities: Vec<_> = self.entity_registry.server_entities_iter().collect();
-                let count = server_entities.len();
-
-                let mut matched_key = None;
-
-                if let Some(user_key) = self.client_to_user_key(&client_key) {
-                    let server = self.server.as_ref().expect("server not started");
-
-                    for (ek, server_entity) in &server_entities {
-                        let world_ref = self.server_world.proxy();
-                        let server_ref = server.entity(world_ref, server_entity);
-                        if let Some(server_local_entity) = server_ref.local_entity(&user_key) {
-                            let server_value = Self::extract_local_entity_value(&server_local_entity);
-                            if server_value == local_entity_value {
-                                debug!("Matched LocalEntity value {} to server entity {:?}", local_entity_value, ek);
-                                matched_key = Some(*ek);
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                (matched_key, count)
-            };
-            
-            if let Some(entity_key) = entity_key {
-                self.entity_registry_mut()
-                    .register_client_entity(&entity_key, &client_key, &client_entity, &local_entity);
-            } else {
-                warn!(
-                    "Phase D: Failed to resolve EntityKey for client {:?} with LocalEntity value {} (checked {} server entities). \
-                     This may indicate a mapping lifecycle violation - entity should resolve in a future tick.",
-                    client_key, local_entity_value, server_entities_count
-                );
-            }
-        }
-    }
-
-    /// Extract the comparable value from a LocalEntity.
-    ///
-    /// This relies on Naia's current internal representation where `LocalEntity` wraps
-    /// an `OwnedLocalEntity` enum with a `u16` value. The server and client share the
-    /// same value for the same user's view of an entity.
-    ///
-    /// # TODO: Brittleness
-    ///
-    /// This assumes Naia's internal representation. If Naia changes how `LocalEntity`
-    /// is represented or provides a public API for comparison, this should be updated.
-    /// Consider contributing a public comparison API to the naia crate.
-    fn extract_local_entity_value(local_entity: &LocalEntity) -> u16 {
-        let owned: OwnedLocalEntity = (*local_entity).into();
-        match owned {
-            OwnedLocalEntity::Host(v) | OwnedLocalEntity::Remote(v) => v,
-        }
-    }
 
     pub(crate) fn take_server_events(&mut self) -> ServerEvents {
         let server = self.server.as_mut().expect("server not started");
