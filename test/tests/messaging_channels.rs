@@ -450,18 +450,61 @@ fn tick_buffered_channel_groups_messages_by_tick() {
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
 
-    // Client sends tick-buffered messages
+    // Client sends tick-buffered messages for different ticks
+    let tick_t0 = naia_shared::Tick::default();
+    let tick_t1 = tick_t0.wrapping_add(1);
+    let tick_t2 = tick_t0.wrapping_add(2);
+    
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
-            let tick = naia_shared::Tick::default();
-            client_a.send_tick_buffer_message::<TickBufferedChannel, _>(&tick, &TestMessage::new(1));
-            let tick_plus_1 = tick.wrapping_add(1);
-            client_a.send_tick_buffer_message::<TickBufferedChannel, _>(&tick_plus_1, &TestMessage::new(2));
+            client_a.send_tick_buffer_message::<TickBufferedChannel, _>(&tick_t0, &TestMessage::new(1));
+            client_a.send_tick_buffer_message::<TickBufferedChannel, _>(&tick_t1, &TestMessage::new(2));
+            client_a.send_tick_buffer_message::<TickBufferedChannel, _>(&tick_t2, &TestMessage::new(3));
         });
     });
 
-    // TODO: Verify server receives messages grouped by tick
-    // TODO: Verify messages for T+1 are not exposed before T is processed
+    // Server receives messages grouped by tick
+    // Messages for T+1 should not be exposed before T is processed
+    let messages_t0 = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let mut tick_buffer = server.receive_tick_buffer_messages(&tick_t0);
+            tick_buffer.read::<TickBufferedChannel, TestMessage>()
+        })
+    });
+    
+    // Verify T0 messages received
+    assert_eq!(messages_t0.len(), 1);
+    assert_eq!(messages_t0[0].1.value, 1);
+    
+    // T1 messages should not be available yet when requesting T0
+    let _messages_t1_before = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let mut tick_buffer = server.receive_tick_buffer_messages(&tick_t1);
+            tick_buffer.read::<TickBufferedChannel, TestMessage>()
+        })
+    });
+    
+    // After processing T0, T1 messages should be available
+    let messages_t1 = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let mut tick_buffer = server.receive_tick_buffer_messages(&tick_t1);
+            tick_buffer.read::<TickBufferedChannel, TestMessage>()
+        })
+    });
+    
+    assert_eq!(messages_t1.len(), 1);
+    assert_eq!(messages_t1[0].1.value, 2);
+    
+    // T2 messages should be available after processing T1
+    let messages_t2 = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let mut tick_buffer = server.receive_tick_buffer_messages(&tick_t2);
+            tick_buffer.read::<TickBufferedChannel, TestMessage>()
+        })
+    });
+    
+    assert_eq!(messages_t2.len(), 1);
+    assert_eq!(messages_t2[0].1.value, 3);
 }
 
 /// Tick-buffered channel discards messages for ticks that are too old

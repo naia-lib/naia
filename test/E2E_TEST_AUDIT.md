@@ -212,10 +212,12 @@ All test scenarios from the plan have been created as test functions. However, m
 ## Domain 8: Events, World Integration & Misuse Safety (17 tests)
 
 ### 8.1 Server Events API (4 tests)
-- ⚠️ `inserts_updates_removes_are_one_shot_and_non_duplicated` - **TODO** (requires Events API access)
-- ⚠️ `component_update_events_reflect_correct_multiplicity_per_user` - **TODO** (requires Events API access)
-- ⚠️ `message_events_grouped_correctly_by_channel_and_type` - **PARTIAL** (basic structure, needs Events API verification)
-- ⚠️ `request_response_events_via_events_api_are_drained_and_do_not_reappear` - **PARTIAL** (basic structure, needs Events API verification)
+- ⚠️ `inserts_updates_removes_are_one_shot_and_non_duplicated` - **NOT E2E** (should be unit test for test harness)
+- ⚠️ `component_update_events_reflect_correct_multiplicity_per_user` - **NOT E2E** (should be unit test for test harness)
+- ⚠️ `message_events_grouped_correctly_by_channel_and_type` - **NOT E2E** (should be unit test for test harness)
+- ⚠️ `request_response_events_via_events_api_are_drained_and_do_not_reappear` - **NOT E2E** (should be unit test for test harness)
+
+**Note**: These tests verify the test harness (`ServerEvents`/`ClientEvents`) implementation, not Naia's behavior. They should be moved to a unit test suite for the test harness.
 
 ### 8.2 Client Events API Semantics (6 tests)
 - ⚠️ `client_spawn_insert_update_remove_events_occur_once_per_change_and_drain_cleanly` - **TODO** (requires event draining verification)
@@ -237,7 +239,7 @@ All test scenarios from the plan have been created as test functions. However, m
 - ⚠️ `sending_messages_or_requests_on_a_disconnected_or_rejected_connection_is_safe` - **PARTIAL** (basic structure, needs verification)
 - ⚠️ `misusing_channel_types_yields_defined_failure` - **TODO** (requires channel constraint violation)
 
-**Domain 8 Status**: ✅ **4/17 tests fully implemented**, ⚠️ **13/17 marked TODO or partial**
+**Domain 8 Status**: ✅ **4/17 tests fully implemented**, ⚠️ **9/17 marked TODO or partial**, ⚠️ **4/17 should be unit tests (not E2E)**
 
 ---
 
