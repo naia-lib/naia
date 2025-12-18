@@ -56,7 +56,6 @@ const TICK_DURATION_MS: u64 = 16; // Default tick duration (~60 FPS)
 const DEFAULT_MAX_EXPECT_TICKS: usize = 50; // Maximum ticks before expect() times out
 
 pub struct Scenario {
-    protocol: Protocol,
     hub: LocalTransportHub,
     server: Option<Server>,
     server_world: TestWorld,
@@ -71,7 +70,7 @@ pub struct Scenario {
 }
 
 impl Scenario {
-    pub fn new(protocol: Protocol) -> Self {
+    pub fn new() -> Self {
         // Initialize simulated clock for deterministic test time
         TestClock::init(0);
         
@@ -85,25 +84,30 @@ impl Scenario {
             clients: HashMap::new(),
             entity_registry: EntityRegistry::new(),
             next_client_key: 1,
-            protocol,
             user_to_client_map: HashMap::new(),
             pending_auths: HashMap::new(),
         }
     }
 
-    pub fn server_start(&mut self, server_config: ServerConfig) {
+    pub fn server_start(&mut self, server_config: ServerConfig, protocol: Protocol) {
         if self.server.is_some() {
             panic!("server_start() called multiple times");
         }
 
-        let mut server = Server::new(server_config, self.protocol.clone());
+        let mut server = Server::new(server_config, protocol);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
         server.listen(server_socket);
 
         self.server = Some(server);
     }
 
-    pub fn client_start(&mut self, _display_name: &str, auth: Auth, client_config: ClientConfig) -> ClientKey {
+    pub fn client_start(
+        &mut self,
+        _display_name: &str,
+        auth: Auth,
+        client_config: ClientConfig,
+        protocol: Protocol,
+    ) -> ClientKey {
         if self.server.is_none() {
             panic!("server_start() must be called before client_start()");
         }
@@ -111,7 +115,7 @@ impl Scenario {
         let client_key = ClientKey::new(self.next_client_key);
         self.next_client_key += 1;
 
-        let mut client = Client::new(client_config, self.protocol.clone());
+        let mut client = Client::new(client_config, protocol);
         let world = TestWorld::default();
         let (socket, identity_token, rejection_code) = self.create_client_socket();
         

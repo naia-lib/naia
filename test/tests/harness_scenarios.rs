@@ -11,13 +11,14 @@ use naia_test::{
 /// Test: single client spawn replicates to server
 #[test]
 fn harness_single_client_spawn_replicates_to_server() {
-    let mut scenario = Scenario::new(protocol());
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
 
-    scenario.server_start(ServerConfig::default());
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let room_key = make_room(&mut scenario);
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"));
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
     
     // Mutate phase: client spawns entity
     let entity_a = scenario.mutate(|ctx| {
@@ -40,14 +41,15 @@ fn harness_single_client_spawn_replicates_to_server() {
 /// Test: two clients see the same logical entity
 #[test]
 fn harness_two_clients_entity_mapping() {
-    let mut scenario = Scenario::new(protocol());
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
 
-    scenario.server_start(ServerConfig::default());
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let room_key = make_room(&mut scenario);
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"));
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"));
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
+    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
 
     // Mutate phase: client A spawns entity A
     let entity_a = scenario.mutate(|ctx| {
@@ -127,13 +129,13 @@ fn make_room(scenario: &mut Scenario) -> RoomKey {
     })
 }
 
-fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str, client_auth: Auth) -> ClientKey {
+fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str, client_auth: Auth, protocol: naia_shared::Protocol) -> ClientKey {
     // Create client config for tests (fast handshake, no jitter buffer)
     let mut client_config = ClientConfig::default();
     client_config.send_handshake_interval = Duration::from_millis(0);
     client_config.jitter_buffer = JitterBufferType::Bypass;
     
-    let client_key = scenario.client_start(client_name, client_auth.clone(), client_config);
+    let client_key = scenario.client_start(client_name, client_auth.clone(), client_config, protocol);
 
     // Server: read auth event
     scenario.expect(|ctx| {
