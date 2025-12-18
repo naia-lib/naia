@@ -34,7 +34,7 @@ fn deterministic_replay_of_a_scenario() {
     let client_b_key = client_connect(&mut scenario1, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
 
     // Spawn an entity on server
-    let entity_e = scenario1.mutate(|ctx| {
+    let (entity_e, _) = scenario1.mutate(|ctx| {
         ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
@@ -77,7 +77,7 @@ fn robustness_under_simulated_packet_loss() {
     let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
 
     // Spawn entity E
-    let entity_e = scenario.mutate(|ctx| {
+    let (entity_e, _) = scenario.mutate(|ctx| {
         ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
@@ -118,10 +118,10 @@ fn out_of_order_packet_handling_does_not_regress_to_older_state() {
 
     let room_key = make_room(&mut scenario);
 
-    let _client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
 
     // Spawn entity E
-    let entity_e = scenario.mutate(|ctx| {
+    let (entity_e, _) = scenario.mutate(|ctx| {
         ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
@@ -146,8 +146,8 @@ fn out_of_order_packet_handling_does_not_regress_to_older_state() {
         scenario.mutate(|ctx| {
             ctx.server(|server| {
                 if let Some(mut e) = server.entity_mut(&entity_e) {
-                    if let Some(mut pos) = e.component_mut::<Position>() {
-                        pos.x.set(i as f32);
+                    if let Some(mut pos) = e.component::<Position>() {
+                        *pos.x = i as f32;
                     }
                 }
             });
@@ -161,7 +161,7 @@ fn out_of_order_packet_handling_does_not_regress_to_older_state() {
         ctx.client(client_a_key, |c| {
             if let Some(e) = c.entity(&entity_e) {
                 if let Some(pos) = e.component::<Position>() {
-                    pos.x.get() == 5.0
+                    *pos.x == 5.0
                 } else {
                     false
                 }
@@ -189,7 +189,7 @@ fn server_and_client_tick_indices_advance_monotonically() {
 
     let room_key = make_room(&mut scenario);
 
-    let _client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
 
     let mut last_server_tick: Option<Tick> = None;
     let mut last_client_tick: Option<Tick> = None;
@@ -200,13 +200,17 @@ fn server_and_client_tick_indices_advance_monotonically() {
             // Check server tick
             let mut server_tick_events: Vec<Tick> = Vec::new();
             ctx.server(|server| {
-                server_tick_events = server.read_event::<naia_test::ServerTickEvent>().collect();
+                if let Some(tick) = server.read_event::<naia_test::ServerTickEvent>() {
+                    server_tick_events.push(tick);
+                }
             });
             
             // Check client tick
             let mut client_tick_events: Vec<Tick> = Vec::new();
             ctx.client(client_a_key, |c| {
-                client_tick_events = c.read_event::<naia_test::ClientServerTickEvent>().collect();
+                if let Some(tick) = c.read_event::<naia_test::ClientServerTickEvent>() {
+                    client_tick_events.push(tick);
+                }
             });
 
             // Verify monotonic advancement
@@ -321,7 +325,7 @@ fn long_running_scenario_maintains_stable_memory_and_state() {
         let client_key = client_connect(&mut scenario, &room_key, &format!("Client {}", cycle), Auth::new(&format!("client_{}", cycle), "password"), test_protocol.clone());
         
         // Spawn and despawn entities
-        let entity = scenario.mutate(|ctx| {
+        let (entity, _) = scenario.mutate(|ctx| {
             ctx.server(|server| {
                 server.spawn(|mut e| {
                     e.insert_component(Position::new(cycle as f32, 0.0));
