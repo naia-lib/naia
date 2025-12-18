@@ -1,7 +1,7 @@
-use naia_server::{EntityRef, UserRef, RoomRef, RoomKey};
+use naia_server::{EntityRef, UserRef as NaiaUserRef, RoomRef as NaiaRoomRef, RoomKey};
 use naia_demo_world::WorldRef;
 
-use crate::{harness::{scenario::Scenario, user_scope::UserScopeRef, EntityKey, ClientKey, server_events::{ServerEvents, ServerEvent}}, TestEntity};
+use crate::{harness::{scenario::Scenario, user_scope::UserScopeRef, EntityKey, ClientKey, server_events::{ServerEvents, ServerEvent}, user::UserRef, room::RoomRef}, TestEntity};
 
 /// Context for server-side expectations with per-tick events
 pub struct ServerExpectCtx<'a> {
@@ -84,10 +84,12 @@ impl<'a> ServerExpectCtx<'a> {
     }
 
     /// Get read-only user access for a ClientKey
-    pub fn user(&'_ self, client_key: &ClientKey) -> Option<UserRef<'_, TestEntity>> {
+    pub fn user(&'_ self, client_key: &ClientKey) -> Option<UserRef<'_>> {
         let user_key = self.scenario.client_to_user_key(client_key)?;
+        let users = self.scenario.client_users();
         let (server, _) = self.scenario.server_and_registry()?;
-        Some(server.user(&user_key))
+        let user: NaiaUserRef<'_, TestEntity> = server.user(&user_key);
+        Some(UserRef::new(user, users))
     }
 
     /// Get all ClientKeys for connected users
@@ -112,9 +114,15 @@ impl<'a> ServerExpectCtx<'a> {
     }
 
     /// Get read-only room access
-    pub fn room(&'_ self, room_key: &RoomKey) -> Option<RoomRef<'_, TestEntity>> {
-        let (server, _) = self.scenario.server_and_registry()?;
-        Some(server.room(room_key))
+    pub fn room(&'_ self, room_key: &RoomKey) -> Option<RoomRef<'_>> {
+        let (server, registry) = self.scenario.server_and_registry()?;
+        let users = self.scenario.client_users();
+        if server.room_exists(room_key) {
+            let room = server.room(room_key);
+            Some(crate::harness::room::RoomRef::new(room, registry, users))
+        } else {
+            None
+        }
     }
 
     /// Get all room keys

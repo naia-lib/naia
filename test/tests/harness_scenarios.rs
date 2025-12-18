@@ -8,6 +8,9 @@ use naia_test::{
     AuthEvent, ConnectEvent,
 };
 
+mod test_helpers;
+use test_helpers::{make_room, client_connect};
+
 /// Test: single client spawn replicates to server
 #[test]
 fn harness_single_client_spawn_replicates_to_server() {
@@ -119,61 +122,4 @@ fn harness_two_clients_entity_mapping() {
         });
         (client_a_ok && client_b_ok).then_some(())
     });
-}
-
-fn make_room(scenario: &mut Scenario) -> RoomKey {
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.make_room().key()
-        })
-    })
-}
-
-fn client_connect(scenario: &mut Scenario, room_key: &RoomKey, client_name: &str, client_auth: Auth, protocol: naia_shared::Protocol) -> ClientKey {
-    // Create client config for tests (fast handshake, no jitter buffer)
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
-    
-    let client_key = scenario.client_start(client_name, client_auth.clone(), client_config, protocol);
-
-    // Server: read auth event
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some((incoming_client_key, incoming_auth)) = server.read_event::<AuthEvent<Auth>>() {
-                if incoming_client_key == client_key && incoming_auth == client_auth {
-                    return Some(incoming_client_key);
-                }
-            }
-            return None;
-        })
-    });
-
-    // Server: accept connection
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.accept_connection(&client_key);
-        });
-    });
-
-    // Server: read connect event
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some(incoming_client_key) = server.read_event::<ConnectEvent>() {
-                if incoming_client_key == client_key {
-                    return Some(());
-                }
-            }
-            return None;
-        })
-    });
-
-    // Server: add client to room
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.room_mut(&room_key).expect("room to exist").add_user(&client_key);
-        });
-    });
-
-    client_key
 }
