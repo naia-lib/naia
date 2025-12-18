@@ -136,4 +136,47 @@ impl<'a> ServerExpectCtx<'a> {
         let (server, _) = self.scenario.server_and_registry().unwrap();
         server.rooms_count()
     }
+
+    /// Read messages from a specific channel sent by clients
+    /// Returns an iterator over (ClientKey, M) tuples for messages of type M received on channel C
+    pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(&mut self) -> impl Iterator<Item = (ClientKey, M)> {
+        use naia_shared::{ChannelKind, MessageKind, MessageContainer};
+        let channel_kind = ChannelKind::of::<C>();
+        let message_kind = MessageKind::of::<M>();
+        
+        // Access messages through a helper method on ServerEvents
+        let messages = self.events.take_messages_for_channel_and_type(
+            &channel_kind,
+            &message_kind,
+        );
+        
+        messages.into_iter().map(|(client_key, container)| {
+            let message: M = Box::<dyn std::any::Any + 'static>::downcast::<M>(container.to_boxed_any())
+                .ok()
+                .map(|boxed_m| *boxed_m)
+                .expect("Message type mismatch");
+            (client_key, message)
+        })
+    }
+
+    /// Read requests from a specific channel sent by clients
+    /// Returns an iterator over (ClientKey, ResponseId, Request) tuples received on channel C
+    pub fn read_request<C: naia_shared::Channel, Q: naia_shared::Request>(&mut self) -> impl Iterator<Item = (ClientKey, naia_shared::GlobalResponseId, Q)> {
+        use naia_shared::{ChannelKind, MessageKind};
+        let channel_kind = ChannelKind::of::<C>();
+        let message_kind = MessageKind::of::<Q>();
+        
+        let requests = self.events.take_requests_for_channel_and_type(
+            &channel_kind,
+            &message_kind,
+        );
+        
+        requests.into_iter().map(|(client_key, response_id, container)| {
+            let request: Q = Box::<dyn std::any::Any + 'static>::downcast::<Q>(container.to_boxed_any())
+                .ok()
+                .map(|boxed_q| *boxed_q)
+                .expect("Request type mismatch");
+            (client_key, response_id, request)
+        })
+    }
 }

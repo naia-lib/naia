@@ -260,6 +260,28 @@ impl ServerEvents {
     pub fn has<V: ServerEvent>(&self) -> bool {
         V::has(self)
     }
+
+    pub fn take_messages_for_channel_and_type(
+        &mut self,
+        channel_kind: &naia_shared::ChannelKind,
+        message_kind: &naia_shared::MessageKind,
+    ) -> Vec<(ClientKey, naia_shared::MessageContainer)> {
+        self.messages
+            .get_mut(channel_kind)
+            .and_then(|channel_messages| channel_messages.remove(message_kind))
+            .unwrap_or_default()
+    }
+
+    pub fn take_requests_for_channel_and_type(
+        &mut self,
+        channel_kind: &naia_shared::ChannelKind,
+        message_kind: &naia_shared::MessageKind,
+    ) -> Vec<(ClientKey, naia_shared::GlobalResponseId, naia_shared::MessageContainer)> {
+        self.requests
+            .get_mut(channel_kind)
+            .and_then(|channel_requests| channel_requests.remove(message_kind))
+            .unwrap_or_default()
+    }
 }
 
 // ServerEvent trait
@@ -395,6 +417,51 @@ impl ServerEvent for TickEvent {
 
     fn has(events: &ServerEvents) -> bool {
         !events.ticks.is_empty()
+    }
+}
+
+// DelegateEntityEvent
+pub struct DelegateEntityEvent;
+impl ServerEvent for DelegateEntityEvent {
+    type Iter = std::vec::IntoIter<(ClientKey, EntityKey)>;
+    type Item = (ClientKey, EntityKey);
+
+    fn iter(events: &mut ServerEvents) -> Self::Iter {
+        std::mem::take(&mut events.delegates).into_iter()
+    }
+
+    fn has(events: &ServerEvents) -> bool {
+        !events.delegates.is_empty()
+    }
+}
+
+// EntityAuthGrantEvent
+pub struct EntityAuthGrantEvent;
+impl ServerEvent for EntityAuthGrantEvent {
+    type Iter = std::vec::IntoIter<(ClientKey, EntityKey)>;
+    type Item = (ClientKey, EntityKey);
+
+    fn iter(events: &mut ServerEvents) -> Self::Iter {
+        std::mem::take(&mut events.auth_grants).into_iter()
+    }
+
+    fn has(events: &ServerEvents) -> bool {
+        !events.auth_grants.is_empty()
+    }
+}
+
+// EntityAuthResetEvent
+pub struct EntityAuthResetEvent;
+impl ServerEvent for EntityAuthResetEvent {
+    type Iter = std::vec::IntoIter<EntityKey>;
+    type Item = EntityKey;
+
+    fn iter(events: &mut ServerEvents) -> Self::Iter {
+        std::mem::take(&mut events.auth_resets).into_iter()
+    }
+
+    fn has(events: &ServerEvents) -> bool {
+        !events.auth_resets.is_empty()
     }
 }
 

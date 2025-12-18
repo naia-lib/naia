@@ -1,7 +1,7 @@
 /// Minimal test protocol for E2E testing
 use bevy_ecs::prelude::Component;
 
-use naia_shared::{Property, Protocol, Replicate, Message};
+use naia_shared::{Property, Protocol, Replicate, Message, Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings};
 
 #[derive(Message, PartialEq, Eq, Hash)]
 pub struct Auth {
@@ -17,6 +17,71 @@ impl Auth {
         }
     }
 }
+
+#[derive(Message, PartialEq, Eq, Hash)]
+pub struct TestMessage {
+    pub value: u32,
+}
+
+impl TestMessage {
+    pub fn new(value: u32) -> Self {
+        Self { value }
+    }
+}
+
+#[derive(Message, PartialEq, Eq, Hash)]
+pub struct TestRequest {
+    pub query: String,
+}
+
+impl TestRequest {
+    pub fn new(query: &str) -> Self {
+        Self {
+            query: query.to_string(),
+        }
+    }
+}
+
+#[derive(Message, PartialEq, Eq, Hash)]
+pub struct TestResponse {
+    pub result: String,
+}
+
+impl TestResponse {
+    pub fn new(result: &str) -> Self {
+        Self {
+            result: result.to_string(),
+        }
+    }
+}
+
+impl naia_shared::Request for TestRequest {
+    type Response = TestResponse;
+}
+
+impl naia_shared::Response for TestResponse {}
+
+// Channels for testing
+#[derive(Channel)]
+pub struct ReliableChannel;
+
+#[derive(Channel)]
+pub struct UnreliableChannel;
+
+#[derive(Channel)]
+pub struct OrderedChannel;
+
+#[derive(Channel)]
+pub struct UnorderedChannel;
+
+#[derive(Channel)]
+pub struct SequencedChannel;
+
+#[derive(Channel)]
+pub struct TickBufferedChannel;
+
+#[derive(Channel)]
+pub struct RequestResponseChannel;
 
 #[derive(Component, Replicate)]
 pub struct Position {
@@ -34,6 +99,37 @@ pub fn protocol() -> Protocol {
     Protocol::builder()
         .add_component::<Position>()
         .add_message::<Auth>()
+        .add_message::<TestMessage>()
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>()
+        .add_channel::<ReliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<UnreliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedUnreliable,
+        )
+        .add_channel::<OrderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::OrderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<UnorderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<SequencedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::SequencedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<TickBufferedChannel>(
+            ChannelDirection::ClientToServer,
+            ChannelMode::TickBuffered(TickBufferSettings::default()),
+        )
+        .add_channel::<RequestResponseChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
         .enable_client_authoritative_entities()
         .build()
 }

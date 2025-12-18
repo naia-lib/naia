@@ -191,6 +191,28 @@ impl ClientEvents {
     pub fn has<V: ClientEvent>(&self) -> bool {
         V::has(self)
     }
+
+    pub fn take_messages_for_channel_and_type(
+        &mut self,
+        channel_kind: &naia_shared::ChannelKind,
+        message_kind: &naia_shared::MessageKind,
+    ) -> Vec<naia_shared::MessageContainer> {
+        self.messages
+            .get_mut(channel_kind)
+            .and_then(|channel_messages| channel_messages.remove(message_kind))
+            .unwrap_or_default()
+    }
+
+    pub fn take_requests_for_channel_and_type(
+        &mut self,
+        channel_kind: &naia_shared::ChannelKind,
+        message_kind: &naia_shared::MessageKind,
+    ) -> Vec<(naia_shared::GlobalResponseId, naia_shared::MessageContainer)> {
+        self.requests
+            .get_mut(channel_kind)
+            .and_then(|channel_requests| channel_requests.remove(message_kind))
+            .unwrap_or_default()
+    }
 }
 
 // ClientEvent trait

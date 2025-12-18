@@ -92,6 +92,53 @@ impl<'a> ClientExpectCtx<'a> {
         // Check if RejectEvent is present in current events
         self.events.has::<RejectEvent>()
     }
+
+    /// Check if an event type is present
+    pub fn has<V: ClientEvent>(&self) -> bool {
+        self.events.has::<V>()
+    }
+
+    /// Read messages from a specific channel
+    /// Returns an iterator over messages of type M received on channel C
+    pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(&mut self) -> impl Iterator<Item = M> {
+        use naia_shared::{ChannelKind, MessageKind, MessageContainer};
+        let channel_kind = ChannelKind::of::<C>();
+        let message_kind = MessageKind::of::<M>();
+        
+        // Access messages through a helper method on ClientEvents
+        let messages = self.events.take_messages_for_channel_and_type(
+            &channel_kind,
+            &message_kind,
+        );
+        
+        messages.into_iter().map(|container| {
+            Box::<dyn std::any::Any + 'static>::downcast::<M>(container.to_boxed_any())
+                .ok()
+                .map(|boxed_m| *boxed_m)
+                .expect("Message type mismatch")
+        })
+    }
+
+    /// Read requests from a specific channel
+    /// Returns an iterator over (ResponseId, Request) tuples received on channel C
+    pub fn read_request<C: naia_shared::Channel, Q: naia_shared::Request>(&mut self) -> impl Iterator<Item = (naia_shared::GlobalResponseId, Q)> {
+        use naia_shared::{ChannelKind, MessageKind};
+        let channel_kind = ChannelKind::of::<C>();
+        let message_kind = MessageKind::of::<Q>();
+        
+        let requests = self.events.take_requests_for_channel_and_type(
+            &channel_kind,
+            &message_kind,
+        );
+        
+        requests.into_iter().map(|(response_id, container)| {
+            let request: Q = Box::<dyn std::any::Any + 'static>::downcast::<Q>(container.to_boxed_any())
+                .ok()
+                .map(|boxed_q| *boxed_q)
+                .expect("Request type mismatch");
+            (response_id, request)
+        })
+    }
 }
 
 

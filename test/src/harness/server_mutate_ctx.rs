@@ -68,6 +68,13 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         Some(server.entity_mut(world_mut, &entity))
     }
 
+    /// Despawn an entity by EntityKey
+    pub fn despawn(&mut self, key: &EntityKey) {
+        if let Some(mut entity_mut) = self.entity_mut(key) {
+            entity_mut.despawn();
+        }
+    }
+
     /// Returns a HarnessUserScopeRef, which is used to query whether a given user has
     /// entities in scope. Takes ClientKey and converts it to UserKey internally.
     /// The returned scope works with EntityKey instead of TestEntity.
@@ -328,6 +335,39 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// where you want to test with malformed, expired, or reused tokens.
     pub fn generate_identity_token(&self) -> IdentityToken {
         generate_identity_token()
+    }
+
+    /// Request authority for an entity on behalf of a client
+    /// 
+    /// This requests authority for the given entity for the specified client.
+    /// Returns true if the request was successful, false otherwise.
+    pub fn request_authority(&mut self, client_key: &ClientKey, entity: &EntityKey) -> bool {
+        let scenario = self.ctx.scenario_mut();
+        let Some(user_key) = scenario.client_to_user_key(client_key) else {
+            return false;
+        };
+        let Some(entity) = scenario.entity_registry().server_entity(entity) else {
+            return false;
+        };
+        let (server, _, _, _) = scenario.split_for_server_mut();
+        server.client_request_authority(&user_key, &entity);
+        true
+    }
+
+    /// Release authority for an entity
+    /// 
+    /// This releases authority for the given entity. If a client_key is provided,
+    /// authority is released on behalf of that client. If None, authority is released
+    /// by the server.
+    pub fn release_authority(&mut self, client_key: Option<&ClientKey>, entity: &EntityKey) -> bool {
+        let scenario = self.ctx.scenario_mut();
+        let Some(entity) = scenario.entity_registry().server_entity(entity) else {
+            return false;
+        };
+        let user_key = client_key.and_then(|ck| scenario.client_to_user_key(ck));
+        let (server, _, _, _) = scenario.split_for_server_mut();
+        server.entity_release_authority(user_key.as_ref(), &entity);
+        true
     }
 }
 
