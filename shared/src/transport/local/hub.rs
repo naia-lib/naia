@@ -7,6 +7,7 @@ use std::{
 use tokio::sync::mpsc;
 
 use crate::transport::local::shared::{create_auth_channels, create_data_channels};
+use crate::{LinkConditionerConfig, TimeQueue, Instant, link_condition_logic};
 
 /// Per-client connection state stored in the hub
 /// Only stores server-side channels (what the server needs to receive/send)
@@ -20,6 +21,15 @@ struct ClientConnection {
     server_data_rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
     // Data channels (server -> client) - server sends
     server_data_tx: mpsc::UnboundedSender<Vec<u8>>,
+    
+    // Link conditioner configuration (bidirectional)
+    // None means no conditioning (perfect connection)
+    client_to_server_conditioner: Option<LinkConditionerConfig>,
+    server_to_client_conditioner: Option<LinkConditionerConfig>,
+    
+    // Time queues for delayed packet delivery
+    client_to_server_queue: Arc<Mutex<TimeQueue<Vec<u8>>>>,
+    server_to_client_queue: Arc<Mutex<TimeQueue<Vec<u8>>>>,
 }
 
 /// Shared transport hub managing multiple client connections
@@ -75,6 +85,10 @@ impl LocalTransportHub {
             auth_resp_tx: auth_resp_tx.clone(),
             server_data_rx: Arc::new(Mutex::new(server_data_rx)),
             server_data_tx: server_data_tx.clone(),
+            client_to_server_conditioner: None,
+            server_to_client_conditioner: None,
+            client_to_server_queue: Arc::new(Mutex::new(TimeQueue::new())),
+            server_to_client_queue: Arc::new(Mutex::new(TimeQueue::new())),
         };
 
         self.connections.lock().unwrap().insert(client_addr, connection);
@@ -118,17 +132,43 @@ impl LocalTransportHub {
 
     /// Try to receive a data packet from any client (returns (client_addr, bytes))
     /// Returns None if traffic is paused (packets are dropped)
+    /// Applies link conditioning if configured
+    /// Also processes time queues to deliver ready packets to clients
     pub fn try_recv_data(&self) -> Option<(SocketAddr, Vec<u8>)> {
         let paused = *self.traffic_paused.lock().unwrap(); // Single check
-        let connections = self.connections.lock().unwrap();
+        let now = Instant::now();
+        let mut connections = self.connections.lock().unwrap();
         
-        for (addr, conn) in connections.iter() {
+        // First, deliver any ready packets from server-to-client queues
+        self.deliver_all_queued_packets_to_clients(&mut connections, &now);
+        
+        // Then check time queues for client-to-server delayed packets that are now ready
+        for (addr, conn) in connections.iter_mut() {
+            let mut queue_guard = conn.client_to_server_queue.lock().unwrap();
+            if queue_guard.has_item(&now) {
+                if let Some(bytes) = queue_guard.pop_item(&now) {
+                    return Some((*addr, bytes));
+                }
+            }
+        }
+        
+        // Finally check direct channels and apply link conditioning
+        for (addr, conn) in connections.iter_mut() {
             let mut rx_guard = conn.server_data_rx.lock().unwrap();
             if paused {
                 // Drain ALL packets when paused, not just one
                 while rx_guard.try_recv().is_ok() {}
             } else if let Ok(bytes) = rx_guard.try_recv() {
-                return Some((*addr, bytes));
+                // Apply link conditioning if configured
+                if let Some(ref config) = conn.client_to_server_conditioner {
+                    let mut queue_guard = conn.client_to_server_queue.lock().unwrap();
+                    link_condition_logic::process_packet(config, &mut queue_guard, bytes);
+                    // Packet is now in queue, will be delivered later
+                    continue;
+                } else {
+                    // No conditioning, deliver immediately
+                    return Some((*addr, bytes));
+                }
             }
         }
         None
@@ -152,17 +192,71 @@ impl LocalTransportHub {
 
     /// Send data packet to a specific client
     /// Returns Err(()) if traffic is paused (packets are dropped)
+    /// Applies link conditioning if configured
+    /// Also processes time queues to deliver any ready packets
     pub fn send_data(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
         let paused = *self.traffic_paused.lock().unwrap(); // Single check
         if paused {
             return Err(()); // Drop packet
         }
         
-        let connections = self.connections.lock().unwrap();
-        if let Some(conn) = connections.get(client_addr) {
-            conn.server_data_tx.send(bytes).map_err(|_| ())
+        let now = Instant::now();
+        let mut connections = self.connections.lock().unwrap();
+        
+        // First, deliver any ready packets from server-to-client queues for all clients
+        self.deliver_all_queued_packets_to_clients(&mut connections, &now);
+        
+        if let Some(conn) = connections.get_mut(client_addr) {
+            // Apply link conditioning if configured
+            if let Some(ref config) = conn.server_to_client_conditioner {
+                let mut queue_guard = conn.server_to_client_queue.lock().unwrap();
+                link_condition_logic::process_packet(config, &mut queue_guard, bytes);
+                // Packet is now in queue, will be delivered later
+                Ok(())
+            } else {
+                // No conditioning, send immediately
+                conn.server_data_tx.send(bytes).map_err(|_| ())
+            }
         } else {
             Err(())
+        }
+    }
+    
+    /// Deliver any ready packets from server-to-client time queues to client channels
+    /// Called periodically to ensure delayed packets are delivered
+    fn deliver_all_queued_packets_to_clients(
+        &self,
+        connections: &mut HashMap<SocketAddr, ClientConnection>,
+        now: &Instant,
+    ) {
+        for (_addr, conn) in connections.iter_mut() {
+            let mut queue_guard = conn.server_to_client_queue.lock().unwrap();
+            while queue_guard.has_item(now) {
+                if let Some(bytes) = queue_guard.pop_item(now) {
+                    // Deliver to client channel (non-blocking, may fail if channel is closed)
+                    let _ = conn.server_data_tx.send(bytes);
+                }
+            }
+        }
+    }
+    
+    /// Configure link conditioner for a specific client connection
+    /// `client_to_server` applies to packets from client to server
+    /// `server_to_client` applies to packets from server to client
+    /// Pass `None` to disable conditioning for that direction
+    pub fn configure_link_conditioner(
+        &self,
+        client_addr: &SocketAddr,
+        client_to_server: Option<LinkConditionerConfig>,
+        server_to_client: Option<LinkConditionerConfig>,
+    ) -> bool {
+        let mut connections = self.connections.lock().unwrap();
+        if let Some(conn) = connections.get_mut(client_addr) {
+            conn.client_to_server_conditioner = client_to_server;
+            conn.server_to_client_conditioner = server_to_client;
+            true
+        } else {
+            false
         }
     }
 

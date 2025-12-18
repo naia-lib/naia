@@ -29,6 +29,7 @@ use naia_shared::{
     OwnedLocalEntity,
     Protocol,
     TestClock,
+    LinkConditionerConfig,
 };
 
 use crate::{
@@ -67,6 +68,8 @@ pub struct Scenario {
     user_to_client_map: HashMap<UserKey, ClientKey>,
     /// Pending auth payloads for clients that have started connecting but not yet authenticated
     pending_auths: HashMap<ClientKey, Auth>,
+    /// Mapping: ClientKey -> SocketAddr (for link conditioner configuration)
+    client_to_addr_map: HashMap<ClientKey, SocketAddr>,
 }
 
 impl Scenario {
@@ -86,6 +89,7 @@ impl Scenario {
             next_client_key: 1,
             user_to_client_map: HashMap::new(),
             pending_auths: HashMap::new(),
+            client_to_addr_map: HashMap::new(),
         }
     }
 
@@ -117,7 +121,10 @@ impl Scenario {
 
         let mut client = Client::new(client_config, protocol);
         let world = TestWorld::default();
-        let (socket, identity_token, rejection_code) = self.create_client_socket();
+        let (socket, identity_token, rejection_code, client_addr) = self.create_client_socket();
+        
+        // Store client address for link conditioner configuration
+        self.client_to_addr_map.insert(client_key, client_addr);
         
         // Store auth in pending_auths for later matching with AuthEvent
         self.pending_auths.insert(client_key, auth.clone());
@@ -457,8 +464,8 @@ impl Scenario {
     }
 
     /// Create a client socket from the transport hub
-    /// Returns the socket along with handles to identity_token and rejection_code
-    fn create_client_socket(&self) -> (ClientSocket, Arc<Mutex<Option<naia_shared::IdentityToken>>>, Arc<Mutex<Option<u16>>>) {
+    /// Returns the socket along with handles to identity_token, rejection_code, and client_addr
+    fn create_client_socket(&self) -> (ClientSocket, Arc<Mutex<Option<naia_shared::IdentityToken>>>, Arc<Mutex<Option<u16>>>, SocketAddr) {
         let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) = 
             self.hub.register_client();
         
@@ -483,7 +490,24 @@ impl Scenario {
             rejection_code.clone(),
         );
         let socket = ClientSocket::new(inner_socket, None);
-        (socket, identity_token, rejection_code)
+        (socket, identity_token, rejection_code, client_addr)
+    }
+    
+    /// Configure link conditioner for a specific client
+    /// `client_to_server` applies to packets from client to server (loss, jitter, latency)
+    /// `server_to_client` applies to packets from server to client (loss, jitter, latency)
+    /// Pass `None` to disable conditioning for that direction (perfect connection)
+    pub fn configure_link_conditioner(
+        &self,
+        client_key: &ClientKey,
+        client_to_server: Option<LinkConditionerConfig>,
+        server_to_client: Option<LinkConditionerConfig>,
+    ) -> bool {
+        if let Some(client_addr) = self.client_to_addr_map.get(client_key) {
+            self.hub.configure_link_conditioner(client_addr, client_to_server, server_to_client)
+        } else {
+            false
+        }
     }
 
     /// Update a single client and server at a specific time
