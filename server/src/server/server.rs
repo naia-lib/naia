@@ -59,6 +59,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             self.world_server.receive_user(user_key, user_address);
         }
 
+        // handle queued disconnects (from verified disconnect handshake packets)
+        for user_key in main_events.read::<crate::events::main_events::QueuedDisconnectEvent>() {
+            self.world_server.user_queue_disconnect(&user_key);
+        }
+
         // handle world packets
         let to_world_sender = self.to_world_sender_opt.as_mut().unwrap();
         for (_, addr, payload) in main_events.read::<WorldPacketEvent>() {

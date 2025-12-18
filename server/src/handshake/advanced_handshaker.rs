@@ -126,7 +126,12 @@ impl Handshaker for HandshakeManager {
             }
             HandshakeHeader::Disconnect => {
                 if self.verify_disconnect_request(address, reader) {
-                    return Ok(HandshakeAction::ForwardPacket);
+                    // Get the user_key for this address to disconnect
+                    if let Some(user_key) = self.authenticated_and_identified_users.get(address) {
+                        return Ok(HandshakeAction::DisconnectUser(*user_key));
+                    } else {
+                        return Ok(HandshakeAction::None);
+                    }
                 } else {
                     return Ok(HandshakeAction::None);
                 }

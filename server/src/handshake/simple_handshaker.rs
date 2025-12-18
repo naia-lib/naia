@@ -59,8 +59,8 @@ impl Handshaker for HandshakeManager {
                     else {
                         return Ok(HandshakeAction::None);
                     };
-                    // remove identity token from map
-                    if self.identity_token_map.remove(&user_key).is_none() {
+                    // Verify identity token exists (but keep it for disconnect verification)
+                    if !self.identity_token_map.contains_key(&user_key) {
                         panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
                     }
 
@@ -81,7 +81,12 @@ impl Handshaker for HandshakeManager {
             }
             HandshakeHeader::Disconnect => {
                 if self.verify_disconnect_request(address, reader) {
-                    return Ok(HandshakeAction::ForwardPacket);
+                    // Get the user_key for this address to disconnect
+                    if let Some(user_key) = self.authenticated_and_identified_users.get(address) {
+                        return Ok(HandshakeAction::DisconnectUser(*user_key));
+                    } else {
+                        return Ok(HandshakeAction::None);
+                    }
                 } else {
                     return Ok(HandshakeAction::None);
                 }
@@ -136,13 +141,26 @@ impl HandshakeManager {
 
     fn verify_disconnect_request(
         &mut self,
-        _address: &SocketAddr,
-        _reader: &mut BitReader,
+        address: &SocketAddr,
+        reader: &mut BitReader,
     ) -> bool {
-        // To verify that timestamp hash has been written by this
-        // server instance
-
-        todo!()
+        // Read the identity token from the disconnect packet
+        let Ok(disconnect_token) = IdentityToken::de(reader) else {
+            return false;
+        };
+        
+        // Verify the address is authenticated
+        let Some(user_key) = self.authenticated_and_identified_users.get(address) else {
+            return false;
+        };
+        
+        // Verify the identity token matches what we expect for this user
+        let Some(expected_token) = self.identity_token_map.get(user_key) else {
+            return false;
+        };
+        
+        // Token must match
+        *expected_token == disconnect_token
     }
 
     // fn write_reject_response(&self) -> BitWriter {

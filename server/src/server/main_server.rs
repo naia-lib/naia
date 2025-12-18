@@ -323,6 +323,11 @@ impl MainServer {
                                         );
                                     }
                                 }
+                                Ok(HandshakeAction::DisconnectUser(user_key)) => {
+                                    // Verified disconnect request - queue disconnect in world server
+                                    // The Server struct will handle queuing it properly
+                                    self.incoming_events.push_queued_disconnect(&user_key);
+                                }
                                 Ok(HandshakeAction::SendPacket(packet)) => {
                                     if self.io.send_packet(&address, packet).is_err() {
                                         // TODO: pass this on and handle above

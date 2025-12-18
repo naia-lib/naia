@@ -1734,12 +1734,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     pub(crate) fn user_queue_disconnect(&mut self, user_key: &UserKey) {
         let Some(user) = self.users.get(user_key) else {
-            panic!("Attempting to disconnect a nonexistent user");
+            // User already disconnected, this is fine (disconnect packets may arrive multiple times)
+            return;
         };
         let Some(connection) = self.user_connections.get_mut(&user.address()) else {
-            panic!("Attempting to disconnect a nonexistent connection");
+            // Connection already gone, user is being/has been disconnected
+            return;
         };
+        
+        // If already marked for disconnect, don't queue again (idempotent)
+        if connection.manual_disconnect {
+            return;
+        }
+        
         connection.manual_disconnect = true;
+        // Add to outstanding_disconnects immediately so it gets processed in the next process_all_packets call
+        self.outstanding_disconnects.push(*user_key);
     }
 
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> WorldUser {
@@ -2487,11 +2497,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             self.timeout_timer.reset();
 
             for (_, connection) in self.user_connections.iter() {
-                // user disconnects
+                // Skip manual disconnects - they're already queued by user_queue_disconnect
                 if connection.manual_disconnect {
-                    self.outstanding_disconnects.push(connection.user_key);
                     continue;
                 }
+                // TODO: Add timeout detection logic here for non-manual disconnects
+                // For now, handle_disconnects only processes manual disconnects which are
+                // already queued, so we skip them to avoid double-processing
             }
         }
     }

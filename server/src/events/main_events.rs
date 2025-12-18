@@ -7,6 +7,7 @@ use crate::{events::world_events, user::UserKey, NaiaServerError};
 pub struct MainEvents {
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
     connections: Vec<UserKey>,
+    queued_disconnects: Vec<UserKey>,
     errors: Vec<NaiaServerError>,
     world_packets: Vec<(UserKey, SocketAddr, Box<[u8]>)>,
 
@@ -18,6 +19,7 @@ impl Default for MainEvents {
         Self {
             auths: HashMap::new(),
             connections: Vec::new(),
+            queued_disconnects: Vec::new(),
             errors: Vec::new(),
             world_packets: Vec::new(),
 
@@ -44,6 +46,7 @@ impl MainEvents {
     pub fn append(&mut self, other: Self) {
         self.auths.extend(other.auths);
         self.connections.extend(other.connections);
+        self.queued_disconnects.extend(other.queued_disconnects);
         self.errors.extend(other.errors);
         self.world_packets.extend(other.world_packets);
 
@@ -89,6 +92,11 @@ impl MainEvents {
         payload: Box<[u8]>,
     ) {
         self.world_packets.push((user_key, user_addr, payload));
+        self.empty = false;
+    }
+
+    pub(crate) fn push_queued_disconnect(&mut self, user_key: &UserKey) {
+        self.queued_disconnects.push(*user_key);
         self.empty = false;
     }
 }
@@ -151,6 +159,21 @@ impl<M: Message> MainEvent for AuthEvent<M> {
     fn has(events: &MainEvents) -> bool {
         let message_kind: MessageKind = MessageKind::of::<M>();
         return events.auths.contains_key(&message_kind);
+    }
+}
+
+// QueuedDisconnectEvent
+pub struct QueuedDisconnectEvent;
+impl MainEvent for QueuedDisconnectEvent {
+    type Iter = IntoIter<UserKey>;
+
+    fn iter(events: &mut MainEvents) -> Self::Iter {
+        let list = std::mem::take(&mut events.queued_disconnects);
+        return IntoIterator::into_iter(list);
+    }
+
+    fn has(events: &MainEvents) -> bool {
+        !events.queued_disconnects.is_empty()
     }
 }
 
