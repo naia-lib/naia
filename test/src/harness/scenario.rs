@@ -154,12 +154,31 @@ impl Scenario {
         result
     }
 
+    /// Create a context for expectations with a custom tick timeout.
+    ///
+    /// # Example
+    /// ```rust,no_run
+    /// // Wait up to 200 ticks for a condition that may take longer
+    /// scenario.until(200.ticks()).expect(|ctx| {
+    ///     // ... check conditions
+    /// });
+    /// ```
+    pub fn until(&mut self, ticks: crate::harness::Ticks) -> crate::harness::UntilCtx<'_> {
+        crate::harness::UntilCtx::new(self, ticks.0)
+    }
+
     /// Register expectations and wait until they all pass or timeout.
     ///
     /// The closure is called each tick and should return `Some(T)` when expectations are met.
     /// Ticks the simulation until the closure returns `Some(value)` or the maximum tick count is reached.
-    pub fn expect<T>(&mut self, mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
-        for _tick_count in 1..=DEFAULT_MAX_EXPECT_TICKS {
+    pub fn expect<T>(&mut self, f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
+        self.expect_with_ticks_internal(DEFAULT_MAX_EXPECT_TICKS, f)
+    }
+
+    /// Internal method for expectations with a custom tick limit.
+    /// Use `scenario.until(ticks).expect(...)` instead.
+    pub(crate) fn expect_with_ticks_internal<T>(&mut self, max_ticks: usize, mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
+        for _tick_count in 1..=max_ticks {
             // Update network without draining events
             self.tick();
 
@@ -181,7 +200,7 @@ impl Scenario {
 
         panic!(
             "Scenario::expect timed out after {} ticks without satisfying condition",
-            DEFAULT_MAX_EXPECT_TICKS
+            max_ticks
         );
     }
 
