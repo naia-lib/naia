@@ -24,14 +24,13 @@ impl MutChannelType for MutChannelData {
         } else {
             let receiver = MutReceiver::new(self.diff_mask_length);
             self.receiver_map.insert(address, receiver.clone());
-
             Some(receiver)
         }
     }
 
-    fn send(&self, diff: u8) {
+    fn send(&self, property_index: u8) {
         for (_, receiver) in self.receiver_map.iter() {
-            receiver.mutate(diff);
+            receiver.mutate(property_index);
         }
     }
 }

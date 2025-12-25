@@ -1,4 +1,3 @@
-use log::warn;
 
 use crate::world::local::local_entity::RemoteEntity;
 use crate::world::local::local_world_manager::LocalWorldManager;
@@ -293,12 +292,14 @@ impl WorldReader {
         tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
+        let mut update_count = 0;
         loop {
             // read update continue bit
             let update_continue = bool::de(reader)?;
             if !update_continue {
                 break;
             }
+            update_count += 1;
 
             let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
             // apply redirect if entity was migrated
@@ -329,13 +330,7 @@ impl WorldReader {
 
             // At this point, the WorldChannel/EntityReceiver should guarantee the Entity is in scope, correct?
             if world_manager.has_local_entity(local_entity) {
-                // info!("read_update(): READ UPDATE for entity {:?}, component {:?}", local_entity, component_update.kind);
                 world_manager.insert_received_update(*tick, local_entity, component_update);
-            } else {
-                warn!(
-                    "read_update(): SKIPPED READ UPDATE for entity {:?}, component {:?}!",
-                    local_entity, component_update.kind
-                );
             }
         }
 

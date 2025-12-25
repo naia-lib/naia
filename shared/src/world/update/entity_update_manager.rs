@@ -56,8 +56,9 @@ impl EntityUpdateManager {
             }
 
             component_kinds.retain(|kind| {
-                world.has_component_of_kind(&world_entity, kind)
-                    && !self.diff_handler.diff_mask_is_clear(global_entity, kind)
+                let has_component = world.has_component_of_kind(&world_entity, kind);
+                let diff_mask_clear = self.diff_handler.diff_mask_is_clear(global_entity, kind);
+                has_component && !diff_mask_clear
             });
             !component_kinds.is_empty()
         });

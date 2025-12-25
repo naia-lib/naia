@@ -181,28 +181,28 @@ impl BaseConnection {
         }
     }
 
-    pub fn read_packet(
-        &mut self,
-        channel_kinds: &ChannelKinds,
-        message_kinds: &MessageKinds,
-        component_kinds: &ComponentKinds,
-        tick: &Tick,
-        read_world_events: bool,
-        reader: &mut BitReader,
-    ) -> Result<(), SerdeErr> {
-        // read messages
-        self.message_manager.read_messages(
-            channel_kinds,
-            message_kinds,
-            &mut self.world_manager,
-            reader,
-        )?;
+            pub fn read_packet(
+                &mut self,
+                channel_kinds: &ChannelKinds,
+                message_kinds: &MessageKinds,
+                component_kinds: &ComponentKinds,
+                tick: &Tick,
+                read_world_events: bool,
+                reader: &mut BitReader,
+            ) -> Result<(), SerdeErr> {
+                // read messages
+                self.message_manager.read_messages(
+                    channel_kinds,
+                    message_kinds,
+                    &mut self.world_manager,
+                    reader,
+                )?;
 
-        // read world events
-        if read_world_events {
-            WorldReader::read_world_events(&mut self.world_manager, component_kinds, tick, reader)?;
-        }
+                // read world events
+                if read_world_events {
+                    WorldReader::read_world_events(&mut self.world_manager, component_kinds, tick, reader)?;
+                }
 
-        Ok(())
-    }
+                Ok(())
+            }
 }

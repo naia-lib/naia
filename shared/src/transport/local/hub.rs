@@ -5,6 +5,7 @@ use std::{
 };
 
 use tokio::sync::mpsc;
+use log::debug;
 
 use crate::transport::local::shared::{create_auth_channels, create_data_channels};
 use crate::{LinkConditionerConfig, TimeQueue, Instant, link_condition_logic};
@@ -139,7 +140,7 @@ impl LocalTransportHub {
         let now = Instant::now();
         let mut connections = self.connections.lock().unwrap();
         
-        // First, deliver any ready packets from server-to-client queues
+        // First, deliver any ready packets from server-to-client queues for all clients
         self.deliver_all_queued_packets_to_clients(&mut connections, &now);
         
         // Then check time queues for client-to-server delayed packets that are now ready
@@ -197,6 +198,7 @@ impl LocalTransportHub {
     pub fn send_data(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
         let paused = *self.traffic_paused.lock().unwrap(); // Single check
         if paused {
+            debug!("[HUB] send_data: Packet dropped (traffic paused)");
             return Err(()); // Drop packet
         }
         
@@ -209,35 +211,77 @@ impl LocalTransportHub {
         if let Some(conn) = connections.get_mut(client_addr) {
             // Apply link conditioning if configured
             if let Some(ref config) = conn.server_to_client_conditioner {
+                let packet_len = bytes.len();
                 let mut queue_guard = conn.server_to_client_queue.lock().unwrap();
+                let queue_len_before = queue_guard.len();
                 link_condition_logic::process_packet(config, &mut queue_guard, bytes);
+                let queue_len_after = queue_guard.len();
+                println!("[HUB] send_data: Queued packet for client {} ({} bytes, queue: {} -> {})", 
+                       client_addr, packet_len, queue_len_before, queue_len_after);
                 // Packet is now in queue, will be delivered later
                 Ok(())
             } else {
                 // No conditioning, send immediately
+                let packet_len = bytes.len();
+                println!("[HUB] send_data: Sending packet immediately to {} ({} bytes, no conditioner)", 
+                       client_addr, packet_len);
                 conn.server_data_tx.send(bytes).map_err(|_| ())
             }
         } else {
+            println!("[HUB] send_data: Client {} not found in connections", client_addr);
             Err(())
         }
     }
     
     /// Deliver any ready packets from server-to-client time queues to client channels
     /// Called periodically to ensure delayed packets are delivered
+    /// Returns the number of packets delivered
     fn deliver_all_queued_packets_to_clients(
         &self,
         connections: &mut HashMap<SocketAddr, ClientConnection>,
         now: &Instant,
-    ) {
-        for (_addr, conn) in connections.iter_mut() {
+    ) -> usize {
+        let mut total_delivered = 0;
+        for (addr, conn) in connections.iter_mut() {
             let mut queue_guard = conn.server_to_client_queue.lock().unwrap();
+            let queue_len_before = queue_guard.len();
+            let mut delivered_this_client = 0;
             while queue_guard.has_item(now) {
                 if let Some(bytes) = queue_guard.pop_item(now) {
-                    // Deliver to client channel (non-blocking, may fail if channel is closed)
-                    let _ = conn.server_data_tx.send(bytes);
+                    match conn.server_data_tx.send(bytes) {
+                        Ok(()) => {
+                            delivered_this_client += 1;
+                            total_delivered += 1;
+                        }
+                        Err(_) => {
+                            println!("[HUB] deliver_all_queued: Failed to send packet to client {} (channel closed?)", addr);
+                        }
+                    }
                 }
             }
+            if delivered_this_client > 0 {
+                println!("[HUB] deliver_all_queued: Delivered {} packets to client {} (queue: {} -> {})", 
+                       delivered_this_client, addr, queue_len_before, queue_guard.len());
+            }
         }
+        total_delivered
+    }
+    
+    /// Process time queues for all connections to deliver any ready packets
+    /// This should be called periodically (e.g., during each tick) to ensure
+    /// delayed packets are delivered even when there's no active send/recv
+    pub fn process_time_queues(&self) {
+        let now = Instant::now();
+        let mut connections = self.connections.lock().unwrap();
+        
+        // Deliver ready packets from server-to-client queues
+        let delivered = self.deliver_all_queued_packets_to_clients(&mut connections, &now);
+        if delivered > 0 {
+            println!("[HUB] process_time_queues: Delivered {} total packets", delivered);
+        }
+        
+        // Note: client-to-server queues are processed in try_recv_data(),
+        // which is called during server receive operations
     }
     
     /// Configure link conditioner for a specific client connection

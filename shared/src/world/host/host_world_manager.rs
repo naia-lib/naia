@@ -115,7 +115,13 @@ impl HostWorldManager {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
+        entity_update_manager: &mut EntityUpdateManager,
     ) {
+        // Register components immediately when entity comes into scope (not waiting for delivery confirmation)
+        // This ensures mutations can set the diff mask right away
+        for component_kind in &component_kinds {
+            entity_update_manager.register_component(global_entity, component_kind);
+        }
         // add entity
         self.host_engine
             .send_command(converter, EntityCommand::Spawn(*global_entity));
@@ -323,11 +329,12 @@ impl HostWorldManager {
 
     fn on_delivered_insert_component(
         &mut self,
-        entity_update_manager: &mut EntityUpdateManager,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
+        _entity_update_manager: &mut EntityUpdateManager,
+        _global_entity: &GlobalEntity,
+        _component_kind: &ComponentKind,
     ) {
-        entity_update_manager.register_component(global_entity, component_kind);
+        // Component is already registered when entity comes into scope (in host_init_entity),
+        // so we don't need to register again here when InsertComponent is delivered
     }
 
     fn on_delivered_remove_component(

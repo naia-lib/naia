@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use log::{debug, warn};
 use naia_client::{NaiaClientError, TickEvents, WorldEvents};
-use naia_shared::{ChannelKind, ComponentKind, GlobalResponseId, MessageContainer, MessageKind, Replicate, Tick, LocalEntity, OwnedLocalEntity};
+use naia_shared::{ChannelKind, ComponentKind, GlobalResponseId, MessageContainer, MessageKind, Replicate, Tick, LocalEntity, OwnedLocalEntity, WorldRefType};
 
 use crate::{Scenario, TestEntity};
 use crate::harness::{EntityKey, ClientKey};
@@ -426,11 +426,58 @@ pub(crate) fn register_client_entity_event(
     entity: &TestEntity,
 ) -> Option<EntityKey> {
     let state = scenario.client_state(client_key);
-    let _user_key = state.user_key()?;
+    let user_key = scenario.client_to_user_key(client_key)?;
     let world_ref = state.world().proxy();
+    if !world_ref.has_entity(entity) {
+        return None;
+    }
     let client_ref = state.client().entity(world_ref, entity);
     let local_entity = client_ref.local_entity()?;
-    let entity_key = scenario.entity_registry().entity_key_for_client_entity(client_key, &local_entity)?;
+    // Try to find EntityKey by matching LocalEntity with server entities
+    let entity_key = match scenario.entity_registry().entity_key_for_client_entity(client_key, &local_entity) {
+        Some(ek) => ek,
+        None => {
+            // For server-spawned entities, match by LocalEntity value with server entities
+            let local_entity_value = extract_local_entity_value(&local_entity);
+            let mut matched_key = None;
+            
+            if let Some(user_key) = scenario.client_to_user_key(client_key) {
+                let server = scenario.server().as_ref()?;
+                let server_entities: Vec<_> = scenario.entity_registry().server_entities_iter().collect();
+                
+                for (ek, server_entity) in &server_entities {
+                    let world_ref = scenario.server_world_ref();
+                    let server_ref = server.entity(world_ref, server_entity);
+                    if let Some(server_local_entity) = server_ref.local_entity(&user_key) {
+                        let server_value = extract_local_entity_value(&server_local_entity);
+                        if server_value == local_entity_value {
+                            matched_key = Some(*ek);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            match matched_key {
+                Some(ek) => {
+                    // Verify entity is still in client world before registering
+                    let state = scenario.client_state(client_key);
+                    let world_ref = state.world().proxy();
+                    if !world_ref.has_entity(entity) {
+                        return None;
+                    }
+                    // Register the mapping
+                    scenario.entity_registry_mut().register_client_local_entity_mapping(&ek, client_key, &local_entity);
+                    // Register the client entity
+                    scenario.entity_registry_mut().register_client_entity(&ek, client_key, entity, &local_entity);
+                    ek
+                }
+                None => {
+                    return None;
+                }
+            }
+        }
+    };
     
     // Register client entity if not already registered
     if scenario.entity_registry().client_entity(&entity_key, client_key).is_none() {

@@ -233,10 +233,10 @@ impl Connection {
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) -> bool {
-        if !host_world_events.is_empty()
-            || !update_events.is_empty()
-            || self.base.message_manager.has_outgoing_messages()
-        {
+        let has_messages = self.base.message_manager.has_outgoing_messages();
+        let has_events = !host_world_events.is_empty() || !update_events.is_empty();
+        
+        if has_events || has_messages {
             let writer = self.write_packet(
                 channel_kinds,
                 message_kinds,

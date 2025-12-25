@@ -67,7 +67,8 @@ pub fn client_connect(
 ) -> ClientKey {
     let mut client_config = ClientConfig::default();
     client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    // Use Real jitter buffer mode (default) - Bypass mode would break tick-based ordering tests
+    // client_config.jitter_buffer = JitterBufferType::Bypass;
     client_connect_with_config(scenario, room_key, client_name, client_auth, client_config, protocol)
 }
 
@@ -121,6 +122,13 @@ pub fn client_connect_with_config(
         ctx.server(|server| {
             server.room_mut(&room_key).expect("room to exist").add_user(&client_key);
         });
+    });
+
+    // Verify client has fully established the connection (both client-side and server-side)
+    scenario.expect(|ctx| {
+        let client_connected = ctx.client(client_key, |c| c.connection_status().is_connected());
+        let user_exists = ctx.server(|s| s.user_exists(&client_key));
+        (client_connected && user_exists).then_some(())
     });
 
     client_key

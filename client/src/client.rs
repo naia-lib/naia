@@ -232,6 +232,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut self.incoming_world_events,
         );
 
+        if !entity_events.is_empty() {
+            println!("[CLIENT] process_all_packets: Processing {} entity events", entity_events.len());
+        }
         self.process_entity_events(&mut world, entity_events);
     }
 
@@ -255,6 +258,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
 
         if should_read_packets {
+            println!("[CLIENT] take_tick_events: Reading buffered packets (receiving_tick_happened={:?}, jitter_buffer={:?})", 
+                   receiving_tick_happened, self.client_config.jitter_buffer);
             // read packets on tick boundary, de-jittering
             if connection
                 .read_buffered_packets(
@@ -267,6 +272,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                 warn!("Error reading from buffered packet!");
             }
+        } else {
+            println!("[CLIENT] take_tick_events: NOT reading buffered packets (should_read_packets=false)");
         }
 
         if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
@@ -1350,7 +1357,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         //     self.disconnect_reset_connection();
                         //     return;
                         // }
-                        None => {}
+                        None => {                        }
                     }
                 }
                 Ok(None) => {
@@ -1378,16 +1385,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         Self::handle_empty_acks(connection, &mut self.io);
 
         let mut received_any = false;
+        let mut packets_received = 0;
 
         // receive from socket
         loop {
             match self.io.recv_reader() {
                 Ok(Some(mut reader)) => {
+                    packets_received += 1;
                     connection.mark_heard();
 
-                    let header = StandardHeader::de(&mut reader)
-                        .expect("unable to parse header from incoming packet");
+                    let header = match StandardHeader::de(&mut reader) {
+                        Ok(h) => h,
+                        Err(e) => {
+                            println!("[CLIENT] maintain_connection: Failed to parse header for packet #{}: {:?}", packets_received, e);
+                            continue;
+                        }
+                    };
 
+                    println!("[CLIENT] maintain_connection: Received packet #{} with type={:?}", packets_received, header.packet_type);
                     match header.packet_type {
                         PacketType::Data
                         | PacketType::Heartbeat
@@ -1397,6 +1412,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             // connection is established
                         }
                         _ => {
+                            println!("[CLIENT] maintain_connection: Dropping packet with unsupported type={:?}", header.packet_type);
                             // short-circuit, do not need to handle other packet types at this
                             // point
                             continue;
@@ -1426,6 +1442,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // Handle based on PacketType
                     match header.packet_type {
                         PacketType::Data => {
+                            println!("[CLIENT] maintain_connection: Received Data packet with server_tick={:?}", server_tick);
                             connection.base.mark_should_send_empty_ack();
 
                             if connection
@@ -1574,10 +1591,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // );
             match response_event {
                 EntityEvent::Spawn(global_entity) => {
+                    println!("[CLIENT] process_entity_events: Processing Spawn event for global_entity={:?}", global_entity);
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    println!("[CLIENT] process_entity_events: Mapped to world_entity, pushing spawn");
                     self.incoming_world_events.push_spawn(world_entity);
                     self.global_world_manager
                         .remote_spawn_entity(&global_entity);

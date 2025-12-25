@@ -97,6 +97,7 @@ impl Connection {
         incoming_tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
+        println!("[CLIENT_CONN] buffer_data_packet: Buffering packet for server_tick={:?}", incoming_tick);
         self.jitter_buffer
             .add_item(*incoming_tick, reader.to_owned());
         Ok(())
@@ -112,8 +113,12 @@ impl Connection {
     ) -> Result<(), SerdeErr> {
 
         let receiving_tick = self.time_manager.client_receiving_tick;
+        println!("[CLIENT_CONN] read_buffered_packets: Reading packets for receiving_tick={:?}", receiving_tick);
 
+        let mut packets_read = 0;
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
+            packets_read += 1;
+            println!("[CLIENT_CONN] read_buffered_packets: Reading packet server_tick={:?}", server_tick);
             let mut reader = owned_reader.borrow();
 
             self.base.read_packet(
@@ -124,6 +129,9 @@ impl Connection {
                 true,
                 &mut reader,
             )?;
+        }
+        if packets_read > 0 {
+            println!("[CLIENT_CONN] read_buffered_packets: Read {} packets", packets_read);
         }
 
         Ok(())

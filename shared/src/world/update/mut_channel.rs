@@ -43,9 +43,9 @@ impl MutChannel {
         None
     }
 
-    pub fn send(&self, diff: u8) -> bool {
+    pub fn send(&self, property_index: u8) -> bool {
         if let Ok(data) = self.data.as_ref().read() {
-            data.send(diff);
+            data.send(property_index);
             return true;
         }
         false
@@ -80,11 +80,11 @@ impl MutReceiver {
         return mask.is_clear();
     }
 
-    pub fn mutate(&self, diff: u8) {
+    pub fn mutate(&self, property_index: u8) {
         let Ok(mut mask) = self.mask.as_ref().write() else {
             panic!("Mask held on current thread");
         };
-        mask.set_bit(diff, true);
+        mask.set_bit(property_index, true);
     }
 
     pub fn or_mask(&self, other_mask: &DiffMask) {

@@ -34,8 +34,14 @@ impl JitterBuffer {
     /// Add an item to the buffer
     pub fn add_item(&mut self, tick: Tick, item: OwnedBitReader) {
         match self {
-            JitterBuffer::Real(queue) => queue.add_item(tick, item),
-            JitterBuffer::Bypass(queue) => queue.push_back((tick, item)),
+            JitterBuffer::Real(queue) => {
+                println!("[JITTER_BUFFER] Real mode: Adding packet with server_tick={:?}", tick);
+                queue.add_item(tick, item);
+            }
+            JitterBuffer::Bypass(queue) => {
+                println!("[JITTER_BUFFER] Bypass mode: Adding packet with server_tick={:?} (queue len: {} -> {})", tick, queue.len(), queue.len() + 1);
+                queue.push_back((tick, item));
+            }
         }
     }
 
@@ -44,7 +50,13 @@ impl JitterBuffer {
     pub fn pop_item(&mut self, current_tick: Tick) -> Option<(Tick, OwnedBitReader)> {
         match self {
             JitterBuffer::Real(queue) => queue.pop_item(current_tick),
-            JitterBuffer::Bypass(queue) => queue.pop_front(),
+            JitterBuffer::Bypass(queue) => {
+                let result = queue.pop_front();
+                if result.is_none() && !queue.is_empty() {
+                    println!("[JITTER_BUFFER] Bypass mode: queue has {} items but pop_front returned None", queue.len());
+                }
+                result
+            }
         }
     }
 }

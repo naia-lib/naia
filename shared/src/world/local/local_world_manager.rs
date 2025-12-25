@@ -152,7 +152,7 @@ impl LocalWorldManager {
                 .insert_with_host_entity(*global_entity, host_entity);
         }
         self.host
-            .init_entity_send_host_commands(&self.entity_map, global_entity, component_kinds);
+            .init_entity_send_host_commands(&self.entity_map, global_entity, component_kinds, &mut self.updater);
     }
 
     /// BULLETPROOF: Migrate entity from remote (client) control to host (server) control
@@ -601,6 +601,9 @@ impl LocalWorldManager {
             panic!("Attempting to insert component for entity which does not exist in local entity map! {:?}", global_entity);
         };
         if local_entity.is_host() {
+            // Register component immediately when it comes into scope (not waiting for delivery confirmation)
+            // This ensures mutations can set the diff mask right away
+            self.updater.register_component(global_entity, component_kind);
             self.host.send_command(
                 &self.entity_map,
                 EntityCommand::InsertComponent(*global_entity, *component_kind),

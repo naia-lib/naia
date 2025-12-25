@@ -4,7 +4,6 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use log::{debug, warn};
 
 use naia_client::{
     transport::local::{LocalAddrCell, Socket as ClientSocket, LocalClientSocket},
@@ -30,6 +29,7 @@ use naia_shared::{
     Protocol,
     TestClock,
     LinkConditionerConfig,
+    WorldRefType,
 };
 
 use crate::{
@@ -56,6 +56,14 @@ type Server = NaiaServer<TestEntity>;
 const TICK_DURATION_MS: u64 = 16; // Default tick duration (~60 FPS)
 const DEFAULT_MAX_EXPECT_TICKS: usize = 50; // Maximum ticks before expect() times out
 
+/// Tracks the last operation type to enforce alternating mutate/expect calls
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LastOperation {
+    None,
+    Mutate,
+    Expect,
+}
+
 pub struct Scenario {
     hub: LocalTransportHub,
     server: Option<Server>,
@@ -70,6 +78,8 @@ pub struct Scenario {
     pending_auths: HashMap<ClientKey, Auth>,
     /// Mapping: ClientKey -> SocketAddr (for link conditioner configuration)
     client_to_addr_map: HashMap<ClientKey, SocketAddr>,
+    /// Tracks the last operation to enforce alternating mutate/expect calls
+    last_operation: LastOperation,
 }
 
 impl Scenario {
@@ -90,6 +100,7 @@ impl Scenario {
             user_to_client_map: HashMap::new(),
             pending_auths: HashMap::new(),
             client_to_addr_map: HashMap::new(),
+            last_operation: LastOperation::None,
         }
     }
 
@@ -146,11 +157,21 @@ impl Scenario {
     /// The closure receives a mutable context for spawning entities and modifying world state.
     /// After the closure completes, updates the network to propagate changes (like entity spawns)
     /// but does not drain events - events are only drained by `expect()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called immediately after another `mutate()` call. Tests MUST alternate
+    /// between `mutate()` and `expect()` calls.
     pub fn mutate<R>(&mut self, f: impl FnOnce(&mut MutateCtx) -> R) -> R {
+        if self.last_operation == LastOperation::Mutate {
+            panic!("Scenario::mutate() called immediately after another mutate() call. Tests MUST alternate between mutate() and expect() calls.");
+        }
+        
         let mut ctx = MutateCtx::new(self);
         let result = f(&mut ctx);
         // Update network to propagate immediate effects without draining events
         self.tick();
+        self.last_operation = LastOperation::Mutate;
         result
     }
 
@@ -171,37 +192,63 @@ impl Scenario {
     ///
     /// The closure is called each tick and should return `Some(T)` when expectations are met.
     /// Ticks the simulation until the closure returns `Some(value)` or the maximum tick count is reached.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called immediately after another `expect()` call. Tests MUST alternate
+    /// between `mutate()` and `expect()` calls.
     pub fn expect<T>(&mut self, f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
         self.expect_with_ticks_internal(DEFAULT_MAX_EXPECT_TICKS, f)
     }
 
     /// Internal method for expectations with a custom tick limit.
     /// Use `scenario.until(ticks).expect(...)` instead.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called immediately after another `expect()` call. Tests MUST alternate
+    /// between `mutate()` and `expect()` calls.
     pub(crate) fn expect_with_ticks_internal<T>(&mut self, max_ticks: usize, mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
-        for _tick_count in 1..=max_ticks {
-            // Update network without draining events
-            self.tick();
+        if self.last_operation == LastOperation::Expect {
+            panic!("Scenario::expect() called immediately after another expect() call. Tests MUST alternate between mutate() and expect() calls.");
+        }
+        
+        let result = (|| {
+            for tick_count in 1..=max_ticks {
+                // Update network without draining events
+                self.tick();
 
-            // Collect per-tick events (EXACTLY once per tick)
-            let mut server_events = self.take_server_events();
-            let mut client_events_map = self.take_client_events();
+                // Collect per-tick events (EXACTLY once per tick)
+                let mut server_events = self.take_server_events();
+                let mut client_events_map = self.take_client_events();
 
-            // Process spawn events to match client-spawned entities with server entities
-            crate::harness::client_events::process_spawn_events(self, &mut server_events, &mut client_events_map);
+                // Process spawn events to match client-spawned entities with server entities
+                process_spawn_events(self, &mut server_events, &mut client_events_map);
 
-            // Create immutable ExpectCtx for this tick with translated events
-            let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
+                // Create immutable ExpectCtx for this tick with translated events
+                let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
 
             // Call user closure
-            if let Some(value) = f(&mut ctx) {
-                return value;
+            let result = f(&mut ctx);
+            if let Some(value) = result {
+                return Some(value);
+            }
+            }
+            None
+        })();
+        
+        // Update last operation after expect completes (whether success or timeout)
+        self.last_operation = LastOperation::Expect;
+        
+        match result {
+            Some(value) => value,
+            None => {
+                panic!(
+                    "Scenario::expect timed out after {} ticks without satisfying condition",
+                    max_ticks
+                );
             }
         }
-
-        panic!(
-            "Scenario::expect timed out after {} ticks without satisfying condition",
-            max_ticks
-        );
     }
 
     /// Get read-only access to entity registry
@@ -315,8 +362,14 @@ impl Scenario {
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
 
         let state = self.client_state(client_key);
-        let user_key = state.user_key()?;
-        let local_entity = self.local_entity_for(key, &user_key)?;
+        let user_key = match state.user_key() {
+            Some(uk) => uk,
+            None => return None,
+        };
+        let local_entity = match self.local_entity_for(key, &user_key) {
+            Some(le) => le,
+            None => return None,
+        };
         let world_ref = state.world().proxy();
         state.client().local_entity(world_ref, &local_entity)
     }
@@ -359,9 +412,11 @@ impl Scenario {
         if let Some(client_entity) = self.entity_registry.client_entity(entity_key, &client_key) {
             let state = self.clients.get(&client_key)?;
             let world_ref = state.world().proxy();
-            let client_ref = state.client().entity(world_ref, &client_entity);
-            if let Some(local_entity) = client_ref.local_entity() {
-                return Some(local_entity);
+            if world_ref.has_entity(&client_entity) {
+                let client_ref = state.client().entity(world_ref, &client_entity);
+                if let Some(local_entity) = client_ref.local_entity() {
+                    return Some(local_entity);
+                }
             }
         }
 
@@ -419,6 +474,15 @@ impl Scenario {
         // Advance simulated clock by default tick duration
         TestClock::advance(TICK_DURATION_MS);
         let now = Instant::now();
+        log::trace!("[SCENARIO] tick: Time advanced");
+
+        // Process time queues to deliver any ready delayed packets
+        // This is critical for link conditioner tests where packets are queued
+        // with future timestamps and need to be delivered even when there's
+        // no new traffic. Without this, queued packets would only be delivered
+        // when send_data() or try_recv_data() is called, which doesn't happen
+        // if there's nothing new to send/receive.
+        self.hub.process_time_queues();
 
         // Update all clients and server network
         let server = self.server.as_mut().expect("server not started");
