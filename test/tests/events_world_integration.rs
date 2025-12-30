@@ -35,17 +35,12 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
+            let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
-            })
-        })
-    });
-
-    // Include entity in client's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
+            });
             server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-        });
+            (entity_e, local_entity)
+        })
     });
 
     // Wait for spawn event
@@ -64,6 +59,21 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
         });
     });
 
+    // Verify update was applied
+    scenario.expect(|ctx| {
+        ctx.server(|s| {
+            if let Some(e) = s.entity(&entity_e) {
+                if let Some(pos) = e.component::<Position>() {
+                    (*pos.x - 10.0).abs() < 0.001
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        }).then_some(())
+    });
+
     // Remove component
     scenario.mutate(|ctx| {
         ctx.server(|server| {
@@ -71,6 +81,11 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
                 e.remove_component::<Position>();
             }
         });
+    });
+
+    // Verify remove was applied
+    scenario.expect(|ctx| {
+        (!ctx.server(|s| s.entity(&entity_e).map(|e| e.has_component::<Position>()).unwrap_or(false))).then_some(())
     });
 
     // TODO: Verify that insert/update/remove events appear exactly once
@@ -97,18 +112,13 @@ fn component_update_events_reflect_correct_multiplicity_per_user() {
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
+            let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
-            })
-        })
-    });
-
-    // Include entity in both clients' scopes
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
+            });
             server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
             server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
-        });
+            (entity_e, local_entity)
+        })
     });
 
     // Wait for both clients to see the entity
@@ -211,18 +221,16 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
     let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
 
     // Both clients send requests
-    let response_key_a = scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |c| {
+    let (response_key_a, response_key_b) = scenario.mutate(|ctx| {
+        let key_a = ctx.client(client_a_key, |c| {
             c.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&naia_test::test_protocol::TestRequest::new("query_a"))
                 .expect("Failed to send request")
-        })
-    });
-
-    let response_key_b = scenario.mutate(|ctx| {
-        ctx.client(client_b_key, |c| {
+        });
+        let key_b = ctx.client(client_b_key, |c| {
             c.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&naia_test::test_protocol::TestRequest::new("query_b"))
                 .expect("Failed to send request")
-        })
+        });
+        (key_a, key_b)
     });
 
     // Server receives and responds to both requests
@@ -297,17 +305,12 @@ fn client_spawn_insert_update_remove_events_occur_once_per_change_and_drain_clea
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
+            let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
-            })
-        })
-    });
-
-    // Include entity in client's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
+            });
             server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-        });
+            (entity_e, local_entity)
+        })
     });
 
     // Wait for spawn event
@@ -363,6 +366,11 @@ fn client_never_sees_update_or_remove_events_for_entities_that_were_never_in_sco
         })
     });
 
+    // Verify entity exists on server before updating/removing
+    scenario.expect(|ctx| {
+        ctx.server(|s| s.has_entity(&entity_e)).then_some(())
+    });
+
     // Update and remove component while entity is not in A's scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
@@ -401,28 +409,17 @@ fn client_never_sees_update_or_insert_events_before_seeing_a_spawn_event() {
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
+            let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
-            })
-        })
-    });
-
-    // Include entity in client's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
+            });
             server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-        });
-    });
-
-    // Update component immediately after spawn
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
                 if let Some(mut pos) = e.component::<Position>() {
                     *pos.x = 10.0;
                 }
             }
-        });
+            (entity_e, local_entity)
+        })
     });
 
     // Wait for entity to be visible
@@ -453,17 +450,12 @@ fn client_never_sees_events_after_despawn_for_a_given_entity() {
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
+            let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
-            })
-        })
-    });
-
-    // Include entity in client's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
+            });
             server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-        });
+            (entity_e, local_entity)
+        })
     });
 
     // Wait for entity to be visible
@@ -560,17 +552,13 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
 
     // Server sends multiple requests
-    let response_key_1 = scenario.mutate(|ctx| {
+    let (response_key_1, response_key_2) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&client_a_key, &naia_test::test_protocol::TestRequest::new("query1"))
-                .expect("Failed to send request")
-        })
-    });
-
-    let response_key_2 = scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&client_a_key, &naia_test::test_protocol::TestRequest::new("query2"))
-                .expect("Failed to send request")
+            let key_1 = server.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&client_a_key, &naia_test::test_protocol::TestRequest::new("query1"))
+                .expect("Failed to send request");
+            let key_2 = server.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&client_a_key, &naia_test::test_protocol::TestRequest::new("query2"))
+                .expect("Failed to send request");
+            (key_1, key_2)
         })
     });
 
@@ -652,7 +640,7 @@ fn server_world_integration_receives_every_insert_update_remove_exactly_once() {
     // Verify entity exists in server world and has Position component (insert operation was applied)
     scenario.expect(|ctx| {
         let has_entity = ctx.server(|s| s.has_entity(&entity_e));
-        let has_component = ctx.server(|s| s.world_has_component::<Position>(&entity_e));
+        let has_component = ctx.server(|s| s.entity(&entity_e).map(|e| e.has_component::<Position>()).unwrap_or(false));
         (has_entity && has_component).then_some(())
     });
 
@@ -694,7 +682,10 @@ fn server_world_integration_receives_every_insert_update_remove_exactly_once() {
 
     // Verify remove was applied (component no longer exists)
     scenario.expect(|ctx| {
-        (!ctx.server(|s| s.world_has_component::<Position>(&entity_e))).then_some(())
+        let component_removed = ctx.server(|s| {
+            s.entity(&entity_e).map(|e| !e.has_component::<Position>()).unwrap_or(true)
+        });
+        component_removed.then_some(())
     });
 }
 
@@ -728,29 +719,22 @@ fn world_integration_cleans_up_completely_on_disconnect_and_reconnect() {
 
     // Server spawns entity and add to client's scope in one mutate
     let (entity_e, _) = scenario.mutate(|ctx| {
-        let entity = ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-            })
-        });
-        // Add entity to client's scope in same mutate
         ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity.0);
-        });
-        entity
+            let (entity_e, local_entity) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            (entity_e, local_entity)
+        })
     });
 
     // Wait for entity to replicate to client
-    scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
-    });
-
-    // Need mutate between expect calls
-    scenario.mutate(|_ctx| {});
-
-    // Record initial entity count
     let initial_client_count = scenario.expect(|ctx| {
-        Some(ctx.client(client_a_key, |c| c.world_entity_count()))
+        if ctx.client(client_a_key, |c| c.has_entity(&entity_e)) {
+            Some(ctx.client(client_a_key, |c| c.entities().len()))
+        } else {
+            None
+        }
     });
 
     // Disconnect client
@@ -760,19 +744,13 @@ fn world_integration_cleans_up_completely_on_disconnect_and_reconnect() {
         });
     });
 
-    // Wait for disconnect event first (like basic_connect_disconnect_lifecycle does)
+    // Wait for disconnect event and user removal (user cleanup happens after disconnect event)
     scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server.read_event::<ServerDisconnectEvent>().is_some().then_some(())
-        })
-    });
-
-    // Need mutate between expect calls
-    scenario.mutate(|_ctx| {});
-
-    // Wait for user to be removed (user cleanup happens after disconnect event)
-    scenario.expect(|ctx| {
-        (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(())
+        let disconnect_event = ctx.server(|server| {
+            server.read_event::<ServerDisconnectEvent>().is_some()
+        });
+        let user_removed = !ctx.server(|s| s.user_exists(&client_a_key));
+        (disconnect_event && user_removed).then_some(())
     });
 
     // After disconnect, client state is removed, so we verify cleanup by ensuring
@@ -852,17 +830,12 @@ fn accessing_an_entity_after_despawn_is_safely_rejected() {
     // Spawn entity
     let (entity_e, _) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
+            let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
-            })
-        })
-    });
-
-    // Include entity in client's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
+            });
             server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-        });
+            (entity_e, local_entity)
+        })
     });
 
     // Wait for entity to be visible

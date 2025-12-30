@@ -251,6 +251,14 @@ impl Scenario {
         }
     }
 
+    /// Reset the operation state to allow the next call to be either `mutate()` or `expect()`.
+    /// 
+    /// This is useful for helper functions like `client_connect()` that perform multiple
+    /// operations internally and should allow the caller to follow with either type of operation.
+    pub fn allow_flexible_next(&mut self) {
+        self.last_operation = LastOperation::None;
+    }
+
     /// Get read-only access to entity registry
     pub(crate) fn entity_registry(&self) -> &EntityRegistry {
         &self.entity_registry

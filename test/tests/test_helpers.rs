@@ -131,5 +131,8 @@ pub fn client_connect_with_config(
         (client_connected && user_exists).then_some(())
     });
 
+    // Allow the next call to be either mutate() or expect()
+    scenario.allow_flexible_next();
+
     client_key
 }
