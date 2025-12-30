@@ -41,31 +41,18 @@ fn client_owned_spawn_grants_authority_to_that_client() {
         })
     });
 
-    // Wait for entity to replicate to server
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server.has_entity(&entity_e).then_some(())
-        })
-    });
-
-    // Verify server records A as owner (client-owned entities become ClientPublic)
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some(e) = server.entity(&entity_e) {
-                let owner = e.owner();
-                // Client-spawned public entities become ClientPublic
-                owner.is_client().then_some(())
-            } else {
-                None
-            }
-        })
-    });
-
-    // Wait for authority-grant event to be emitted to A
+    // Wait for entity to replicate to server and verify A is owner with authority-grant event
     // (Client-spawned public entities automatically get authority)
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| {
-            // Check if we have an auth grant event for this entity
+        let entity_exists = ctx.server(|server| server.has_entity(&entity_e));
+        let owner_correct = ctx.server(|server| {
+            if let Some(e) = server.entity(&entity_e) {
+                e.owner().is_client()
+            } else {
+                false
+            }
+        });
+        let auth_grant_received = ctx.client(client_a_key, |c| {
             if c.has::<EntityAuthGrantedEvent>() {
                 let mut found = false;
                 for entity in c.read_event::<EntityAuthGrantedEvent>() {
@@ -74,11 +61,12 @@ fn client_owned_spawn_grants_authority_to_that_client() {
                         break;
                     }
                 }
-                found.then_some(())
+                found
             } else {
-                None
+                false
             }
-        })
+        });
+        (entity_exists && owner_correct && auth_grant_received).then_some(())
     });
 
     // Verify A can update E authoritatively
@@ -241,21 +229,16 @@ fn delegation_request_for_non_delegatable_entity_is_denied() {
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
 
-    // Server spawns E (server-owned, non-delegatable)
+    // Server spawns E (server-owned, non-delegatable) and include in A's scope
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
+            let entity = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
                 e.enter_room(&room_key);
-            }).0
+            }).0;
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            entity
         })
-    });
-
-    // Include E in A's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-        });
     });
 
     // Verify A sees E
@@ -271,29 +254,25 @@ fn delegation_request_for_non_delegatable_entity_is_denied() {
         });
     });
 
-    // Verify ownership does not change (still server-owned)
+    // Verify ownership does not change (still server-owned) and no grant event is emitted to A
     scenario.expect(|ctx| {
-        ctx.server(|server| {
+        let ownership_correct = ctx.server(|server| {
             if let Some(e) = server.entity(&entity_e) {
-                let owner = e.owner();
-                owner.is_server().then_some(())
+                e.owner().is_server()
             } else {
-                None
+                false
             }
-        })
-    });
-
-    // Verify no grant event is emitted to A
-    scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| {
+        });
+        let no_grant_event = ctx.client(client_a_key, |c| {
             // Should not have received auth grant
             let mut found = false;
             for _entity in c.read_event::<EntityAuthGrantedEvent>() {
                 found = true;
                 break;
             }
-            (!found).then_some(())
-        })
+            !found
+        });
+        (ownership_correct && no_grant_event).then_some(())
     });
 
     // Verify A's direct control attempts are ignored (server updates take precedence)
@@ -305,6 +284,11 @@ fn delegation_request_for_non_delegatable_entity_is_denied() {
         });
     });
 
+    // Verify server update applied before A's attempt
+    scenario.expect(|ctx| {
+        ctx.server(|server| server.has_entity(&entity_e).then_some(()))
+    });
+
     // A attempts to update (should be ignored)
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
@@ -314,20 +298,22 @@ fn delegation_request_for_non_delegatable_entity_is_denied() {
         });
     });
 
-    // Verify server's update is authoritative (not A's)
+    // Verify entity exists and server's update is authoritative (not A's)
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| {
+        let entity_exists = ctx.server(|server| server.has_entity(&entity_e));
+        let server_authoritative = ctx.client(client_a_key, |c| {
             if let Some(e) = c.entity(&entity_e) {
                 if let Some(pos) = e.component::<Position>() {
                     // Should have server's value (100, 200), not A's (999, 999)
-                    ((*pos.x - 100.0).abs() < 0.001 && (*pos.y - 200.0).abs() < 0.001).then_some(())
+                    (*pos.x - 100.0).abs() < 0.001 && (*pos.y - 200.0).abs() < 0.001
                 } else {
-                    None
+                    false
                 }
             } else {
-                None
+                false
             }
-        })
+        });
+        (entity_exists && server_authoritative).then_some(())
     });
 }
 
@@ -357,16 +343,10 @@ fn server_can_revoke_authority_reset() {
         })
     });
 
-    // Wait for entity to replicate to server
+    // Wait for entity to replicate to server and authority-grant event (client-spawned entities get authority automatically)
     scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server.has_entity(&entity_e).then_some(())
-        })
-    });
-
-    // Wait for authority-grant event (client-spawned entities get authority automatically)
-    scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| {
+        let entity_exists = ctx.server(|server| server.has_entity(&entity_e));
+        let auth_grant_received = ctx.client(client_a_key, |c| {
             if c.has::<EntityAuthGrantedEvent>() {
                 let mut found = false;
                 for entity in c.read_event::<EntityAuthGrantedEvent>() {
@@ -375,11 +355,12 @@ fn server_can_revoke_authority_reset() {
                         break;
                     }
                 }
-                found.then_some(())
+                found
             } else {
-                None
+                false
             }
-        })
+        });
+        (entity_exists && auth_grant_received).then_some(())
     });
 
     // Server revokes E's authority
@@ -389,9 +370,9 @@ fn server_can_revoke_authority_reset() {
         });
     });
 
-    // Verify authority-reset event is emitted to A
+    // Verify authority-reset event is emitted to A and E becomes server-owned
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| {
+        let reset_event_received = ctx.client(client_a_key, |c| {
             if c.has::<naia_test::ClientEntityAuthResetEvent>() {
                 let mut found = false;
                 for entity in c.read_event::<naia_test::ClientEntityAuthResetEvent>() {
@@ -400,23 +381,19 @@ fn server_can_revoke_authority_reset() {
                         break;
                     }
                 }
-                found.then_some(())
+                found
             } else {
-                None
+                false
             }
-        })
-    });
-
-    // Verify E becomes server-owned
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
+        });
+        let server_owned = ctx.server(|server| {
             if let Some(e) = server.entity(&entity_e) {
-                let owner = e.owner();
-                owner.is_server().then_some(())
+                e.owner().is_server()
             } else {
-                None
+                false
             }
-        })
+        });
+        (reset_event_received && server_owned).then_some(())
     });
 
     // Verify further updates from A are ignored
@@ -426,6 +403,11 @@ fn server_can_revoke_authority_reset() {
                 entity_mut.insert_component(Position::new(999.0, 999.0));
             }
         });
+    });
+
+    // Verify entity still exists before server update
+    scenario.expect(|ctx| {
+        ctx.server(|server| server.has_entity(&entity_e).then_some(()))
     });
 
     // Server updates E
@@ -509,35 +491,19 @@ fn delegated_owner_disconnect_cleanup() {
         });
     });
 
-    // Wait for disconnect
+    // Wait for disconnect and verify server resets E's authority to safe state (server-owned), E remains alive and replicated to B
     scenario.expect(|ctx| {
-        (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(())
-    });
-
-    // Verify server resets E's authority to safe state (server-owned)
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
+        let disconnected = !ctx.server(|s| s.user_exists(&client_a_key));
+        let authority_reset = ctx.server(|server| {
             if let Some(e) = server.entity(&entity_e) {
-                let owner = e.owner();
-                owner.is_server().then_some(())
+                e.owner().is_server()
             } else {
-                None
+                false
             }
-        })
-    });
-
-    // Verify E remains alive and replicated to B
-    scenario.expect(|ctx| {
+        });
         let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
-        b_sees_e.then_some(())
-    });
-
-    // Verify future delegation can proceed (by checking entity still exists and can be delegated)
-    // This is implicit - if the entity is still alive and server-owned, it can be delegated again
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server.has_entity(&entity_e).then_some(())
-        })
+        let entity_exists = ctx.server(|server| server.has_entity(&entity_e));
+        (disconnected && authority_reset && b_sees_e && entity_exists).then_some(())
     });
 }
 
@@ -608,12 +574,7 @@ fn ownership_transfer_from_one_client_to_another() {
         ctx.server(|server| {
             // Release A's authority
             server.release_authority(Some(&client_a_key), &entity_e);
-        });
-    });
-
-    // Grant authority to B
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
+            // Grant authority to B
             server.request_authority(&client_b_key, &entity_e);
         });
     });
@@ -636,23 +597,6 @@ fn ownership_transfer_from_one_client_to_another() {
         })
     });
 
-    // Verify B receives auth grant event
-    scenario.expect(|ctx| {
-        ctx.client(client_b_key, |c| {
-            if c.has::<EntityAuthGrantedEvent>() {
-                let mut found = false;
-                for entity in c.read_event::<EntityAuthGrantedEvent>() {
-                    if entity == entity_e {
-                        found = true;
-                        break;
-                    }
-                }
-                found.then_some(())
-            } else {
-                None
-            }
-        })
-    });
 
     // A attempts to update (should be ignored)
     scenario.mutate(|ctx| {
@@ -661,6 +605,11 @@ fn ownership_transfer_from_one_client_to_another() {
                 entity_mut.insert_component(Position::new(999.0, 999.0));
             }
         });
+    });
+
+    // Verify entity still exists before B's update
+    scenario.expect(|ctx| {
+        ctx.server(|server| server.has_entity(&entity_e).then_some(()))
     });
 
     // B updates E (should be applied)
@@ -741,6 +690,11 @@ fn concurrent_conflicting_updates_respect_current_owner() {
         });
     });
 
+    // Verify entity exists before A's update
+    scenario.expect(|ctx| {
+        ctx.server(|server| server.has_entity(&entity_e).then_some(()))
+    });
+
     // A sends update (before transfer)
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
@@ -748,6 +702,11 @@ fn concurrent_conflicting_updates_respect_current_owner() {
                 entity_mut.insert_component(Position::new(10.0, 20.0));
             }
         });
+    });
+
+    // Verify entity exists before ownership transfer
+    scenario.expect(|ctx| {
+        ctx.server(|server| server.has_entity(&entity_e).then_some(()))
     });
 
     // Server switches ownership from A to B
@@ -758,6 +717,17 @@ fn concurrent_conflicting_updates_respect_current_owner() {
         });
     });
 
+    // Verify ownership transferred to B
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(e) = server.entity(&entity_e) {
+                e.owner().is_client().then_some(())
+            } else {
+                None
+            }
+        })
+    });
+
     // A sends update (after transfer - should be ignored)
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
@@ -765,6 +735,11 @@ fn concurrent_conflicting_updates_respect_current_owner() {
                 entity_mut.insert_component(Position::new(999.0, 999.0));
             }
         });
+    });
+
+    // Verify entity still exists before B's update
+    scenario.expect(|ctx| {
+        ctx.server(|server| server.has_entity(&entity_e).then_some(()))
     });
 
     // B sends update (after transfer - should be applied)
@@ -846,11 +821,21 @@ fn authority_revocation_races_with_pending_updates() {
         });
     });
 
+    // Verify entity exists before authority revocation
+    scenario.expect(|ctx| {
+        ctx.server(|server| server.has_entity(&entity_e).then_some(()))
+    });
+
     // Server revokes A's authority
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server.release_authority(Some(&client_a_key), &entity_e);
         });
+    });
+
+    // Verify authority revoked before A's update
+    scenario.expect(|ctx| {
+        ctx.server(|server| server.has_entity(&entity_e).then_some(()))
     });
 
     // A sends update (post-revocation - should be discarded)
@@ -860,6 +845,11 @@ fn authority_revocation_races_with_pending_updates() {
                 entity_mut.insert_component(Position::new(999.0, 999.0));
             }
         });
+    });
+
+    // Verify entity still exists before server update
+    scenario.expect(|ctx| {
+        ctx.server(|server| server.has_entity(&entity_e).then_some(()))
     });
 
     // Server updates E (to establish authoritative state)
@@ -931,14 +921,10 @@ fn delegation_to_an_out_of_scope_client_behaves_predictably() {
         });
     });
 
-    // Verify E is brought into A's scope (delegation should include entity in scope)
+    // Verify E is brought into A's scope and A receives auth grant event (delegation should include entity in scope)
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
-    });
-
-    // Verify A receives auth grant event
-    scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| {
+        let entity_in_scope = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        let auth_grant_received = ctx.client(client_a_key, |c| {
             if c.has::<EntityAuthGrantedEvent>() {
                 let mut found = false;
                 for entity in c.read_event::<EntityAuthGrantedEvent>() {
@@ -947,11 +933,12 @@ fn delegation_to_an_out_of_scope_client_behaves_predictably() {
                         break;
                     }
                 }
-                found.then_some(())
+                found
             } else {
-                None
+                false
             }
-        })
+        });
+        (entity_in_scope && auth_grant_received).then_some(())
     });
 }
 
@@ -1015,21 +1002,14 @@ fn owner_removed_from_scope_retains_or_loses_authority_consistently() {
         });
     });
 
-    // Verify A no longer sees E, but B still does
-    scenario.expect(|ctx| {
-        let a_sees_e = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
-        let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
-        (!a_sees_e && b_sees_e).then_some(())
-    });
-
+    // Verify A no longer sees E, but B still does, and entity remains alive
     // Note: The behavior for authority when owner is removed from scope depends on Naia's implementation.
     // For this test, we verify that the entity remains alive and B can still see it.
     // A's authority status when out of scope is implementation-dependent.
-    
-    // Verify entity remains alive
     scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server.has_entity(&entity_e).then_some(())
-        })
+        let a_sees_e = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
+        let entity_alive = ctx.server(|server| server.has_entity(&entity_e));
+        (!a_sees_e && b_sees_e && entity_alive).then_some(())
     });
 }

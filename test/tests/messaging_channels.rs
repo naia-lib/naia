@@ -119,15 +119,16 @@ fn reliable_point_to_point_request_response() {
     });
 
     // Verify A receives exactly one response
-    scenario.mutate(|ctx| {
+    let response_received = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
             if let Some(response) = c.receive_response(&response_key) {
-                assert_eq!(response.result, "result");
+                response.result == "result"
             } else {
-                panic!("Expected response but got None");
+                false
             }
-        });
+        })
     });
+    assert!(response_received, "Expected response but got None or wrong result");
 
     // Verify B does not receive the response
     scenario.expect(|ctx| {
@@ -156,23 +157,19 @@ fn per_channel_ordering() {
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
     let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
 
-    // Server sends M1, M2, M3 on Channel1 and N1, N2 on Channel2
+    // Server sends M1, M2, M3 on Channel1 and N1, N2 on Channel2 to both A and B
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            // Send on Channel1 (OrderedChannel)
+            // Send to A on Channel1 (OrderedChannel)
             server.send_message::<OrderedChannel, _>(&client_a_key, &TestMessage::new(1));
             server.send_message::<OrderedChannel, _>(&client_a_key, &TestMessage::new(2));
             server.send_message::<OrderedChannel, _>(&client_a_key, &TestMessage::new(3));
             
-            // Send on Channel2 (UnorderedChannel)
+            // Send to A on Channel2 (UnorderedChannel)
             server.send_message::<UnorderedChannel, _>(&client_a_key, &TestMessage::new(10));
             server.send_message::<UnorderedChannel, _>(&client_a_key, &TestMessage::new(20));
-        });
-    });
-
-    // Also send to B
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
+            
+            // Send to B
             server.send_message::<OrderedChannel, _>(&client_b_key, &TestMessage::new(1));
             server.send_message::<OrderedChannel, _>(&client_b_key, &TestMessage::new(2));
             server.send_message::<OrderedChannel, _>(&client_b_key, &TestMessage::new(3));
@@ -485,6 +482,9 @@ fn tick_buffered_channel_groups_messages_by_tick() {
         })
     });
     
+    // Verify T0 was processed (allow T1 to become available)
+    scenario.expect(|_ctx| Some(()));
+    
     // After processing T0, T1 messages should be available
     let messages_t1 = scenario.mutate(|ctx| {
         ctx.server(|server| {
@@ -495,6 +495,9 @@ fn tick_buffered_channel_groups_messages_by_tick() {
     
     assert_eq!(messages_t1.len(), 1);
     assert_eq!(messages_t1[0].1.value, 2);
+    
+    // Verify T1 was processed (allow T2 to become available)
+    scenario.expect(|_ctx| Some(()));
     
     // T2 messages should be available after processing T1
     let messages_t2 = scenario.mutate(|ctx| {
