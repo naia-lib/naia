@@ -952,6 +952,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_to_global_entity(world_entity)
             .unwrap();
 
+        // Register component in GlobalDiffHandler FIRST (before inserting into connection)
+        // This ensures that when insert_component is called on the connection's world_manager,
+        // the component is already registered in GlobalDiffHandler, allowing UserDiffHandler
+        // to successfully register it.
+        self.global_world_manager.host_insert_component(
+            &self.protocol.component_kinds,
+            &global_entity,
+            component,
+        );
+
         // insert component into server connection
         if let Some(connection) = &mut self.server_connection {
             // insert component into server connection
@@ -970,18 +980,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         } else {
             warn!("Attempting to insert component into a non-existent entity in the server connection. This should not happen.");
         }
-
-        // update in world manager
-        // info!(
-        //     "Client.insert_component_worldless(): inserting Component {:?} into Entity {:?}",
-        //     self.protocol.component_kinds.kind_to_name(&component_kind),
-        //     global_entity
-        // );
-        self.global_world_manager.host_insert_component(
-            &self.protocol.component_kinds,
-            &global_entity,
-            component,
-        );
 
         // if entity is delegated, convert over
         if self

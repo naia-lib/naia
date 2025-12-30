@@ -1313,11 +1313,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
 
             // insert component into user's connection
-            if !connection
+            let has_entity = connection
                 .base
                 .world_manager
-                .has_global_entity(global_entity)
-            {
+                .has_global_entity(global_entity);
+            
+            if !has_entity {
                 // entity is not in scope for this connection
                 continue;
             }
@@ -2089,13 +2090,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         &global_entity,
                         &component_kind,
                     );
-                    if self
+                    let is_public_and_client_owned = self
                         .global_world_manager
-                        .entity_is_public_and_client_owned(&global_entity)
-                        || self
-                            .global_world_manager
-                            .entity_is_delegated(&global_entity)
-                    {
+                        .entity_is_public_and_client_owned(&global_entity);
+                    let is_delegated = self
+                        .global_world_manager
+                        .entity_is_delegated(&global_entity);
+                    
+                    if is_public_and_client_owned || is_delegated {
                         world.component_publish(
                             &self.component_kinds,
                             &self.global_entity_map,
@@ -2104,10 +2106,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             &component_kind,
                         );
 
-                        if self
-                            .global_world_manager
-                            .entity_is_delegated(&global_entity)
-                        {
+                        if is_delegated {
                             world.component_enable_delegation(
                                 &self.component_kinds,
                                 &self.global_entity_map,
