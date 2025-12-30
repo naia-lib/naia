@@ -4,10 +4,10 @@ This document audits the implementation status of all tests from `E2E_TEST_PLAN.
 
 ## Summary
 
-**Total Tests in Plan**: 132  
-**Tests Implemented**: 132 (100%)  
+**Total Tests in Plan**: 130  
+**Tests Implemented**: 130 (100%)  
 **Tests with Full Implementation**: ~95  
-**Tests Marked TODO**: ~37
+**Tests Marked TODO**: ~35
 
 All test scenarios from the plan have been created as test functions. However, many are marked with `TODO` comments indicating they need additional implementation or require features not yet available in the test harness.
 
@@ -176,9 +176,7 @@ All test scenarios from the plan have been created as test functions. However, m
 - ⚠️ `fragment_loss_causes_older_state_until_a_full_later_update` - **TODO** (requires MTU/fragmentation testing)
 - ⚠️ `compression_on_off_does_not_change_observable_semantics` - **TODO** (requires compression toggle)
 
-### 6.6 Config, Limits & Edge Behaviour (7 tests)
-- ⚠️ `maximum_users_limit_is_enforced_and_observable` - **TODO** (requires max users config)
-- ⚠️ `maximum_entities_limit_is_enforced_and_observable` - **TODO** (requires max entities config)
+### 6.6 Config, Limits & Edge Behaviour (5 tests)
 - ⚠️ `reliable_retry_timeout_settings_produce_defined_failure_behaviour` - **TODO** (requires retry/timeout config)
 - ⚠️ `minimal_retry_reliable_settings_produce_clear_delivery_failure_semantics` - **TODO** (requires retry/timeout config)
 - ⚠️ `very_aggressive_heartbeat_timeout_still_leads_to_clean_disconnect` - **TODO** (requires heartbeat timeout config)
@@ -191,7 +189,7 @@ All test scenarios from the plan have been created as test functions. However, m
 - ⚠️ `bandwidth_monitor_reflects_changes_in_traffic_volume` - **TODO** (requires bandwidth metrics)
 - ⚠️ `compression_toggling_affects_bandwidth_metrics_but_not_logical_events` - **TODO** (requires bandwidth metrics + compression)
 
-**Domain 6 Status**: ✅ **1/26 tests fully implemented**, ⚠️ **25/26 marked TODO or partial**
+**Domain 6 Status**: ✅ **1/24 tests fully implemented**, ⚠️ **23/24 marked TODO or partial**
 
 ---
 
@@ -256,9 +254,9 @@ All test scenarios from the plan have been created as test functions. However, m
 ## Overall Summary
 
 ### By Status:
-- ✅ **Fully Implemented**: ~95 tests (72%)
-- ⚠️ **TODO/Partial**: ~37 tests (28%)
-- ❌ **Removed**: 2 tests (component-level authority, per user instruction)
+- ✅ **Fully Implemented**: ~95 tests (73%)
+- ⚠️ **TODO/Partial**: ~35 tests (27%)
+- ❌ **Removed**: 4 tests (2 component-level authority, 2 max_users/max_entities, per user instruction)
 
 ### By Domain:
 1. ✅ Domain 1: 14/14 (100%)

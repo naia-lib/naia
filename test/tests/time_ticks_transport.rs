@@ -644,29 +644,6 @@ fn compression_on_off_does_not_change_observable_semantics() {
 // Domain 6.6: Config, Limits & Edge Behaviour
 // ============================================================================
 
-/// Maximum users limit is enforced and observable
-/// 
-/// Given server configured with max N concurrent users and N are already connected; when (N+1)th client connects;
-/// then server rejects according to overflow semantics (e.g., explicit reject), emits no connect event, and extra client receives no replication.
-#[test]
-fn maximum_users_limit_is_enforced_and_observable() {
-    // TODO: This test requires ServerConfig with max_users limit
-    // TODO: Connect N users
-    // TODO: Attempt to connect (N+1)th user
-    // TODO: Verify rejection
-}
-
-/// Maximum entities limit is enforced and observable
-/// 
-/// Given server with max entity count; when limit is reached and more spawns are attempted;
-/// then extra spawns fail according to contract and clients never see entities exceeding configured maximum.
-#[test]
-fn maximum_entities_limit_is_enforced_and_observable() {
-    // TODO: This test requires ServerConfig with max_entities limit
-    // TODO: Spawn entities up to limit
-    // TODO: Attempt to spawn beyond limit
-    // TODO: Verify failure
-}
 
 /// Reliable retry/timeout settings produce defined failure behaviour
 /// 

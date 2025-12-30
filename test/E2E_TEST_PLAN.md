@@ -329,12 +329,6 @@ I’ve grouped related headings into larger “domains” and kept each scenario
 
 ### 6.6 Config, Limits & Edge Behaviour
 
-* **Maximum users limit is enforced and observable**
-  Given server configured with max N concurrent users and N are already connected; when (N+1)th client connects; then server rejects according to overflow semantics (e.g., explicit reject), emits no connect event, and extra client receives no replication.
-
-* **Maximum entities limit is enforced and observable**
-  Given server with max entity count; when limit is reached and more spawns are attempted; then extra spawns fail according to contract and clients never see entities exceeding configured maximum.
-
 * **Reliable retry/timeout settings produce defined failure behaviour**
   Given reliable channel with limited retries/timeouts; when server sends reliable message over link that can’t deliver within budget; then sender surfaces a clear failure/timeout, stops retrying, and system does not hang or leak.
 

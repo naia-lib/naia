@@ -33,12 +33,21 @@ fn basic_connect_disconnect_lifecycle() {
     // A connects
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
     
+    // client_connect ends with expect, so we need mutate before next client_connect
+    scenario.mutate(|_ctx| {});
+    
     // B connects
     let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol.clone());
 
+    // client_connect ends with expect, so we need mutate before assert_connected (which also starts with expect)
+    scenario.mutate(|_ctx| {});
+
     // Verify both are connected
+    // assert_connected ends with expect, so we need mutate between calls
     assert_connected(&mut scenario, client_a_key);
+    scenario.mutate(|_ctx| {});
     assert_connected(&mut scenario, client_b_key);
+    scenario.mutate(|_ctx| {});
     scenario.expect(|ctx| {
         (ctx.server(|s| s.users_count()) == 2).then_some(())
     });
@@ -67,12 +76,15 @@ fn basic_connect_disconnect_lifecycle() {
         });
     });
 
-    // Wait for disconnect event (disconnect verification is now working!)
+    // Wait for disconnect event
     scenario.expect(|ctx| {
         ctx.server(|server| {
             server.read_event::<ServerDisconnectEvent>().is_some().then_some(())
         })
     });
+
+    // Need mutate between expect calls
+    scenario.mutate(|_ctx| {});
 
     // Wait for user to be removed and client to show disconnected
     scenario.expect(|ctx| {
@@ -81,10 +93,18 @@ fn basic_connect_disconnect_lifecycle() {
         (user_removed && client_disconnected).then_some(())
     });
 
+    // Need mutate before assert_connected (which ends with expect)
+    scenario.mutate(|_ctx| {});
+
     // Verify B remains connected and user count is correct
+    // assert_connected ends with expect, so we need mutate before next expect
     assert_connected(&mut scenario, client_b_key);
+    scenario.mutate(|_ctx| {});
+    // Combine both checks in one expect to avoid consecutive expects
     scenario.expect(|ctx| {
-        (ctx.server(|s| s.users_count()) == 1).then_some(())
+        let b_connected = ctx.server(|s| s.user_exists(&client_b_key));
+        let user_count = ctx.server(|s| s.users_count());
+        (b_connected && user_count == 1).then_some(())
     });
     
     // Note: Client-spawned entities may persist on the server after disconnect
@@ -592,8 +612,8 @@ fn server_capacity_reject_produces_reject_event() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
 
-    // Note: ServerConfig doesn't have max_users field
-    // This test will verify rejection behavior when server is at capacity
+    // Note: Naia does not support max_users limits
+    // This test verifies rejection behavior for other capacity-based scenarios
     // For now, we'll test with default config and verify rejection logic
     let server_config = ServerConfig::default();
     scenario.server_start(server_config, test_protocol.clone());
