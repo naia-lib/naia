@@ -54,10 +54,8 @@ fn deterministic_replay_of_a_scenario() {
         ctx.server(|server| {
             let (entity_key, _) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
-            // Add entity to room so it can be replicated to clients
-            // Entities must be in a room for update_entity_scopes() to process them
-            server.room_mut(&room_key).unwrap().add_entity(&entity_key);
             // Include entity in both clients' scopes
             server
                 .user_scope_mut(&client_a_key)
@@ -118,9 +116,8 @@ fn robustness_under_simulated_packet_loss() {
         ctx.server(|server| {
             let (entity_key, _) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
-            // Add entity to room so it can be replicated to clients
-            server.room_mut(&room_key).unwrap().add_entity(&entity_key);
             // Include entity in both clients' scopes
             server
                 .user_scope_mut(&client_a_key)
@@ -219,9 +216,8 @@ fn out_of_order_packet_handling_does_not_regress_to_older_state() {
         ctx.server(|server| {
             let (entity_key, _) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
-            // Add entity to room so it can be replicated to clients
-            server.room_mut(&room_key).unwrap().add_entity(&entity_key);
             // Include entity in client's scope
             server
                 .user_scope_mut(&client_a_key)
@@ -629,9 +625,8 @@ fn packet_duplication_does_not_surface_duplicate_events() {
         ctx.server(|server| {
             let (entity_key, _) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
-            // Add entity to room so it can be replicated to clients
-            server.room_mut(&room_key).unwrap().add_entity(&entity_key);
             // Include entity in client's scope
             server
                 .user_scope_mut(&client_a_key)

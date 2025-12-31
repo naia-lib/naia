@@ -160,6 +160,8 @@ fn reliable_point_to_point_request_response() {
 
     scenario.expect(|_ctx| Some(()));
 
+    // TODO: This seems like we're checking for something in a mutate block ... 
+    // that's not following best practices here. It should be in a expect block.    
     // Verify A receives exactly one response
     let response_received = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
@@ -598,6 +600,9 @@ fn tick_buffered_channel_groups_messages_by_tick() {
     });
 
     // Allow network to propagate
+    scenario.expect(|_ctx| Some(()));
+    
+    // Additional propagation time for tick-buffered messages
     scenario.expect(|_ctx| Some(()));
 
     // Server receives messages grouped by tick
@@ -1104,6 +1109,9 @@ fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
                 .expect("Failed to send request")
         })
     });
+
+    // Allow client B's request to propagate
+    scenario.expect(|_ctx| Some(()));
 
     // Server receives and responds to both requests
     let response_ids: Vec<(ClientKey, naia_shared::GlobalResponseId)> = scenario.expect(|ctx| {

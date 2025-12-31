@@ -348,6 +348,8 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
         });
     });
 
+    scenario.expect(|_ctx| Some(()));
+
     // Verify clients receive responses
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
@@ -428,6 +430,8 @@ fn client_spawn_insert_update_remove_events_occur_once_per_change_and_drain_clea
             }
         });
     });
+
+    scenario.expect(|_ctx| Some(()));
 
     // Remove component
     scenario.mutate(|ctx| {
@@ -602,6 +606,8 @@ fn client_never_sees_events_after_despawn_for_a_given_entity() {
         });
     });
 
+    scenario.expect(|_ctx| Some(()));
+
     // Despawn entity
     scenario.mutate(|ctx| {
         ctx.server(|server| {
@@ -744,6 +750,8 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
             }
         });
     });
+
+    scenario.expect(|_ctx| Some(()));
 
     // Verify server receives responses
     scenario.mutate(|ctx| {

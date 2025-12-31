@@ -137,6 +137,8 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
         });
     });
 
+    scenario.expect(|_ctx| Some(()));
+
     // Send messages on different channels
     scenario.mutate(|ctx| {
         ctx.server(|server| {
