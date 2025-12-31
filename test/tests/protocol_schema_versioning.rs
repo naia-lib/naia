@@ -127,6 +127,8 @@ fn multi_type_mapping_across_messages_components_and_channels() {
         (a_correct && b_correct && a_no_ordered && b_no_reliable).then_some(())
     });
 
+    scenario.mutate(|_ctx| {});
+
     // Verify both clients see the Position component correctly
     scenario.expect(|ctx| {
         let a_has_pos = ctx.client(client_a_key, |c| {

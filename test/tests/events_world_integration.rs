@@ -41,6 +41,7 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
         ctx.server(|server| {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
             server
                 .user_scope_mut(&client_a_key)
@@ -142,6 +143,7 @@ fn component_update_events_reflect_correct_multiplicity_per_user() {
         ctx.server(|server| {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
             server
                 .user_scope_mut(&client_a_key)
@@ -400,6 +402,7 @@ fn client_spawn_insert_update_remove_events_occur_once_per_change_and_drain_clea
         ctx.server(|server| {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
             server
                 .user_scope_mut(&client_a_key)
@@ -466,6 +469,7 @@ fn client_never_sees_update_or_remove_events_for_entities_that_were_never_in_sco
         ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             })
         })
     });
@@ -518,6 +522,7 @@ fn client_never_sees_update_or_insert_events_before_seeing_a_spawn_event() {
         ctx.server(|server| {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
             server
                 .user_scope_mut(&client_a_key)
@@ -570,6 +575,7 @@ fn client_never_sees_events_after_despawn_for_a_given_entity() {
         ctx.server(|server| {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
             server
                 .user_scope_mut(&client_a_key)
@@ -795,6 +801,7 @@ fn server_world_integration_receives_every_insert_update_remove_exactly_once() {
         ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             })
         })
     });
@@ -897,6 +904,7 @@ fn world_integration_cleans_up_completely_on_disconnect_and_reconnect() {
         ctx.server(|server| {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
             server
                 .user_scope_mut(&client_a_key)
@@ -1019,6 +1027,7 @@ fn accessing_an_entity_after_despawn_is_safely_rejected() {
         ctx.server(|server| {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             });
             server
                 .user_scope_mut(&client_a_key)
@@ -1084,6 +1093,7 @@ fn mutating_out_of_scope_entity_for_a_given_user_is_ignored_or_errors_predictabl
         ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             })
         })
     });
