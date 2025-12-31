@@ -27,6 +27,14 @@ impl GlobalRequestManager {
         id
     }
 
+    /// Check if a response is available for the given request ID (non-destructive)
+    pub(crate) fn has_response(&self, request_id: &GlobalRequestId) -> bool {
+        self.map
+            .get(request_id)
+            .map(|opt| opt.is_some())
+            .unwrap_or(false)
+    }
+
     pub(crate) fn destroy_request_id(
         &mut self,
         request_id: &GlobalRequestId,

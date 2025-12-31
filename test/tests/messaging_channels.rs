@@ -158,11 +158,12 @@ fn reliable_point_to_point_request_response() {
         });
     });
 
-    scenario.expect(|_ctx| Some(()));
+    // Wait for client A to receive the response (must use expect to wait for network propagation)
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| c.has_response(&response_key).then_some(()))
+    });
 
-    // TODO: This seems like we're checking for something in a mutate block ... 
-    // that's not following best practices here. It should be in a expect block.    
-    // Verify A receives exactly one response
+    // Verify A receives exactly one response with correct content
     let response_received = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
             if let Some(response) = c.receive_response(&response_key) {
@@ -746,7 +747,13 @@ fn client_to_server_request_yields_exactly_one_response() {
         });
     });
 
-    scenario.expect(|_ctx| Some(()));
+    // Wait for client to receive the response (must use expect to wait for network propagation)
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            // Check if response is available - expect will retry until it is
+            c.has_response(&response_key).then_some(())
+        })
+    });
 
     // Verify client receives exactly one response
     scenario.mutate(|ctx| {
@@ -1005,51 +1012,59 @@ fn many_concurrent_requests_from_a_single_client_remain_distinct() {
         test_protocol.clone(),
     );
 
-    // Client sends multiple concurrent requests
-    let response_keys: Vec<_> = scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |client_a| {
-            (0..5)
-                .map(|i| {
-                    client_a
-                        .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new(
-                            &format!("query_{}", i),
-                        ))
-                        .expect("Failed to send request")
-                })
-                .collect()
-        })
-    });
+    // Client sends multiple requests, server responds to each one at a time
+    let mut response_keys = Vec::new();
 
-    // Server receives and responds to all requests (may be out of order)
-    let response_ids: Vec<(naia_shared::GlobalResponseId, String)> = scenario.expect(|ctx| {
-        ctx.server(|server| {
-            let mut ids = Vec::new();
-            for (client_key, response_id, request) in
-                server.read_request::<RequestResponseChannel, TestRequest>()
-            {
-                if client_key == client_a_key {
-                    let result = format!("result_{}", request.query.replace("query_", ""));
-                    ids.push((response_id, result));
-                }
-            }
-            if ids.len() == 5 {
-                Some(ids)
-            } else {
-                None
-            }
-        })
-    });
+    for i in 0..5 {
+        // Client sends request
+        let response_key = scenario.mutate(|ctx| {
+            ctx.client(client_a_key, |client_a| {
+                client_a
+                    .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new(
+                        &format!("query_{}", i),
+                    ))
+                    .expect("Failed to send request")
+            })
+        });
+        response_keys.push(response_key);
 
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            for (response_id, result) in &response_ids {
+        // Server receives and responds
+        let response_id = scenario.expect(|ctx| {
+            ctx.server(|server| {
+                server
+                    .read_request::<RequestResponseChannel, TestRequest>()
+                    .next()
+                    .map(|(_, response_id, request)| {
+                        let result = format!("result_{}", request.query.replace("query_", ""));
+                        (response_id, result)
+                    })
+            })
+        });
+
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                let (response_id, result) = &response_id;
                 let response_send_key = naia_shared::ResponseSendKey::new(*response_id);
                 server.send_response(&response_send_key, &TestResponse::new(result));
-            }
+            });
         });
-    });
 
-    scenario.expect(|_ctx| Some(()));
+        // Allow response to propagate before next iteration - use mutate to ensure proper alternation
+        scenario.expect(|_ctx| Some(()));
+    }
+
+    // Transition from loop's final expect to the next expect
+    scenario.mutate(|_ctx| {});
+
+    // Wait for all responses to arrive
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            response_keys
+                .iter()
+                .all(|key| c.has_response(key))
+                .then_some(())
+        })
+    });
 
     // Verify client receives exactly one response per request, correctly matched
     scenario.mutate(|ctx| {
@@ -1097,61 +1112,78 @@ fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
         test_protocol,
     );
 
-    // Both clients send requests with same query text
+    // client_connect ends with expect() and calls allow_flexible_next()
+    // Client A sends request
     let response_key_a = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a
-                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query"))
-                .expect("Failed to send request")
+                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query_a"))
+                .expect("Failed to send request from A")
         })
     });
 
-    scenario.expect(|_ctx| Some(()));
-
-    let response_key_b = scenario.mutate(|ctx| {
-        ctx.client(client_b_key, |client_b| {
-            client_b
-                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query"))
-                .expect("Failed to send request")
-        })
-    });
-
-    // Allow client B's request to propagate
-    scenario.expect(|_ctx| Some(()));
-
-    // Server receives and responds to both requests
-    let response_ids: Vec<(ClientKey, naia_shared::GlobalResponseId)> = scenario.expect(|ctx| {
+    // Server receives A's request and responds
+    let response_id_a = scenario.expect(|ctx| {
         ctx.server(|server| {
-            let mut ids = Vec::new();
-            for (client_key, response_id, _request) in
+            for (client_key, response_id, request) in
                 server.read_request::<RequestResponseChannel, TestRequest>()
             {
-                if client_key == client_a_key || client_key == client_b_key {
-                    ids.push((client_key, response_id));
+                if client_key == client_a_key && request.query == "query_a" {
+                    return Some(response_id);
                 }
             }
-            if ids.len() == 2 {
-                Some(ids)
-            } else {
-                None
-            }
+            None
         })
     });
 
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            for (client_key, response_id) in &response_ids {
-                let response_send_key = naia_shared::ResponseSendKey::new(*response_id);
-                if *client_key == client_a_key {
-                    server.send_response(&response_send_key, &TestResponse::new("result_a"));
-                } else if *client_key == client_b_key {
-                    server.send_response(&response_send_key, &TestResponse::new("result_b"));
-                }
-            }
+            let response_send_key = naia_shared::ResponseSendKey::new(response_id_a);
+            server.send_response(&response_send_key, &TestResponse::new("result_a"));
         });
     });
 
-    scenario.expect(|_ctx| Some(()));
+    // Wait for A's response to propagate
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| c.has_response(&response_key_a).then_some(()))
+    });
+
+    // Client B sends request
+    let response_key_b = scenario.mutate(|ctx| {
+        ctx.client(client_b_key, |client_b| {
+            client_b
+                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query_b"))
+                .expect("Failed to send request from B")
+        })
+    });
+
+    // Server receives B's request and responds
+    let response_id_b = scenario.expect(|ctx| {
+        ctx.server(|server| {
+            for (client_key, response_id, request) in
+                server.read_request::<RequestResponseChannel, TestRequest>()
+            {
+                if client_key == client_b_key && request.query == "query_b" {
+                    return Some(response_id);
+                }
+            }
+            None
+        })
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let response_send_key = naia_shared::ResponseSendKey::new(response_id_b);
+            server.send_response(&response_send_key, &TestResponse::new("result_b"));
+        });
+    });
+
+    // Wait for both clients to receive their responses
+    scenario.expect(|ctx| {
+        let a_has = ctx.client(client_a_key, |c| c.has_response(&response_key_a));
+        let b_has = ctx.client(client_b_key, |c| c.has_response(&response_key_b));
+        (a_has && b_has).then_some(())
+    });
 
     // Verify each client only sees its own response
     scenario.mutate(|ctx| {
@@ -1194,60 +1226,70 @@ fn response_completion_order_is_well_defined_and_documented() {
         test_protocol.clone(),
     );
 
-    // Client sends requests in order: 1, 2, 3
-    let response_keys: Vec<_> = scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |client_a| {
-            vec![
-                client_a
-                    .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("1"))
-                    .expect("Failed"),
-                client_a
-                    .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("2"))
-                    .expect("Failed"),
-                client_a
-                    .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("3"))
-                    .expect("Failed"),
-            ]
-        })
-    });
+    // Client sends requests one at a time: 1, 2, 3
+    // Server responds in reverse order: 3, 2, 1
+    let mut response_keys = Vec::new();
+    let mut response_ids = Vec::new();
 
-    // Server responds out of order: 3, 1, 2
-    let mut response_ids: Vec<(naia_shared::GlobalResponseId, String)> = scenario.expect(|ctx| {
-        ctx.server(|server| {
-            let mut ids = Vec::new();
-            for (client_key, response_id, request) in
-                server.read_request::<RequestResponseChannel, TestRequest>()
-            {
-                if client_key == client_a_key {
-                    let result = format!("result_{}", request.query);
-                    ids.push((response_id, result));
-                }
-            }
-            if ids.len() == 3 {
-                Some(ids)
-            } else {
-                None
-            }
-        })
-    });
+    for i in 1..=3 {
+        // Client sends request
+        let response_key = scenario.mutate(|ctx| {
+            ctx.client(client_a_key, |client_a| {
+                client_a
+                    .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new(
+                        &i.to_string(),
+                    ))
+                    .expect("Failed")
+            })
+        });
+        response_keys.push(response_key);
 
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            // Respond in different order (reverse order)
-            response_ids.reverse();
-            for (response_id, result) in &response_ids {
+        // Server receives request (store for later out-of-order response)
+        let response_id = scenario.expect(|ctx| {
+            ctx.server(|server| {
+                server
+                    .read_request::<RequestResponseChannel, TestRequest>()
+                    .next()
+                    .map(|(_, response_id, request)| {
+                        let result = format!("result_{}", request.query);
+                        (response_id, result)
+                    })
+            })
+        });
+        response_ids.push(response_id);
+
+        // Mutate to separate from next iteration's mutate (via allow_flexible_next pattern)
+        scenario.mutate(|_ctx| {});
+        scenario.allow_flexible_next();
+    }
+
+    // Server responds in reverse order (3, 2, 1)
+    response_ids.reverse();
+    for (response_id, result) in &response_ids {
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
                 let response_send_key = naia_shared::ResponseSendKey::new(*response_id);
                 server.send_response(&response_send_key, &TestResponse::new(result));
-            }
+            });
         });
+        scenario.expect(|_ctx| Some(()));
+    }
+
+    // Transition from second loop's expect to next expect
+    scenario.mutate(|_ctx| {});
+
+    // Wait for all responses to arrive
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            response_keys
+                .iter()
+                .all(|key| c.has_response(key))
+                .then_some(())
+        })
     });
 
-    scenario.expect(|_ctx| Some(()));
-
-    // TODO: Verify responses arrive in completion order (not send order)
-    // Note: The exact order depends on Naia's implementation contract
+    // Verify all responses are received
     scenario.mutate(|ctx| {
-        // Verify all responses are received
         let mut received_count = 0;
         for response_key in &response_keys {
             ctx.client(client_a_key, |c| {

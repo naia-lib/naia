@@ -454,6 +454,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         return true;
     }
 
+    /// Check if a response is available for the given request (non-destructive)
+    pub fn has_response<S: Response>(&self, response_key: &ResponseReceiveKey<S>) -> bool {
+        let Some(connection) = &self.server_connection else {
+            return false;
+        };
+        let request_id = response_key.request_id();
+        connection.global_request_manager.has_response(&request_id)
+    }
+
     pub fn receive_response<S: Response>(
         &mut self,
         response_key: &ResponseReceiveKey<S>,

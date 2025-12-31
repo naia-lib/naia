@@ -152,4 +152,13 @@ impl<'a> ClientExpectCtx<'a> {
             (response_id, request)
         })
     }
+
+    /// Check if a response is available for the given request key (non-destructive)
+    pub fn has_response<S: naia_shared::Response>(
+        &self,
+        response_key: &naia_shared::ResponseReceiveKey<S>,
+    ) -> bool {
+        let state = self.scenario.client_state(&self.client_key);
+        state.client().has_response(response_key)
+    }
 }
