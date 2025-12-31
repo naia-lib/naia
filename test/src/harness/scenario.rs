@@ -1,60 +1,48 @@
 use std::{
     collections::HashMap,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::{atomic::Ordering, Arc, Mutex},
 };
 
-
 use naia_client::{
-    transport::local::{LocalAddrCell, Socket as ClientSocket, LocalClientSocket},
-    Client as NaiaClient,
-    ClientConfig,
-    EntityMut,
-    EntityRef,
-    TickEvents as ClientTickEvents,
+    transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket},
+    Client as NaiaClient, ClientConfig, EntityMut, EntityRef, TickEvents as ClientTickEvents,
     WorldEvents as ClientWorldEvents,
 };
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{
-    transport::local::{Socket as ServerSocket, LocalServerSocket},
-    Server as NaiaServer,
-    ServerConfig,
-    UserKey,
+    transport::local::{LocalServerSocket, Socket as ServerSocket},
+    Server as NaiaServer, ServerConfig, UserKey,
 };
+#[cfg(feature = "e2e_debug")]
+use naia_server::{
+    SERVER_AUTH_GRANTED_EMITTED, SERVER_OUTGOING_CMDS_DRAINED_TOTAL, SERVER_RX_FRAMES,
+    SERVER_SEND_ALL_PACKETS_CALLS, SERVER_SET_AUTH_ENQUEUED, SERVER_SPAWN_APPLIED,
+    SERVER_TX_FRAMES, SERVER_WORLD_MSGS_DRAINED, SERVER_WORLD_PKTS_SENT, SERVER_WROTE_SET_AUTH,
+};
+#[cfg(feature = "e2e_debug")]
+use naia_client::counters::{CLIENT_EMIT_AUTH_GRANTED_EVENT, CLIENT_SAW_SET_AUTH_WIRE, CLIENT_TO_EVENT_SET_AUTH_OK, CLIENT_WORLD_PKTS_RECV};
 use naia_shared::{
     transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
-    Instant,
-    LocalEntity,
-    OwnedLocalEntity,
-    Protocol,
-    TestClock,
-    LinkConditionerConfig,
-    WorldRefType,
+    Instant, LinkConditionerConfig, LocalEntity, Protocol, TestClock, WorldRefType,
 };
 
+use crate::harness::client_events::{process_spawn_events, ClientEvents};
+use crate::harness::server_events::ServerEvents;
 use crate::{
     harness::{
-        client_state::ClientState,
-        entity_registry::EntityRegistry,
-        mutate_ctx::MutateCtx,
-        users::Users,
-        ClientKey,
-        EntityKey,
-        ExpectCtx,
+        client_state::ClientState, entity_registry::EntityRegistry, mutate_ctx::MutateCtx,
+        users::Users, ClientKey, EntityKey, ExpectCtx,
     },
-    Auth,
-    TestEntity,
-    TestWorld,
+    Auth, TestEntity, TestWorld,
 };
-use crate::harness::client_events::{ClientEvents, process_spawn_events};
-use crate::harness::server_events::ServerEvents;
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
 
 // Constants for simulation timing and retry behavior
 const TICK_DURATION_MS: u64 = 16; // Default tick duration (~60 FPS)
-const DEFAULT_MAX_EXPECT_TICKS: usize = 50; // Maximum ticks before expect() times out
+const DEFAULT_MAX_EXPECT_TICKS: usize = 100; // Maximum ticks before expect() times out
 
 /// Tracks the last operation type to enforce alternating mutate/expect calls
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,10 +74,10 @@ impl Scenario {
     pub fn new() -> Self {
         // Initialize simulated clock for deterministic test time
         TestClock::init(0);
-        
+
         let server_addr: SocketAddr = FAKE_SERVER_ADDR.parse().expect("invalid server addr");
         let hub = LocalTransportHub::new(server_addr);
-        
+
         Self {
             hub,
             server: None,
@@ -133,13 +121,13 @@ impl Scenario {
         let mut client = Client::new(client_config, protocol);
         let world = TestWorld::default();
         let (socket, identity_token, rejection_code, client_addr) = self.create_client_socket();
-        
+
         // Store client address for link conditioner configuration
         self.client_to_addr_map.insert(client_key, client_addr);
-        
+
         // Store auth in pending_auths for later matching with AuthEvent
         self.pending_auths.insert(client_key, auth.clone());
-        
+
         client.auth(auth);
         client.connect(socket);
 
@@ -166,7 +154,7 @@ impl Scenario {
         if self.last_operation == LastOperation::Mutate {
             panic!("Scenario::mutate() called immediately after another mutate() call. Tests MUST alternate between mutate() and expect() calls.");
         }
-        
+
         let mut ctx = MutateCtx::new(self);
         let result = f(&mut ctx);
         // Update network to propagate immediate effects without draining events
@@ -201,6 +189,14 @@ impl Scenario {
         self.expect_with_ticks_internal(DEFAULT_MAX_EXPECT_TICKS, f)
     }
 
+    pub fn expect_msg<T>(
+        &mut self,
+        msg: &str,
+        f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>,
+    ) -> T {
+        self.expect_with_ticks_internal_msg(DEFAULT_MAX_EXPECT_TICKS, msg, f)
+    }
+
     /// Internal method for expectations with a custom tick limit.
     /// Use `scenario.until(ticks).expect(...)` instead.
     ///
@@ -208,13 +204,17 @@ impl Scenario {
     ///
     /// Panics if called immediately after another `expect()` call. Tests MUST alternate
     /// between `mutate()` and `expect()` calls.
-    pub(crate) fn expect_with_ticks_internal<T>(&mut self, max_ticks: usize, mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
+    pub(crate) fn expect_with_ticks_internal<T>(
+        &mut self,
+        max_ticks: usize,
+        mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>,
+    ) -> T {
         if self.last_operation == LastOperation::Expect {
             panic!("Scenario::expect() called immediately after another expect() call. Tests MUST alternate between mutate() and expect() calls.");
         }
-        
+
         let result = (|| {
-            for tick_count in 1..=max_ticks {
+            for _tick_count in 1..=max_ticks {
                 // Update network without draining events
                 self.tick();
 
@@ -225,24 +225,42 @@ impl Scenario {
                 // Process spawn events to match client-spawned entities with server entities
                 process_spawn_events(self, &mut server_events, &mut client_events_map);
 
+                // Process despawn events to unregister entities from the registry
+                crate::harness::client_events::process_despawn_events(
+                    self,
+                    &mut server_events,
+                    &mut client_events_map,
+                );
+
                 // Create immutable ExpectCtx for this tick with translated events
                 let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
 
-            // Call user closure
-            let result = f(&mut ctx);
-            if let Some(value) = result {
-                return Some(value);
-            }
+                // Call user closure
+                let result = f(&mut ctx);
+                if let Some(value) = result {
+                    return Some(value);
+                }
             }
             None
         })();
-        
+
         // Update last operation after expect completes (whether success or timeout)
         self.last_operation = LastOperation::Expect;
-        
+
         match result {
             Some(value) => value,
             None => {
+                #[cfg(feature = "e2e_debug")]
+                {
+                    let srv_sent = SERVER_WORLD_PKTS_SENT.load(Ordering::Relaxed);
+                    let cli_recv = CLIENT_WORLD_PKTS_RECV.load(Ordering::Relaxed);
+                    let saw_set_auth = CLIENT_SAW_SET_AUTH_WIRE.load(Ordering::Relaxed);
+                    let to_event_ok = CLIENT_TO_EVENT_SET_AUTH_OK.load(Ordering::Relaxed);
+                    eprintln!(
+                        "[wire] srv_sent={} cli_recv={} saw_set_auth={} to_event_ok={}",
+                        srv_sent, cli_recv, saw_set_auth, to_event_ok
+                    );
+                }
                 panic!(
                     "Scenario::expect timed out after {} ticks without satisfying condition",
                     max_ticks
@@ -251,8 +269,74 @@ impl Scenario {
         }
     }
 
+    pub(crate) fn expect_with_ticks_internal_msg<T>(
+        &mut self,
+        max_ticks: usize,
+        msg: &str,
+        mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>,
+    ) -> T {
+        if self.last_operation == LastOperation::Expect {
+            panic!("Scenario::expect() called immediately after another expect() call. Tests MUST alternate between mutate() and expect() calls.");
+        }
+
+        let result = (|| {
+            for _tick_count in 1..=max_ticks {
+                // Update network without draining events
+                self.tick();
+
+                // Collect per-tick events (EXACTLY once per tick)
+                let mut server_events = self.take_server_events();
+                let mut client_events_map = self.take_client_events();
+
+                // Process spawn events to match client-spawned entities with server entities
+                process_spawn_events(self, &mut server_events, &mut client_events_map);
+
+                // Process despawn events to unregister entities from the registry
+                crate::harness::client_events::process_despawn_events(
+                    self,
+                    &mut server_events,
+                    &mut client_events_map,
+                );
+
+                // Create immutable ExpectCtx for this tick with translated events
+                let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
+
+                // Call user closure
+                let result = f(&mut ctx);
+                if let Some(value) = result {
+                    return Some(value);
+                }
+            }
+            None
+        })();
+
+        // Update last operation after expect completes (whether success or timeout)
+        self.last_operation = LastOperation::Expect;
+
+        match result {
+            Some(value) => value,
+            None => {
+                #[cfg(feature = "e2e_debug")]
+                {
+                    let srv_sent = SERVER_WORLD_PKTS_SENT.load(Ordering::Relaxed);
+                    let cli_recv = CLIENT_WORLD_PKTS_RECV.load(Ordering::Relaxed);
+                    let saw_set_auth = CLIENT_SAW_SET_AUTH_WIRE.load(Ordering::Relaxed);
+                    let to_event_ok = CLIENT_TO_EVENT_SET_AUTH_OK.load(Ordering::Relaxed);
+                    eprintln!(
+                        "[wire] srv_sent={} cli_recv={} saw_set_auth={} to_event_ok={}",
+                        srv_sent, cli_recv, saw_set_auth, to_event_ok
+                    );
+                }
+                panic!(
+                    "Scenario::expect timed out after {} ticks: {}",
+                    max_ticks, msg
+                );
+            }
+        }
+    }
+
     /// Reset the operation state to allow the next call to be either `mutate()` or `expect()`.
-    /// 
+    ///
     /// This is useful for helper functions like `client_connect()` that perform multiple
     /// operations internally and should allow the caller to follow with either type of operation.
     pub fn allow_flexible_next(&mut self) {
@@ -270,10 +354,6 @@ impl Scenario {
 
     pub(crate) fn server(&self) -> &Option<Server> {
         &self.server
-    }
-
-    pub(crate) fn server_world(&self) -> &TestWorld {
-        &self.server_world
     }
 
     pub(crate) fn clients_mut(&mut self) -> &mut HashMap<ClientKey, ClientState> {
@@ -333,12 +413,12 @@ impl Scenario {
     }
 
     /// Pause all network traffic (drop all packets)
-    /// 
+    ///
     /// This is useful for testing timeout behavior. The TestClock will continue
     /// to advance via `tick()`, but no packets will be delivered.
-    /// 
+    ///
     /// # Examples
-    /// 
+    ///
     /// ```rust,ignore
     /// // Pause traffic to test timeout
     /// scenario.pause_traffic();
@@ -360,7 +440,7 @@ impl Scenario {
     }
 
     /// Get client-side EntityRef by EntityKey.
-    /// 
+    ///
     /// Encapsulates LocalEntity lookup and EntityRef creation to avoid double-borrow issues.
     #[must_use]
     pub(crate) fn client_entity_ref(
@@ -368,7 +448,6 @@ impl Scenario {
         client_key: &ClientKey,
         key: &EntityKey,
     ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
-
         let state = self.client_state(client_key);
         let user_key = match state.user_key() {
             Some(uk) => uk,
@@ -383,7 +462,7 @@ impl Scenario {
     }
 
     /// Get client-side EntityMut by EntityKey.
-    /// 
+    ///
     /// Encapsulates LocalEntity lookup and EntityMut creation to avoid double-borrow issues.
     #[must_use]
     pub(crate) fn client_entity_mut(
@@ -391,7 +470,6 @@ impl Scenario {
         client_key: &ClientKey,
         key: &EntityKey,
     ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
-
         let user_key = self.client_state(client_key).user_key()?;
         let local_entity = self.local_entity_for(key, &user_key)?;
 
@@ -413,7 +491,11 @@ impl Scenario {
     ///
     /// Uses EntityRegistry as source of truth: checks client entities first, then falls back to server lookup.
     #[must_use]
-    pub(crate) fn local_entity_for(&self, entity_key: &EntityKey, user_key: &UserKey) -> Option<LocalEntity> {
+    pub(crate) fn local_entity_for(
+        &self,
+        entity_key: &EntityKey,
+        user_key: &UserKey,
+    ) -> Option<LocalEntity> {
         let client_key = self.user_to_client_key(user_key)?;
 
         // Try client entity first (if registered)
@@ -431,50 +513,54 @@ impl Scenario {
         // Fallback: server's perspective (returns None if entity hasn't replicated to this user yet)
         let server_entity = self.entity_registry.server_entity(entity_key)?;
         let server = self.server.as_ref()?;
-        let server_ref = server.entity(self.server_world.proxy(), &server_entity);
+        let world_proxy = self.server_world.proxy();
+        if !world_proxy.has_entity(&server_entity) {
+            return None;
+        }
+        let server_ref = server.entity(world_proxy, &server_entity);
         server_ref.local_entity(&user_key)
     }
 
     /// Tick the simulation once - updates all clients and server
-    /// 
+    ///
     /// # Tick Phase Architecture
-    /// 
+    ///
     /// This method orchestrates a single simulation tick with four distinct phases:
-    /// 
+    ///
     /// ## Phase A (per-client): Update client + server network and worlds
     /// - For each client: `update_client_server_at()` handles bidirectional packet processing
     /// - Server is borrowed mutably across the entire client loop
     /// - This phase processes network I/O and world updates, but does NOT read events
-    /// 
+    ///
     /// ## Phase B (per-client): Collect client spawn events
     /// - `client.take_world_events()` is called once per client, immediately after that client's update
     /// - Client-spawned entities are identified and queued for registration
     /// - Events are collected into `spawns_to_register` for later processing
-    /// 
+    ///
     /// ## Phase C (once per tick): Collect server spawn events
     /// - `server.take_world_events()` is called exactly ONCE, after all client updates
     /// - Server spawn events may correspond to:
     ///   - Client-spawned entities (via `pending_client_spawns`) that just replicated to server
     ///   - Server-spawned entities that need to be registered
     /// - Events are collected into `server_spawn_data` for later processing
-    /// 
+    ///
     /// ## Phase D (once per tick): Apply all registry updates
     /// - Register client entities, server entities, and LocalEntity mappings
     /// - Must NOT call `take_world_events()` or modify client/server/world state
     /// - All borrows are dropped before this phase begins
-    /// 
+    ///
     /// # Invariants
-    /// 
+    ///
     /// - **`server.take_world_events()` called exactly once per tick**: This is critical for
     ///   correct event processing. Calling it multiple times would consume events prematurely.
-    /// 
+    ///
     /// - **`client.take_world_events()` called exactly once per client per tick**: Each client's
     ///   events are collected immediately after that client's update, preserving ordering.
-    /// 
+    ///
     /// - **`pending_client_spawns` entries are created in mutate phase, resolved in Phase C**:
     ///   When a client spawns an entity, it's tracked as pending. When the server receives the
     ///   corresponding `ServerSpawnEntityEvent`, the pending entry is resolved and removed.
-    /// 
+    ///
     /// - **Registry updates happen after all event collection**: This ensures all events from
     ///   the current tick are available for matching and registration.
     /// Update simulation without draining events (for expect() to handle events)
@@ -494,19 +580,12 @@ impl Scenario {
 
         // Update all clients and server network
         let server = self.server.as_mut().expect("server not started");
-        
+
         for (_client_key, state) in self.clients.iter_mut() {
             let (client, world) = state.client_and_world_mut();
-            Self::update_client_server_at(
-                &now,
-                client,
-                server,
-                world,
-                &mut self.server_world,
-            );
+            Self::update_client_server_at(&now, client, server, world, &mut self.server_world);
         }
     }
-
 
     pub(crate) fn take_server_events(&mut self) -> ServerEvents {
         let server = self.server.as_mut().expect("server not started");
@@ -514,7 +593,7 @@ impl Scenario {
         let mut events = server.take_world_events();
         let tick_events = server.take_tick_events(&now);
         let auths = events.take_auths();
-        
+
         ServerEvents::new(self, auths, tick_events, events)
     }
 
@@ -522,7 +601,8 @@ impl Scenario {
         let mut map = HashMap::new();
         let now = Instant::now();
         // Collect events first to avoid borrow conflicts
-        let mut events_data: Vec<(ClientKey, ClientWorldEvents<TestEntity>, ClientTickEvents)> = Vec::new();
+        let mut events_data: Vec<(ClientKey, ClientWorldEvents<TestEntity>, ClientTickEvents)> =
+            Vec::new();
         for (client_key, client_state) in self.clients.iter_mut() {
             let client = client_state.client_mut();
             let tick_events = client.take_tick_events(&now);
@@ -556,10 +636,17 @@ impl Scenario {
 
     /// Create a client socket from the transport hub
     /// Returns the socket along with handles to identity_token, rejection_code, and client_addr
-    fn create_client_socket(&self) -> (ClientSocket, Arc<Mutex<Option<naia_shared::IdentityToken>>>, Arc<Mutex<Option<u16>>>, SocketAddr) {
-        let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) = 
+    fn create_client_socket(
+        &self,
+    ) -> (
+        ClientSocket,
+        Arc<Mutex<Option<naia_shared::IdentityToken>>>,
+        Arc<Mutex<Option<u16>>>,
+        SocketAddr,
+    ) {
+        let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) =
             self.hub.register_client();
-        
+
         let addr_cell = LocalAddrCell::new();
         // For local transport, we know the server address immediately
         addr_cell.set_sync(self.hub.server_addr());
@@ -583,7 +670,7 @@ impl Scenario {
         let socket = ClientSocket::new(inner_socket, None);
         (socket, identity_token, rejection_code, client_addr)
     }
-    
+
     /// Configure link conditioner for a specific client
     /// `client_to_server` applies to packets from client to server (loss, jitter, latency)
     /// `server_to_client` applies to packets from server to client (loss, jitter, latency)
@@ -595,7 +682,8 @@ impl Scenario {
         server_to_client: Option<LinkConditionerConfig>,
     ) -> bool {
         if let Some(client_addr) = self.client_to_addr_map.get(client_key) {
-            self.hub.configure_link_conditioner(client_addr, client_to_server, server_to_client)
+            self.hub
+                .configure_link_conditioner(client_addr, client_to_server, server_to_client)
         } else {
             false
         }

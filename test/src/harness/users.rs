@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use naia_server::UserKey;
 
-use crate::harness::client_state::ClientState;
 use super::keys::ClientKey;
+use crate::harness::client_state::ClientState;
 
 /// Lightweight handle for ClientKey -> UserKey mapping
 /// Allows ServerMut to map ClientKey to UserKey without holding full Scenario reference
@@ -32,4 +32,3 @@ impl<'a> Users<'a> {
         self.user_to_client.get(user_key).cloned()
     }
 }
-

@@ -12,7 +12,10 @@ use naia_shared::{
     WorldMutType, WorldRefType,
 };
 
-use super::{client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents, JitterBufferType};
+use super::{
+    client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents,
+    JitterBufferType,
+};
 use crate::{
     connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
     handshake::{HandshakeManager, HandshakeResult, Handshaker},
@@ -60,6 +63,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         );
 
         let compression_config = protocol.compression.clone();
+
+        // Print protocol ID for SetAuthority at startup
 
         Self {
             // Config
@@ -232,9 +237,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut self.incoming_world_events,
         );
 
-        if !entity_events.is_empty() {
-            println!("[CLIENT] process_all_packets: Processing {} entity events", entity_events.len());
-        }
         self.process_entity_events(&mut world, entity_events);
     }
 
@@ -258,8 +260,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
 
         if should_read_packets {
-            println!("[CLIENT] take_tick_events: Reading buffered packets (receiving_tick_happened={:?}, jitter_buffer={:?})", 
-                   receiving_tick_happened, self.client_config.jitter_buffer);
             // read packets on tick boundary, de-jittering
             if connection
                 .read_buffered_packets(
@@ -272,12 +272,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                 warn!("Error reading from buffered packet!");
             }
-        } else {
-            println!("[CLIENT] take_tick_events: NOT reading buffered packets (should_read_packets=false)");
         }
 
         if let Some((prev_receiving_tick, current_receiving_tick)) = receiving_tick_happened {
-
             let mut index_tick = prev_receiving_tick.wrapping_add(1);
             loop {
                 self.incoming_tick_events.push_server_tick(index_tick);
@@ -1174,10 +1171,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.global_world_manager
             .entity_update_authority(global_entity, new_auth_status);
 
+        // Count when authority state is actually mutated
+        #[cfg(feature = "e2e_debug")]
+        if new_auth_status == EntityAuthStatus::Granted {
+            use crate::counters::CLIENT_HANDLE_SET_AUTH;
+            use std::sync::atomic::Ordering;
+            CLIENT_HANDLE_SET_AUTH.fetch_add(1, Ordering::Relaxed);
+        }
+
         // Update RemoteEntityChannel's internal AuthChannel status (for migrated entities)
         // This ensures the channel's state machine stays in sync with the global tracker
         if let Some(connection) = &mut self.server_connection {
-
             // Check if entity exists as RemoteEntity
             let channel_status_before = connection
                 .base
@@ -1220,6 +1224,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                 // push outgoing event
                 self.incoming_world_events.push_auth_grant(*world_entity);
+                #[cfg(feature = "e2e_debug")]
+                {
+                    use crate::counters::CLIENT_EMIT_AUTH_GRANTED_EVENT;
+                    use std::sync::atomic::Ordering;
+                    CLIENT_EMIT_AUTH_GRANTED_EVENT.fetch_add(1, Ordering::Relaxed);
+                }
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Available)
             | (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
@@ -1355,7 +1365,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         //     self.disconnect_reset_connection();
                         //     return;
                         // }
-                        None => {                        }
+                        None => {}
                     }
                 }
                 Ok(None) => {
@@ -1394,23 +1404,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                     let header = match StandardHeader::de(&mut reader) {
                         Ok(h) => h,
-                        Err(e) => {
-                            println!("[CLIENT] maintain_connection: Failed to parse header for packet #{}: {:?}", packets_received, e);
+                        Err(_e) => {
                             continue;
                         }
                     };
-
-                    println!("[CLIENT] maintain_connection: Received packet #{} with type={:?}", packets_received, header.packet_type);
                     match header.packet_type {
-                        PacketType::Data
-                        | PacketType::Heartbeat
+                        PacketType::Data => {
+                            // Count world packets received from transport
+                            #[cfg(feature = "e2e_debug")]
+                            {
+                                use crate::counters::CLIENT_WORLD_PKTS_RECV;
+                                use std::sync::atomic::Ordering;
+                                CLIENT_WORLD_PKTS_RECV.fetch_add(1, Ordering::Relaxed);
+                            }
+                            // continue
+                        }
+                        PacketType::Heartbeat
                         | PacketType::Ping
                         | PacketType::Pong => {
                             // continue, these packet types are allowed when
                             // connection is established
                         }
                         _ => {
-                            println!("[CLIENT] maintain_connection: Dropping packet with unsupported type={:?}", header.packet_type);
                             // short-circuit, do not need to handle other packet types at this
                             // point
                             continue;
@@ -1440,7 +1455,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     // Handle based on PacketType
                     match header.packet_type {
                         PacketType::Data => {
-                            println!("[CLIENT] maintain_connection: Received Data packet with server_tick={:?}", server_tick);
                             connection.base.mark_should_send_empty_ack();
 
                             if connection
@@ -1505,7 +1519,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let mut writer = BitWriter::new();
 
         // write header
-        connection
+        let _header = connection
             .base
             .write_header(PacketType::Heartbeat, &mut writer);
 
@@ -1589,12 +1603,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // );
             match response_event {
                 EntityEvent::Spawn(global_entity) => {
-                    println!("[CLIENT] process_entity_events: Processing Spawn event for global_entity={:?}", global_entity);
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    println!("[CLIENT] process_entity_events: Mapped to world_entity, pushing spawn");
                     self.incoming_world_events.push_spawn(world_entity);
                     self.global_world_manager
                         .remote_spawn_entity(&global_entity);
@@ -1712,7 +1724,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.incoming_world_events.push_unpublish(world_entity);
                 }
                 EntityEvent::EnableDelegation(global_entity) => {
-
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -1746,6 +1757,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     panic!("Client should never receive an EntityReleaseAuthority event");
                 }
                 EntityEvent::SetAuthority(global_entity, new_auth_status) => {
+                    // Count when SetAuthority successfully converts to EntityEvent (after mapping)
+                    #[cfg(feature = "e2e_debug")]
+                    if new_auth_status == EntityAuthStatus::Granted {
+                        use crate::counters::{CLIENT_RX_SET_AUTH, CLIENT_TO_EVENT_SET_AUTH_OK};
+                        use std::sync::atomic::Ordering;
+                        CLIENT_RX_SET_AUTH.fetch_add(1, Ordering::Relaxed);
+                        CLIENT_TO_EVENT_SET_AUTH_OK.fetch_add(1, Ordering::Relaxed);
+                    }
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -1753,7 +1772,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.entity_update_authority(&global_entity, &world_entity, new_auth_status);
                 }
                 EntityEvent::MigrateResponse(global_entity, new_remote_entity) => {
-
                     // Validate we have a valid world entity
                     let world_entity = match self
                         .global_entity_map
@@ -1862,6 +1880,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                     // Emit AuthGrant event
                     self.incoming_world_events.push_auth_grant(world_entity);
+                    #[cfg(feature = "e2e_debug")]
+                    {
+                        use crate::counters::CLIENT_EMIT_AUTH_GRANTED_EVENT;
+                        use std::sync::atomic::Ordering;
+                        CLIENT_EMIT_AUTH_GRANTED_EVENT.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
                 EntityEvent::UpdateComponent(tick, global_entity, component_kind) => {
                     let world_entity = self
@@ -1979,7 +2003,7 @@ cfg_if! {
                 }
                 Some(self.entity_mut(world, &world_entity))
             }
-            
+
             fn local_to_world_entity(
                 &self,
                 local_entity: &LocalEntity
@@ -1993,16 +2017,16 @@ cfg_if! {
                     .global_entity_map
                     .global_entity_to_entity(&global_entity)
                     .ok()?;
-                
+
                 Some(world_entity)
             }
-            
+
             pub(crate) fn world_to_local_entity(
                 &self,
                 world_entity: &E,
             ) -> Option<LocalEntity> {
                 let global_entity = self.global_entity_map.entity_to_global_entity(world_entity).ok()?;
-                
+
                 let connection = self.server_connection.as_ref()?;
                 let converter = connection.base.world_manager.entity_converter();
                 let owned_entity = converter.global_entity_to_owned_entity(&global_entity).ok()?;

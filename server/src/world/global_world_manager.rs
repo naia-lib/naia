@@ -275,6 +275,13 @@ impl GlobalWorldManager {
         self.auth_handler.register_entity(global_entity);
     }
 
+    pub(crate) fn register_entity_for_authority(&mut self, global_entity: &GlobalEntity) {
+        // Register entity in auth handler for authority tracking (used for public non-delegated entities)
+        if self.auth_handler.authority_status(global_entity).is_none() {
+            self.auth_handler.register_entity(global_entity);
+        }
+    }
+
     pub(crate) fn migrate_entity_to_server(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");

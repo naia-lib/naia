@@ -4,6 +4,7 @@ use std::{
     hash::Hash,
     net::SocketAddr,
     panic,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     time::Duration,
 };
 
@@ -35,6 +36,27 @@ use crate::{
     NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, UserKey, UserMut,
     UserRef, UserScopeMut, UserScopeRef, WorldUser,
 };
+
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_RX_FRAMES: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_TX_FRAMES: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_SPAWN_APPLIED: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_SEND_ALL_PACKETS_CALLS: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_OUTGOING_CMDS_DRAINED_TOTAL: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_AUTH_GRANTED_EMITTED: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_SET_AUTH_ENQUEUED: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_WORLD_MSGS_DRAINED: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_WROTE_SET_AUTH: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_WORLD_PKTS_SENT: AtomicUsize = AtomicUsize::new(0);
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -73,6 +95,8 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     global_response_manager: GlobalResponseManager,
     // Ticks
     time_manager: TimeManager,
+    // Deferred auth grants (one-tick delay to ensure entity registration)
+    pending_auth_grants: Vec<(UserKey, GlobalEntity, EntityAuthStatus)>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
@@ -100,6 +124,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         );
 
         let time_manager = TimeManager::new(tick_interval);
+
+        // Print protocol ID for SetAuthority at startup
 
         Self {
             // Config
@@ -132,6 +158,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),
             time_manager,
+            // Deferred auth grants
+            pending_auth_grants: Vec::new(),
         }
     }
 
@@ -160,6 +188,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return;
         };
 
+        use std::collections::hash_map::Entry;
         let new_connection = Connection::new(
             &self.server_config.connection,
             &self.server_config.ping,
@@ -169,7 +198,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             &self.global_world_manager,
         );
 
-        self.user_connections.insert(*user_address, new_connection);
+        match self.user_connections.entry(*user_address) {
+            Entry::Vacant(v) => {
+                v.insert(new_connection);
+            }
+            Entry::Occupied(mut o) => {
+                o.insert(new_connection);
+            }
+        }
 
         if self.io.bandwidth_monitor_enabled() {
             self.io.register_client(user_address);
@@ -542,6 +578,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// method, the Server will never communicate with it's connected
     /// Clients
     pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
+        #[cfg(feature = "e2e_debug")]
+        {
+            SERVER_SEND_ALL_PACKETS_CALLS.fetch_add(1, Ordering::Relaxed);
+        }
         let now = Instant::now();
 
         // update entity scopes
@@ -549,13 +589,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // loop through all connections, send packet
         let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
-
         // shuffle order of connections in order to avoid priority among users
         fastrand::shuffle(&mut user_addresses);
 
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
-
             connection.send_packets(
                 &self.channel_kinds,
                 &self.message_kinds,
@@ -567,6 +605,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 &self.global_world_manager,
                 &self.time_manager,
             );
+        }
+
+        // Flush deferred auth grants (one-tick delay ensures entity registration on client)
+        let pending_grants = std::mem::take(&mut self.pending_auth_grants);
+        for (owner_user_key, global_entity, _granted_status) in pending_grants {
+            // Collect addresses first to avoid borrowing issues
+            let user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
+            // Send SetAuthority to all users in scope (canonical path)
+            for address in user_addresses {
+                let Some(conn) = self.user_connections.get_mut(&address) else {
+                    continue;
+                };
+                if !conn.base.world_manager.has_global_entity(&global_entity) {
+                    continue;
+                }
+                let user_key_for_conn = conn.user_key;
+                let mut new_status: EntityAuthStatus = EntityAuthStatus::Denied;
+                if owner_user_key == user_key_for_conn {
+                    new_status = EntityAuthStatus::Granted;
+                }
+                // Use host_send_set_auth which handles both HostEntity and RemoteEntity
+                conn.base.world_manager.host_send_set_auth(&global_entity, new_status);
+                #[cfg(feature = "e2e_debug")]
+                if new_status == EntityAuthStatus::Granted {
+                    SERVER_SET_AUTH_ENQUEUED.fetch_add(1, Ordering::Relaxed);
+                    SERVER_AUTH_GRANTED_EMITTED.fetch_add(1, Ordering::Relaxed);
+                }
+            }
         }
     }
 
@@ -655,7 +721,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 // Check if entity exists on the client (as either HostEntity or RemoteEntity)
                 // After migration, the entity is a RemoteEntity on the client, but the server
                 // still sends from HostEntity perspective and the client's routing handles it
-                if !connection.base.world_manager.has_global_entity(global_entity) {
+                if !connection
+                    .base
+                    .world_manager
+                    .has_global_entity(global_entity)
+                {
                     // entity is not mapped to this connection
                     continue;
                 }
@@ -802,7 +872,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Check if entity exists on the client (as either HostEntity or RemoteEntity)
             // After migration, the entity is a RemoteEntity on the client, but the server
             // still sends from HostEntity perspective and the client's routing handles it
-            if !connection.base.world_manager.has_global_entity(&global_entity) {
+            if !connection
+                .base
+                .world_manager
+                .has_global_entity(&global_entity)
+            {
                 // entity is not mapped to this connection
                 continue;
             }
@@ -825,6 +899,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .base
                 .world_manager
                 .host_send_set_auth(&global_entity, new_status);
+            #[cfg(feature = "e2e_debug")]
+            if new_status == EntityAuthStatus::Granted {
+                SERVER_SET_AUTH_ENQUEUED.fetch_add(1, Ordering::Relaxed);
+                SERVER_AUTH_GRANTED_EMITTED.fetch_add(1, Ordering::Relaxed);
+            }
         }
 
         self.incoming_world_events
@@ -1317,7 +1396,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .base
                 .world_manager
                 .has_global_entity(global_entity);
-            
+
             if !has_entity {
                 // entity is not in scope for this connection
                 continue;
@@ -1742,12 +1821,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Connection already gone, user is being/has been disconnected
             return;
         };
-        
+
         // If already marked for disconnect, don't queue again (idempotent)
         if connection.manual_disconnect {
             return;
         }
-        
+
         connection.manual_disconnect = true;
         // Add to outstanding_disconnects immediately so it gets processed in the next process_all_packets call
         self.outstanding_disconnects.push(*user_key);
@@ -1977,10 +2056,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             panic!("Server Error: received non-data packet in data packet handler");
         }
 
-        // Packets requiring established connection
         let Some(connection) = self.user_connections.get_mut(address) else {
             return Ok(());
         };
+
+        #[cfg(feature = "e2e_debug")]
+        {
+            SERVER_RX_FRAMES.fetch_add(1, Ordering::Relaxed);
+        }
 
         // Process incoming header
         connection.process_incoming_header(header);
@@ -2000,6 +2083,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             client_tick,
             reader,
         )?;
+
+        // Mark that we should send an ACK-only packet
+        connection.base.mark_should_send_empty_ack();
 
         return Ok(());
     }
@@ -2065,6 +2151,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .base
                         .world_manager
                         .remote_spawn_entity(&global_entity); // TODO: migrate to localworldmanager
+                    #[cfg(feature = "e2e_debug")]
+                    {
+                        SERVER_SPAWN_APPLIED.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
                 EntityEvent::Despawn(global_entity) => {
                     let world_entity = self
@@ -2096,7 +2186,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     let is_delegated = self
                         .global_world_manager
                         .entity_is_delegated(&global_entity);
-                    
+
                     if is_public_and_client_owned || is_delegated {
                         world.component_publish(
                             &self.component_kinds,
@@ -2173,6 +2263,45 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.publish_entity(world, &global_entity, &world_entity, false);
                     self.incoming_world_events
                         .push_publish(user_key, &world_entity);
+                    
+                    // Auto-grant authority for public client-owned entities when they become public
+                    let is_public_and_client_owned = self
+                        .global_world_manager
+                        .entity_is_public_and_client_owned(&global_entity);
+                    if is_public_and_client_owned {
+                        // Get the owner user key from the entity record
+                        let owner_user_key = match self.global_world_manager.entity_owner(&global_entity) {
+                            Some(EntityOwner::ClientPublic(owner_key)) => owner_key,
+                            _ => continue,
+                        };
+                        
+                        // Register entity in auth handler if not already registered
+                        self.global_world_manager.register_entity_for_authority(&global_entity);
+                        
+                        // Use canonical authority grant path (sends SetAuthority AND emits world event)
+                        // Check if entity exists in connection before attempting grant
+                        let owner_user = match self.users.get(&owner_user_key) {
+                            Some(u) => u,
+                            None => continue,
+                        };
+                        let connection = match self.user_connections.get(&owner_user.address()) {
+                            Some(c) => c,
+                            None => continue,
+                        };
+                        // Only grant if entity exists in connection's world manager
+                        if connection.base.world_manager.has_global_entity(&global_entity) {
+                            let requester = AuthOwner::Client(owner_user_key);
+                            let success = self
+                                .global_world_manager
+                                .client_request_authority(&global_entity, &requester);
+                            if success {
+                                // Defer SetAuthority by one tick to ensure entity is registered on client
+                                self.pending_auth_grants.push((owner_user_key, global_entity, EntityAuthStatus::Granted));
+                                // Emit world event immediately (canonical path)
+                                self.incoming_world_events.push_auth_grant(&owner_user_key, &world_entity);
+                            }
+                        }
+                    }
                 }
                 EntityEvent::Unpublish(global_entity) => {
                     let world_entity = self
@@ -2280,7 +2409,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     let mut writer = BitWriter::new();
 
                     // write header
-                    connection.base.write_header(PacketType::Ping, &mut writer);
+                    let _header = connection.base.write_header(PacketType::Ping, &mut writer);
 
                     // write server tick
                     self.time_manager.current_tick().ser(&mut writer);
@@ -2338,7 +2467,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let mut writer = BitWriter::new();
 
         // write header
-        connection
+        let _header = connection
             .base
             .write_header(PacketType::Heartbeat, &mut writer);
 

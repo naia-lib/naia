@@ -71,7 +71,10 @@ impl TransportSocket for Socket {
 
         let packet_receiver: Box<dyn PacketReceiver> = {
             if let Some(config) = &self.config {
-                Box::new(ConditionedPacketReceiver::new(Box::new(packet_receiver), config))
+                Box::new(ConditionedPacketReceiver::new(
+                    Box::new(packet_receiver),
+                    config,
+                ))
             } else {
                 Box::new(packet_receiver)
             }

@@ -1,7 +1,10 @@
 /// Minimal test protocol for E2E testing
 use bevy_ecs::prelude::Component;
 
-use naia_shared::{Property, Protocol, Replicate, Message, Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings};
+use naia_shared::{
+    Channel, ChannelDirection, ChannelMode, Message, Property, Protocol, ReliableSettings,
+    Replicate, TickBufferSettings,
+};
 
 #[derive(Message, PartialEq, Eq, Hash)]
 pub struct Auth {

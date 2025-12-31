@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use tokio::sync::mpsc;
-use log::{debug, trace};
 
+use log::debug;
 use naia_shared::transport::local::{ClientRecvError, ClientSendError, ClientServerAddr};
 
 use super::addr_cell::LocalAddrCell;
@@ -28,7 +28,8 @@ impl LocalClientSender {
             ClientServerAddr::Found(_addr) => {}
         }
         // Send via unbounded channel (non-blocking)
-        self.tx.send(payload.to_vec())
+        self.tx
+            .send(payload.to_vec())
             .map_err(|_| ClientSendError)?;
         Ok(())
     }
@@ -60,7 +61,8 @@ impl LocalClientReceiver {
         let mut rx_guard = self.rx.lock().unwrap();
         match rx_guard.try_recv() {
             Ok(payload) => {
-                println!("[CLIENT_RX] Received packet: {} bytes", payload.len());
+                // Use debug logging instead of println to reduce noise
+                debug!("[CLIENT_RX] Received packet: {} bytes", payload.len());
                 let boxed = payload.into_boxed_slice();
                 *self.last_payload.lock().unwrap() = Some(boxed);
                 let payload_ref = self.last_payload.lock().unwrap();
@@ -68,8 +70,8 @@ impl LocalClientReceiver {
                 let static_ref: &'static [u8] = unsafe { std::mem::transmute(payload_slice) };
                 Ok(Some(static_ref))
             }
-            Err(e) => {
-                println!("[CLIENT_RX] try_recv() returned error: {:?} (Empty means no more packets)", e);
+            Err(_e) => {
+                // Empty error is expected when no packets are available - no need to log
                 Ok(None)
             }
         }
@@ -79,4 +81,3 @@ impl LocalClientReceiver {
         self.addr_cell.get()
     }
 }
-

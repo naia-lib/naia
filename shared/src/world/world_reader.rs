@@ -1,4 +1,3 @@
-
 use crate::world::local::local_entity::RemoteEntity;
 use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::{
@@ -80,6 +79,8 @@ impl WorldReader {
             EntityMessageType::Spawn => {
                 // read remote entity
                 let remote_entity = RemoteEntity::de(reader)?;
+
+                eprintln!("[probe] SERVER WorldReader::read_message: SPAWN message_id={:?}, remote_entity={:?}", message_id, remote_entity);
 
                 world_manager.receiver_buffer_message(
                     message_id,
@@ -188,6 +189,17 @@ impl WorldReader {
             }
             EntityMessageType::SetAuthority => {
                 // this command is only ever received by clients, regarding server-owned entities
+                
+                // Count when SetAuthority message KIND is recognized on wire (before entity mapping)
+                #[cfg(feature = "e2e_debug")]
+                {
+                    extern "Rust" {
+                        fn client_saw_set_auth_wire_increment();
+                    }
+                    unsafe {
+                        client_saw_set_auth_wire_increment();
+                    }
+                }
 
                 // read subcommand id
                 let sub_command_id = SubCommandId::de(reader)?;

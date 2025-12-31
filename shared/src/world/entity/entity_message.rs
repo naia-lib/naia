@@ -48,6 +48,10 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
         }
     }
 
+    pub fn is_noop(&self) -> bool {
+        matches!(self, Self::Noop)
+    }
+
     pub fn component_kind(&self) -> Option<ComponentKind> {
         match self {
             Self::InsertComponent(_, component_kind) => Some(*component_kind),

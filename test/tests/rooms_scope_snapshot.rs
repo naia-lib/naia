@@ -3,21 +3,17 @@ use std::time::Duration;
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::{RoomKey, ServerConfig};
 use naia_shared::Protocol;
-use naia_test::{
-    Scenario, ClientKey,
-    protocol, Auth, Position,
-    AuthEvent, ConnectEvent,
-};
+use naia_test::{protocol, Auth, ClientKey, Position, Scenario};
 
 mod test_helpers;
-use test_helpers::{make_room, client_connect};
+use test_helpers::client_connect;
 
 // ============================================================================
 // Domain 2.1: Rooms & Scoping
 // ============================================================================
 
 /// Entities only replicate when room & scope match
-/// 
+///
 /// Given Room1 with A and Room2 with B; when server spawns public E in Room1 and public F in Room2;
 /// then A sees only E, B sees only F, and server room state is E∈Room1, F∈Room2.
 #[test]
@@ -27,37 +23,54 @@ fn entities_only_replicate_when_room_scope_match() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room1_key = make_room(&mut scenario);
-    let room2_key = make_room(&mut scenario);
+    let (room1_key, room2_key) = scenario
+        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
 
-    let client_a_key = client_connect(&mut scenario, &room1_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room2_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room1_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room2_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Server spawns E in Room1
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room1_key);
-            }).0
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room1_key);
+                })
+                .0
         })
     });
 
     // Verify E exists before spawning F
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server.has_entity(&entity_e).then_some(())
-        })
-    });
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
 
     // Server spawns F in Room2 and include entities in user scopes
     let entity_f = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let f = server.spawn(|mut e| {
-                e.insert_component(Position::new(10.0, 20.0));
-                e.enter_room(&room2_key);
-            }).0;
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            let f = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(10.0, 20.0));
+                    e.enter_room(&room2_key);
+                })
+                .0;
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
             server.user_scope_mut(&client_b_key).unwrap().include(&f);
             f
         })
@@ -70,7 +83,7 @@ fn entities_only_replicate_when_room_scope_match() {
         let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
         let b_sees_f = ctx.client(client_b_key, |c| c.has_entity(&entity_f));
         let client_visibility_ok = a_sees_e && !a_sees_f && !b_sees_e && b_sees_f;
-        
+
         let room_state_ok = ctx.server(|server| {
             if let Some(room1) = server.room(&room1_key) {
                 if let Some(room2) = server.room(&room2_key) {
@@ -82,13 +95,13 @@ fn entities_only_replicate_when_room_scope_match() {
                 false
             }
         });
-        
+
         (client_visibility_ok && room_state_ok).then_some(())
     });
 }
 
 /// Moving a user between rooms updates scope
-/// 
+///
 /// Given E public in Room1, A in Room1, B in Room2; when server moves B from Room2 to Room1;
 /// then B spawns E, A continues to see E, and B never sees entities that exist only in Room2.
 #[test]
@@ -98,37 +111,54 @@ fn moving_user_between_rooms_updates_scope() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room1_key = make_room(&mut scenario);
-    let room2_key = make_room(&mut scenario);
+    let (room1_key, room2_key) = scenario
+        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
 
-    let client_a_key = client_connect(&mut scenario, &room1_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room2_key, "Client B", Auth::new("client_b", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room1_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room2_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
     // Spawn E in Room1
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room1_key);
-            }).0
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room1_key);
+                })
+                .0
         })
     });
 
     // Verify E exists before spawning F
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server.has_entity(&entity_e).then_some(())
-        })
-    });
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
 
     // Spawn F in Room2 (only visible to B initially) and include entities in user scopes
     let entity_f = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let f = server.spawn(|mut e| {
-                e.insert_component(Position::new(10.0, 20.0));
-                e.enter_room(&room2_key);
-            }).0;
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            let f = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(10.0, 20.0));
+                    e.enter_room(&room2_key);
+                })
+                .0;
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
             server.user_scope_mut(&client_b_key).unwrap().include(&f);
             f
         })
@@ -147,7 +177,10 @@ fn moving_user_between_rooms_updates_scope() {
             let mut user_b = server.user_mut(&client_b_key).unwrap();
             user_b.leave_room(&room2_key);
             user_b.enter_room(&room1_key);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -157,13 +190,13 @@ fn moving_user_between_rooms_updates_scope() {
     scenario.expect(|ctx| {
         let a_sees_e = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
         let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
-        
+
         (a_sees_e && b_sees_e).then_some(())
     });
 }
 
 /// Moving an entity between rooms updates scope
-/// 
+///
 /// Given A and B in Room1 and public E in Room1 visible to both; when server moves E to Room2;
 /// then A and B despawn E, and clients in Room2 see E.
 #[test]
@@ -173,21 +206,43 @@ fn moving_entity_between_rooms_updates_scope() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room1_key = make_room(&mut scenario);
-    let room2_key = make_room(&mut scenario);
+    let (room1_key, room2_key) = scenario
+        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
 
-    let client_a_key = client_connect(&mut scenario, &room1_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room1_key, "Client B", Auth::new("client_b", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room1_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room1_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
     // Spawn E in Room1 and include in A and B's scopes
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let entity = server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room1_key);
-            }).0;
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room1_key);
+                })
+                .0;
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity);
             entity
         })
     });
@@ -200,7 +255,14 @@ fn moving_entity_between_rooms_updates_scope() {
     });
 
     // Add client C to Room2
-    let client_c_key = client_connect(&mut scenario, &room2_key, "Client C", Auth::new("client_c", "password"), test_protocol);
+    let client_c_key = client_connect(
+        &mut scenario,
+        &room2_key,
+        "Client C",
+        Auth::new("client_c", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Move E from Room1 to Room2
     scenario.mutate(|ctx| {
@@ -209,9 +271,18 @@ fn moving_entity_between_rooms_updates_scope() {
             entity_mut.leave_room(&room1_key);
             entity_mut.enter_room(&room2_key);
             // Update scopes: exclude from A and B, include in C
-            server.user_scope_mut(&client_a_key).unwrap().exclude(&entity_e);
-            server.user_scope_mut(&client_b_key).unwrap().exclude(&entity_e);
-            server.user_scope_mut(&client_c_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .exclude(&entity_e);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .exclude(&entity_e);
+            server
+                .user_scope_mut(&client_c_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -220,13 +291,13 @@ fn moving_entity_between_rooms_updates_scope() {
         let a_sees_e = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
         let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
         let c_sees_e = ctx.client(client_c_key, |c| c.has_entity(&entity_e));
-        
+
         (!a_sees_e && !b_sees_e && c_sees_e).then_some(())
     });
 }
 
 /// Custom viewport scoping function (position-based scope)
-/// 
+///
 /// Given A and B in same room, entity E with Position, and per-client viewports;
 /// when E's Position moves from A's viewport region into B's; then A initially sees E then despawns it on exit,
 /// B initially does not see E then spawns it on entry.
@@ -235,26 +306,48 @@ fn custom_viewport_scoping_function() {
     // Note: This test requires custom scoping logic which may not be directly supported
     // by the current harness. For now, we'll test basic room-based scoping.
     // A full implementation would require custom scope functions.
-    
+
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn E in room and include in both clients' scopes
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let entity = server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room_key);
-            }).0;
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity);
             entity
         })
     });
@@ -288,7 +381,7 @@ fn custom_viewport_scoping_function() {
 // ============================================================================
 
 /// Entity belonging to multiple rooms projects correctly to different users
-/// 
+///
 /// Given E in both RoomA and RoomB; when U1 is only in RoomA, U2 only in RoomB, U3 in both;
 /// then U1 sees E once, U2 sees E once, U3 sees E once, and removing E from one room only affects
 /// users whose visibility depended on that room.
@@ -299,21 +392,40 @@ fn entity_in_multiple_rooms_projects_correctly() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_a_key = make_room(&mut scenario);
-    let room_b_key = make_room(&mut scenario);
+    let room_a_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_b_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_u1_key = client_connect(&mut scenario, &room_a_key, "Client U1", Auth::new("client_u1", "password"), test_protocol.clone());
-    let client_u2_key = client_connect(&mut scenario, &room_b_key, "Client U2", Auth::new("client_u2", "password"), test_protocol.clone());
+    let client_u1_key = client_connect(
+        &mut scenario,
+        &room_a_key,
+        "Client U1",
+        Auth::new("client_u1", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_u2_key = client_connect(
+        &mut scenario,
+        &room_b_key,
+        "Client U2",
+        Auth::new("client_u2", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
     // Spawn E in RoomA
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room_a_key);
-            }).0
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_a_key);
+                })
+                .0
         })
     });
+
+    // Verify E spawned before adding to RoomB
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
 
     // Add E to RoomB as well
     scenario.mutate(|ctx| {
@@ -324,7 +436,18 @@ fn entity_in_multiple_rooms_projects_correctly() {
     });
 
     // Add U3 to both rooms first
-    let client_u3_key = client_connect(&mut scenario, &room_a_key, "Client U3", Auth::new("client_u3", "password"), test_protocol.clone());
+    let client_u3_key = client_connect(
+        &mut scenario,
+        &room_a_key,
+        "Client U3",
+        Auth::new("client_u3", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    // Verify U3 connected before modifying rooms
+    scenario.expect(|ctx| ctx.server(|server| server.user_exists(&client_u3_key).then_some(())));
+
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             let mut user_u3 = server.user_mut(&client_u3_key).unwrap();
@@ -333,16 +456,23 @@ fn entity_in_multiple_rooms_projects_correctly() {
     });
 
     // Verify U3 connected before including E in scopes
-    scenario.expect(|ctx| {
-        ctx.server(|server| server.user_exists(&client_u3_key).then_some(()))
-    });
+    scenario.expect(|ctx| ctx.server(|server| server.user_exists(&client_u3_key).then_some(())));
 
     // Include E in all users' scopes (after E is in both rooms and U3 is set up)
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_u1_key).unwrap().include(&entity_e);
-            server.user_scope_mut(&client_u2_key).unwrap().include(&entity_e);
-            server.user_scope_mut(&client_u3_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_u1_key)
+                .unwrap()
+                .include(&entity_e);
+            server
+                .user_scope_mut(&client_u2_key)
+                .unwrap()
+                .include(&entity_e);
+            server
+                .user_scope_mut(&client_u3_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -360,7 +490,10 @@ fn entity_in_multiple_rooms_projects_correctly() {
             let mut entity_mut = server.entity_mut(&entity_e).unwrap();
             entity_mut.leave_room(&room_a_key);
             // Exclude E from U1's scope (was only in RoomA)
-            server.user_scope_mut(&client_u1_key).unwrap().exclude(&entity_e);
+            server
+                .user_scope_mut(&client_u1_key)
+                .unwrap()
+                .exclude(&entity_e);
         });
     });
 
@@ -369,13 +502,13 @@ fn entity_in_multiple_rooms_projects_correctly() {
         let u1_sees_e = ctx.client(client_u1_key, |c| c.has_entity(&entity_e));
         let u2_sees_e = ctx.client(client_u2_key, |c| c.has_entity(&entity_e));
         let u3_sees_e = ctx.client(client_u3_key, |c| c.has_entity(&entity_e));
-        
+
         (!u1_sees_e && u2_sees_e && u3_sees_e).then_some(())
     });
 }
 
 /// Manual user-scope include overrides room absence
-/// 
+///
 /// Given E in RoomA and U not in RoomA; when server manually includes E in U's user scope;
 /// then U sees E while override is active, and despawns E when override is removed
 /// (even though E stays in RoomA).
@@ -386,18 +519,27 @@ fn manual_user_scope_include_overrides_room_absence() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_a_key = make_room(&mut scenario);
-    let room_b_key = make_room(&mut scenario);
+    let room_a_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_b_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_u_key = client_connect(&mut scenario, &room_b_key, "Client U", Auth::new("client_u", "password"), test_protocol.clone());
+    let client_u_key = client_connect(
+        &mut scenario,
+        &room_b_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
     // Spawn E in RoomA
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room_a_key);
-            }).0
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_a_key);
+                })
+                .0
         })
     });
 
@@ -410,7 +552,10 @@ fn manual_user_scope_include_overrides_room_absence() {
     // Manually include E in U's scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_u_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_u_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -423,7 +568,10 @@ fn manual_user_scope_include_overrides_room_absence() {
     // Remove the override
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_u_key).unwrap().exclude(&entity_e);
+            server
+                .user_scope_mut(&client_u_key)
+                .unwrap()
+                .exclude(&entity_e);
         });
     });
 
@@ -435,7 +583,7 @@ fn manual_user_scope_include_overrides_room_absence() {
 }
 
 /// Manual user-scope exclude hides an entity despite shared room
-/// 
+///
 /// Given E and U both in RoomA; when server explicitly excludes E from U's scope;
 /// then U does not see E while override is active, and E reappears for U once override is removed.
 #[test]
@@ -445,25 +593,32 @@ fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_a_key = make_room(&mut scenario);
+    let room_a_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_u_key = client_connect(&mut scenario, &room_a_key, "Client U", Auth::new("client_u", "password"), test_protocol.clone());
+    let client_u_key = client_connect(
+        &mut scenario,
+        &room_a_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
-    // Spawn E in RoomA
+    // Spawn E in RoomA and include in U's scope initially
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room_a_key);
-            }).0
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_a_key);
+                })
+                .0;
+            server
+                .user_scope_mut(&client_u_key)
+                .unwrap()
+                .include(&entity);
+            entity
         })
-    });
-
-    // Include E in U's scope initially
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.user_scope_mut(&client_u_key).unwrap().include(&entity_e);
-        });
     });
 
     // Verify U sees E initially (both in RoomA)
@@ -475,7 +630,10 @@ fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
     // Manually exclude E from U's scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_u_key).unwrap().exclude(&entity_e);
+            server
+                .user_scope_mut(&client_u_key)
+                .unwrap()
+                .exclude(&entity_e);
         });
     });
 
@@ -488,7 +646,10 @@ fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
     // Remove the override
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_u_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_u_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -500,7 +661,7 @@ fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
 }
 
 /// Publish/unpublish vs spawn/despawn semantics are distinct
-/// 
+///
 /// Given E exists on server; when server publishes E to a room, later unpublishes it, then finally despawns it;
 /// then clients see E appear on publish, disappear on unpublish, and never see E again after despawn
 /// even if re-published as a new lifetime.
@@ -511,17 +672,26 @@ fn publish_unpublish_vs_spawn_despawn_semantics_distinct() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_key = client_connect(&mut scenario, &room_key, "Client", Auth::new("client", "password"), test_protocol.clone());
+    let client_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client",
+        Auth::new("client", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
     // Spawn E but don't publish yet
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                // Don't enter room yet
-            }).0
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    // Don't enter room yet
+                })
+                .0
         })
     });
 
@@ -537,7 +707,10 @@ fn publish_unpublish_vs_spawn_despawn_semantics_distinct() {
             let mut entity_mut = server.entity_mut(&entity_e).unwrap();
             entity_mut.enter_room(&room_key);
             // Include E in client's scope when published
-            server.user_scope_mut(&client_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -553,7 +726,10 @@ fn publish_unpublish_vs_spawn_despawn_semantics_distinct() {
             let mut entity_mut = server.entity_mut(&entity_e).unwrap();
             entity_mut.leave_room(&room_key);
             // Exclude E from client's scope when unpublished
-            server.user_scope_mut(&client_key).unwrap().exclude(&entity_e);
+            server
+                .user_scope_mut(&client_key)
+                .unwrap()
+                .exclude(&entity_e);
         });
     });
 
@@ -582,7 +758,7 @@ fn publish_unpublish_vs_spawn_despawn_semantics_distinct() {
 // ============================================================================
 
 /// Snapshot on join-in-progress
-/// 
+///
 /// Given Room with entities E1–E3 already replicated to existing clients;
 /// when B connects and joins Room; then B's initial snapshot includes all in-scope entities
 /// with current component values (no history replay), and existing clients' views are untouched.
@@ -593,36 +769,44 @@ fn snapshot_on_join_in_progress() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
     // Spawn E1, E2, E3 in room
     let (entity_e1, entity_e2, entity_e3) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let e1 = server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room_key);
-            }).0;
-            let e2 = server.spawn(|mut e| {
-                e.insert_component(Position::new(10.0, 20.0));
-                e.enter_room(&room_key);
-            }).0;
-            let e3 = server.spawn(|mut e| {
-                e.insert_component(Position::new(100.0, 200.0));
-                e.enter_room(&room_key);
-            }).0;
+            let e1 = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            let e2 = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(10.0, 20.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            let e3 = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(100.0, 200.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            // Include all entities in A's scope
+            server.user_scope_mut(&client_a_key).unwrap().include(&e1);
+            server.user_scope_mut(&client_a_key).unwrap().include(&e2);
+            server.user_scope_mut(&client_a_key).unwrap().include(&e3);
             (e1, e2, e3)
         })
-    });
-
-    // Include all entities in A's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e1);
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e2);
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e3);
-        });
     });
 
     // Verify A sees all entities
@@ -643,29 +827,46 @@ fn snapshot_on_join_in_progress() {
     });
 
     // Verify E2 updated before B connects
-    scenario.expect(|ctx| {
-        ctx.server(|server| server.has_entity(&entity_e2).then_some(()))
-    });
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e2).then_some(())));
 
     // Now B connects and joins room
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Include all entities in B's scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e1);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e2);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e3);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e1);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e2);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e3);
         });
     });
 
-    // Verify B sees all entities with current values (snapshot, not history)
+    // Verify B sees all entities with current values (snapshot, not history) and A still sees all entities
     scenario.expect(|ctx| {
         let b_sees_e1 = ctx.client(client_b_key, |c| c.has_entity(&entity_e1));
         let b_sees_e2 = ctx.client(client_b_key, |c| c.has_entity(&entity_e2));
         let b_sees_e3 = ctx.client(client_b_key, |c| c.has_entity(&entity_e3));
-        
-        if b_sees_e1 && b_sees_e2 && b_sees_e3 {
+        let a_sees_e1 = ctx.client(client_a_key, |c| c.has_entity(&entity_e1));
+        let a_sees_e2 = ctx.client(client_a_key, |c| c.has_entity(&entity_e2));
+        let a_sees_e3 = ctx.client(client_a_key, |c| c.has_entity(&entity_e3));
+
+        if b_sees_e1 && b_sees_e2 && b_sees_e3 && a_sees_e1 && a_sees_e2 && a_sees_e3 {
             // Verify E2 has updated position (current value, not old)
             let e2_pos_correct = ctx.client(client_b_key, |c| {
                 if let Some(entity_ref) = c.entity(&entity_e2) {
@@ -683,18 +884,10 @@ fn snapshot_on_join_in_progress() {
             None
         }
     });
-
-    // Verify A still sees all entities (untouched)
-    scenario.expect(|ctx| {
-        let a_sees_e1 = ctx.client(client_a_key, |c| c.has_entity(&entity_e1));
-        let a_sees_e2 = ctx.client(client_a_key, |c| c.has_entity(&entity_e2));
-        let a_sees_e3 = ctx.client(client_a_key, |c| c.has_entity(&entity_e3));
-        (a_sees_e1 && a_sees_e2 && a_sees_e3).then_some(())
-    });
 }
 
 /// Clean reconnect
-/// 
+///
 /// Given A and B connected and seeing same entities; when A disconnects (graceful or simulated loss)
 /// and later reconnects as same or new logical player per chosen model; then after rejoin A's world
 /// matches server's current state (and B's) with no ghost or missing entities.
@@ -705,27 +898,44 @@ fn clean_reconnect() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
-    // Spawn entity E
+    // Spawn entity E and include in both clients' scopes
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room_key);
-            }).0
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity);
+            entity
         })
-    });
-
-    // Include E in both clients' scopes
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
-        });
     });
 
     // Verify both see E
@@ -744,6 +954,9 @@ fn clean_reconnect() {
         });
     });
 
+    // Verify update applied before disconnect
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
+
     // A disconnects
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
@@ -752,9 +965,7 @@ fn clean_reconnect() {
     });
 
     // Wait for disconnect
-    scenario.expect(|ctx| {
-        (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(()));
 
     // Update E again while A is disconnected
     scenario.mutate(|ctx| {
@@ -766,12 +977,25 @@ fn clean_reconnect() {
     });
 
     // A reconnects
-    let client_a_key_new = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key_new = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
+
+    // Verify A reconnected before including E in scope
+    scenario.expect(|ctx| ctx.server(|server| server.user_exists(&client_a_key_new).then_some(())));
 
     // Include E in A's scope after reconnect
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_a_key_new).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key_new)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -779,7 +1003,7 @@ fn clean_reconnect() {
     scenario.expect(|ctx| {
         let a_sees_e = ctx.client(client_a_key_new, |c| c.has_entity(&entity_e));
         let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
-        
+
         if a_sees_e && b_sees_e {
             // Verify both have same position (current state)
             let a_pos_correct = ctx.client(client_a_key_new, |c| {
@@ -816,7 +1040,7 @@ fn clean_reconnect() {
 // ============================================================================
 
 /// Late-joining client receives full, current snapshot of all in-scope entities
-/// 
+///
 /// Given E1–E3 exist, updated, and published in RoomR with A observing;
 /// when B joins RoomR; then B's first world view contains E1–E3 with all components at current values,
 /// with no partially-populated entities.
@@ -827,45 +1051,64 @@ fn late_joining_client_receives_full_current_snapshot() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
-    // Spawn and update E1, E2, E3
+    // Spawn E1
     let entity_e1 = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room_key);
-            }).0
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_key);
+                })
+                .0
         })
     });
 
-    let entity_e2 = scenario.mutate(|ctx| {
+    // Verify E1 exists before spawning E2 and E3
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e1).then_some(())));
+
+    // Spawn entities E2 and E3 and include all in A's scope
+    let (entity_e2, entity_e3) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(10.0, 20.0));
-                e.enter_room(&room_key);
-            }).0
+            let e2 = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(10.0, 20.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            let e3 = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(100.0, 200.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            // Include all entities in A's scope
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e1);
+            server.user_scope_mut(&client_a_key).unwrap().include(&e2);
+            server.user_scope_mut(&client_a_key).unwrap().include(&e3);
+            (e2, e3)
         })
     });
 
-    let entity_e3 = scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(100.0, 200.0));
-                e.enter_room(&room_key);
-            }).0
-        })
-    });
-
-    // Include entities in A's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e1);
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e2);
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e3);
-        });
+    // Verify entities exist before updating
+    scenario.expect(|ctx| {
+        let has_e1 = ctx.server(|server| server.has_entity(&entity_e1));
+        let has_e2 = ctx.server(|server| server.has_entity(&entity_e2));
+        let has_e3 = ctx.server(|server| server.has_entity(&entity_e3));
+        (has_e1 && has_e2 && has_e3).then_some(())
     });
 
     // Update all entities
@@ -884,14 +1127,33 @@ fn late_joining_client_receives_full_current_snapshot() {
     });
 
     // B joins
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
+
+    // Verify B connected before including entities in scope
+    scenario.expect(|ctx| ctx.server(|server| server.user_exists(&client_b_key).then_some(())));
 
     // Include entities in B's scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e1);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e2);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e3);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e1);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e2);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e3);
         });
     });
 
@@ -900,7 +1162,7 @@ fn late_joining_client_receives_full_current_snapshot() {
         let b_sees_e1 = ctx.client(client_b_key, |c| c.has_entity(&entity_e1));
         let b_sees_e2 = ctx.client(client_b_key, |c| c.has_entity(&entity_e2));
         let b_sees_e3 = ctx.client(client_b_key, |c| c.has_entity(&entity_e3));
-        
+
         if b_sees_e1 && b_sees_e2 && b_sees_e3 {
             // Verify all have current positions (not initial values)
             let e1_correct = ctx.client(client_b_key, |c| {
@@ -944,7 +1206,7 @@ fn late_joining_client_receives_full_current_snapshot() {
 }
 
 /// Late-joining client does not see removed components or despawned entities from history
-/// 
+///
 /// Given entities were spawned, modified, some components removed, some entities despawned before B connects;
 /// when B joins; then B only sees currently alive entities with current components, and no historical
 /// ghost entities/components.
@@ -955,41 +1217,52 @@ fn late_joining_client_no_removed_components_or_despawned_entities() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
     // Spawn E1 with Position
     let entity_e1 = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room_key);
-            }).0
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_key);
+                })
+                .0
         })
     });
 
-    // Spawn E2, then despawn it
+    // Verify E1 exists before spawning E2
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e1).then_some(())));
+
+    // Spawn E2 and include entities in A's scope
     let entity_e2 = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(10.0, 20.0));
-                e.enter_room(&room_key);
-            }).0
+            let e2 = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(10.0, 20.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e1);
+            server.user_scope_mut(&client_a_key).unwrap().include(&e2);
+            e2
         })
     });
 
-    // Include entities in A's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e1);
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e2);
-        });
-    });
-
-    scenario.expect(|ctx| {
-        ctx.server(|s| s.has_entity(&entity_e2)).then_some(())
-    });
+    // Verify E2 exists, then despawn it
+    scenario.expect(|ctx| ctx.server(|s| s.has_entity(&entity_e2)).then_some(()));
 
     // Despawn E2
     scenario.mutate(|ctx| {
@@ -1002,12 +1275,25 @@ fn late_joining_client_no_removed_components_or_despawned_entities() {
     // For now, we'll just verify E1 still exists
 
     // B joins
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
+
+    // Verify B connected before including E1 in scope
+    scenario.expect(|ctx| ctx.server(|server| server.user_exists(&client_b_key).then_some(())));
 
     // Include E1 in B's scope (E2 is despawned, so don't include it)
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e1);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e1);
         });
     });
 
@@ -1020,7 +1306,7 @@ fn late_joining_client_no_removed_components_or_despawned_entities() {
 }
 
 /// Entering scope mid-lifetime yields consistent snapshot without historical diffs
-/// 
+///
 /// Given E existed and changed while A was out of scope; when A's scope changes so that E becomes in-scope;
 /// then A first sees E as a coherent snapshot of its current state, without replaying older intermediate diffs.
 #[test]
@@ -1030,32 +1316,39 @@ fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room1_key = make_room(&mut scenario);
-    let room2_key = make_room(&mut scenario);
+    let (room1_key, room2_key) = scenario
+        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
 
-    let client_a_key = client_connect(&mut scenario, &room1_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room1_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
     // Spawn E in Room2 (A is not in Room2, so A doesn't see it)
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room2_key);
-            }).0
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room2_key);
+                })
+                .0
         })
     });
 
-    // Update E multiple times while A is out of scope
+    // Verify E exists before updating
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
+
+    // Update E multiple times while A is out of scope (merged into single mutate)
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
                 entity_mut.insert_component(Position::new(10.0, 20.0));
             }
-        });
-    });
-
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
                 entity_mut.insert_component(Position::new(100.0, 200.0));
             }
@@ -1075,7 +1368,10 @@ fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
             user_a.leave_room(&room1_key);
             user_a.enter_room(&room2_key);
             // Include E in A's scope when moving to Room2
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -1102,7 +1398,7 @@ fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
 }
 
 /// Leaving scope vs despawn are distinguishable and behave consistently
-/// 
+///
 /// Given A sees E; when E leaves A's scope but is not despawned; then A sees E disappear without a "despawn"
 /// lifetime event, and later re-entering scope shows E again with fresh snapshot; when E is truly despawned,
 /// all scoped clients see a despawn and E never reappears.
@@ -1113,27 +1409,41 @@ fn leaving_scope_vs_despawn_distinguishable() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room1_key = make_room(&mut scenario);
-    let room2_key = make_room(&mut scenario);
+    let (room1_key, room2_key) = scenario
+        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
 
-    let client_a_key = client_connect(&mut scenario, &room1_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room2_key, "Client B", Auth::new("client_b", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room1_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room2_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
-    // Spawn E in Room1
+    // Spawn E in Room1 and include in A's scope
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room1_key);
-            }).0
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room1_key);
+                })
+                .0;
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
+            entity
         })
-    });
-
-    // Include E in A's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-        });
     });
 
     // Verify A sees E
@@ -1149,21 +1459,22 @@ fn leaving_scope_vs_despawn_distinguishable() {
             entity_mut.leave_room(&room1_key);
             entity_mut.enter_room(&room2_key);
             // Exclude E from A's scope, include in B's scope
-            server.user_scope_mut(&client_a_key).unwrap().exclude(&entity_e);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .exclude(&entity_e);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
-    // Verify A no longer sees E (left scope)
+    // Verify A no longer sees E (left scope) and B sees E (in Room2)
     scenario.expect(|ctx| {
         let a_sees_e = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
-        (!a_sees_e).then_some(())
-    });
-
-    // Verify B sees E (in Room2)
-    scenario.expect(|ctx| {
         let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
-        b_sees_e.then_some(())
+        (!a_sees_e && b_sees_e).then_some(())
     });
 
     // Move E back to Room1 (re-enters A's scope)
@@ -1173,8 +1484,14 @@ fn leaving_scope_vs_despawn_distinguishable() {
             entity_mut.leave_room(&room2_key);
             entity_mut.enter_room(&room1_key);
             // Re-include E in A's scope, exclude from B's scope
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-            server.user_scope_mut(&client_b_key).unwrap().exclude(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .exclude(&entity_e);
         });
     });
 
@@ -1191,21 +1508,16 @@ fn leaving_scope_vs_despawn_distinguishable() {
         });
     });
 
-    // Verify A no longer sees E (despawned)
+    // Verify A no longer sees E (despawned) and E is gone from server
     scenario.expect(|ctx| {
         let a_sees_e = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
-        (!a_sees_e).then_some(())
-    });
-
-    // Verify E is gone from server
-    scenario.expect(|ctx| {
         let exists = ctx.server(|s| s.has_entity(&entity_e));
-        (!exists).then_some(())
+        (!a_sees_e && !exists).then_some(())
     });
 }
 
 /// Reconnect always yields a clean snapshot independent of prior connection state
-/// 
+///
 /// Given A connects, sees entities, then disconnects; when A reconnects and rejoins rooms;
 /// then A receives a fresh snapshot based solely on current server state with no accidental
 /// reuse of old client-side mappings.
@@ -1216,25 +1528,32 @@ fn reconnect_yields_clean_snapshot() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
-    // Spawn E1
+    // Spawn E1 and include in A's scope
     let entity_e1 = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(1.0, 2.0));
-                e.enter_room(&room_key);
-            }).0
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
+            entity
         })
-    });
-
-    // Include E1 in A's scope
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e1);
-        });
     });
 
     // Verify A sees E1
@@ -1250,32 +1569,41 @@ fn reconnect_yields_clean_snapshot() {
         });
     });
 
-    scenario.expect(|ctx| {
-        if !ctx.server(|s| s.user_exists(&client_a_key)) {
-            Some(())
-        } else {
-            None
-        }
-    });
+    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(()));
 
     // Despawn E1, spawn E2 while A is disconnected
     let entity_e2 = scenario.mutate(|ctx| {
         ctx.server(|server| {
             server.entity_mut(&entity_e1).unwrap().despawn();
-            server.spawn(|mut e| {
-                e.insert_component(Position::new(10.0, 20.0));
-                e.enter_room(&room_key);
-            }).0
+            server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(10.0, 20.0));
+                    e.enter_room(&room_key);
+                })
+                .0
         })
     });
 
     // A reconnects
-    let client_a_key_new = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key_new = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
+
+    // Verify A reconnected before including E2 in scope
+    scenario.expect(|ctx| ctx.server(|server| server.user_exists(&client_a_key_new).then_some(())));
 
     // Include E2 in A's scope after reconnect
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_a_key_new).unwrap().include(&entity_e2);
+            server
+                .user_scope_mut(&client_a_key_new)
+                .unwrap()
+                .include(&entity_e2);
         });
     });
 
@@ -1304,4 +1632,3 @@ fn reconnect_yields_clean_snapshot() {
 // ============================================================================
 // Helper Functions
 // ============================================================================
-

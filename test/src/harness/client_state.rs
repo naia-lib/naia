@@ -1,10 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use naia_client::{Client as NaiaClient};
+use naia_client::Client as NaiaClient;
 use naia_server::UserKey;
 use naia_shared::IdentityToken;
 
-use crate::{TestWorld, TestEntity};
+use crate::{TestEntity, TestWorld};
 
 type Client = NaiaClient<TestEntity>;
 
@@ -43,7 +43,7 @@ impl ClientState {
     pub(crate) fn client_mut(&mut self) -> &mut Client {
         &mut self.client
     }
-    
+
     /// Get reference to the world
     pub(crate) fn world(&self) -> &TestWorld {
         &self.world

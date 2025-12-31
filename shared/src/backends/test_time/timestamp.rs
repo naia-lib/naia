@@ -4,10 +4,10 @@ pub struct Timestamp;
 
 impl Timestamp {
     /// Returns the current simulated time as seconds since a fixed epoch
-    /// 
+    ///
     /// In tests, we use a fixed epoch (0) and convert simulated milliseconds to seconds.
     /// This ensures deterministic timestamps that advance with simulated time.
-    /// 
+    ///
     /// This uses `TestClock::current_time_ms()` which reads from the simulated clock,
     /// ensuring timestamps stay in sync with the test time abstraction.
     pub fn now() -> u64 {

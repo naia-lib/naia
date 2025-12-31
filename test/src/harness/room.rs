@@ -1,7 +1,10 @@
+use naia_server::{RoomKey, RoomMut as NaiaRoomMut, RoomRef as NaiaRoomRef};
 use naia_shared::{Channel, Message};
-use naia_server::{RoomRef as NaiaRoomRef, RoomMut as NaiaRoomMut, RoomKey};
 
-use crate::{TestEntity, harness::{EntityKey, ClientKey, entity_registry::EntityRegistry, users::Users}};
+use crate::{
+    harness::{entity_registry::EntityRegistry, users::Users, ClientKey, EntityKey},
+    TestEntity,
+};
 
 /// Harness wrapper for RoomRef that works with EntityKey/ClientKey instead of TestEntity/UserKey
 pub struct RoomRef<'a> {
@@ -16,7 +19,11 @@ impl<'a> RoomRef<'a> {
         registry: &'a EntityRegistry,
         users: Users<'a>,
     ) -> Self {
-        Self { room, registry, users }
+        Self {
+            room,
+            registry,
+            users,
+        }
     }
 
     /// Get the RoomKey for this room
@@ -40,7 +47,8 @@ impl<'a> RoomRef<'a> {
 
     /// Get all user keys (as ClientKeys) in this room
     pub fn user_keys(&self) -> Vec<ClientKey> {
-        self.room.user_keys()
+        self.room
+            .user_keys()
             .filter_map(|uk| self.users.user_to_client_key(uk))
             .collect()
     }
@@ -61,11 +69,10 @@ impl<'a> RoomRef<'a> {
 
     /// Get all entities (as EntityKeys) in this room
     pub fn entities(&self) -> Vec<EntityKey> {
-        self.room.entities()
+        self.room
+            .entities()
             .iter()
-            .filter_map(|entity| {
-                self.registry.entity_key_for_server_entity(entity)
-            })
+            .filter_map(|entity| self.registry.entity_key_for_server_entity(entity))
             .collect()
     }
 }
@@ -83,7 +90,11 @@ impl<'a> RoomMut<'a> {
         registry: &'a EntityRegistry,
         users: Users<'a>,
     ) -> Self {
-        Self { room, registry, users }
+        Self {
+            room,
+            registry,
+            users,
+        }
     }
 
     /// Get the RoomKey for this room
@@ -128,7 +139,8 @@ impl<'a> RoomMut<'a> {
 
     /// Get all user keys (as ClientKeys) in this room
     pub fn user_keys(&self) -> Vec<ClientKey> {
-        self.room.user_keys()
+        self.room
+            .user_keys()
             .filter_map(|uk| self.users.user_to_client_key(uk))
             .collect()
     }
@@ -168,4 +180,3 @@ impl<'a> RoomMut<'a> {
         self.room.broadcast_message::<C, M>(message);
     }
 }
-

@@ -28,4 +28,3 @@ pub fn get_runtime() -> Handle {
 
     Lazy::<Handle>::force(&GLOBAL).clone()
 }
-

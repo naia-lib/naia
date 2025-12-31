@@ -1,23 +1,20 @@
+use naia_client::ClientConfig;
 use naia_server::ServerConfig;
 use naia_shared::Protocol;
-use naia_test::{
-    Scenario, ClientKey, ToTicks,
-    protocol, Auth,
-    ServerDisconnectEvent,
-};
+use naia_test::{protocol, Auth, ClientKey, Scenario, ServerDisconnectEvent, ToTicks};
 
 mod test_helpers;
-use test_helpers::{make_room, client_connect};
+use test_helpers::client_connect;
 
+use naia_test::test_protocol::{OrderedChannel, ReliableChannel};
 use naia_test::test_protocol::{Position, TestMessage};
-use naia_test::test_protocol::{ReliableChannel, OrderedChannel};
 
 // ============================================================================
 // Domain 8.1: Server Events API (naia_server::Events)
 // ============================================================================
 
 /// Inserts/updates/removes are one-shot and non-duplicated
-/// 
+///
 /// Given server spawns E, updates a component, then removes it in one tick;
 /// when main loop calls `take_inserts`, `take_updates`, `take_removes` once;
 /// then each change appears exactly once and subsequent calls that tick return nothing for those changes.
@@ -28,9 +25,16 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -38,14 +42,18 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
             (entity_e, local_entity)
         })
     });
 
     // Wait for spawn event
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            .then_some(())
     });
 
     // Update component
@@ -71,7 +79,8 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
             } else {
                 false
             }
-        }).then_some(())
+        })
+        .then_some(())
     });
 
     // Remove component
@@ -85,7 +94,12 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
 
     // Verify remove was applied
     scenario.expect(|ctx| {
-        (!ctx.server(|s| s.entity(&entity_e).map(|e| e.has_component::<Position>()).unwrap_or(false))).then_some(())
+        (!ctx.server(|s| {
+            s.entity(&entity_e)
+                .map(|e| e.has_component::<Position>())
+                .unwrap_or(false)
+        }))
+        .then_some(())
     });
 
     // TODO: Verify that insert/update/remove events appear exactly once
@@ -94,7 +108,7 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
 }
 
 /// Component update events reflect correct multiplicity per user
-/// 
+///
 /// Given component replicated to multiple users; when server changes component once;
 /// then `take_updates` returns one event per in-scope user with no duplicates or missing entries.
 #[test]
@@ -104,10 +118,24 @@ fn component_update_events_reflect_correct_multiplicity_per_user() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -115,8 +143,14 @@ fn component_update_events_reflect_correct_multiplicity_per_user() {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e);
             (entity_e, local_entity)
         })
     });
@@ -144,7 +178,7 @@ fn component_update_events_reflect_correct_multiplicity_per_user() {
 }
 
 /// Message events grouped correctly by channel and type
-/// 
+///
 /// Given multiple message types from multiple users across multiple channels in one tick;
 /// when Events API drains messages; then grouping matches documented structure (by channel/type/user),
 /// each message appears once, and second call in same tick yields none.
@@ -155,10 +189,24 @@ fn message_events_grouped_correctly_by_channel_and_type() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Send multiple messages from multiple users on multiple channels
     scenario.mutate(|ctx| {
@@ -175,13 +223,19 @@ fn message_events_grouped_correctly_by_channel_and_type() {
     // Verify messages are grouped correctly
     scenario.expect(|ctx| {
         let a_reliable: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<ReliableChannel, TestMessage>().map(|m| m.value).collect()
+            c.read_message::<ReliableChannel, TestMessage>()
+                .map(|m| m.value)
+                .collect()
         });
         let b_reliable: Vec<u32> = ctx.client(client_b_key, |c| {
-            c.read_message::<ReliableChannel, TestMessage>().map(|m| m.value).collect()
+            c.read_message::<ReliableChannel, TestMessage>()
+                .map(|m| m.value)
+                .collect()
         });
         let a_ordered: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<OrderedChannel, TestMessage>().map(|m| m.value).collect()
+            c.read_message::<OrderedChannel, TestMessage>()
+                .map(|m| m.value)
+                .collect()
         });
 
         // A should receive 1 on ReliableChannel
@@ -194,7 +248,9 @@ fn message_events_grouped_correctly_by_channel_and_type() {
         let a_no_2 = !a_reliable.contains(&2);
         let b_no_1 = !b_reliable.contains(&1);
         let b_no_ordered = !ctx.client(client_b_key, |c| {
-            c.read_message::<OrderedChannel, TestMessage>().next().is_some()
+            c.read_message::<OrderedChannel, TestMessage>()
+                .next()
+                .is_some()
         });
 
         (a_has_1 && b_has_2 && a_has_10 && a_no_2 && b_no_1 && b_no_ordered).then_some(())
@@ -204,7 +260,7 @@ fn message_events_grouped_correctly_by_channel_and_type() {
 }
 
 /// Request/response events via Events API are drained and do not reappear
-/// 
+///
 /// Given multiple client requests and server responses in a tick;
 /// when Events API drains request/response events; then each appears exactly once
 /// and does not reappear later that tick, with no silent loss.
@@ -215,20 +271,38 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Both clients send requests
     let (response_key_a, response_key_b) = scenario.mutate(|ctx| {
         let key_a = ctx.client(client_a_key, |c| {
-            c.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&naia_test::test_protocol::TestRequest::new("query_a"))
-                .expect("Failed to send request")
+            c.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(
+                &naia_test::test_protocol::TestRequest::new("query_a"),
+            )
+            .expect("Failed to send request")
         });
         let key_b = ctx.client(client_b_key, |c| {
-            c.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&naia_test::test_protocol::TestRequest::new("query_b"))
-                .expect("Failed to send request")
+            c.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(
+                &naia_test::test_protocol::TestRequest::new("query_b"),
+            )
+            .expect("Failed to send request")
         });
         (key_a, key_b)
     });
@@ -237,12 +311,18 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
     let response_ids = scenario.expect(|ctx| {
         ctx.server(|server| {
             let mut ids = Vec::new();
-            for (client_key, response_id, _request) in server.read_request::<ReliableChannel, naia_test::test_protocol::TestRequest>() {
+            for (client_key, response_id, _request) in
+                server.read_request::<ReliableChannel, naia_test::test_protocol::TestRequest>()
+            {
                 if client_key == client_a_key || client_key == client_b_key {
                     ids.push((client_key, response_id));
                 }
             }
-            if ids.len() == 2 { Some(ids) } else { None }
+            if ids.len() == 2 {
+                Some(ids)
+            } else {
+                None
+            }
         })
     });
 
@@ -252,9 +332,15 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
             for (client_key, response_id) in &response_ids {
                 let response_send_key = naia_shared::ResponseSendKey::new(*response_id);
                 if *client_key == client_a_key {
-                    server.send_response(&response_send_key, &naia_test::test_protocol::TestResponse::new("result_a"));
+                    server.send_response(
+                        &response_send_key,
+                        &naia_test::test_protocol::TestResponse::new("result_a"),
+                    );
                 } else if *client_key == client_b_key {
-                    server.send_response(&response_send_key, &naia_test::test_protocol::TestResponse::new("result_b"));
+                    server.send_response(
+                        &response_send_key,
+                        &naia_test::test_protocol::TestResponse::new("result_b"),
+                    );
                 }
             }
         });
@@ -287,7 +373,7 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
 // ============================================================================
 
 /// Client spawn/insert/update/remove events occur once per change and drain cleanly
-/// 
+///
 /// Given E is spawned, component inserted, updated, then removed while in A's scope;
 /// when A processes events for those ticks; then A sees one spawn, one insert, appropriate updates, and one remove,
 /// and already-drained events do not reappear.
@@ -298,9 +384,16 @@ fn client_spawn_insert_update_remove_events_occur_once_per_change_and_drain_clea
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -308,14 +401,18 @@ fn client_spawn_insert_update_remove_events_occur_once_per_change_and_drain_clea
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
             (entity_e, local_entity)
         })
     });
 
     // Wait for spawn event
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            .then_some(())
     });
 
     // Update component
@@ -343,7 +440,7 @@ fn client_spawn_insert_update_remove_events_occur_once_per_change_and_drain_clea
 }
 
 /// Client never sees update or remove events for entities that were never in scope
-/// 
+///
 /// Given entities created/destroyed entirely while A is out of scope;
 /// when A drains events; then A sees no events for those entities.
 #[test]
@@ -353,9 +450,16 @@ fn client_never_sees_update_or_remove_events_for_entities_that_were_never_in_sco
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity but don't include it in A's scope
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -367,9 +471,7 @@ fn client_never_sees_update_or_remove_events_for_entities_that_were_never_in_sco
     });
 
     // Verify entity exists on server before updating/removing
-    scenario.expect(|ctx| {
-        ctx.server(|s| s.has_entity(&entity_e)).then_some(())
-    });
+    scenario.expect(|ctx| ctx.server(|s| s.has_entity(&entity_e)).then_some(()));
 
     // Update and remove component while entity is not in A's scope
     scenario.mutate(|ctx| {
@@ -384,15 +486,13 @@ fn client_never_sees_update_or_remove_events_for_entities_that_were_never_in_sco
     });
 
     // Verify A never sees the entity
-    scenario.expect(|ctx| {
-        (!ctx.client(client_a_key, |c| c.has_entity(&entity_e))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.client(client_a_key, |c| c.has_entity(&entity_e))).then_some(()));
 
     // TODO: Verify A sees no events for this entity
 }
 
 /// Client never sees update or insert events before seeing a spawn event
-/// 
+///
 /// Given E is spawned then updated/extended; when A processes events;
 /// then first event for E is spawn (plus possible initial inserts) and no update/remove is seen before spawn.
 #[test]
@@ -402,9 +502,16 @@ fn client_never_sees_update_or_insert_events_before_seeing_a_spawn_event() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -412,7 +519,10 @@ fn client_never_sees_update_or_insert_events_before_seeing_a_spawn_event() {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
             if let Some(mut e) = server.entity_mut(&entity_e) {
                 if let Some(mut pos) = e.component::<Position>() {
                     *pos.x = 10.0;
@@ -424,7 +534,8 @@ fn client_never_sees_update_or_insert_events_before_seeing_a_spawn_event() {
 
     // Wait for entity to be visible
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            .then_some(())
     });
 
     // TODO: Verify that spawn event comes before update event
@@ -432,7 +543,7 @@ fn client_never_sees_update_or_insert_events_before_seeing_a_spawn_event() {
 }
 
 /// Client never sees events after despawn for a given entity
-/// 
+///
 /// Given E is spawned, updated, then despawned while in A's scope;
 /// when A processes events after despawn, including under packet reordering;
 /// then E generates no further events.
@@ -443,9 +554,16 @@ fn client_never_sees_events_after_despawn_for_a_given_entity() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity with Position component
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -453,14 +571,18 @@ fn client_never_sees_events_after_despawn_for_a_given_entity() {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
             (entity_e, local_entity)
         })
     });
 
     // Wait for entity to be visible
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            .then_some(())
     });
 
     // Update component
@@ -482,16 +604,14 @@ fn client_never_sees_events_after_despawn_for_a_given_entity() {
     });
 
     // Wait for entity to be removed from client
-    scenario.expect(|ctx| {
-        (!ctx.client(client_a_key, |c| c.has_entity(&entity_e))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.client(client_a_key, |c| c.has_entity(&entity_e))).then_some(()));
 
     // TODO: Verify no further events are generated for this entity
     // TODO: Test under packet reordering conditions
 }
 
 /// Client message events are grouped and typed correctly per channel
-/// 
+///
 /// Given A receives multiple message types over multiple channels in one tick;
 /// when A drains message events; then each message appears once with correct type and bound to correct channel.
 #[test]
@@ -501,9 +621,16 @@ fn client_message_events_are_grouped_and_typed_correctly_per_channel() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Send multiple messages on different channels
     scenario.mutate(|ctx| {
@@ -517,10 +644,14 @@ fn client_message_events_are_grouped_and_typed_correctly_per_channel() {
     // Verify messages are grouped correctly
     scenario.expect(|ctx| {
         let reliable_messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<ReliableChannel, TestMessage>().map(|m| m.value).collect()
+            c.read_message::<ReliableChannel, TestMessage>()
+                .map(|m| m.value)
+                .collect()
         });
         let ordered_messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<OrderedChannel, TestMessage>().map(|m| m.value).collect()
+            c.read_message::<OrderedChannel, TestMessage>()
+                .map(|m| m.value)
+                .collect()
         });
 
         // ReliableChannel should have 1, 2
@@ -536,7 +667,7 @@ fn client_message_events_are_grouped_and_typed_correctly_per_channel() {
 }
 
 /// Client request/response events are drained once and matched correctly
-/// 
+///
 /// Given multiple server-to-client requests and client responses across ticks;
 /// when client processes its request/response events; then each incoming request and outgoing response appears once,
 /// is matchable to correct logical ID/handle, and does not reappear.
@@ -547,16 +678,31 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Server sends multiple requests
     let (response_key_1, response_key_2) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let key_1 = server.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&client_a_key, &naia_test::test_protocol::TestRequest::new("query1"))
+            let key_1 = server
+                .send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(
+                    &client_a_key,
+                    &naia_test::test_protocol::TestRequest::new("query1"),
+                )
                 .expect("Failed to send request");
-            let key_2 = server.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(&client_a_key, &naia_test::test_protocol::TestRequest::new("query2"))
+            let key_2 = server
+                .send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(
+                    &client_a_key,
+                    &naia_test::test_protocol::TestRequest::new("query2"),
+                )
                 .expect("Failed to send request");
             (key_1, key_2)
         })
@@ -566,10 +712,16 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
     let response_ids = scenario.expect(|ctx| {
         ctx.client(client_a_key, |c| {
             let mut ids = Vec::new();
-            for (response_id, request) in c.read_request::<ReliableChannel, naia_test::test_protocol::TestRequest>() {
+            for (response_id, request) in
+                c.read_request::<ReliableChannel, naia_test::test_protocol::TestRequest>()
+            {
                 ids.push((response_id, request.query));
             }
-            if ids.len() == 2 { Some(ids) } else { None }
+            if ids.len() == 2 {
+                Some(ids)
+            } else {
+                None
+            }
         })
     });
 
@@ -579,7 +731,10 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
             for (response_id, query) in &response_ids {
                 let response_send_key = naia_shared::ResponseSendKey::new(*response_id);
                 let result = format!("result_{}", query);
-                c.send_response(&response_send_key, &naia_test::test_protocol::TestResponse::new(&result));
+                c.send_response(
+                    &response_send_key,
+                    &naia_test::test_protocol::TestResponse::new(&result),
+                );
             }
         });
     });
@@ -611,7 +766,7 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
 // ============================================================================
 
 /// Server world integration receives every insert/update/remove exactly once
-/// 
+///
 /// Given fake world wired via `WorldMutType`; when entities spawn, components change, and entities despawn;
 /// then fake world sees each operation exactly once, in same order as Naia's internal world.
 #[test]
@@ -624,9 +779,16 @@ fn server_world_integration_receives_every_insert_update_remove_exactly_once() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let _client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let _client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -640,7 +802,11 @@ fn server_world_integration_receives_every_insert_update_remove_exactly_once() {
     // Verify entity exists in server world and has Position component (insert operation was applied)
     scenario.expect(|ctx| {
         let has_entity = ctx.server(|s| s.has_entity(&entity_e));
-        let has_component = ctx.server(|s| s.entity(&entity_e).map(|e| e.has_component::<Position>()).unwrap_or(false));
+        let has_component = ctx.server(|s| {
+            s.entity(&entity_e)
+                .map(|e| e.has_component::<Position>())
+                .unwrap_or(false)
+        });
         (has_entity && has_component).then_some(())
     });
 
@@ -683,14 +849,16 @@ fn server_world_integration_receives_every_insert_update_remove_exactly_once() {
     // Verify remove was applied (component no longer exists)
     scenario.expect(|ctx| {
         let component_removed = ctx.server(|s| {
-            s.entity(&entity_e).map(|e| !e.has_component::<Position>()).unwrap_or(true)
+            s.entity(&entity_e)
+                .map(|e| !e.has_component::<Position>())
+                .unwrap_or(true)
         });
         component_removed.then_some(())
     });
 }
 
 /// Client world integration stays in lockstep with Naia's view
-/// 
+///
 /// Given fake client world updated from client events; when server spawns/updates/despawns entities;
 /// then at each tick integrated world has same entities and component values as Naia client.
 #[test]
@@ -701,7 +869,7 @@ fn client_world_integration_stays_in_lockstep_with_naias_view() {
 }
 
 /// World integration cleans up completely on disconnect and reconnect
-/// 
+///
 /// Given clients connect, cause world changes, then disconnect and later reconnect;
 /// when inspecting fake world after each cycle; then it only contains entities for currently connected sessions
 /// and in-scope rooms, with no leftover entities from past sessions.
@@ -712,10 +880,17 @@ fn world_integration_cleans_up_completely_on_disconnect_and_reconnect() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
     // Connect client
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
 
     // Server spawns entity and add to client's scope in one mutate
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -723,7 +898,10 @@ fn world_integration_cleans_up_completely_on_disconnect_and_reconnect() {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
             (entity_e, local_entity)
         })
     });
@@ -746,9 +924,8 @@ fn world_integration_cleans_up_completely_on_disconnect_and_reconnect() {
 
     // Wait for disconnect event and user removal (user cleanup happens after disconnect event)
     scenario.expect(|ctx| {
-        let disconnect_event = ctx.server(|server| {
-            server.read_event::<ServerDisconnectEvent>().is_some()
-        });
+        let disconnect_event =
+            ctx.server(|server| server.read_event::<ServerDisconnectEvent>().is_some());
         let user_removed = !ctx.server(|s| s.user_exists(&client_a_key));
         (disconnect_event && user_removed).then_some(())
     });
@@ -764,7 +941,7 @@ fn world_integration_cleans_up_completely_on_disconnect_and_reconnect() {
 // ============================================================================
 
 /// Accessing non-existent entity yields safe failure, not panic
-/// 
+///
 /// Given no entity with a certain ID; when code attempts to access it via read/write APIs;
 /// then APIs return "not found"/`None`/error without panicking or corrupting state.
 #[test]
@@ -774,9 +951,16 @@ fn accessing_non_existent_entity_yields_safe_failure_not_panic() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Create a fake entity key that doesn't correspond to any real entity
     // We'll allocate a key from a temporary scenario that we know doesn't exist in the main scenario
@@ -798,14 +982,10 @@ fn accessing_non_existent_entity_yields_safe_failure_not_panic() {
     // Verify accessing non-existent entity returns None/error safely
     scenario.mutate(|ctx| {
         // Server side - should return None
-        let server_entity = ctx.server(|server| {
-            server.entity(&fake_entity).is_none()
-        });
-        
+        let server_entity = ctx.server(|server| server.entity(&fake_entity).is_none());
+
         // Client side - should return None
-        let client_entity = ctx.client(client_a_key, |c| {
-            c.entity(&fake_entity).is_none()
-        });
+        let client_entity = ctx.client(client_a_key, |c| c.entity(&fake_entity).is_none());
 
         assert!(server_entity);
         assert!(client_entity);
@@ -813,7 +993,7 @@ fn accessing_non_existent_entity_yields_safe_failure_not_panic() {
 }
 
 /// Accessing an entity after despawn is safely rejected
-/// 
+///
 /// Given E was spawned then despawned; when code attempts to read/mutate E after despawn;
 /// then calls fail gracefully and do not recreate E or panic.
 #[test]
@@ -823,9 +1003,16 @@ fn accessing_an_entity_after_despawn_is_safely_rejected() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -833,14 +1020,18 @@ fn accessing_an_entity_after_despawn_is_safely_rejected() {
             let (entity_e, local_entity) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e);
             (entity_e, local_entity)
         })
     });
 
     // Wait for entity to be visible
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            .then_some(())
     });
 
     // Despawn entity
@@ -851,21 +1042,15 @@ fn accessing_an_entity_after_despawn_is_safely_rejected() {
     });
 
     // Wait for entity to be removed
-    scenario.expect(|ctx| {
-        (!ctx.server(|s| s.has_entity(&entity_e))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.server(|s| s.has_entity(&entity_e))).then_some(()));
 
     // Verify accessing despawned entity returns None/error safely
     scenario.mutate(|ctx| {
         // Server side - should return None
-        let server_entity = ctx.server(|server| {
-            server.entity(&entity_e).is_none()
-        });
-        
+        let server_entity = ctx.server(|server| server.entity(&entity_e).is_none());
+
         // Client side - should return None
-        let client_entity = ctx.client(client_a_key, |c| {
-            c.entity(&entity_e).is_none()
-        });
+        let client_entity = ctx.client(client_a_key, |c| c.entity(&entity_e).is_none());
 
         assert!(server_entity);
         assert!(client_entity);
@@ -873,7 +1058,7 @@ fn accessing_an_entity_after_despawn_is_safely_rejected() {
 }
 
 /// Mutating out-of-scope entity for a given user is ignored or errors predictably
-/// 
+///
 /// Given E not in A's scope; when A tries to mutate E via client APIs or server applies per-user operation assuming A sees E;
 /// then Naia either ignores the operation or returns a defined error, without corrupting scoped state.
 #[test]
@@ -883,9 +1068,16 @@ fn mutating_out_of_scope_entity_for_a_given_user_is_ignored_or_errors_predictabl
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity but don't include it in A's scope
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -897,22 +1089,20 @@ fn mutating_out_of_scope_entity_for_a_given_user_is_ignored_or_errors_predictabl
     });
 
     // Verify A cannot see the entity
-    scenario.expect(|ctx| {
-        (!ctx.client(client_a_key, |c| c.has_entity(&entity_e))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.client(client_a_key, |c| c.has_entity(&entity_e))).then_some(()));
 
     // Verify that A cannot mutate the entity via client APIs
     // entity_mut() should return None for out-of-scope entities
-    let can_mutate = scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |c| {
-            c.entity_mut(&entity_e).is_some()
-        })
-    });
-    assert!(!can_mutate, "entity_mut() should return None for out-of-scope entities, preventing mutation");
+    let can_mutate =
+        scenario.mutate(|ctx| ctx.client(client_a_key, |c| c.entity_mut(&entity_e).is_some()));
+    assert!(
+        !can_mutate,
+        "entity_mut() should return None for out-of-scope entities, preventing mutation"
+    );
 }
 
 /// Sending messages or requests on a disconnected or rejected connection is safe
-/// 
+///
 /// Given a connection that is disconnected or rejected; when code sends a message/request on it;
 /// then attempt is ignored or returns clear error, and does not resurrect connection or panic.
 #[test]
@@ -922,9 +1112,16 @@ fn sending_messages_or_requests_on_a_disconnected_or_rejected_connection_is_safe
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Disconnect
     scenario.mutate(|ctx| {
@@ -934,9 +1131,7 @@ fn sending_messages_or_requests_on_a_disconnected_or_rejected_connection_is_safe
     });
 
     // Wait for disconnect
-    scenario.expect(|ctx| {
-        (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(()));
 
     // Try to send message after disconnect
     scenario.mutate(|ctx| {
@@ -951,7 +1146,7 @@ fn sending_messages_or_requests_on_a_disconnected_or_rejected_connection_is_safe
 }
 
 /// Misusing channel types (e.g., sending too-large message) yields defined failure
-/// 
+///
 /// Given a channel with constraints (e.g., max message size); when caller sends a violating message;
 /// then Naia surfaces a defined error/refusal and does not fall into undefined behavior or corruption.
 #[test]
@@ -959,5 +1154,3 @@ fn misusing_channel_types_yields_defined_failure() {
     // TODO: This test requires a way to send messages that violate channel constraints
     // This may require creating very large messages or using unsupported channel types
 }
-
-

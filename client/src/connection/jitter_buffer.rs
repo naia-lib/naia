@@ -35,7 +35,10 @@ impl JitterBuffer {
     pub fn add_item(&mut self, tick: Tick, item: OwnedBitReader) {
         match self {
             JitterBuffer::Real(queue) => {
-                println!("[JITTER_BUFFER] Real mode: Adding packet with server_tick={:?}", tick);
+                println!(
+                    "[JITTER_BUFFER] Real mode: Adding packet with server_tick={:?}",
+                    tick
+                );
                 queue.add_item(tick, item);
             }
             JitterBuffer::Bypass(queue) => {
@@ -60,4 +63,3 @@ impl JitterBuffer {
         }
     }
 }
-

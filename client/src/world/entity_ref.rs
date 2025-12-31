@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use naia_shared::{EntityAuthStatus, ReplicaRefWrapper, ReplicatedComponent, WorldRefType};
 
-use crate::{Client, ReplicationConfig, world::entity_owner::EntityOwner};
+use crate::{world::entity_owner::EntityOwner, Client, ReplicationConfig};
 
 // EntityRef
 pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> {
@@ -47,11 +47,11 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
 
 cfg_if! {
     if #[cfg(feature = "interior_visibility")] {
-        
+
         use naia_shared::LocalEntity;
-        
+
         impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E, W> {
-            
+
             pub fn local_entity(&self) -> Option<LocalEntity> {
                 self.client.world_to_local_entity(&self.entity)
             }

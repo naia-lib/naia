@@ -1,14 +1,19 @@
 use std::collections::HashMap;
 
 use log::{debug, warn};
+
 use naia_client::{NaiaClientError, TickEvents, WorldEvents};
-use naia_shared::{ChannelKind, ComponentKind, GlobalResponseId, MessageContainer, MessageKind, Replicate, Tick, LocalEntity, OwnedLocalEntity, WorldRefType};
+use naia_shared::{
+    ChannelKind, ComponentKind, GlobalResponseId, LocalEntity, MessageContainer, MessageKind,
+    OwnedLocalEntity, Replicate, Tick, WorldRefType,
+};
 
-use crate::{Scenario, TestEntity};
-use crate::harness::{EntityKey, ClientKey};
-use crate::harness::server_events::ServerEvents;
+use crate::{
+    harness::{server_events::ServerEvents, ClientKey, EntityKey},
+    Scenario, TestEntity,
+};
 
-pub(crate) struct ClientEvents {
+pub struct ClientEvents {
     connections: Vec<()>,
     rejections: Vec<()>,
     disconnections: Vec<()>,
@@ -61,7 +66,6 @@ impl ClientEvents {
         mut world_events: WorldEvents<TestEntity>,
         mut tick_events: TickEvents,
     ) -> Self {
-
         let mut spawns = Vec::new();
         for entity in world_events.read::<naia_client::SpawnEntityEvent>() {
             if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
@@ -115,7 +119,9 @@ impl ClientEvents {
         for (component_kind, entities) in world_events.take_inserts().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for entity in entities {
-                if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
+                if let Some(entity_key) =
+                    register_client_entity_event(scenario, &client_key, &entity)
+                {
                     entity_keys.push(entity_key);
                 }
             }
@@ -128,7 +134,9 @@ impl ClientEvents {
         for (component_kind, entity_data) in world_events.take_removes().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for (entity, component) in entity_data {
-                if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
+                if let Some(entity_key) =
+                    register_client_entity_event(scenario, &client_key, &entity)
+                {
                     entity_keys.push((entity_key, component));
                 }
             }
@@ -141,7 +149,9 @@ impl ClientEvents {
         for (component_kind, entity_data) in world_events.take_updates().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for (tick, entity) in entity_data {
-                if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
+                if let Some(entity_key) =
+                    register_client_entity_event(scenario, &client_key, &entity)
+                {
                     entity_keys.push((tick, entity_key));
                 }
             }
@@ -151,9 +161,18 @@ impl ClientEvents {
         }
 
         // Extract connection/rejection/disconnection events (they don't have entity data)
-        let connections: Vec<()> = world_events.read::<naia_client::ConnectEvent>().map(|_| ()).collect();
-        let rejections: Vec<()> = world_events.read::<naia_client::RejectEvent>().map(|_| ()).collect();
-        let disconnections: Vec<()> = world_events.read::<naia_client::DisconnectEvent>().map(|_| ()).collect();
+        let connections: Vec<()> = world_events
+            .read::<naia_client::ConnectEvent>()
+            .map(|_| ())
+            .collect();
+        let rejections: Vec<()> = world_events
+            .read::<naia_client::RejectEvent>()
+            .map(|_| ())
+            .collect();
+        let disconnections: Vec<()> = world_events
+            .read::<naia_client::DisconnectEvent>()
+            .map(|_| ())
+            .collect();
         let errors: Vec<NaiaClientError> = world_events.read::<naia_client::ErrorEvent>().collect();
         let messages = world_events.take_messages();
         let requests = world_events.take_requests();
@@ -225,8 +244,8 @@ pub trait ClientEvent {
 }
 
 // ConnectEvent
-pub struct ConnectEvent;
-impl ClientEvent for ConnectEvent {
+pub struct ClientConnectEvent;
+impl ClientEvent for ClientConnectEvent {
     type Iter = std::vec::IntoIter<()>;
     type Item = ();
 
@@ -240,8 +259,8 @@ impl ClientEvent for ConnectEvent {
 }
 
 // RejectEvent
-pub struct RejectEvent;
-impl ClientEvent for RejectEvent {
+pub struct ClientRejectEvent;
+impl ClientEvent for ClientRejectEvent {
     type Iter = std::vec::IntoIter<()>;
     type Item = ();
 
@@ -255,8 +274,8 @@ impl ClientEvent for RejectEvent {
 }
 
 // DisconnectEvent
-pub struct DisconnectEvent;
-impl ClientEvent for DisconnectEvent {
+pub struct ClientDisconnectEvent;
+impl ClientEvent for ClientDisconnectEvent {
     type Iter = std::vec::IntoIter<()>;
     type Item = ();
 
@@ -270,8 +289,8 @@ impl ClientEvent for DisconnectEvent {
 }
 
 // ErrorEvent
-pub struct ErrorEvent;
-impl ClientEvent for ErrorEvent {
+pub struct ClientErrorEvent;
+impl ClientEvent for ClientErrorEvent {
     type Iter = std::vec::IntoIter<NaiaClientError>;
     type Item = NaiaClientError;
 
@@ -285,8 +304,8 @@ impl ClientEvent for ErrorEvent {
 }
 
 // SpawnEntityEvent
-pub struct SpawnEntityEvent;
-impl ClientEvent for SpawnEntityEvent {
+pub struct ClientSpawnEntityEvent;
+impl ClientEvent for ClientSpawnEntityEvent {
     type Iter = std::vec::IntoIter<EntityKey>;
     type Item = EntityKey;
 
@@ -300,8 +319,8 @@ impl ClientEvent for SpawnEntityEvent {
 }
 
 // DespawnEntityEvent
-pub struct DespawnEntityEvent;
-impl ClientEvent for DespawnEntityEvent {
+pub struct ClientDespawnEntityEvent;
+impl ClientEvent for ClientDespawnEntityEvent {
     type Iter = std::vec::IntoIter<EntityKey>;
     type Item = EntityKey;
 
@@ -315,8 +334,8 @@ impl ClientEvent for DespawnEntityEvent {
 }
 
 // PublishEntityEvent
-pub struct PublishEntityEvent;
-impl ClientEvent for PublishEntityEvent {
+pub struct ClientPublishEntityEvent;
+impl ClientEvent for ClientPublishEntityEvent {
     type Iter = std::vec::IntoIter<EntityKey>;
     type Item = EntityKey;
 
@@ -330,8 +349,8 @@ impl ClientEvent for PublishEntityEvent {
 }
 
 // UnpublishEntityEvent
-pub struct UnpublishEntityEvent;
-impl ClientEvent for UnpublishEntityEvent {
+pub struct ClientUnpublishEntityEvent;
+impl ClientEvent for ClientUnpublishEntityEvent {
     type Iter = std::vec::IntoIter<EntityKey>;
     type Item = EntityKey;
 
@@ -345,8 +364,8 @@ impl ClientEvent for UnpublishEntityEvent {
 }
 
 // EntityAuthGrantedEvent
-pub struct EntityAuthGrantedEvent;
-impl ClientEvent for EntityAuthGrantedEvent {
+pub struct ClientEntityAuthGrantedEvent;
+impl ClientEvent for ClientEntityAuthGrantedEvent {
     type Iter = std::vec::IntoIter<EntityKey>;
     type Item = EntityKey;
 
@@ -360,8 +379,8 @@ impl ClientEvent for EntityAuthGrantedEvent {
 }
 
 // EntityAuthDeniedEvent
-pub struct EntityAuthDeniedEvent;
-impl ClientEvent for EntityAuthDeniedEvent {
+pub struct ClientEntityAuthDeniedEvent;
+impl ClientEvent for ClientEntityAuthDeniedEvent {
     type Iter = std::vec::IntoIter<EntityKey>;
     type Item = EntityKey;
 
@@ -375,8 +394,8 @@ impl ClientEvent for EntityAuthDeniedEvent {
 }
 
 // EntityAuthResetEvent
-pub struct EntityAuthResetEvent;
-impl ClientEvent for EntityAuthResetEvent {
+pub struct ClientEntityAuthResetEvent;
+impl ClientEvent for ClientEntityAuthResetEvent {
     type Iter = std::vec::IntoIter<EntityKey>;
     type Item = EntityKey;
 
@@ -405,8 +424,8 @@ impl ClientEvent for ClientTickEvent {
 }
 
 // ServerTickEvent
-pub struct ServerTickEvent;
-impl ClientEvent for ServerTickEvent {
+pub struct ClientServerTickEvent;
+impl ClientEvent for ClientServerTickEvent {
     type Iter = std::vec::IntoIter<Tick>;
     type Item = Tick;
 
@@ -426,7 +445,7 @@ pub(crate) fn register_client_entity_event(
     entity: &TestEntity,
 ) -> Option<EntityKey> {
     let state = scenario.client_state(client_key);
-    let user_key = scenario.client_to_user_key(client_key)?;
+
     let world_ref = state.world().proxy();
     if !world_ref.has_entity(entity) {
         return None;
@@ -434,19 +453,26 @@ pub(crate) fn register_client_entity_event(
     let client_ref = state.client().entity(world_ref, entity);
     let local_entity = client_ref.local_entity()?;
     // Try to find EntityKey by matching LocalEntity with server entities
-    let entity_key = match scenario.entity_registry().entity_key_for_client_entity(client_key, &local_entity) {
+    let entity_key = match scenario
+        .entity_registry()
+        .entity_key_for_client_entity(client_key, &local_entity)
+    {
         Some(ek) => ek,
         None => {
             // For server-spawned entities, match by LocalEntity value with server entities
             let local_entity_value = extract_local_entity_value(&local_entity);
             let mut matched_key = None;
-            
+
             if let Some(user_key) = scenario.client_to_user_key(client_key) {
                 let server = scenario.server().as_ref()?;
-                let server_entities: Vec<_> = scenario.entity_registry().server_entities_iter().collect();
-                
+                let server_entities: Vec<_> =
+                    scenario.entity_registry().server_entities_iter().collect();
+
                 for (ek, server_entity) in &server_entities {
                     let world_ref = scenario.server_world_ref();
+                    if !world_ref.has_entity(server_entity) {
+                        continue;
+                    }
                     let server_ref = server.entity(world_ref, server_entity);
                     if let Some(server_local_entity) = server_ref.local_entity(&user_key) {
                         let server_value = extract_local_entity_value(&server_local_entity);
@@ -457,7 +483,7 @@ pub(crate) fn register_client_entity_event(
                     }
                 }
             }
-            
+
             match matched_key {
                 Some(ek) => {
                     // Verify entity is still in client world before registering
@@ -467,9 +493,16 @@ pub(crate) fn register_client_entity_event(
                         return None;
                     }
                     // Register the mapping
-                    scenario.entity_registry_mut().register_client_local_entity_mapping(&ek, client_key, &local_entity);
+                    scenario
+                        .entity_registry_mut()
+                        .register_client_local_entity_mapping(&ek, client_key, &local_entity);
                     // Register the client entity
-                    scenario.entity_registry_mut().register_client_entity(&ek, client_key, entity, &local_entity);
+                    scenario.entity_registry_mut().register_client_entity(
+                        &ek,
+                        client_key,
+                        entity,
+                        &local_entity,
+                    );
                     ek
                 }
                 None => {
@@ -478,12 +511,21 @@ pub(crate) fn register_client_entity_event(
             }
         }
     };
-    
+
     // Register client entity if not already registered
-    if scenario.entity_registry().client_entity(&entity_key, client_key).is_none() {
-        scenario.entity_registry_mut().register_client_entity(&entity_key, client_key, entity, &local_entity);
+    if scenario
+        .entity_registry()
+        .client_entity(&entity_key, client_key)
+        .is_none()
+    {
+        scenario.entity_registry_mut().register_client_entity(
+            &entity_key,
+            client_key,
+            entity,
+            &local_entity,
+        );
     }
-    
+
     Some(entity_key)
 }
 
@@ -498,45 +540,85 @@ pub(crate) fn process_spawn_events(
     for (client_key, _client_events) in client_events_map.iter_mut() {
         // Check for new client spawns in this tick
         // These are entities the client created that we need to match with server
-        let state = scenario.clients().get(client_key).expect("client not found");
+        let state = scenario
+            .clients()
+            .get(client_key)
+            .expect("client not found");
         let client = state.client();
-        
+
         // Get all entities that exist on this client
         let entities = {
             let world_ref = state.world().proxy();
             client.entities(&world_ref)
         };
-        
+
         for entity in entities {
             let world_ref = state.world().proxy();
             let client_ref = client.entity(world_ref, &entity);
             if let Some(local_entity) = client_ref.local_entity() {
                 // Check if this entity is already registered in our registry
-                if scenario.entity_registry().entity_key_for_client_entity(client_key, &local_entity).is_none() {
+                if scenario
+                    .entity_registry()
+                    .entity_key_for_client_entity(client_key, &local_entity)
+                    .is_none()
+                {
                     // This is a new client entity - add to list for matching
                     spawns_to_register.push((*client_key, local_entity, entity));
                 }
             }
         }
     }
-    
+
     register_client_spawns(scenario, spawns_to_register);
 }
 
+/// Process despawn events to unregister entities from the registry
+pub(crate) fn process_despawn_events(
+    scenario: &mut Scenario,
+    server_events: &mut ServerEvents,
+    client_events_map: &mut HashMap<ClientKey, ClientEvents>,
+) {
+    // 1. Process server despawn events
+    for (_client_key, entity_key) in server_events.despawns() {
+        scenario
+            .entity_registry_mut()
+            .unregister_server_entity(entity_key);
+    }
+
+    // 2. Process client despawn events
+    for (client_key, client_events) in client_events_map.iter_mut() {
+        for entity_key in client_events.read::<crate::ClientDespawnEntityEvent>() {
+            scenario
+                .entity_registry_mut()
+                .unregister_client_entity(&entity_key, client_key);
+        }
+    }
+}
+
 /// Register client spawns by matching LocalEntity values with server entities.
-fn register_client_spawns(scenario: &mut Scenario, spawns_to_register: Vec<(ClientKey, LocalEntity, TestEntity)>) {
+fn register_client_spawns(
+    scenario: &mut Scenario,
+    spawns_to_register: Vec<(ClientKey, LocalEntity, TestEntity)>,
+) {
     for (client_key, local_entity, client_entity) in spawns_to_register {
         let local_entity_value = extract_local_entity_value(&local_entity);
-        
+
         // Skip if already registered
-        if let Some(existing_key) = scenario.entity_registry().entity_key_for_client_entity(&client_key, &local_entity) {
-            debug!("Skipping already-registered client entity {:?} for client {:?}", existing_key, client_key);
+        if let Some(existing_key) = scenario
+            .entity_registry()
+            .entity_key_for_client_entity(&client_key, &local_entity)
+        {
+            debug!(
+                "Skipping already-registered client entity {:?} for client {:?}",
+                existing_key, client_key
+            );
             continue;
         }
-        
+
         // Match EntityKey by LocalEntity value
         let (entity_key, server_entities_count) = {
-            let server_entities: Vec<_> = scenario.entity_registry().server_entities_iter().collect();
+            let server_entities: Vec<_> =
+                scenario.entity_registry().server_entities_iter().collect();
             let count = server_entities.len();
 
             let mut matched_key = None;
@@ -546,11 +628,17 @@ fn register_client_spawns(scenario: &mut Scenario, spawns_to_register: Vec<(Clie
 
                 for (ek, server_entity) in &server_entities {
                     let world_ref = scenario.server_world_ref();
+                    if !world_ref.has_entity(server_entity) {
+                        continue;
+                    }
                     let server_ref = server.entity(world_ref, server_entity);
                     if let Some(server_local_entity) = server_ref.local_entity(&user_key) {
                         let server_value = extract_local_entity_value(&server_local_entity);
                         if server_value == local_entity_value {
-                            debug!("Matched LocalEntity value {} to server entity {:?}", local_entity_value, ek);
+                            debug!(
+                                "Matched LocalEntity value {} to server entity {:?}",
+                                local_entity_value, ek
+                            );
                             matched_key = Some(*ek);
                             break;
                         }
@@ -560,10 +648,14 @@ fn register_client_spawns(scenario: &mut Scenario, spawns_to_register: Vec<(Clie
 
             (matched_key, count)
         };
-        
+
         if let Some(entity_key) = entity_key {
-            scenario.entity_registry_mut()
-                .register_client_entity(&entity_key, &client_key, &client_entity, &local_entity);
+            scenario.entity_registry_mut().register_client_entity(
+                &entity_key,
+                &client_key,
+                &client_entity,
+                &local_entity,
+            );
         } else {
             warn!(
                 "Phase D: Failed to resolve EntityKey for client {:?} with LocalEntity value {} (checked {} server entities). \

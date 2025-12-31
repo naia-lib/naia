@@ -1,22 +1,20 @@
+use naia_client::ClientConfig;
 use naia_server::ServerConfig;
 use naia_shared::Protocol;
-use naia_test::{
-    Scenario, ClientKey,
-    protocol, Auth,
-};
+use naia_test::{protocol, Auth, ClientKey, Scenario};
 
 mod test_helpers;
-use test_helpers::{make_room, client_connect};
+use test_helpers::client_connect;
 
-use naia_test::test_protocol::{Position, TestMessage};
 use naia_test::test_protocol::ReliableChannel;
+use naia_test::test_protocol::{Position, TestMessage};
 
 // ============================================================================
 // Domain 9: Integration & Transport Parity
 // ============================================================================
 
 /// Core replication scenario behaves identically over UDP and WebRTC
-/// 
+///
 /// Given simple multi-client scenario (spawn/update/despawn and some messages);
 /// when run once over UDP and once over WebRTC with equivalent link conditions;
 /// then externally observable events (connects, spawns, updates, messages, despawns, disconnects) are identical modulo timing.
@@ -31,7 +29,7 @@ fn core_replication_scenario_behaves_identically_over_udp_and_webrtc() {
 }
 
 /// Transport-specific connection failure surfaces cleanly
-/// 
+///
 /// Given WebRTC transport configured so ICE/signalling fails; when client attempts to connect;
 /// then connection eventually fails with clear error, no partial user/room state is created on server,
 /// and client doesn't get stuck half-connected.
@@ -42,7 +40,7 @@ fn transport_specific_connection_failure_surfaces_cleanly() {
 }
 
 /// Integrated "everything at once" scenario stays consistent and error-free
-/// 
+///
 /// Given a complex scenario exercising all major features simultaneously (multiple clients, rooms, scoping,
 /// entity replication with ownership/delegation, messages on multiple channels, requests/responses, tick-buffered commands);
 /// when run to completion; then all features work correctly together, no errors occur, state remains consistent,
@@ -54,13 +52,34 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room1_key = make_room(&mut scenario);
-    let room2_key = make_room(&mut scenario);
+    let room1_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room2_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
     // Connect multiple clients
-    let client_a_key = client_connect(&mut scenario, &room1_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room1_key, "Client B", Auth::new("client_b", "password"), test_protocol.clone());
-    let client_c_key = client_connect(&mut scenario, &room2_key, "Client C", Auth::new("client_c", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room1_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room1_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_c_key = client_connect(
+        &mut scenario,
+        &room2_key,
+        "Client C",
+        Auth::new("client_c", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Server spawns entities
     let (entity_e1, _) = scenario.mutate(|ctx| {
@@ -83,10 +102,19 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             // E1 in A and B's scope (room1)
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e1);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e1);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_e1);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e1);
             // E2 in C's scope (room2)
-            server.user_scope_mut(&client_c_key).unwrap().include(&entity_e2);
+            server
+                .user_scope_mut(&client_c_key)
+                .unwrap()
+                .include(&entity_e2);
         });
     });
 
@@ -120,10 +148,12 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
     // Verify messages received
     scenario.expect(|ctx| {
         let a_received = ctx.client(client_a_key, |c| {
-            c.read_message::<ReliableChannel, TestMessage>().any(|m| m.value == 1)
+            c.read_message::<ReliableChannel, TestMessage>()
+                .any(|m| m.value == 1)
         });
         let b_received = ctx.client(client_b_key, |c| {
-            c.read_message::<ReliableChannel, TestMessage>().any(|m| m.value == 2)
+            c.read_message::<ReliableChannel, TestMessage>()
+                .any(|m| m.value == 2)
         });
         (a_received && b_received).then_some(())
     });
@@ -152,9 +182,7 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
     });
 
     // Verify E1 is removed from B
-    scenario.expect(|ctx| {
-        (!ctx.client(client_b_key, |c| c.has_entity(&entity_e1))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.client(client_b_key, |c| c.has_entity(&entity_e1))).then_some(()));
 
     // Disconnect client B
     scenario.mutate(|ctx| {
@@ -164,9 +192,7 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
     });
 
     // Wait for disconnect
-    scenario.expect(|ctx| {
-        (!ctx.server(|s| s.user_exists(&client_b_key))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_b_key))).then_some(()));
 
     // Verify final state: A and C still connected, E2 still exists
     scenario.expect(|ctx| {

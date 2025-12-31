@@ -139,26 +139,22 @@ impl HandshakeManager {
         writer
     }
 
-    fn verify_disconnect_request(
-        &mut self,
-        address: &SocketAddr,
-        reader: &mut BitReader,
-    ) -> bool {
+    fn verify_disconnect_request(&mut self, address: &SocketAddr, reader: &mut BitReader) -> bool {
         // Read the identity token from the disconnect packet
         let Ok(disconnect_token) = IdentityToken::de(reader) else {
             return false;
         };
-        
+
         // Verify the address is authenticated
         let Some(user_key) = self.authenticated_and_identified_users.get(address) else {
             return false;
         };
-        
+
         // Verify the identity token matches what we expect for this user
         let Some(expected_token) = self.identity_token_map.get(user_key) else {
             return false;
         };
-        
+
         // Token must match
         *expected_token == disconnect_token
     }

@@ -29,7 +29,7 @@ impl Timer {
     /// elapsed since the last "reset")
     pub fn ringing(&self) -> bool {
         let now = Instant::now();
-        
+
         // Special case: zero duration timers should ring immediately
         // After ring_manual(), last is set to be in the past (now - 1ms)
         // After reset(), last is set to now
@@ -48,7 +48,7 @@ impl Timer {
             // So !now.is_after(&last) means now <= last, which is what we want!
             // But the issue is: if last is in the past, now.is_after(&last) is true, so !now.is_after(&last) is false
             // So the logic is wrong. Let me think again...
-            // 
+            //
             // We want: ring if last <= now
             // is_after: self.is_after(&other) means self > other
             // So now.is_after(&last) means now > last (i.e., last is in the past)
@@ -57,7 +57,7 @@ impl Timer {
             // If now.is_after(&last) is false, then now <= last, so we should ring
             // But if now.is_after(&last) is true, then now > last, so we should also ring (last is in the past)
             // So we should ALWAYS ring for zero duration? No, that's not right either.
-            // 
+            //
             // Actually, the issue is simpler: for zero duration, we want to ring immediately after reset()
             // After reset(), last = now, so we want to ring
             // After ring_manual(), last = now - 1ms, so we want to ring
@@ -66,20 +66,20 @@ impl Timer {
             // So if now.is_after(&last) is false, then now <= last, which means we should ring
             // But if now.is_after(&last) is true, then now > last (last is in the past), which also means we should ring
             // So we should ALWAYS ring? No wait, that doesn't make sense.
-            // 
+            //
             // Let me think about this differently:
             // - After reset(): last = now, so we want ringing() to return true
             // - After ring_manual(): last = now - 1ms, so we want ringing() to return true
             // - If time advances and last < now, we still want to ring (zero duration means immediate)
             // So we want: ring if last <= now
-            // 
+            //
             // The simplest check: compare millis directly
             // But Instant doesn't expose millis... wait, in the test backend it does!
             // Actually, let's use elapsed: if elapsed >= 0, ring
             let elapsed = self.last.elapsed(&now);
             return elapsed >= Duration::ZERO; // Always true for zero duration after reset or ring_manual
         }
-        
+
         // Handle case where time might go backwards (shouldn't happen, but be safe)
         if now.is_after(&self.last) {
             self.last.elapsed(&now) > self.duration

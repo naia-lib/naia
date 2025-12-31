@@ -1,4 +1,7 @@
-use std::{time::Duration, sync::atomic::{AtomicU64, Ordering}};
+use std::{
+    sync::atomic::{AtomicU64, Ordering},
+    time::Duration,
+};
 
 // Global simulated clock state
 static SIMULATED_CLOCK: AtomicU64 = AtomicU64::new(u64::MAX); // Use MAX as "uninitialized" sentinel
@@ -57,9 +60,9 @@ pub struct Instant {
 
 impl Instant {
     /// Creates an Instant from the current simulated time
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// This function will panic if the simulated clock has not been initialized
     /// via `init_test_clock()`.
     pub fn now() -> Self {
@@ -107,11 +110,10 @@ impl Instant {
     }
 
     /// Returns inner Instant implementation (not available in test backend)
-    /// 
+    ///
     /// This method exists for API compatibility but always panics in the test backend
     /// since there is no underlying std::time::Instant.
     pub fn inner(&self) -> std::time::Instant {
         panic!("inner() is not available in test backend. Use the Instant API directly.");
     }
 }
-

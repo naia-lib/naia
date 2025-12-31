@@ -77,6 +77,10 @@ impl BaseConnection {
         self.ack_manager.should_send_empty_ack()
     }
 
+    pub fn take_should_send_empty_ack(&mut self) -> bool {
+        self.ack_manager.take_should_send_empty_ack()
+    }
+
     /// Process an incoming packet, pulling out the packet index number to keep
     /// track of the current RTT, and sending the packet to the AckManager to
     /// handle packet notification events
@@ -97,16 +101,23 @@ impl BaseConnection {
     /// Given a packet payload, start tracking the packet via it's index, attach
     /// the appropriate header, and return the packet's resulting underlying
     /// bytes
-    pub fn write_header(&mut self, packet_type: PacketType, writer: &mut BitWriter) {
-        // Add header onto message!
-        self.ack_manager
-            .next_outgoing_packet_header(packet_type)
-            .ser(writer);
+    pub fn write_header(
+        &mut self,
+        packet_type: PacketType,
+        writer: &mut BitWriter,
+    ) -> StandardHeader {
+        let header = self.ack_manager.next_outgoing_packet_header(packet_type);
+        header.ser(writer);
+        header
     }
 
     /// Get the next outgoing packet's index
     pub fn next_packet_index(&self) -> PacketIndex {
         self.ack_manager.next_sender_packet_index()
+    }
+
+    pub fn last_received_packet_index(&self) -> PacketIndex {
+        self.ack_manager.last_received_packet_index()
     }
 
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
@@ -181,28 +192,28 @@ impl BaseConnection {
         }
     }
 
-            pub fn read_packet(
-                &mut self,
-                channel_kinds: &ChannelKinds,
-                message_kinds: &MessageKinds,
-                component_kinds: &ComponentKinds,
-                tick: &Tick,
-                read_world_events: bool,
-                reader: &mut BitReader,
-            ) -> Result<(), SerdeErr> {
-                // read messages
-                self.message_manager.read_messages(
-                    channel_kinds,
-                    message_kinds,
-                    &mut self.world_manager,
-                    reader,
-                )?;
+    pub fn read_packet(
+        &mut self,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
+        tick: &Tick,
+        read_world_events: bool,
+        reader: &mut BitReader,
+    ) -> Result<(), SerdeErr> {
+        // read messages
+        self.message_manager.read_messages(
+            channel_kinds,
+            message_kinds,
+            &mut self.world_manager,
+            reader,
+        )?;
 
-                // read world events
-                if read_world_events {
-                    WorldReader::read_world_events(&mut self.world_manager, component_kinds, tick, reader)?;
-                }
+        // read world events
+        if read_world_events {
+            WorldReader::read_world_events(&mut self.world_manager, component_kinds, tick, reader)?;
+        }
 
-                Ok(())
-            }
+        Ok(())
+    }
 }

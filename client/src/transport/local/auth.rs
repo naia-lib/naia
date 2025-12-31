@@ -2,7 +2,12 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::{mpsc, oneshot, oneshot::error::TryRecvError};
 
-use naia_shared::{transport::local::{get_runtime, ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError}, IdentityToken};
+use naia_shared::{
+    transport::local::{
+        get_runtime, ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError,
+    },
+    IdentityToken,
+};
 
 use super::addr_cell::LocalAddrCell;
 
@@ -33,7 +38,7 @@ impl PendingRequest {
             // Parse HTTP response
             let response = naia_shared::transport::bytes_to_response(&response_bytes);
             let status_code = response.status().as_u16();
-            
+
             if status_code != 200 {
                 let _ = tx.send(Ok((status_code, String::new())));
                 return;
@@ -47,7 +52,7 @@ impl PendingRequest {
                     return;
                 }
             };
-            
+
             let mut parts = body.splitn(2, "\r\n");
             let identity_token = parts.next().unwrap().to_string();
             let server_addr_str = match parts.next() {
@@ -57,7 +62,7 @@ impl PendingRequest {
                     return;
                 }
             };
-            
+
             let server_addr = match server_addr_str.parse() {
                 Ok(addr) => addr,
                 Err(_) => {
@@ -65,7 +70,7 @@ impl PendingRequest {
                     return;
                 }
             };
-            
+
             // Update addr_cell asynchronously
             // IMPORTANT: Update addr_cell BEFORE sending result so client can use it immediately
             addr_cell.recv(server_addr).await;
@@ -110,7 +115,7 @@ impl ClientAuthIo {
             rejection_code,
         }
     }
-    
+
     // Called by LocalClientSocket during connect
     pub(crate) fn connect(&mut self) {
         // Create PendingRequest immediately (not lazily!) if one doesn't exist
@@ -118,33 +123,35 @@ impl ClientAuthIo {
             // Already created, skip
             return;
         }
-        
+
         // Take ownership of the receiver
-        let auth_responses_rx = self.auth_responses_rx.take()
+        let auth_responses_rx = self
+            .auth_responses_rx
+            .take()
             .expect("auth_responses_rx already taken");
-        
+
         self.pending_req_opt = Some(PendingRequest::new(
             auth_responses_rx,
             self.addr_cell.clone(),
         ));
     }
-    
+
     fn receive(&mut self) -> ClientIdentityReceiverResult {
         // Check if already received token (from previous call)
         if let Some(token) = self.identity_token.lock().unwrap().clone() {
             return ClientIdentityReceiverResult::Success(token);
         }
-        
+
         // Check if rejection happened
         if let Some(code) = *self.rejection_code.lock().unwrap() {
             return ClientIdentityReceiverResult::ErrorResponseCode(code);
         }
-        
+
         // Check if we have a pending request
         if self.pending_req_opt.is_none() {
             panic!("No PendingRequest (did you forget to call connect?)");
         }
-        
+
         // Poll the pending request
         let pending_req = self.pending_req_opt.as_mut().unwrap();
         match pending_req.poll_response() {
@@ -153,7 +160,7 @@ impl ClientAuthIo {
                     *self.rejection_code.lock().unwrap() = Some(status_code);
                     return ClientIdentityReceiverResult::ErrorResponseCode(status_code);
                 }
-                
+
                 // Verify address is available before returning Success
                 match self.addr_cell.get() {
                     ClientServerAddr::Finding => {
@@ -161,16 +168,12 @@ impl ClientAuthIo {
                     }
                     ClientServerAddr::Found(_addr) => {}
                 }
-                
+
                 *self.identity_token.lock().unwrap() = Some(id_token.clone());
                 ClientIdentityReceiverResult::Success(id_token)
             }
-            Ok(None) => {
-                ClientIdentityReceiverResult::Waiting
-            }
-            Err(_e) => {
-                ClientIdentityReceiverResult::ErrorResponseCode(500)
-            }
+            Ok(None) => ClientIdentityReceiverResult::Waiting,
+            Err(_e) => ClientIdentityReceiverResult::ErrorResponseCode(500),
         }
     }
 }
@@ -185,9 +188,8 @@ impl LocalClientIdentity {
     pub(crate) fn new(auth_io: Arc<Mutex<ClientAuthIo>>) -> Self {
         Self { auth_io }
     }
-    
+
     pub fn receive(&mut self) -> ClientIdentityReceiverResult {
         self.auth_io.lock().unwrap().receive()
     }
 }
-

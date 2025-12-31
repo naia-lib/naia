@@ -9,10 +9,10 @@ use naia_socket_shared::Instant;
 
 use crate::{
     world::{
-        local::local_entity::RemoteEntity,
+        entity::in_scope_entities::InScopeEntities,
         entity_event::EntityEvent,
         host::host_world_manager::CommandId,
-        entity::in_scope_entities::InScopeEntities,
+        local::local_entity::RemoteEntity,
         remote::{
             remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
             remote_world_waitlist::RemoteWorldWaitlist,
@@ -262,6 +262,7 @@ impl RemoteWorldManager {
             // info!("Processing EntityMessage: {:?}", message);
             match message {
                 EntityMessage::Spawn(remote_entity) => {
+                    eprintln!("[probe] SERVER RemoteWorldManager::process_ready_messages: Processing SPAWN for remote_entity={:?}", remote_entity);
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
@@ -271,6 +272,7 @@ impl RemoteWorldManager {
                         local_entity_map.insert_with_remote_entity(global_entity, remote_entity);
                     }
 
+                    eprintln!("[probe] SERVER RemoteWorldManager: PUSHING EntityEvent::Spawn(global={:?})", global_entity);
                     self.incoming_events.push(EntityEvent::Spawn(global_entity));
                 }
                 EntityMessage::Despawn(remote_entity) => {
@@ -420,9 +422,10 @@ impl RemoteWorldManager {
         // Remove from world
         if let Some(component) = world.remove_component_of_kind(&world_entity, &component_kind) {
             // Send out event
-            let global_entity = converter.remote_entity_to_global_entity(&entity).unwrap();
-            self.incoming_events
-                .push(EntityEvent::RemoveComponent(global_entity, component));
+            if let Ok(global_entity) = converter.remote_entity_to_global_entity(&entity) {
+                self.incoming_events
+                    .push(EntityEvent::RemoveComponent(global_entity, component));
+            }
         }
     }
 

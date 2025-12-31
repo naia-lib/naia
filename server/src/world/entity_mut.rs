@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
 
-use crate::{room::RoomKey, server::WorldServer, ReplicationConfig, EntityOwner};
+use crate::{room::RoomKey, server::WorldServer, EntityOwner, ReplicationConfig};
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
@@ -99,13 +99,13 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
 
 cfg_if! {
     if #[cfg(feature = "interior_visibility")] {
-        
+
         use naia_shared::LocalEntity;
 
         use crate::UserKey;
 
         impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
-            
+
             pub fn local_entity(&self, user_key: &UserKey) -> Option<LocalEntity> {
                 self.server.world_to_local_entity(user_key, &self.entity)
             }

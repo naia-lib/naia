@@ -20,14 +20,12 @@ use crate::{HostEntity, OwnedLocalEntity, RemoteEntity};
 /// Note: IDs may be reused after entity removal. These are for testing/introspection only.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub struct LocalEntity {
-    inner: OwnedLocalEntity
+    inner: OwnedLocalEntity,
 }
 
 impl LocalEntity {
     fn new(inner: OwnedLocalEntity) -> Self {
-        Self {
-            inner
-        }
+        Self { inner }
     }
 }
 

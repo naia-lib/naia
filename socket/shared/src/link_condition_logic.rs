@@ -14,7 +14,10 @@ pub fn process_packet<T: Eq>(
 ) {
     let now = Instant::now();
     if Random::gen_range_f32(0.0, 1.0) <= config.incoming_loss {
-        debug!("[LINK_COND] Packet dropped due to loss (loss={})", config.incoming_loss);
+        debug!(
+            "[LINK_COND] Packet dropped due to loss (loss={})",
+            config.incoming_loss
+        );
         return;
     }
     let mut latency: u32 = config.incoming_latency;
@@ -33,9 +36,11 @@ pub fn process_packet<T: Eq>(
     }
     let mut packet_timestamp = now;
     packet_timestamp.add_millis(latency);
-    let delay_ms = latency as u64;
-    println!("[LINK_COND] Queuing packet: delay={}ms (latency={}, jitter={}, loss={})", 
-           delay_ms, config.incoming_latency, config.incoming_jitter, config.incoming_loss);
+    // Use debug logging instead of println to reduce noise
+    debug!(
+        "[LINK_COND] Queuing packet: delay={}ms (latency={}, jitter={}, loss={})",
+        latency as u64, config.incoming_latency, config.incoming_jitter, config.incoming_loss
+    );
     time_queue.add_item(packet_timestamp, packet);
-    println!("[LINK_COND] Queue length after add: {}", time_queue.len());
+    debug!("[LINK_COND] Queue length after add: {}", time_queue.len());
 }

@@ -63,5 +63,3 @@ impl PacketReceiver for ConditionedPacketReceiver {
         self.inner_receiver.server_addr()
     }
 }
-
-

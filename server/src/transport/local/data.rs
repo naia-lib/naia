@@ -1,6 +1,8 @@
-use std::{net::SocketAddr, sync::{Arc, Mutex}};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
-use log::debug;
 use naia_shared::transport::local::{LocalTransportHub, ServerRecvError, ServerSendError};
 
 // Server packet sender (always uses hub-based multiplexing)
@@ -15,7 +17,8 @@ impl LocalServerSender {
     }
 
     pub fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), ServerSendError> {
-        self.hub.send_data(address, payload.to_vec())
+        self.hub
+            .send_data(address, payload.to_vec())
             .map_err(|_| ServerSendError)?;
         Ok(())
     }
@@ -49,4 +52,3 @@ impl LocalServerReceiver {
         }
     }
 }
-

@@ -1,10 +1,23 @@
 use log::warn;
 
-use naia_server::{EntityMut, EntityRef, RoomKey, NaiaServerError, TickBufferMessages};
-use naia_demo_world::{WorldRef, WorldMut};
-use naia_shared::{Channel, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick, generate_identity_token, IdentityToken};
+use naia_demo_world::{WorldMut, WorldRef};
+use naia_server::{EntityMut, EntityRef, NaiaServerError, RoomKey, TickBufferMessages};
+use naia_shared::WorldRefType;
+use naia_shared::{
+    generate_identity_token, Channel, IdentityToken, Message, Request, Response,
+    ResponseReceiveKey, ResponseSendKey, Tick,
+};
 
-use crate::{harness::{EntityKey, ClientKey, user_scope::{UserScopeRef, UserScopeMut}, user::{UserRef, UserMut}, room::{RoomRef, RoomMut}, mutate_ctx::MutateCtx}, TestEntity};
+use crate::{
+    harness::{
+        mutate_ctx::MutateCtx,
+        room::{RoomMut, RoomRef},
+        user::{UserMut, UserRef},
+        user_scope::{UserScopeMut, UserScopeRef},
+        ClientKey, EntityKey,
+    },
+    TestEntity,
+};
 
 /// Lightweight handle for server-side mutations
 /// Provides direct pass-through to core Server API with EntityKey resolution
@@ -24,7 +37,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     {
         let scenario = self.ctx.scenario_mut();
         let (server, world, registry, _) = scenario.split_for_server_mut();
-        
+
         // 1. Spawn entity via Server API
         let entity_mut = server.spawn_entity(world.proxy_mut());
 
@@ -44,10 +57,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
 
     /// Get read-only entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
-    pub fn entity(
-        &'_ self,
-        key: &EntityKey,
-    ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
+    pub fn entity(&'_ self, key: &EntityKey) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
         let scenario = self.ctx.scenario();
         let entity = scenario.entity_registry().server_entity(key)?;
         let (server, _) = scenario.server_and_registry()?;
@@ -65,6 +75,9 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let entity = scenario.entity_registry().server_entity(key)?;
         let (server, world, _, _) = scenario.split_for_server_mut();
         let world_mut = world.proxy_mut();
+        if !world_mut.has_entity(&entity) {
+            return None;
+        }
         Some(server.entity_mut(world_mut, &entity))
     }
 
@@ -72,6 +85,10 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     pub fn despawn(&mut self, key: &EntityKey) {
         if let Some(mut entity_mut) = self.entity_mut(key) {
             entity_mut.despawn();
+            self.ctx
+                .scenario_mut()
+                .entity_registry_mut()
+                .unregister_server_entity(key);
         }
     }
 
@@ -106,7 +123,8 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let (server, registry) = scenario.server_and_registry().unwrap();
         let world_ref = scenario.server_world_ref();
         let server_entities = server.entities(world_ref);
-        server_entities.iter()
+        server_entities
+            .iter()
             .filter_map(|e| registry.entity_key_for_server_entity(e))
             .collect()
     }
@@ -152,7 +170,8 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let scenario = self.ctx.scenario();
         let (server, _) = scenario.server_and_registry().unwrap();
         let users = scenario.client_users();
-        server.user_keys()
+        server
+            .user_keys()
             .iter()
             .filter_map(|uk| users.user_to_client_key(uk))
             .collect()
@@ -165,7 +184,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Accept connection for a client
-    /// 
+    ///
     /// Requires that the ClientKey has been mapped to a UserKey (via reading AuthEvent).
     /// Panics if the mapping doesn't exist.
     pub fn accept_connection(&mut self, client_key: &ClientKey) {
@@ -176,9 +195,9 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Reject connection
-    /// 
+    ///
     /// # Note
-    /// 
+    ///
     /// This method silently fails if the ClientKey has no associated UserKey
     /// (e.g., if the client hasn't authenticated yet). A warning is logged in this case.
     pub fn reject_connection(&mut self, client_key: &ClientKey) {
@@ -192,17 +211,17 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Disconnect a user from the server
-    /// 
+    ///
     /// This requests a server-side disconnect of the user identified by the given ClientKey.
     /// The user will be disconnected in the next tick.
-    /// 
+    ///
     /// # Returns
-    /// 
+    ///
     /// Returns `true` if the disconnect was queued successfully, `false` if the ClientKey
     /// has no associated UserKey (e.g., not authenticated yet or already disconnected).
-    /// 
+    ///
     /// # Note
-    /// 
+    ///
     /// A warning is logged if the operation fails, which can help diagnose test issues.
     pub fn disconnect_user(&mut self, client_key: &ClientKey) -> bool {
         // Use the user_mut() method to get UserMut and call disconnect on it
@@ -249,7 +268,8 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> Option<RoomMut<'_>> {
         let scenario = self.ctx.scenario_mut();
         // Check if room exists before splitting
-        let exists = scenario.server_and_registry()
+        let exists = scenario
+            .server_and_registry()
             .map(|(server, _)| server.room_exists(room_key))
             .unwrap_or(false);
         if exists {
@@ -306,18 +326,27 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Send response
-    pub fn send_response<S: Response>(&mut self, response_key: &ResponseSendKey<S>, response: &S) -> bool {
+    pub fn send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> bool {
         let (server, _, _, _) = self.ctx.scenario_mut().split_for_server_mut();
         server.send_response(response_key, response)
     }
 
     /// Receive response
-    pub fn receive_response<S: Response>(&mut self, response_key: &ResponseReceiveKey<S>) -> Option<(ClientKey, S)> {
+    pub fn receive_response<S: Response>(
+        &mut self,
+        response_key: &ResponseReceiveKey<S>,
+    ) -> Option<(ClientKey, S)> {
         let scenario = self.ctx.scenario_mut();
         let (server, _, _, users) = scenario.split_for_server_mut();
-        server.receive_response(response_key)
+        server
+            .receive_response(response_key)
             .and_then(|(user_key, response)| {
-                users.user_to_client_key(&user_key)
+                users
+                    .user_to_client_key(&user_key)
                     .map(|client_key| (client_key, response))
             })
     }
@@ -329,7 +358,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Generate a new identity token
-    /// 
+    ///
     /// This is a thin wrapper around Naia's public API for generating identity tokens.
     /// Useful for creating tokens that can be used in tests, including negative tests
     /// where you want to test with malformed, expired, or reused tokens.
@@ -338,7 +367,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Request authority for an entity on behalf of a client
-    /// 
+    ///
     /// This requests authority for the given entity for the specified client.
     /// Returns true if the request was successful, false otherwise.
     pub fn request_authority(&mut self, client_key: &ClientKey, entity: &EntityKey) -> bool {
@@ -355,11 +384,15 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     }
 
     /// Release authority for an entity
-    /// 
+    ///
     /// This releases authority for the given entity. If a client_key is provided,
     /// authority is released on behalf of that client. If None, authority is released
     /// by the server.
-    pub fn release_authority(&mut self, client_key: Option<&ClientKey>, entity: &EntityKey) -> bool {
+    pub fn release_authority(
+        &mut self,
+        client_key: Option<&ClientKey>,
+        entity: &EntityKey,
+    ) -> bool {
         let scenario = self.ctx.scenario_mut();
         let Some(entity) = scenario.entity_registry().server_entity(entity) else {
             return false;
@@ -370,4 +403,3 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         true
     }
 }
-

@@ -7,12 +7,12 @@ use std::{
 use crate::{
     messages::channels::senders::indexed_message_writer::IndexedMessageWriter,
     world::{
-        local::local_world_manager::LocalWorldManager,
         entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
+        local::local_world_manager::LocalWorldManager,
     },
     BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength,
     EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageType, GlobalEntity,
-    Instant, MessageIndex, PacketIndex, Serde, WorldRefType,
+    Instant, MessageIndex, PacketIndex, RemoteEntity, Serde, WorldRefType,
 };
 
 pub struct WorldWriter;
@@ -81,6 +81,20 @@ impl WorldWriter {
         has_written: &mut bool,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
+        eprintln!(
+            "[rep_probe] WorldWriter::write_commands: {} commands to write",
+            next_send_commands.len()
+        );
+        for (idx, (id, cmd)) in next_send_commands.iter().enumerate() {
+            eprintln!(
+                "[rep_probe]   [{}] id={:?}, type={:?}, entity={:?}",
+                idx,
+                id,
+                cmd.get_type(),
+                cmd.entity()
+            );
+        }
+
         let mut last_counted_id: Option<MessageIndex> = None;
         let mut last_written_id: Option<MessageIndex> = None;
 
@@ -107,6 +121,7 @@ impl WorldWriter {
                 next_send_commands,
             );
             if counter.overflowed() {
+                eprintln!("[rep_probe] WorldWriter::write_commands: counter OVERFLOWED, breaking without consuming commands");
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
                 if !*has_written {
@@ -215,9 +230,19 @@ impl WorldWriter {
             }
             EntityCommand::InsertComponent(global_entity, component_kind) => {
                 // get world entity
-                let world_entity = entity_converter
-                    .global_entity_to_entity(global_entity)
-                    .unwrap();
+                let Some(world_entity) =
+                    entity_converter.global_entity_to_entity(global_entity).ok()
+                else {
+                    EntityMessageType::Noop.ser(writer);
+                    if is_writing {
+                        world_manager.record_command_written(
+                            packet_index,
+                            command_id,
+                            EntityMessage::Noop,
+                        );
+                    }
+                    return;
+                };
 
                 if !world_manager.has_global_entity(global_entity)
                     || !world.has_component_of_kind(&world_entity, component_kind)
@@ -424,7 +449,7 @@ impl WorldWriter {
                 }
             }
             EntityCommand::SetAuthority(sub_id_opt, global_entity, auth_status) => {
-                // this command is only ever sent by the server, regarding server-owned entities, to clients
+                // this command is sent by the server to clients (for both server-owned and client-owned entities)
 
                 // get subcommand id
                 let Some(sub_id) = sub_id_opt else {
@@ -437,14 +462,28 @@ impl WorldWriter {
                 // write subcommand id
                 sub_id.ser(writer);
 
-                // get host entity
-                let host_entity = world_manager
+                // get remote entity (client always reads SetAuthority as RemoteEntity)
+                // Try RemoteEntity first (for client-owned entities on server), fall back to HostEntity if needed
+                let remote_entity = world_manager
                     .entity_converter()
-                    .global_entity_to_host_entity(global_entity)
-                    .unwrap();
+                    .global_entity_to_remote_entity(global_entity)
+                    .or_else(|_| {
+                        // Fallback: if it's a HostEntity, convert it to RemoteEntity
+                        // This handles the case where server-owned entities are sent as SetAuthority
+                        world_manager
+                            .entity_converter()
+                            .global_entity_to_host_entity(global_entity)
+                            .map(|he| he.to_remote())
+                    })
+                    .unwrap_or_else(|_| {
+                        panic!(
+                            "SetAuthority: Cannot convert GlobalEntity {:?} to RemoteEntity or HostEntity",
+                            global_entity
+                        );
+                    });
 
-                // write host entity
-                host_entity.ser(writer);
+                // write remote entity
+                remote_entity.ser(writer);
 
                 // write auth status
                 auth_status.ser(writer);
@@ -456,7 +495,7 @@ impl WorldWriter {
                         command_id,
                         EntityMessage::SetAuthority(
                             *sub_id,
-                            host_entity.copy_to_owned(),
+                            remote_entity.copy_to_owned(),
                             *auth_status,
                         ),
                     );
@@ -570,7 +609,6 @@ impl WorldWriter {
                 old_remote_entity,
                 new_host_entity_value,
             ) => {
-
                 // this command is only ever sent by the server, regarding newly delegated server-owned entities, to clients
 
                 // get subcommand id

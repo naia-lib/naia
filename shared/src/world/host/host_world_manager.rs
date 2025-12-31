@@ -5,7 +5,10 @@ use std::{
 
 use crate::{
     messages::channels::receivers::reliable_receiver::ReliableReceiver,
-    world::{update::entity_update_manager::EntityUpdateManager, sync::{HostEngine, HostEntityChannel, RemoteEngine, RemoteEntityChannel}},
+    world::{
+        sync::{HostEngine, HostEntityChannel, RemoteEngine, RemoteEntityChannel},
+        update::entity_update_manager::EntityUpdateManager,
+    },
     ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage,
     EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity,
     HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap,
@@ -63,7 +66,6 @@ impl HostWorldManager {
         world: &mut W,
         incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
     ) -> Vec<EntityEvent> {
-
         let incoming_messages = EntityMessageReceiver::host_take_incoming_events(
             &mut self.host_engine,
             incoming_messages,
@@ -216,9 +218,11 @@ impl HostWorldManager {
                     self.on_delivered_despawn_entity(local_entity_map, &host_entity);
                 }
                 EntityMessage::InsertComponent(host_entity, component_kind) => {
-                    let global_entity = local_entity_map
-                        .global_entity_from_host(&host_entity)
-                        .expect("Host entity not found in local entity map");
+                    let Some(global_entity) =
+                        local_entity_map.global_entity_from_host(&host_entity)
+                    else {
+                        return;
+                    };
                     self.on_delivered_insert_component(
                         entity_update_manager,
                         global_entity,
@@ -226,9 +230,11 @@ impl HostWorldManager {
                     );
                 }
                 EntityMessage::RemoveComponent(host_entity, component_kind) => {
-                    let global_entity = local_entity_map
-                        .global_entity_from_host(&host_entity)
-                        .expect("Host entity not found in local entity map");
+                    let Some(global_entity) =
+                        local_entity_map.global_entity_from_host(&host_entity)
+                    else {
+                        return;
+                    };
                     self.on_delivered_remove_component(
                         entity_update_manager,
                         global_entity,

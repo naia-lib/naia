@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, sync::{Arc, Mutex}};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 use naia_shared::IdentityToken;
 use tokio::sync::mpsc;
@@ -18,7 +21,6 @@ pub struct LocalClientSocket {
 }
 
 impl LocalClientSocket {
-
     /// Create a new client socket with per-client identity token storage
     /// This is used when multiple clients need to connect to the same server
     pub fn new_with_tokens(
@@ -47,17 +49,16 @@ impl LocalClientSocket {
         }
     }
 
-    pub fn connect(
-        self,
-    ) -> (
-        LocalClientIdentity,
-        LocalClientSender,
-        LocalClientReceiver,
-    ) {
+    pub fn connect(self) -> (LocalClientIdentity, LocalClientSender, LocalClientReceiver) {
         // Note: connect() without auth doesn't create a PendingRequest.
         // Only connect_with_auth*() methods create it after sending the auth request.
         // This matches the expected behavior - if no auth request is sent, no response is expected.
-        let LocalClientSocket { auth_io, sender, receiver, .. } = self;
+        let LocalClientSocket {
+            auth_io,
+            sender,
+            receiver,
+            ..
+        } = self;
         let identity = LocalClientIdentity::new(auth_io);
         (identity, sender, receiver)
     }
@@ -65,11 +66,7 @@ impl LocalClientSocket {
     pub fn connect_with_auth(
         self,
         auth_bytes: Vec<u8>,
-    ) -> (
-        LocalClientIdentity,
-        LocalClientSender,
-        LocalClientReceiver,
-    ) {
+    ) -> (LocalClientIdentity, LocalClientSender, LocalClientReceiver) {
         // Build HTTP POST request with Authorization header
         let base64_encoded = base64::encode(&auth_bytes);
         let request = http::Request::builder()
@@ -93,15 +90,9 @@ impl LocalClientSocket {
     pub fn connect_with_auth_headers(
         self,
         auth_headers: Vec<(String, String)>,
-    ) -> (
-        LocalClientIdentity,
-        LocalClientSender,
-        LocalClientReceiver,
-    ) {
+    ) -> (LocalClientIdentity, LocalClientSender, LocalClientReceiver) {
         // Build HTTP POST request with custom headers
-        let mut builder = http::Request::builder()
-            .method("POST")
-            .uri("/");
+        let mut builder = http::Request::builder().method("POST").uri("/");
 
         for (key, value) in auth_headers {
             builder = builder.header(key, value);
@@ -123,11 +114,7 @@ impl LocalClientSocket {
         self,
         auth_bytes: Vec<u8>,
         auth_headers: Vec<(String, String)>,
-    ) -> (
-        LocalClientIdentity,
-        LocalClientSender,
-        LocalClientReceiver,
-    ) {
+    ) -> (LocalClientIdentity, LocalClientSender, LocalClientReceiver) {
         // Build HTTP POST request with both auth and headers
         let base64_encoded = base64::encode(&auth_bytes);
         let mut builder = http::Request::builder()

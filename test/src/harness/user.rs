@@ -1,8 +1,11 @@
 use std::net::SocketAddr;
 
-use naia_server::{UserRef as NaiaUserRef, UserMut as NaiaUserMut, RoomKey};
+use naia_server::{RoomKey, UserMut as NaiaUserMut, UserRef as NaiaUserRef};
 
-use crate::{TestEntity, harness::{ClientKey, users::Users}};
+use crate::{
+    harness::{users::Users, ClientKey},
+    TestEntity,
+};
 
 /// Harness wrapper for UserRef that works with ClientKey instead of UserKey
 pub struct UserRef<'a> {
@@ -86,4 +89,3 @@ impl<'a> UserMut<'a> {
         self.user.room_keys().copied().collect()
     }
 }
-

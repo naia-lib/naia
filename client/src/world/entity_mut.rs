@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
 
-use crate::{Client, ReplicationConfig, world::entity_owner::EntityOwner};
+use crate::{world::entity_owner::EntityOwner, Client, ReplicationConfig};
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {

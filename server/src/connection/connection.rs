@@ -1,13 +1,14 @@
 use std::collections::{HashMap, HashSet, VecDeque};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
-    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
-    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Serde,
-    SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    ConnectionConfig, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityEvent,
+    GlobalEntity, GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType,
+    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -21,6 +22,8 @@ use crate::{
     user::UserKey,
     world::global_world_manager::GlobalWorldManager,
 };
+#[cfg(feature = "e2e_debug")]
+use crate::server::world_server::{SERVER_RX_FRAMES, SERVER_TX_FRAMES};
 
 pub struct Connection {
     pub address: SocketAddr,
@@ -60,6 +63,7 @@ impl Connection {
     // Incoming Data
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
+        // Note: identity print is now in world_server::read_data_packet for consistency
         self.base.process_incoming_header(header, &mut []);
     }
 
@@ -191,6 +195,17 @@ impl Connection {
             .base
             .world_manager
             .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
+        
+        // Count drained commands and messages for this connection
+        #[cfg(feature = "e2e_debug")]
+        {
+            use crate::server::world_server::{SERVER_OUTGOING_CMDS_DRAINED_TOTAL, SERVER_WORLD_MSGS_DRAINED};
+            let total_drained = host_world_events.len();
+            if total_drained > 0 {
+                SERVER_OUTGOING_CMDS_DRAINED_TOTAL.fetch_add(total_drained, Ordering::Relaxed);
+                SERVER_WORLD_MSGS_DRAINED.fetch_add(total_drained, Ordering::Relaxed);
+            }
+        }
 
         let mut any_sent = false;
         loop {
@@ -235,8 +250,47 @@ impl Connection {
     ) -> bool {
         let has_messages = self.base.message_manager.has_outgoing_messages();
         let has_events = !host_world_events.is_empty() || !update_events.is_empty();
-        
+
+        // Check one-shot ACK flag (edge-triggered, consumed here)
+        let needs_ack_only = self.base.take_should_send_empty_ack();
+
+        // If ACK-only and no messages/events, send exactly ONE header-only packet and return false
+        if needs_ack_only && !has_messages && !has_events {
+            let mut writer = BitWriter::new();
+            writer.reserve_bits(3); // Messages, Updates, Actions finish bits
+
+            // write header
+            let header = self.base.write_header(PacketType::Data, &mut writer);
+
+            // write server tick
+            let tick = time_manager.current_tick();
+            tick.ser(&mut writer);
+
+            // write server tick instant
+            time_manager.current_tick_instant().ser(&mut writer);
+
+            // write finish bits for empty packet (no messages, no updates, no actions)
+            false.ser(&mut writer); // Messages finish bit
+            false.ser(&mut writer); // Updates finish bit
+            false.ser(&mut writer); // Actions finish bit
+
+            // send packet
+            if io.send_packet(&self.address, writer.to_packet()).is_err() {
+                warn!("Server Error: Cannot send ACK-only packet to {}", &self.address);
+            } else {
+                #[cfg(feature = "e2e_debug")]
+                {
+                    SERVER_TX_FRAMES.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+
+            // Return false to stop the loop (ACK-only is one-shot)
+            return false;
+        }
+
+        // Normal packet sending path (with messages/events or no ACK needed)
         if has_events || has_messages {
+            let packet_index_before = self.base.next_packet_index();
             let writer = self.write_packet(
                 channel_kinds,
                 message_kinds,
@@ -252,8 +306,14 @@ impl Connection {
 
             // send packet
             if io.send_packet(&self.address, writer.to_packet()).is_err() {
-                // TODO: pass this on and handle above
                 warn!("Server Error: Cannot send data packet to {}", &self.address);
+            } else {
+                #[cfg(feature = "e2e_debug")]
+                {
+                    SERVER_TX_FRAMES.fetch_add(1, Ordering::Relaxed);
+                    use crate::server::world_server::SERVER_WORLD_PKTS_SENT;
+                    SERVER_WORLD_PKTS_SENT.fetch_add(1, Ordering::Relaxed);
+                }
             }
 
             return true;
@@ -297,6 +357,18 @@ impl Connection {
 
         // write common data packet
         let mut has_written = false;
+        
+        // Count SetAuthority(Granted) commands before writing
+        let set_auth_granted_before = host_world_events.iter()
+            .filter(|(_, cmd)| {
+                if let EntityCommand::SetAuthority(_, _, status) = cmd {
+                    *status == EntityAuthStatus::Granted
+                } else {
+                    false
+                }
+            })
+            .count();
+        
         self.base.write_packet(
             channel_kinds,
             message_kinds,
@@ -312,6 +384,27 @@ impl Connection {
             host_world_events,
             update_events,
         );
+        
+        #[cfg(feature = "e2e_debug")]
+        {
+            // Count SetAuthority(Granted) commands after writing (they're consumed during write)
+            let set_auth_granted_after = host_world_events.iter()
+                .filter(|(_, cmd)| {
+                    if let EntityCommand::SetAuthority(_, _, status) = cmd {
+                        *status == EntityAuthStatus::Granted
+                    } else {
+                        false
+                    }
+                })
+                .count();
+            
+            // The difference is how many were written
+            let written_count = set_auth_granted_before - set_auth_granted_after;
+            if written_count > 0 {
+                use crate::server::world_server::SERVER_WROTE_SET_AUTH;
+                SERVER_WROTE_SET_AUTH.fetch_add(written_count, Ordering::Relaxed);
+            }
+        }
 
         writer
     }

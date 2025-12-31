@@ -64,7 +64,7 @@ impl BaseTimeManager {
         let mut writer = BitWriter::new();
 
         // write header
-        connection.base.write_header(PacketType::Pong, &mut writer);
+        let _header = connection.base.write_header(PacketType::Pong, &mut writer);
 
         // write index
         ping_index.ser(&mut writer);

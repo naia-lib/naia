@@ -1,8 +1,22 @@
 use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
-use naia_shared::{Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType};
+use naia_shared::{
+    Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate, Request,
+    Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
+};
 
-use crate::{connection::tick_buffer_messages::TickBufferMessages, events::main_events::WorldPacketEvent, server::{main_server::MainServer, world_server::WorldServer}, transport::Socket, transport::{PacketChannel, PacketSender}, world::{entity_mut::EntityMut, entity_ref::EntityRef}, ConnectEvent, DisconnectEvent, EntityOwner, Events, MainEvents, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef};
+use crate::{
+    connection::tick_buffer_messages::TickBufferMessages,
+    events::main_events::WorldPacketEvent,
+    server::{main_server::MainServer, world_server::WorldServer},
+    transport::Socket,
+    transport::{PacketChannel, PacketSender},
+    world::{entity_mut::EntityMut, entity_ref::EntityRef},
+    ConnectEvent, DisconnectEvent, EntityOwner, Events, MainEvents, NaiaServerError,
+    ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, TickEvents, UserKey, UserMut,
+    UserRef, UserScopeMut, UserScopeRef,
+};
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -440,9 +454,9 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Se
 
 cfg_if! {
     if #[cfg(feature = "interior_visibility")] {
-        
+
         use naia_shared::LocalEntity;
-        
+
         impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             /// Returns all LocalEntity IDs for entities replicated to the given user.
             ///
@@ -456,7 +470,7 @@ cfg_if! {
             pub fn local_entities(&self, user_key: &UserKey) -> Vec<LocalEntity> {
                 self.world_server.local_entities(user_key)
             }
-        
+
             /// Retrieves an EntityRef that exposes read-only operations for the Entity
             /// identified by the given LocalEntity for the specified user.
             ///
@@ -472,7 +486,7 @@ cfg_if! {
             ) -> Option<EntityRef<'_, E, W>> {
                 self.world_server.local_entity(world, user_key, local_entity)
             }
-        
+
             /// Retrieves an EntityMut that exposes read and write operations for the Entity
             /// identified by the given LocalEntity for the specified user.
             ///

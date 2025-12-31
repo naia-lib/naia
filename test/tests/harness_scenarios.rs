@@ -2,14 +2,10 @@ use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig};
 use naia_server::{RoomKey, ServerConfig};
-use naia_test::{
-    Scenario, ClientKey,
-    protocol, Auth, Position,
-    AuthEvent, ConnectEvent,
-};
+use naia_test::{protocol, Auth, ClientKey, Position, Scenario};
 
 mod test_helpers;
-use test_helpers::{make_room, client_connect};
+use test_helpers::client_connect;
 
 /// Test: single client spawn replicates to server
 #[test]
@@ -19,26 +15,30 @@ fn harness_single_client_spawn_replicates_to_server() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
-    
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
+
     // Mutate phase: client spawns entity
     let entity_a = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut spawned_entity| {
                 spawned_entity
+                    .configure_replication(ReplicationConfig::Public)
                     .insert_component(Position::new(1.0, 2.0));
             })
         })
     });
-    
+
     // Expect phase: server has entity
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server.has_entity(&entity_a).then_some(())
-        })
-    });
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_a).then_some(())));
 }
 
 /// Test: two clients see the same logical entity
@@ -49,35 +49,50 @@ fn harness_two_clients_entity_mapping() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Mutate phase: client A spawns entity A
     let entity_a = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut spawned_entity| {
-                spawned_entity.configure_replication(ReplicationConfig::Public).insert_component(Position::new(10.0, 20.0));
+                spawned_entity
+                    .configure_replication(ReplicationConfig::Public)
+                    .insert_component(Position::new(10.0, 20.0));
             })
         })
     });
 
     // Wait for entity to replicate to server
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server.has_entity(&entity_a).then_some(())
-        })
-    });
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_a).then_some(())));
 
     // Now include B in scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             // Ensure entity is in room
             server.entity_mut(&entity_a).unwrap().enter_room(&room_key);
-            
+
             // Include entity in Client B's scope
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_a);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_a);
         });
     });
 

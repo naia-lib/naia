@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, sync::{Arc, Mutex}};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 use naia_shared::IdentityToken;
 
@@ -17,13 +20,12 @@ impl ServerAuthIo {
             buffer: [0; 1472],
         }
     }
-    
+
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
         if let Some((client_addr, request_bytes)) = self.hub.try_recv_auth_request() {
-
             // Parse HTTP request
             let request = naia_shared::transport::bytes_to_request(&request_bytes);
-            
+
             // Extract Authorization header if present
             if let Some(auth_header) = request.headers().get("Authorization") {
                 let auth_str = auth_header.to_str().unwrap();
@@ -39,7 +41,7 @@ impl ServerAuthIo {
             Ok(None)
         }
     }
-    
+
     fn accept(
         &mut self,
         address: &SocketAddr,
@@ -51,11 +53,12 @@ impl ServerAuthIo {
             .status(200)
             .body(response_body.into_bytes())
             .unwrap();
-        
+
         let response_bytes = naia_shared::transport::response_to_bytes(response);
-        
+
         // Send to the specific client via hub
-        self.hub.send_auth_response(address, response_bytes)
+        self.hub
+            .send_auth_response(address, response_bytes)
             .map_err(|_| ServerSendError)?;
 
         Ok(())
@@ -67,11 +70,12 @@ impl ServerAuthIo {
             .status(401)
             .body(Vec::new())
             .unwrap();
-        
+
         let response_bytes = naia_shared::transport::response_to_bytes(response);
-        
+
         // Send to the specific client via hub
-        self.hub.send_auth_response(address, response_bytes)
+        self.hub
+            .send_auth_response(address, response_bytes)
             .map_err(|_| ServerSendError)?;
 
         Ok(())
@@ -89,7 +93,11 @@ impl LocalServerAuthSender {
         Self { auth_io }
     }
 
-    pub fn accept(&self, address: &SocketAddr, identity_token: &IdentityToken) -> Result<(), ServerSendError> {
+    pub fn accept(
+        &self,
+        address: &SocketAddr,
+        identity_token: &IdentityToken,
+    ) -> Result<(), ServerSendError> {
         self.auth_io.lock().unwrap().accept(address, identity_token)
     }
 
@@ -127,4 +135,3 @@ impl LocalServerAuthReceiver {
         }
     }
 }
-

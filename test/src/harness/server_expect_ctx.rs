@@ -1,7 +1,18 @@
-use naia_server::{EntityRef, UserRef as NaiaUserRef, RoomRef as NaiaRoomRef, RoomKey};
 use naia_demo_world::WorldRef;
+use naia_server::{EntityRef, RoomKey, UserRef as NaiaUserRef};
+use naia_shared::WorldRefType;
 
-use crate::{harness::{scenario::Scenario, user_scope::UserScopeRef, EntityKey, ClientKey, server_events::{ServerEvents, ServerEvent}, user::UserRef, room::RoomRef}, TestEntity};
+use crate::{
+    harness::{
+        room::RoomRef,
+        scenario::Scenario,
+        server_events::{ServerEvent, ServerEvents},
+        user::UserRef,
+        user_scope::UserScopeRef,
+        ClientKey, EntityKey,
+    },
+    TestEntity,
+};
 
 /// Context for server-side expectations with per-tick events
 pub struct ServerExpectCtx<'a> {
@@ -10,22 +21,16 @@ pub struct ServerExpectCtx<'a> {
 }
 
 impl<'a> ServerExpectCtx<'a> {
-    pub(crate) fn new(
-        scenario: &'a Scenario,
-        events: &'a mut ServerEvents,
-    ) -> Self {
-        Self {
-            scenario,
-            events,
-        }
+    pub(crate) fn new(scenario: &'a Scenario, events: &'a mut ServerEvents) -> Self {
+        Self { scenario, events }
     }
 
     pub fn scenario(&self) -> &Scenario {
         self.scenario
     }
-    
+
     /// Read an event (returns first event if any)
-    pub fn read_event<V: ServerEvent>(&mut self) -> Option<V::Item> 
+    pub fn read_event<V: ServerEvent>(&mut self) -> Option<V::Item>
     where
         V::Iter: Iterator<Item = V::Item>,
     {
@@ -34,7 +39,10 @@ impl<'a> ServerExpectCtx<'a> {
 
     /// Expect that the server has replicated/created a concrete entity
     pub fn has_entity(&self, entity: &EntityKey) -> bool {
-        self.scenario.entity_registry().server_entity(entity).is_some()
+        self.scenario
+            .entity_registry()
+            .server_entity(entity)
+            .is_some()
     }
 
     /// Get read-only entity access by EntityKey
@@ -42,6 +50,9 @@ impl<'a> ServerExpectCtx<'a> {
         let entity = self.scenario.entity_registry().server_entity(key)?;
         let (server, _) = self.scenario.server_and_registry()?;
         let world_ref = self.scenario.server_world_ref();
+        if !world_ref.has_entity(&entity) {
+            return None;
+        }
         Some(server.entity(world_ref, &entity))
     }
 
@@ -67,7 +78,8 @@ impl<'a> ServerExpectCtx<'a> {
         let (server, registry) = self.scenario.server_and_registry().unwrap();
         let world_ref = self.scenario.server_world_ref();
         let server_entities = server.entities(world_ref);
-        server_entities.iter()
+        server_entities
+            .iter()
             .filter_map(|e| registry.entity_key_for_server_entity(e))
             .collect()
     }
@@ -96,7 +108,8 @@ impl<'a> ServerExpectCtx<'a> {
     pub fn user_keys(&self) -> Vec<ClientKey> {
         let (server, _) = self.scenario.server_and_registry().unwrap();
         let user_keys = server.user_keys();
-        user_keys.iter()
+        user_keys
+            .iter()
             .filter_map(|uk| self.scenario.user_to_client_key(uk))
             .collect()
     }
@@ -139,44 +152,51 @@ impl<'a> ServerExpectCtx<'a> {
 
     /// Read messages from a specific channel sent by clients
     /// Returns an iterator over (ClientKey, M) tuples for messages of type M received on channel C
-    pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(&mut self) -> impl Iterator<Item = (ClientKey, M)> {
-        use naia_shared::{ChannelKind, MessageKind, MessageContainer};
+    pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(
+        &mut self,
+    ) -> impl Iterator<Item = (ClientKey, M)> {
+        use naia_shared::{ChannelKind, MessageKind};
+
         let channel_kind = ChannelKind::of::<C>();
         let message_kind = MessageKind::of::<M>();
-        
+
         // Access messages through a helper method on ServerEvents
-        let messages = self.events.take_messages_for_channel_and_type(
-            &channel_kind,
-            &message_kind,
-        );
-        
+        let messages = self
+            .events
+            .take_messages_for_channel_and_type(&channel_kind, &message_kind);
+
         messages.into_iter().map(|(client_key, container)| {
-            let message: M = Box::<dyn std::any::Any + 'static>::downcast::<M>(container.to_boxed_any())
-                .ok()
-                .map(|boxed_m| *boxed_m)
-                .expect("Message type mismatch");
+            let message: M =
+                Box::<dyn std::any::Any + 'static>::downcast::<M>(container.to_boxed_any())
+                    .ok()
+                    .map(|boxed_m| *boxed_m)
+                    .expect("Message type mismatch");
             (client_key, message)
         })
     }
 
     /// Read requests from a specific channel sent by clients
     /// Returns an iterator over (ClientKey, ResponseId, Request) tuples received on channel C
-    pub fn read_request<C: naia_shared::Channel, Q: naia_shared::Request>(&mut self) -> impl Iterator<Item = (ClientKey, naia_shared::GlobalResponseId, Q)> {
+    pub fn read_request<C: naia_shared::Channel, Q: naia_shared::Request>(
+        &mut self,
+    ) -> impl Iterator<Item = (ClientKey, naia_shared::GlobalResponseId, Q)> {
         use naia_shared::{ChannelKind, MessageKind};
         let channel_kind = ChannelKind::of::<C>();
         let message_kind = MessageKind::of::<Q>();
-        
-        let requests = self.events.take_requests_for_channel_and_type(
-            &channel_kind,
-            &message_kind,
-        );
-        
-        requests.into_iter().map(|(client_key, response_id, container)| {
-            let request: Q = Box::<dyn std::any::Any + 'static>::downcast::<Q>(container.to_boxed_any())
-                .ok()
-                .map(|boxed_q| *boxed_q)
-                .expect("Request type mismatch");
-            (client_key, response_id, request)
-        })
+
+        let requests = self
+            .events
+            .take_requests_for_channel_and_type(&channel_kind, &message_kind);
+
+        requests
+            .into_iter()
+            .map(|(client_key, response_id, container)| {
+                let request: Q =
+                    Box::<dyn std::any::Any + 'static>::downcast::<Q>(container.to_boxed_any())
+                        .ok()
+                        .map(|boxed_q| *boxed_q)
+                        .expect("Request type mismatch");
+                (client_key, response_id, request)
+            })
     }
 }

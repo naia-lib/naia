@@ -4,8 +4,8 @@ use naia_shared::LinkConditionerConfig;
 
 use crate::transport::{
     AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
-    ConditionedPacketReceiver, PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
-    Socket as TransportSocket,
+    ConditionedPacketReceiver, PacketReceiver as TransportReceiver,
+    PacketSender as TransportSender, RecvError, SendError, Socket as TransportSocket,
 };
 
 use super::{
@@ -20,7 +20,10 @@ pub struct Socket {
 
 impl Socket {
     pub fn new(local: LocalServerSocket, config: Option<LinkConditionerConfig>) -> Self {
-        Self { inner: Some(local), config }
+        Self {
+            inner: Some(local),
+            config,
+        }
     }
 }
 
@@ -88,7 +91,9 @@ impl TransportAuthSender for LocalServerTransportAuthSender {
         address: &SocketAddr,
         identity_token: &naia_shared::IdentityToken,
     ) -> Result<(), SendError> {
-        self.0.accept(address, identity_token).map_err(|_| SendError)
+        self.0
+            .accept(address, identity_token)
+            .map_err(|_| SendError)
     }
 
     fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {

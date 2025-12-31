@@ -5,4 +5,4 @@ mod entity;
 mod world;
 
 pub use entity::Entity;
-pub use world::{World, WorldRef, WorldMut};
+pub use world::{World, WorldMut, WorldRef};

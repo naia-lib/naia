@@ -1,9 +1,16 @@
 use std::net::SocketAddr;
 
+use naia_client::{ConnectionStatus, EntityRef, NaiaClientError};
 use naia_demo_world::WorldRef;
-use naia_client::{EntityRef, ConnectionStatus, NaiaClientError};
 
-use crate::{TestEntity, harness::{client_events::{ClientEvents, ClientEvent, RejectEvent}, scenario::Scenario, EntityKey, ClientKey}};
+use crate::{
+    harness::{
+        client_events::{ClientEvent, ClientEvents, ClientRejectEvent},
+        scenario::Scenario,
+        ClientKey, EntityKey,
+    },
+    TestEntity,
+};
 
 /// Context for client-side expectations with per-tick events
 pub struct ClientExpectCtx<'a> {
@@ -34,9 +41,11 @@ impl<'a> ClientExpectCtx<'a> {
     }
 
     pub fn has_entity(&self, entity: &EntityKey) -> bool {
-        self.scenario.client_entity_ref(&self.client_key, entity).is_some()
+        self.scenario
+            .client_entity_ref(&self.client_key, entity)
+            .is_some()
     }
-    
+
     /// Get read-only entity access by EntityKey
     /// Returns None if the entity doesn't exist or isn't visible to this client
     pub fn entity(&self, entity: &EntityKey) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
@@ -54,7 +63,7 @@ impl<'a> ClientExpectCtx<'a> {
         let state = self.scenario.client_state(&self.client_key);
         state.client().server_address()
     }
-    
+
     /// Get connection status
     pub fn connection_status(&self) -> ConnectionStatus {
         let state = self.scenario.client_state(&self.client_key);
@@ -76,7 +85,7 @@ impl<'a> ClientExpectCtx<'a> {
     }
 
     /// Check if the client was explicitly rejected by the server
-    /// 
+    ///
     /// Returns true if:
     /// - A rejection code (typically 401) was received, OR
     /// - A RejectEvent is present in the current tick's events
@@ -88,9 +97,9 @@ impl<'a> ClientExpectCtx<'a> {
                 return true;
             }
         }
-        
+
         // Check if RejectEvent is present in current events
-        self.events.has::<RejectEvent>()
+        self.events.has::<ClientRejectEvent>()
     }
 
     /// Check if an event type is present
@@ -100,17 +109,19 @@ impl<'a> ClientExpectCtx<'a> {
 
     /// Read messages from a specific channel
     /// Returns an iterator over messages of type M received on channel C
-    pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(&mut self) -> impl Iterator<Item = M> {
-        use naia_shared::{ChannelKind, MessageKind, MessageContainer};
+    pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(
+        &mut self,
+    ) -> impl Iterator<Item = M> {
+        use naia_shared::{ChannelKind, MessageKind};
+
         let channel_kind = ChannelKind::of::<C>();
         let message_kind = MessageKind::of::<M>();
-        
+
         // Access messages through a helper method on ClientEvents
-        let messages = self.events.take_messages_for_channel_and_type(
-            &channel_kind,
-            &message_kind,
-        );
-        
+        let messages = self
+            .events
+            .take_messages_for_channel_and_type(&channel_kind, &message_kind);
+
         messages.into_iter().map(|container| {
             Box::<dyn std::any::Any + 'static>::downcast::<M>(container.to_boxed_any())
                 .ok()
@@ -121,25 +132,24 @@ impl<'a> ClientExpectCtx<'a> {
 
     /// Read requests from a specific channel
     /// Returns an iterator over (ResponseId, Request) tuples received on channel C
-    pub fn read_request<C: naia_shared::Channel, Q: naia_shared::Request>(&mut self) -> impl Iterator<Item = (naia_shared::GlobalResponseId, Q)> {
+    pub fn read_request<C: naia_shared::Channel, Q: naia_shared::Request>(
+        &mut self,
+    ) -> impl Iterator<Item = (naia_shared::GlobalResponseId, Q)> {
         use naia_shared::{ChannelKind, MessageKind};
         let channel_kind = ChannelKind::of::<C>();
         let message_kind = MessageKind::of::<Q>();
-        
-        let requests = self.events.take_requests_for_channel_and_type(
-            &channel_kind,
-            &message_kind,
-        );
-        
+
+        let requests = self
+            .events
+            .take_requests_for_channel_and_type(&channel_kind, &message_kind);
+
         requests.into_iter().map(|(response_id, container)| {
-            let request: Q = Box::<dyn std::any::Any + 'static>::downcast::<Q>(container.to_boxed_any())
-                .ok()
-                .map(|boxed_q| *boxed_q)
-                .expect("Request type mismatch");
+            let request: Q =
+                Box::<dyn std::any::Any + 'static>::downcast::<Q>(container.to_boxed_any())
+                    .ok()
+                    .map(|boxed_q| *boxed_q)
+                    .expect("Request type mismatch");
             (response_id, request)
         })
     }
 }
-
-
-

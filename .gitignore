@@ -23,3 +23,9 @@ node_modules
 /demos/socket/client/wasm_bindgen/target
 /demos/socket/client/wasm_bindgen/target/
 /demos/socket/client/wasm_bindgen/target/*
+
+# LLM Bridge
+llm_io/.env
+llm_io/inbox.txt
+llm_io/outbox.txt
+llm_io/*.log

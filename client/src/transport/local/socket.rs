@@ -1,12 +1,18 @@
-
-use naia_shared::{transport::local::{ClientIdentityReceiverResult, ClientServerAddr}, LinkConditionerConfig};
+use naia_shared::{
+    transport::local::{ClientIdentityReceiverResult, ClientServerAddr},
+    LinkConditionerConfig,
+};
 
 use crate::transport::{
+    local::{
+        auth::LocalClientIdentity,
+        data::{LocalClientReceiver, LocalClientSender},
+        LocalClientSocket,
+    },
     ConditionedPacketReceiver, IdentityReceiver as TransportIdentityReceiver,
     IdentityReceiverResult as TransportIdentityReceiverResult, PacketReceiver as TransportReceiver,
     PacketSender as TransportSender, RecvError, SendError, ServerAddr as TransportServerAddr,
     Socket as TransportSocket,
-    local::{LocalClientSocket, auth::LocalClientIdentity, data::{LocalClientReceiver, LocalClientSender}},
 };
 
 pub struct Socket {
@@ -16,7 +22,10 @@ pub struct Socket {
 
 impl Socket {
     pub fn new(local: LocalClientSocket, config: Option<LinkConditionerConfig>) -> Self {
-        Self { inner: Some(local), config }
+        Self {
+            inner: Some(local),
+            config,
+        }
     }
 }
 
@@ -121,7 +130,8 @@ impl TransportSocket for Socket {
     ) {
         let Socket { inner, config } = *self;
         let local_socket = inner.expect("local socket already taken");
-        let (identity, sender, receiver) = local_socket.connect_with_auth_and_headers(auth_bytes, auth_headers);
+        let (identity, sender, receiver) =
+            local_socket.connect_with_auth_and_headers(auth_bytes, auth_headers);
 
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalClientTransportReceiver(receiver);

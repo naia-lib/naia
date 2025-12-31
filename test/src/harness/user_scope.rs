@@ -1,6 +1,9 @@
-use naia_server::{UserScopeRef as NaiaUserScopeRef, UserScopeMut as NaiaUserScopeMut};
+use naia_server::{UserScopeMut as NaiaUserScopeMut, UserScopeRef as NaiaUserScopeRef};
 
-use crate::{TestEntity, harness::{EntityKey, entity_registry::EntityRegistry}};
+use crate::{
+    harness::{entity_registry::EntityRegistry, EntityKey},
+    TestEntity,
+};
 
 /// Harness wrapper for UserScopeRef that works with EntityKey instead of TestEntity
 pub struct UserScopeRef<'a> {
@@ -9,7 +12,10 @@ pub struct UserScopeRef<'a> {
 }
 
 impl<'a> UserScopeRef<'a> {
-    pub(crate) fn new(scope: NaiaUserScopeRef<'a, TestEntity>, registry: &'a EntityRegistry) -> Self {
+    pub(crate) fn new(
+        scope: NaiaUserScopeRef<'a, TestEntity>,
+        registry: &'a EntityRegistry,
+    ) -> Self {
         Self { scope, registry }
     }
 
@@ -30,7 +36,10 @@ pub struct UserScopeMut<'a> {
 }
 
 impl<'a> UserScopeMut<'a> {
-    pub(crate) fn new(scope: NaiaUserScopeMut<'a, TestEntity>, registry: &'a EntityRegistry) -> Self {
+    pub(crate) fn new(
+        scope: NaiaUserScopeMut<'a, TestEntity>,
+        registry: &'a EntityRegistry,
+    ) -> Self {
         Self { scope, registry }
     }
 
@@ -65,4 +74,3 @@ impl<'a> UserScopeMut<'a> {
         self
     }
 }
-

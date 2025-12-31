@@ -9,7 +9,10 @@ pub struct UntilCtx<'scenario> {
 
 impl<'scenario> UntilCtx<'scenario> {
     pub(crate) fn new(scenario: &'scenario mut Scenario, max_ticks: usize) -> Self {
-        Self { scenario, max_ticks }
+        Self {
+            scenario,
+            max_ticks,
+        }
     }
 
     /// Register expectations and wait until they all pass or timeout.

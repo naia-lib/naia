@@ -1,18 +1,19 @@
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 
-use log::warn;
+use log::{debug, warn};
 
 use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
     ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
-    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType,
-    Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Protocol,
+    Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
     connection::{
-        io::Io, jitter_buffer::{JitterBuffer, JitterBufferType},
+        io::Io,
+        jitter_buffer::{JitterBuffer, JitterBufferType},
         tick_buffer_sender::TickBufferSender,
         time_manager::TimeManager,
     },
@@ -88,6 +89,10 @@ impl Connection {
     }
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
+        eprintln!(
+            "[ack] CLIENT RX server_ack={:?} server_ack_bits={:?}",
+            header.sender_ack_index, header.sender_ack_bitfield
+        );
         self.base
             .process_incoming_header(header, &mut [&mut self.tick_buffer]);
     }
@@ -97,7 +102,11 @@ impl Connection {
         incoming_tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        println!("[CLIENT_CONN] buffer_data_packet: Buffering packet for server_tick={:?}", incoming_tick);
+        // Use debug logging instead of println to reduce noise
+        debug!(
+            "[CLIENT_CONN] buffer_data_packet: Buffering packet for server_tick={:?}",
+            incoming_tick
+        );
         self.jitter_buffer
             .add_item(*incoming_tick, reader.to_owned());
         Ok(())
@@ -111,14 +120,19 @@ impl Connection {
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
     ) -> Result<(), SerdeErr> {
-
         let receiving_tick = self.time_manager.client_receiving_tick;
-        println!("[CLIENT_CONN] read_buffered_packets: Reading packets for receiving_tick={:?}", receiving_tick);
+        debug!(
+            "[CLIENT_CONN] read_buffered_packets: Reading packets for receiving_tick={:?}",
+            receiving_tick
+        );
 
         let mut packets_read = 0;
         while let Some((server_tick, owned_reader)) = self.jitter_buffer.pop_item(receiving_tick) {
             packets_read += 1;
-            println!("[CLIENT_CONN] read_buffered_packets: Reading packet server_tick={:?}", server_tick);
+            debug!(
+                "[CLIENT_CONN] read_buffered_packets: Reading packet server_tick={:?}",
+                server_tick
+            );
             let mut reader = owned_reader.borrow();
 
             self.base.read_packet(
@@ -131,7 +145,10 @@ impl Connection {
             )?;
         }
         if packets_read > 0 {
-            println!("[CLIENT_CONN] read_buffered_packets: Read {} packets", packets_read);
+            debug!(
+                "[CLIENT_CONN] read_buffered_packets: Read {} packets",
+                packets_read
+            );
         }
 
         Ok(())
@@ -213,7 +230,13 @@ impl Connection {
             .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
 
         let mut any_sent = false;
+        let mut iteration = 0;
         loop {
+            eprintln!(
+                "[probe] send_packets loop iteration={}, host_events.len()={}",
+                iteration,
+                host_world_events.len()
+            );
             if self.send_packet(
                 protocol,
                 now,
@@ -225,7 +248,14 @@ impl Connection {
                 &mut update_events,
             ) {
                 any_sent = true;
+                eprintln!("[probe] send_packet returned TRUE (packet sent)");
             } else {
+                eprintln!("[probe] send_packet returned FALSE (breaking loop)");
+                break;
+            }
+            iteration += 1;
+            if iteration > 5 {
+                eprintln!("[probe] LOOP SAFETY BREAK after {} iterations", iteration);
                 break;
             }
         }
@@ -262,7 +292,9 @@ impl Connection {
             );
 
             // send packet
-            if io.send_packet(writer.to_packet()).is_err() {
+            let packet = writer.to_packet();
+            eprintln!("[rep_probe] client send frame");
+            if io.send_packet(packet).is_err() {
                 // TODO: pass this on and handle above
                 warn!("Client Error: Cannot send data packet to Server");
             }

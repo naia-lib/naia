@@ -18,4 +18,3 @@ impl EntityKey {
         Self(id)
     }
 }
-

@@ -151,8 +151,12 @@ impl LocalWorldManager {
             self.entity_map
                 .insert_with_host_entity(*global_entity, host_entity);
         }
-        self.host
-            .init_entity_send_host_commands(&self.entity_map, global_entity, component_kinds, &mut self.updater);
+        self.host.init_entity_send_host_commands(
+            &self.entity_map,
+            global_entity,
+            component_kinds,
+            &mut self.updater,
+        );
     }
 
     /// BULLETPROOF: Migrate entity from remote (client) control to host (server) control
@@ -254,7 +258,10 @@ impl LocalWorldManager {
     // Used by server after migration to prepare channel for MigrateResponse
     pub fn host_local_enable_delegation(&mut self, host_entity: &HostEntity) {
         let Some(channel) = self.host.get_entity_channel_mut(host_entity) else {
-            panic!("Cannot enable delegation on non-existent HostEntity: {:?}", host_entity);
+            panic!(
+                "Cannot enable delegation on non-existent HostEntity: {:?}",
+                host_entity
+            );
         };
         channel.local_enable_delegation();
     }
@@ -284,7 +291,17 @@ impl LocalWorldManager {
     ) {
         // TODO: ?
         let command = EntityCommand::SetAuthority(None, *global_entity, auth_status);
-        self.host.send_command(&self.entity_map, command);
+        // Determine if entity is HostEntity or RemoteEntity and use appropriate channel
+        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            panic!("Attempting to send SetAuthority for entity which does not exist in local entity map! {:?}", global_entity);
+        };
+        if local_entity.is_host() {
+            self.host.send_command(&self.entity_map, command);
+        } else {
+            // For RemoteEntity, use remote.send_auth_command (similar to send_publish)
+            self.remote
+                .send_auth_command(self.entity_map.entity_converter(), command);
+        }
     }
 
     pub fn host_reserve_entity(&mut self, global_entity: &GlobalEntity) -> HostEntity {
@@ -431,7 +448,7 @@ impl LocalWorldManager {
             if incoming_message.get_type() == EntityMessageType::Noop {
                 continue; // skip noop messages
             }
-            
+
             // use log::info;
             // info!(
             //     "LocalWorldManager::take_incoming_events - processing message: id={}, type={:?}",
@@ -603,7 +620,8 @@ impl LocalWorldManager {
         if local_entity.is_host() {
             // Register component immediately when it comes into scope (not waiting for delivery confirmation)
             // This ensures mutations can set the diff mask right away
-            self.updater.register_component(global_entity, component_kind);
+            self.updater
+                .register_component(global_entity, component_kind);
             self.host.send_command(
                 &self.entity_map,
                 EntityCommand::InsertComponent(*global_entity, *component_kind),
@@ -887,6 +905,9 @@ impl LocalWorldManager {
     }
 
     fn deliver_message(&mut self, id: CommandId, msg: EntityMessage<OwnedLocalEntity>) {
+        if msg.is_noop() {
+            return;
+        }
         let Some(local_entity) = msg.entity() else {
             panic!("Delivered message without an entity! Message: {:?}", msg);
         };
@@ -981,14 +1002,14 @@ impl LocalWorldManager {
                 remote_entity
             );
             let channel = self.remote.get_entity_channel_mut(&remote_entity).unwrap();
-            
+
             // Upgrade to delegated
             channel.configure_as_delegated();
-            
+
             // Set state to Spawned (if not already)
             // Note: We don't want to overwrite if it's already Spawned, but for migration we assume it should be
             channel.set_spawned(0);
-            
+
             // Insert component channels
             for component_kind in component_kinds {
                 channel.insert_component_channel_as_inserted(component_kind, 0);
@@ -996,15 +1017,15 @@ impl LocalWorldManager {
         } else {
             // Normal Case: Create new delegated channel
             let mut channel = RemoteEntityChannel::new_delegated(self.entity_map.host_type());
-            
+
             // Set state to Spawned
             channel.set_spawned(0);
-            
+
             // For each component_kind, add RemoteComponentChannel with inserted=true
             for component_kind in component_kinds {
                 channel.insert_component_channel_as_inserted(component_kind, 0);
             }
-            
+
             // Insert into remote engine
             self.remote.insert_entity_channel(remote_entity, channel);
         }

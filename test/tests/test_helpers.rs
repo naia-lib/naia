@@ -1,82 +1,85 @@
-use std::time::Duration;
-
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::RoomKey;
 use naia_shared::Protocol;
-use naia_test::{
-    Scenario, ClientKey,
-    protocol, Auth,
-    AuthEvent, ConnectEvent,
-};
+use naia_test::{Auth, ClientKey, ExpectCtx, Scenario, ServerAuthEvent, ServerConnectEvent};
+use std::time::Duration;
 
 // ============================================================================
-// Connection Helpers
+// Test Configuration Helpers
 // ============================================================================
 
-/// Assert that a client is connected (both client-side and server-side)
-pub fn assert_connected(scenario: &mut Scenario, client_key: ClientKey) {
-    scenario.expect(|ctx| {
-        let connected = ctx.client(client_key, |c| c.connection_status().is_connected());
-        let user_exists = ctx.server(|s| s.user_exists(&client_key));
-        (connected && user_exists).then_some(())
-    });
-}
-
-/// Assert that a client is NOT connected
-pub fn assert_disconnected(scenario: &mut Scenario, client_key: ClientKey) {
-    scenario.expect(|ctx| {
-        let not_connected = !ctx.client(client_key, |c| c.connection_status().is_connected());
-        let user_not_exists = !ctx.server(|s| s.user_exists(&client_key));
-        (not_connected && user_not_exists).then_some(())
-    });
+/// Create a ClientConfig configured for E2E tests.
+///
+/// Sets:
+/// - `send_handshake_interval = 0` for immediate handshake
+/// - `jitter_buffer = Bypass` for immediate packet processing
+///
+/// Use this instead of `ClientConfig::default()` in all tests.
+pub fn test_client_config() -> ClientConfig {
+    let mut config = ClientConfig::default();
+    config.send_handshake_interval = Duration::from_millis(0);
+    config.jitter_buffer = JitterBufferType::Bypass;
+    config
 }
 
 // ============================================================================
-// Room Helpers
+// Connection Assertion Helpers
 // ============================================================================
 
-/// Create a new room on the server
-pub fn make_room(scenario: &mut Scenario) -> RoomKey {
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.make_room().key()
-        })
-    })
+/// Assert that a client is connected (both client-side and server-side).
+///
+/// This helper is meant to be called from within an `expect()` block.
+/// Returns `Some(())` if the client is connected, `None` otherwise.
+///
+/// # Example
+/// ```rust,ignore
+/// scenario.expect(|ctx| {
+///     expect_client_connected(ctx, client_key)
+/// });
+/// ```
+pub fn server_and_client_connected(ctx: &mut ExpectCtx<'_>, client_key: ClientKey) -> Option<()> {
+    let connected = ctx.client(client_key, |c| c.connection_status().is_connected());
+    let user_exists = ctx.server(|s| s.user_exists(&client_key));
+    (connected && user_exists).then_some(())
+}
+
+/// Assert that a client is NOT connected.
+///
+/// This helper is meant to be called from within an `expect()` block.
+/// Returns `Some(())` if the client is disconnected, `None` otherwise.
+///
+/// # Example
+/// ```rust,ignore
+/// scenario.expect(|ctx| {
+///     expect_client_disconnected(ctx, client_key)
+/// });
+/// ```
+pub fn server_and_client_disconnected(
+    ctx: &mut ExpectCtx<'_>,
+    client_key: ClientKey,
+) -> Option<()> {
+    let not_connected = !ctx.client(client_key, |c| c.connection_status().is_connected());
+    let user_not_exists = !ctx.server(|s| s.user_exists(&client_key));
+    (not_connected && user_not_exists).then_some(())
 }
 
 // ============================================================================
 // Client Connection Helpers
 // ============================================================================
 
-/// Connect a client to the server with default configuration.
-/// 
+/// Connect a client to the server with a custom ClientConfig.
+///
 /// This helper:
-/// - Starts the client with fast handshake settings
+/// - Starts the client with the provided configuration
 /// - Waits for and processes the auth event
 /// - Accepts the connection on the server
 /// - Waits for the connect event
 /// - Adds the client to the specified room
-/// 
+///
+/// Note: `send_handshake_interval` is always set to 0 for immediate handshake in tests.
+///
 /// Returns the ClientKey for the connected client.
 pub fn client_connect(
-    scenario: &mut Scenario,
-    room_key: &RoomKey,
-    client_name: &str,
-    client_auth: Auth,
-    protocol: Protocol,
-) -> ClientKey {
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    // Use Real jitter buffer mode (default) - Bypass mode would break tick-based ordering tests
-    // client_config.jitter_buffer = JitterBufferType::Bypass;
-    client_connect_with_config(scenario, room_key, client_name, client_auth, client_config, protocol)
-}
-
-/// Connect a client to the server with a custom ClientConfig.
-/// 
-/// This is the lower-level helper that `client_connect` uses internally.
-/// Use this when you need to customize the client configuration (e.g., for timeout tests).
-pub fn client_connect_with_config(
     scenario: &mut Scenario,
     room_key: &RoomKey,
     client_name: &str,
@@ -84,12 +87,22 @@ pub fn client_connect_with_config(
     client_config: ClientConfig,
     protocol: Protocol,
 ) -> ClientKey {
-    let client_key = scenario.client_start(client_name, client_auth.clone(), client_config, protocol);
+    // Allow this to be called after either mutate() or expect()
+    scenario.allow_flexible_next();
+
+    // Merge user config with test-required settings
+    let mut config = client_config;
+    config.send_handshake_interval = Duration::from_millis(0);
+    config.jitter_buffer = JitterBufferType::Bypass;
+
+    let client_key = scenario.client_start(client_name, client_auth.clone(), config, protocol);
 
     // Server: read auth event
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            if let Some((incoming_client_key, incoming_auth)) = server.read_event::<AuthEvent<Auth>>() {
+            if let Some((incoming_client_key, incoming_auth)) =
+                server.read_event::<ServerAuthEvent<Auth>>()
+            {
                 if incoming_client_key == client_key && incoming_auth == client_auth {
                     return Some(incoming_client_key);
                 }
@@ -108,7 +121,7 @@ pub fn client_connect_with_config(
     // Server: read connect event
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            if let Some(incoming_client_key) = server.read_event::<ConnectEvent>() {
+            if let Some(incoming_client_key) = server.read_event::<ServerConnectEvent>() {
                 if incoming_client_key == client_key {
                     return Some(());
                 }
@@ -120,7 +133,10 @@ pub fn client_connect_with_config(
     // Server: add client to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room to exist").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room to exist")
+                .add_user(&client_key);
         });
     });
 

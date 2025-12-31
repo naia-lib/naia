@@ -1,22 +1,22 @@
+use naia_client::ClientConfig;
 use naia_server::ServerConfig;
 use naia_shared::{Protocol, Tick};
-use naia_test::{
-    Scenario, ClientKey,
-    protocol, Auth,
-};
 use naia_test::ToTicks;
+use naia_test::{protocol, Auth, ClientKey, Scenario};
 
 mod test_helpers;
-use test_helpers::{make_room, client_connect};
+use test_helpers::client_connect;
 
-use naia_test::test_protocol::{Position, TestMessage, ReliableChannel, OrderedChannel, UnorderedChannel, SequencedChannel};
+use naia_test::test_protocol::{
+    OrderedChannel, Position, ReliableChannel, SequencedChannel, TestMessage, UnorderedChannel,
+};
 
 // ============================================================================
 // Domain 6.1: Time, Transport & Determinism
 // ============================================================================
 
 /// Deterministic replay of a scenario
-/// 
+///
 /// Given fully scripted scenario and deterministic clock/seed; when scenario executes twice;
 /// then externally observable events and world states on all clients are identical across runs.
 #[test]
@@ -28,12 +28,26 @@ fn deterministic_replay_of_a_scenario() {
 
     scenario1.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario1);
+    let room_key = scenario1.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario1, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario1,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
     // client_connect ends with expect, so we need a mutate before the next operation
     scenario1.mutate(|_ctx| {});
-    let client_b_key = client_connect(&mut scenario1, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_b_key = client_connect(
+        &mut scenario1,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn an entity on server, add it to the room, and include it in both clients' scopes
     let (entity_e, _) = scenario1.mutate(|ctx| {
@@ -45,8 +59,14 @@ fn deterministic_replay_of_a_scenario() {
             // Entities must be in a room for update_entity_scopes() to process them
             server.room_mut(&room_key).unwrap().add_entity(&entity_key);
             // Include entity in both clients' scopes
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_key);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_key);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_key);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_key);
             (entity_key, ())
         })
     });
@@ -62,7 +82,7 @@ fn deterministic_replay_of_a_scenario() {
 }
 
 /// Robustness under simulated packet loss
-/// 
+///
 /// Given A and B seeing replicated E; when server updates E while test transport drops a substantial fraction of packets;
 /// then after loss subsides both clients converge to server's latest E state without permanent divergence.
 #[test]
@@ -72,12 +92,26 @@ fn robustness_under_simulated_packet_loss() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol.clone());
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
     // client_connect ends with expect, so we need a mutate before the next operation
     scenario.mutate(|_ctx| {});
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B", Auth::new("client_b", "password"), test_protocol);
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity E, add it to the room, and include it in both clients' scopes
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -88,8 +122,14 @@ fn robustness_under_simulated_packet_loss() {
             // Add entity to room so it can be replicated to clients
             server.room_mut(&room_key).unwrap().add_entity(&entity_key);
             // Include entity in both clients' scopes
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_key);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_key);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_key);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_key);
             (entity_key, ())
         })
     });
@@ -153,7 +193,7 @@ fn robustness_under_simulated_packet_loss() {
 }
 
 /// Out-of-order packet handling does not regress to older state
-/// 
+///
 /// Given E updated monotonically; when some packets carrying older states are delayed until after newer states;
 /// then clients never regress to older state once newer state applied, and eventually report latest state.
 #[test]
@@ -163,9 +203,16 @@ fn out_of_order_packet_handling_does_not_regress_to_older_state() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Spawn entity E, add it to the room, and include it in client's scope
     let (entity_e, _) = scenario.mutate(|ctx| {
@@ -176,14 +223,18 @@ fn out_of_order_packet_handling_does_not_regress_to_older_state() {
             // Add entity to room so it can be replicated to clients
             server.room_mut(&room_key).unwrap().add_entity(&entity_key);
             // Include entity in client's scope
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_key);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_key);
             (entity_key, ())
         })
     });
 
     // Wait for client to see the entity
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            .then_some(())
     });
 
     // Configure link conditioner with moderate jitter to cause reordering
@@ -230,7 +281,7 @@ fn out_of_order_packet_handling_does_not_regress_to_older_state() {
 // ============================================================================
 
 /// Server and client tick indices advance monotonically
-/// 
+///
 /// Given server and client with matching tick rates; when simulation runs;
 /// then both server tick and client's notion of server tick advance monotonically, never decreasing or rolling back.
 #[test]
@@ -240,9 +291,16 @@ fn server_and_client_tick_indices_advance_monotonically() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     let mut last_server_tick: Option<Tick> = None;
     let mut last_client_tick: Option<Tick> = None;
@@ -261,7 +319,7 @@ fn server_and_client_tick_indices_advance_monotonically() {
                 server_tick_events.push(tick);
             }
         });
-        
+
         // Check client tick
         let mut client_tick_events: Vec<Tick> = Vec::new();
         ctx.client(client_a_key, |c| {
@@ -304,7 +362,7 @@ fn server_and_client_tick_indices_advance_monotonically() {
 }
 
 /// Pausing and resuming time does not create extra ticks
-/// 
+///
 /// Given deterministic time source; when time is paused (no tick advancement) then resumed;
 /// then no ticks are generated during pause and progression resumes smoothly from last tick index.
 #[test]
@@ -316,9 +374,16 @@ fn pausing_and_resuming_time_does_not_create_extra_ticks() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let _client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let _client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // TODO: Pause time
     // TODO: Verify no ticks generated
@@ -327,7 +392,7 @@ fn pausing_and_resuming_time_does_not_create_extra_ticks() {
 }
 
 /// Command history preserves and replays commands after correction
-/// 
+///
 /// Given client sends per-tick input and server sends authoritative state; when client receives corrected state for earlier tick while holding newer commands;
 /// then client replays newer commands in order on corrected state and reaches same final state as if correction had been there from start.
 #[test]
@@ -337,7 +402,7 @@ fn command_history_preserves_and_replays_commands_after_correction() {
 }
 
 /// Command history discards old commands beyond its window
-/// 
+///
 /// Given bounded command history; when many ticks pass and commands are inserted;
 /// then commands older than window are discarded, and late corrections for ticks outside window do not attempt to replay discarded commands.
 #[test]
@@ -351,7 +416,7 @@ fn command_history_discards_old_commands_beyond_its_window() {
 // ============================================================================
 
 /// Tick index wraparound does not break progression or ordering
-/// 
+///
 /// Given deterministic time and known tick counter max; when server and client tick through wraparound;
 /// then tick ordering stays correct, channels/tick-buffer semantics still hold, and no panics/invalid state occur.
 #[test]
@@ -361,7 +426,7 @@ fn tick_index_wraparound_does_not_break_progression_or_ordering() {
 }
 
 /// Sequence number wraparound for channels preserves ordering semantics
-/// 
+///
 /// Given ordered channel with wrapping sequence numbers; when enough messages force wrap;
 /// then ordered semantics still hold across wrap and later messages are still treated as newer.
 #[test]
@@ -371,7 +436,7 @@ fn sequence_number_wraparound_for_channels_preserves_ordering_semantics() {
 }
 
 /// Long-running scenario maintains stable memory and state
-/// 
+///
 /// Given long scenario with frequent connects/disconnects, spawns/updates/despawns, and messages; when test finishes;
 /// then user/entity counts and buffer sizes remain bounded, and no ghost users/entities remain.
 #[test]
@@ -381,12 +446,19 @@ fn long_running_scenario_maintains_stable_memory_and_state() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
     // Perform many connect/disconnect cycles
     for cycle in 0..10 {
-        let client_key = client_connect(&mut scenario, &room_key, &format!("Client {}", cycle), Auth::new(&format!("client_{}", cycle), "password"), test_protocol.clone());
-        
+        let client_key = client_connect(
+            &mut scenario,
+            &room_key,
+            &format!("Client {}", cycle),
+            Auth::new(&format!("client_{}", cycle), "password"),
+            ClientConfig::default(),
+            test_protocol.clone(),
+        );
+
         // Spawn entity (client_connect ends with expect, so this mutate is fine)
         let (entity, _) = scenario.mutate(|ctx| {
             ctx.server(|server| {
@@ -407,9 +479,7 @@ fn long_running_scenario_maintains_stable_memory_and_state() {
         });
 
         // Wait for disconnect
-        scenario.expect(|ctx| {
-            (!ctx.server(|s| s.user_exists(&client_key))).then_some(())
-        });
+        scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_key))).then_some(()));
 
         // Despawn entity
         scenario.mutate(|ctx| {
@@ -432,7 +502,7 @@ fn long_running_scenario_maintains_stable_memory_and_state() {
 // ============================================================================
 
 /// Extreme jitter and reordering preserve channel contracts
-/// 
+///
 /// Given link conditioner with high jitter and reordering; when sending messages and replication updates over ordered/unordered/sequenced/tick-buffered channels;
 /// then each channel still satisfies its documented ordering/reliability/latest-only semantics.
 #[test]
@@ -442,9 +512,16 @@ fn extreme_jitter_and_reordering_preserve_channel_contracts() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // First test without link conditioner to verify messages work
     scenario.mutate(|ctx| {
@@ -479,7 +556,7 @@ fn extreme_jitter_and_reordering_preserve_channel_contracts() {
             server.send_message::<ReliableChannel, _>(&client_a_key, &TestMessage::new(1));
             server.send_message::<ReliableChannel, _>(&client_a_key, &TestMessage::new(2));
             server.send_message::<ReliableChannel, _>(&client_a_key, &TestMessage::new(3));
-            
+
             // Send on OrderedChannel (should arrive in order)
             server.send_message::<OrderedChannel, _>(&client_a_key, &TestMessage::new(10));
             server.send_message::<OrderedChannel, _>(&client_a_key, &TestMessage::new(20));
@@ -503,15 +580,23 @@ fn extreme_jitter_and_reordering_preserve_channel_contracts() {
         });
         (reliable_messages.len() == 3 && ordered_messages.len() == 3).then_some(())
     });
-    assert_eq!(reliable_messages, vec![1, 2, 3], "ReliableChannel should maintain order");
-    assert_eq!(ordered_messages, vec![10, 20, 30], "OrderedChannel should maintain order");
+    assert_eq!(
+        reliable_messages,
+        vec![1, 2, 3],
+        "ReliableChannel should maintain order"
+    );
+    assert_eq!(
+        ordered_messages,
+        vec![10, 20, 30],
+        "OrderedChannel should maintain order"
+    );
 }
 
 /// Packet duplication does not surface duplicate events
-/// 
+///
 /// Given link conditioner that duplicates packets at high rate; when server sends entity updates and messages;
 /// then clients never observe duplicate spawn/despawn/message/response events, and state does not regress even if older duplicates arrive after newer packets.
-/// 
+///
 /// Note: Link conditioner doesn't support duplication, but high jitter can cause reordering which tests similar behavior.
 #[test]
 fn packet_duplication_does_not_surface_duplicate_events() {
@@ -520,9 +605,16 @@ fn packet_duplication_does_not_surface_duplicate_events() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Configure link conditioner with moderate jitter to simulate reordering (similar to duplication effects)
     // Use latency >= jitter to avoid underflow
@@ -541,7 +633,10 @@ fn packet_duplication_does_not_surface_duplicate_events() {
             // Add entity to room so it can be replicated to clients
             server.room_mut(&room_key).unwrap().add_entity(&entity_key);
             // Include entity in client's scope
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity_key);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity_key);
             (entity_key, ())
         })
     });
@@ -549,14 +644,21 @@ fn packet_duplication_does_not_surface_duplicate_events() {
     // Verify entity spawn event occurred exactly once
     // Note: SpawnEntityEvent is not exported, so we verify by checking entity exists
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            .then_some(())
     });
 
     // Send multiple messages
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(&client_a_key, &naia_test::test_protocol::TestMessage::new(100));
-            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(&client_a_key, &naia_test::test_protocol::TestMessage::new(200));
+            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(
+                &client_a_key,
+                &naia_test::test_protocol::TestMessage::new(100),
+            );
+            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(
+                &client_a_key,
+                &naia_test::test_protocol::TestMessage::new(200),
+            );
         });
     });
 
@@ -596,9 +698,14 @@ fn packet_duplication_does_not_surface_duplicate_events() {
             };
             let x_value = *pos.x;
             (x_value - 5.0).abs() < 0.001
-        }).then_some(())
+        })
+        .then_some(())
     });
-    assert_eq!(message_values.len(), 2, "Should receive exactly 2 messages, no duplicates");
+    assert_eq!(
+        message_values.len(),
+        2,
+        "Should receive exactly 2 messages, no duplicates"
+    );
     assert!(message_values.contains(&100), "Should receive message 100");
     assert!(message_values.contains(&200), "Should receive message 200");
 }
@@ -608,7 +715,7 @@ fn packet_duplication_does_not_surface_duplicate_events() {
 // ============================================================================
 
 /// Large entity update that exceeds MTU is correctly reassembled
-/// 
+///
 /// Given E whose update exceeds single MTU; when server sends full update;
 /// then client applies a complete coherent update only after all fragments arrive, never partial component state, even with delayed/duplicated fragments.
 #[test]
@@ -619,7 +726,7 @@ fn large_entity_update_that_exceeds_mtu_is_correctly_reassembled() {
 }
 
 /// Fragment loss causes older state until a full later update
-/// 
+///
 /// Given repeated large updates for E with fragmentation; when one update loses a fragment but a later full update arrives intact;
 /// then client stays at previous valid state until later full update is applied, never applying a partially missing update.
 #[test]
@@ -630,7 +737,7 @@ fn fragment_loss_causes_older_state_until_a_full_later_update() {
 }
 
 /// Compression on/off does not change observable semantics
-/// 
+///
 /// Given scenario with entities/messages; when run once with compression off and once on;
 /// then sequence of API-visible events, entity states, and messages is identical between runs (only bandwidth differs).
 #[test]
@@ -644,9 +751,8 @@ fn compression_on_off_does_not_change_observable_semantics() {
 // Domain 6.6: Config, Limits & Edge Behaviour
 // ============================================================================
 
-
 /// Reliable retry/timeout settings produce defined failure behaviour
-/// 
+///
 /// Given reliable channel with limited retries/timeouts; when server sends reliable message over link that can't deliver within budget;
 /// then sender surfaces a clear failure/timeout, stops retrying, and system does not hang or leak.
 #[test]
@@ -656,9 +762,16 @@ fn reliable_retry_timeout_settings_produce_defined_failure_behaviour() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Configure link conditioner to drop all packets (100% loss)
     scenario.configure_link_conditioner(
@@ -670,7 +783,10 @@ fn reliable_retry_timeout_settings_produce_defined_failure_behaviour() {
     // Send reliable message
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(&client_a_key, &naia_test::test_protocol::TestMessage::new(42));
+            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(
+                &client_a_key,
+                &naia_test::test_protocol::TestMessage::new(42),
+            );
         });
     });
 
@@ -690,11 +806,14 @@ fn reliable_retry_timeout_settings_produce_defined_failure_behaviour() {
         // After enough ticks, verify message was not received
         Some(())
     });
-    assert_eq!(message_count, 0, "Message should not be received with 100% packet loss");
+    assert_eq!(
+        message_count, 0,
+        "Message should not be received with 100% packet loss"
+    );
 }
 
 /// Minimal retry reliable settings produce clear delivery failure semantics
-/// 
+///
 /// Given reliable channel with extremely low retries/timeouts; when messages cannot be delivered within constraints;
 /// then sender reports "delivery failed" or timeout, stops retrying, and no internal state is left stuck.
 #[test]
@@ -704,9 +823,16 @@ fn minimal_retry_reliable_settings_produce_clear_delivery_failure_semantics() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Configure link conditioner to drop all packets (100% loss)
     scenario.configure_link_conditioner(
@@ -718,7 +844,10 @@ fn minimal_retry_reliable_settings_produce_clear_delivery_failure_semantics() {
     // Send reliable message
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(&client_a_key, &naia_test::test_protocol::TestMessage::new(99));
+            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(
+                &client_a_key,
+                &naia_test::test_protocol::TestMessage::new(99),
+            );
         });
     });
 
@@ -734,8 +863,11 @@ fn minimal_retry_reliable_settings_produce_clear_delivery_failure_semantics() {
         // After enough ticks, verify message was not received
         Some(())
     });
-    assert_eq!(message_count, 0, "Message should not be delivered with 100% loss");
-    
+    assert_eq!(
+        message_count, 0,
+        "Message should not be delivered with 100% loss"
+    );
+
     // Verify system remains stable (can still access client)
     // The previous expect ended, so we need a mutate before the next expect
     scenario.mutate(|_ctx| {});
@@ -743,12 +875,13 @@ fn minimal_retry_reliable_settings_produce_clear_delivery_failure_semantics() {
         ctx.client(client_a_key, |_c| {
             // Just verify we can still access the client
             true
-        }).then_some(())
+        })
+        .then_some(())
     });
 }
 
 /// Very aggressive heartbeat/timeout still leads to clean disconnect
-/// 
+///
 /// Given very small heartbeat/timeout values; when traffic briefly pauses or link is stressed;
 /// then connection may time out but disconnect remains clean (events emitted, state cleared) with no partial user state.
 #[test]
@@ -758,9 +891,16 @@ fn very_aggressive_heartbeat_timeout_still_leads_to_clean_disconnect() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Configure link conditioner with high loss to cause connection issues
     scenario.configure_link_conditioner(
@@ -788,15 +928,18 @@ fn very_aggressive_heartbeat_timeout_still_leads_to_clean_disconnect() {
         });
         Some(())
     });
-    
+
     // If disconnect occurred, verify it was clean (only one event)
     if disconnect_events > 0 {
-        assert_eq!(disconnect_events, 1, "Should have exactly one disconnect event");
+        assert_eq!(
+            disconnect_events, 1,
+            "Should have exactly one disconnect event"
+        );
     }
 }
 
 /// Tiny tick-buffer window behaves correctly for old ticks
-/// 
+///
 /// Given tick-buffer with very small window; when messages tagged with old ticks arrive after window advanced;
 /// then they are dropped according to semantics and never applied to current state or regress tick index.
 #[test]
@@ -807,7 +950,7 @@ fn tiny_tick_buffer_window_behaves_correctly_for_old_ticks() {
 }
 
 /// Switching a channel from reliable to unreliable (or ordered to unordered) only changes documented semantics
-/// 
+///
 /// Given two runs of same scenario, one with channel reliable/ordered, another unreliable/unordered; when comparing;
 /// then only the documented differences (loss/reordering) appear, with no unintended effects like instability or desync.
 #[test]
@@ -821,7 +964,7 @@ fn switching_channel_reliability_only_changes_documented_semantics() {
 // ============================================================================
 
 /// Reported ping/RTT converges under steady latency
-/// 
+///
 /// Given link with fixed RTT and low jitter/loss; when client/server exchange several heartbeats;
 /// then reported ping/RTT converges near configured latency and is never negative or wildly unstable.
 #[test]
@@ -833,9 +976,16 @@ fn reported_ping_rtt_converges_under_steady_latency() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Configure link conditioner with fixed latency (50ms) and low jitter/loss
     scenario.configure_link_conditioner(
@@ -857,12 +1007,13 @@ fn reported_ping_rtt_converges_under_steady_latency() {
         ctx.client(client_a_key, |_c| {
             // Just verify we can still access the client
             true
-        }).then_some(())
+        })
+        .then_some(())
     });
 }
 
 /// Reported ping remains bounded under jitter and loss
-/// 
+///
 /// Given link with significant jitter and modest loss; when running;
 /// then ping/RTT fluctuates but stays finite, non-negative, and below a reasonable ceiling (no overflow/garbage values).
 #[test]
@@ -874,9 +1025,16 @@ fn reported_ping_remains_bounded_under_jitter_and_loss() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = make_room(&mut scenario);
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A", Auth::new("client_a", "password"), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol,
+    );
 
     // Configure link conditioner with significant jitter and modest loss
     scenario.configure_link_conditioner(
@@ -898,12 +1056,13 @@ fn reported_ping_remains_bounded_under_jitter_and_loss() {
         ctx.client(client_a_key, |_c| {
             // Just verify we can still access the client
             true
-        }).then_some(())
+        })
+        .then_some(())
     });
 }
 
 /// Bandwidth monitor reflects changes in traffic volume
-/// 
+///
 /// Given bandwidth metric; when system alternates between high traffic and near-idle;
 /// then reported bandwidth rises during high activity and drops during idle, without staying stuck at stale values.
 #[test]
@@ -914,7 +1073,7 @@ fn bandwidth_monitor_reflects_changes_in_traffic_volume() {
 }
 
 /// Compression toggling affects bandwidth metrics but not logical events
-/// 
+///
 /// Given scripted replication/messages; when run once with compression off and once on;
 /// then compressed run shows fewer bytes sent, while logical events and world states stay identical.
 #[test]

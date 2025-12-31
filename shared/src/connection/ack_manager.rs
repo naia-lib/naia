@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{types::PacketIndex, wrapping_number::sequence_greater_than};
 
@@ -27,6 +28,8 @@ pub struct AckManager {
     should_send_empty_ack: bool,
 }
 
+static ACK_RX_PRINT_COUNT: AtomicUsize = AtomicUsize::new(0);
+
 impl AckManager {
     pub fn new() -> Self {
         Self {
@@ -48,6 +51,13 @@ impl AckManager {
 
     pub fn clear_should_send_empty_ack(&mut self) {
         self.should_send_empty_ack = false;
+    }
+
+    /// Take the should_send_empty_ack flag (returns and clears it)
+    pub fn take_should_send_empty_ack(&mut self) -> bool {
+        let result = self.should_send_empty_ack;
+        self.should_send_empty_ack = false;
+        result
     }
 
     /// Get the index of the next outgoing packet
@@ -72,8 +82,15 @@ impl AckManager {
 
         // ensure that `self.sender_ack_index` is always increasing (with
         // wrapping)
-        if sequence_greater_than(sender_ack_index, self.last_recv_packet_index) {
-            self.last_recv_packet_index = sender_ack_index;
+        if sequence_greater_than(sender_packet_index, self.last_recv_packet_index) {
+            self.last_recv_packet_index = sender_packet_index;
+        }
+
+        if ACK_RX_PRINT_COUNT.fetch_add(1, Ordering::Relaxed) < 3 {
+            eprintln!(
+                "[ack] RX seq={} last_recv_now={}",
+                sender_packet_index, self.last_recv_packet_index
+            );
         }
 
         // the current `sender_ack_index` was (clearly) received so we should remove it
@@ -127,13 +144,10 @@ impl AckManager {
 
     pub fn next_outgoing_packet_header(&mut self, packet_type: PacketType) -> StandardHeader {
         let next_packet_index = self.next_sender_packet_index();
+        let last_rx = self.last_received_packet_index();
+        let ack_bits = self.ack_bitfield();
 
-        let outgoing = StandardHeader::new(
-            packet_type,
-            next_packet_index,
-            self.last_received_packet_index(),
-            self.ack_bitfield(),
-        );
+        let outgoing = StandardHeader::new(packet_type, next_packet_index, last_rx, ack_bits);
 
         self.track_packet(packet_type, next_packet_index);
         self.increment_local_packet_index();
@@ -155,8 +169,8 @@ impl AckManager {
         }
     }
 
-    fn last_received_packet_index(&self) -> PacketIndex {
-        self.received_packets.sequence_num().wrapping_sub(1)
+    pub fn last_received_packet_index(&self) -> PacketIndex {
+        self.last_recv_packet_index
     }
 
     fn ack_bitfield(&self) -> u32 {

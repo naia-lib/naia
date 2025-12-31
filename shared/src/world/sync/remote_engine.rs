@@ -173,7 +173,10 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
 
     pub(crate) fn insert_entity_channel(&mut self, entity: E, channel: RemoteEntityChannel) {
         if self.entity_channels.contains_key(&entity) {
-            panic!("Cannot insert entity channel that already exists for entity: {:?}", entity);
+            panic!(
+                "Cannot insert entity channel that already exists for entity: {:?}",
+                entity
+            );
         }
         self.entity_channels.insert(entity, channel);
     }
@@ -182,7 +185,10 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         self.entity_channels.contains_key(entity)
     }
 
-    pub(crate) fn get_entity_channel_mut(&mut self, entity: &E) -> Option<&mut RemoteEntityChannel> {
+    pub(crate) fn get_entity_channel_mut(
+        &mut self,
+        entity: &E,
+    ) -> Option<&mut RemoteEntityChannel> {
         self.entity_channels.get_mut(entity)
     }
 

@@ -119,7 +119,7 @@ impl RemoteEntityChannel {
     }
 
     /// Create a RemoteEntityChannel for a delegated entity (used during migration)
-    /// 
+    ///
     /// After migration, MigrateResponse has subcommand_id=0, so the next message (SetAuthority)
     /// will have subcommand_id=1. We need to sync the receiver's next_subcommand_id accordingly.
     pub fn new_delegated(host_type: HostType) -> Self {

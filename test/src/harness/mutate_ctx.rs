@@ -1,7 +1,7 @@
-use super::scenario::Scenario;
-use super::keys::{ClientKey};
-use super::server_mutate_ctx::ServerMutateCtx;
 use super::client_mutate_ctx::ClientMutateCtx;
+use super::keys::ClientKey;
+use super::scenario::Scenario;
+use super::server_mutate_ctx::ServerMutateCtx;
 
 /// Context for performing actions in a mutate phase
 pub struct MutateCtx<'a> {
@@ -28,7 +28,11 @@ impl<'a> MutateCtx<'a> {
     }
 
     /// Perform client-side actions
-    pub fn client<R>(&mut self, client_key: ClientKey, f: impl FnOnce(&mut ClientMutateCtx<'_, '_>) -> R) -> R {
+    pub fn client<R>(
+        &mut self,
+        client_key: ClientKey,
+        f: impl FnOnce(&mut ClientMutateCtx<'_, '_>) -> R,
+    ) -> R {
         let mut ctx = ClientMutateCtx::new(self, client_key);
         f(&mut ctx)
     }
