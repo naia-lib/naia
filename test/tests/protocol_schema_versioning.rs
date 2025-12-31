@@ -62,6 +62,7 @@ fn multi_type_mapping_across_messages_components_and_channels() {
         let entity = ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
             })
         });
         ctx.server(|server| {

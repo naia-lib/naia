@@ -555,7 +555,8 @@ fn manual_user_scope_include_overrides_room_absence() {
         (!u_sees_e).then_some(())
     });
 
-    // Manually include E in U's scope
+    // Manually include E in U's scope (entity is already in room_a, U is in room_b)
+    // Note: Manual scope inclusion should work even when entity is in different room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server
@@ -707,16 +708,17 @@ fn publish_unpublish_vs_spawn_despawn_semantics_distinct() {
         (!sees_e).then_some(())
     });
 
-    // Publish E to room
+    // Publish E to room and include in client's scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let mut entity_mut = server.entity_mut(&entity_e).unwrap();
-            entity_mut.enter_room(&room_key);
-            // Include E in client's scope when published
+            // Include E in client's scope first
             server
                 .user_scope_mut(&client_key)
                 .unwrap()
                 .include(&entity_e);
+            // Then enter room
+            let mut entity_mut = server.entity_mut(&entity_e).unwrap();
+            entity_mut.enter_room(&room_key);
         });
     });
 
@@ -1461,10 +1463,7 @@ fn leaving_scope_vs_despawn_distinguishable() {
     // Move E to Room2 (leaves A's scope, but not despawned)
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let mut entity_mut = server.entity_mut(&entity_e).unwrap();
-            entity_mut.leave_room(&room1_key);
-            entity_mut.enter_room(&room2_key);
-            // Exclude E from A's scope, include in B's scope
+            // Update scopes first
             server
                 .user_scope_mut(&client_a_key)
                 .unwrap()
@@ -1473,6 +1472,10 @@ fn leaving_scope_vs_despawn_distinguishable() {
                 .user_scope_mut(&client_b_key)
                 .unwrap()
                 .include(&entity_e);
+            // Then move room
+            let mut entity_mut = server.entity_mut(&entity_e).unwrap();
+            entity_mut.leave_room(&room1_key);
+            entity_mut.enter_room(&room2_key);
         });
     });
 

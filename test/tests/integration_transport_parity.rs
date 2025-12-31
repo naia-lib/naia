@@ -89,11 +89,13 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
         let e1 = ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room1_key);
             })
         });
         let e2 = ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(10.0, 20.0));
+                e.enter_room(&room2_key);
             })
         });
         // Include entities in different scopes

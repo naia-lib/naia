@@ -121,7 +121,6 @@ impl WorldWriter {
                 next_send_commands,
             );
             if counter.overflowed() {
-                eprintln!("[rep_probe] WorldWriter::write_commands: counter OVERFLOWED, breaking without consuming commands");
                 // if nothing useful has been written in this packet yet,
                 // send warning about size of component being too big
                 if !*has_written {

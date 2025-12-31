@@ -262,7 +262,6 @@ impl RemoteWorldManager {
             // info!("Processing EntityMessage: {:?}", message);
             match message {
                 EntityMessage::Spawn(remote_entity) => {
-                    eprintln!("[probe] SERVER RemoteWorldManager::process_ready_messages: Processing SPAWN for remote_entity={:?}", remote_entity);
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
@@ -272,7 +271,6 @@ impl RemoteWorldManager {
                         local_entity_map.insert_with_remote_entity(global_entity, remote_entity);
                     }
 
-                    eprintln!("[probe] SERVER RemoteWorldManager: PUSHING EntityEvent::Spawn(global={:?})", global_entity);
                     self.incoming_events.push(EntityEvent::Spawn(global_entity));
                 }
                 EntityMessage::Despawn(remote_entity) => {

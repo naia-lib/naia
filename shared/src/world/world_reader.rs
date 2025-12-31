@@ -80,8 +80,6 @@ impl WorldReader {
                 // read remote entity
                 let remote_entity = RemoteEntity::de(reader)?;
 
-                eprintln!("[probe] SERVER WorldReader::read_message: SPAWN message_id={:?}, remote_entity={:?}", message_id, remote_entity);
-
                 world_manager.receiver_buffer_message(
                     message_id,
                     EntityMessage::Spawn(remote_entity.copy_to_owned()),
