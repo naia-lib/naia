@@ -158,6 +158,8 @@ fn reliable_point_to_point_request_response() {
         });
     });
 
+    scenario.expect(|_ctx| Some(()));
+
     // Verify A receives exactly one response
     let response_received = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
@@ -733,6 +735,8 @@ fn client_to_server_request_yields_exactly_one_response() {
         });
     });
 
+    scenario.expect(|_ctx| Some(()));
+
     // Verify client receives exactly one response
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
@@ -798,6 +802,8 @@ fn server_to_client_request_yields_exactly_one_response() {
             c.send_response(&response_send_key, &TestResponse::new("result"));
         });
     });
+
+    scenario.expect(|_ctx| Some(()));
 
     // Verify server receives exactly one response
     scenario.mutate(|ctx| {
@@ -1032,6 +1038,8 @@ fn many_concurrent_requests_from_a_single_client_remain_distinct() {
         });
     });
 
+    scenario.expect(|_ctx| Some(()));
+
     // Verify client receives exactly one response per request, correctly matched
     scenario.mutate(|ctx| {
         let mut responses_received = 0;
@@ -1087,6 +1095,8 @@ fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
         })
     });
 
+    scenario.expect(|_ctx| Some(()));
+
     let response_key_b = scenario.mutate(|ctx| {
         ctx.client(client_b_key, |client_b| {
             client_b
@@ -1126,6 +1136,8 @@ fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
             }
         });
     });
+
+    scenario.expect(|_ctx| Some(()));
 
     // Verify each client only sees its own response
     scenario.mutate(|ctx| {
@@ -1215,6 +1227,8 @@ fn response_completion_order_is_well_defined_and_documented() {
             }
         });
     });
+
+    scenario.expect(|_ctx| Some(()));
 
     // TODO: Verify responses arrive in completion order (not send order)
     // Note: The exact order depends on Naia's implementation contract
