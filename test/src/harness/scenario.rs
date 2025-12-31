@@ -704,7 +704,6 @@ impl Scenario {
         // Client update
         if client.connection_status().is_connected() {
             client.receive_all_packets();
-            client.take_tick_events(now);
             client.process_all_packets(client_world.proxy_mut(), now);
             client.send_all_packets(client_world.proxy_mut());
         } else {
@@ -714,7 +713,6 @@ impl Scenario {
 
         // Server update
         server.receive_all_packets();
-        server.take_tick_events(now);
         server.process_all_packets(server_world.proxy_mut(), now);
         server.send_all_packets(server_world.proxy());
     }

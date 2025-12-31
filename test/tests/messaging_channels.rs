@@ -583,8 +583,17 @@ fn tick_buffered_channel_groups_messages_by_tick() {
         test_protocol.clone(),
     );
 
+    // Wait for system to stabilize and advance a few ticks
+    // This ensures server has a current tick we can reference
+    scenario.expect(|_ctx| Some(()));
+    scenario.expect(|_ctx| Some(()));
+    scenario.expect(|_ctx| Some(()));
+
     // Client sends tick-buffered messages for different ticks
-    let tick_t0 = naia_shared::Tick::default();
+    // Use a large base tick to ensure messages are in the future relative to server's current tick
+    // (tick-buffered messages are only stored if client_tick > server_tick)
+    // Using a large value that's definitely in the future (accounting for tick wrapping)
+    let tick_t0 = naia_shared::Tick::MAX.wrapping_sub(50);
     let tick_t1 = tick_t0.wrapping_add(1);
     let tick_t2 = tick_t0.wrapping_add(2);
 
@@ -600,9 +609,6 @@ fn tick_buffered_channel_groups_messages_by_tick() {
     });
 
     // Allow network to propagate
-    scenario.expect(|_ctx| Some(()));
-    
-    // Additional propagation time for tick-buffered messages
     scenario.expect(|_ctx| Some(()));
 
     // Server receives messages grouped by tick
