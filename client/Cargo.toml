@@ -28,6 +28,7 @@ transport_udp = [
 ]
 transport_local = [ "tokio", "http", "base64", "naia-shared/transport_local" ]
 interior_visibility = [ "naia-shared/interior_visibility" ]
+e2e_debug = []
 test_time = [ "naia-shared/test_time" ]
 
 [dependencies]

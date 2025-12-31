@@ -8,6 +8,7 @@ use test_helpers::client_connect;
 
 use naia_test::test_protocol::ReliableChannel;
 use naia_test::test_protocol::{Position, TestMessage};
+use std::sync::Once;
 
 // ============================================================================
 // Domain 9: Integration & Transport Parity
@@ -119,7 +120,7 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
     });
 
     // Wait for entities to be visible
-    scenario.expect(|ctx| {
+    scenario.expect_msg("clients see spawned entities", |ctx| {
         let a_sees_e1 = ctx.client(client_a_key, |c| c.has_entity(&entity_e1));
         let b_sees_e1 = ctx.client(client_b_key, |c| c.has_entity(&entity_e1));
         let c_sees_e2 = ctx.client(client_c_key, |c| c.has_entity(&entity_e2));
@@ -137,7 +138,7 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
         });
     });
 
-    scenario.expect(|_ctx| Some(()));
+    scenario.expect_msg("entity update propagates", |_ctx| Some(()));
 
     // Send messages on different channels
     scenario.mutate(|ctx| {
@@ -148,7 +149,7 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
     });
 
     // Verify messages received
-    scenario.expect(|ctx| {
+    scenario.expect_msg("clients receive messages", |ctx| {
         let a_received = ctx.client(client_a_key, |c| {
             c.read_message::<ReliableChannel, TestMessage>()
                 .any(|m| m.value == 1)
@@ -166,14 +167,68 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
             let mut user_a = server.user_mut(&client_a_key).unwrap();
             user_a.leave_room(&room1_key);
             user_a.enter_room(&room2_key);
+
+            // Update scope: exclude E1, include E2
+            server.user_scope_mut(&client_a_key).unwrap().exclude(&entity_e1);
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity_e2);
+
+            // Verify server-side room membership immediately after move
+            let user_a = server.user(&client_a_key).expect("User A should exist");
+            let a_in_room1 = user_a.room_keys().iter().any(|k| *k == room1_key);
+            let a_in_room2 = user_a.room_keys().iter().any(|k| *k == room2_key);
+
+            let e1_in_room1 = server
+                .room(&room1_key)
+                .expect("Room 1 should exist")
+                .has_entity(&entity_e1);
+            let e2_in_room2 = server
+                .room(&room2_key)
+                .expect("Room 2 should exist")
+                .has_entity(&entity_e2);
+
+            #[cfg(feature = "e2e_debug")]
+            eprintln!("[room_invariant] a_in_room1={} a_in_room2={} e1_in_room1={} e2_in_room2={}",
+                      a_in_room1, a_in_room2, e1_in_room1, e2_in_room2);
+
+            assert!(!a_in_room1, "User A should NOT be in room1 after leave");
+            assert!(a_in_room2, "User A should BE in room2 after enter");
+            assert!(e1_in_room1, "Entity E1 should BE in room1");
+            assert!(e2_in_room2, "Entity E2 should BE in room2");
         });
     });
 
     // Verify A no longer sees E1 but can see E2
-    scenario.expect(|ctx| {
-        let a_no_e1 = !ctx.client(client_a_key, |c| c.has_entity(&entity_e1));
-        let a_sees_e2 = ctx.client(client_a_key, |c| c.has_entity(&entity_e2));
-        (a_no_e1 && a_sees_e2).then_some(())
+    static ROOM_CHANGE_DIAG: Once = Once::new();
+    scenario.expect_msg("client A room change complete", |ctx| {
+        let missing_e1 = !ctx.client(client_a_key, |c| c.has_entity(&entity_e1));
+        let has_e2 = ctx.client(client_a_key, |c| c.has_entity(&entity_e2));
+        
+        if missing_e1 && has_e2 {
+            Some(())
+        } else {
+            ROOM_CHANGE_DIAG.call_once(|| {
+                #[cfg(feature = "e2e_debug")]
+                {
+                    use naia_server::{SERVER_ROOM_MOVE_CALLED, SERVER_SCOPE_DIFF_ENQUEUED, SERVER_WORLD_PKTS_SENT};
+                    use naia_client::counters::{CLIENT_WORLD_PKTS_RECV, CLIENT_SCOPE_APPLIED_ADD_E2, CLIENT_SCOPE_APPLIED_REMOVE_E1};
+                    use std::sync::atomic::Ordering;
+                    
+                    eprintln!("[room_path] missing_e1={} has_e2={} room_move={} scope_diff={} srv_pkts={} cli_pkts={} add_e2={} rm_e1={}",
+                              missing_e1, has_e2,
+                              SERVER_ROOM_MOVE_CALLED.load(Ordering::Relaxed),
+                              SERVER_SCOPE_DIFF_ENQUEUED.load(Ordering::Relaxed),
+                              SERVER_WORLD_PKTS_SENT.load(Ordering::Relaxed),
+                              CLIENT_WORLD_PKTS_RECV.load(Ordering::Relaxed),
+                              CLIENT_SCOPE_APPLIED_ADD_E2.load(Ordering::Relaxed),
+                              CLIENT_SCOPE_APPLIED_REMOVE_E1.load(Ordering::Relaxed));
+                }
+                #[cfg(not(feature = "e2e_debug"))]
+                {
+                    eprintln!("[room_change] missing_e1={} has_e2={}", missing_e1, has_e2);
+                }
+            });
+            None
+        }
     });
 
     // Despawn E1
@@ -184,7 +239,7 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
     });
 
     // Verify E1 is removed from B
-    scenario.expect(|ctx| (!ctx.client(client_b_key, |c| c.has_entity(&entity_e1))).then_some(()));
+    scenario.expect_msg("client B sees E1 removed", |ctx| (!ctx.client(client_b_key, |c| c.has_entity(&entity_e1))).then_some(()));
 
     // Disconnect client B
     scenario.mutate(|ctx| {
@@ -194,12 +249,12 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
     });
 
     // Wait for disconnect
-    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_b_key))).then_some(()));
+    scenario.expect_msg("client B disconnected", |ctx| (!ctx.server(|s| s.user_exists(&client_b_key))).then_some(()));
 
     scenario.mutate(|_ctx| {});
 
     // Verify final state: A and C still connected, E2 still exists
-    scenario.expect(|ctx| {
+    scenario.expect_msg("final state consistent", |ctx| {
         let a_connected = ctx.server(|s| s.user_exists(&client_a_key));
         let c_connected = ctx.server(|s| s.user_exists(&client_c_key));
         let e2_exists = ctx.server(|s| s.has_entity(&entity_e2));

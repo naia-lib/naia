@@ -8,6 +8,11 @@ edition = "2021"
 publish = false
 
 [features]
+e2e_debug = [
+  "naia-client/e2e_debug",
+  "naia-server/e2e_debug",
+  "naia-shared/e2e_debug"
+]
 
 [dependencies]
 naia-server = { path = "../server", features = ["transport_local", "interior_visibility", "test_time", "bevy_support"] }

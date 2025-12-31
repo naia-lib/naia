@@ -28,6 +28,7 @@ transport_local = [ "http", "tokio", "once_cell" ]
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
 advanced_handshake = []
 interior_visibility = []
+e2e_debug = []
 
 [dependencies]
 naia-socket-shared = { version = "0.24", path = "../socket/shared" }

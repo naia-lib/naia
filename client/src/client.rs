@@ -1626,6 +1626,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .base
                         .world_manager
                         .remote_spawn_entity(&global_entity); // TODO: move to localworld?
+                    #[cfg(feature = "e2e_debug")]
+                    {
+                        use crate::counters::CLIENT_SCOPE_APPLIED_ADD_E2;
+                        use std::sync::atomic::Ordering;
+                        CLIENT_SCOPE_APPLIED_ADD_E2.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
                 EntityEvent::Despawn(global_entity) => {
                     let world_entity = self
@@ -1653,6 +1659,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.global_world_manager
                         .remove_entity_record(&global_entity);
                     self.global_entity_map.despawn_by_global(&global_entity);
+                    #[cfg(feature = "e2e_debug")]
+                    {
+                        use crate::counters::CLIENT_SCOPE_APPLIED_REMOVE_E1;
+                        use std::sync::atomic::Ordering;
+                        CLIENT_SCOPE_APPLIED_REMOVE_E1.fetch_add(1, Ordering::Relaxed);
+                    }
                 }
                 EntityEvent::InsertComponent(global_entity, component_kind) => {
                     let world_entity = self

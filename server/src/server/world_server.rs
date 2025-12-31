@@ -50,6 +50,10 @@ pub static SERVER_OUTGOING_CMDS_DRAINED_TOTAL: AtomicUsize = AtomicUsize::new(0)
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_AUTH_GRANTED_EMITTED: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "e2e_debug")]
+pub static SERVER_ROOM_MOVE_CALLED: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_SCOPE_DIFF_ENQUEUED: AtomicUsize = AtomicUsize::new(0);
+#[cfg(feature = "e2e_debug")]
 pub static SERVER_SET_AUTH_ENQUEUED: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_WORLD_MSGS_DRAINED: AtomicUsize = AtomicUsize::new(0);
@@ -1922,6 +1926,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Entities will only ever be in-scope for Users which are in a
     /// Room with them
     pub(crate) fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        #[cfg(feature = "e2e_debug")]
+        {
+            SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
+        }
         if let Some(user) = self.users.get_mut(user_key) {
             if let Some(room) = self.rooms.get_mut(room_key) {
                 room.subscribe_user(user_key);
@@ -1932,6 +1940,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Removes a User from a Room
     pub(crate) fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        #[cfg(feature = "e2e_debug")]
+        {
+            SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
+        }
         if let Some(user) = self.users.get_mut(user_key) {
             if let Some(room) = self.rooms.get_mut(room_key) {
                 room.unsubscribe_user(user_key);
@@ -2546,6 +2558,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     .base
                     .world_manager
                     .despawn_entity(&removed_global_entity);
+                #[cfg(feature = "e2e_debug")]
+                {
+                    SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
 
@@ -2601,6 +2617,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .base
                             .world_manager
                             .host_init_entity(global_entity, component_kinds);
+                        #[cfg(feature = "e2e_debug")]
+                        {
+                            SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
+                        }
 
                         // if entity is delegated, send message to connection via EntityActionEvent system
                         if !self.global_world_manager.entity_is_delegated(global_entity) {
