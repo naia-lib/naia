@@ -52,8 +52,11 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room1_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
-    let room2_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let (room1_key, room2_key) = scenario.mutate(|ctx| {
+        let r1 = ctx.server(|server| server.make_room().key());
+        let r2 = ctx.server(|server| server.make_room().key());
+        (r1, r2)
+    });
 
     // Connect multiple clients
     let client_a_key = client_connect(
@@ -81,41 +84,36 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
         test_protocol,
     );
 
-    // Server spawns entities
-    let (entity_e1, _) = scenario.mutate(|ctx| {
-        ctx.server(|server| {
+    // Server spawns entities and include in different scopes
+    let ((entity_e1, _), (entity_e2, _)) = scenario.mutate(|ctx| {
+        let e1 = ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
             })
-        })
-    });
-
-    let (entity_e2, _) = scenario.mutate(|ctx| {
-        ctx.server(|server| {
+        });
+        let e2 = ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(10.0, 20.0));
             })
-        })
-    });
-
-    // Include entities in different scopes
-    scenario.mutate(|ctx| {
+        });
+        // Include entities in different scopes
         ctx.server(|server| {
             // E1 in A and B's scope (room1)
             server
                 .user_scope_mut(&client_a_key)
                 .unwrap()
-                .include(&entity_e1);
+                .include(&e1.0);
             server
                 .user_scope_mut(&client_b_key)
                 .unwrap()
-                .include(&entity_e1);
+                .include(&e1.0);
             // E2 in C's scope (room2)
             server
                 .user_scope_mut(&client_c_key)
                 .unwrap()
-                .include(&entity_e2);
+                .include(&e2.0);
         });
+        (e1, e2)
     });
 
     // Wait for entities to be visible
@@ -193,6 +191,8 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
 
     // Wait for disconnect
     scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_b_key))).then_some(()));
+
+    scenario.mutate(|_ctx| {});
 
     // Verify final state: A and C still connected, E2 still exists
     scenario.expect(|ctx| {

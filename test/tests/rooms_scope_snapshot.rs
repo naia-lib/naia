@@ -392,8 +392,11 @@ fn entity_in_multiple_rooms_projects_correctly() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_a_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
-    let room_b_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let (room_a_key, room_b_key) = scenario.mutate(|ctx| {
+        let ra = ctx.server(|server| server.make_room().key());
+        let rb = ctx.server(|server| server.make_room().key());
+        (ra, rb)
+    });
 
     let client_u1_key = client_connect(
         &mut scenario,
@@ -519,8 +522,11 @@ fn manual_user_scope_include_overrides_room_absence() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_a_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
-    let room_b_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let (room_a_key, room_b_key) = scenario.mutate(|ctx| {
+        let ra = ctx.server(|server| server.make_room().key());
+        let rb = ctx.server(|server| server.make_room().key());
+        (ra, rb)
+    });
 
     let client_u_key = client_connect(
         &mut scenario,

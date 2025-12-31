@@ -57,27 +57,24 @@ fn multi_type_mapping_across_messages_components_and_channels() {
         test_protocol,
     );
 
-    // Spawn entity with Position component
+    // Spawn entity with Position component and include in both clients' scopes
     let (entity_e, _) = scenario.mutate(|ctx| {
-        ctx.server(|server| {
+        let entity = ctx.server(|server| {
             server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
             })
-        })
-    });
-
-    // Include entity in both clients' scopes
-    scenario.mutate(|ctx| {
+        });
         ctx.server(|server| {
             server
                 .user_scope_mut(&client_a_key)
                 .unwrap()
-                .include(&entity_e);
+                .include(&entity.0);
             server
                 .user_scope_mut(&client_b_key)
                 .unwrap()
-                .include(&entity_e);
+                .include(&entity.0);
         });
+        entity
     });
 
     // Wait for both clients to see the entity
