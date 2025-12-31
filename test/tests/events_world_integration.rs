@@ -348,7 +348,12 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
         });
     });
 
-    scenario.expect(|_ctx| Some(()));
+    // Wait for both clients to have their responses
+    scenario.expect(|ctx| {
+        let a_has = ctx.client(client_a_key, |c| c.has_response(&response_key_a));
+        let b_has = ctx.client(client_b_key, |c| c.has_response(&response_key_b));
+        (a_has && b_has).then_some(())
+    });
 
     // Verify clients receive responses
     scenario.mutate(|ctx| {
@@ -1058,8 +1063,12 @@ fn accessing_an_entity_after_despawn_is_safely_rejected() {
         });
     });
 
-    // Wait for entity to be removed
-    scenario.expect(|ctx| (!ctx.server(|s| s.has_entity(&entity_e))).then_some(()));
+    // Wait for entity to be removed from both server and client
+    scenario.expect(|ctx| {
+        let server_removed = !ctx.server(|s| s.has_entity(&entity_e));
+        let client_removed = ctx.client(client_a_key, |c| c.entity(&entity_e).is_none());
+        (server_removed && client_removed).then_some(())
+    });
 
     // Verify accessing despawned entity returns None/error safely
     scenario.mutate(|ctx| {
