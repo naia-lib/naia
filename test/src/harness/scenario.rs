@@ -111,6 +111,10 @@ impl Scenario {
         client_config: ClientConfig,
         protocol: Protocol,
     ) -> ClientKey {
+        // Allow this to be called after either mutate() or expect()
+        // This is a setup operation, not a mutate or expect, so it should be flexible
+        self.allow_flexible_next();
+
         if self.server.is_none() {
             panic!("server_start() must be called before client_start()");
         }

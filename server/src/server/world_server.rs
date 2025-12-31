@@ -1799,11 +1799,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             {
                 let copied_entities = all_owned_entities.clone();
                 for global_entity in copied_entities {
-                    let world_entity = self
+                    // Only release authority if entity still exists (may have been despawned already)
+                    if let Ok(world_entity) = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
-                        .unwrap();
-                    self.entity_release_authority(Some(user_key), &world_entity);
+                    {
+                        self.entity_release_authority(Some(user_key), &world_entity);
+                    }
                 }
             }
         }

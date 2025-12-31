@@ -450,6 +450,7 @@ fn invalid_credentials_rejected() {
                 Some(())
             })
         });
+        scenario.mutate(|_ctx| {});
     }
 
     assert!(
@@ -516,18 +517,18 @@ fn no_replication_before_auth_decision() {
     server_config.require_auth = true;
     scenario.server_start(server_config, test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
-
-    // Create an entity before A connects
-    let existing_entity = scenario.mutate(|ctx| {
-        ctx.server(|server| {
+    // Create room and entity before A connects
+    let (room_key, existing_entity) = scenario.mutate(|ctx| {
+        let room_key = ctx.server(|server| server.make_room().key());
+        let entity = ctx.server(|server| {
             server
                 .spawn(|mut e| {
                     e.insert_component(Position::new(10.0, 20.0));
                     e.enter_room(&room_key);
                 })
                 .0
-        })
+        });
+        (room_key, entity)
     });
 
     // A connects but don't accept yet
