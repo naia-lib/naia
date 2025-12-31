@@ -584,20 +584,20 @@ fn tick_buffered_channel_groups_messages_by_tick() {
         test_protocol.clone(),
     );
 
-    // Wait for system to stabilize and advance a few ticks
-    // This ensures server has a current tick we can reference
-    scenario.expect(|_ctx| Some(()));
-    scenario.expect(|_ctx| Some(()));
-    scenario.expect(|_ctx| Some(()));
+    // Get current server tick and define test ticks relative to it
+    // This ensures messages are in the future (will be queued) under wrap-aware comparison
+    let (tick_t0, tick_t1, tick_t2) = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let base = server.current_tick();
+            let t0 = base.wrapping_add(5);
+            let t1 = base.wrapping_add(6);
+            let t2 = base.wrapping_add(7);
+            (t0, t1, t2)
+        })
+    });
 
     // Client sends tick-buffered messages for different ticks
-    // Use a large base tick to ensure messages are in the future relative to server's current tick
-    // (tick-buffered messages are only stored if client_tick > server_tick)
-    // Using a large value that's definitely in the future (accounting for tick wrapping)
-    let tick_t0 = naia_shared::Tick::MAX.wrapping_sub(50);
-    let tick_t1 = tick_t0.wrapping_add(1);
-    let tick_t2 = tick_t0.wrapping_add(2);
-
+    scenario.expect(|_ctx| Some(()));
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a
@@ -609,8 +609,11 @@ fn tick_buffered_channel_groups_messages_by_tick() {
         });
     });
 
-    // Allow network to propagate
-    scenario.expect(|_ctx| Some(()));
+    // Wait until server has advanced past tick_t2
+    scenario.until(50.ticks()).expect_msg("server advanced past t2", |ctx| {
+        let now = ctx.server(|s| s.current_tick());
+        naia_shared::sequence_greater_than(now, tick_t2).then_some(())
+    });
 
     // Server receives messages grouped by tick
     // Messages for T+1 should not be exposed before T is processed
@@ -630,7 +633,7 @@ fn tick_buffered_channel_groups_messages_by_tick() {
     // T1 messages should not be available yet when requesting T0
     let _messages_t1_before = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let mut tick_buffer = server.receive_tick_buffer_messages(&tick_t1);
+            let mut tick_buffer = server.receive_tick_buffer_messages(&tick_t0);
             tick_buffer.read::<TickBufferedChannel, TestMessage>()
         })
     });

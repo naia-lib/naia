@@ -22,4 +22,12 @@ impl<'scenario> UntilCtx<'scenario> {
     pub fn expect<T>(self, f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
         self.scenario.expect_with_ticks_internal(self.max_ticks, f)
     }
+
+    /// Register expectations with a custom message and wait until they all pass or timeout.
+    ///
+    /// The closure is called each tick and should return `Some(T)` when expectations are met.
+    /// Ticks the simulation until the closure returns `Some(value)` or the maximum tick count is reached.
+    pub fn expect_msg<T>(self, msg: &str, f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
+        self.scenario.expect_with_ticks_internal_msg(self.max_ticks, msg, f)
+    }
 }

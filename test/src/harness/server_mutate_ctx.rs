@@ -55,6 +55,13 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         (entity_key, result)
     }
 
+    /// Get the server's current tick
+    pub fn current_tick(&self) -> Tick {
+        let scenario = self.ctx.scenario();
+        let (server, _) = scenario.server_and_registry().expect("server not started");
+        server.current_tick()
+    }
+
     /// Get read-only entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
     pub fn entity(&'_ self, key: &EntityKey) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {

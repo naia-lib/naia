@@ -29,6 +29,12 @@ impl<'a> ServerExpectCtx<'a> {
         self.scenario
     }
 
+    /// Get the server's current tick
+    pub fn current_tick(&self) -> naia_shared::Tick {
+        let (server, _) = self.scenario.server_and_registry().expect("server not started");
+        server.current_tick()
+    }
+
     /// Read an event (returns first event if any)
     pub fn read_event<V: ServerEvent>(&mut self) -> Option<V::Item>
     where
