@@ -158,49 +158,148 @@ I’ve grouped related headings into larger “domains” and kept each scenario
 
 ---
 
-## 4. Ownership & Delegation
+## 4. Ownership, Publication, Delegation, Authority (E2E Contract Assertions)
 
-### 4.1 Delegation & Authority
+### 4.1 Client-Owned Entities (Unpublished vs Published)
 
-* **Client-owned spawn grants authority to that client**
-  Given server supports delegated entities; when A spawns E as client-owned; then server records A as owner, emits authority-grant events, and accepts component updates from A for E as authoritative.
+* **Client-owned (Unpublished) is visible only to owner**
+  Given client A owns client-owned entity E in **Unpublished** state; when E exists; then A can see E, server can see E, and every non-owner client B MUST NOT have E in scope (E absent in B’s world).
 
-* **Owner updates propagate; non-owners cannot control delegated entity**
-  Given A owns delegated E and B sees E; when A updates E; then A and B see updated state; when B attempts to update E directly; then those updates are ignored and authoritative state remains driven by A/server.
+* **Client-owned (Unpublished) replication is owner→server only**
+  Given client-owned Unpublished E owned by A; when A mutates E; then server reflects the mutation; and any non-owner client B never observes E (no visibility, no replication to B).
 
-* **Delegation request for non-delegatable entity is denied**
-  Given server-owned non-delegatable E; when A requests delegation/authority over E; then ownership does not change, no grant event is emitted, and A’s direct control attempts are ignored.
+* **Client-owned (Published) may be scoped to non-owners**
+  Given client-owned Published E owned by A; when server includes E in B’s scope; then B observes E (E appears in B’s world) with correct replicated state.
 
-* **Server can revoke authority (reset)**
-  Given A owns delegated E; when server revokes E’s authority; then an authority-reset event is emitted, E becomes server-owned (or safe default), and further updates from A for E are ignored while replication continues normally.
+* **Client-owned (Published) rejects non-owner mutations**
+  Given client-owned Published E owned by A and in scope for B; when B attempts to mutate E; then server ignores/rejects B’s mutation and authoritative state remains driven by A (and/or server replication), with no panics.
 
-* **Delegated owner disconnect cleanup**
-  Given A owns delegated E and B observes E; when A disconnects; then server resets E’s authority to a safe state, keeps E alive and replicated to appropriate clients, and future delegation can proceed without stale ties to A.
+* **Client-owned (Published) accepts owner mutations and propagates**
+  Given client-owned Published E owned by A and in scope for B; when A mutates E; then server accepts and both A and B observe the updated state.
 
-### 4.2 Advanced Ownership / Delegation
+* **Publish toggle: Published → Unpublished forcibly despawns for non-owners**
+  Given client-owned Published E owned by A and currently in scope for B; when E becomes Unpublished (by server or owner A); then B MUST lose E from its world (OutOfScope), while A and server retain E.
 
-* **Mixed ownership per component respects authority boundaries**
-  Given E with some server-owned components and some delegated to A; when A mutates both; then only delegated components change, and server-owned components ignore A’s modifications.
+* **Publish toggle: Unpublished → Published enables scoping to non-owners**
+  Given client-owned Unpublished E owned by A; when E becomes Published; then server can include E in B’s scope and B observes E normally.
 
-* **Ownership transfer from one client to another**
-  Given E initially owned by A; when server transfers ownership to B; then A loses ability to update E, B gains it, B’s updates are applied, and A’s subsequent updates are ignored.
+* **Client-owned entities emit NO authority events**
+  Given client-owned E (Published or Unpublished); when any replication and mutations occur; then clients MUST observe **no** AuthGranted/AuthDenied/AuthLost events for E.
 
-* **Concurrent conflicting updates respect current owner**
-  Given E with ownership that can change; when A and B both send updates and server switches ownership from A to B during the period; then updates from A before transfer are applied, updates from A after transfer are ignored, and B’s post-transfer updates are applied.
+---
 
-* **Authority revocation races with pending updates**
-  Given A owns E and has in-flight updates; when server revokes A’s authority; then updates arriving after revocation are discarded, and final replicated state reflects only pre-revocation updates.
+### 4.2 Server-Owned Undelegated Entities (No Authority Exists)
 
-### 4.3 Delegation & Scoping Edge Cases
+* **Server-owned undelegated accepts only server writes**
+  Given server-owned undelegated E in scope for A and B; when A or B attempts to mutate E; then changes are ignored/rejected; when server mutates E; then A and B observe server’s updates.
 
-* **Delegation to an out-of-scope client behaves predictably**
-  Given E not in A’s scope; when server delegates authority to A or accepts delegation from A; then behavior matches the chosen contract (e.g., either E is first brought into scope or A’s updates are rejected until in-scope), and test asserts that contract.
+* **Server-owned undelegated has no authority status and no auth events**
+  Given server-owned undelegated E in scope for A; then A MUST observe no authority events for E under any circumstance.
 
-* **Component-level grant and later reset for delegated authority**
-  Given E with component `C_owned` delegated to A and others server-owned; when server issues authority reset for `C_owned`; then A’s later changes to `C_owned` are ignored and server resumes sole authority, with visibility matching pre- vs post-reset states.
+* **Client request_authority on non-delegated returns ErrNotDelegated**
+  Given server-owned undelegated E in scope for A; when A calls request_authority(E); then the call returns ErrNotDelegated and no state/events change.
 
-* **Owner removed from scope retains or loses authority consistently**
-  Given A owns delegated E and B observes E; when E is removed from A’s scope but remains alive; then system either automatically revokes authority from A or lets A retain authority while out-of-scope, and test locks the chosen behavior (including handling of updates from A).
+* **Server authority APIs on non-delegated return ErrNotDelegated**
+  Given server-owned undelegated E; when server calls give_authority/take_authority/release_authority for E; then each returns ErrNotDelegated and E remains undelegated.
+
+---
+
+### 4.3 Enabling/Disabling Delegation (Server-Owned → Delegated → Undelegated)
+
+* **Enable delegation makes entity Available for all in-scope clients**
+  Given server-owned undelegated E in scope for A and B; when server enables delegation on E; then A and B observe E as Available (no holder), and no client has Granted.
+
+* **Disable delegation clears authority semantics**
+  Given delegated E in scope for A and B with some current authority holder; when server disables delegation on E; then E becomes server-owned undelegated and clients MUST NOT receive further authority statuses/events for E; subsequent client request_authority returns ErrNotDelegated.
+
+---
+
+### 4.4 Delegated Authority: Client Path (request/release)
+
+* **request_authority(Available) grants to requester and denies everyone else**
+  Given delegated E with AuthNone (Available) in scope for A and B; when A calls request_authority(E); then A observes Granted + AuthGranted(E), and B observes Denied + AuthDenied(E).
+
+* **Non-holder cannot mutate delegated entity**
+  Given delegated E where A is authority holder and B is Denied; when B attempts to mutate E; then mutation is ignored/rejected (no panics) and both clients converge on the authoritative state (from A/server).
+
+* **Holder can mutate delegated entity**
+  Given delegated E where A is authority holder; when A mutates E; then server accepts and all in-scope clients observe the mutation.
+
+* **Denied client request_authority fails (ErrNotAvailable)**
+  Given delegated E where A holds authority and B observes Denied; when B calls request_authority(E); then it returns ErrNotAvailable and authority holder remains A (no state/events change).
+
+* **Holder release_authority transitions everyone to Available**
+  Given delegated E where A holds authority and B observes Denied; when A calls release_authority(E); then A emits AuthLost(E) and both A and B observe Available (explicit Denied→Available for B).
+
+* **release_authority when not holder fails (ErrNotHolder)**
+  Given delegated E where A holds authority and B observes Denied; when B calls release_authority(E); then it returns ErrNotHolder and nothing changes.
+
+---
+
+### 4.5 Delegated Authority: Server Priority Path (give/take/release)
+
+* **give_authority assigns to client and denies everyone else**
+  Given delegated E with AuthNone (Available) in scope for A and B; when server calls give_authority(A,E); then A observes Granted + AuthGranted(E) and B observes Denied + AuthDenied(E).
+
+* **take_authority forces server hold; all clients denied**
+  Given delegated E with AuthNone (Available) in scope for A and B; when server calls take_authority(E); then both A and B observe Denied, and both emit AuthDenied(E) (from non-Denied to Denied).
+
+* **Server priority: take_authority overrides a client holder**
+  Given delegated E where A currently holds authority (A Granted, B Denied); when server calls take_authority(E); then A transitions Granted→Denied emitting AuthLost(E) and AuthDenied(E); B remains Denied; all in-scope clients observe Denied.
+
+* **Server priority: give_authority overrides current holder**
+  Given delegated E where A currently holds authority; when server calls give_authority(B,E); then A transitions Granted→Denied emitting AuthLost(E) and AuthDenied(E); B transitions Denied/Available→Granted emitting AuthGranted(E); all other in-scope clients observe Denied.
+
+* **Server release_authority clears holder; all clients Available**
+  Given delegated E with any current holder (Server or Client); when server calls release_authority(E); then all in-scope clients observe Available; if a client previously held Granted it MUST emit AuthLost(E); any client previously Denied MUST observe Denied→Available.
+
+* **Server give_authority requires scope**
+  Given delegated E where OutOfScope(A,E) holds; when server calls give_authority(A,E); then it returns ErrNotInScope and authority holder does not change.
+
+---
+
+### 4.6 Authority + Scope Coupling
+
+* **Authority releases when holder goes OutOfScope**
+  Given delegated E where A holds authority and B observes Denied; when server removes E from A’s scope (so A despawns E); then authority MUST release to None, and B MUST observe Denied→Available.
+
+* **Authority releases when holder disconnects**
+  Given delegated E where A holds authority and B is in scope; when A disconnects; then authority MUST release to None, and B MUST observe Available (or Denied→Available if previously denied), with E still alive and replicated per server policy.
+
+---
+
+### 4.7 Client-Owned Delegation (Migration to Server-Owned Delegated)
+
+* **Cannot delegate client-owned Unpublished (ErrNotPublished)**
+  Given client-owned Unpublished E owned by A; when server (or A) attempts to delegate E; then operation fails with ErrNotPublished and E remains client-owned Unpublished.
+
+* **Delegating client-owned Published migrates identity without despawn+spawn**
+  Given client-owned Published E owned by A and in scope for A and B; when server (or A) delegates E; then E remains the same identity on clients (continuity), and becomes server-owned delegated.
+
+* **Migration assigns initial authority to owner if owner in scope**
+  Given client-owned Published E owned by A and InScope(A,E); when E is delegated (migrates); then resulting delegated E has holder Client(A): A observes Granted + AuthGranted(E), and every other in-scope client observes Denied + AuthDenied(E).
+
+* **Migration yields no holder if owner out of scope**
+  Given client-owned Published E owned by A but OutOfScope(A,E) at migration moment; when E is delegated (migrates); then resulting delegated E has AuthNone and every in-scope client observes Available (no initial holder).
+
+* **After migration, writes follow delegated rules**
+  Given migrated delegated E; when owner A is not the authority holder; then A’s mutations are ignored/rejected; when A later acquires authority (Available→Granted) then A’s mutations are accepted.
+
+---
+
+### 4.8 Event Correctness (No duplicates; transition-driven)
+
+* **AuthGranted emitted exactly once on Available→Granted**
+  Given delegated E Available for A; when A becomes holder (via request_authority or give_authority); then exactly one AuthGranted(E) is emitted to A for that transition.
+
+* **AuthDenied emitted exactly once per transition into Denied**
+  Given delegated E where a client C transitions into Denied (from Available or Granted); then exactly one AuthDenied(E) is emitted for that transition.
+
+* **AuthLost emitted exactly once per transition out of Granted**
+  Given delegated E where client A transitions from Granted to (Denied or Available); then exactly one AuthLost(E) is emitted for that transition.
+
+* **No auth events for non-delegated entities, ever**
+  Given any non-delegated entity (server-owned undelegated or any client-owned); then AuthGranted/AuthDenied/AuthLost MUST NOT be emitted regardless of scope/mutations.
 
 ---
 
