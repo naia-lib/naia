@@ -160,4 +160,19 @@ impl<'a> ClientExpectCtx<'a> {
         let state = self.scenario.client_state(&self.client_key);
         state.client().has_response(response_key)
     }
+
+    /// Get the server tick that this client has received and processed
+    /// (after jitter buffer)
+    /// This is the tick of server updates that have been received and processed.
+    pub fn server_tick(&self) -> Option<naia_shared::Tick> {
+        let state = self.scenario.client_state(&self.client_key);
+        state.client().server_tick()
+    }
+
+    /// Get the client's predicted tick (how far ahead client is predicting)
+    /// This is the client's internal prediction tick for client-side prediction.
+    pub fn client_tick(&self) -> Option<naia_shared::Tick> {
+        let state = self.scenario.client_state(&self.client_key);
+        state.client().client_tick()
+    }
 }

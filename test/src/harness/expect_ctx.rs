@@ -52,4 +52,16 @@ impl<'a> ExpectCtx<'a> {
         let mut client_expect = ClientExpectCtx::new(self.scenario, client_key, client_events);
         f(&mut client_expect)
     }
+
+    #[cfg(feature = "e2e_debug")]
+    /// Get access to scenario for debugging (feature-gated)
+    pub fn scenario(&self) -> &Scenario {
+        self.scenario
+    }
+
+    /// Get the current iteration count (how many times scenario.tick() has been called)
+    /// This is NOT a game tick - it's just the test harness's internal iteration counter.
+    pub fn global_tick(&self) -> usize {
+        self.scenario.global_tick()
+    }
 }

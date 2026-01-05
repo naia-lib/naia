@@ -61,6 +61,8 @@ pub struct Scenario {
     client_to_addr_map: HashMap<ClientKey, SocketAddr>,
     /// Tracks the last operation to enforce alternating mutate/expect calls
     last_operation: LastOperation,
+    /// Current tick count (incremented on each tick)
+    global_tick: usize,
 }
 
 impl Scenario {
@@ -82,6 +84,7 @@ impl Scenario {
             pending_auths: HashMap::new(),
             client_to_addr_map: HashMap::new(),
             last_operation: LastOperation::None,
+            global_tick: 0,
         }
     }
 
@@ -373,6 +376,79 @@ impl Scenario {
         Users::new(&self.clients, &self.user_to_client_map)
     }
 
+    #[cfg(feature = "e2e_debug")]
+    /// Debug helper to dump entity identity state for troubleshooting test failures
+    pub fn debug_dump_identity_state(
+        &self,
+        label: &str,
+        entity_key: &EntityKey,
+        client_keys: &[ClientKey],
+    ) {
+        use crate::test_protocol::Position;
+        
+        eprintln!("=== Identity State Dump: {} ===", label);
+        eprintln!("EntityKey: {:?}", entity_key);
+        
+        // Server state
+        if let Some(server_entity) = self.entity_registry.server_entity(entity_key) {
+            eprintln!("Server: has entity={:?}", server_entity);
+            if let Some(server) = &self.server {
+                let world_ref = self.server_world.proxy();
+                if world_ref.has_entity(&server_entity) {
+                    let server_ref = server.entity(world_ref, &server_entity);
+                    let pos_value = server_ref.component::<Position>().map(|p| (*p.x, *p.y));
+                    if let Some((x, y)) = pos_value {
+                        eprintln!("Server Position: ({}, {})", x, y);
+                    } else {
+                        eprintln!("Server Position: missing");
+                    }
+                } else {
+                    eprintln!("Server: entity not in world");
+                }
+            }
+        } else {
+            eprintln!("Server: entity not registered");
+        }
+        
+        // Per-client state
+        for client_key in client_keys {
+            let client_state = match self.clients.get(client_key) {
+                Some(s) => s,
+                None => {
+                    eprintln!("Client {:?}: not found", client_key);
+                    continue;
+                }
+            };
+            
+            let world_ref = client_state.world().proxy();
+            let client_entity = self.entity_registry.client_entity(entity_key, client_key);
+            
+            eprintln!("Client {:?}:", client_key);
+            eprintln!("  Registered client entity: {:?}", client_entity);
+            
+            if let Some(ce) = client_entity {
+                if world_ref.has_entity(&ce) {
+                    eprintln!("  Has entity in world: true");
+                    let client_ref = client_state.client().entity(world_ref, &ce);
+                    if let Some(local_entity) = client_ref.local_entity() {
+                        eprintln!("  LocalEntity: {:?}", local_entity);
+                    }
+                    let pos_value = client_ref.component::<Position>().map(|p| (*p.x, *p.y));
+                    if let Some((x, y)) = pos_value {
+                        eprintln!("  Position: ({}, {})", x, y);
+                    } else {
+                        eprintln!("  Position: missing");
+                    }
+                } else {
+                    eprintln!("  Has entity in world: false");
+                }
+            } else {
+                eprintln!("  Registered client entity: None");
+            }
+        }
+        eprintln!("=== End Dump ===\n");
+    }
+
     /// Get read-only access to server world
     pub(crate) fn server_world_ref(&self) -> WorldRef<'_> {
         self.server_world.proxy()
@@ -543,6 +619,9 @@ impl Scenario {
     ///   the current tick are available for matching and registration.
     /// Update simulation without draining events (for expect() to handle events)
     fn tick(&mut self) {
+        // Increment tick counter
+        self.global_tick += 1;
+
         // Advance simulated clock by default tick duration
         TestClock::advance(TICK_DURATION_MS);
         let now = Instant::now();
@@ -563,6 +642,11 @@ impl Scenario {
             let (client, world) = state.client_and_world_mut();
             Self::update_client_server_at(&now, client, server, world, &mut self.server_world);
         }
+    }
+
+    /// Get the current tick count
+    pub fn global_tick(&self) -> usize {
+        self.global_tick
     }
 
     pub(crate) fn take_server_events(&mut self) -> ServerEvents {

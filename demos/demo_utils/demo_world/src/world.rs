@@ -343,12 +343,18 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         }
     }
 
-    fn entity_unpublish(&mut self, _entity: &Entity) {
-        todo!()
+    fn entity_unpublish(&mut self, entity: &Entity) {
+        for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
+            WorldMutType::<Entity>::component_unpublish(self, entity, &component_kind);
+        }
     }
 
-    fn component_unpublish(&mut self, _entity: &Entity, _component_kind: &ComponentKind) {
-        todo!()
+    fn component_unpublish(&mut self, entity: &Entity, component_kind: &ComponentKind) {
+        if let Some(component_map) = self.world.entities.get_mut(entity) {
+            if let Some(component) = component_map.get_mut(component_kind) {
+                component.unpublish();
+            }
+        }
     }
 
     fn entity_enable_delegation(

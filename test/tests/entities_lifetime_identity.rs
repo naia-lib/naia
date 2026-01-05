@@ -706,8 +706,20 @@ fn stable_logical_identity_across_clients_in_steady_state() {
         });
     });
 
+    // Debug dump before failing expect
+    #[cfg(feature = "e2e_debug")]
+    scenario.debug_dump_identity_state(
+        "Before expect: A mutates E",
+        &entity_e,
+        &[client_a_key, client_b_key],
+    );
+
+    let start_tick = scenario.global_tick();
     // Verify both see same updated values (wait for client-authoritative update to propagate)
     scenario.until(200_u32.ticks()).expect(|ctx| {
+        let current_tick = ctx.global_tick();
+        let tick_diff = current_tick - start_tick;
+        let is_last_tick = tick_diff >= 200;
         let a_pos = ctx.client(client_a_key, |c| {
             if let Some(e) = c.entity(&entity_e) {
                 e.component::<Position>().map(|p| (*p.x, *p.y))
@@ -729,6 +741,15 @@ fn stable_logical_identity_across_clients_in_steady_state() {
             let correct = (ax - 10.0).abs() < 0.001 && (ay - 20.0).abs() < 0.001;
             (same && correct).then_some(())
         } else {
+            // Dump state on last tick when condition fails
+            #[cfg(feature = "e2e_debug")]
+            if is_last_tick {
+                ctx.scenario().debug_dump_identity_state(
+                    &format!("Timeout at tick {}", current_tick),
+                    &entity_e,
+                    &[client_a_key, client_b_key],
+                );
+            }
             None
         }
     });

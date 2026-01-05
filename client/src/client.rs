@@ -927,15 +927,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let component_kind = component.kind();
 
-        // Check if client has authority over this entity before mutating
+        // Check if client has permission to mutate this entity
+        // For client-owned entities: check if this client is the owner
+        // For delegated entities: check if client has Granted authority
         // If not, silently ignore the mutation (matches test expectation that updates are ignored)
         if let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(entity) {
-            if self
-                .global_world_manager
-                .entity_authority_status(&global_entity)
-                != Some(EntityAuthStatus::Granted)
-            {
-                // Client doesn't have authority - silently ignore the mutation
+            let owner = self.global_world_manager.entity_owner(&global_entity);
+            let is_delegated = self.global_world_manager.entity_is_delegated(&global_entity);
+            
+            let can_mutate = if is_delegated {
+                // For delegated entities, check authority status
+                self.global_world_manager
+                    .entity_authority_status(&global_entity)
+                    == Some(EntityAuthStatus::Granted)
+            } else if let Some(owner) = owner {
+                // For client-owned non-delegated entities, owner can always mutate
+                owner.is_client()
+            } else {
+                // No owner info - cannot mutate
+                false
+            };
+            
+            if !can_mutate {
+                // Client doesn't have permission - silently ignore the mutation
                 return;
             }
         }
