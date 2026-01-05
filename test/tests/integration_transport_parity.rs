@@ -8,7 +8,6 @@ use test_helpers::client_connect;
 
 use naia_test::test_protocol::ReliableChannel;
 use naia_test::test_protocol::{Position, TestMessage};
-use std::sync::Once;
 
 // ============================================================================
 // Domain 9: Integration & Transport Parity
@@ -186,10 +185,6 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
                 .expect("Room 2 should exist")
                 .has_entity(&entity_e2);
 
-            #[cfg(feature = "e2e_debug")]
-            eprintln!("[room_invariant] a_in_room1={} a_in_room2={} e1_in_room1={} e2_in_room2={}",
-                      a_in_room1, a_in_room2, e1_in_room1, e2_in_room2);
-
             assert!(!a_in_room1, "User A should NOT be in room1 after leave");
             assert!(a_in_room2, "User A should BE in room2 after enter");
             assert!(e1_in_room1, "Entity E1 should BE in room1");
@@ -198,7 +193,6 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
     });
 
     // Verify A no longer sees E1 but can see E2
-    static ROOM_CHANGE_DIAG: Once = Once::new();
     scenario.expect_msg("client A room change complete", |ctx| {
         let missing_e1 = !ctx.client(client_a_key, |c| c.has_entity(&entity_e1));
         let has_e2 = ctx.client(client_a_key, |c| c.has_entity(&entity_e2));
@@ -206,27 +200,6 @@ fn integrated_everything_at_once_scenario_stays_consistent_and_error_free() {
         if missing_e1 && has_e2 {
             Some(())
         } else {
-            ROOM_CHANGE_DIAG.call_once(|| {
-                #[cfg(feature = "e2e_debug")]
-                {
-                    use naia_server::{SERVER_ROOM_MOVE_CALLED, SERVER_SCOPE_DIFF_ENQUEUED, SERVER_WORLD_PKTS_SENT};
-                    use naia_client::counters::{CLIENT_WORLD_PKTS_RECV, CLIENT_SCOPE_APPLIED_ADD_E2, CLIENT_SCOPE_APPLIED_REMOVE_E1};
-                    use std::sync::atomic::Ordering;
-                    
-                    eprintln!("[room_path] missing_e1={} has_e2={} room_move={} scope_diff={} srv_pkts={} cli_pkts={} add_e2={} rm_e1={}",
-                              missing_e1, has_e2,
-                              SERVER_ROOM_MOVE_CALLED.load(Ordering::Relaxed),
-                              SERVER_SCOPE_DIFF_ENQUEUED.load(Ordering::Relaxed),
-                              SERVER_WORLD_PKTS_SENT.load(Ordering::Relaxed),
-                              CLIENT_WORLD_PKTS_RECV.load(Ordering::Relaxed),
-                              CLIENT_SCOPE_APPLIED_ADD_E2.load(Ordering::Relaxed),
-                              CLIENT_SCOPE_APPLIED_REMOVE_E1.load(Ordering::Relaxed));
-                }
-                #[cfg(not(feature = "e2e_debug"))]
-                {
-                    eprintln!("[room_change] missing_e1={} has_e2={}", missing_e1, has_e2);
-                }
-            });
             None
         }
     });
