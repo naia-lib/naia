@@ -253,6 +253,25 @@ impl EntityRegistry {
             .copied()
     }
 
+    /// Look up EntityKey from a client's TestEntity.
+    ///
+    /// Returns None if the client entity isn't registered yet.
+    pub fn entity_key_for_client_test_entity(
+        &self,
+        client_key: &ClientKey,
+        entity: &TestEntity,
+    ) -> Option<EntityKey> {
+        self.entity_map
+            .iter()
+            .find_map(|(key, record)| {
+                record
+                    .client_entities
+                    .get(client_key)
+                    .filter(|&e| e == entity)
+                    .map(|_| *key)
+            })
+    }
+
     /// Remove and return EntityKey for a pending client-spawned entity.
     ///
     /// This should be called when resolving a pending spawn (e.g., when the server

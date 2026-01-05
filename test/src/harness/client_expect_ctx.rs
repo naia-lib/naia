@@ -1,15 +1,14 @@
 use std::net::SocketAddr;
 
-use naia_client::{ConnectionStatus, EntityRef, NaiaClientError};
+use naia_client::{ConnectionStatus, NaiaClientError};
 use naia_demo_world::WorldRef;
 
 use crate::{
     harness::{
         client_events::{ClientEvent, ClientEvents, ClientRejectEvent},
         scenario::Scenario,
-        ClientKey, EntityKey,
+        ClientKey, EntityKey, ClientEntityRef,
     },
-    TestEntity,
 };
 
 /// Context for client-side expectations with per-tick events
@@ -48,7 +47,7 @@ impl<'a> ClientExpectCtx<'a> {
 
     /// Get read-only entity access by EntityKey
     /// Returns None if the entity doesn't exist or isn't visible to this client
-    pub fn entity(&self, entity: &EntityKey) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
+    pub fn entity(&self, entity: &EntityKey) -> Option<ClientEntityRef<'_, WorldRef<'_>>> {
         self.scenario.client_entity_ref(&self.client_key, entity)
     }
 

@@ -1,22 +1,21 @@
 use log::warn;
 
 use naia_demo_world::{WorldMut, WorldRef};
-use naia_server::{EntityMut, EntityRef, NaiaServerError, RoomKey, TickBufferMessages};
-use naia_shared::WorldRefType;
-use naia_shared::{
+use naia_server::{NaiaServerError, RoomKey, TickBufferMessages};
+use naia_shared::{WorldRefType,
     generate_identity_token, Channel, IdentityToken, Message, Request, Response,
     ResponseReceiveKey, ResponseSendKey, Tick,
 };
 
 use crate::{
     harness::{
+        server_entity::{ServerEntityMut, ServerEntityRef},
         mutate_ctx::MutateCtx,
         room::{RoomMut, RoomRef},
         user::{UserMut, UserRef},
         user_scope::{UserScopeMut, UserScopeRef},
         ClientKey, EntityKey,
     },
-    TestEntity,
 };
 
 /// Lightweight handle for server-side mutations
@@ -33,10 +32,10 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// Spawn a server entity, configure it, and return EntityKey
     pub fn spawn<F, R>(&mut self, f: F) -> (EntityKey, R)
     where
-        F: for<'b> FnOnce(EntityMut<'b, TestEntity, WorldMut<'b>>) -> R,
+        F: for<'b> FnOnce(ServerEntityMut<'b, WorldMut<'b>>) -> R,
     {
         let scenario = self.ctx.scenario_mut();
-        let (server, world, registry, _) = scenario.split_for_server_mut();
+        let (server, world, registry, users) = scenario.split_for_server_mut();
 
         // 1. Spawn entity via Server API
         let entity_mut = server.spawn_entity(world.proxy_mut());
@@ -48,8 +47,9 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let entity = entity_mut.id();
         registry.register_server_entity(&entity_key, &entity);
 
-        // 4. Call closure with EntityMut
-        let result = f(entity_mut);
+        // 4. Wrap EntityMut in ServerEntityMut and call closure
+        let server_entity_mut = ServerEntityMut::new(entity_mut, users, registry);
+        let result = f(server_entity_mut);
 
         // 5. Return (EntityKey, R)
         (entity_key, result)
@@ -64,12 +64,14 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
 
     /// Get read-only entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
-    pub fn entity(&'_ self, key: &EntityKey) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
+    pub fn entity(&'_ self, key: &EntityKey) -> Option<ServerEntityRef<'_, WorldRef<'_>>> {
         let scenario = self.ctx.scenario();
         let entity = scenario.entity_registry().server_entity(key)?;
-        let (server, _) = scenario.server_and_registry()?;
+        let (server, registry) = scenario.server_and_registry()?;
         let world_ref = scenario.server_world_ref();
-        Some(server.entity(world_ref, &entity))
+        let entity_ref = server.entity(world_ref, &entity);
+        let users = scenario.client_users();
+        Some(ServerEntityRef::new(entity_ref, users, registry))
     }
 
     /// Get mutable entity access by EntityKey
@@ -77,15 +79,16 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     pub fn entity_mut(
         &'_ mut self,
         key: &EntityKey,
-    ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
+    ) -> Option<ServerEntityMut<'_, WorldMut<'_>>> {
         let scenario = self.ctx.scenario_mut();
         let entity = scenario.entity_registry().server_entity(key)?;
-        let (server, world, _, _) = scenario.split_for_server_mut();
+        let (server, world, registry, users) = scenario.split_for_server_mut();
         let world_mut = world.proxy_mut();
         if !world_mut.has_entity(&entity) {
             return None;
         }
-        Some(server.entity_mut(world_mut, &entity))
+        let entity_mut = server.entity_mut(world_mut, &entity);
+        Some(ServerEntityMut::new(entity_mut, users, registry))
     }
 
     /// Despawn an entity by EntityKey
@@ -371,42 +374,5 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// where you want to test with malformed, expired, or reused tokens.
     pub fn generate_identity_token(&self) -> IdentityToken {
         generate_identity_token()
-    }
-
-    /// Request authority for an entity on behalf of a client
-    ///
-    /// This requests authority for the given entity for the specified client.
-    /// Returns true if the request was successful, false otherwise.
-    pub fn request_authority(&mut self, client_key: &ClientKey, entity: &EntityKey) -> bool {
-        let scenario = self.ctx.scenario_mut();
-        let Some(user_key) = scenario.client_to_user_key(client_key) else {
-            return false;
-        };
-        let Some(entity) = scenario.entity_registry().server_entity(entity) else {
-            return false;
-        };
-        let (server, _, _, _) = scenario.split_for_server_mut();
-        server.client_request_authority(&user_key, &entity);
-        true
-    }
-
-    /// Release authority for an entity
-    ///
-    /// This releases authority for the given entity. If a client_key is provided,
-    /// authority is released on behalf of that client. If None, authority is released
-    /// by the server.
-    pub fn release_authority(
-        &mut self,
-        client_key: Option<&ClientKey>,
-        entity: &EntityKey,
-    ) -> bool {
-        let scenario = self.ctx.scenario_mut();
-        let Some(entity) = scenario.entity_registry().server_entity(entity) else {
-            return false;
-        };
-        let user_key = client_key.and_then(|ck| scenario.client_to_user_key(ck));
-        let (server, _, _, _) = scenario.split_for_server_mut();
-        server.entity_release_authority(user_key.as_ref(), &entity);
-        true
     }
 }

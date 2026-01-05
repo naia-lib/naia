@@ -1,41 +1,34 @@
 use std::{
     collections::HashMap,
     net::SocketAddr,
-    sync::{atomic::Ordering, Arc, Mutex},
+    sync::{Arc, Mutex},
 };
 
-use naia_client::{
-    transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket},
-    Client as NaiaClient, ClientConfig, EntityMut, EntityRef, TickEvents as ClientTickEvents,
-    WorldEvents as ClientWorldEvents,
-};
+
 use naia_demo_world::{WorldMut, WorldRef};
-use naia_server::{
-    transport::local::{LocalServerSocket, Socket as ServerSocket},
-    Server as NaiaServer, ServerConfig, UserKey,
-};
-#[cfg(feature = "e2e_debug")]
-use naia_server::{
-    SERVER_AUTH_GRANTED_EMITTED, SERVER_OUTGOING_CMDS_DRAINED_TOTAL, SERVER_RX_FRAMES,
-    SERVER_SEND_ALL_PACKETS_CALLS, SERVER_SET_AUTH_ENQUEUED, SERVER_SPAWN_APPLIED,
-    SERVER_TX_FRAMES, SERVER_WORLD_MSGS_DRAINED, SERVER_WORLD_PKTS_SENT, SERVER_WROTE_SET_AUTH,
-};
-#[cfg(feature = "e2e_debug")]
-use naia_client::counters::{CLIENT_EMIT_AUTH_GRANTED_EVENT, CLIENT_SAW_SET_AUTH_WIRE, CLIENT_TO_EVENT_SET_AUTH_OK, CLIENT_WORLD_PKTS_RECV};
 use naia_shared::{
     transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
     Instant, LinkConditionerConfig, LocalEntity, Protocol, TestClock, WorldRefType,
 };
+use naia_server::{
+    transport::local::{LocalServerSocket, Socket as ServerSocket},
+    Server as NaiaServer, ServerConfig, UserKey,
+};
+use naia_client::{
+    transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket},
+    Client as NaiaClient, ClientConfig, TickEvents as ClientTickEvents,
+    WorldEvents as ClientWorldEvents,
+};
 
-use crate::harness::client_events::{process_spawn_events, ClientEvents};
-use crate::harness::server_events::ServerEvents;
 use crate::{
     harness::{
+        client_events::{process_spawn_events, ClientEvents},
         client_state::ClientState, entity_registry::EntityRegistry, mutate_ctx::MutateCtx,
-        users::Users, ClientKey, EntityKey, ExpectCtx,
+        users::Users, ClientKey, EntityKey, ExpectCtx, server_events::ServerEvents, ClientEntityRef
     },
     Auth, TestEntity, TestWorld,
 };
+use crate::harness::ClientEntityMut;
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
@@ -254,17 +247,6 @@ impl Scenario {
         match result {
             Some(value) => value,
             None => {
-                #[cfg(feature = "e2e_debug")]
-                {
-                    let srv_sent = SERVER_WORLD_PKTS_SENT.load(Ordering::Relaxed);
-                    let cli_recv = CLIENT_WORLD_PKTS_RECV.load(Ordering::Relaxed);
-                    let saw_set_auth = CLIENT_SAW_SET_AUTH_WIRE.load(Ordering::Relaxed);
-                    let to_event_ok = CLIENT_TO_EVENT_SET_AUTH_OK.load(Ordering::Relaxed);
-                    eprintln!(
-                        "[wire] srv_sent={} cli_recv={} saw_set_auth={} to_event_ok={}",
-                        srv_sent, cli_recv, saw_set_auth, to_event_ok
-                    );
-                }
                 panic!(
                     "Scenario::expect timed out after {} ticks without satisfying condition",
                     max_ticks
@@ -320,17 +302,6 @@ impl Scenario {
         match result {
             Some(value) => value,
             None => {
-                #[cfg(feature = "e2e_debug")]
-                {
-                    let srv_sent = SERVER_WORLD_PKTS_SENT.load(Ordering::Relaxed);
-                    let cli_recv = CLIENT_WORLD_PKTS_RECV.load(Ordering::Relaxed);
-                    let saw_set_auth = CLIENT_SAW_SET_AUTH_WIRE.load(Ordering::Relaxed);
-                    let to_event_ok = CLIENT_TO_EVENT_SET_AUTH_OK.load(Ordering::Relaxed);
-                    eprintln!(
-                        "[wire] srv_sent={} cli_recv={} saw_set_auth={} to_event_ok={}",
-                        srv_sent, cli_recv, saw_set_auth, to_event_ok
-                    );
-                }
                 panic!(
                     "Scenario::expect timed out after {} ticks: {}",
                     max_ticks, msg
@@ -451,7 +422,7 @@ impl Scenario {
         &'_ self,
         client_key: &ClientKey,
         key: &EntityKey,
-    ) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
+    ) -> Option<ClientEntityRef<'_, WorldRef<'_>>> {
         let state = self.client_state(client_key);
         let user_key = match state.user_key() {
             Some(uk) => uk,
@@ -462,7 +433,9 @@ impl Scenario {
             None => return None,
         };
         let world_ref = state.world().proxy();
-        state.client().local_entity(world_ref, &local_entity)
+        let entity_ref = state.client().local_entity(world_ref, &local_entity)?;
+        let registry = self.entity_registry();
+        Some(ClientEntityRef::new(entity_ref, registry, *client_key))
     }
 
     /// Get client-side EntityMut by EntityKey.
@@ -473,12 +446,11 @@ impl Scenario {
         &'_ mut self,
         client_key: &ClientKey,
         key: &EntityKey,
-    ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
+    ) -> Option<ClientEntityMut<'_, WorldMut<'_>>> {
         let user_key = self.client_state(client_key).user_key()?;
         let local_entity = self.local_entity_for(key, &user_key)?;
-
-        let state = self.client_state_mut(client_key);
-
+        let state = self.clients.get_mut(client_key)?;
+        let registry = &mut self.entity_registry;
         // Derive entity ID in tight scope to drop borrows before getting mutable references
         let entity = {
             let world_ref = state.world().proxy();
@@ -488,7 +460,9 @@ impl Scenario {
 
         let (client_mut, world_mut) = state.client_and_world_mut();
         let world_mut_proxy = world_mut.proxy_mut();
-        Some(client_mut.entity_mut(world_mut_proxy, &entity))
+        let entity_mut = client_mut.entity_mut(world_mut_proxy, &entity);
+        // Reborrow registry as immutable for ClientEntityMut::new
+        Some(ClientEntityMut::new(entity_mut, &*registry, *client_key))
     }
 
     /// Get LocalEntity for an EntityKey and UserKey.
@@ -636,6 +610,17 @@ impl Scenario {
         let registry = &mut self.entity_registry;
         let users = Users::new(&self.clients, &self.user_to_client_map);
         (server, world, registry, users)
+    }
+
+    /// Split borrow fields needed for client spawn
+    /// Returns disjoint references: client state (mutable), registry (mutable, can be reborrowed as immutable)
+    pub(crate) fn split_for_client_mut(
+        &'_ mut self,
+        client_key: &ClientKey,
+    ) -> Option<(&'_ mut ClientState, &'_ mut EntityRegistry)> {
+        let state = self.clients.get_mut(client_key)?;
+        let registry = &mut self.entity_registry;
+        Some((state, registry))
     }
 
     /// Create a client socket from the transport hub

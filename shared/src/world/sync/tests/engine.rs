@@ -799,3 +799,29 @@ fn large_burst_at_max_in_flight() {
     }
     asserts.check(&mut engine);
 }
+
+#[test]
+fn auth_messages_buffer_until_spawn_epoch() {
+    // Test that auth messages (SetAuthority, Publish, etc.) respect the spawn barrier
+    // and buffer until Spawn is processed, even when arriving out of order
+    
+    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
+    let entity = RemoteEntity::new(1);
+
+    // Deliver SetAuthority FIRST with MessageIndex=1 (simulate out-of-order arrival)
+    // Note: subcommand_id=0 to match initial next_subcommand_id=0
+    engine.receive_message(1, EntityMessage::SetAuthority(0, entity, EntityAuthStatus::Granted));
+    
+    // Assert: no incoming events emitted yet (spawn barrier holds)
+    let events = engine.take_incoming_events();
+    assert_eq!(events.len(), 0, "Auth messages should not be emitted before Spawn");
+
+    // Deliver Spawn with MessageIndex=0 (epoch opener, must have lower id)
+    engine.receive_message(0, EntityMessage::Spawn(entity));
+    
+    // Assert: Spawn event emitted first, then SetAuthority event
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::SetAuthority(0, entity, EntityAuthStatus::Granted));
+    asserts.check(&mut engine);
+}

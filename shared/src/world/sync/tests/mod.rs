@@ -4,6 +4,7 @@
 
 #![cfg(test)]
 
+mod auth_channel_transitions;
 mod bulletproof_migration;
 mod command_validation_tests;
 mod engine;

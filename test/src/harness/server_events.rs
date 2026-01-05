@@ -9,7 +9,7 @@ use naia_shared::{
 use crate::harness::EntityKey;
 use crate::{ClientKey, Scenario, TestEntity};
 
-pub(crate) struct ServerEvents {
+pub struct ServerEvents {
     auths: HashMap<MessageKind, Vec<(ClientKey, MessageContainer)>>,
     connections: Vec<ClientKey>,
     disconnections: Vec<ClientKey>,
@@ -558,11 +558,7 @@ pub(crate) fn register_auth_event(
             let auth_container =
                 MessageContainer::from_read(Box::new(auth) as Box<dyn naia_shared::Message>);
             return Some((client_key, auth_container));
-        } else {
-            eprintln!("[DEBUG] register_auth_event: no matching pending_auth found!");
         }
-    } else {
-        eprintln!("[DEBUG] register_auth_event: downcast to Auth FAILED!");
     }
 
     None
@@ -575,10 +571,6 @@ pub(crate) fn register_spawn_entity(
     user_key: naia_server::UserKey,
     server_entity: TestEntity,
 ) -> Option<(ClientKey, EntityKey)> {
-    eprintln!(
-        "[rep_probe] register_spawn_entity: user_key={:?}, server_entity={:?}",
-        user_key, server_entity
-    );
     let client_key = scenario.user_to_client_key(&user_key)?;
 
     let server_local_entity = {
@@ -591,21 +583,12 @@ pub(crate) fn register_spawn_entity(
         server_ref.local_entity(&user_key)?
     };
 
-    eprintln!(
-        "[rep_probe] Looking for entity_key with client_key={:?}, server_local_entity={:?}",
-        client_key, server_local_entity
-    );
-
     // Try to match EntityKey:
     // 1. Check if client entity already registered (client-spawned)
     if let Some(entity_key) = scenario
         .entity_registry()
         .entity_key_for_client_entity(&client_key, &server_local_entity)
     {
-        eprintln!(
-            "[rep_probe] Found entity_key={:?}, registering server entity",
-            entity_key
-        );
         scenario
             .entity_registry_mut()
             .register_server_entity(&entity_key, &server_entity);
@@ -614,7 +597,6 @@ pub(crate) fn register_spawn_entity(
             .register_client_local_entity_mapping(&entity_key, &client_key, &server_local_entity);
         return Some((client_key, entity_key));
     }
-    eprintln!("[rep_probe] NO entity_key found for client entity");
     // 2. Check if server entity already registered (server-spawned)
     if let Some(entity_key) = scenario
         .entity_registry()

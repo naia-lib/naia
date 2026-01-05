@@ -1,11 +1,12 @@
 use naia_demo_world::WorldRef;
-use naia_server::{EntityRef, RoomKey, UserRef as NaiaUserRef};
+use naia_server::{RoomKey, UserRef as NaiaUserRef};
 use naia_shared::WorldRefType;
 
 use crate::{
     harness::{
         room::RoomRef,
         scenario::Scenario,
+        server_entity::ServerEntityRef,
         server_events::{ServerEvent, ServerEvents},
         user::UserRef,
         user_scope::UserScopeRef,
@@ -52,14 +53,16 @@ impl<'a> ServerExpectCtx<'a> {
     }
 
     /// Get read-only entity access by EntityKey
-    pub fn entity(&'_ self, key: &EntityKey) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
+    pub fn entity(&'_ self, key: &EntityKey) -> Option<ServerEntityRef<'_, WorldRef<'_>>> {
         let entity = self.scenario.entity_registry().server_entity(key)?;
-        let (server, _) = self.scenario.server_and_registry()?;
+        let (server, registry) = self.scenario.server_and_registry()?;
         let world_ref = self.scenario.server_world_ref();
         if !world_ref.has_entity(&entity) {
             return None;
         }
-        Some(server.entity(world_ref, &entity))
+        let entity_ref = server.entity(world_ref, &entity);
+        let users = self.scenario.client_users();
+        Some(ServerEntityRef::new(entity_ref, users, registry))
     }
 
     /// Returns a HarnessUserScopeRef, which is used to query whether a given user has

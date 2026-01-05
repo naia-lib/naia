@@ -1,14 +1,13 @@
 use std::net::SocketAddr;
 
-use naia_client::{ConnectionStatus, EntityMut, EntityRef, NaiaClientError};
+use naia_client::{ConnectionStatus, NaiaClientError};
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_shared::{
     Channel, IdentityToken, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick,
 };
 
 use crate::{
-    harness::{mutate_ctx::MutateCtx, ClientKey, EntityKey},
-    TestEntity,
+    harness::{ClientEntityMut, ClientEntityRef, mutate_ctx::MutateCtx, ClientKey, EntityKey},
 };
 
 /// Lightweight handle for client-side mutations
@@ -27,10 +26,12 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     /// Synchronous: waits for server to have entity before returning
     pub fn spawn<F>(&mut self, f: F) -> EntityKey
     where
-        F: for<'b> FnOnce(EntityMut<'b, TestEntity, WorldMut<'b>>),
+        F: for<'b> FnOnce(ClientEntityMut<'b, WorldMut<'b>>),
     {
-        // Use a single borrow of state and scoped blocks to manage borrows
-        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        let scenario = self.ctx.scenario_mut();
+        // Create Users the same way split_for_server_mut does
+        let (state, registry) = scenario.split_for_client_mut(&self.client_key)
+            .expect("client state not found");
 
         // 1. Spawn entity via Client API
         // Get mutable references to both client and world
@@ -44,8 +45,10 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
             .local_entity()
             .expect("Client-spawned entity should have LocalEntity immediately");
 
-        // 3. Call closure with EntityMut (this consumes entity_mut, dropping its borrows)
-        f(entity_mut);
+        // 3. Wrap EntityMut in ClientEntityMut and call closure (this consumes entity_mut, dropping its borrows)
+        // Reborrow registry as immutable for ClientEntityMut::new
+        let client_entity_mut = ClientEntityMut::new(entity_mut, &*registry, self.client_key);
+        f(client_entity_mut);
         // Now entity_mut is dropped, so we can borrow scenario again
 
         // 4. Allocate EntityKey
@@ -68,7 +71,7 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
 
     /// Get read-only entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
-    pub fn entity(&'_ self, entity: &EntityKey) -> Option<EntityRef<'_, TestEntity, WorldRef<'_>>> {
+    pub fn entity(&'_ self, entity: &EntityKey) -> Option<ClientEntityRef<'_, WorldRef<'_>>> {
         // Delegate to Scenario helper to avoid double-borrow issues
         self.ctx
             .scenario()
@@ -80,7 +83,7 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     pub fn entity_mut(
         &'_ mut self,
         entity: &EntityKey,
-    ) -> Option<EntityMut<'_, TestEntity, WorldMut<'_>>> {
+    ) -> Option<ClientEntityMut<'_, WorldMut<'_>>> {
         // Delegate to Scenario helper to avoid double-borrow issues
         // The helper uses a single client_state_mut() call with scoped borrows
         self.ctx
