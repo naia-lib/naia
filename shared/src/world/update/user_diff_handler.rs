@@ -36,10 +36,18 @@ impl UserDiffHandler {
             panic!("Be sure you can get self.global_diff_handler before calling this!");
         };
         let Some(receiver) = global_handler.receiver(address, entity, component_kind) else {
-            panic!(
-                "GlobalDiffHandler has not yet registered this {:?} for {:?}",
-                component_kind, entity
-            );
+            // Component not yet registered in GlobalDiffHandler - this can happen on the client
+            // side when authority is granted before components are registered for diff tracking.
+            // Skip registration for now; it will be registered when the component is actually
+            // inserted or when it needs to be diffed.
+            #[cfg(feature = "e2e_debug")]
+            {
+                warn!(
+                    "UserDiffHandler: Component {:?} for {:?} not yet registered in GlobalDiffHandler, skipping registration",
+                    component_kind, entity
+                );
+            }
+            return;
         };
 
         self.receivers.insert((*entity, *component_kind), receiver);

@@ -77,6 +77,17 @@ impl WorldReader {
 
         match message_type {
             EntityMessageType::Spawn => {
+                // Count when Spawn message KIND is recognized on wire (before routing)
+                #[cfg(feature = "e2e_debug")]
+                {
+                    extern "Rust" {
+                        fn client_saw_spawn_increment();
+                    }
+                    unsafe {
+                        client_saw_spawn_increment();
+                    }
+                }
+
                 // read remote entity
                 let remote_entity = RemoteEntity::de(reader)?;
 

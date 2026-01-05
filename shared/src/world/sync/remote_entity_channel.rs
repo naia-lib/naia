@@ -80,13 +80,18 @@ use std::{
 };
 
 use crate::{
-    sequence_less_than, world::sync::remote_component_channel::RemoteComponentChannel,
+    sequence_less_than,
+    world::{
+        host::host_world_manager::SubCommandId,
+        sync::remote_component_channel::RemoteComponentChannel,
+    },
     ComponentKind, EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType,
     MessageIndex,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum EntityChannelState {
+#[cfg_attr(feature = "e2e_debug", allow(dead_code))]
+pub enum EntityChannelState {
     Despawned,
     Spawned,
 }
@@ -225,6 +230,16 @@ impl RemoteEntityChannel {
                     }
 
                     self.state = EntityChannelState::Spawned;
+                    // Count when Spawn transitions state to Spawned
+                    #[cfg(feature = "e2e_debug")]
+                    {
+                        extern "Rust" {
+                            fn client_processed_spawn_increment();
+                        }
+                        unsafe {
+                            client_processed_spawn_increment();
+                        }
+                    }
                     self.last_epoch_id = Some(id);
                     // clear buffered messages less than or equal to the last spawn id
                     self.buffered_messages.pop_front_until_and_excluding(id);
@@ -281,7 +296,11 @@ impl RemoteEntityChannel {
                     // info!("EntityChannelReceiver::process_messages(id={}, msgType={:?})", id, msg.get_type());
 
                     self.auth_channel.receiver_receive_message(Some(self.state), id, msg);
-                    self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
+                    // Only drain auth messages when entity is Spawned (spawn barrier contract)
+                    if self.state == EntityChannelState::Spawned {
+                        self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
+                    }
+                    // When Despawned, message stays buffered in auth_channel until Spawn arm drains it
                 }
                 EntityMessageType::Noop => {
                     // Drop it
@@ -301,6 +320,24 @@ impl RemoteEntityChannel {
     #[allow(dead_code)]
     pub(crate) fn get_state(&self) -> EntityChannelState {
         self.state
+    }
+
+    #[cfg(feature = "e2e_debug")]
+    pub(crate) fn debug_auth_diagnostic(&self) -> (EntityChannelState, (SubCommandId, usize, Option<SubCommandId>, usize)) {
+        let auth_diag = self.auth_channel.receiver_debug_diagnostic();
+        (self.state, auth_diag)
+    }
+
+    #[cfg(feature = "e2e_debug")]
+    pub(crate) fn debug_channel_snapshot(&self) -> (EntityChannelState, Option<MessageIndex>, usize, Option<(MessageIndex, EntityMessageType)>, Option<MessageIndex>) {
+        let state = self.state;
+        let last_epoch_id = self.last_epoch_id;
+        let buffered_len = self.buffered_messages.len();
+        let head = self.buffered_messages.peek_front()
+            .map(|(id, msg)| (*id, msg.get_type()));
+        let spawn_id = self.buffered_messages.find_by_predicate(|msg| msg.get_type() == EntityMessageType::Spawn)
+            .map(|(id, _)| id);
+        (state, last_epoch_id, buffered_len, head, spawn_id)
     }
 
     pub(crate) fn extract_inserted_component_kinds(&self) -> HashSet<ComponentKind> {

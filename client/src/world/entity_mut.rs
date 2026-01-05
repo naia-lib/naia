@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
+use naia_shared::{AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
 
 use crate::{world::entity_owner::EntityOwner, Client, ReplicationConfig};
 
@@ -71,16 +71,14 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.client.entity_owner(&self.entity)
     }
 
-    pub fn request_authority(&mut self) -> &mut Self {
-        self.client.entity_request_authority(&self.entity);
-
-        self
+    pub fn request_authority(&mut self) -> Result<&mut Self, AuthorityError> {
+        self.client.entity_request_authority(&self.entity)?;
+        Ok(self)
     }
 
-    pub fn release_authority(&mut self) -> &mut Self {
-        self.client.entity_release_authority(&self.entity);
-
-        self
+    pub fn release_authority(&mut self) -> Result<&mut Self, AuthorityError> {
+        self.client.entity_release_authority(&self.entity)?;
+        Ok(self)
     }
 }
 

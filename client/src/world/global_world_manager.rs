@@ -6,9 +6,9 @@ use std::{
 use log::info;
 
 use naia_shared::{
-    ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus, GlobalDiffHandler,
-    GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostType, InScopeEntities,
-    MutChannelType, PropertyMutator, Replicate,
+    AuthorityError, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus,
+    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostType,
+    InScopeEntities, MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -287,29 +287,41 @@ impl GlobalWorldManager {
             .map(|host_status| host_status.status())
     }
 
-    pub(crate) fn entity_request_authority(&mut self, global_entity: &GlobalEntity) -> bool {
+    pub(crate) fn entity_request_authority(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Result<(), AuthorityError> {
+        if !self.entity_is_delegated(global_entity) {
+            return Err(AuthorityError::NotDelegated);
+        }
         let Some(auth_status) = self.auth_handler.auth_status(global_entity) else {
-            panic!("Can only request authority for an Entity that is Delegated!");
+            return Err(AuthorityError::NotDelegated);
         };
         if !auth_status.can_request() {
             // Cannot request authority for an Entity that is not Available!
-            return false;
+            return Err(AuthorityError::NotAvailable);
         }
         self.auth_handler
             .set_auth_status(global_entity, EntityAuthStatus::Requested);
-        return true;
+        Ok(())
     }
 
-    pub(crate) fn entity_release_authority(&mut self, global_entity: &GlobalEntity) -> bool {
+    pub(crate) fn entity_release_authority(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Result<(), AuthorityError> {
+        if !self.entity_is_delegated(global_entity) {
+            return Err(AuthorityError::NotDelegated);
+        }
         let Some(auth_status) = self.auth_handler.auth_status(global_entity) else {
-            panic!("Can only release authority for an Entity that is Delegated!");
+            return Err(AuthorityError::NotDelegated);
         };
         if !auth_status.can_release() {
-            return false;
+            return Err(AuthorityError::NotHolder);
         }
         self.auth_handler
             .set_auth_status(global_entity, EntityAuthStatus::Releasing);
-        return true;
+        Ok(())
     }
 
     pub(crate) fn entity_update_authority(

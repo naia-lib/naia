@@ -3,7 +3,9 @@ use std::{
     hash::Hash,
 };
 
-use naia_shared::{EntityAuthAccessor, EntityAuthStatus, GlobalEntity, HostAuthHandler, HostType};
+use naia_shared::{
+    AuthorityError, EntityAuthAccessor, EntityAuthStatus, GlobalEntity, HostAuthHandler, HostType,
+};
 
 use crate::UserKey;
 
@@ -63,9 +65,9 @@ impl ServerAuthHandler {
         &mut self,
         entity: &GlobalEntity,
         requester: &AuthOwner,
-    ) -> bool {
+    ) -> Result<(), AuthorityError> {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
-            panic!("Entity not registered with ServerAuthHandler");
+            return Err(AuthorityError::NotDelegated);
         };
         if *owner == AuthOwner::None {
             match requester {
@@ -88,9 +90,9 @@ impl ServerAuthHandler {
                 AuthOwner::None => {}
             }
 
-            return true;
+            return Ok(());
         } else {
-            return false;
+            return Err(AuthorityError::NotAvailable);
         }
     }
 
@@ -98,9 +100,9 @@ impl ServerAuthHandler {
         &mut self,
         entity: &GlobalEntity,
         releaser: &AuthOwner,
-    ) -> bool {
+    ) -> Result<(), AuthorityError> {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
-            panic!("Entity not registered with ServerAuthHandler");
+            return Err(AuthorityError::NotDelegated);
         };
 
         if owner == releaser {
@@ -108,23 +110,22 @@ impl ServerAuthHandler {
             *owner = AuthOwner::None;
             self.release_all_authority(entity, previous_owner);
 
-            return true;
+            return Ok(());
         } else {
-            return false;
+            return Err(AuthorityError::NotHolder);
         }
     }
 
-    // returns whether or not any change needed to be made
-    pub(crate) fn server_take_authority(&mut self, entity: &GlobalEntity) -> bool {
+    pub(crate) fn server_take_authority(&mut self, entity: &GlobalEntity) -> Result<(), AuthorityError> {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
-            panic!("Entity not registered with ServerAuthHandler");
+            return Err(AuthorityError::NotDelegated);
         };
 
         let previous_owner = *owner;
         *owner = AuthOwner::None;
-        let response = self.release_all_authority(entity, previous_owner);
+        self.release_all_authority(entity, previous_owner);
 
-        response
+        Ok(())
     }
 
     fn release_all_authority(&mut self, entity: &GlobalEntity, owner: AuthOwner) -> bool {

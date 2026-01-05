@@ -3,7 +3,7 @@ use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Du
 use log::{debug, info, warn};
 
 use naia_shared::{
-    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    AuthorityError, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAuthStatus, EntityDoesNotExistError, EntityEvent, FakeEntityConverter, GameInstant,
     GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OwnedLocalEntity,
@@ -716,7 +716,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_request_authority(&mut self, world_entity: &E) {
+    pub fn entity_request_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 
         let global_entity = self
@@ -725,14 +725,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .unwrap();
 
         // 1. Set local authority status for Entity
-        let success = self
+        let result = self
             .global_world_manager
             .entity_request_authority(&global_entity);
 
-        if success {
+        if result.is_ok() {
             // 2. Send request to Server via EntityActionEvent system
             let Some(connection) = &mut self.server_connection else {
-                return;
+                return result;
             };
 
             connection
@@ -740,10 +740,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .world_manager
                 .remote_send_request_auth(&global_entity);
         }
+        result
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_release_authority(&mut self, world_entity: &E) {
+    pub fn entity_release_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 
         let global_entity = self
@@ -752,18 +753,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .unwrap();
 
         // 1. Set local authority status for Entity
-        let success = self
+        let result = self
             .global_world_manager
             .entity_release_authority(&global_entity);
-        if success {
+        if result.is_ok() {
             let Some(connection) = &mut self.server_connection else {
-                return;
+                return result;
             };
             connection
                 .base
                 .world_manager
                 .remote_send_release_auth(&global_entity);
         }
+        result
     }
 
     // Connection
@@ -886,10 +888,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // check whether we have authority to despawn this entity
         if let Some(owner) = self.global_world_manager.entity_owner(&global_entity) {
             if owner.is_server() {
-                if !self
-                    .global_world_manager
-                    .entity_is_delegated(&global_entity)
-                {
+                let is_delegated = self.global_world_manager.entity_is_delegated(&global_entity);
+                if !is_delegated {
                     panic!("attempting to despawn entity that is not yet delegated. Delegation needs some time to be confirmed by the Server, so check that a despawn is possible by calling `commands.entity(..).replication_config(..).is_delegated()` first.");
                 }
                 if self
@@ -926,6 +926,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         let component_kind = component.kind();
+
+        // Check if client has authority over this entity before mutating
+        // If not, silently ignore the mutation (matches test expectation that updates are ignored)
+        if let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(entity) {
+            if self
+                .global_world_manager
+                .entity_authority_status(&global_entity)
+                != Some(EntityAuthStatus::Granted)
+            {
+                // Client doesn't have authority - silently ignore the mutation
+                return;
+            }
+        }
 
         if world.has_component_of_kind(entity, &component_kind) {
             // Entity already has this Component type yet, update Component
@@ -1158,12 +1171,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Cannot disable delegation from Client. Server owns all delegated Entities.");
         }
 
+        // Snapshot authority status BEFORE clearing delegation
+        let had_granted = self
+            .global_world_manager
+            .entity_authority_status(global_entity)
+            == Some(EntityAuthStatus::Granted);
+
+        // Clear delegation + authority semantics
         self.global_world_manager
             .entity_disable_delegation(global_entity);
         world.entity_disable_delegation(world_entity);
 
-        // Despawn Entity in Host connection
-        self.despawn_entity_worldless(world_entity)
+        // Emit AuthLost (AuthReset) if client had Granted authority
+        if had_granted {
+            self.incoming_world_events.push_auth_reset(*world_entity);
+        }
+
+        // Cleanup connection state (despawn from connection's world_manager, but NOT from client world)
+        if let Some(connection) = &mut self.server_connection {
+            connection.base.world_manager.despawn_entity(global_entity);
+        }
+
+        // Note: We do NOT call despawn_entity_worldless here.
+        // Disabling delegation clears authority semantics; entity remains alive in the client world.
+        // The entity continues normal replication as undelegated.
     }
 
     pub(crate) fn entity_update_authority(
@@ -1220,18 +1251,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // Updated Host Manager
         match (old_auth_status, new_auth_status) {
-            (EntityAuthStatus::Requested, EntityAuthStatus::Granted) => {
-                // Granted Authority
-
-                // start tracking updates for this entity
+            // Grant authority (from any state)
+            (EntityAuthStatus::Requested, EntityAuthStatus::Granted) |
+            (EntityAuthStatus::Denied, EntityAuthStatus::Granted) |
+            (EntityAuthStatus::Available, EntityAuthStatus::Granted) => {
+                // Register and emit grant event
                 self.server_connection
                     .as_mut()
                     .unwrap()
                     .base
                     .world_manager
                     .register_authed_entity(&self.global_world_manager, global_entity);
-
-                // push outgoing event
                 self.incoming_world_events.push_auth_grant(*world_entity);
                 #[cfg(feature = "e2e_debug")]
                 {
@@ -1240,41 +1270,59 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     CLIENT_EMIT_AUTH_GRANTED_EVENT.fetch_add(1, Ordering::Relaxed);
                 }
             }
-            (EntityAuthStatus::Releasing, EntityAuthStatus::Available)
-            | (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
-                // Lost Authority
-
-                // stop tracking updates for this entity
+            // Lose authority (must deregister and emit reset)
+            (EntityAuthStatus::Granted, EntityAuthStatus::Available) |
+            (EntityAuthStatus::Granted, EntityAuthStatus::Denied) => {
+                // Deregister and emit reset event
                 self.server_connection
                     .as_mut()
                     .unwrap()
                     .base
                     .world_manager
                     .deregister_authed_entity(&self.global_world_manager, global_entity);
-
-                // push outgoing event
                 self.incoming_world_events.push_auth_reset(*world_entity);
             }
-            (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {
-                // push outgoing event
+            // Request denied (only when Requested -> Denied)
+            (EntityAuthStatus::Requested, EntityAuthStatus::Denied) => {
+                // Emit denied event, but do NOT deregister (never had authority)
                 self.incoming_world_events.push_auth_deny(*world_entity);
             }
-            (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {
-                // push outgoing event
+            // Release flow
+            (EntityAuthStatus::Releasing, EntityAuthStatus::Available) => {
+                self.server_connection
+                    .as_mut()
+                    .unwrap()
+                    .base
+                    .world_manager
+                    .deregister_authed_entity(&self.global_world_manager, global_entity);
+                self.incoming_world_events.push_auth_reset(*world_entity);
+            }
+            (EntityAuthStatus::Releasing, EntityAuthStatus::Denied) => {
+                // Server takeover during release
+                self.server_connection
+                    .as_mut()
+                    .unwrap()
+                    .base
+                    .world_manager
+                    .deregister_authed_entity(&self.global_world_manager, global_entity);
                 self.incoming_world_events.push_auth_reset(*world_entity);
             }
             (EntityAuthStatus::Releasing, EntityAuthStatus::Granted) => {
-                // granted auth response arrived while we are releasing auth!
+                // Grant arrived during release - treat as Available
                 self.global_world_manager
                     .entity_update_authority(global_entity, EntityAuthStatus::Available);
             }
-            (EntityAuthStatus::Available, EntityAuthStatus::Available)
-            | (EntityAuthStatus::Denied, EntityAuthStatus::Denied) => {
-                // auth was released before it was granted, continue as normal
-                warn!(
-                    "-- Entity {:?} updated authority, not handled -- {:?} -> {:?}",
-                    global_entity, old_auth_status, new_auth_status
-                );
+            // Other valid transitions (no side effects)
+            (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {
+                // Enter scope while someone else holds - no event needed
+            }
+            (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {
+                // Release by someone else - emit reset
+                self.incoming_world_events.push_auth_reset(*world_entity);
+            }
+            (EntityAuthStatus::Available, EntityAuthStatus::Available) |
+            (EntityAuthStatus::Denied, EntityAuthStatus::Denied) => {
+                // Idempotent - no action needed
             }
             (_, _) => {
                 panic!(
@@ -1600,6 +1648,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.io.server_addr().expect("connection not established!")
     }
 
+    #[cfg(feature = "e2e_debug")]
+    pub fn debug_remote_channel_diagnostic(&self, remote_entity: &naia_shared::RemoteEntity) -> Option<(naia_shared::EntityChannelState, (naia_shared::SubCommandId, usize, Option<naia_shared::SubCommandId>, usize))> {
+        let Some(connection) = self.server_connection.as_ref() else {
+            return None;
+        };
+        connection.base.world_manager.debug_remote_channel_diagnostic(remote_entity)
+    }
+
+    #[cfg(feature = "e2e_debug")]
+    pub fn debug_remote_channel_snapshot(&self, remote_entity: &naia_shared::RemoteEntity) -> Option<(naia_shared::EntityChannelState, Option<naia_shared::MessageIndex>, usize, Option<(naia_shared::MessageIndex, naia_shared::EntityMessageType)>, Option<naia_shared::MessageIndex>)> {
+        let Some(connection) = self.server_connection.as_ref() else {
+            return None;
+        };
+        connection.base.world_manager.debug_remote_channel_snapshot(remote_entity)
+    }
+
+
     fn process_entity_events<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -1745,6 +1810,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.incoming_world_events.push_unpublish(world_entity);
                 }
                 EntityEvent::EnableDelegation(global_entity) => {
+                    #[cfg(feature = "e2e_debug")]
+                    naia_shared::e2e_trace!(
+                        "[CLIENT_RECV] EnableDelegation entity={:?}",
+                        global_entity
+                    );
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
@@ -1765,6 +1835,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     panic!("Client should never receive an EnableDelegationEntityResponse event");
                 }
                 EntityEvent::DisableDelegation(global_entity) => {
+                    #[cfg(feature = "e2e_debug")]
+                    {
+                        let delegated_at_entry = self
+                            .global_world_manager
+                            .entity_is_delegated(&global_entity);
+                        naia_shared::e2e_trace!(
+                            "[CLIENT_RECV] DisableDelegation entity={:?} delegated_at_entry={}",
+                            global_entity, delegated_at_entry
+                        );
+                    }
                     let world_entity = self
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)

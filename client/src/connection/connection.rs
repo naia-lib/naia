@@ -89,10 +89,6 @@ impl Connection {
     }
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        eprintln!(
-            "[ack] CLIENT RX server_ack={:?} server_ack_bits={:?}",
-            header.sender_ack_index, header.sender_ack_bitfield
-        );
         self.base
             .process_incoming_header(header, &mut [&mut self.tick_buffer]);
     }
@@ -232,11 +228,6 @@ impl Connection {
         let mut any_sent = false;
         let mut iteration = 0;
         loop {
-            eprintln!(
-                "[probe] send_packets loop iteration={}, host_events.len()={}",
-                iteration,
-                host_world_events.len()
-            );
             if self.send_packet(
                 protocol,
                 now,
@@ -248,14 +239,11 @@ impl Connection {
                 &mut update_events,
             ) {
                 any_sent = true;
-                eprintln!("[probe] send_packet returned TRUE (packet sent)");
             } else {
-                eprintln!("[probe] send_packet returned FALSE (breaking loop)");
                 break;
             }
             iteration += 1;
             if iteration > 5 {
-                eprintln!("[probe] LOOP SAFETY BREAK after {} iterations", iteration);
                 break;
             }
         }
@@ -293,7 +281,6 @@ impl Connection {
 
             // send packet
             let packet = writer.to_packet();
-            eprintln!("[rep_probe] client send frame");
             if io.send_packet(packet).is_err() {
                 // TODO: pass this on and handle above
                 warn!("Client Error: Cannot send data packet to Server");

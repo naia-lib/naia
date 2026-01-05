@@ -1,8 +1,8 @@
 use std::hash::Hash;
 
-use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
+use naia_shared::{AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
 
-use crate::{room::RoomKey, server::WorldServer, EntityOwner, ReplicationConfig};
+use crate::{UserKey, room::RoomKey, server::WorldServer, EntityOwner, ReplicationConfig};
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
@@ -82,6 +82,21 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.server.entity_owner(&self.entity)
     }
 
+    pub fn give_authority(&mut self, user_key: &UserKey) -> Result<&mut Self, AuthorityError> {
+        self.server.entity_give_authority(user_key, &self.entity)?;
+        Ok(self)
+    }
+
+    pub fn take_authority(&mut self) -> Result<&mut Self, AuthorityError> {
+        self.server.entity_take_authority(&self.entity)?;
+        Ok(self)
+    }
+
+    pub fn release_authority(&mut self) -> Result<&mut Self, AuthorityError> {
+        self.server.entity_release_authority(None, &self.entity)?;
+        Ok(self)
+    }
+
     // Rooms
 
     pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
@@ -101,8 +116,6 @@ cfg_if! {
     if #[cfg(feature = "interior_visibility")] {
 
         use naia_shared::LocalEntity;
-
-        use crate::UserKey;
 
         impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
 

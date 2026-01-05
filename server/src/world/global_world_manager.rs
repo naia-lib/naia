@@ -6,7 +6,7 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    BigMapKey, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus,
+    AuthorityError, BigMapKey, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus,
     GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, InScopeEntities, MutChannelType,
     PropertyMutator, Replicate,
 };
@@ -313,8 +313,13 @@ impl GlobalWorldManager {
         self.auth_handler.authority_status(global_entity)
     }
 
-    // returns whether or not any change to auth needed to be made
-    pub(crate) fn server_take_authority(&mut self, global_entity: &GlobalEntity) -> bool {
+    pub(crate) fn server_take_authority(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Result<(), AuthorityError> {
+        if !self.entity_is_delegated(global_entity) {
+            return Err(AuthorityError::NotDelegated);
+        }
         self.auth_handler.server_take_authority(global_entity)
     }
 
@@ -322,7 +327,10 @@ impl GlobalWorldManager {
         &mut self,
         global_entity: &GlobalEntity,
         requester: &AuthOwner,
-    ) -> bool {
+    ) -> Result<(), AuthorityError> {
+        if !self.entity_is_delegated(global_entity) {
+            return Err(AuthorityError::NotDelegated);
+        }
         self.auth_handler
             .client_request_authority(global_entity, requester)
     }
@@ -331,7 +339,10 @@ impl GlobalWorldManager {
         &mut self,
         global_entity: &GlobalEntity,
         releaser: &AuthOwner,
-    ) -> bool {
+    ) -> Result<(), AuthorityError> {
+        if !self.entity_is_delegated(global_entity) {
+            return Err(AuthorityError::NotDelegated);
+        }
         self.auth_handler
             .client_release_authority(global_entity, releaser)
     }

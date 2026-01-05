@@ -1,7 +1,7 @@
 use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
-    Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    AuthorityError, Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate, Request,
     Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
 };
@@ -232,8 +232,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_take_authority(&mut self, world_entity: &E) {
-        self.world_server.entity_take_authority(world_entity);
+    pub fn entity_take_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
+        self.world_server.entity_take_authority(world_entity)
     }
 
     pub fn configure_entity_replication<W: WorldMutType<E>>(
@@ -247,20 +247,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn client_request_authority(&mut self, origin_user: &UserKey, world_entity: &E) {
-        self.world_server
-            .client_request_authority(origin_user, world_entity);
-    }
-
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
         self.world_server.entity_authority_status(world_entity)
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_release_authority(&mut self, origin_user: Option<&UserKey>, world_entity: &E) {
+    pub fn entity_release_authority(
+        &mut self,
+        origin_user: Option<&UserKey>,
+        world_entity: &E,
+    ) -> Result<(), AuthorityError> {
         self.world_server
-            .entity_release_authority(origin_user, world_entity);
+            .entity_release_authority(origin_user, world_entity)
+    }
+
+    /// Enable delegation for a server-owned entity
+    ///
+    /// This enables delegation for the given entity, allowing authority to be
+    /// requested/released. The entity must be server-owned and Public.
+    /// Returns true if delegation was enabled, false otherwise.
+    pub fn enable_delegation<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        world_entity: &E,
+    ) -> bool {
+        self.world_server.enable_delegation(world, world_entity)
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the

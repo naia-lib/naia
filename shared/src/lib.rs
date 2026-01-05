@@ -159,6 +159,9 @@ pub use world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}
 pub use world::local::local_entity_map::LocalEntityMap;
 pub use world::local::local_world_manager::LocalWorldManager;
 pub use world::sync::auth_channel::EntityAuthChannelState;
+pub use world::sync::authority_error::AuthorityError;
+#[cfg(feature = "e2e_debug")]
+pub use world::sync::remote_entity_channel::EntityChannelState;
 pub use world::sync::host_entity_channel::HostEntityChannel;
 pub use world::sync::remote_entity_channel::RemoteEntityChannel;
 pub use world::update::component_update::{ComponentFieldUpdate, ComponentUpdate};

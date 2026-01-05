@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::{types::PacketIndex, wrapping_number::sequence_greater_than};
 
@@ -27,8 +26,6 @@ pub struct AckManager {
     // Whether or not we should send an empty ack on the next outgoing packet
     should_send_empty_ack: bool,
 }
-
-static ACK_RX_PRINT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
 impl AckManager {
     pub fn new() -> Self {
@@ -84,13 +81,6 @@ impl AckManager {
         // wrapping)
         if sequence_greater_than(sender_packet_index, self.last_recv_packet_index) {
             self.last_recv_packet_index = sender_packet_index;
-        }
-
-        if ACK_RX_PRINT_COUNT.fetch_add(1, Ordering::Relaxed) < 3 {
-            eprintln!(
-                "[ack] RX seq={} last_recv_now={}",
-                sender_packet_index, self.last_recv_packet_index
-            );
         }
 
         // the current `sender_ack_index` was (clearly) received so we should remove it

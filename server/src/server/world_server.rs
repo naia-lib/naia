@@ -4,14 +4,14 @@ use std::{
     hash::Hash,
     net::SocketAddr,
     panic,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
 
 use log::{info, warn};
 
 use naia_shared::{
-    handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds,
+    AuthorityError, handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds,
     ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner,
     GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message,
@@ -699,19 +699,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_take_authority(&mut self, world_entity: &E) {
+    pub fn entity_take_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         let global_entity = self
             .global_entity_map
             .entity_to_global_entity(world_entity)
             .unwrap();
-        let did_change = self
+        let result = self
             .global_world_manager
             .server_take_authority(&global_entity);
 
-        if did_change {
+        if result.is_ok() {
             self.send_reset_authority_messages(&global_entity);
             self.incoming_world_events.push_auth_reset(world_entity);
         }
+        result
     }
 
     fn send_reset_authority_messages(&mut self, global_entity: &GlobalEntity) {
@@ -850,17 +851,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn client_request_authority(&mut self, origin_user: &UserKey, world_entity: &E) {
+    pub(crate) fn entity_give_authority(
+        &mut self,
+        origin_user: &UserKey,
+        world_entity: &E,
+    ) -> Result<(), AuthorityError> {
         let global_entity = self
             .global_entity_map
             .entity_to_global_entity(world_entity)
             .unwrap();
+        
         let requester = AuthOwner::Client(*origin_user);
-        let success = self
+        let result = self
             .global_world_manager
             .client_request_authority(&global_entity, &requester);
-        if !success {
-            panic!("Failed to request authority for entity");
+        if result.is_err() {
+            return result;
         }
 
         // entity authority was granted for origin user
@@ -890,12 +896,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 new_status = EntityAuthStatus::Granted;
             }
 
-            // if new_status == EntityAuthStatus::Denied {
-            //     warn!("Denying status of entity to user: `{:?}`", user_key);
-            // } else {
-            //     warn!("Granting status of entity to user: `{:?}`", user_key);
-            // }
-
             // Send UpdateAuthority action through EntityActionEvent system
             // The server always sends from HostEntity perspective, and the client's
             // routing logic will handle converting it to the correct entity type
@@ -909,59 +909,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 SERVER_AUTH_GRANTED_EMITTED.fetch_add(1, Ordering::Relaxed);
             }
         }
+        
 
-        self.incoming_world_events
-            .push_auth_grant(origin_user, &world_entity);
+        // NOTE: We send SetAuthority immediately above, so we don't need to push to auth_grants
+        // which would cause duplicate SetAuthority sends (leading to invalid transitions like Denied->Denied)
+        // self.incoming_world_events
+        //     .push_auth_grant(origin_user, &world_entity);
+        Ok(())
     }
 
     fn entity_enable_delegation_response(
         &mut self,
-        user_key: &UserKey,
-        global_entity: &GlobalEntity,
+        _user_key: &UserKey,
+        _global_entity: &GlobalEntity,
     ) {
-        if !self.global_world_manager.entity_is_delegated(global_entity) {
-            warn!(
-                "Entity {:?} is not delegated, cannot send authority status",
-                global_entity
-            );
-            return;
-        }
-        let Some(auth_status) = self
-            .global_world_manager
-            .entity_authority_status(global_entity)
-        else {
-            panic!("Entity should have an Auth status if it is delegated..")
-        };
-        if auth_status == EntityAuthStatus::Available {
-            // no need to send any message, this is the default on the client after enabling delegation
-            return;
-        }
-
-        // NOTES:
-
-        // We do not need to send auth messages to any other user with this entity in scope.
-        // Because a separate EnableEntityDelegation message is sent to all users with this entity in scope already
-        // this is their individual responses
-
-        // So... the only reason we have a message of this type is to send an updated auth status to the client
-        // after they have received the enable delegation message.
-        // TODO: We should perform this action on ACKed delivery of this message, rather than waiting for a response like this
-
-        // Send UpdateAuthority action through EntityActionEvent system
-        let Some(user) = self.users.get(user_key) else {
-            panic!("User does not exist: {:?}", user_key);
-        };
-        let Some(connection) = self.user_connections.get_mut(&user.address()) else {
-            panic!("User is not connected: {:?}", user_key);
-        };
-        connection
-            .base
-            .world_manager
-            .host_send_set_auth(global_entity, auth_status);
+        // EnableDelegationResponse does NOT send SetAuthority messages.
+        // Enabling delegation establishes the delegated-mode baseline as Available (AuthNone) for clients.
+        // Any Denied/Granted status changes come ONLY from subsequent authority operations (request/give/take/release).
+        // The client initializes local auth status to Available when processing EnableDelegation message,
+        // so no SetAuthority message is needed here.
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
+    pub(crate) fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
         let global_entity = self
             .global_entity_map
             .entity_to_global_entity(world_entity)
@@ -971,18 +941,51 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
-    pub fn entity_release_authority(&mut self, origin_user: Option<&UserKey>, world_entity: &E) {
+    pub fn entity_release_authority(
+        &mut self,
+        origin_user: Option<&UserKey>,
+        world_entity: &E,
+    ) -> Result<(), AuthorityError> {
         let releaser = AuthOwner::from_user_key(origin_user);
         let global_entity = self
             .global_entity_map
             .entity_to_global_entity(world_entity)
             .unwrap();
-        let success = self
+        let result = self
             .global_world_manager
             .client_release_authority(&global_entity, &releaser);
-        if success {
+        if result.is_ok() {
             self.send_reset_authority_messages(&global_entity);
         }
+        result
+    }
+
+    /// Enable delegation for a server-owned entity
+    ///
+    /// This enables delegation for the given entity, allowing authority to be
+    /// requested/released. The entity must be server-owned and Public.
+    /// Returns true if delegation was enabled, false otherwise.
+    pub(crate) fn enable_delegation<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        world_entity: &E,
+    ) -> bool {
+        let global_entity = match self
+            .global_entity_map
+            .entity_to_global_entity(world_entity)
+        {
+            Ok(ge) => ge,
+            Err(_) => return false,
+        };
+
+        // Only enable delegation for server-owned entities
+        let owner = self.entity_owner(world_entity);
+        if !owner.is_server() {
+            return false;
+        }
+
+        self.entity_enable_delegation(world, &global_entity, world_entity, None);
+        true
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -1015,7 +1018,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     // This intended to be used by adapter crates
-    pub fn entity_owner(&self, world_entity: &E) -> EntityOwner {
+    pub(crate) fn entity_owner(&self, world_entity: &E) -> EntityOwner {
         let global_entity = self
             .global_entity_map
             .entity_to_global_entity(world_entity)
@@ -1209,6 +1212,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.despawn_entity_worldless(&world_entity);
     }
 
+    // Used by adapter crates only!
     pub fn despawn_entity_worldless(&mut self, world_entity: &E) {
         let global_entity = self
             .global_entity_map
@@ -1718,10 +1722,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // grant authority to user
         let requester = AuthOwner::from_user_key(Some(client_key));
-        let success = self
+        let result = self
             .global_world_manager
             .client_request_authority(&global_entity, &requester);
-        if !success {
+        if result.is_err() {
             panic!("failed to grant authority of client-owned delegated entity to creating user");
         }
     }
@@ -1808,7 +1812,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                     {
-                        self.entity_release_authority(Some(user_key), &world_entity);
+                        let _ = self.entity_release_authority(Some(user_key), &world_entity);
                     }
                 }
             }
@@ -2278,44 +2282,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.incoming_world_events
                         .push_publish(user_key, &world_entity);
                     
-                    // Auto-grant authority for public client-owned entities when they become public
-                    let is_public_and_client_owned = self
-                        .global_world_manager
-                        .entity_is_public_and_client_owned(&global_entity);
-                    if is_public_and_client_owned {
-                        // Get the owner user key from the entity record
-                        let owner_user_key = match self.global_world_manager.entity_owner(&global_entity) {
-                            Some(EntityOwner::ClientPublic(owner_key)) => owner_key,
-                            _ => continue,
-                        };
-                        
-                        // Register entity in auth handler if not already registered
-                        self.global_world_manager.register_entity_for_authority(&global_entity);
-                        
-                        // Use canonical authority grant path (sends SetAuthority AND emits world event)
-                        // Check if entity exists in connection before attempting grant
-                        let owner_user = match self.users.get(&owner_user_key) {
-                            Some(u) => u,
-                            None => continue,
-                        };
-                        let connection = match self.user_connections.get(&owner_user.address()) {
-                            Some(c) => c,
-                            None => continue,
-                        };
-                        // Only grant if entity exists in connection's world manager
-                        if connection.base.world_manager.has_global_entity(&global_entity) {
-                            let requester = AuthOwner::Client(owner_user_key);
-                            let success = self
-                                .global_world_manager
-                                .client_request_authority(&global_entity, &requester);
-                            if success {
-                                // Defer SetAuthority by one tick to ensure entity is registered on client
-                                self.pending_auth_grants.push((owner_user_key, global_entity, EntityAuthStatus::Granted));
-                                // Emit world event immediately (canonical path)
-                                self.incoming_world_events.push_auth_grant(&owner_user_key, &world_entity);
-                            }
-                        }
-                    }
+                    // NOTE: Client-owned entities do NOT get auto-granted authority.
+                    // Authority/SetAuthority only applies to delegated (server-owned) entities.
                 }
                 EntityEvent::Unpublish(global_entity) => {
                     let world_entity = self
@@ -2351,7 +2319,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.client_request_authority(user_key, &world_entity);
+                    let _ = self.entity_give_authority(user_key, &world_entity);
                 }
                 EntityEvent::ReleaseAuthority(global_entity) => {
                     // info!("received release auth entity message!");
@@ -2359,8 +2327,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.entity_release_authority(Some(user_key), &world_entity);
-                    self.incoming_world_events.push_auth_reset(&world_entity);
+                    if self.entity_release_authority(Some(user_key), &world_entity).is_ok() {
+                        self.incoming_world_events.push_auth_reset(&world_entity);
+                    }
                 }
                 EntityEvent::SetAuthority(_, _) => {
                     panic!("Clients should not be able to update entity authority.");

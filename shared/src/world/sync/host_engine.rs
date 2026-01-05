@@ -32,19 +32,7 @@ impl HostEngine {
     }
 
     pub(crate) fn take_outgoing_commands(&mut self) -> Vec<EntityCommand> {
-        let commands = std::mem::take(&mut self.outgoing_commands);
-        eprintln!(
-            "[rep_probe] HostEngine::take_outgoing_commands: draining {} commands",
-            commands.len()
-        );
-        for cmd in &commands {
-            eprintln!(
-                "[rep_probe]   - command type={:?}, entity={:?}",
-                cmd.get_type(),
-                cmd.entity()
-            );
-        }
-        commands
+        std::mem::take(&mut self.outgoing_commands)
     }
 
     pub(crate) fn get_world(&self) -> &HashMap<HostEntity, HostEntityChannel> {
@@ -103,10 +91,6 @@ impl HostEngine {
                 self.entity_channels
                     .insert(host_entity, HostEntityChannel::new(self.host_type));
 
-                eprintln!(
-                    "[rep_probe] HostEngine::send_command SPAWN queued: global={:?}, host={:?}",
-                    global_entity, host_entity
-                );
                 self.outgoing_commands.push(command);
                 return;
             }

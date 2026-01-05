@@ -12,7 +12,7 @@ use crate::{
     },
     BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength,
     EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageType, GlobalEntity,
-    Instant, MessageIndex, PacketIndex, RemoteEntity, Serde, WorldRefType,
+    Instant, MessageIndex, PacketIndex, Serde, WorldRefType,
 };
 
 pub struct WorldWriter;
@@ -81,19 +81,6 @@ impl WorldWriter {
         has_written: &mut bool,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
-        eprintln!(
-            "[rep_probe] WorldWriter::write_commands: {} commands to write",
-            next_send_commands.len()
-        );
-        for (idx, (id, cmd)) in next_send_commands.iter().enumerate() {
-            eprintln!(
-                "[rep_probe]   [{}] id={:?}, type={:?}, entity={:?}",
-                idx,
-                id,
-                cmd.get_type(),
-                cmd.entity()
-            );
-        }
 
         let mut last_counted_id: Option<MessageIndex> = None;
         let mut last_written_id: Option<MessageIndex> = None;

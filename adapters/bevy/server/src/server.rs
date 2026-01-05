@@ -82,17 +82,17 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {
+    pub(crate) fn entity_authority_status<W: WorldRefType<Entity>>(&self, world: W, entity: &Entity) -> Option<EntityAuthStatus> {
         match self {
-            Self::Full(server) => server.entity_authority_status(entity),
-            Self::WorldOnly(server) => server.entity_authority_status(entity),
+            Self::Full(server) => server.entity(world, entity).authority(),
+            Self::WorldOnly(server) => server.entity(world, entity).authority(),
         }
     }
 
-    pub(crate) fn entity_owner(&self, entity: &Entity) -> EntityOwner {
+    pub(crate) fn entity_owner<W: WorldRefType<Entity>>(&self, world: W, entity: &Entity) -> EntityOwner {
         match self {
-            Self::Full(server) => server.entity_owner(entity),
-            Self::WorldOnly(server) => server.entity_owner(entity),
+            Self::Full(server) => server.entity(world, entity).owner(),
+            Self::WorldOnly(server) => server.entity(world, entity).owner(),
         }
     }
 

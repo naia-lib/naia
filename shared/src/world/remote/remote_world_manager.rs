@@ -11,18 +11,22 @@ use crate::{
     world::{
         entity::in_scope_entities::InScopeEntities,
         entity_event::EntityEvent,
-        host::host_world_manager::CommandId,
+        host::host_world_manager::{CommandId, SubCommandId},
         local::local_entity::RemoteEntity,
         remote::{
             remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
             remote_world_waitlist::RemoteWorldWaitlist,
         },
-        sync::{RemoteEngine, RemoteEntityChannel},
+        sync::{
+            remote_entity_channel::EntityChannelState,
+            RemoteEngine, RemoteEntityChannel,
+        },
     },
     ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageReceiver, GlobalEntity,
-    GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter,
-    LocalEntityMap, MessageIndex, OwnedLocalEntity, Replicate, Tick, WorldMutType,
+    EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageReceiver, EntityMessageType,
+    GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType,
+    LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity,
+    Replicate, Tick, WorldMutType,
 };
 
 pub struct RemoteWorldManager {
@@ -91,6 +95,20 @@ impl RemoteWorldManager {
         };
 
         authed_entities.insert(*remote_entity);
+    }
+
+    #[cfg(feature = "e2e_debug")]
+    pub fn debug_channel_diagnostic(&self, remote_entity: &RemoteEntity) -> Option<(EntityChannelState, (SubCommandId, usize, Option<SubCommandId>, usize))> {
+        self.remote_engine.get_world()
+            .get(remote_entity)
+            .map(|channel| channel.debug_auth_diagnostic())
+    }
+
+    #[cfg(feature = "e2e_debug")]
+    pub fn debug_channel_snapshot(&self, remote_entity: &RemoteEntity) -> Option<(EntityChannelState, Option<MessageIndex>, usize, Option<(MessageIndex, EntityMessageType)>, Option<MessageIndex>)> {
+        self.remote_engine.get_world()
+            .get(remote_entity)
+            .map(|channel| channel.debug_channel_snapshot())
     }
 
     pub(crate) fn deregister_authed_entity(&mut self, remote_entity: &RemoteEntity) {

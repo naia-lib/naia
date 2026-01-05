@@ -72,6 +72,8 @@ impl AuthChannel {
                 self.auth_status = Some(EntityAuthStatus::Available);
             }
             EntityMessageType::DisableDelegation => {
+                #[cfg(feature = "e2e_debug")]
+                crate::e2e_trace!("[CLIENT_RECV] DisableDelegation entity={:?} current_state={:?}", entity, self.state);
                 if self.state != EntityAuthChannelState::Delegated {
                     panic!(
                         "Cannot disable delegation on Entity: {:?} that is not delegated",
@@ -103,12 +105,28 @@ impl AuthChannel {
                     panic!("Expected SetAuthority command");
                 };
 
-                match (self.auth_status.unwrap(), next_status) {
+                let from_status = self.auth_status.unwrap();
+                #[cfg(feature = "e2e_debug")]
+                crate::e2e_trace!("[CLIENT_RECV] SetAuthority entity={:?} from_status={:?} to_status={:?}", command.entity(), from_status, next_status);
+
+                match (from_status, next_status) {
+                    (EntityAuthStatus::Available, EntityAuthStatus::Requested) |
                     (EntityAuthStatus::Available, EntityAuthStatus::Granted) |
                     (EntityAuthStatus::Available, EntityAuthStatus::Denied) |
-                    (EntityAuthStatus::Available, EntityAuthStatus::Available) | // Idempotent: Allow resetting to Available
+
+                    (EntityAuthStatus::Requested, EntityAuthStatus::Granted) |
+                    (EntityAuthStatus::Requested, EntityAuthStatus::Denied) |
+                    (EntityAuthStatus::Requested, EntityAuthStatus::Available) |
+
+                    (EntityAuthStatus::Denied, EntityAuthStatus::Granted) |
                     (EntityAuthStatus::Denied, EntityAuthStatus::Available) |
-                    (EntityAuthStatus::Granted, EntityAuthStatus::Available) => {
+
+                    (EntityAuthStatus::Granted, EntityAuthStatus::Available) |
+                    (EntityAuthStatus::Granted, EntityAuthStatus::Denied) |
+                    (EntityAuthStatus::Granted, EntityAuthStatus::Releasing) |
+
+                    (EntityAuthStatus::Releasing, EntityAuthStatus::Available) |
+                    (EntityAuthStatus::Releasing, EntityAuthStatus::Denied) => {
                         // valid transition!
                     }
                     (from_status, to_status) => {
@@ -232,5 +250,10 @@ impl AuthChannel {
     /// Force set the authority status (used to sync with global authority tracker after migration)
     pub(crate) fn force_set_auth_status(&mut self, auth_status: EntityAuthStatus) {
         self.auth_status = Some(auth_status);
+    }
+
+    #[cfg(feature = "e2e_debug")]
+    pub(crate) fn receiver_debug_diagnostic(&self) -> (SubCommandId, usize, Option<SubCommandId>, usize) {
+        self.receiver.debug_diagnostic()
     }
 }

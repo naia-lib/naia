@@ -1,6 +1,5 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::{hash::Hash, net::SocketAddr};
+use std::{hash::Hash, net::SocketAddr, sync::atomic::Ordering};
 
 use log::warn;
 
@@ -23,7 +22,7 @@ use crate::{
     world::global_world_manager::GlobalWorldManager,
 };
 #[cfg(feature = "e2e_debug")]
-use crate::server::world_server::{SERVER_RX_FRAMES, SERVER_TX_FRAMES};
+use crate::server::world_server::SERVER_TX_FRAMES;
 
 pub struct Connection {
     pub address: SocketAddr,
@@ -260,7 +259,7 @@ impl Connection {
             writer.reserve_bits(3); // Messages, Updates, Actions finish bits
 
             // write header
-            let header = self.base.write_header(PacketType::Data, &mut writer);
+            let _header = self.base.write_header(PacketType::Data, &mut writer);
 
             // write server tick
             let tick = time_manager.current_tick();
@@ -290,7 +289,6 @@ impl Connection {
 
         // Normal packet sending path (with messages/events or no ACK needed)
         if has_events || has_messages {
-            let packet_index_before = self.base.next_packet_index();
             let writer = self.write_packet(
                 channel_kinds,
                 message_kinds,
@@ -359,6 +357,7 @@ impl Connection {
         let mut has_written = false;
         
         // Count SetAuthority(Granted) commands before writing
+        #[cfg(feature = "e2e_debug")]
         let set_auth_granted_before = host_world_events.iter()
             .filter(|(_, cmd)| {
                 if let EntityCommand::SetAuthority(_, _, status) = cmd {

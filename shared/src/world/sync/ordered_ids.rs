@@ -85,4 +85,19 @@ impl<P> OrderedIds<P> {
     pub fn clear(&mut self) {
         self.inner.clear();
     }
+
+    #[cfg(feature = "e2e_debug")]
+    pub fn len(&self) -> usize {
+        self.inner.len()
+    }
+
+    #[cfg(feature = "e2e_debug")]
+    pub fn find_by_predicate<F: Fn(&P) -> bool>(&self, predicate: F) -> Option<(MessageIndex, P)>
+    where
+        P: Clone,
+    {
+        self.inner.iter()
+            .find(|(_, item)| predicate(item))
+            .map(|(id, item)| (*id, item.clone()))
+    }
 }

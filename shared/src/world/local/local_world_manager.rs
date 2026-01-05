@@ -17,9 +17,12 @@ use crate::{
     types::{HostType, PacketIndex},
     world::{
         entity::entity_converters::GlobalWorldManagerType,
-        host::host_world_manager::{CommandId, HostWorldManager},
+        host::host_world_manager::{CommandId, HostWorldManager, SubCommandId},
         remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
-        sync::HostEntityChannel,
+        sync::{
+            remote_entity_channel::EntityChannelState,
+            HostEntityChannel,
+        },
     },
     ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut,
@@ -207,6 +210,19 @@ impl LocalWorldManager {
         self.entity_map
             .insert_with_host_entity(*global_entity, new_host_entity);
 
+        // CRITICAL: After migration, global_entity_to_remote_entity() must fail for this global_entity
+        // remove_by_global_entity should have removed the remote mapping, but verify it's gone
+        // This prevents SetAuthority from encoding via stale global->remote mapping
+        // Double-check: ensure old remote mapping is completely removed from remote_to_global
+        self.entity_map.remove_remote_mapping_if_exists(&old_remote_entity);
+        
+        // Verify the invariant: after migration, global_entity should NOT convert to remote_entity
+        // This is a defensive check - if this fails, there's a bug in remove_by_global_entity
+        debug_assert!(
+            self.entity_map.entity_converter().global_entity_to_remote_entity(global_entity).is_err(),
+            "After migration, global_entity_to_remote_entity must fail for migrated entity"
+        );
+
         // BULLETPROOF: Step 1: Force-drain all buffers in RemoteEntityChannel
         // This ensures all pending operations are processed before migration
         self.remote.force_drain_entity_buffers(&old_remote_entity);
@@ -284,17 +300,21 @@ impl LocalWorldManager {
         self.host.send_command(&self.entity_map, command);
     }
 
+    #[track_caller]
     pub fn host_send_set_auth(
         &mut self,
         global_entity: &GlobalEntity,
         auth_status: EntityAuthStatus,
     ) {
-        // TODO: ?
-        let command = EntityCommand::SetAuthority(None, *global_entity, auth_status);
-        // Determine if entity is HostEntity or RemoteEntity and use appropriate channel
+        #[cfg(feature = "e2e_debug")]
+        {
+            crate::e2e_trace!("[SERVER_SEND] SetAuthority entity={:?} status={:?}", global_entity, auth_status);
+        }
         let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
             panic!("Attempting to send SetAuthority for entity which does not exist in local entity map! {:?}", global_entity);
         };
+        
+        let command = EntityCommand::SetAuthority(None, *global_entity, auth_status);
         if local_entity.is_host() {
             self.host.send_command(&self.entity_map, command);
         } else {
@@ -349,6 +369,17 @@ impl LocalWorldManager {
     pub fn remote_entities(&self) -> Vec<GlobalEntity> {
         self.entity_map.remote_entities()
     }
+
+    #[cfg(feature = "e2e_debug")]
+    pub fn debug_remote_channel_diagnostic(&self, remote_entity: &RemoteEntity) -> Option<(EntityChannelState, (SubCommandId, usize, Option<SubCommandId>, usize))> {
+        self.remote.debug_channel_diagnostic(remote_entity)
+    }
+
+    #[cfg(feature = "e2e_debug")]
+    pub fn debug_remote_channel_snapshot(&self, remote_entity: &RemoteEntity) -> Option<(EntityChannelState, Option<MessageIndex>, usize, Option<(MessageIndex, EntityMessageType)>, Option<MessageIndex>)> {
+        self.remote.debug_channel_snapshot(remote_entity)
+    }
+
 
     // only client sends this, after receiving enabledelegation message from server
     pub fn send_enable_delegation_response(&mut self, global_entity: &GlobalEntity) {
@@ -471,6 +502,16 @@ impl LocalWorldManager {
                 OwnedLocalEntity::Remote(remote_entity) => {
                     // Remote entity message
                     let remote_entity = RemoteEntity::new(remote_entity);
+                    // Count when Spawn is routed to incoming_remote_messages
+                    #[cfg(feature = "e2e_debug")]
+                    if incoming_message.get_type() == EntityMessageType::Spawn {
+                        extern "Rust" {
+                            fn client_routed_remote_spawn_increment();
+                        }
+                        unsafe {
+                            client_routed_remote_spawn_increment();
+                        }
+                    }
                     incoming_remote_messages
                         .push((id, incoming_message.with_entity(remote_entity)));
                 }
@@ -757,17 +798,27 @@ impl LocalWorldManager {
             }
 
             // Always send EnableDelegation (this will transition Published → Delegated)
+            #[cfg(feature = "e2e_debug")]
+            crate::e2e_trace!("[SERVER_SEND] EnableDelegation entity={:?} callsite=send_enable_delegation(host)", global_entity);
             let enable_delegation_command = EntityCommand::EnableDelegation(None, *global_entity);
             self.host
                 .send_command(&self.entity_map, enable_delegation_command);
         } else {
+            #[cfg(feature = "e2e_debug")]
+            crate::e2e_trace!("[SERVER_SEND] EnableDelegation entity={:?} callsite=send_enable_delegation(remote)", global_entity);
             let command = EntityCommand::EnableDelegation(None, *global_entity);
             self.remote
                 .send_auth_command(self.entity_map.entity_converter(), command);
         }
     }
 
+    #[track_caller]
     pub fn send_disable_delegation(&mut self, global_entity: &GlobalEntity) {
+        #[cfg(feature = "e2e_debug")]
+        {
+            let caller = std::panic::Location::caller();
+            crate::e2e_trace!("[SERVER_SEND] DisableDelegation entity={:?} caller={}:{}", global_entity, caller.file(), caller.line());
+        }
         // only server should ever be able to call this, on host-owned (server-owned) entities
         let command = EntityCommand::DisableDelegation(None, *global_entity);
         self.host.send_command(&self.entity_map, command);
