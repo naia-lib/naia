@@ -1,97 +1,130 @@
-# Spec: Entity Ownership
-Defines the only valid semantics for non-delegated entity ownership and write acceptance.
+# Entity Ownership
 
-**Status:** Active  
-**Version:** v1  
-**Related specs:** `entity_publication.md`, `entity_delegation.md`, `entity_authority.md`, `entity_scopes.md`, `entity_replication.md`  
-**Applies to:** server + client
+This spec defines **Entity Ownership**: which actor is permitted to **write** replicated state for an Entity.
 
-**Contract ID format:** `entity-ownership-<nn>` (stable; never reused; never renumbered)
+Ownership is **not** Delegation, and ownership is **not** Authority. Those are specified elsewhere. Ownership is the coarse, per-entity “who may write replicated updates” rule; Delegation/Authority describe finer-grained permission flows and events.
 
 ---
 
-## 1) Scope & Vocabulary
+## Definitions
 
-**In scope**
-- Canonical ownership for **non-delegated** entities.
-- Write acceptance rules for server-owned undelegated and client-owned entities.
+### Mutate vs Write
 
-**Out of scope**
-- Delegation enable/disable and migration (see `entity_delegation.md`)
-- Authority statuses/events (see `entity_authority.md`)
-- Scope membership rules (see `entity_scopes.md`)
+- **Mutate**: change the local world state by inserting/removing/updating components and/or despawning an entity.
+- **Write**: cause a mutation to be **replicated over the wire** (serialized into outbound replication and sent to the remote host).
 
-**Vocabulary**
-- **Entity `E`**: a replicated object with a stable identity.
-- **Owner(E)**: single writer-of-record for a **non-delegated** entity: `Server` or `Client(A)`.
-- **Client-owned**: entity with `Owner(E)=Client(A)`.
-- **Server-owned undelegated**: entity with `Owner(E)=Server` and not delegated.
+A mutation may be allowed locally (mutate) while still being forbidden to replicate (write).
 
----
+### Replicated component vs local-only component
 
-## 2) Contract (Rules)
+- A **replicated component** is a component type registered for replication in the Protocol.
+- A **local-only component** is any component instance that exists only in a local world view and is not currently backed by replicated authority for that entity on that host (even if its type is a replicated type).
 
-### entity-ownership-01 — Ownership is exclusive
-An entity MUST be exactly one of:
-- server-owned, or
-- client-owned by exactly one client.
+Local-only components may exist on entities a host does not own.
 
-### entity-ownership-02 — Undelegated entities have no authority concept
-For all **non-delegated** entities (server-owned undelegated and all client-owned states):
-- “authority status” is undefined and MUST NOT be queried, stored, inferred, or surfaced.
-(Authority exists only for delegated entities; see `entity_authority.md`.)
+### Owner
 
-### entity-ownership-03 — Server-owned undelegated write acceptance
-For a server-owned undelegated entity `E`:
-- the server is authoritative;
-- all client writes MUST be rejected/ignored.
-
-### entity-ownership-04 — Client-owned write acceptance
-For a client-owned entity `E` with `Owner(E)=Client(A)`:
-- the server MUST accept writes from `A`;
-- the server MUST reject/ignore writes from any `C != A`.
-
-(Visibility/scoping depends on publication; see `entity_publication.md`.)
+Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()` on both server and client. The server’s view is more detailed; the client’s view is intentionally coarse.
 
 ---
 
-## 3) Contract IDs (Obligations)
+## Core Contracts
 
-### entity-ownership-01 — Ownership is exclusive
-**Guarantee:** exactly one owner domain applies per entity.  
-**Covered by tests:** downstream via domain tests (ownership implied across all suites).
+### Ownership is per-entity, exclusive, and not per-component
+- **entity-ownership-01**: Ownership MUST be defined per-Entity and MUST NOT be defined per-Component.
+- **entity-ownership-01**: An Entity MUST have exactly one owner at any moment (exclusive ownership).
 
-### entity-ownership-02 — No authority for non-delegated
-**Guarantee:** no authority status/events for non-delegated entities.  
-**Covered by tests:** `test/tests/entity_client_owned.rs::client_owned_entities_emit_no_authority_events` and undelegated tests in authority/delegation suites.
+### Client-owned entities (server view)
+- **entity-ownership-02**: For a **client-owned Entity E**, the server MUST accept **writes** for E only from the owning client and MUST NOT apply writes from any other client.
+- **entity-ownership-02**: The server MAY ignore unauthorized writes silently and/or record a metric/log, but MUST NOT apply them.
 
-### entity-ownership-03 — Server-owned undelegated rejects client writes
-**Guarantee:** client mutation attempts do not affect authoritative state.  
-**Covered by tests:** (delegation toggle / undelegated suite; exact mapping lives in E2E plan/tests)
+### Server-owned entities (server view)
+- **entity-ownership-03**: For a **server-owned Entity E** (not client-owned), the server MUST NOT accept **writes** for E from any client.
+- **entity-ownership-03**: The server MAY ignore unauthorized writes silently and/or record a metric/log, but MUST NOT apply them.
 
-### entity-ownership-04 — Client-owned accepts only owner writes
-**Guarantee:** owner writes accepted; non-owner writes ignored.  
-**Covered by tests:** `test/tests/entity_client_owned.rs::client_owned_published_rejects_non_owner_mutations` and `...accepts_owner_mutations_and_propagates`
-
----
-
-## 4) Interfaces & Observability
-
-- Clients MAY attempt writes; acceptance follows rules above.
-- Rejected/ignored writes MUST NOT panic.
-- No “authority” API applies here (see `entity_authority.md`).
+### Ownership does not emit authority events for client-owned entities
+- **entity-ownership-04**: Ownership alone MUST NOT emit Authority events for client-owned entities. Authority events are part of Delegation/Authority, not Ownership.
 
 ---
 
-## 5) Invariants & Non-Goals
+## Client-side Safety Rules (Panic Contracts)
 
-**Always true**
-- Ownership is entity-level (not per-component).
+### Clients must never write unowned entities
+- **entity-ownership-05**: A client MUST NOT write (replicate over the wire) any update for an Entity it does not own.
+- **entity-ownership-05**: If Naia would enqueue/serialize/send a replication write for an unowned entity, Naia MUST panic.
 
-**Non-goals**
-- Does not define scoping, delegation, authority, or message ordering.
+This is a hard invariant: Naia guarantees well-behaved clients never attempt such writes.
+
+### Ownership visibility on the client is intentionally coarse
+- **entity-ownership-06**: On the client, `entity(...).owner()` MUST return an `EntityOwner` enum.
+- **entity-ownership-06**: For the client, any entity not owned by that client MUST be reported as `EntityOwner::Server` (i.e., the client MUST NOT observe “owned by another client”).
+- **entity-ownership-06**: Client-owned entities visible to the owning client MUST be reported as `EntityOwner::Client`.
+- **entity-ownership-06**: Local-only entities MUST be reported as `EntityOwner::Local`.
+
+(As of the current public server API, the server’s `EntityOwner` has richer variants such as `Client`, `ClientWaiting`, and `ClientPublic`.) :contentReference[oaicite:0]{index=0}
 
 ---
 
-## 6) Changelog
-- v1: extracted from prior omnibus contract.
+## Mutate vs Write Behavior on Clients (Local Prediction & Local-Only State)
+
+### Non-owners may mutate locally, but must never write
+- **entity-ownership-07**: A client MAY mutate entities it does not own (insert/remove/update components, and despawn locally), but such mutations MUST NOT write/replicate to the server.
+- **entity-ownership-07**: Any replicated updates received from the server for that entity MUST overwrite the client’s local state for the relevant replicated components.
+
+### Local-only components persist until despawn (even if the type is replicated)
+- **entity-ownership-08**: If a client inserts a component (replicated or non-replicated type) onto an entity it does not own, and the server never replicates that component for that entity, the component MUST persist locally until removed locally or the entity is despawned/unpublished.
+- **entity-ownership-08**: If the server later begins replicating that component for that entity, the newly replicated “official” component state MUST overwrite the existing local-only component state.
+
+### Removing components from unowned entities: allowed only for local-only components
+- **entity-ownership-09**: A client MAY remove a component from an unowned entity only if that component instance is local-only on that client.
+- **entity-ownership-09**: If a client attempts to remove a component from an unowned entity where that component instance is currently backed by server replication (i.e., it was inserted/maintained by server replication for that entity), Naia MUST panic.
+
+Rationale: removing a server-replicated component locally creates a misleading “phantom delete” that cannot be written, and would be immediately contradicted by subsequent replication.
+
+---
+
+## Ownership Transitions
+
+### Server-owned entities never migrate to client-owned
+- **entity-ownership-10**: An entity that is server-owned MUST NOT transition to client-owned at any time.
+
+### Client-owned entities may migrate to server-owned delegated via enabling delegation
+- **entity-ownership-11**: A client-owned entity MAY transition to server-owned (delegated) only when delegation is enabled for that entity by:
+  - the owning client, or
+  - the server (server authority takes priority).
+- **entity-ownership-11**: When delegation is enabled for a client-owned entity, ownership MUST transfer from client → server as part of that action.
+- **entity-ownership-11**: Once a client-owned entity transfers to server ownership via delegation enabling, it MUST NOT revert back to client ownership.
+
+Note: “delegated” here describes the downstream Authority/permission model; ownership itself is simply “server-owned” after the transfer.
+
+### Client-owned entities are inherently always in-scope for the owner client
+- **entity-ownership-12**: While the owning client is connected, a client-owned entity MUST be considered in-scope for that owning client (the owning client must never lose scope for its client-owned entities).
+
+---
+
+## Disconnect Handling
+
+### Owner disconnect despawns all client-owned entities
+- **entity-ownership-13**: When a client disconnects, the server MUST despawn all entities owned by that client.
+- **entity-ownership-13**: There are no exceptions (delegation/authority do not change this ownership rule).
+
+---
+
+## Out-of-scope / unpublished write attempts
+
+- **entity-ownership-14**: A client MUST NOT write about an entity it does not own.
+- **entity-ownership-14**: Naia MUST guarantee that a client does not write about entities that are out-of-scope/unpublished and unowned by it; if such a write would occur, Naia MUST panic.
+
+Exception note: `EntityProperty` may refer to entities as data (identity/reference semantics). This is a read/reference mechanism and MUST NOT be treated as “writing an entity the client does not own.”
+
+---
+
+## Test Obligations (TODO)
+
+(We are not implementing tests yet; these are placeholders.)
+
+- **entity-ownership-02/03**: Unauthorized client writes MUST NOT affect server state.
+- **entity-ownership-05**: Client MUST panic if it would write an unowned entity.
+- **entity-ownership-08**: Local-only component persists until despawn; server replication overwrites if it begins replicating later.
+- **entity-ownership-09**: Client MUST panic on unauthorized removal of a server-replicated component from an unowned entity.
+- **entity-ownership-13**: Owner disconnect despawns all client-owned entities.
