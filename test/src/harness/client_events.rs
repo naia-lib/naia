@@ -232,6 +232,39 @@ impl ClientEvents {
             .and_then(|channel_requests| channel_requests.remove(message_kind))
             .unwrap_or_default()
     }
+
+    /// Take all insert events for a specific component kind
+    pub fn take_inserts_for_component(
+        &mut self,
+        component_kind: &ComponentKind,
+    ) -> Vec<EntityKey> {
+        self.inserts
+            .get_mut(component_kind)
+            .map(|v| std::mem::take(v))
+            .unwrap_or_default()
+    }
+
+    /// Take all remove events for a specific component kind
+    pub fn take_removes_for_component(
+        &mut self,
+        component_kind: &ComponentKind,
+    ) -> Vec<(EntityKey, Box<dyn Replicate>)> {
+        self.removes
+            .get_mut(component_kind)
+            .map(|v| std::mem::take(v))
+            .unwrap_or_default()
+    }
+
+    /// Take all update events for a specific component kind
+    pub fn take_updates_for_component(
+        &mut self,
+        component_kind: &ComponentKind,
+    ) -> Vec<(Tick, EntityKey)> {
+        self.updates
+            .get_mut(component_kind)
+            .map(|v| std::mem::take(v))
+            .unwrap_or_default()
+    }
 }
 
 // ClientEvent trait

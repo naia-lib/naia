@@ -30,11 +30,11 @@ pub use client_entity::{ClientEntityMut, ClientEntityRef};
 pub use expect_ctx::ExpectCtx;
 pub use keys::{ClientKey, EntityKey};
 pub use scenario::Scenario;
-pub use server_entity::{ServerEntityMut, ServerEntityRef};
 pub use server_events::{
     ServerAuthEvent, ServerConnectEvent, ServerDelegateEntityEvent, ServerDespawnEntityEvent,
     ServerDisconnectEvent, ServerEntityAuthGrantEvent, ServerEntityAuthResetEvent,
-    ServerErrorEvent, ServerSpawnEntityEvent, ServerTickEvent,
+    ServerErrorEvent, ServerPublishEntityEvent, ServerSpawnEntityEvent, ServerTickEvent,
+    ServerUnpublishEntityEvent,
 };
 pub use ticks::{Ticks, ToTicks};
 pub use until_ctx::UntilCtx;

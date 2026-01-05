@@ -909,12 +909,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 SERVER_AUTH_GRANTED_EMITTED.fetch_add(1, Ordering::Relaxed);
             }
         }
-        
 
-        // NOTE: We send SetAuthority immediately above, so we don't need to push to auth_grants
+        // From a previous failure:
+        // We send SetAuthority immediately above (where though?), so we don't need to push to auth_grants
         // which would cause duplicate SetAuthority sends (leading to invalid transitions like Denied->Denied)
-        // self.incoming_world_events
-        //     .push_auth_grant(origin_user, &world_entity);
+        // Potentially there will be a future error here!
+        // TODO: verify this with tests!
+
+        // Push to events for external systems (e.g., Bevy adapter, test harness)
+        // Events are separate from network messages - they're notifications for external consumers
+        self.incoming_world_events.push_auth_grant(origin_user, &world_entity);
+        
         Ok(())
     }
 

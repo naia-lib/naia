@@ -324,6 +324,39 @@ impl ServerEvents {
     pub(crate) fn despawns(&self) -> &Vec<(ClientKey, EntityKey)> {
         &self.despawns
     }
+
+    /// Take all insert events for a specific component kind
+    pub fn take_inserts_for_component(
+        &mut self,
+        component_kind: &ComponentKind,
+    ) -> Vec<(ClientKey, EntityKey)> {
+        self.inserts
+            .get_mut(component_kind)
+            .map(|v| std::mem::take(v))
+            .unwrap_or_default()
+    }
+
+    /// Take all remove events for a specific component kind
+    pub fn take_removes_for_component(
+        &mut self,
+        component_kind: &ComponentKind,
+    ) -> Vec<(ClientKey, EntityKey, Box<dyn Replicate>)> {
+        self.removes
+            .get_mut(component_kind)
+            .map(|v| std::mem::take(v))
+            .unwrap_or_default()
+    }
+
+    /// Take all update events for a specific component kind
+    pub fn take_updates_for_component(
+        &mut self,
+        component_kind: &ComponentKind,
+    ) -> Vec<(ClientKey, EntityKey)> {
+        self.updates
+            .get_mut(component_kind)
+            .map(|v| std::mem::take(v))
+            .unwrap_or_default()
+    }
 }
 
 // ServerEvent trait
@@ -508,6 +541,36 @@ impl ServerEvent for EntityAuthResetEvent {
     }
 }
 
+// PublishEntityEvent
+pub struct PublishEntityEvent;
+impl ServerEvent for PublishEntityEvent {
+    type Iter = std::vec::IntoIter<(ClientKey, EntityKey)>;
+    type Item = (ClientKey, EntityKey);
+
+    fn iter(events: &mut ServerEvents) -> Self::Iter {
+        std::mem::take(&mut events.publishes).into_iter()
+    }
+
+    fn has(events: &ServerEvents) -> bool {
+        !events.publishes.is_empty()
+    }
+}
+
+// UnpublishEntityEvent
+pub struct UnpublishEntityEvent;
+impl ServerEvent for UnpublishEntityEvent {
+    type Iter = std::vec::IntoIter<(ClientKey, EntityKey)>;
+    type Item = (ClientKey, EntityKey);
+
+    fn iter(events: &mut ServerEvents) -> Self::Iter {
+        std::mem::take(&mut events.unpublishes).into_iter()
+    }
+
+    fn has(events: &ServerEvents) -> bool {
+        !events.unpublishes.is_empty()
+    }
+}
+
 // Type aliases for public API (matching mod.rs exports)
 pub type ServerAuthEvent<M> = AuthEvent<M>;
 pub type ServerConnectEvent = ConnectEvent;
@@ -519,6 +582,8 @@ pub type ServerTickEvent = TickEvent;
 pub type ServerDelegateEntityEvent = DelegateEntityEvent;
 pub type ServerEntityAuthGrantEvent = EntityAuthGrantEvent;
 pub type ServerEntityAuthResetEvent = EntityAuthResetEvent;
+pub type ServerPublishEntityEvent = PublishEntityEvent;
+pub type ServerUnpublishEntityEvent = UnpublishEntityEvent;
 
 /// Register auth event and map UserKey to ClientKey
 /// Returns (ClientKey, MessageContainer) if successful

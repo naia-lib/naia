@@ -1450,13 +1450,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         Self::handle_empty_acks(connection, &mut self.io);
 
         let mut received_any = false;
-        let mut packets_received = 0;
+        let mut _packets_received = 0;
 
         // receive from socket
         loop {
             match self.io.recv_reader() {
                 Ok(Some(mut reader)) => {
-                    packets_received += 1;
+                    _packets_received += 1;
                     connection.mark_heard();
 
                     let header = match StandardHeader::de(&mut reader) {

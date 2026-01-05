@@ -37,6 +37,7 @@ pub fn test_client_config() -> ClientConfig {
 ///     expect_client_connected(ctx, client_key)
 /// });
 /// ```
+#[allow(dead_code)]
 pub fn server_and_client_connected(ctx: &mut ExpectCtx<'_>, client_key: ClientKey) -> Option<()> {
     let connected = ctx.client(client_key, |c| c.connection_status().is_connected());
     let user_exists = ctx.server(|s| s.user_exists(&client_key));
@@ -54,6 +55,7 @@ pub fn server_and_client_connected(ctx: &mut ExpectCtx<'_>, client_key: ClientKe
 ///     expect_client_disconnected(ctx, client_key)
 /// });
 /// ```
+#[allow(dead_code)]
 pub fn server_and_client_disconnected(
     ctx: &mut ExpectCtx<'_>,
     client_key: ClientKey,

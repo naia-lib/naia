@@ -275,6 +275,7 @@ impl GlobalWorldManager {
         self.auth_handler.register_entity(global_entity);
     }
 
+    #[allow(dead_code)]
     pub(crate) fn register_entity_for_authority(&mut self, global_entity: &GlobalEntity) {
         // Register entity in auth handler for authority tracking (used for public non-delegated entities)
         if self.auth_handler.authority_status(global_entity).is_none() {

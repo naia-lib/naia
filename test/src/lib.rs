@@ -6,7 +6,8 @@ pub use harness::{ClientKey, ExpectCtx, Scenario, ToTicks};
 pub use harness::{
     ServerAuthEvent, ServerConnectEvent, ServerDelegateEntityEvent, ServerDespawnEntityEvent,
     ServerDisconnectEvent, ServerEntityAuthGrantEvent, ServerEntityAuthResetEvent,
-    ServerErrorEvent, ServerSpawnEntityEvent, ServerTickEvent,
+    ServerErrorEvent, ServerPublishEntityEvent, ServerSpawnEntityEvent, ServerTickEvent,
+    ServerUnpublishEntityEvent,
 };
 //client events
 pub use harness::{
