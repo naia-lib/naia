@@ -1,100 +1,149 @@
 # Spec: Entity Publication
-Defines the only valid semantics for publication/unpublication and visibility constraints.
 
-**Status:** Active  
-**Version:** v1  
-**Related specs:** `entity_ownership.md`, `entity_scopes.md`, `entity_replication.md`, `entity_delegation.md`  
-**Applies to:** server + client
+Entity Publication defines the **only valid semantics** for whether a *client-owned* entity may be replicated (spawned/updated) to **non-owning clients**.
 
-**Contract ID format:** `entity-publication-<nn>` (stable; never reused; never renumbered)
+Publication is a **gate** layered on top of scoping:
+- **Scoping** decides *which* clients are in-scope.
+- **Publication** decides whether non-owners are even *eligible* to be in-scope for a client-owned entity.
+
+This spec is intentionally narrow:
+- It defines publication as a closed, normative contract.
+- It does **not** redefine ownership, scopes, replication, or delegation; it cross-references them.
 
 ---
 
-## 1) Scope & Vocabulary
+## 1) Scope
 
-**In scope**
-- Publication states for client-owned entities.
-- Scoping eligibility constraints derived from publication.
+### In scope
+- Publication states and transitions for **client-owned** entities.
+- Required effect of publication on **non-owner scope eligibility**.
+- Observable publication state via `replication_config()` on server/client entities.
 
-**Out of scope**
-- Ownership write acceptance (see `entity_ownership.md`)
-- Delegation migration constraints beyond “must be published first” (see `entity_delegation.md`)
-- Authority (see `entity_authority.md`)
+### Out of scope (defined elsewhere)
+- Ownership write acceptance / panics (`entity_ownership.md`)
+- Scope computation & in-scope/out-of-scope mechanics (`entity_scopes.md`)
+- Replication ordering / wire semantics (`entity_replication.md`)
+- Delegation migration & delegated authority (`entity_delegation.md`, `entity_authority.md`)
 
-**Vocabulary**
-- **Published (client-owned only)**: server MAY scope `E` to non-owning clients.
-- **Unpublished (client-owned only)**: server MUST NOT scope `E` to any non-owning client.
+---
+
+## 2) Vocabulary
+
+- **Owner(E)**: The owner of entity `E` (see `entity_ownership.md`).
+- **Owning client A**: A client `A` such that `Owner(E) == A`.
+- **Non-owner client C**: A client `C` such that `C != Owner(E)`.
 - **InScope(C,E)** / **OutOfScope(C,E)**: defined in `entity_scopes.md`.
+- **Despawn (client-side)**: `E` is removed from the client’s networked entity pool (and all of its components in that pool are destroyed).
+- **Publication state (client-owned only)**:
+  - **Published**: the server MAY scope `E` to non-owners (subject to scope policy).
+  - **Unpublished**: the server MUST NOT scope `E` to any non-owner.
+
+### Observable: ReplicationConfig
+Naia exposes an observable replication configuration via `replication_config() -> Option<ReplicationConfig>` and a setter `configure_replication(ReplicationConfig)` on server & client entity handles.
+
+This spec defines how `ReplicationConfig::{Private,Public,Delegated}` maps onto publication semantics **only for client-owned entities**.
 
 ---
 
-## 2) Contract (Rules)
+## 3) Contract (Rules)
 
-### entity-publication-01 — Server-owned entities are scoping-eligible
-All server-owned entities MUST be scoping-eligible for any client, subject to server scope policy.
-(“Published/unpublished” does not apply to server-owned entities.)
+### entity-publication-01 — Publication gates only client-owned visibility to non-owners
+Publication semantics apply only to **client-owned** entities as a gate for **non-owner** visibility.
+This spec does not impose additional constraints on server-owned entities beyond what `entity_scopes.md` / `entity_replication.md` specify.
 
-### entity-publication-02 — Unpublished client-owned is owner+server only
-If `E` is client-owned unpublished with owner `A`:
+### entity-publication-02 — Unpublished client-owned entities are never in-scope for non-owners
+If `E` is client-owned and **Unpublished** with owner `A`:
 - for all clients `C != A`, `OutOfScope(C,E)` MUST hold.
 
-### entity-publication-03 — Published client-owned may be scoped to non-owners
-If `E` is client-owned published with owner `A`:
+### entity-publication-03 — Published client-owned entities may be in-scope for non-owners
+If `E` is client-owned and **Published** with owner `A`:
 - the server MAY place `E` into scope of clients `C != A` per normal scope policy.
 
-### entity-publication-04 — Publication transitions are server/owner initiated and may be automatic
-Only the server OR the owning client MAY cause:
+### entity-publication-04 — Only the server or owning client may change publication; server wins conflicts
+Only the server OR the owning client MAY cause `E` to transition:
 - Unpublished ↔ Published
-This transition MAY be automatic/system-driven and is not required to be a public API.
 
-### entity-publication-05 — Unpublish forces immediate out-of-scope for non-owners
-When client-owned `E` transitions Published → Unpublished:
-- all non-owner clients MUST become `OutOfScope(C,E)` for `C != Owner(E)`.
+If the server and owning client produce conflicting publication changes “in the same effective replication window”
+(e.g. within one server tick / one resolved change-set), the server’s final resolved publication state MUST win.
+
+Notes:
+- There is no requirement that publication transitions are exposed as a public API; they MAY be system-driven.
+- This rule defines *authority to cause the transition*, not how the API is shaped.
+
+### entity-publication-05 — Unpublish forces immediate OutOfScope for all non-owners
+When client-owned `E` transitions **Published → Unpublished**:
+- all non-owner clients MUST become `OutOfScope(C,E)` for `C != Owner(E)` as part of the next resolved scope update.
 
 ### entity-publication-06 — Publish enables later scoping; does not guarantee scoping
-When client-owned `E` transitions Unpublished → Published:
+When client-owned `E` transitions **Unpublished → Published**:
 - the server MAY later scope `E` to non-owners per policy;
 - publication does not itself guarantee that any particular non-owner becomes in-scope.
 
-### entity-publication-07 — Client-owned entities have no authority statuses/events
-For all client-owned entities (published or unpublished):
-- authority status is undefined;
-- `AuthGranted/AuthDenied/AuthLost` MUST NOT be emitted or surfaced.
-(Authority exists only for delegated server-owned entities; see `entity_authority.md`.)
+### entity-publication-07 — Owning client is always in-scope for its owned entities
+For any client-owned entity `E` with owner `A`:
+- `InScope(A,E)` MUST always hold.
+- Publication MUST NOT remove `E` from the owning client’s scope.
+
+(If the entity ceases to exist—e.g. it is despawned—this rule no longer applies.)
+
+### entity-publication-08 — Non-owner unpublish/out-of-scope implies despawn and destroys local-only components
+If a non-owner client `C != Owner(E)` transitions to `OutOfScope(C,E)` due to publication becoming Unpublished:
+- `E` MUST despawn on that client (be removed from the client’s networked entity pool).
+- All components attached to `E` in that client’s pool (including any “local-only” components) MUST be destroyed.
+
+This is intentionally aligned with the general “OutOfScope ⇒ despawn” rule in `entity_scopes.md`;
+publication is just one cause of OutOfScope.
+
+### entity-publication-09 — Publication MUST be observable via replication_config
+For a client-owned entity `E` that exists on the server:
+- `Published` MUST correspond to `replication_config(E) == Some(Public)`
+- `Unpublished` MUST correspond to `replication_config(E) == Some(Private)`
+
+For a non-owner client `C != Owner(E)`:
+- If `E` exists in the client’s networked entity pool, then `replication_config(E)` MUST NOT be `Some(Private)`.
+  (Because `Some(Private)` would mean Unpublished, which must be OutOfScope for non-owners.)
+
+### entity-publication-10 — Delegation migration ends “client-owned publication” semantics
+If a client-owned entity `E` migrates into a **delegated server-owned entity** (see `entity_delegation.md`):
+- `E` is no longer client-owned, and publication semantics in this spec no longer apply.
+- Non-owners are no longer gated by “Published/Unpublished client-owned rules”; the entity is now governed by
+  server-owned scoping + delegated rules.
+
+Cross-constraint (restated for coherence; the detailed rule lives in `entity_delegation.md`):
+- A client-owned entity MUST be Published before it may migrate into delegated server-owned form.
 
 ---
 
-## 3) Contract IDs (Obligations)
+## 4) Illegal cases & required behavior
 
-### entity-publication-02 — Unpublished visibility
-**Covered by tests:** `test/tests/entity_client_owned.rs::client_owned_unpublished_is_visible_only_to_owner`
+This section exists to prevent “undefined behavior pockets.” These situations MUST NOT occur in correct Naia usage,
+but if they do occur due to a bug or misuse, behavior is still defined.
 
-### entity-publication-05 — Unpublish forces despawn for non-owners
-**Covered by tests:** `test/tests/entity_client_owned.rs::publish_toggle_published_to_unpublished_forcibly_despawns_for_non_owners`
+### entity-publication-11 — If a non-owner observes a client-owned Private entity, it MUST be treated as OutOfScope
+If a non-owner client `C != Owner(E)` ever reaches a state where:
+- `E` exists in the client’s networked entity pool AND `replication_config(E) == Some(Private)`
 
-### entity-publication-07 — No authority for client-owned
-**Covered by tests:** `test/tests/entity_client_owned.rs::client_owned_entities_emit_no_authority_events`
+then the client MUST immediately treat `E` as `OutOfScope(C,E)` and despawn it.
 
-(Other obligations map 1:1 to the remaining `entity_client_owned.rs` tests.)
-
----
-
-## 4) Interfaces & Observability
-
-- Owner and server may trigger publish/unpublish (possibly automatically).
-- Non-owners MUST NOT observe unpublished entities.
+Rationale: this restores the invariant required by entity-publication-02/09 without relying on perfect server behavior.
 
 ---
 
-## 5) Invariants & Non-Goals
+## 5) Test obligations (TODO placeholders; not implementing yet)
 
-**Always true**
-- Publication never changes ownership by itself.
-
-**Non-goals**
-- Does not define delegation or authority.
+- **entity-publication-02**: Prove unpublished client-owned entities never appear for non-owners.
+- **entity-publication-05/08**: Prove Published→Unpublished forces non-owner despawn, destroying local-only components.
+- **entity-publication-06**: Prove Unpublished→Published does not guarantee any non-owner in-scope.
+- **entity-publication-07**: Prove owning client always retains in-scope visibility across publication toggles.
+- **entity-publication-09**: Prove `replication_config` accurately reflects Published/Public and Unpublished/Private.
+- **entity-publication-10**: Prove delegated migration requires Published first and then switches to delegated semantics.
+- **entity-publication-11**: Prove the client self-heals by despawning if it ever sees `Private` on a non-owned entity.
 
 ---
 
-## 6) Changelog
-- v1: extracted from prior omnibus contract + replaces older client-owned publication spec.
+## 6) Cross-references
+
+- Ownership: `entity_ownership.md`
+- Scopes: `entity_scopes.md`
+- Replication ordering/wire behavior: `entity_replication.md`
+- Delegation & authority: `entity_delegation.md`, `entity_authority.md`
