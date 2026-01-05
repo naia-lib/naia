@@ -11,23 +11,32 @@ use crate::{
     world::{
         entity::in_scope_entities::InScopeEntities,
         entity_event::EntityEvent,
-        host::host_world_manager::{CommandId, SubCommandId},
+        host::host_world_manager::CommandId,
         local::local_entity::RemoteEntity,
         remote::{
             remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
             remote_world_waitlist::RemoteWorldWaitlist,
         },
         sync::{
-            remote_entity_channel::EntityChannelState,
             RemoteEngine, RemoteEntityChannel,
         },
     },
     ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageReceiver, EntityMessageType,
+    EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageReceiver,
     GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType,
     LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity,
     Replicate, Tick, WorldMutType,
 };
+
+cfg_if! {
+    if #[cfg(feature = "e2e_debug")] {
+        use crate::world::{
+            host::host_world_manager::SubCommandId,
+            sync::remote_entity_channel::EntityChannelState,
+        };
+        use crate::EntityMessageType;
+    }
+}
 
 pub struct RemoteWorldManager {
     // For Server, this contains the Entities that have been received from the Client, that the Client has authority over.

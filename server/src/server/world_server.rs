@@ -4,7 +4,6 @@ use std::{
     hash::Hash,
     net::SocketAddr,
     panic,
-    sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
 
@@ -36,6 +35,12 @@ use crate::{
     NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, UserKey, UserMut,
     UserRef, UserScopeMut, UserScopeRef, WorldUser,
 };
+
+cfg_if! {
+    if #[cfg(feature = "e2e_debug")] {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+    }
+}
 
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_RX_FRAMES: AtomicUsize = AtomicUsize::new(0);

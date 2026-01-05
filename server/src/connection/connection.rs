@@ -1,11 +1,11 @@
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::{hash::Hash, net::SocketAddr, sync::atomic::Ordering};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
-    ConnectionConfig, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityEvent,
+    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent,
     GlobalEntity, GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType,
     Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
@@ -21,8 +21,14 @@ use crate::{
     user::UserKey,
     world::global_world_manager::GlobalWorldManager,
 };
-#[cfg(feature = "e2e_debug")]
-use crate::server::world_server::SERVER_TX_FRAMES;
+
+cfg_if! {
+    if #[cfg(feature = "e2e_debug")] {
+        use std::sync::atomic::Ordering;
+        use naia_shared::EntityAuthStatus;
+        use crate::server::world_server::SERVER_TX_FRAMES;
+    }
+}
 
 pub struct Connection {
     pub address: SocketAddr,

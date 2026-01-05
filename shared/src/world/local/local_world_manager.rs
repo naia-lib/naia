@@ -17,12 +17,9 @@ use crate::{
     types::{HostType, PacketIndex},
     world::{
         entity::entity_converters::GlobalWorldManagerType,
-        host::host_world_manager::{CommandId, HostWorldManager, SubCommandId},
+        host::host_world_manager::{CommandId, HostWorldManager},
         remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
-        sync::{
-            remote_entity_channel::EntityChannelState,
-            HostEntityChannel,
-        },
+        sync::HostEntityChannel,
     },
     ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut,
@@ -31,6 +28,15 @@ use crate::{
     OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager,
     Replicate, Tick, WorldMutType, WorldRefType,
 };
+
+cfg_if! {
+    if #[cfg(feature = "e2e_debug")] {
+        use crate::world::{
+            host::host_world_manager::SubCommandId,
+            sync::remote_entity_channel::EntityChannelState,
+        };
+    }
+}
 
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);

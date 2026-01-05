@@ -81,13 +81,16 @@ use std::{
 
 use crate::{
     sequence_less_than,
-    world::{
-        host::host_world_manager::SubCommandId,
-        sync::remote_component_channel::RemoteComponentChannel,
-    },
+    world::sync::remote_component_channel::RemoteComponentChannel,
     ComponentKind, EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType,
     MessageIndex,
 };
+
+cfg_if! {
+    if #[cfg(feature = "e2e_debug")] {
+        use crate::world::host::host_world_manager::SubCommandId;
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "e2e_debug", allow(dead_code))]
