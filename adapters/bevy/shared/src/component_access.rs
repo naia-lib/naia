@@ -93,9 +93,10 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
     fn add_systems(&self, app: &mut App) {
         app.add_systems(
             Update,
-            (on_component_added::<R>, on_component_removed::<R>)
-                .chain()
-                .in_set(HostSyncChangeTracking),
+            (
+                bevy_ecs::system::IntoSystem::into_system(on_component_added::<R>).in_set(HostSyncChangeTracking),
+                bevy_ecs::system::IntoSystem::into_system(on_component_removed::<R>).in_set(HostSyncChangeTracking),
+            ),
         );
     }
 

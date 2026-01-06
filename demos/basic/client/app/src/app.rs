@@ -1,8 +1,12 @@
 cfg_if! {
     if #[cfg(feature = "mquad")] {
         use miniquad::info;
-    } else {
+    } else if #[cfg(feature = "wbindgen")] {
         use log::info;
+    } else {
+        macro_rules! info {
+            ($($arg:tt)*) => (println!($($arg)*));
+        }
     }
 }
 

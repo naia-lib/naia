@@ -20,7 +20,7 @@ pub fn derive_serde_tuple_struct(
         };
         de_body = quote! {
             #de_body
-            #field_index: Serde::de(reader)?,
+            Serde::de(reader)?,
         };
         bit_length_body = quote! {
             #bit_length_body
@@ -46,9 +46,9 @@ pub fn derive_serde_tuple_struct(
                     #ser_body
                  }
                  fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-                    Ok(Self {
+                    Ok(Self(
                         #de_body
-                    })
+                    ))
                  }
                  fn bit_length(&self) -> u32 {
                     let mut output = 0;

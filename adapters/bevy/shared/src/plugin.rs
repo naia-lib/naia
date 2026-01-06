@@ -32,13 +32,16 @@ impl<T: Send + Sync + 'static> PluginType for SharedPlugin<T> {
         app
             // RESOURCES //
             .init_resource::<HostOwnedMap>()
-            // EVENTS //
-            .add_event::<HostSyncEvent>()
+            // MESSAGES //
+            .add_message::<HostSyncEvent>()
             // SYSTEMS //
             .add_systems(
                 Update,
-                on_host_owned_added.in_set(HostSyncOwnedAddedTracking),
+                bevy_ecs::system::IntoSystem::into_system(on_host_owned_added).in_set(HostSyncOwnedAddedTracking),
             )
-            .add_systems(Update, on_despawn.in_set(HostSyncChangeTracking));
+            .add_systems(
+                Update,
+                bevy_ecs::system::IntoSystem::into_system(on_despawn).in_set(HostSyncChangeTracking),
+            );
     }
 }

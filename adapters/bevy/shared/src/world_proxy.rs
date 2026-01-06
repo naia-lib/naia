@@ -176,9 +176,9 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
         let components = self.world.components();
 
-        for component_id in self.world.entity(*entity).archetype().components() {
+            for component_id in self.world.entity(*entity).archetype().components() {
             let component_info = components
-                .get_info(component_id)
+                .get_info(*component_id)
                 .expect("Components need info to instantiate");
             let type_id = component_info
                 .type_id()
