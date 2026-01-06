@@ -1,9 +1,8 @@
 use bevy::{
     color::LinearRgba,
     log::info,
-    prelude::{Assets, Circle, Color, ColorMaterial, Commands, Mesh, ResMut},
+    prelude::{Assets, Camera2d, Circle, Color, ColorMaterial, Commands, Mesh, ResMut},
 };
-use bevy::prelude::Camera2d;
 use naia_bevy_client::{transport::webrtc, Client};
 
 use naia_bevy_demo_shared::messages::Auth;

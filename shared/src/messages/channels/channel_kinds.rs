@@ -44,6 +44,7 @@ impl ConstBitLength for ChannelKind {
 }
 
 // ChannelKinds
+#[derive(Clone)]
 pub struct ChannelKinds {
     current_net_id: NetId,
     kind_map: HashMap<ChannelKind, (NetId, ChannelSettings)>,

@@ -1,7 +1,7 @@
 use std::any::{Any, TypeId};
 use std::collections::HashMap;
 
-use bevy_ecs::{component::Component, entity::Entity, system::Resource};
+use bevy_ecs::{component::Component, entity::Entity, resource::Resource};
 
 #[derive(Component, Clone, Copy)]
 pub struct HostOwned {

@@ -15,7 +15,6 @@ use naia_shared::Timer;
 use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
 
 pub struct App {
-
     // IdentityReceiver must not be de-allocated, even if we don't use it in this demo
     #[allow(dead_code)]
     id_receiver: Box<dyn IdentityReceiver>,

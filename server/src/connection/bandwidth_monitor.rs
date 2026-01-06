@@ -2,6 +2,7 @@ use std::{collections::HashMap, net::SocketAddr, time::Duration};
 
 use naia_shared::BandwidthMonitor as SingleBandwidthMonitor;
 
+#[derive(Clone)]
 pub struct BandwidthMonitor {
     total_monitor: SingleBandwidthMonitor,
     client_monitors: HashMap<SocketAddr, SingleBandwidthMonitor>,
@@ -10,7 +11,7 @@ pub struct BandwidthMonitor {
 
 impl BandwidthMonitor {
     pub fn new(bandwidth_measure_duration: Duration) -> Self {
-        BandwidthMonitor {
+        Self {
             bandwidth_measure_duration,
             total_monitor: SingleBandwidthMonitor::new(bandwidth_measure_duration),
             client_monitors: HashMap::new(),

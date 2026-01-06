@@ -6,7 +6,7 @@ use macroquad::prelude::{
 };
 
 use naia_client::{
-    shared::{sequence_greater_than, Tick},
+    shared::{sequence_greater_than, Instant, Tick},
     transport::webrtc,
     Client as NaiaClient, ClientConfig, ClientTickEvent, CommandHistory, ConnectEvent,
     DespawnEntityEvent, DisconnectEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
@@ -37,7 +37,7 @@ struct OwnedEntity {
 
 impl OwnedEntity {
     pub fn new(confirmed_entity: Entity, predicted_entity: Entity) -> Self {
-        OwnedEntity {
+        Self {
             confirmed: confirmed_entity,
             predicted: predicted_entity,
         }
@@ -64,7 +64,7 @@ impl App {
         client.auth(Auth::new("charlie", "12345"));
         client.connect(socket);
 
-        App {
+        Self {
             client,
             world: World::default(),
             owned_entity: None,
@@ -115,19 +115,29 @@ impl App {
     }
 
     fn receive_events(&mut self) {
-        if self.client.connection_status().is_disconnected() {
+        if !self.client.connection_status().is_connected() {
+            // send/receive handshake packets to establish connection
+            self.client.receive_all_packets();
+            self.client.send_all_packets(self.world.proxy_mut());
             return;
         }
 
-        let mut events = self.client.receive(self.world.proxy_mut());
+        let now = Instant::now();
+
+        self.client.receive_all_packets();
+        self.client
+            .process_all_packets(self.world.proxy_mut(), &now);
+
+        let mut world_events = self.client.take_world_events();
+        let mut tick_events = self.client.take_tick_events(&now);
 
         // Connect Events
-        for server_address in events.read::<ConnectEvent>() {
+        for server_address in world_events.read::<ConnectEvent>() {
             info!("Client connected to: {}", server_address);
         }
 
         // Disconnect Events
-        for server_address in events.read::<DisconnectEvent>() {
+        for server_address in world_events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
 
             self.world = World::default();
@@ -139,7 +149,7 @@ impl App {
 
         // Message Events
         for entity_assignment in
-            events.read::<MessageEvent<EntityAssignmentChannel, EntityAssignment>>()
+            world_events.read::<MessageEvent<EntityAssignmentChannel, EntityAssignment>>()
         {
             let assign = entity_assignment.assign;
 
@@ -175,13 +185,13 @@ impl App {
         }
 
         // Spawn Entity Events
-        for entity in events.read::<SpawnEntityEvent>() {
+        for entity in world_events.read::<SpawnEntityEvent>() {
             self.server_entities.insert(entity);
             info!("spawned entity");
         }
 
         // Despawn Entity Events
-        for entity in events.read::<DespawnEntityEvent>() {
+        for entity in world_events.read::<DespawnEntityEvent>() {
             self.server_entities.remove(&entity);
             self.interp_entities.remove(&entity);
             info!("despawned entity");
@@ -189,7 +199,7 @@ impl App {
         }
 
         // Insert Component Events
-        for entity in events.read::<InsertComponentEvent<Position>>() {
+        for entity in world_events.read::<InsertComponentEvent<Position>>() {
             if let Some(position) = self.world.proxy().component::<Position>(&entity) {
                 self.interp_entities
                     .insert(entity, Interp::new(*position.x, *position.y));
@@ -202,7 +212,9 @@ impl App {
             let server_entity = owned_entity.confirmed;
             let client_entity = owned_entity.predicted;
 
-            for (server_tick, updated_entity) in events.read::<UpdateComponentEvent<Position>>() {
+            for (server_tick, updated_entity) in
+                world_events.read::<UpdateComponentEvent<Position>>()
+            {
                 // If entity is owned
                 if updated_entity == server_entity {
                     if let Some(last_tick) = &mut latest_tick {
@@ -236,7 +248,9 @@ impl App {
         }
 
         // Client Tick Events
-        for client_tick in events.read::<ClientTickEvent>() {
+        let mut did_tick = false;
+        for client_tick in tick_events.read::<ClientTickEvent>() {
+            did_tick = true;
             let Some(owned_entity) = &self.owned_entity else {
                 continue;
             };
@@ -263,9 +277,13 @@ impl App {
                 shared_behavior::process_command(&command, &mut position);
             }
         }
+        if did_tick {
+            // VERY IMPORTANT! send all packets
+            self.client.send_all_packets(self.world.proxy());
+        }
 
         // Error Events
-        for error in events.read::<ErrorEvent>() {
+        for error in world_events.read::<ErrorEvent>() {
             info!("Client Error: {}", error);
         }
     }

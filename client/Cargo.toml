@@ -26,6 +26,10 @@ transport_udp = [
     "naia-shared/advanced_handshake", "naia-shared/transport_udp",
     "local_ipaddress", "once_cell", "base64", "tokio", "reqwest",
 ]
+transport_local = [ "tokio", "http", "base64", "naia-shared/transport_local" ]
+interior_visibility = [ "naia-shared/interior_visibility" ]
+e2e_debug = []
+test_time = [ "naia-shared/test_time" ]
 
 [dependencies]
 naia-shared = { version = "0.24", path = "../shared" }
@@ -38,3 +42,4 @@ base64 = { version = "0.13", optional = true }
 tokio = { version = "1.15", features = ["full"], optional = true }
 reqwest = { version = "0.11", optional = true }
 once_cell = { version = "1.4.1", optional = true }
+http = { version = "1.2", optional = true }

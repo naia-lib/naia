@@ -1,5 +1,10 @@
 cfg_if! {
-    if #[cfg(all(target_arch = "wasm32", feature = "wbindgen"))] {
+    if #[cfg(feature = "test_time")] {
+        mod test_time;
+        pub use self::test_time::timer::Timer;
+        pub use self::test_time::timestamp::Timestamp;
+    }
+    else if #[cfg(all(target_arch = "wasm32", feature = "wbindgen"))] {
         mod wasm_bindgen;
         pub use self::wasm_bindgen::timer::Timer;
         pub use self::wasm_bindgen::timestamp::Timestamp;

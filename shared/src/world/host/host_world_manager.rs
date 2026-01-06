@@ -1,272 +1,421 @@
 use std::{
-    clone::Clone,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, HashSet},
     hash::Hash,
-    net::SocketAddr,
-    time::Duration,
 };
 
 use crate::{
-    sequence_list::SequenceList,
+    messages::channels::receivers::reliable_receiver::ReliableReceiver,
     world::{
-        entity::entity_converters::GlobalWorldManagerType, local_world_manager::LocalWorldManager,
+        sync::{HostEngine, HostEntityChannel, RemoteEngine, RemoteEntityChannel},
+        update::entity_update_manager::EntityUpdateManager,
     },
-    ComponentKind, DiffMask, EntityAction, HostEntity, Instant, MessageIndex, PacketIndex,
-    WorldRefType,
+    ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage,
+    EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity,
+    HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap,
+    MessageIndex, OwnedLocalEntity, ShortMessageIndex, WorldMutType,
 };
 
-use super::{entity_action_event::EntityActionEvent, world_channel::WorldChannel};
+pub type CommandId = MessageIndex;
+pub type SubCommandId = ShortMessageIndex;
 
-const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
-const ACTION_RECORD_TTL: Duration = Duration::from_secs(60);
+/// Channel to perform ECS replication between server and client
+/// Only handles entity commands (Spawn/despawn entity and insert/remove components)
+/// Will use a reliable sender.
+/// Will wait for acks from the client to know the state of the client's ECS world ("remote")
+pub struct HostWorldManager {
+    // host entity generator
+    entity_generator: HostEntityGenerator,
 
-pub type ActionId = MessageIndex;
+    // For Server, this contains the Entities that the Server has authority over, that it syncs to the Client
+    // For Client, this contains the non-Delegated Entities that the Client has authority over, that it syncs to the Server
+    host_engine: HostEngine,
 
-/// Manages Entities for a given Client connection and keeps them in
-/// sync on the Client
-pub struct HostWorldManager<E: Copy + Eq + Hash + Send + Sync> {
-    // World
-    pub world_channel: WorldChannel<E>,
-
-    // Actions
-    pub sent_action_packets: SequenceList<(Instant, Vec<(ActionId, EntityAction<E>)>)>,
-
-    // Updates
-    /// Map of component updates and [`DiffMask`] that were written into each packet
-    pub sent_updates: HashMap<PacketIndex, (Instant, HashMap<(E, ComponentKind), DiffMask>)>,
-    /// Last [`PacketIndex`] where a component update was written by the server
-    pub last_update_packet_index: PacketIndex,
+    // For Server, this contains the Entities that the Server has authority over, that have been delivered to the Client
+    // For Client, this contains the non-Delegated Entities that the Client has authority over, that have been delivered to the Server
+    delivered_receiver: ReliableReceiver<EntityMessage<HostEntity>>,
+    delivered_engine: RemoteEngine<HostEntity>,
+    incoming_events: Vec<EntityEvent>,
 }
 
-pub struct HostWorldEvents<E: Copy + Eq + Hash + Send + Sync> {
-    pub next_send_actions: VecDeque<(ActionId, EntityActionEvent<E>)>,
-    pub next_send_updates: HashMap<E, HashSet<ComponentKind>>,
-}
-
-impl<E: Copy + Eq + Hash + Send + Sync> HostWorldEvents<E> {
-    pub fn has_events(&self) -> bool {
-        !self.next_send_actions.is_empty() || !self.next_send_updates.is_empty()
-    }
-}
-
-impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
-    /// Create a new HostWorldManager, given the client's address
-    pub fn new(
-        address: &Option<SocketAddr>,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
-    ) -> Self {
-        HostWorldManager {
-            // World
-            world_channel: WorldChannel::new(address, global_world_manager),
-            sent_action_packets: SequenceList::new(),
-
-            // Update
-            sent_updates: HashMap::new(),
-            last_update_packet_index: 0,
+impl HostWorldManager {
+    pub fn new(host_type: HostType, user_key: u64) -> Self {
+        Self {
+            entity_generator: HostEntityGenerator::new(user_key),
+            host_engine: HostEngine::new(host_type),
+            delivered_receiver: ReliableReceiver::new(),
+            delivered_engine: RemoteEngine::new(host_type.invert()),
+            incoming_events: Vec::new(),
         }
     }
 
-    // World
+    pub(crate) fn entity_converter_mut<'a, 'b>(
+        &'b mut self,
+        global_world_manager: &'a dyn GlobalWorldManagerType,
+        entity_map: &'b mut LocalEntityMap,
+    ) -> EntityConverterMut<'a, 'b> {
+        EntityConverterMut::new(global_world_manager, entity_map, &mut self.entity_generator)
+    }
+
+    // Collect
+
+    pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+        &mut self,
+        spawner: &mut dyn GlobalEntitySpawner<E>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        local_entity_map: &LocalEntityMap,
+        world: &mut W,
+        incoming_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)>,
+    ) -> Vec<EntityEvent> {
+        let incoming_messages = EntityMessageReceiver::host_take_incoming_events(
+            &mut self.host_engine,
+            incoming_messages,
+        );
+
+        self.process_incoming_messages(
+            spawner,
+            global_world_manager,
+            local_entity_map,
+            world,
+            incoming_messages,
+        );
+
+        std::mem::take(&mut self.incoming_events)
+    }
+
+    pub fn take_outgoing_commands(&mut self) -> Vec<EntityCommand> {
+        self.host_engine.take_outgoing_commands()
+    }
+
+    pub(crate) fn host_generate_entity(&mut self) -> HostEntity {
+        self.entity_generator.generate_host_entity()
+    }
+
+    pub(crate) fn host_reserve_entity(
+        &mut self,
+        entity_map: &mut LocalEntityMap,
+        global_entity: &GlobalEntity,
+    ) -> HostEntity {
+        self.entity_generator
+            .host_reserve_entity(entity_map, global_entity)
+    }
+
+    pub(crate) fn host_removed_reserved_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Option<HostEntity> {
+        self.entity_generator
+            .host_remove_reserved_entity(global_entity)
+    }
+
+    pub(crate) fn has_entity(&self, host_entity: &HostEntity) -> bool {
+        self.get_host_world().contains_key(host_entity)
+    }
 
     // used when Entity first comes into Connection's scope
-    pub fn init_entity(
+    pub fn init_entity_send_host_commands(
         &mut self,
-        world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
+        entity_update_manager: &mut EntityUpdateManager,
     ) {
+        // Register components immediately when entity comes into scope (not waiting for delivery confirmation)
+        // This ensures mutations can set the diff mask right away
+        for component_kind in &component_kinds {
+            entity_update_manager.register_component(global_entity, component_kind);
+        }
         // add entity
-        self.spawn_entity(world_manager, entity, &component_kinds);
+        self.host_engine
+            .send_command(converter, EntityCommand::Spawn(*global_entity));
         // add components
         for component_kind in component_kinds {
-            self.insert_component(entity, &component_kind);
+            self.host_engine.send_command(
+                converter,
+                EntityCommand::InsertComponent(*global_entity, component_kind),
+            );
         }
     }
 
-    pub fn spawn_entity(
+    pub fn send_command(
         &mut self,
-        world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
-        component_kinds: &Vec<ComponentKind>,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        command: EntityCommand,
     ) {
-        self.world_channel
-            .host_spawn_entity(world_manager, entity, component_kinds);
+        self.host_engine.send_command(converter, command);
     }
 
-    pub fn despawn_entity(&mut self, entity: &E) {
-        self.world_channel.host_despawn_entity(entity);
+    pub(crate) fn get_host_world(&self) -> &HashMap<HostEntity, HostEntityChannel> {
+        self.host_engine.get_world()
     }
 
-    pub fn client_initiated_despawn(&mut self, entity: &E) {
-        self.world_channel.client_initiated_despawn(entity);
-    }
-
-    pub fn insert_component(&mut self, entity: &E, component_kind: &ComponentKind) {
-        self.world_channel
-            .host_insert_component(entity, component_kind);
-    }
-
-    pub fn remove_component(&mut self, entity: &E, component_kind: &ComponentKind) {
-        self.world_channel
-            .host_remove_component(entity, component_kind);
-    }
-
-    pub fn host_has_entity(&self, entity: &E) -> bool {
-        self.world_channel.host_has_entity(entity)
-    }
-
-    // used when Remote Entity gains Write Authority (delegation)
-    pub fn track_remote_entity(
+    pub(crate) fn extract_entity_commands(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
-        component_kinds: Vec<ComponentKind>,
-    ) -> HostEntity {
-        // add entity
-        let new_host_entity =
-            self.world_channel
-                .track_remote_entity(local_world_manager, entity, &component_kinds);
+        host_entity: &HostEntity,
+    ) -> Vec<EntityCommand> {
+        self.host_engine.extract_entity_commands(host_entity)
+    }
 
-        // info!("--- tracking remote entity ---");
+    pub(crate) fn get_delivered_world(&self) -> &HashMap<HostEntity, RemoteEntityChannel> {
+        self.delivered_engine.get_world()
+    }
 
-        // add components
-        for component_kind in component_kinds {
-            self.track_remote_component(entity, &component_kind);
+    pub(crate) fn get_updatable_world(
+        &self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
+        let mut output = HashMap::new();
+        for (host_entity, host_channel) in self.get_host_world() {
+            let Some(delivered_channel) = self.get_delivered_world().get(host_entity) else {
+                continue;
+            };
+            let host_component_kinds = host_channel.component_kinds();
+            let joined_component_kinds =
+                delivered_channel.component_kinds_intersection(host_component_kinds);
+            if joined_component_kinds.is_empty() {
+                continue;
+            }
+
+            let global_entity = converter
+                .host_entity_to_global_entity(host_entity)
+                .expect("Host entity not found in local entity map");
+            output.insert(global_entity, joined_component_kinds);
         }
-
-        // info!("--- ---------------------- ---");
-
-        new_host_entity
+        output
     }
 
-    pub fn untrack_remote_entity(
+    pub(crate) fn deliver_message(
         &mut self,
-        local_world_manager: &mut LocalWorldManager<E>,
-        entity: &E,
+        command_id: CommandId,
+        message: EntityMessage<HostEntity>,
     ) {
-        self.world_channel
-            .untrack_remote_entity(local_world_manager, entity);
+        self.delivered_receiver.buffer_message(command_id, message);
     }
 
-    pub fn track_remote_component(&mut self, entity: &E, component_kind: &ComponentKind) {
-        self.world_channel
-            .track_remote_component(entity, component_kind);
-    }
-
-    // Messages
-
-    pub fn handle_dropped_packets(&mut self, now: &Instant, rtt_millis: &f32) {
-        self.handle_dropped_update_packets(now, rtt_millis);
-        self.handle_dropped_action_packets(now);
-    }
-
-    // Collecting
-
-    fn handle_dropped_action_packets(&mut self, now: &Instant) {
-        let mut pop = false;
-
-        loop {
-            if let Some((_, (time_sent, _))) = self.sent_action_packets.front() {
-                if time_sent.elapsed(now) > ACTION_RECORD_TTL {
-                    pop = true;
-                }
-            } else {
-                return;
-            }
-            if pop {
-                self.sent_action_packets.pop_front();
-            } else {
-                return;
-            }
-        }
-    }
-
-    fn handle_dropped_update_packets(&mut self, now: &Instant, rtt_millis: &f32) {
-        let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
-
-        {
-            let mut dropped_packets = Vec::new();
-            for (packet_index, (time_sent, _)) in &self.sent_updates {
-                let elapsed_since_send = time_sent.elapsed(now);
-                if elapsed_since_send > drop_duration {
-                    dropped_packets.push(*packet_index);
-                }
-            }
-
-            for packet_index in dropped_packets {
-                self.dropped_update_cleanup(packet_index);
-            }
-        }
-    }
-
-    fn dropped_update_cleanup(&mut self, dropped_packet_index: PacketIndex) {
-        if let Some((_, diff_mask_map)) = self.sent_updates.remove(&dropped_packet_index) {
-            for (component_index, diff_mask) in &diff_mask_map {
-                let (entity, component) = component_index;
-                if !self
-                    .world_channel
-                    .diff_handler
-                    .has_component(entity, component)
-                {
-                    continue;
-                }
-                let mut new_diff_mask = diff_mask.clone();
-
-                // walk from dropped packet up to most recently sent packet
-                if dropped_packet_index != self.last_update_packet_index {
-                    let mut packet_index = dropped_packet_index.wrapping_add(1);
-                    while packet_index != self.last_update_packet_index {
-                        if let Some((_, diff_mask_map)) = self.sent_updates.get(&packet_index) {
-                            if let Some(next_diff_mask) = diff_mask_map.get(component_index) {
-                                new_diff_mask.nand(next_diff_mask);
-                            }
-                        }
-
-                        packet_index = packet_index.wrapping_add(1);
-                    }
-                }
-
-                self.world_channel
-                    .diff_handler
-                    .or_diff_mask(entity, component, &new_diff_mask);
-            }
-        }
-    }
-
-    pub fn take_outgoing_events<W: WorldRefType<E>>(
+    pub(crate) fn process_delivered_commands(
         &mut self,
-        world: &W,
-        global_world_manager: &dyn GlobalWorldManagerType<E>,
-        now: &Instant,
-        rtt_millis: &f32,
-    ) -> HostWorldEvents<E> {
-        HostWorldEvents {
-            next_send_actions: self.world_channel.take_next_actions(now, rtt_millis),
-            next_send_updates: self
-                .world_channel
-                .collect_next_updates(world, global_world_manager),
-        }
-    }
-}
-
-impl<E: Copy + Eq + Hash + Send + Sync> HostWorldManager<E> {
-    pub fn notify_packet_delivered(
-        &mut self,
-        packet_index: PacketIndex,
-        local_world_manager: &mut LocalWorldManager<E>,
+        local_entity_map: &mut LocalEntityMap,
+        entity_update_manager: &mut EntityUpdateManager,
     ) {
-        // Updates
-        self.sent_updates.remove(&packet_index);
+        let delivered_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)> =
+            self.delivered_receiver.receive_messages();
 
-        // Actions
-        if let Some((_, action_list)) = self
-            .sent_action_packets
-            .remove_scan_from_front(&packet_index)
-        {
-            for (action_id, action) in action_list {
-                self.world_channel
-                    .action_delivered(local_world_manager, action_id, action);
+        // Filter out MigrateResponse messages - they should not be processed by RemoteEngine
+        // MigrateResponse is a client-only message that the server tracks for delivery but doesn't process
+        let filtered_messages: Vec<(MessageIndex, EntityMessage<HostEntity>)> = delivered_messages
+            .into_iter()
+            .filter(|(_, msg)| !matches!(msg, EntityMessage::MigrateResponse(_, _, _)))
+            .collect();
+
+        for message in EntityMessageReceiver::remote_take_incoming_messages(
+            &mut self.delivered_engine,
+            filtered_messages,
+        ) {
+            match message {
+                EntityMessage::Spawn(host_entity) => {
+                    self.on_delivered_spawn_entity(&host_entity);
+                }
+                EntityMessage::Despawn(host_entity) => {
+                    self.on_delivered_despawn_entity(local_entity_map, &host_entity);
+                }
+                EntityMessage::InsertComponent(host_entity, component_kind) => {
+                    let Some(global_entity) =
+                        local_entity_map.global_entity_from_host(&host_entity)
+                    else {
+                        return;
+                    };
+                    self.on_delivered_insert_component(
+                        entity_update_manager,
+                        global_entity,
+                        &component_kind,
+                    );
+                }
+                EntityMessage::RemoveComponent(host_entity, component_kind) => {
+                    let Some(global_entity) =
+                        local_entity_map.global_entity_from_host(&host_entity)
+                    else {
+                        return;
+                    };
+                    self.on_delivered_remove_component(
+                        entity_update_manager,
+                        global_entity,
+                        &component_kind,
+                    );
+                }
+                EntityMessage::Noop => {
+                    // do nothing
+                }
+                _ => {
+                    // Only Auth-related messages are left here
+                    // Right now it doesn't seem like we need to track auth state here
+                }
             }
         }
+    }
+
+    fn process_incoming_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+        &mut self,
+        _spawner: &mut dyn GlobalEntitySpawner<E>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
+        local_entity_map: &LocalEntityMap,
+        _world: &mut W,
+        incoming_messages: Vec<EntityMessage<HostEntity>>,
+    ) {
+        // execute the action and emit an event
+        for message in incoming_messages {
+            // info!("Processing EntityMessage<HostEntity>: {:?}", message);
+            match message {
+                EntityMessage::Spawn(_) => {
+                    todo!("Implement EntityMessage::<HostEntity>::Spawn handling");
+                }
+                EntityMessage::Despawn(_) => {
+                    todo!("Implement EntityMessage::<HostEntity>::Despawn handling");
+                }
+                EntityMessage::InsertComponent(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::InsertComponent handling");
+                }
+                EntityMessage::RemoveComponent(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::RemoveComponent handling");
+                }
+                EntityMessage::Publish(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::Publish handling");
+                }
+                EntityMessage::Unpublish(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::Unpublish handling");
+                }
+                EntityMessage::EnableDelegation(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::EnableDelegation handling");
+                }
+                EntityMessage::DisableDelegation(_, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::DisableDelegation handling");
+                }
+                EntityMessage::SetAuthority(_, _, _) => {
+                    todo!("Implement EntityMessage::<HostEntity>::SetAuthority handling");
+                }
+                EntityMessage::MigrateResponse(_sub_id, client_host_entity, new_remote_entity) => {
+                    // Client receives MigrateResponse from server telling it to migrate
+                    // a client-created delegated entity from HostEntity to RemoteEntity
+
+                    // Look up the global entity from the client's HostEntity
+                    let global_entity = *local_entity_map.global_entity_from_host(&client_host_entity)
+                        .expect("Host entity not found in local entity map during MigrateResponse processing");
+
+                    // Create event for the client to process the migration
+                    self.incoming_events.push(EntityEvent::MigrateResponse(
+                        global_entity,
+                        new_remote_entity,
+                    ));
+                }
+                EntityMessage::Noop => {
+                    // do nothing
+                }
+                // Whitelisted incoming messages:
+                // 1. EntityMessage::EnableDelegationResponse
+                // 2. EntityMessage::RequestAuthority
+                // 3. EntityMessage::ReleaseAuthority
+                msg => {
+                    let event = msg.to_event(local_entity_map);
+                    self.incoming_events.push(event);
+                }
+            }
+        }
+    }
+
+    fn on_delivered_spawn_entity(&mut self, _host_entity: &HostEntity) {
+        // stubbed
+    }
+
+    pub fn on_delivered_despawn_entity(
+        &mut self,
+        local_entity_map: &mut LocalEntityMap,
+        host_entity: &HostEntity,
+    ) {
+        self.entity_generator
+            .remove_by_host_entity(local_entity_map, host_entity);
+    }
+
+    fn on_delivered_insert_component(
+        &mut self,
+        _entity_update_manager: &mut EntityUpdateManager,
+        _global_entity: &GlobalEntity,
+        _component_kind: &ComponentKind,
+    ) {
+        // Component is already registered when entity comes into scope (in host_init_entity),
+        // so we don't need to register again here when InsertComponent is delivered
+    }
+
+    fn on_delivered_remove_component(
+        &mut self,
+        entity_update_manager: &mut EntityUpdateManager,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        entity_update_manager.deregister_component(global_entity, component_kind);
+    }
+
+    pub(crate) fn insert_entity_channel(&mut self, entity: HostEntity, channel: HostEntityChannel) {
+        self.host_engine.insert_entity_channel(entity, channel);
+    }
+
+    pub(crate) fn get_entity_channel(&self, entity: &HostEntity) -> Option<&HostEntityChannel> {
+        self.host_engine.get_entity_channel(entity)
+    }
+
+    pub(crate) fn get_entity_channel_mut(
+        &mut self,
+        entity: &HostEntity,
+    ) -> Option<&mut HostEntityChannel> {
+        self.host_engine.get_entity_channel_mut(entity)
+    }
+
+    pub(crate) fn remove_entity_channel(&mut self, entity: &HostEntity) -> HostEntityChannel {
+        self.host_engine.remove_entity_channel(entity)
+    }
+
+    #[allow(dead_code)]
+    fn on_delivered_migrate_response(
+        &mut self,
+        local_entity_map: &mut LocalEntityMap,
+        global_entity: GlobalEntity,
+        new_host_entity: HostEntity,
+    ) {
+        // Step 1: Get the old RemoteEntity from the global entity
+        let old_remote_entity = local_entity_map
+            .global_entity_to_remote_entity(&global_entity)
+            .expect("Global entity not found in local entity map");
+
+        // Step 2: Force-drain all buffers in RemoteEntityChannel
+        // Note: This would need to be implemented in RemoteWorldManager
+        // self.remote.force_drain_entity_buffers(&old_remote_entity);
+
+        // Step 3: Extract component state from RemoteEntityChannel
+        // Note: This would need to be implemented in RemoteWorldManager
+        // let component_kinds = self.remote.extract_component_kinds(&old_remote_entity);
+
+        // Step 4: Remove RemoteEntityChannel from RemoteEngine
+        // Note: This would need to be implemented in RemoteWorldManager
+        // let _old_remote_channel = self.remote.remove_entity_channel(&old_remote_entity);
+
+        // Step 5: Create new HostEntityChannel with extracted component state
+        // Note: For now, create with empty component set
+        let new_host_channel = HostEntityChannel::new_with_components(
+            HostType::Client, // TODO: Get actual host_type
+            HashSet::new(),   // TODO: Use extracted component_kinds
+        );
+
+        // Step 6: Insert new HostEntityChannel into HostEngine
+        self.host_engine
+            .insert_entity_channel(new_host_entity, new_host_channel);
+
+        // Step 7: Update LocalEntityMap to point to new HostEntity
+        local_entity_map.insert_with_host_entity(global_entity, new_host_entity);
+
+        // Step 8: Install entity redirect in LocalEntityMap
+        let old_entity = OwnedLocalEntity::Remote(old_remote_entity.value());
+        let new_entity = OwnedLocalEntity::Host(new_host_entity.value());
+        local_entity_map.install_entity_redirect(old_entity, new_entity);
+
+        // Step 9: Clean up old remote entity
+        // Note: This would need to be implemented in RemoteWorldManager
+        // self.remote.despawn_entity(local_entity_map, &old_remote_entity);
     }
 }

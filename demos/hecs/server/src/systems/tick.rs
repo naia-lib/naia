@@ -116,9 +116,9 @@ pub fn check_scopes(app: &mut App) {
     }
 }
 
-pub fn send_updates(app: &mut App) {
+pub fn send_all_packets(app: &mut App) {
     // VERY IMPORTANT! Calling this actually sends all update data
     // packets to all Clients that require it. If you don't call this
     // method, the Server will never communicate with it's connected Clients
-    app.server.send_all_updates(&app.world);
+    app.server.send_all_packets(&app.world);
 }

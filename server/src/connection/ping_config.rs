@@ -16,7 +16,7 @@ pub struct PingConfig {
 }
 
 impl PingConfig {
-    /// Creates a new MonitorConfig, used to monitor statistics about the
+    /// Creates a new PingConfig, used to monitor statistics about the
     /// network
     pub fn new(
         ping_interval: Duration,
@@ -24,7 +24,7 @@ impl PingConfig {
         jitter_initial_estimate: Duration,
         rtt_smoothing_factor: f32,
     ) -> Self {
-        PingConfig {
+        Self {
             ping_interval,
             rtt_initial_estimate,
             jitter_initial_estimate,

@@ -1,8 +1,10 @@
 use std::{collections::HashMap, thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::Random, transport::webrtc, AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent,
-    PublishEntityEvent, RoomKey, Server as NaiaServer, ServerConfig, TickEvent, UserKey,
+    shared::{Instant, Random},
+    transport::webrtc,
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, PublishEntityEvent, RoomKey,
+    Server as NaiaServer, ServerConfig, TickEvent, UserKey,
 };
 
 use naia_demo_world::{Entity, World};
@@ -62,15 +64,23 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        let mut events = self.server.receive(self.world.proxy_mut());
-        if events.is_empty() {
+        let now = Instant::now();
+
+        self.server.receive_all_packets();
+        self.server
+            .process_all_packets(self.world.proxy_mut(), &now);
+
+        let mut world_events = self.server.take_world_events();
+        let mut tick_events = self.server.take_tick_events(&now);
+
+        if world_events.is_empty() && tick_events.is_empty() {
             // If we don't sleep here, app will loop at 100% CPU until a new message comes in
             sleep(Duration::from_millis(3));
             return;
         }
 
         // Auth Events
-        for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
+        for (user_key, auth) in world_events.read::<AuthEvent<Auth>>() {
             if auth.username == "charlie" && auth.password == "12345" {
                 // Accept incoming connection
                 self.server.accept_connection(&user_key);
@@ -81,7 +91,7 @@ impl App {
         }
 
         // Connect Events
-        for user_key in events.read::<ConnectEvent>() {
+        for user_key in world_events.read::<ConnectEvent>() {
             // New User has joined the Server
             let user_address = self
                 .server
@@ -134,8 +144,8 @@ impl App {
         }
 
         // Disconnect Events
-        for (user_key, user) in events.read::<DisconnectEvent>() {
-            info!("Naia Server disconnected from: {}", user.address());
+        for (user_key, user_addr) in world_events.read::<DisconnectEvent>() {
+            info!("Naia Server disconnected from: {}", user_addr);
             if let Some(entity) = self.user_to_square_map.remove(&user_key) {
                 self.server
                     .entity_mut(self.world.proxy_mut(), &entity)
@@ -145,7 +155,7 @@ impl App {
         }
 
         // Publish Entity Events for Client Cursors
-        for (_user_key, client_entity) in events.read::<PublishEntityEvent>() {
+        for (_user_key, client_entity) in world_events.read::<PublishEntityEvent>() {
             info!("client entity has been made public");
 
             // Add newly public client entity to the main Room
@@ -157,7 +167,7 @@ impl App {
         // Tick Events
         let mut has_ticked = false;
 
-        for server_tick in events.read::<TickEvent>() {
+        for server_tick in tick_events.read::<TickEvent>() {
             has_ticked = true;
 
             // All game logic should happen here, on a tick event
@@ -193,11 +203,11 @@ impl App {
             // VERY IMPORTANT! Calling this actually sends all update data
             // packets to all Clients that require it. If you don't call this
             // method, the Server will never communicate with it's connected Clients
-            self.server.send_all_updates(self.world.proxy());
+            self.server.send_all_packets(self.world.proxy());
         }
 
         // Error Events
-        for error in events.read::<ErrorEvent>() {
+        for error in world_events.read::<ErrorEvent>() {
             info!("Naia Server error: {}", error);
         }
     }

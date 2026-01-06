@@ -13,7 +13,6 @@ use super::{
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     Socket as TransportSocket,
 };
-use crate::user::UserAuthAddr;
 
 pub struct Socket {
     server_addrs: ServerAddrs,
@@ -47,26 +46,26 @@ impl TransportAuthSender for Box<dyn AuthSender> {
     ///
     fn accept(
         &self,
-        address: &UserAuthAddr,
+        address: &SocketAddr,
         identity_token: &IdentityToken,
     ) -> Result<(), SendError> {
         self.as_ref()
-            .accept(&address.addr(), identity_token)
+            .accept(address, identity_token)
             .map_err(|_| SendError)
     }
     ///
-    fn reject(&self, address: &UserAuthAddr) -> Result<(), SendError> {
-        self.as_ref().reject(&address.addr()).map_err(|_| SendError)
+    fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
+        self.as_ref().reject(address).map_err(|_| SendError)
     }
 }
 
 impl TransportAuthReceiver for Box<dyn AuthReceiver> {
     ///
-    fn receive(&mut self) -> Result<Option<(UserAuthAddr, &[u8])>, RecvError> {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
         match self.as_mut().receive() {
             Ok(auth_opt) => match auth_opt {
                 Some((addr, payload)) => {
-                    return Ok(Some((UserAuthAddr::new(addr), payload)));
+                    return Ok(Some((addr, payload)));
                 }
                 None => {
                     return Ok(None);

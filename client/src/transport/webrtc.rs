@@ -1,14 +1,14 @@
 use naia_shared::SocketConfig;
 
 use naia_client_socket::{
-    IdentityReceiver, IdentityReceiverResult as SocketIdentityReceiverResult, PacketReceiver, PacketSender, ServerAddr,
-    Socket as ClientSocket,
+    IdentityReceiver, IdentityReceiverResult as SocketIdentityReceiverResult, PacketReceiver,
+    PacketSender, ServerAddr, Socket as ClientSocket,
 };
 
 use super::{
-    IdentityReceiver as TransportIdentityReceiver, PacketReceiver as TransportReceiver,
-    PacketSender as TransportSender, RecvError, SendError, ServerAddr as TransportAddr,
-    Socket as TransportSocket, IdentityReceiverResult,
+    IdentityReceiver as TransportIdentityReceiver, IdentityReceiverResult,
+    PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
+    ServerAddr as TransportAddr, Socket as TransportSocket,
 };
 
 pub struct Socket {
@@ -59,7 +59,9 @@ impl TransportIdentityReceiver for Box<dyn IdentityReceiver> {
         match self.as_mut().receive() {
             SocketIdentityReceiverResult::Waiting => IdentityReceiverResult::Waiting,
             SocketIdentityReceiverResult::Success(token) => IdentityReceiverResult::Success(token),
-            SocketIdentityReceiverResult::ErrorResponseCode(code) => IdentityReceiverResult::ErrorResponseCode(code),
+            SocketIdentityReceiverResult::ErrorResponseCode(code) => {
+                IdentityReceiverResult::ErrorResponseCode(code)
+            }
         }
     }
 }

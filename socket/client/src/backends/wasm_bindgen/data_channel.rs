@@ -193,7 +193,8 @@ impl DataChannel {
                                                 }
                                             }
 
-                                            let candidate_init_dict: RtcIceCandidateInit = RtcIceCandidateInit::new(candidate_str);
+                                            let candidate_init_dict: RtcIceCandidateInit =
+                                                RtcIceCandidateInit::new(candidate_str);
                                             candidate_init_dict.set_sdp_m_line_index(Some(
                                                 session_response.candidate.sdp_m_line_index,
                                             ));

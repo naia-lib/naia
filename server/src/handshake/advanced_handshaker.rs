@@ -110,7 +110,7 @@ impl Handshaker for HandshakeManager {
             }
             HandshakeHeader::ClientConnectRequest => {
                 // send connect response
-                let writer = self.write_connect_response();
+                let writer = Self::write_connect_response();
                 let packet = writer.to_packet();
 
                 if has_connection {
@@ -126,11 +126,12 @@ impl Handshaker for HandshakeManager {
             }
             HandshakeHeader::Disconnect => {
                 if self.verify_disconnect_request(address, reader) {
-                    let user_key = *self
-                        .been_handshaked_users
-                        .get(address)
-                        .expect("should be a user by now, from validation step");
-                    return Ok(HandshakeAction::DisconnectUser(user_key));
+                    // Get the user_key for this address to disconnect
+                    if let Some(user_key) = self.authenticated_and_identified_users.get(address) {
+                        return Ok(HandshakeAction::DisconnectUser(*user_key));
+                    } else {
+                        return Ok(HandshakeAction::None);
+                    }
                 } else {
                     return Ok(HandshakeAction::None);
                 }
@@ -143,6 +144,15 @@ impl Handshaker for HandshakeManager {
                 return Ok(HandshakeAction::None);
             }
         }
+    }
+
+    fn reset(&mut self) {
+        self.authenticated_and_identified_users.clear();
+        self.authenticated_unidentified_users.clear();
+        self.identity_token_map.clear();
+        self.been_handshaked_users.clear();
+        self.address_to_timestamp_map.clear();
+        self.timestamp_digest_map.clear();
     }
 }
 
@@ -219,7 +229,7 @@ impl HandshakeManager {
     }
 
     // Step 5 of Handshake
-    fn write_connect_response(&self) -> BitWriter {
+    pub(crate) fn write_connect_response() -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
         HandshakeHeader::ServerConnectResponse.ser(&mut writer);

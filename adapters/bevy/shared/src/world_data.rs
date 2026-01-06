@@ -1,12 +1,11 @@
 use std::{
-    any::Any,
     collections::{HashMap, HashSet},
     default::Default,
 };
 
 use bevy_app::App;
 use bevy_ecs::{
-    component::Component,
+    component::{Component, Mutable},
     entity::Entity,
     prelude::Resource,
     world::{FromWorld, World},
@@ -19,7 +18,20 @@ use super::component_access::{ComponentAccess, ComponentAccessor};
 #[derive(Resource)]
 pub struct WorldData {
     entities: HashSet<Entity>,
-    kind_to_accessor_map: HashMap<ComponentKind, Box<dyn Any>>,
+    kind_to_accessor_map: HashMap<ComponentKind, Box<dyn ComponentAccess>>,
+}
+
+impl Clone for WorldData {
+    fn clone(&self) -> Self {
+        Self {
+            entities: self.entities.clone(),
+            kind_to_accessor_map: self
+                .kind_to_accessor_map
+                .iter()
+                .map(|(kind, accessor)| (*kind, accessor.box_clone()))
+                .collect(),
+        }
+    }
 }
 
 unsafe impl Send for WorldData {}
@@ -50,10 +62,7 @@ impl WorldData {
     }
 
     pub fn add_systems(&self, app: &mut App) {
-        for (_kind, accessor_any) in &self.kind_to_accessor_map {
-            let accessor = accessor_any
-                .downcast_ref::<Box<dyn ComponentAccess>>()
-                .unwrap();
+        for (_kind, accessor) in &self.kind_to_accessor_map {
             accessor.add_systems(app);
         }
     }
@@ -85,13 +94,13 @@ impl WorldData {
         &self,
         component_kind: &ComponentKind,
     ) -> Option<&Box<dyn ComponentAccess>> {
-        if let Some(accessor_any) = self.kind_to_accessor_map.get(component_kind) {
-            return accessor_any.downcast_ref::<Box<dyn ComponentAccess>>();
-        }
-        None
+        self.kind_to_accessor_map.get(component_kind)
     }
 
-    pub(crate) fn put_kind<R: Replicate + Component>(&mut self, component_kind: &ComponentKind) {
+    pub(crate) fn put_kind<R: Replicate + Component<Mutability = Mutable>>(
+        &mut self,
+        component_kind: &ComponentKind,
+    ) {
         self.kind_to_accessor_map
             .insert(*component_kind, ComponentAccessor::<R>::create());
     }

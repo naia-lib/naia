@@ -5,14 +5,13 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use naia_shared::{transport_udp, IdentityToken, LinkConditionerConfig};
+use naia_shared::{http_utils, IdentityToken, LinkConditionerConfig};
 
 use super::{
-    conditioner::ConditionedPacketReceiver, AuthReceiver as TransportAuthReceiver,
-    AuthSender as TransportAuthSender, PacketReceiver, PacketSender as TransportSender, RecvError,
+    AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
+    ConditionedPacketReceiver, PacketReceiver, PacketSender as TransportSender, RecvError,
     SendError, Socket as TransportSocket,
 };
-use crate::user::UserAuthAddr;
 
 // Socket
 pub struct Socket {
@@ -72,7 +71,10 @@ impl TransportSocket for Socket {
 
         let packet_receiver: Box<dyn PacketReceiver> = {
             if let Some(config) = &self.config {
-                Box::new(ConditionedPacketReceiver::new(packet_receiver, config))
+                Box::new(ConditionedPacketReceiver::new(
+                    Box::new(packet_receiver),
+                    config,
+                ))
             } else {
                 Box::new(packet_receiver)
             }
@@ -89,6 +91,7 @@ impl TransportSocket for Socket {
 
 // Packet Sender
 
+#[derive(Clone)]
 struct UdpPacketSender {
     socket: Arc<Mutex<UdpSocket>>,
 }
@@ -174,7 +177,7 @@ impl AuthIo {
         }
     }
 
-    fn receive(&mut self) -> Result<Option<(UserAuthAddr, &[u8])>, RecvError> {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
         match self.socket.accept() {
             Ok((mut stream, addr)) => {
                 let recv_len = stream.read(&mut self.buffer).unwrap();
@@ -185,7 +188,7 @@ impl AuthIo {
                 }
                 self.outgoing_streams.insert(addr, stream);
 
-                let request = transport_udp::bytes_to_request(&self.buffer[..recv_len]);
+                let request = http_utils::bytes_to_request(&self.buffer[..recv_len]);
                 if request.headers().contains_key("Authorization") {
                     let auth_bytes = request
                         .headers()
@@ -195,10 +198,7 @@ impl AuthIo {
                         .unwrap();
                     let auth_bytes = base64::decode(auth_bytes).unwrap();
                     self.buffer[0..auth_bytes.len()].copy_from_slice(&auth_bytes);
-                    return Ok(Some((
-                        UserAuthAddr::new(addr),
-                        &self.buffer[..auth_bytes.len()],
-                    )));
+                    return Ok(Some((addr, &self.buffer[..auth_bytes.len()])));
                 } else {
                     return Ok(None);
                 }
@@ -216,10 +216,10 @@ impl AuthIo {
     /// Sends an accept packet from the Client Socket
     fn accept(
         &mut self,
-        address: &UserAuthAddr,
+        address: &SocketAddr,
         identity_token: &IdentityToken,
     ) -> Result<(), SendError> {
-        if let Some(mut stream) = self.outgoing_streams.remove(&address.addr()) {
+        if let Some(mut stream) = self.outgoing_streams.remove(address) {
             let response_body = format!("{}\r\n{}", identity_token, self.public_udp_addr);
             let response_body_bytes = response_body.into_bytes();
 
@@ -227,7 +227,7 @@ impl AuthIo {
                 .status(200)
                 .body(response_body_bytes)
                 .unwrap();
-            let response_bytes = transport_udp::response_to_bytes(response);
+            let response_bytes = http_utils::response_to_bytes(response);
             stream.write_all(&response_bytes).unwrap();
 
             stream.flush().unwrap();
@@ -238,13 +238,13 @@ impl AuthIo {
     }
 
     /// Sends a rejection packet from the Client Socket
-    fn reject(&mut self, address: &UserAuthAddr) -> Result<(), SendError> {
-        if let Some(mut stream) = self.outgoing_streams.remove(&address.addr()) {
+    fn reject(&mut self, address: &SocketAddr) -> Result<(), SendError> {
+        if let Some(mut stream) = self.outgoing_streams.remove(address) {
             let response = http::Response::builder()
                 .status(401)
                 .body(Vec::new())
                 .unwrap();
-            let response_bytes = transport_udp::response_to_bytes(response);
+            let response_bytes = http_utils::response_to_bytes(response);
             stream.write_all(&response_bytes).unwrap();
 
             stream.flush().unwrap();
@@ -271,14 +271,14 @@ impl TransportAuthSender for AuthSender {
     /// Sends an accept packet from the Client Socket
     fn accept(
         &self,
-        address: &UserAuthAddr,
+        address: &SocketAddr,
         identity_token: &IdentityToken,
     ) -> Result<(), SendError> {
         self.auth_io.lock().unwrap().accept(address, identity_token)
     }
 
     /// Sends a rejection packet from the Client Socket
-    fn reject(&self, address: &UserAuthAddr) -> Result<(), SendError> {
+    fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
         self.auth_io.lock().unwrap().reject(address)
     }
 }
@@ -300,7 +300,7 @@ impl AuthReceiver {
 }
 
 impl TransportAuthReceiver for AuthReceiver {
-    fn receive(&mut self) -> Result<Option<(UserAuthAddr, &[u8])>, RecvError> {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
         let mut guard = self.auth_io.lock().unwrap();
         match guard.receive() {
             Ok(option) => match option {

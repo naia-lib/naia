@@ -1,15 +1,20 @@
 use std::{collections::VecDeque, mem};
 
+use log::{info, warn};
+
 use naia_serde::{BitReader, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::messages::channels::senders::request_sender::LocalRequestId;
+use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::{
     messages::{
-        channels::receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+        channels::{
+            receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+            senders::request_sender::LocalRequestId,
+        },
         message_kinds::MessageKinds,
     },
-    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
+    world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
     LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer,
 };
 
@@ -36,10 +41,25 @@ impl UnorderedUnreliableReceiver {
         message_kinds.read(reader, converter)
     }
 
-    fn recv_message(&mut self, entity_waitlist: &mut EntityWaitlist, message: MessageContainer) {
-        if let Some(entity_set) = message.relations_waiting() {
-            entity_waitlist.queue(&entity_set, &mut self.waitlist_store, message);
+    fn recv_message(
+        &mut self,
+        local_world_manager: &mut LocalWorldManager,
+        message: MessageContainer,
+    ) {
+        if let Some(remote_entity_set) = message.relations_waiting() {
+            warn!(
+                "Queuing waiting message {:?}! Waiting on entities: {:?}",
+                message.name(),
+                remote_entity_set
+            );
+            local_world_manager.entity_waitlist_queue(
+                &remote_entity_set,
+                &mut self.waitlist_store,
+                message,
+            );
             return;
+        } else {
+            info!("Received message {:?}!", message.name());
         }
 
         self.incoming_messages.push_back(message);
@@ -51,7 +71,7 @@ impl ChannelReceiver<MessageContainer> for UnorderedUnreliableReceiver {
         &mut self,
         _message_kinds: &MessageKinds,
         now: &Instant,
-        entity_waitlist: &mut EntityWaitlist,
+        entity_waitlist: &mut RemoteEntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {
@@ -69,8 +89,7 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        local_world_manager: &mut LocalWorldManager,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         loop {
@@ -79,8 +98,12 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
                 break;
             }
 
-            let message = self.read_message(message_kinds, converter, reader)?;
-            self.recv_message(entity_waitlist, message);
+            let message = self.read_message(
+                message_kinds,
+                local_world_manager.entity_converter(),
+                reader,
+            )?;
+            self.recv_message(local_world_manager, message);
         }
 
         Ok(())

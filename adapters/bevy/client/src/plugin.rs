@@ -1,21 +1,28 @@
 use std::{marker::PhantomData, ops::DerefMut, sync::Mutex};
 
-use bevy_app::{App, Plugin as PluginType, Update};
-use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
+use bevy_app::{App, Plugin as PluginType, Startup, Update};
+use bevy_ecs::{entity::Entity, schedule::IntoScheduleConfigs};
 
-use crate::events::RequestEvents;
-use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SharedPlugin, WorldData};
+use naia_bevy_shared::{
+    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
+    ProcessPackets, Protocol, ReceivePackets, SendPackets, SharedPlugin, TranslateTickEvents,
+    TranslateWorldEvents, WorldData, WorldToHostSync, WorldUpdate,
+};
 use naia_client::{Client, ClientConfig};
+
+use crate::{component_event_registry::ComponentEventRegistry, events::RequestEvents};
 
 use super::{
     client::ClientWrapper,
     events::{
         ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
-        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvents,
-        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, ServerTickEvent,
-        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, MessageEvents,
+        PublishEntityEvent, RejectEvent, ServerTickEvent, SpawnEntityEvent, UnpublishEntityEvent,
     },
-    systems::before_receive_events,
+    systems::{
+        process_packets, receive_packets, send_packets, send_packets_init, translate_tick_events,
+        translate_world_events, world_to_host_sync,
+    },
 };
 
 struct PluginConfig {
@@ -25,7 +32,7 @@ struct PluginConfig {
 
 impl PluginConfig {
     pub fn new(client_config: ClientConfig, protocol: Protocol) -> Self {
-        PluginConfig {
+        Self {
             client_config,
             protocol,
         }
@@ -68,6 +75,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_plugins(SharedPlugin::<T>::new())
             // RESOURCES //
             .insert_resource(client)
+            .init_resource::<ComponentEventRegistry<T>>()
             // EVENTS //
             .add_event::<ConnectEvent<T>>()
             .add_event::<DisconnectEvent<T>>()
@@ -84,13 +92,33 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_event::<EntityAuthGrantedEvent<T>>()
             .add_event::<EntityAuthDeniedEvent<T>>()
             .add_event::<EntityAuthResetEvent<T>>()
-            .add_event::<InsertComponentEvents<T>>()
-            .add_event::<UpdateComponentEvents<T>>()
-            .add_event::<RemoveComponentEvents<T>>()
+            // SYSTEM SETS //
+            .configure_sets(Update, ReceivePackets.before(TranslateTickEvents))
+            .configure_sets(Update, TranslateTickEvents.before(HandleTickEvents))
+            .configure_sets(Update, HandleTickEvents.before(ProcessPackets))
+            .configure_sets(Update, ProcessPackets.before(TranslateWorldEvents))
+            .configure_sets(Update, TranslateWorldEvents.before(HandleWorldEvents))
+            .configure_sets(Update, HandleWorldEvents.before(WorldUpdate))
+            .configure_sets(Update, WorldUpdate.before(HostSyncOwnedAddedTracking))
+            .configure_sets(
+                Update,
+                HostSyncOwnedAddedTracking.before(HostSyncChangeTracking),
+            )
+            .configure_sets(Update, HostSyncChangeTracking.before(WorldToHostSync))
+            .configure_sets(Update, WorldToHostSync.before(SendPackets))
             // SYSTEMS //
+            .add_systems(Update, receive_packets::<T>.in_set(ReceivePackets))
             .add_systems(
                 Update,
-                before_receive_events::<T>.in_set(BeforeReceiveEvents),
-            );
+                translate_tick_events::<T>.in_set(TranslateTickEvents),
+            )
+            .add_systems(Update, process_packets::<T>.in_set(ProcessPackets))
+            .add_systems(
+                Update,
+                translate_world_events::<T>.in_set(TranslateWorldEvents),
+            )
+            .add_systems(Update, world_to_host_sync::<T>.in_set(WorldToHostSync))
+            .add_systems(Startup, send_packets_init::<T>)
+            .add_systems(Update, send_packets::<T>.in_set(SendPackets));
     }
 }

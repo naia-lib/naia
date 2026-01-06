@@ -55,7 +55,7 @@ pub fn cursor_input(
     mut position_query: Query<&mut Position>,
 ) {
     if let Some(entity) = global.cursor_entity {
-        if let Ok(window) = window_query.get_single() {
+        if let Ok(window) = window_query.single() {
             if let Ok(mut cursor_position) = position_query.get_mut(entity) {
                 if let Some(mouse_position) = window_relative_mouse_position(window) {
                     *cursor_position.x = mouse_position.x as i16;

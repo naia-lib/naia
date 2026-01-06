@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use naia_shared::{Channel, ChannelKind, Message, MessageContainer, MessageKind};
 
-use crate::{events, UserKey};
+use crate::{events::world_events, UserKey};
 
 pub struct TickBufferMessages {
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
@@ -23,11 +23,11 @@ impl TickBufferMessages {
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {
-        events::push_message_impl(&mut self.messages, user_key, channel_kind, message);
+        world_events::push_message_impl(&mut self.messages, user_key, channel_kind, message);
         self.empty = false;
     }
 
     pub fn read<C: Channel, M: Message>(&mut self) -> Vec<(UserKey, M)> {
-        return events::read_channel_messages::<C, M>(&mut self.messages);
+        return world_events::read_channel_messages::<C, M>(&mut self.messages);
     }
 }

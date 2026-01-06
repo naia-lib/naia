@@ -69,7 +69,7 @@ impl Handshaker for HandshakeManager {
                     let writer = self.write_identify_request(identity_token);
                     return Some(writer.to_packet());
                 } else {
-                    // warn!("Identity Token not set");
+                    log::warn!("HandshakeManager: Timer ringing but Identity Token not set");
                     return None;
                 }
             }
@@ -105,10 +105,12 @@ impl Handshaker for HandshakeManager {
                 };
                 match handshake_header {
                     HandshakeHeader::ServerIdentifyResponse => {
+                        // info!("Received ServerIdentifyResponse");
                         self.recv_identify_response(reader);
                         return None;
                     }
                     HandshakeHeader::ServerConnectResponse => {
+                        // info!("Received ServerConnectResponse");
                         return self.recv_connect_response();
                     }
                     HandshakeHeader::ClientIdentifyRequest

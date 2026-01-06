@@ -48,55 +48,45 @@ impl Handshaker for HandshakeManager {
         // Handshake stuff
         match handshake_header {
             HandshakeHeader::ClientIdentifyRequest => {
-                if let Ok(id_token) = self.recv_identify_request(reader) {
-                    if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
-                    {
-                        // remove identity token from map
-                        if self.identity_token_map.remove(&user_key).is_none() {
-                            panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
-                        }
-
-                        // User is authenticated
-                        self.authenticated_and_identified_users
-                            .insert(*address, user_key);
-                    } else {
-                        // commented out because it's pretty common to get multiple ClientIdentifyRequests which would trigger this
-                        //warn!("Server Error: User not authenticated for: {:?}, with token: {}", address, identity_token);
-
-                        return Ok(HandshakeAction::None);
-                    }
-
+                if has_connection {
                     let identify_response = Self::write_identity_response().to_packet();
-
                     return Ok(HandshakeAction::SendPacket(identify_response));
                 } else {
-                    return Ok(HandshakeAction::None);
+                    let Ok(id_token) = self.recv_identify_request(reader) else {
+                        return Ok(HandshakeAction::None);
+                    };
+                    let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
+                    else {
+                        return Ok(HandshakeAction::None);
+                    };
+                    // Verify identity token exists (but keep it for disconnect verification)
+                    if !self.identity_token_map.contains_key(&user_key) {
+                        panic!("Server Error: Identity Token not found for user_key: {:?}. Shouldn't be possible.", user_key);
+                    }
+
+                    // User is authenticated
+                    self.authenticated_and_identified_users
+                        .insert(*address, user_key);
+
+                    // send identify response
+                    let identify_response = Self::write_identity_response().to_packet();
+                    return Ok(HandshakeAction::FinalizeConnection(
+                        user_key,
+                        identify_response,
+                    ));
                 }
             }
             HandshakeHeader::ClientConnectRequest => {
-                // send connect response
-                let writer = self.write_connect_response();
-                let packet = writer.to_packet();
-
-                if has_connection {
-                    return Ok(HandshakeAction::SendPacket(packet));
-                } else {
-                    let Some(user_key) = self.authenticated_and_identified_users.get(address)
-                    else {
-                        warn!("Server Error: User not authenticated for: {:?}", address);
-                        return Ok(HandshakeAction::None);
-                    };
-
-                    return Ok(HandshakeAction::FinalizeConnection(*user_key, packet));
-                }
+                return Ok(HandshakeAction::ForwardPacket);
             }
             HandshakeHeader::Disconnect => {
                 if self.verify_disconnect_request(address, reader) {
-                    let user_key = *self
-                        .authenticated_and_identified_users
-                        .get(address)
-                        .expect("Server Error: User not authenticated for disconnect request. Shouldn't be possible.");
-                    return Ok(HandshakeAction::DisconnectUser(user_key));
+                    // Get the user_key for this address to disconnect
+                    if let Some(user_key) = self.authenticated_and_identified_users.get(address) {
+                        return Ok(HandshakeAction::DisconnectUser(*user_key));
+                    } else {
+                        return Ok(HandshakeAction::None);
+                    }
                 } else {
                     return Ok(HandshakeAction::None);
                 }
@@ -109,6 +99,12 @@ impl Handshaker for HandshakeManager {
                 return Ok(HandshakeAction::None);
             }
         }
+    }
+
+    fn reset(&mut self) {
+        self.authenticated_and_identified_users.clear();
+        self.authenticated_unidentified_users.clear();
+        self.identity_token_map.clear();
     }
 }
 
@@ -136,22 +132,31 @@ impl HandshakeManager {
     }
 
     // Step 3 of Handshake
-    fn write_connect_response(&self) -> BitWriter {
+    pub(crate) fn write_connect_response() -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
         HandshakeHeader::ServerConnectResponse.ser(&mut writer);
         writer
     }
 
-    fn verify_disconnect_request(
-        &mut self,
-        _address: &SocketAddr,
-        _reader: &mut BitReader,
-    ) -> bool {
-        // To verify that timestamp hash has been written by this
-        // server instance
+    fn verify_disconnect_request(&mut self, address: &SocketAddr, reader: &mut BitReader) -> bool {
+        // Read the identity token from the disconnect packet
+        let Ok(disconnect_token) = IdentityToken::de(reader) else {
+            return false;
+        };
 
-        todo!()
+        // Verify the address is authenticated
+        let Some(user_key) = self.authenticated_and_identified_users.get(address) else {
+            return false;
+        };
+
+        // Verify the identity token matches what we expect for this user
+        let Some(expected_token) = self.identity_token_map.get(user_key) else {
+            return false;
+        };
+
+        // Token must match
+        *expected_token == disconnect_token
     }
 
     // fn write_reject_response(&self) -> BitWriter {

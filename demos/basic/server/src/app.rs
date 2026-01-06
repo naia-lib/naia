@@ -1,9 +1,10 @@
 use std::{thread::sleep, time::Duration};
 
 use naia_server::{
-    shared::default_channels::UnorderedReliableChannel, transport::webrtc, AuthEvent, ConnectEvent,
-    DisconnectEvent, ErrorEvent, MessageEvent, RoomKey, Server as NaiaServer, ServerConfig,
-    TickEvent,
+    shared::{default_channels::UnorderedReliableChannel, Instant},
+    transport::webrtc,
+    AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, MessageEvent, RoomKey,
+    Server as NaiaServer, ServerConfig, TickEvent,
 };
 
 use naia_demo_world::{Entity, World, WorldRefType};
@@ -79,13 +80,21 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        let mut events = self.server.receive(self.world.proxy_mut());
-        if events.is_empty() {
+        let now = Instant::now();
+
+        self.server.receive_all_packets();
+        self.server
+            .process_all_packets(self.world.proxy_mut(), &now);
+
+        let mut world_events = self.server.take_world_events();
+        let mut tick_events = self.server.take_tick_events(&now);
+
+        if world_events.is_empty() && tick_events.is_empty() {
             // If we don't sleep here, app will loop at 100% CPU until a new message comes in
             sleep(Duration::from_millis(3));
             return;
         } else {
-            for (user_key, auth) in events.read::<AuthEvent<Auth>>() {
+            for (user_key, auth) in world_events.read::<AuthEvent<Auth>>() {
                 if auth.username == "charlie" && auth.password == "12345" {
                     // Accept incoming connection
                     info!("accepting connection for user_key: {:?}", user_key);
@@ -96,7 +105,7 @@ impl App {
                     self.server.reject_connection(&user_key);
                 }
             }
-            for user_key in events.read::<ConnectEvent>() {
+            for user_key in world_events.read::<ConnectEvent>() {
                 info!(
                     "Naia Server connected to: {}",
                     self.server.user(&user_key).address()
@@ -105,11 +114,11 @@ impl App {
                     .room_mut(&self.main_room_key)
                     .add_user(&user_key);
             }
-            for (_user_key, user) in events.read::<DisconnectEvent>() {
-                info!("Naia Server disconnected from: {:?}", user.address());
+            for (_user_key, user_addr) in world_events.read::<DisconnectEvent>() {
+                info!("Naia Server disconnected from: {:?}", user_addr);
             }
             for (user_key, message) in
-                events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>()
+                world_events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>()
             {
                 let message_contents = &(*message.contents);
                 info!(
@@ -118,7 +127,7 @@ impl App {
                     message_contents
                 );
             }
-            for _ in events.read::<TickEvent>() {
+            for _ in tick_events.read::<TickEvent>() {
                 // All game logic should happen here, on a tick event
 
                 // Message sending
@@ -171,11 +180,11 @@ impl App {
                 // VERY IMPORTANT! Calling this actually sends all update data
                 // packets to all Clients that require it. If you don't call this
                 // method, the Server will never communicate with it's connected Clients
-                self.server.send_all_updates(self.world.proxy());
+                self.server.send_all_packets(self.world.proxy());
 
                 self.tick_count = self.tick_count.wrapping_add(1);
             }
-            for error in events.read::<ErrorEvent>() {
+            for error in world_events.read::<ErrorEvent>() {
                 info!("Naia Server Error: {}", error);
             }
         }

@@ -16,7 +16,7 @@ impl PingManager {
         let rtt_average = ping_config.rtt_initial_estimate.as_secs_f32() * 1000.0;
         let jitter_average = ping_config.jitter_initial_estimate.as_secs_f32() * 1000.0;
 
-        PingManager {
+        Self {
             rtt_average: rtt_average,
             jitter_average: jitter_average,
             ping_timer: Timer::new(ping_config.ping_interval),

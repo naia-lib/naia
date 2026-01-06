@@ -2,18 +2,18 @@ use std::hash::Hash;
 
 use naia_shared::{EntityAuthStatus, ReplicaRefWrapper, ReplicatedComponent, WorldRefType};
 
-use crate::{ReplicationConfig, Server};
+use crate::{server::WorldServer, EntityOwner, ReplicationConfig};
 
 // EntityRef
 pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> {
-    server: &'s Server<E>,
+    server: &'s WorldServer<E>,
     world: W,
     entity: E,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E, W> {
-    pub fn new(server: &'s Server<E>, world: W, entity: &E) -> Self {
-        EntityRef {
+    pub(crate) fn new(server: &'s WorldServer<E>, world: W, entity: &E) -> Self {
+        Self {
             server,
             world,
             entity: *entity,
@@ -28,7 +28,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: ReplicatedComponent>(&self) -> Option<ReplicaRefWrapper<R>> {
+    pub fn component<R: ReplicatedComponent>(&'_ self) -> Option<ReplicaRefWrapper<'_, R>> {
         self.world.component::<R>(&self.entity)
     }
 
@@ -38,5 +38,25 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
 
     pub fn authority(&self) -> Option<EntityAuthStatus> {
         self.server.entity_authority_status(&self.entity)
+    }
+
+    pub fn owner(&self) -> EntityOwner {
+        self.server.entity_owner(&self.entity)
+    }
+}
+
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+
+        use naia_shared::LocalEntity;
+
+        use crate::UserKey;
+
+        impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E, W> {
+
+            pub fn local_entity(&self, user_key: &UserKey) -> Option<LocalEntity> {
+                self.server.world_to_local_entity(user_key, &self.entity)
+            }
+        }
     }
 }

@@ -8,6 +8,7 @@ use crate::{
     transport::{PacketReceiver, PacketSender},
 };
 
+#[derive(Clone)]
 pub struct Io {
     packet_sender: Option<Box<dyn PacketSender>>,
     packet_receiver: Option<Box<dyn PacketReceiver>>,
@@ -38,7 +39,7 @@ impl Io {
                 .map(|mode| Decoder::new(mode.clone()))
         });
 
-        Io {
+        Self {
             packet_sender: None,
             packet_receiver: None,
             outgoing_bandwidth_monitor,
@@ -63,6 +64,14 @@ impl Io {
 
     pub fn is_loaded(&self) -> bool {
         self.packet_sender.is_some()
+    }
+
+    pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
+        if self.packet_sender.is_none() {
+            panic!("Cannot call Server.sender_cloned() until you call Server.listen()!");
+        }
+
+        self.packet_sender.as_ref().unwrap().clone()
     }
 
     pub fn send_packet(

@@ -1,11 +1,11 @@
 use std::marker::PhantomData;
 
+use bevy_ecs::system::Command;
 use bevy_ecs::{
     entity::Entity,
     system::EntityCommands,
-    world::{Command as BevyCommand, Mut, World},
+    world::{Mut, World},
 };
-
 use naia_bevy_shared::{EntityAuthStatus, HostOwned, WorldMutType, WorldProxyMut};
 use naia_client::ReplicationConfig;
 
@@ -129,7 +129,7 @@ impl LocalDuplicateComponents {
     }
 }
 
-impl BevyCommand for LocalDuplicateComponents {
+impl Command for LocalDuplicateComponents {
     fn apply(self, world: &mut World) {
         WorldMutType::<Entity>::local_duplicate_components(
             &mut world.proxy_mut(),
@@ -156,7 +156,7 @@ impl<T: Send + Sync + 'static> ConfigureReplicationCommand<T> {
     }
 }
 
-impl<T: Send + Sync + 'static> BevyCommand for ConfigureReplicationCommand<T> {
+impl<T: Send + Sync + 'static> Command for ConfigureReplicationCommand<T> {
     fn apply(self, world: &mut World) {
         world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
             client.client.configure_entity_replication(

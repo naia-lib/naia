@@ -2,6 +2,8 @@ use std::{default::Default, time::Duration};
 
 use naia_shared::ConnectionConfig;
 
+use crate::JitterBufferType;
+
 /// Contains Config properties which will be used by a Server or Client
 #[derive(Clone)]
 pub struct ClientConfig {
@@ -17,6 +19,8 @@ pub struct ClientConfig {
     /// taking longer. Keep in mind that the network measurements affect how likely commands
     /// are able to arrive at the server before processing.
     pub handshake_pings: u8,
+    /// Configuration for jitter buffer behavior
+    pub jitter_buffer: JitterBufferType,
 }
 
 impl Default for ClientConfig {
@@ -26,6 +30,7 @@ impl Default for ClientConfig {
             send_handshake_interval: Duration::from_millis(250),
             ping_interval: Duration::from_secs(1),
             handshake_pings: 10,
+            jitter_buffer: JitterBufferType::Real,
         }
     }
 }

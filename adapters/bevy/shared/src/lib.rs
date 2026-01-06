@@ -3,17 +3,19 @@ pub use naia_shared::{
     Channel, ChannelDirection, ChannelKind, ChannelMode, ComponentFieldUpdate, ComponentKind,
     ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask, EntityAndGlobalEntityConverter,
     EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, EntityProperty,
-    FakeEntityConverter, GameInstant, GlobalEntity, HostEntity, HostEntityAuthStatus, Instant,
-    LinkConditionerConfig, LocalEntityAndGlobalEntityConverter,
-    LocalEntityAndGlobalEntityConverterMut, MessageBevy as Message, MessageBuilder,
+    FakeEntityConverter, FileBitWriter, GameInstant, GlobalEntity, HostEntity,
+    HostEntityAuthStatus, Instant, LinkConditionerConfig, LocalEntityAndGlobalEntityConverter,
+    LocalEntityAndGlobalEntityConverterMut, LocalEntityMap, MessageBevy as Message, MessageBuilder,
     MessageContainer, MessageKind, MessageKinds, Named, OwnedBitReader, Property, PropertyMutate,
     PropertyMutator, Random, ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef,
     ReplicateBevy as Replicate, ReplicateBuilder, Request, Response, ResponseReceiveKey,
-    ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeIntegerConversion, SignedInteger,
-    SignedVariableInteger, Tick, TickBufferSettings, Timer, UnsignedInteger,
+    ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeFloatConversion,
+    SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger,
+    Tick, TickBufferSettings, Timer, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
     UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
+mod bundle;
 mod change_detection;
 mod component_access;
 mod component_ref;
@@ -25,12 +27,17 @@ mod system_set;
 mod world_data;
 mod world_proxy;
 
+pub use bundle::ReplicateBundle;
 pub use change_detection::HostSyncEvent;
 pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
 pub use components::{HostOwned, HostOwnedMap};
 pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;
-pub use system_set::{BeforeReceiveEvents, HostSyncChangeTracking, ReceiveEvents, SendPackets};
+pub use system_set::{
+    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
+    ProcessPackets, ReceivePackets, SendPackets, TranslateTickEvents, TranslateWorldEvents,
+    WorldToHostSync, WorldUpdate,
+};
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};

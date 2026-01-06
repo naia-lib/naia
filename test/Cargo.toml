@@ -8,10 +8,20 @@ edition = "2021"
 publish = false
 
 [features]
-
+e2e_debug = [
+  "naia-client/e2e_debug",
+  "naia-server/e2e_debug",
+  "naia-shared/e2e_debug"
+]
 
 [dependencies]
-naia-server = { path = "../server" }
-naia-client = { path = "../client" }
-naia-shared = { path = "../shared" }
+naia-server = { path = "../server", features = ["transport_local", "interior_visibility", "test_time", "bevy_support"] }
+naia-client = { path = "../client", features = ["transport_local", "interior_visibility", "test_time", "bevy_support"] }
+naia-shared = { path = "../shared", features = ["transport_local", "interior_visibility", "test_time", "bevy_support"] }
+
+naia-demo-world = { path = "../demos/demo_utils/demo_world" }
+
+bevy_ecs = { version = "0.17", default-features = false }
+
+log = "0.4"
 

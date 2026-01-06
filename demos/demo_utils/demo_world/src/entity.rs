@@ -1,7 +1,7 @@
 use naia_shared::BigMapKey;
 
 // Entity
-#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub struct Entity(u64);
 
 impl BigMapKey for Entity {

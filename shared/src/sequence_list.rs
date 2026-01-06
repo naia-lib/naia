@@ -108,4 +108,8 @@ impl<T> SequenceList<T> {
             index += 1;
         }
     }
+
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut (u16, T)> {
+        self.list.iter_mut()
+    }
 }

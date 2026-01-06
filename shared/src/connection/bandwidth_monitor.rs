@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+#[derive(Clone)]
 pub struct BandwidthMonitor {
     time_queue: ExpiringTimeQueue<usize>,
     total_bytes: u16,

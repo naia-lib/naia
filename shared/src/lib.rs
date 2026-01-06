@@ -25,14 +25,18 @@ pub use naia_derive::{
 };
 pub use naia_serde::{
     BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
-    Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeHecs,
-    SerdeIntegerConversion, SerdeInternal, SignedInteger, SignedVariableInteger, UnsignedInteger,
-    UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
+    Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeFloatConversion,
+    SerdeHecs, SerdeIntegerConversion, SerdeInternal, SignedFloat, SignedInteger,
+    SignedVariableFloat, SignedVariableInteger, UnsignedFloat, UnsignedInteger,
+    UnsignedVariableFloat, UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
     generate_identity_token, link_condition_logic, IdentityToken, Instant, LinkConditionerConfig,
     Random, SocketConfig, TimeQueue,
 };
+
+#[cfg(feature = "test_time")]
+pub use naia_socket_shared::TestClock;
 
 mod backends;
 mod bigmap;
@@ -49,10 +53,17 @@ mod world;
 mod wrapping_number;
 
 cfg_if! {
-    if #[cfg(feature = "transport_udp")]{
-        pub mod transport_udp;
+    if #[cfg(any(feature = "transport_udp", feature = "transport_local"))]{
+        pub mod transport;
     }
 }
+
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+        pub use world::local::LocalEntity;
+    }
+}
+
 pub use backends::{Timer, Timestamp};
 pub use connection::{
     ack_manager::AckManager,
@@ -81,7 +92,6 @@ pub use messages::{
             reliable_sender::ReliableSender,
             request_sender::LocalResponseId,
         },
-        system_channel::SystemChannel,
     },
     message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
     message_container::MessageContainer,
@@ -95,8 +105,6 @@ pub use messages::{
 pub use world::{
     component::{
         component_kinds::{ComponentKind, ComponentKinds},
-        component_update::{ComponentFieldUpdate, ComponentUpdate},
-        diff_mask::DiffMask,
         entity_property::EntityProperty,
         property::Property,
         property_mutate::{PropertyMutate, PropertyMutator},
@@ -116,30 +124,21 @@ pub use world::{
         host_auth_handler::HostAuthHandler,
     },
     entity::{
-        entity_action::EntityAction,
-        entity_action_receiver::EntityActionReceiver,
-        entity_action_type::EntityActionType,
-        entity_auth_event::{EntityEventMessage, EntityEventMessageAction},
         entity_converters::{
-            EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter,
-            EntityConverterMut, FakeEntityConverter, GlobalWorldManagerType,
-            LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
+            EntityAndGlobalEntityConverter, EntityConverterMut, FakeEntityConverter,
+            GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+            LocalEntityAndGlobalEntityConverterMut,
         },
+        entity_message::EntityMessage,
+        entity_message_receiver::EntityMessageReceiver,
+        entity_message_type::EntityMessageType,
         error::EntityDoesNotExistError,
         global_entity::GlobalEntity,
-        local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
+        global_entity_map::{GlobalEntityMap, GlobalEntitySpawner},
+        in_scope_entities::InScopeEntities,
     },
-    host::{
-        global_diff_handler::GlobalDiffHandler,
-        host_world_manager::{HostWorldEvents, HostWorldManager},
-        mut_channel::{MutChannelType, MutReceiver},
-    },
-    local_world_manager::LocalWorldManager,
-    remote::{
-        entity_action_event::EntityActionEvent,
-        entity_event::{EntityEvent, EntityResponseEvent},
-        remote_world_manager::RemoteWorldManager,
-    },
+    host::host_world_manager::HostWorldManager,
+    remote::remote_world_manager::RemoteWorldManager,
     shared_global_world_manager::SharedGlobalWorldManager,
     world_type::{WorldMutType, WorldRefType},
 };
@@ -152,4 +151,24 @@ pub use messages::channels::senders::request_sender::{
 };
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
-pub use wrapping_number::{sequence_greater_than, sequence_less_than, wrapping_diff};
+pub use world::entity_command::EntityCommand;
+pub use world::entity_event::EntityEvent;
+pub use world::host::host_entity_generator::HostEntityGenerator;
+pub use world::host::host_world_manager::SubCommandId;
+pub use world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
+pub use world::local::local_entity_map::LocalEntityMap;
+pub use world::local::local_world_manager::LocalWorldManager;
+pub use world::sync::auth_channel::EntityAuthChannelState;
+pub use world::sync::authority_error::AuthorityError;
+#[cfg(feature = "e2e_debug")]
+pub use world::sync::remote_entity_channel::EntityChannelState;
+pub use world::sync::host_entity_channel::HostEntityChannel;
+pub use world::sync::remote_entity_channel::RemoteEntityChannel;
+pub use world::update::component_update::{ComponentFieldUpdate, ComponentUpdate};
+pub use world::update::diff_mask::DiffMask;
+pub use world::update::global_diff_handler::GlobalDiffHandler;
+pub use world::update::mut_channel::{MutChannelType, MutReceiver};
+pub use wrapping_number::{
+    sequence_equal_or_greater_than, sequence_equal_or_less_than, sequence_greater_than,
+    sequence_less_than, wrapping_diff,
+};

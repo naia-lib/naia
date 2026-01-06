@@ -1,53 +1,61 @@
-use std::{any::Any, hash::Hash, net::SocketAddr};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
 use naia_shared::{
-    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKind, ChannelKinds, ConnectionConfig,
-    EntityEventMessage, EntityResponseEvent, HostType, HostWorldEvents, Instant, PacketType,
-    Protocol, Serde, SerdeErr, StandardHeader, SystemChannel, Tick, WorldMutType, WorldRefType,
+    BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
+    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent,
+    GlobalEntity, GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType,
+    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
-use crate::request::{GlobalRequestManager, GlobalResponseManager};
 use crate::{
     connection::{
-        io::Io, ping_config::PingConfig, tick_buffer_messages::TickBufferMessages,
-        tick_buffer_receiver::TickBufferReceiver,
+        io::Io, ping_config::PingConfig, ping_manager::PingManager,
+        tick_buffer_messages::TickBufferMessages, tick_buffer_receiver::TickBufferReceiver,
     },
-    events::Events,
+    events::WorldEvents,
+    request::{GlobalRequestManager, GlobalResponseManager},
     time_manager::TimeManager,
     user::UserKey,
     world::global_world_manager::GlobalWorldManager,
 };
 
-use super::ping_manager::PingManager;
+cfg_if! {
+    if #[cfg(feature = "e2e_debug")] {
+        use std::sync::atomic::Ordering;
+        use naia_shared::EntityAuthStatus;
+        use crate::server::world_server::SERVER_TX_FRAMES;
+    }
+}
 
-pub struct Connection<E: Copy + Eq + Hash + Send + Sync> {
+pub struct Connection {
     pub address: SocketAddr,
     pub user_key: UserKey,
-    pub base: BaseConnection<E>,
+    pub base: BaseConnection,
     pub ping_manager: PingManager,
     tick_buffer: TickBufferReceiver,
     pub manual_disconnect: bool,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
+impl Connection {
     pub fn new(
         connection_config: &ConnectionConfig,
         ping_config: &PingConfig,
         user_address: &SocketAddr,
         user_key: &UserKey,
         channel_kinds: &ChannelKinds,
-        global_world_manager: &GlobalWorldManager<E>,
+        global_world_manager: &GlobalWorldManager,
     ) -> Self {
         Self {
             address: *user_address,
             user_key: *user_key,
             base: BaseConnection::new(
+                connection_config,
                 &Some(*user_address),
                 HostType::Server,
                 user_key.to_u64(),
-                connection_config,
                 channel_kinds,
                 global_world_manager,
             ),
@@ -60,34 +68,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     // Incoming Data
 
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
+        // Note: identity print is now in world_server::read_data_packet for consistency
         self.base.process_incoming_header(header, &mut []);
     }
 
     /// Read packet data received from a client, storing necessary data in an internal buffer
     pub fn read_packet(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
+        client_authoritative_entities: bool,
         server_tick: Tick,
         client_tick: Tick,
         reader: &mut BitReader,
-        global_world_manager: &mut GlobalWorldManager<E>,
     ) -> Result<(), SerdeErr> {
         // read tick-buffered messages
         self.tick_buffer.read_messages(
-            protocol,
+            channel_kinds,
+            message_kinds,
             &server_tick,
             &client_tick,
-            global_world_manager,
-            &self.base.local_world_manager,
+            self.base.world_manager.entity_converter(),
             reader,
         )?;
 
         // read common parts of packet (messages & world events)
         self.base.read_packet(
-            protocol,
+            channel_kinds,
+            message_kinds,
+            component_kinds,
             &client_tick,
-            global_world_manager,
-            protocol.client_authoritative_entities,
+            client_authoritative_entities,
             reader,
         )?;
 
@@ -95,51 +107,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     }
 
     /// Receive & process stored packet data
-    pub fn process_packets<W: WorldMutType<E>>(
+    pub fn process_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
-        protocol: &Protocol,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
+        client_authoritative_entities: bool,
         now: &Instant,
-        global_world_manager: &mut GlobalWorldManager<E>,
+        global_entity_map: &mut dyn GlobalEntitySpawner<E>,
+        global_world_manager: &mut GlobalWorldManager,
         global_request_manager: &mut GlobalRequestManager,
         global_response_manager: &mut GlobalResponseManager,
         world: &mut W,
-        incoming_events: &mut Events<E>,
-    ) -> Vec<EntityResponseEvent<E>> {
-        let mut response_events = Vec::new();
+        incoming_events: &mut WorldEvents<E>,
+    ) -> Vec<EntityEvent> {
         // Receive Message Events
+        let (entity_converter, entity_waitlist) =
+            self.base.world_manager.get_message_processor_helpers();
         let messages = self.base.message_manager.receive_messages(
-            &protocol.message_kinds,
+            message_kinds,
             now,
-            global_world_manager,
-            &self.base.local_world_manager,
-            &mut self.base.remote_world_manager.entity_waitlist,
+            entity_converter,
+            entity_waitlist,
         );
         for (channel_kind, messages) in messages {
-            if channel_kind == ChannelKind::of::<SystemChannel>() {
-                for message in messages {
-                    let Some(event_message) = Box::<dyn Any + 'static>::downcast::<
-                        EntityEventMessage,
-                    >(message.to_boxed_any())
-                    .ok()
-                    .map(|boxed_m| *boxed_m) else {
-                        panic!("Received unknown message over SystemChannel!");
-                    };
-                    match event_message.entity.get(global_world_manager) {
-                        Some(entity) => {
-                            response_events.push(event_message.action.to_response_event(&entity));
-                        }
-                        None => {
-                            warn!(
-                                "Received `{:?}` with no Entity over SystemChannel!",
-                                event_message.action
-                            );
-                        }
-                    };
-                }
-            } else {
-                for message in messages {
-                    incoming_events.push_message(&self.user_key, &channel_kind, message);
-                }
+            for message in messages {
+                incoming_events.push_message(&self.user_key, &channel_kind, message);
             }
         }
 
@@ -167,21 +159,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         }
 
         // Receive World Events
-        if protocol.client_authoritative_entities {
-            let remote_events = self.base.remote_world_reader.take_incoming_events();
-            let world_events = self.base.remote_world_manager.process_world_events(
+        if client_authoritative_entities {
+            return self.base.world_manager.take_incoming_events(
+                global_entity_map,
                 global_world_manager,
-                &mut self.base.local_world_manager,
-                &protocol.component_kinds,
+                component_kinds,
                 world,
                 now,
-                remote_events,
             );
-            response_events
-                .extend(incoming_events.receive_entity_events(&self.user_key, world_events));
+        } else {
+            return Vec::new();
         }
-
-        return response_events;
     }
 
     pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {
@@ -194,34 +182,50 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
     }
 
     // Outgoing data
-    pub fn send_packets<W: WorldRefType<E>>(
+    pub fn send_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         io: &mut Io,
         world: &W,
-        global_world_manager: &GlobalWorldManager<E>,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
         self.base.collect_messages(now, &rtt_millis);
-        let mut host_world_events = self.base.host_world_manager.take_outgoing_events(
-            world,
-            global_world_manager,
-            now,
-            &rtt_millis,
-        );
+        let (mut host_world_events, mut update_events) = self
+            .base
+            .world_manager
+            .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
+        
+        // Count drained commands and messages for this connection
+        #[cfg(feature = "e2e_debug")]
+        {
+            use crate::server::world_server::{SERVER_OUTGOING_CMDS_DRAINED_TOTAL, SERVER_WORLD_MSGS_DRAINED};
+            let total_drained = host_world_events.len();
+            if total_drained > 0 {
+                SERVER_OUTGOING_CMDS_DRAINED_TOTAL.fetch_add(total_drained, Ordering::Relaxed);
+                SERVER_WORLD_MSGS_DRAINED.fetch_add(total_drained, Ordering::Relaxed);
+            }
+        }
 
         let mut any_sent = false;
         loop {
             if self.send_packet(
-                protocol,
+                channel_kinds,
+                message_kinds,
+                component_kinds,
                 now,
                 io,
                 world,
+                converter,
                 global_world_manager,
                 time_manager,
                 &mut host_world_events,
+                &mut update_events,
             ) {
                 any_sent = true;
             } else {
@@ -235,30 +239,85 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
     /// Send any message, component actions and component updates to the client
     /// Will split the data into multiple packets.
-    fn send_packet<W: WorldRefType<E>>(
+    fn send_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         io: &mut Io,
         world: &W,
-        global_world_manager: &GlobalWorldManager<E>,
+        entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
-        host_world_events: &mut HostWorldEvents<E>,
+        host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
+        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) -> bool {
-        if host_world_events.has_events() || self.base.message_manager.has_outgoing_messages() {
+        let has_messages = self.base.message_manager.has_outgoing_messages();
+        let has_events = !host_world_events.is_empty() || !update_events.is_empty();
+
+        // Check one-shot ACK flag (edge-triggered, consumed here)
+        let needs_ack_only = self.base.take_should_send_empty_ack();
+
+        // If ACK-only and no messages/events, send exactly ONE header-only packet and return false
+        if needs_ack_only && !has_messages && !has_events {
+            let mut writer = BitWriter::new();
+            writer.reserve_bits(3); // Messages, Updates, Actions finish bits
+
+            // write header
+            let _header = self.base.write_header(PacketType::Data, &mut writer);
+
+            // write server tick
+            let tick = time_manager.current_tick();
+            tick.ser(&mut writer);
+
+            // write server tick instant
+            time_manager.current_tick_instant().ser(&mut writer);
+
+            // write finish bits for empty packet (no messages, no updates, no actions)
+            false.ser(&mut writer); // Messages finish bit
+            false.ser(&mut writer); // Updates finish bit
+            false.ser(&mut writer); // Actions finish bit
+
+            // send packet
+            if io.send_packet(&self.address, writer.to_packet()).is_err() {
+                warn!("Server Error: Cannot send ACK-only packet to {}", &self.address);
+            } else {
+                #[cfg(feature = "e2e_debug")]
+                {
+                    SERVER_TX_FRAMES.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+
+            // Return false to stop the loop (ACK-only is one-shot)
+            return false;
+        }
+
+        // Normal packet sending path (with messages/events or no ACK needed)
+        if has_events || has_messages {
             let writer = self.write_packet(
-                protocol,
+                channel_kinds,
+                message_kinds,
+                component_kinds,
                 now,
                 world,
+                entity_converter,
                 global_world_manager,
                 time_manager,
                 host_world_events,
+                update_events,
             );
 
             // send packet
             if io.send_packet(&self.address, writer.to_packet()).is_err() {
-                // TODO: pass this on and handle above
                 warn!("Server Error: Cannot send data packet to {}", &self.address);
+            } else {
+                #[cfg(feature = "e2e_debug")]
+                {
+                    SERVER_TX_FRAMES.fetch_add(1, Ordering::Relaxed);
+                    use crate::server::world_server::SERVER_WORLD_PKTS_SENT;
+                    SERVER_WORLD_PKTS_SENT.fetch_add(1, Ordering::Relaxed);
+                }
             }
 
             return true;
@@ -267,14 +326,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
         false
     }
 
-    fn write_packet<W: WorldRefType<E>>(
+    fn write_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
         now: &Instant,
         world: &W,
-        global_world_manager: &GlobalWorldManager<E>,
+        entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
-        host_world_events: &mut HostWorldEvents<E>,
+        host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
+        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
 
@@ -298,18 +361,60 @@ impl<E: Copy + Eq + Hash + Send + Sync> Connection<E> {
 
         // write common data packet
         let mut has_written = false;
+        
+        // Count SetAuthority(Granted) commands before writing
+        #[cfg(feature = "e2e_debug")]
+        let set_auth_granted_before = host_world_events.iter()
+            .filter(|(_, cmd)| {
+                if let EntityCommand::SetAuthority(_, _, status) = cmd {
+                    *status == EntityAuthStatus::Granted
+                } else {
+                    false
+                }
+            })
+            .count();
+        
         self.base.write_packet(
-            &protocol,
+            channel_kinds,
+            message_kinds,
+            component_kinds,
             now,
             &mut writer,
             next_packet_index,
             world,
+            entity_converter,
             global_world_manager,
             &mut has_written,
             true,
             host_world_events,
+            update_events,
         );
+        
+        #[cfg(feature = "e2e_debug")]
+        {
+            // Count SetAuthority(Granted) commands after writing (they're consumed during write)
+            let set_auth_granted_after = host_world_events.iter()
+                .filter(|(_, cmd)| {
+                    if let EntityCommand::SetAuthority(_, _, status) = cmd {
+                        *status == EntityAuthStatus::Granted
+                    } else {
+                        false
+                    }
+                })
+                .count();
+            
+            // The difference is how many were written
+            let written_count = set_auth_granted_before - set_auth_granted_after;
+            if written_count > 0 {
+                use crate::server::world_server::SERVER_WROTE_SET_AUTH;
+                SERVER_WROTE_SET_AUTH.fetch_add(written_count, Ordering::Relaxed);
+            }
+        }
 
         writer
+    }
+
+    pub fn process_received_commands(&mut self) {
+        self.base.world_manager.process_delivered_commands();
     }
 }

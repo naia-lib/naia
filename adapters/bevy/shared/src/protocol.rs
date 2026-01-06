@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use bevy_ecs::component::Component;
+use bevy_ecs::component::{Component, Mutable};
 
 use naia_shared::{
     Channel, ChannelDirection, ChannelMode, ComponentKind, CompressionConfig,
@@ -9,6 +9,7 @@ use naia_shared::{
 
 use crate::{ProtocolPlugin, WorldData};
 
+#[derive(Clone)]
 pub struct Protocol {
     inner: InnerProtocol,
     world_data: Option<WorldData>,
@@ -91,7 +92,7 @@ impl Protocol {
         self
     }
 
-    pub fn add_component<C: Replicate + Component>(&mut self) -> &mut Self {
+    pub fn add_component<C: Replicate + Component<Mutability = Mutable>>(&mut self) -> &mut Self {
         self.inner.add_component::<C>();
         self.world_data
             .as_mut()

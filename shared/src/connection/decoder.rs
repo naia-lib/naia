@@ -5,6 +5,7 @@ cfg_if! {
 
         use super::compression_config::CompressionMode;
 
+        #[derive(Clone)]
         pub struct Decoder {
             result: Vec<u8>,
             decoder: Option<Decompressor<'static>>,
@@ -49,6 +50,7 @@ cfg_if! {
     {
         use super::compression_config::CompressionMode;
 
+        #[derive(Clone)]
         pub struct Decoder {
             result: Vec<u8>,
         }

@@ -1,8 +1,8 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, Ident, Index, LitStr, Member,
-    PathArguments, Type,
+    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, GenericParam, Generics, Ident,
+    Index, LitStr, Member, PathArguments, Type,
 };
 
 use crate::{
@@ -88,6 +88,7 @@ pub fn replicate_impl(
         &untyped_generics,
         &input.generics,
     );
+    let builder_box_clone_method = get_builder_box_clone_method(&input.generics);
     let builder_read_method =
         get_builder_read_method(&replica_name, &properties, &struct_type, &turbofish);
     let read_create_update_method =
@@ -135,6 +136,7 @@ pub fn replicate_impl(
                 #builder_read_method
                 #read_create_update_method
                 #split_update_method
+                #builder_box_clone_method
             }
             impl #typed_generics Named for #builder_name #untyped_generics {
                 fn name(&self) -> String {
@@ -703,12 +705,12 @@ pub fn get_new_complete_method(
                 match *struct_type {
                     StructType::Struct => {
                         quote! {
-                             #field_name: EntityProperty::host_owned(#enum_name::#uppercase_variant_name as u8)
+                             #field_name: EntityProperty::new_for_component(#enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     StructType::TupleStruct => {
                         quote! {
-                            EntityProperty::host_owned(#enum_name::#uppercase_variant_name as u8)
+                            EntityProperty::new_for_component(#enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     _ => {
@@ -951,7 +953,7 @@ fn get_split_update_method(
                         let prop_copy = EntityProperty::new_read(reader, converter)?;
 
                         // get waiting local entity from copy after read
-                        let waiting_entity_opt = prop_copy.waiting_local_entity();
+                        let waiting_entity_opt = prop_copy.waiting_remote_entity();
                         if let Some(waiting_entity) = waiting_entity_opt {
                             waiting_did_write = true;
 
@@ -1246,7 +1248,7 @@ fn get_relations_waiting_method(fields: &[Property], struct_type: &StructType) -
         if let Property::Entity(_) = field {
             let field_name = get_field_name(field, struct_type);
             let body_add_right = quote! {
-                if let Some(local_entity) = self.#field_name.waiting_local_entity() {
+                if let Some(local_entity) = self.#field_name.waiting_remote_entity() {
                     output.insert(local_entity);
                 }
             };
@@ -1290,6 +1292,44 @@ fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) 
     quote! {
         fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
             #body
+        }
+    }
+}
+
+pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
+    let fn_impl = if input_generics.gt_token.is_none() {
+        quote! { Self }
+    } else {
+        let mut output = quote! {};
+
+        for param in input_generics.params.iter() {
+            let GenericParam::Type(type_param) = param else {
+                panic!("Only type parameters are supported for now");
+            };
+
+            let field_name =
+                format_ident!("phantom_{}", type_param.ident.to_string().to_lowercase());
+            let new_output_right = quote! {
+                #field_name: std::marker::PhantomData,
+            };
+            let new_output_result = quote! {
+                #output
+                #new_output_right
+            };
+            output = new_output_result;
+        }
+
+        quote! {
+            Self {
+                #output
+            }
+        }
+    };
+
+    quote! {
+        fn box_clone(&self) -> Box<dyn ReplicateBuilder> {
+            let me = #fn_impl ;
+            Box::new(me)
         }
     }
 }

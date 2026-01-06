@@ -3,41 +3,37 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use log::warn;
-
+use crate::world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
+use crate::world::update::mut_channel::MutChannelType;
 use crate::{
     bigmap::BigMapKey,
     world::{
         delegation::auth_channel::EntityAuthAccessor,
-        entity::{
-            error::EntityDoesNotExistError,
-            global_entity::GlobalEntity,
-            local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
-        },
-        host::mut_channel::MutChannelType,
+        entity::{error::EntityDoesNotExistError, global_entity::GlobalEntity},
     },
-    ComponentKind, GlobalDiffHandler, LocalWorldManager, PropertyMutator,
+    ComponentKind, ComponentKinds, GlobalDiffHandler, HostEntityGenerator, InScopeEntities,
+    LocalEntityMap, PropertyMutator,
 };
 
-pub trait GlobalWorldManagerType<E: Copy + Eq + Hash>: EntityAndGlobalEntityConverter<E> {
-    fn component_kinds(&self, entity: &E) -> Option<Vec<ComponentKind>>;
-    fn to_global_entity_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E>;
-    /// Whether or not a given user can receive a Message/Componet with an EntityProperty relating to the given Entity
-    fn entity_can_relate_to_user(&self, entity: &E, user_key: &u64) -> bool;
+pub trait GlobalWorldManagerType: InScopeEntities<GlobalEntity> {
+    fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>>;
+    /// Whether or not a given user can receive a Message/Component with an EntityProperty relating to the given Entity
+    fn entity_can_relate_to_user(&self, global_entity: &GlobalEntity, user_key: &u64) -> bool;
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>>;
-    fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler<E>>>;
+    fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler>>;
     fn register_component(
         &self,
-        entity: &E,
+        component_kinds: &ComponentKinds,
+        global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
         diff_mask_length: u8,
     ) -> PropertyMutator;
-    fn get_entity_auth_accessor(&self, entity: &E) -> EntityAuthAccessor;
-    fn entity_needs_mutator_for_delegation(&self, entity: &E) -> bool;
-    fn entity_is_replicating(&self, entity: &E) -> bool;
+    fn get_entity_auth_accessor(&self, global_entity: &GlobalEntity) -> EntityAuthAccessor;
+    fn entity_needs_mutator_for_delegation(&self, global_entity: &GlobalEntity) -> bool;
+    fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool;
 }
 
-pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash> {
+pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash + Sync + Send> {
     fn global_entity_to_entity(
         &self,
         global_entity: &GlobalEntity,
@@ -66,21 +62,20 @@ pub trait LocalEntityAndGlobalEntityConverter {
         &self,
         remote_entity: &RemoteEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError>;
-}
-
-pub trait EntityAndLocalEntityConverter<E: Copy + Eq + Hash> {
-    fn entity_to_host_entity(&self, entity: &E) -> Result<HostEntity, EntityDoesNotExistError>;
-    fn entity_to_remote_entity(&self, entity: &E) -> Result<RemoteEntity, EntityDoesNotExistError>;
-    fn entity_to_owned_entity(
+    fn owned_entity_to_global_entity(
         &self,
-        entity: &E,
-    ) -> Result<OwnedLocalEntity, EntityDoesNotExistError>;
-    fn host_entity_to_entity(&self, host_entity: &HostEntity)
-        -> Result<E, EntityDoesNotExistError>;
-    fn remote_entity_to_entity(
-        &self,
-        remote_entity: &RemoteEntity,
-    ) -> Result<E, EntityDoesNotExistError>;
+        owned_entity: &OwnedLocalEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        match owned_entity {
+            OwnedLocalEntity::Host(host_entity) => {
+                self.host_entity_to_global_entity(&HostEntity::new(*host_entity))
+            }
+            OwnedLocalEntity::Remote(remote_entity) => {
+                self.remote_entity_to_global_entity(&RemoteEntity::new(*remote_entity))
+            }
+        }
+    }
+    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity;
 }
 
 pub struct FakeEntityConverter;
@@ -120,6 +115,10 @@ impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         Ok(GlobalEntity::from_u64(0))
     }
+
+    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+        *entity // No redirects in fake converter
+    }
 }
 
 impl LocalEntityAndGlobalEntityConverterMut for FakeEntityConverter {
@@ -131,115 +130,6 @@ impl LocalEntityAndGlobalEntityConverterMut for FakeEntityConverter {
     }
 }
 
-pub struct EntityConverter<'a, 'b, E: Eq + Copy + Hash> {
-    global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
-    local_entity_converter: &'b dyn EntityAndLocalEntityConverter<E>,
-}
-
-impl<'a, 'b, E: Eq + Copy + Hash> EntityConverter<'a, 'b, E> {
-    pub fn new(
-        global_entity_converter: &'a dyn EntityAndGlobalEntityConverter<E>,
-        local_entity_converter: &'b dyn EntityAndLocalEntityConverter<E>,
-    ) -> Self {
-        Self {
-            global_entity_converter,
-            local_entity_converter,
-        }
-    }
-}
-
-impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
-    for EntityConverter<'a, 'b, E>
-{
-    fn global_entity_to_host_entity(
-        &self,
-        global_entity: &GlobalEntity,
-    ) -> Result<HostEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .global_entity_converter
-            .global_entity_to_entity(global_entity)
-        {
-            return self.local_entity_converter.entity_to_host_entity(&entity);
-        }
-        return Err(EntityDoesNotExistError);
-    }
-
-    fn global_entity_to_remote_entity(
-        &self,
-        global_entity: &GlobalEntity,
-    ) -> Result<RemoteEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .global_entity_converter
-            .global_entity_to_entity(global_entity)
-        {
-            return self.local_entity_converter.entity_to_remote_entity(&entity);
-        }
-        return Err(EntityDoesNotExistError);
-    }
-
-    fn global_entity_to_owned_entity(
-        &self,
-        global_entity: &GlobalEntity,
-    ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .global_entity_converter
-            .global_entity_to_entity(global_entity)
-        {
-            return self.local_entity_converter.entity_to_owned_entity(&entity);
-        }
-        return Err(EntityDoesNotExistError);
-    }
-
-    fn host_entity_to_global_entity(
-        &self,
-        host_entity: &HostEntity,
-    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .local_entity_converter
-            .host_entity_to_entity(host_entity)
-        {
-            return self
-                .global_entity_converter
-                .entity_to_global_entity(&entity);
-        }
-        warn!("host_entity_to_global_entity() failed!");
-        return Err(EntityDoesNotExistError);
-    }
-
-    fn remote_entity_to_global_entity(
-        &self,
-        remote_entity: &RemoteEntity,
-    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .local_entity_converter
-            .remote_entity_to_entity(remote_entity)
-        {
-            return self
-                .global_entity_converter
-                .entity_to_global_entity(&entity);
-        }
-        return Err(EntityDoesNotExistError);
-    }
-}
-
-// Probably only should be used for writing messages
-pub struct EntityConverterMut<'a, 'b, E: Eq + Copy + Hash> {
-    global_world_manager: &'a dyn GlobalWorldManagerType<E>,
-    local_world_manager: &'b mut LocalWorldManager<E>,
-}
-
-impl<'a, 'b, E: Eq + Copy + Hash> EntityConverterMut<'a, 'b, E> {
-    pub fn new(
-        global_world_manager: &'a dyn GlobalWorldManagerType<E>,
-        local_world_manager: &'b mut LocalWorldManager<E>,
-    ) -> Self {
-        Self {
-            global_world_manager,
-            local_world_manager,
-        }
-    }
-}
-
 pub trait LocalEntityAndGlobalEntityConverterMut: LocalEntityAndGlobalEntityConverter {
     fn get_or_reserve_entity(
         &mut self,
@@ -247,99 +137,105 @@ pub trait LocalEntityAndGlobalEntityConverterMut: LocalEntityAndGlobalEntityConv
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError>;
 }
 
-impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverter
-    for EntityConverterMut<'a, 'b, E>
-{
+// Probably only should be used for writing messages
+pub struct EntityConverterMut<'a, 'b> {
+    global_world_manager: &'a dyn GlobalWorldManagerType,
+    local_entity_map: &'b mut LocalEntityMap,
+    host_entity_generator: &'b mut HostEntityGenerator,
+}
+
+impl<'a, 'b> EntityConverterMut<'a, 'b> {
+    pub fn new(
+        global_world_manager: &'a dyn GlobalWorldManagerType,
+        local_entity_map: &'b mut LocalEntityMap,
+        host_entity_generator: &'b mut HostEntityGenerator,
+    ) -> Self {
+        Self {
+            global_world_manager,
+            local_entity_map,
+            host_entity_generator,
+        }
+    }
+}
+
+impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> {
     fn global_entity_to_host_entity(
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<HostEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .global_world_manager
-            .global_entity_to_entity(global_entity)
-        {
-            return self.local_world_manager.entity_to_host_entity(&entity);
-        }
-        return Err(EntityDoesNotExistError);
+        self.local_entity_map
+            .entity_converter()
+            .global_entity_to_host_entity(global_entity)
     }
 
     fn global_entity_to_remote_entity(
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<RemoteEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .global_world_manager
-            .global_entity_to_entity(global_entity)
-        {
-            return self.local_world_manager.entity_to_remote_entity(&entity);
-        }
-        return Err(EntityDoesNotExistError);
+        self.local_entity_map
+            .entity_converter()
+            .global_entity_to_remote_entity(global_entity)
     }
 
     fn global_entity_to_owned_entity(
         &self,
         global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .global_world_manager
-            .global_entity_to_entity(global_entity)
-        {
-            return self.local_world_manager.entity_to_owned_entity(&entity);
-        }
-        return Err(EntityDoesNotExistError);
+        self.local_entity_map
+            .entity_converter()
+            .global_entity_to_owned_entity(global_entity)
     }
 
     fn host_entity_to_global_entity(
         &self,
         host_entity: &HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self.local_world_manager.host_entity_to_entity(host_entity) {
-            return self.global_world_manager.entity_to_global_entity(&entity);
-        }
-        return Err(EntityDoesNotExistError);
+        self.local_entity_map
+            .entity_converter()
+            .host_entity_to_global_entity(host_entity)
     }
 
     fn remote_entity_to_global_entity(
         &self,
         remote_entity: &RemoteEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
-        if let Ok(entity) = self
-            .local_world_manager
-            .remote_entity_to_entity(remote_entity)
-        {
-            return self.global_world_manager.entity_to_global_entity(&entity);
-        }
-        return Err(EntityDoesNotExistError);
+        self.local_entity_map
+            .entity_converter()
+            .remote_entity_to_global_entity(remote_entity)
+    }
+
+    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+        self.local_entity_map
+            .entity_converter()
+            .apply_entity_redirect(entity)
     }
 }
 
-impl<'a, 'b, E: Copy + Eq + Hash> LocalEntityAndGlobalEntityConverterMut
-    for EntityConverterMut<'a, 'b, E>
-{
+impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, 'b> {
     fn get_or_reserve_entity(
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
-        let Ok(entity) = self
-            .global_world_manager
-            .global_entity_to_entity(global_entity)
-        else {
-            return Err(EntityDoesNotExistError);
-        };
         if !self
             .global_world_manager
-            .entity_can_relate_to_user(&entity, self.local_world_manager.get_user_key())
+            .entity_can_relate_to_user(global_entity, self.host_entity_generator.get_user_key())
         {
             return Err(EntityDoesNotExistError);
         }
-        let result = self.local_world_manager.entity_to_owned_entity(&entity);
+        let result = self
+            .local_entity_map
+            .global_entity_to_owned_entity(global_entity);
         if result.is_ok() {
+            // info!("get_or_reserve_entity(). `global_entity`: {:?} --> `owned_entity`: {:?}", global_entity, result);
             return result;
         }
 
-        let host_entity = self.local_world_manager.host_reserve_entity(&entity);
+        let host_entity = self
+            .host_entity_generator
+            .host_reserve_entity(self.local_entity_map, global_entity);
 
-        warn!("get_or_reserve_entity(): entity is not owned by user, attempting to reserve. HostEntity: {:?}", host_entity);
+        // warn!("get_or_reserve_entity() `global_entity` {:?} is not owned by user, attempting to reserve. `host_entity`: {:?}", global_entity, host_entity);
+
         return Ok(host_entity.copy_to_owned());
     }
 }

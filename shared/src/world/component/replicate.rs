@@ -2,13 +2,13 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
+use crate::world::update::component_update::ComponentUpdate;
+use crate::world::update::diff_mask::DiffMask;
 use crate::{
     messages::named::Named,
     world::{
         component::{
             component_kinds::{ComponentKind, ComponentKinds},
-            component_update::ComponentUpdate,
-            diff_mask::DiffMask,
             property_mutate::PropertyMutator,
             replica_ref::{ReplicaDynMut, ReplicaDynRef},
         },
@@ -39,6 +39,8 @@ pub trait ReplicateBuilder: Send + Sync + Named {
         ),
         SerdeErr,
     >;
+
+    fn box_clone(&self) -> Box<dyn ReplicateBuilder>;
 }
 
 /// A struct that implements Replicate is a Component, or otherwise,
@@ -119,10 +121,10 @@ cfg_if! {
     if #[cfg(feature = "bevy_support")]
     {
         // Require that Bevy Component to be implemented
-        use bevy_ecs::component::Component;
+        use bevy_ecs::component::{Component, Mutable};
 
-        pub trait ReplicatedComponent: Replicate + Component {}
-        impl<T: Replicate + Component> ReplicatedComponent for T {}
+        pub trait ReplicatedComponent: Replicate + Component<Mutability = Mutable> {}
+        impl<T: Replicate + Component<Mutability = Mutable>> ReplicatedComponent for T {}
     }
     else
     {

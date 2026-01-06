@@ -52,6 +52,7 @@ pub fn message_impl(
         &untyped_generics,
         &input.generics,
     );
+    let builder_box_clone_method = get_builder_box_clone_method(&input.generics);
     let builder_read_method =
         get_builder_read_method(&struct_name, &fields, &struct_type, &turbofish);
     let is_fragment_method = get_is_fragment_method(is_fragment);
@@ -71,6 +72,7 @@ pub fn message_impl(
             #builder_new_method
             impl #typed_generics MessageBuilder for #builder_name #untyped_generics {
                 #builder_read_method
+                #builder_box_clone_method
             }
 
             impl #typed_generics Message for #struct_name #untyped_generics {
@@ -214,8 +216,8 @@ fn get_relations_waiting_method(fields: &[Field], struct_type: &StructType) -> T
         if let Field::EntityProperty(_) = field {
             let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
-                if let Some(local_entity) = self.#field_name.waiting_local_entity() {
-                    output.insert(local_entity);
+                if let Some(remote_entity) = self.#field_name.waiting_remote_entity() {
+                    output.insert(remote_entity);
                 }
             };
             let new_body = quote! {
@@ -258,81 +260,6 @@ fn get_relations_complete_method(fields: &[Field], struct_type: &StructType) -> 
     quote! {
         fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
             #body
-        }
-    }
-}
-
-pub fn get_builder_read_method(
-    struct_name: &Ident,
-    fields: &[Field],
-    struct_type: &StructType,
-    turbofish: &TokenStream,
-) -> TokenStream {
-    let mut field_names = quote! {};
-    for field in fields.iter() {
-        let field_name = field.variable_name();
-        let new_output_right = quote! {
-            #field_name
-        };
-        let new_output_result = quote! {
-            #field_names
-            #new_output_right,
-        };
-        field_names = new_output_result;
-    }
-
-    let mut field_reads = quote! {};
-    for field in fields.iter() {
-        let field_name = field.variable_name();
-        let new_output_right = match field {
-            Field::EntityProperty(_property) => {
-                quote! {
-                    let #field_name = EntityProperty::new_read(reader, converter)?;
-                }
-            }
-            Field::Normal(normal_field) => {
-                let field_name = &normal_field.variable_name;
-                let field_type = &normal_field.field_type;
-                quote! {
-                    let #field_name = <#field_type>::de(reader)?;
-                }
-            }
-        };
-
-        let new_output_result = quote! {
-            #field_reads
-            #new_output_right
-        };
-        field_reads = new_output_result;
-    }
-
-    let struct_build = match *struct_type {
-        StructType::Struct => {
-            quote! {
-                #struct_name #turbofish {
-                    #field_names
-                }
-            }
-        }
-        StructType::TupleStruct => {
-            quote! {
-                #struct_name #turbofish (
-                    #field_names
-                )
-            }
-        }
-        StructType::UnitStruct => {
-            quote! {
-                #struct_name
-            }
-        }
-    };
-
-    quote! {
-        fn read(&self, reader: &mut BitReader, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<MessageContainer, SerdeErr> {
-            #field_reads
-
-            return Ok(MessageContainer::from_read(Box::new(#struct_build)));
         }
     }
 }
@@ -532,6 +459,119 @@ pub fn get_builder_new_method(
             pub fn new() -> Self {
                 #fn_impl
             }
+        }
+    }
+}
+
+pub fn get_builder_read_method(
+    struct_name: &Ident,
+    fields: &[Field],
+    struct_type: &StructType,
+    turbofish: &TokenStream,
+) -> TokenStream {
+    let mut field_names = quote! {};
+    for field in fields.iter() {
+        let field_name = field.variable_name();
+        let new_output_right = quote! {
+            #field_name
+        };
+        let new_output_result = quote! {
+            #field_names
+            #new_output_right,
+        };
+        field_names = new_output_result;
+    }
+
+    let mut field_reads = quote! {};
+    for field in fields.iter() {
+        let field_name = field.variable_name();
+        let new_output_right = match field {
+            Field::EntityProperty(_property) => {
+                quote! {
+                    let #field_name = EntityProperty::new_read(reader, converter)?;
+                }
+            }
+            Field::Normal(normal_field) => {
+                let field_name = &normal_field.variable_name;
+                let field_type = &normal_field.field_type;
+                quote! {
+                    let #field_name = <#field_type>::de(reader)?;
+                }
+            }
+        };
+
+        let new_output_result = quote! {
+            #field_reads
+            #new_output_right
+        };
+        field_reads = new_output_result;
+    }
+
+    let struct_build = match *struct_type {
+        StructType::Struct => {
+            quote! {
+                #struct_name #turbofish {
+                    #field_names
+                }
+            }
+        }
+        StructType::TupleStruct => {
+            quote! {
+                #struct_name #turbofish (
+                    #field_names
+                )
+            }
+        }
+        StructType::UnitStruct => {
+            quote! {
+                #struct_name
+            }
+        }
+    };
+
+    quote! {
+        fn read(&self, reader: &mut BitReader, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<MessageContainer, SerdeErr> {
+            #field_reads
+
+            return Ok(MessageContainer::from_read(Box::new(#struct_build)));
+        }
+    }
+}
+
+pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
+    let fn_impl = if input_generics.gt_token.is_none() {
+        quote! { Self }
+    } else {
+        let mut output = quote! {};
+
+        for param in input_generics.params.iter() {
+            let GenericParam::Type(type_param) = param else {
+                panic!("Only type parameters are supported for now");
+            };
+
+            let field_name =
+                format_ident!("phantom_{}", type_param.ident.to_string().to_lowercase());
+            let new_output_right = quote! {
+                #field_name: std::marker::PhantomData,
+            };
+            let new_output_result = quote! {
+                #output
+                #new_output_right
+            };
+            output = new_output_result;
+        }
+
+        quote! {
+            Self {
+                #output
+            }
+        }
+    };
+
+    quote! {
+        fn box_clone(&self) -> Box<dyn MessageBuilder> {
+            let me = #fn_impl ;
+            Box::new(me)
         }
     }
 }

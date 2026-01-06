@@ -17,8 +17,8 @@ pub mod transport;
 pub mod shared {
     pub use naia_shared::{
         default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
-        FileBitWriter, GlobalResponseId, Random, ResponseReceiveKey, Serde, SerdeErr,
-        SignedInteger, SignedVariableInteger, SocketConfig, UnsignedInteger,
+        FileBitWriter, GlobalResponseId, Instant, Protocol, Random, ResponseReceiveKey, Serde,
+        SerdeErr, SignedInteger, SignedVariableInteger, SocketConfig, UnsignedInteger,
         UnsignedVariableInteger,
     };
 }
@@ -32,25 +32,39 @@ mod handshake;
 mod request;
 mod room;
 mod server;
-mod server_config;
 mod time_manager;
 mod user;
 mod user_scope;
 mod world;
 
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+        pub use naia_shared::LocalEntity;
+    }
+}
+
 pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
-    EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, Events, InsertComponentEvent,
-    MessageEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvent, SpawnEntityEvent,
-    TickEvent, UnpublishEntityEvent, UpdateComponentEvent,
+    EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, Event, Events, InsertComponentEvent,
+    MainEvents, MessageEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvent,
+    SpawnEntityEvent, TickEvent, TickEvents, UnpublishEntityEvent, UpdateComponentEvent,
+    WorldEvents, WorldPacketEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
-pub use server::Server;
-pub use server_config::ServerConfig;
-pub use user::{User, UserKey, UserMut, UserRef};
+pub use server::{MainServer, Server, ServerConfig, WorldServer};
+
+#[cfg(feature = "e2e_debug")]
+pub use server::world_server::{
+    SERVER_AUTH_GRANTED_EMITTED, SERVER_OUTGOING_CMDS_DRAINED_TOTAL, SERVER_ROOM_MOVE_CALLED,
+    SERVER_RX_FRAMES, SERVER_SCOPE_DIFF_ENQUEUED, SERVER_SEND_ALL_PACKETS_CALLS,
+    SERVER_SET_AUTH_ENQUEUED, SERVER_SPAWN_APPLIED, SERVER_TX_FRAMES, SERVER_WORLD_MSGS_DRAINED,
+    SERVER_WORLD_PKTS_SENT, SERVER_WROTE_SET_AUTH,
+};
+pub use user::{MainUser, MainUserRef, UserKey, UserMut, UserRef, WorldUser};
 pub use user_scope::{UserScopeMut, UserScopeRef};
 pub use world::{
-    entity_mut::EntityMut, entity_owner::EntityOwner, replication_config::ReplicationConfig,
+    entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
+    replication_config::ReplicationConfig,
 };

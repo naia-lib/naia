@@ -4,19 +4,18 @@ use bevy::{
     color::LinearRgba,
     log::info,
     prelude::{
-        Mesh2d, MeshMaterial2d,
-        Color as BevyColor, Commands, EventReader, Query, Res, ResMut, Sprite,
-        Transform, Vec2,
+        Color as BevyColor, Commands, EventReader, Mesh2d, MeshMaterial2d, Query, Res, ResMut,
+        Sprite, Transform, Vec2,
     },
 };
 
 use naia_bevy_client::{
     events::{
-        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvents,
-        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvents, RequestEvents,
-        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        ClientTickEvent, ConnectEvent, DespawnEntityEvent, DisconnectEvent, InsertComponentEvent,
+        MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvents,
+        SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
     },
-    sequence_greater_than, Client, CommandsExt, Random, Replicate, Tick,
+    sequence_greater_than, Client, CommandsExt, Random, Replicate, ReplicationConfig, Tick,
 };
 
 use naia_bevy_demo_shared::{
@@ -54,8 +53,8 @@ pub fn connect_events(
             .spawn_empty()
             // MUST call this to begin replication
             .enable_replication(&mut client)
-            // make Entity Public, which means it will be visibile to other Clients
-            //.configure_replication(&mut client, ReplicationConfig::Public)
+            // make Entity Public, which means it will be visible to other Clients
+            .configure_replication::<Main>(ReplicationConfig::Public)
             // Insert Position component
             .insert(Position::new(
                 16 * ((Random::gen_range_u32(0, 40) as i16) - 20),
@@ -139,13 +138,11 @@ pub fn message_events(
                                 ColorValue::Aqua => &global.aqua,
                             }
                         };
-                        commands
-                            .entity(cursor_entity)
-                            .insert((
-                                Mesh2d(global.circle.clone().into()),
-                                MeshMaterial2d(color_handle.clone()),
-                                Transform::from_xyz(0.0, 0.0, 0.0)
-                            ));
+                        commands.entity(cursor_entity).insert((
+                            Mesh2d(global.circle.clone().into()),
+                            MeshMaterial2d(color_handle.clone()),
+                            Transform::from_xyz(0.0, 0.0, 0.0),
+                        ));
                         info!("assigned color to cursor");
                     }
                 }
@@ -219,102 +216,108 @@ pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEven
 
 pub fn insert_component_events(
     mut commands: Commands,
-    mut event_reader: EventReader<InsertComponentEvents<Main>>,
+    mut color_event_reader: EventReader<InsertComponentEvent<Main, Color>>,
+    mut position_event_reader: EventReader<InsertComponentEvent<Main, Position>>,
+    mut shape_event_reader: EventReader<InsertComponentEvent<Main, Shape>>,
     global: Res<Global>,
     sprite_query: Query<(&Shape, &Color)>,
     position_query: Query<&Position>,
 ) {
-    for events in event_reader.read() {
-        for entity in events.read::<Color>() {
-            // When we receive a replicated Color component for a given Entity,
-            // use that value to also insert a local-only SpriteBundle component into this entity
-            info!("add Color Component to entity");
+    for event in color_event_reader.read() {
+        let entity = event.entity;
 
-            if let Ok((shape, color)) = sprite_query.get(entity) {
-                match *shape.value {
-                    // Square
-                    ShapeValue::Square => {
-                        let color = {
-                            match *color.value {
-                                ColorValue::Red => BevyColor::LinearRgba(LinearRgba::RED),
-                                ColorValue::Blue => BevyColor::LinearRgba(LinearRgba::BLUE),
-                                ColorValue::Yellow => {
-                                    BevyColor::LinearRgba(LinearRgba::rgb(1.0, 1.0, 0.0))
-                                }
-                                ColorValue::Green => BevyColor::LinearRgba(LinearRgba::GREEN),
-                                ColorValue::White => BevyColor::LinearRgba(LinearRgba::WHITE),
-                                ColorValue::Purple => {
-                                    BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.0, 1.0))
-                                }
-                                ColorValue::Orange => {
-                                    BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.5, 0.0))
-                                }
-                                ColorValue::Aqua => {
-                                    BevyColor::LinearRgba(LinearRgba::rgb(0.0, 1.0, 1.0))
-                                }
-                            }
-                        };
+        // When we receive a replicated Color component for a given Entity,
+        // use that value to also insert a local-only SpriteBundle component into this entity
+        info!("add Color Component to entity: {:?}", entity);
 
-                        commands
-                            .entity(entity)
-                            .insert((
-                                Sprite {
-                                    custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
-                                    color,
-                                    ..Default::default()
-                                },
-                                Transform::from_xyz(0.0, 0.0, 0.0),
-                            ))
-                            // mark as confirmed
-                            .insert(Confirmed);
-                    }
-                    // Circle
-                    ShapeValue::Circle => {
-                        let handle = {
-                            match *color.value {
-                                ColorValue::Red => &global.red,
-                                ColorValue::Blue => &global.blue,
-                                ColorValue::Yellow => &global.yellow,
-                                ColorValue::Green => &global.green,
-                                ColorValue::White => &global.white,
-                                ColorValue::Purple => &global.purple,
-                                ColorValue::Orange => &global.orange,
-                                ColorValue::Aqua => &global.aqua,
+        if let Ok((shape, color)) = sprite_query.get(entity) {
+            match *shape.value {
+                // Square
+                ShapeValue::Square => {
+                    let color = {
+                        match *color.value {
+                            ColorValue::Red => BevyColor::LinearRgba(LinearRgba::RED),
+                            ColorValue::Blue => BevyColor::LinearRgba(LinearRgba::BLUE),
+                            ColorValue::Yellow => {
+                                BevyColor::LinearRgba(LinearRgba::rgb(1.0, 1.0, 0.0))
                             }
-                        };
-                        commands
-                            .entity(entity)
-                            .insert((
-                                Mesh2d(global.circle.clone().into()),
-                                MeshMaterial2d(handle.clone()),
-                                Transform::from_xyz(0.0, 0.0, 0.0),
-                            ))
-                            // mark as confirmed
-                            .insert(Confirmed);
-                    }
+                            ColorValue::Green => BevyColor::LinearRgba(LinearRgba::GREEN),
+                            ColorValue::White => BevyColor::LinearRgba(LinearRgba::WHITE),
+                            ColorValue::Purple => {
+                                BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.0, 1.0))
+                            }
+                            ColorValue::Orange => {
+                                BevyColor::LinearRgba(LinearRgba::rgb(1.0, 0.5, 0.0))
+                            }
+                            ColorValue::Aqua => {
+                                BevyColor::LinearRgba(LinearRgba::rgb(0.0, 1.0, 1.0))
+                            }
+                        }
+                    };
+
+                    commands
+                        .entity(entity)
+                        .insert((
+                            Sprite {
+                                custom_size: Some(Vec2::new(SQUARE_SIZE, SQUARE_SIZE)),
+                                color,
+                                ..Default::default()
+                            },
+                            Transform::from_xyz(0.0, 0.0, 0.0),
+                        ))
+                        // mark as confirmed
+                        .insert(Confirmed);
                 }
-            } else {
-                panic!("spritequery failed!");
+                // Circle
+                ShapeValue::Circle => {
+                    let handle = {
+                        match *color.value {
+                            ColorValue::Red => &global.red,
+                            ColorValue::Blue => &global.blue,
+                            ColorValue::Yellow => &global.yellow,
+                            ColorValue::Green => &global.green,
+                            ColorValue::White => &global.white,
+                            ColorValue::Purple => &global.purple,
+                            ColorValue::Orange => &global.orange,
+                            ColorValue::Aqua => &global.aqua,
+                        }
+                    };
+                    commands
+                        .entity(entity)
+                        .insert((
+                            Mesh2d(global.circle.clone().into()),
+                            MeshMaterial2d(handle.clone()),
+                            Transform::from_xyz(0.0, 0.0, 0.0),
+                        ))
+                        // mark as confirmed
+                        .insert(Confirmed);
+                }
             }
+        } else {
+            panic!("spritequery failed!");
         }
-        for entity in events.read::<Position>() {
-            info!("add Position Component to entity");
-            if let Ok(position) = position_query.get(entity) {
-                // initialize interpolation
-                commands
-                    .entity(entity)
-                    .insert(Interp::new(*position.x, *position.y));
-            }
+    }
+    for event in position_event_reader.read() {
+        let entity = event.entity;
+
+        info!("add Position Component to entity: {:?}", entity);
+        if let Ok(position) = position_query.get(entity) {
+            // initialize interpolation
+            commands
+                .entity(entity)
+                .insert(Interp::new(*position.x, *position.y));
         }
-        for _entity in events.read::<Shape>() {
-            info!("add Shape Component to entity");
-        }
+    }
+
+    for event in shape_event_reader.read() {
+        let entity = event.entity;
+        info!("add Shape Component to entity: {:?}", entity);
     }
 }
 
 pub fn update_component_events(
     mut global: ResMut<Global>,
-    mut event_reader: EventReader<UpdateComponentEvents<Main>>,
+    mut position_event_reader: EventReader<UpdateComponentEvent<Main, Position>>,
     mut position_query: Query<&mut Position>,
 ) {
     // When we receive a new Position update for the Player's Entity,
@@ -326,18 +329,20 @@ pub fn update_component_events(
         let server_entity = owned_entity.confirmed;
         let client_entity = owned_entity.predicted;
 
-        for events in event_reader.read() {
+        for event in position_event_reader.read() {
+            let server_tick = event.tick;
+            let updated_entity = event.entity;
+
             // Update square position
-            for (server_tick, updated_entity) in events.read::<Position>() {
-                // If entity is owned
-                if updated_entity == server_entity {
-                    if let Some(last_tick) = &mut latest_tick {
-                        if sequence_greater_than(server_tick, *last_tick) {
-                            *last_tick = server_tick;
-                        }
-                    } else {
-                        latest_tick = Some(server_tick);
+
+            // If entity is owned
+            if updated_entity == server_entity {
+                if let Some(last_tick) = &mut latest_tick {
+                    if sequence_greater_than(server_tick, *last_tick) {
+                        *last_tick = server_tick;
                     }
+                } else {
+                    latest_tick = Some(server_tick);
                 }
             }
         }
@@ -364,14 +369,25 @@ pub fn update_component_events(
     }
 }
 
-pub fn remove_component_events(mut event_reader: EventReader<RemoveComponentEvents<Main>>) {
-    for events in event_reader.read() {
-        for (_entity, _component) in events.read::<Position>() {
-            info!("removed Position component from entity");
-        }
-        for (_entity, _component) in events.read::<Color>() {
-            info!("removed Color component from entity");
-        }
+pub fn remove_component_events(
+    mut color_event_reader: EventReader<RemoveComponentEvent<Main, Color>>,
+    mut position_event_reader: EventReader<RemoveComponentEvent<Main, Position>>,
+    mut shape_event_reader: EventReader<RemoveComponentEvent<Main, Shape>>,
+) {
+    for event in color_event_reader.read() {
+        let entity = event.entity;
+        let _component = event.component.clone();
+        info!("removed Color component from entity: {:?}", entity);
+    }
+    for event in position_event_reader.read() {
+        let entity = event.entity;
+        let _component = event.component.clone();
+        info!("removed Position component from entity: {:?}", entity);
+    }
+    for event in shape_event_reader.read() {
+        let entity = event.entity;
+        let _component = event.component.clone();
+        info!("removed Shape component from entity: {:?}", entity);
     }
 }
 

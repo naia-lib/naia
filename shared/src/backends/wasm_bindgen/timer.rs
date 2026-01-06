@@ -13,7 +13,7 @@ pub struct Timer {
 impl Timer {
     /// Creates a new Timer with a given Duration
     pub fn new(duration: Duration) -> Self {
-        Timer {
+        Self {
             last: Date::now(),
             duration: duration.as_millis() as f64,
         }

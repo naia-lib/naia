@@ -1,13 +1,14 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use naia_shared::{
-    BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength,
-    EntityConverterMut, LocalWorldManager, MessageContainer, PacketIndex, PacketNotifiable,
-    Protocol, Serde, ShortMessageIndex, Tick,
+    BaseConnection, BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength,
+    MessageContainer, PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick,
 };
 
-use super::channel_tick_buffer_sender::ChannelTickBufferSender;
-use crate::world::global_world_manager::GlobalWorldManager;
+use crate::{
+    connection::channel_tick_buffer_sender::ChannelTickBufferSender,
+    world::global_world_manager::GlobalWorldManager,
+};
 
 pub struct TickBufferSender {
     channel_senders: HashMap<ChannelKind, ChannelTickBufferSender>,
@@ -60,17 +61,19 @@ impl TickBufferSender {
         false
     }
 
-    pub fn write_messages<E: Copy + Eq + Hash + Send + Sync>(
+    pub fn write_messages(
         &mut self,
         protocol: &Protocol,
-        global_world_manager: &GlobalWorldManager<E>,
-        local_world_manager: &mut LocalWorldManager<E>,
+        global_world_manager: &GlobalWorldManager,
+        connection: &mut BaseConnection,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
         host_tick: &Tick,
         has_written: &mut bool,
     ) {
-        let mut converter = EntityConverterMut::new(global_world_manager, local_world_manager);
+        let mut converter = connection
+            .world_manager
+            .entity_converter_mut(global_world_manager);
 
         for (channel_kind, channel) in &mut self.channel_senders {
             if !channel.has_messages() {

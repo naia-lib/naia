@@ -114,7 +114,7 @@ impl Io {
             .map_err(|_| NaiaClientError::SendError)
     }
 
-    pub fn recv_reader(&mut self) -> Result<Option<BitReader>, NaiaClientError> {
+    pub fn recv_reader(&'_ mut self) -> Result<Option<BitReader<'_>>, NaiaClientError> {
         let receive_result = self
             .packet_receiver
             .as_mut()

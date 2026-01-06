@@ -1,19 +1,26 @@
 use std::{ops::DerefMut, sync::Mutex};
 
-use bevy_app::{App, Last, Plugin as PluginType, Startup, Update};
-use bevy_ecs::{entity::Entity, schedule::IntoSystemConfigs};
+use bevy_app::{App, Plugin as PluginType, Startup, Update};
+use bevy_ecs::{entity::Entity, schedule::IntoScheduleConfigs};
 
-use naia_bevy_shared::{BeforeReceiveEvents, Protocol, SendPackets, SharedPlugin};
-use naia_server::{Server, ServerConfig};
+use naia_bevy_shared::{
+    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
+    ProcessPackets, Protocol, ReceivePackets, SendPackets, SharedPlugin, TranslateTickEvents,
+    TranslateWorldEvents, WorldToHostSync, WorldUpdate,
+};
+use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, WorldServer};
 
 use super::{
+    component_event_registry::ComponentEventRegistry,
     events::{
-        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent,
-        InsertComponentEvents, MessageEvents, PublishEntityEvent, RemoveComponentEvents,
-        RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent, UpdateComponentEvents,
+        AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvents,
+        PublishEntityEvent, RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     },
-    server::ServerWrapper,
-    systems::{before_receive_events, send_packets, send_packets_init},
+    server::ServerImpl,
+    systems::{
+        process_packets, receive_packets, send_packets, send_packets_init, translate_tick_events,
+        translate_world_events, world_to_host_sync,
+    },
 };
 
 struct PluginConfig {
@@ -35,13 +42,23 @@ pub struct Singleton;
 
 pub struct Plugin {
     config: Mutex<Option<PluginConfig>>,
+    world_only: bool,
 }
 
 impl Plugin {
     pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
+        Self::new_impl(server_config, protocol, false)
+    }
+
+    pub fn world_only(server_config: ServerConfig, protocol: Protocol) -> Self {
+        Self::new_impl(server_config, protocol, true)
+    }
+
+    fn new_impl(server_config: ServerConfig, protocol: Protocol, world_only: bool) -> Self {
         let config = PluginConfig::new(server_config, protocol);
         Self {
             config: Mutex::new(Some(config)),
+            world_only,
         }
     }
 }
@@ -54,14 +71,21 @@ impl PluginType for Plugin {
         world_data.add_systems(app);
         app.insert_resource(world_data);
 
-        let server = Server::<Entity>::new(config.server_config, config.protocol.into());
-        let server = ServerWrapper(server);
+        let server_impl = if !self.world_only {
+            let server = Server::<Entity>::new(config.server_config, config.protocol.into());
+            ServerImpl::full(server)
+        } else {
+            let protocol: NaiaProtocol = config.protocol.into();
+            let server = WorldServer::<Entity>::new(config.server_config, protocol);
+            ServerImpl::world_only(server)
+        };
 
         app
             // SHARED PLUGIN //
             .add_plugins(SharedPlugin::<Singleton>::new())
             // RESOURCES //
-            .insert_resource(server)
+            .insert_resource(server_impl)
+            .init_resource::<ComponentEventRegistry>()
             // EVENTS //
             .add_event::<ConnectEvent>()
             .add_event::<DisconnectEvent>()
@@ -74,13 +98,26 @@ impl PluginType for Plugin {
             .add_event::<DespawnEntityEvent>()
             .add_event::<PublishEntityEvent>()
             .add_event::<UnpublishEntityEvent>()
-            .add_event::<InsertComponentEvents>()
-            .add_event::<UpdateComponentEvents>()
-            .add_event::<RemoveComponentEvents>()
             // SYSTEM SETS //
-            .configure_sets(Last, SendPackets)
+            .configure_sets(Update, ReceivePackets.before(ProcessPackets))
+            .configure_sets(Update, ProcessPackets.before(TranslateWorldEvents))
+            .configure_sets(Update, TranslateWorldEvents.before(HandleWorldEvents))
+            .configure_sets(Update, HandleWorldEvents.before(TranslateTickEvents))
+            .configure_sets(Update, TranslateTickEvents.before(HandleTickEvents))
+            .configure_sets(Update, HandleTickEvents.before(WorldUpdate))
+            .configure_sets(Update, WorldUpdate.before(HostSyncOwnedAddedTracking))
+            .configure_sets(
+                Update,
+                HostSyncOwnedAddedTracking.before(HostSyncChangeTracking),
+            )
+            .configure_sets(Update, HostSyncChangeTracking.before(WorldToHostSync))
+            .configure_sets(Update, WorldToHostSync.before(SendPackets))
             // SYSTEMS //
-            .add_systems(Update, before_receive_events.in_set(BeforeReceiveEvents))
+            .add_systems(Update, receive_packets.in_set(ReceivePackets))
+            .add_systems(Update, process_packets.in_set(ProcessPackets))
+            .add_systems(Update, translate_world_events.in_set(TranslateWorldEvents))
+            .add_systems(Update, translate_tick_events.in_set(TranslateTickEvents))
+            .add_systems(Update, world_to_host_sync.in_set(WorldToHostSync))
             .add_systems(Startup, send_packets_init)
             .add_systems(Update, send_packets.in_set(SendPackets));
     }

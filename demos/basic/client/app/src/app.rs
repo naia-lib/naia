@@ -1,13 +1,17 @@
 cfg_if! {
     if #[cfg(feature = "mquad")] {
         use miniquad::info;
-    } else {
+    } else if #[cfg(feature = "wbindgen")] {
         use log::info;
+    } else {
+        macro_rules! info {
+            ($($arg:tt)*) => (println!($($arg)*));
+        }
     }
 }
 
 use naia_client::{
-    shared::{default_channels::UnorderedReliableChannel, SocketConfig},
+    shared::{default_channels::UnorderedReliableChannel, Instant, SocketConfig},
     transport::webrtc,
     Client as NaiaClient, ClientConfig, ClientTickEvent, ConnectEvent, DespawnEntityEvent,
     DisconnectEvent, ErrorEvent, MessageEvent, RejectEvent, RemoveComponentEvent, SpawnEntityEvent,
@@ -42,7 +46,7 @@ impl App {
 
         client.connect(socket);
 
-        App {
+        Self {
             client,
             world: World::default(),
             message_count: 0,
@@ -51,16 +55,26 @@ impl App {
     }
 
     pub fn update(&mut self) {
-        if self.client.connection_status().is_disconnected() {
+        if !self.client.connection_status().is_connected() {
+            // send/receive handshake packets to establish connection
+            self.client.receive_all_packets();
+            self.client.send_all_packets(self.world.proxy_mut());
             return;
         }
 
-        let mut events = self.client.receive(self.world.proxy_mut());
+        let now = Instant::now();
 
-        for server_address in events.read::<ConnectEvent>() {
+        self.client.receive_all_packets();
+        self.client
+            .process_all_packets(self.world.proxy_mut(), &now);
+
+        let mut world_events = self.client.take_world_events();
+        let mut tick_events = self.client.take_tick_events(&now);
+
+        for server_address in world_events.read::<ConnectEvent>() {
             info!("Client connected to: {}", server_address);
         }
-        for server_address in events.read::<RejectEvent>() {
+        for server_address in world_events.read::<RejectEvent>() {
             info!(
                 "Client received unauthorized response from: {}",
                 server_address
@@ -73,10 +87,11 @@ impl App {
             let socket = webrtc::Socket::new("http://127.0.0.1:14191", &self.socket_config);
             self.client.connect(socket);
         }
-        for server_address in events.read::<DisconnectEvent>() {
+        for server_address in world_events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
         }
-        for message in events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>() {
+        for message in world_events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>()
+        {
             let message_contents = &(*message.contents);
             info!("Client recv <- {}", message_contents);
 
@@ -89,7 +104,7 @@ impl App {
             // &string_message);
             self.message_count += 1;
         }
-        for entity in events.read::<SpawnEntityEvent>() {
+        for entity in world_events.read::<SpawnEntityEvent>() {
             if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
@@ -104,10 +119,10 @@ impl App {
                 // );
             }
         }
-        for _ in events.read::<DespawnEntityEvent>() {
+        for _ in world_events.read::<DespawnEntityEvent>() {
             // info!("deletion of Character entity");
         }
-        for (_, entity) in events.read::<UpdateComponentEvent<Character>>() {
+        for (_, entity) in world_events.read::<UpdateComponentEvent<Character>>() {
             if let Some(_character) = self
                 .client
                 .entity(self.world.proxy(), &entity)
@@ -122,7 +137,7 @@ impl App {
                 // );
             }
         }
-        for (_, _character) in events.read::<RemoveComponentEvent<Character>>() {
+        for (_, _character) in world_events.read::<RemoveComponentEvent<Character>>() {
             // info!(
             //     "data delete of Character - x: {}, y: {}, name: {} {}",
             //     *character.x,
@@ -131,10 +146,16 @@ impl App {
             //     (*character.fullname).last,
             // );
         }
-        for _ in events.read::<ClientTickEvent>() {
+        let mut did_tick = false;
+        for _ in tick_events.read::<ClientTickEvent>() {
             //info!("tick event");
+            did_tick = true;
         }
-        for error in events.read::<ErrorEvent>() {
+        if did_tick {
+            // VERY IMPORTANT! send all packets
+            self.client.send_all_packets(self.world.proxy());
+        }
+        for error in world_events.read::<ErrorEvent>() {
             info!("Client Error: {}", error);
             return;
         }

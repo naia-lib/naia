@@ -6,24 +6,33 @@ cfg_if! {
 cfg_if! {
     if #[cfg(feature = "transport_udp")] {
         pub mod udp;
-        mod conditioner;
     } else {}
 }
+cfg_if! {
+    if #[cfg(feature = "transport_local")] {
+        pub mod local;
+    } else {}
+}
+
+mod conditioner;
+pub use conditioner::ConditionedPacketReceiver;
+
+mod channel;
+pub use channel::PacketChannel;
 
 pub use inner::{
     AuthReceiver, AuthSender, PacketReceiver, PacketSender, RecvError, SendError, Socket,
 };
-
 mod inner {
 
     use std::net::SocketAddr;
 
     use naia_shared::IdentityToken;
 
-    use crate::user::UserAuthAddr;
-
+    #[derive(Debug)]
     pub struct SendError;
 
+    #[derive(Debug)]
     pub struct RecvError;
 
     pub trait Socket {
@@ -39,9 +48,27 @@ mod inner {
 
     // Packet
 
-    pub trait PacketSender: Send + Sync {
+    pub trait PacketSender: PacketSenderClone + Send + Sync {
         /// Sends a packet to the Server Socket
         fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError>;
+    }
+
+    /// Used to clone Box<dyn PacketSender>
+    pub trait PacketSenderClone {
+        /// Clone the boxed PacketSender
+        fn clone_box(&self) -> Box<dyn PacketSender>;
+    }
+
+    impl<T: 'static + PacketSender + Clone> PacketSenderClone for T {
+        fn clone_box(&self) -> Box<dyn PacketSender> {
+            Box::new(self.clone())
+        }
+    }
+
+    impl Clone for Box<dyn PacketSender> {
+        fn clone(&self) -> Box<dyn PacketSender> {
+            PacketSenderClone::clone_box(self.as_ref())
+        }
     }
 
     pub trait PacketReceiver: PacketReceiverClone + Send + Sync {
@@ -73,16 +100,16 @@ mod inner {
         ///
         fn accept(
             &self,
-            address: &UserAuthAddr,
+            address: &SocketAddr,
             identity_token: &IdentityToken,
         ) -> Result<(), SendError>;
         ///
-        fn reject(&self, address: &UserAuthAddr) -> Result<(), SendError>;
+        fn reject(&self, address: &SocketAddr) -> Result<(), SendError>;
     }
 
     pub trait AuthReceiver: AuthReceiverClone + Send + Sync {
         ///
-        fn receive(&mut self) -> Result<Option<(UserAuthAddr, &[u8])>, RecvError>;
+        fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;
     }
 
     /// Used to clone Box<dyn AuthReceiver>

@@ -6,10 +6,10 @@ use bevy_ecs::{
 };
 
 use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
-    LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType,
-    WorldRefType,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
+    EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -70,15 +70,18 @@ impl<'w> WorldRefType<Entity> for WorldRef<'w> {
         has_component_of_kind(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicatedComponent>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: ReplicatedComponent>(
+        &'_ self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<'_, R>> {
         component(self.world, entity)
     }
 
     fn component_of_kind(
-        &self,
+        &'_ self,
         entity: &Entity,
         component_kind: &ComponentKind,
-    ) -> Option<ReplicaDynRefWrapper> {
+    ) -> Option<ReplicaDynRefWrapper<'_>> {
         component_of_kind(self.world, entity, component_kind)
     }
 }
@@ -91,7 +94,7 @@ pub struct WorldMut<'w> {
 
 impl<'w> WorldMut<'w> {
     pub fn new(world: &'w mut World) -> Self {
-        WorldMut { world }
+        Self { world }
     }
 }
 
@@ -112,15 +115,18 @@ impl<'w> WorldRefType<Entity> for WorldMut<'w> {
         has_component_of_kind(self.world, entity, component_kind)
     }
 
-    fn component<R: ReplicatedComponent>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: ReplicatedComponent>(
+        &'_ self,
+        entity: &Entity,
+    ) -> Option<ReplicaRefWrapper<'_, R>> {
         component(self.world, entity)
     }
 
     fn component_of_kind(
-        &self,
+        &'_ self,
         entity: &Entity,
         component_kind: &ComponentKind,
-    ) -> Option<ReplicaDynRefWrapper> {
+    ) -> Option<ReplicaDynRefWrapper<'_>> {
         component_of_kind(self.world, entity, component_kind)
     }
 }
@@ -170,9 +176,9 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
         let components = self.world.components();
 
-        for component_id in self.world.entity(*entity).archetype().components() {
+            for component_id in self.world.entity(*entity).archetype().components() {
             let component_info = components
-                .get_info(component_id)
+                .get_info(*component_id)
                 .expect("Components need info to instantiate");
             let type_id = component_info
                 .type_id()
@@ -188,9 +194,9 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn component_mut<R: ReplicatedComponent>(
-        &mut self,
+        &'_ mut self,
         entity: &Entity,
-    ) -> Option<ReplicaMutWrapper<R>> {
+    ) -> Option<ReplicaMutWrapper<'_, R>> {
         if let Some(bevy_mut) = self.world.get_mut::<R>(*entity) {
             let wrapper = ComponentMut(bevy_mut);
             let component_mut = ReplicaMutWrapper::new(wrapper);
@@ -200,10 +206,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn component_mut_of_kind(
-        &mut self,
+        &'_ mut self,
         entity: &Entity,
         component_kind: &ComponentKind,
-    ) -> Option<ReplicaDynMutWrapper> {
+    ) -> Option<ReplicaDynMutWrapper<'_>> {
         let world_data = world_data(&self.world);
         let Some(component_access) = world_data.component_access(component_kind) else {
             return None;
@@ -314,12 +320,16 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_publish(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        component_kinds: &ComponentKinds,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
     ) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_publish(
                 self,
+                component_kinds,
+                converter,
                 global_world_manager,
                 entity,
                 &component_kind,
@@ -329,8 +339,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_publish(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
-        entity: &Entity,
+        component_kinds: &ComponentKinds,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        world_entity: &Entity,
         component_kind: &ComponentKind,
     ) {
         self.world
@@ -338,13 +350,19 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 let Some(accessor) = data.component_access(component_kind) else {
                     panic!("ComponentKind has not been registered?");
                 };
-                accessor.component_publish(global_world_manager, world, entity);
+                accessor.component_publish(
+                    component_kinds,
+                    converter,
+                    global_world_manager,
+                    world,
+                    world_entity,
+                );
             });
     }
 
-    fn entity_unpublish(&mut self, entity: &Entity) {
-        for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
-            WorldMutType::<Entity>::component_unpublish(self, entity, &component_kind);
+    fn entity_unpublish(&mut self, world_entity: &Entity) {
+        for component_kind in WorldMutType::<Entity>::component_kinds(self, world_entity) {
+            WorldMutType::<Entity>::component_unpublish(self, world_entity, &component_kind);
         }
     }
 
@@ -360,12 +378,16 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_enable_delegation(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        component_kinds: &ComponentKinds,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
     ) {
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_enable_delegation(
                 self,
+                component_kinds,
+                converter,
                 global_world_manager,
                 entity,
                 &component_kind,
@@ -375,7 +397,9 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn component_enable_delegation(
         &mut self,
-        global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        component_kinds: &ComponentKinds,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
         component_kind: &ComponentKind,
     ) {
@@ -384,7 +408,13 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 let Some(accessor) = data.component_access(component_kind) else {
                     panic!("ComponentKind has not been registered?");
                 };
-                accessor.component_enable_delegation(global_world_manager, world, entity);
+                accessor.component_enable_delegation(
+                    component_kinds,
+                    converter,
+                    global_world_manager,
+                    world,
+                    entity,
+                );
             });
     }
 
@@ -456,7 +486,7 @@ fn world_data(world: &World) -> &WorldData {
         .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
 }
 
-fn world_data_unchecked_mut(world: &mut World) -> Mut<WorldData> {
+fn world_data_unchecked_mut(world: &'_ mut World) -> Mut<'_, WorldData> {
     unsafe {
         world
             .as_unsafe_world_cell()

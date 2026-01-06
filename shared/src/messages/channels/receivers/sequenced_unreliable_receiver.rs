@@ -1,20 +1,25 @@
 use std::mem;
 
+use log::{info, warn};
+
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::messages::channels::senders::request_sender::LocalRequestId;
+use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::{
     messages::{
-        channels::receivers::{
-            channel_receiver::{ChannelReceiver, MessageChannelReceiver},
-            indexed_message_reader::IndexedMessageReader,
+        channels::{
+            receivers::{
+                channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+                indexed_message_reader::IndexedMessageReader,
+            },
+            senders::request_sender::LocalRequestId,
         },
         message_kinds::MessageKinds,
     },
     sequence_greater_than,
     types::MessageIndex,
-    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
+    world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
     LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer,
 };
 
@@ -35,17 +40,24 @@ impl SequencedUnreliableReceiver {
 
     pub fn buffer_message(
         &mut self,
-        entity_waitlist: &mut EntityWaitlist,
+        local_world_manager: &mut LocalWorldManager,
         message_index: MessageIndex,
         message: MessageContainer,
     ) {
-        if let Some(entity_set) = message.relations_waiting() {
-            entity_waitlist.queue(
-                &entity_set,
+        if let Some(remote_entity_set) = message.relations_waiting() {
+            warn!(
+                "Queuing waiting message {:?}! Waiting on entities: {:?}",
+                message.name(),
+                remote_entity_set
+            );
+            local_world_manager.entity_waitlist_queue(
+                &remote_entity_set,
                 &mut self.waitlist_store,
                 (message_index, message),
             );
             return;
+        } else {
+            info!("Received message {:?}!", message.name());
         }
 
         self.arrange_message(message_index, message);
@@ -69,7 +81,7 @@ impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
         &mut self,
         _message_kinds: &MessageKinds,
         now: &Instant,
-        entity_waitlist: &mut EntityWaitlist,
+        entity_waitlist: &mut RemoteEntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {
@@ -89,13 +101,16 @@ impl MessageChannelReceiver for SequencedUnreliableReceiver {
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        local_world_manager: &mut LocalWorldManager,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;
+        let id_w_msgs = IndexedMessageReader::read_messages(
+            message_kinds,
+            local_world_manager.entity_converter(),
+            reader,
+        )?;
         for (id, message) in id_w_msgs {
-            self.buffer_message(entity_waitlist, id, message);
+            self.buffer_message(local_world_manager, id, message);
         }
         Ok(())
     }

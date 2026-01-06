@@ -1,8 +1,8 @@
 use std::hash::Hash;
 
-use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
+use naia_shared::{AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
 
-use crate::{Client, ReplicationConfig};
+use crate::{world::entity_owner::EntityOwner, Client, ReplicationConfig};
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
@@ -13,7 +13,7 @@ pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> 
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
     pub(crate) fn new(client: &'s mut Client<E>, world: W, entity: &E) -> Self {
-        EntityMut {
+        Self {
             client,
             world,
             entity: *entity,
@@ -34,7 +34,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: ReplicatedComponent>(&mut self) -> Option<ReplicaMutWrapper<R>> {
+    pub fn component<R: ReplicatedComponent>(&'_ mut self) -> Option<ReplicaMutWrapper<'_, R>> {
         self.world.component_mut::<R>(&self.entity)
     }
 
@@ -67,15 +67,31 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.client.entity_authority_status(&self.entity)
     }
 
-    pub fn request_authority(&mut self) -> &mut Self {
-        self.client.entity_request_authority(&self.entity);
-
-        self
+    pub fn owner(&self) -> EntityOwner {
+        self.client.entity_owner(&self.entity)
     }
 
-    pub fn release_authority(&mut self) -> &mut Self {
-        self.client.entity_release_authority(&self.entity);
+    pub fn request_authority(&mut self) -> Result<&mut Self, AuthorityError> {
+        self.client.entity_request_authority(&self.entity)?;
+        Ok(self)
+    }
 
-        self
+    pub fn release_authority(&mut self) -> Result<&mut Self, AuthorityError> {
+        self.client.entity_release_authority(&self.entity)?;
+        Ok(self)
+    }
+}
+
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+
+        use naia_shared::LocalEntity;
+
+        impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
+
+            pub fn local_entity(&self) -> Option<LocalEntity> {
+                self.client.world_to_local_entity(&self.entity)
+            }
+        }
     }
 }

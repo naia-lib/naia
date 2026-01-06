@@ -1,17 +1,16 @@
-use std::{
-    collections::{HashMap, HashSet},
-    hash::Hash,
-};
+use std::collections::{HashMap, HashSet};
+
+use naia_shared::GlobalEntity;
 
 use crate::user::UserKey;
 
-pub struct EntityScopeMap<E: Copy + Eq + Hash> {
-    entities_of_user: HashMap<UserKey, HashSet<E>>,
-    users_of_entity: HashMap<E, HashSet<UserKey>>,
-    main_map: HashMap<(UserKey, E), bool>,
+pub struct EntityScopeMap {
+    entities_of_user: HashMap<UserKey, HashSet<GlobalEntity>>,
+    users_of_entity: HashMap<GlobalEntity, HashSet<UserKey>>,
+    main_map: HashMap<(UserKey, GlobalEntity), bool>,
 }
 
-impl<E: Copy + Eq + Hash> EntityScopeMap<E> {
+impl EntityScopeMap {
     pub fn new() -> Self {
         Self {
             main_map: HashMap::new(),
@@ -20,13 +19,13 @@ impl<E: Copy + Eq + Hash> EntityScopeMap<E> {
         }
     }
 
-    pub fn get(&self, user_key: &UserKey, entity: &E) -> Option<&bool> {
+    pub fn get(&self, user_key: &UserKey, entity: &GlobalEntity) -> Option<&bool> {
         let key = (*user_key, *entity);
 
         self.main_map.get(&key)
     }
 
-    pub fn insert(&mut self, user_key: UserKey, entity: E, in_scope: bool) {
+    pub fn insert(&mut self, user_key: UserKey, entity: GlobalEntity, in_scope: bool) {
         self.entities_of_user
             .entry(user_key)
             .or_insert_with(|| HashSet::new());
@@ -59,7 +58,7 @@ impl<E: Copy + Eq + Hash> EntityScopeMap<E> {
         self.entities_of_user.remove(user_key);
     }
 
-    pub fn remove_entity(&mut self, entity: &E) {
+    pub fn remove_entity(&mut self, entity: &GlobalEntity) {
         if let Some(users) = self.users_of_entity.get(entity) {
             for user in users {
                 if let Some(entities) = self.entities_of_user.get_mut(user) {

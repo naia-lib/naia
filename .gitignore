@@ -1,3 +1,5 @@
+.idea
+.cursor
 /target
 **/*.rs.bk
 /Cargo.lock

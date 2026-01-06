@@ -61,3 +61,40 @@ To run the basic client demo on Web:
 To run a miniquad client you will require the following be installed
 
     sudo apt-get install libxi-dev libgl1-mesa-dev
+
+## Testing
+
+Naia has comprehensive test coverage including unit tests, regression tests, integration tests, and property-based tests.
+
+### Running Tests
+
+```bash
+# Run all tests
+cargo test --workspace
+
+# Run specific test package
+cargo test --package naia-test
+
+# Run with output
+cargo test --package naia-test -- --nocapture
+```
+
+### Test Coverage
+
+Generate a coverage report:
+
+```bash
+./scripts/test_coverage.sh
+```
+
+This creates an HTML coverage report in `coverage/index.html`.
+
+### Testing Guide
+
+For detailed information on writing tests and our testing strategy, see [test/TESTING_GUIDE.md](test/TESTING_GUIDE.md).
+
+**Key Testing Principles:**
+- Every production bug gets a regression test
+- Focus on integration tests over unit test coverage
+- Test internal state consistency, not just external APIs
+- Verify all code paths, especially alternate ones

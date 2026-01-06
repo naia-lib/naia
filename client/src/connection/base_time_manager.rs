@@ -1,5 +1,3 @@
-use std::hash::Hash;
-
 use log::warn;
 
 use naia_shared::{
@@ -61,16 +59,12 @@ impl BaseTimeManager {
         Ok(ping_index)
     }
 
-    pub(crate) fn send_pong<E: Copy + Eq + Hash + Send + Sync>(
-        connection: &mut Connection<E>,
-        io: &mut Io,
-        ping_index: PingIndex,
-    ) {
+    pub(crate) fn send_pong(connection: &mut Connection, io: &mut Io, ping_index: PingIndex) {
         // write pong payload
         let mut writer = BitWriter::new();
 
         // write header
-        connection.base.write_header(PacketType::Pong, &mut writer);
+        let _header = connection.base.write_header(PacketType::Pong, &mut writer);
 
         // write index
         ping_index.ser(&mut writer);
@@ -80,7 +74,7 @@ impl BaseTimeManager {
             // TODO: pass this on and handle above
             warn!("Client Error: Cannot send pong packet to Server");
         }
-        connection.base.mark_sent();
+        connection.mark_sent();
     }
 
     pub fn read_pong(

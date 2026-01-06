@@ -1,19 +1,19 @@
 use std::hash::Hash;
 
-use naia_shared::{EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
+use naia_shared::{AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
 
-use crate::{room::RoomKey, server::Server, ReplicationConfig};
+use crate::{UserKey, room::RoomKey, server::WorldServer, EntityOwner, ReplicationConfig};
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
-    server: &'s mut Server<E>,
+    server: &'s mut WorldServer<E>,
     world: W,
     entity: E,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
-    pub(crate) fn new(server: &'s mut Server<E>, world: W, entity: &E) -> Self {
-        EntityMut {
+    pub(crate) fn new(server: &'s mut WorldServer<E>, world: W, entity: &E) -> Self {
+        Self {
             server,
             world,
             entity: *entity,
@@ -34,7 +34,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.world.has_component::<R>(&self.entity)
     }
 
-    pub fn component<R: ReplicatedComponent>(&mut self) -> Option<ReplicaMutWrapper<R>> {
+    pub fn component<R: ReplicatedComponent>(&'_ mut self) -> Option<ReplicaMutWrapper<'_, R>> {
         self.world.component_mut::<R>(&self.entity)
     }
 
@@ -78,6 +78,25 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.server.entity_authority_status(&self.entity)
     }
 
+    pub fn owner(&self) -> EntityOwner {
+        self.server.entity_owner(&self.entity)
+    }
+
+    pub fn give_authority(&mut self, user_key: &UserKey) -> Result<&mut Self, AuthorityError> {
+        self.server.entity_give_authority(user_key, &self.entity)?;
+        Ok(self)
+    }
+
+    pub fn take_authority(&mut self) -> Result<&mut Self, AuthorityError> {
+        self.server.entity_take_authority(&self.entity)?;
+        Ok(self)
+    }
+
+    pub fn release_authority(&mut self) -> Result<&mut Self, AuthorityError> {
+        self.server.entity_release_authority(None, &self.entity)?;
+        Ok(self)
+    }
+
     // Rooms
 
     pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
@@ -90,5 +109,19 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         self.server.room_remove_entity(room_key, &self.entity);
 
         self
+    }
+}
+
+cfg_if! {
+    if #[cfg(feature = "interior_visibility")] {
+
+        use naia_shared::LocalEntity;
+
+        impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
+
+            pub fn local_entity(&self, user_key: &UserKey) -> Option<LocalEntity> {
+                self.server.world_to_local_entity(user_key, &self.entity)
+            }
+        }
     }
 }

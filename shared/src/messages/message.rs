@@ -19,6 +19,8 @@ pub trait MessageBuilder: Send + Sync {
         reader: &mut BitReader,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<MessageContainer, SerdeErr>;
+
+    fn box_clone(&self) -> Box<dyn MessageBuilder>;
 }
 
 // Message
@@ -39,7 +41,7 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
         writer: &mut dyn BitWrite,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
-    /// Returns a list of LocalEntities contained within the Message's EntityProperty fields, which are waiting to be converted to GlobalEntities
+    /// Returns a list of RemoteEntities contained within the Message's EntityProperty fields, which have not yet been received.
     fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
     /// Converts any LocalEntities contained within the Message's EntityProperty fields to GlobalEntities
     fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);

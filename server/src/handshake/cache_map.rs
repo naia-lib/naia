@@ -36,4 +36,9 @@ impl<K: Eq + Hash + Clone, V: Clone> CacheMap<K, V> {
         self.keys.push_back(key.clone());
         self.map.insert(key, value);
     }
+
+    pub fn clear(&mut self) {
+        self.map.clear();
+        self.keys.clear();
+    }
 }

@@ -1,8 +1,9 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
 use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
+use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::{
     constants::FRAGMENTATION_LIMIT_BITS,
     messages::{
@@ -31,10 +32,9 @@ use crate::{
     types::{HostType, MessageIndex, PacketIndex},
     world::{
         entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
-        remote::entity_waitlist::EntityWaitlist,
+        remote::remote_entity_waitlist::RemoteEntityWaitlist,
     },
-    EntityAndGlobalEntityConverter, EntityAndLocalEntityConverter, EntityConverter, MessageKinds,
-    Protocol,
+    LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable,
 };
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -242,7 +242,8 @@ impl MessageManager {
 
     pub fn write_messages(
         &mut self,
-        protocol: &Protocol,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         writer: &mut BitWriter,
         packet_index: PacketIndex,
@@ -270,10 +271,10 @@ impl MessageManager {
             // write ChannelContinue bit
             true.ser(writer);
             // write ChannelIndex
-            channel_kind.ser(&protocol.channel_kinds, writer);
+            channel_kind.ser(channel_kinds, writer);
             // write Messages
             if let Some(message_indices) =
-                channel.write_messages(&protocol.message_kinds, converter, writer, has_written)
+                channel.write_messages(message_kinds, converter, writer, has_written)
             {
                 self.packet_to_message_map
                     .entry(packet_index)
@@ -294,15 +295,13 @@ impl MessageManager {
 
     // Incoming Messages
 
-    pub fn read_messages<E: Copy + Eq + Hash + Send + Sync>(
+    pub fn read_messages(
         &mut self,
-        protocol: &Protocol,
-        entity_waitlist: &mut EntityWaitlist,
-        global_converter: &dyn EntityAndGlobalEntityConverter<E>,
-        local_converter: &dyn EntityAndLocalEntityConverter<E>,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        local_world_manager: &mut LocalWorldManager,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let converter = EntityConverter::new(global_converter, local_converter);
         loop {
             let message_continue = bool::de(reader)?;
             if !message_continue {
@@ -310,32 +309,29 @@ impl MessageManager {
             }
 
             // read channel id
-            let channel_kind = ChannelKind::de(&protocol.channel_kinds, reader)?;
+            let channel_kind = ChannelKind::de(channel_kinds, reader)?;
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(&protocol.message_kinds, entity_waitlist, &converter, reader)?;
+            channel.read_messages(message_kinds, local_world_manager, reader)?;
         }
 
         Ok(())
     }
 
     /// Retrieve all messages from the channel buffers
-    pub fn receive_messages<E: Eq + Copy + Hash>(
+    pub fn receive_messages(
         &mut self,
         message_kinds: &MessageKinds,
         now: &Instant,
-        global_entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
-        local_entity_converter: &dyn EntityAndLocalEntityConverter<E>,
-        entity_waitlist: &mut EntityWaitlist,
+        entity_converter: &dyn LocalEntityAndGlobalEntityConverter,
+        entity_waitlist: &mut RemoteEntityWaitlist,
     ) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
-        let entity_converter =
-            EntityConverter::new(global_entity_converter, local_entity_converter);
         let mut output = Vec::new();
         // TODO: shouldn't we have a priority mechanisms between channels?
         for (channel_kind, channel) in &mut self.channel_receivers {
             let messages =
-                channel.receive_messages(message_kinds, now, entity_waitlist, &entity_converter);
+                channel.receive_messages(message_kinds, now, entity_waitlist, entity_converter);
             output.push((channel_kind.clone(), messages));
         }
         output
@@ -384,10 +380,10 @@ impl MessageManager {
     }
 }
 
-impl MessageManager {
+impl PacketNotifiable for MessageManager {
     /// Occurs when a packet has been notified as delivered. Stops tracking the
     /// status of Messages in that packet.
-    pub fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
+    fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         if let Some(channel_list) = self.packet_to_message_map.get(&packet_index) {
             for (channel_kind, message_indices) in channel_list {
                 if let Some(channel) = self.channel_senders.get_mut(channel_kind) {

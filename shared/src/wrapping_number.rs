@@ -6,12 +6,28 @@ pub fn sequence_greater_than(s1: u16, s2: u16) -> bool {
     ((s1 > s2) && (s1 - s2 <= 32768)) || ((s1 < s2) && (s2 - s1 > 32768))
 }
 
+/// Returns whether or not a wrapping number is equal to or greater than another
+/// sequence_equal_or_greater_than(1,2) will return false
+/// sequence_equal_or_greater_than(2,1) will return true
+/// sequence_equal_or_greater_than(1,1) will return true
+pub fn sequence_equal_or_greater_than(s1: u16, s2: u16) -> bool {
+    s1 == s2 || sequence_greater_than(s1, s2)
+}
+
 /// Returns whether or not a wrapping number is greater than another
 /// sequence_less_than(1,2) will return true
 /// sequence_less_than(2,1) will return false
 /// sequence_less_than(1,1) will return false
 pub fn sequence_less_than(s1: u16, s2: u16) -> bool {
     sequence_greater_than(s2, s1)
+}
+
+/// Returns whether or not a wrapping number is equal to or less than another
+/// sequence_equal_or_less_than(1,2) will return true
+/// sequence_equal_or_less_than(2,1) will return false
+/// sequence_equal_or_less_than(1,1) will return true
+pub fn sequence_equal_or_less_than(s1: u16, s2: u16) -> bool {
+    s1 == s2 || sequence_less_than(s1, s2)
 }
 
 /// Retrieves the wrapping difference between 2 u16 values

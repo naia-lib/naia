@@ -8,3 +8,12 @@ pub enum HostType {
     Server,
     Client,
 }
+
+impl HostType {
+    pub fn invert(self) -> Self {
+        match self {
+            HostType::Server => HostType::Client,
+            HostType::Client => HostType::Server,
+        }
+    }
+}

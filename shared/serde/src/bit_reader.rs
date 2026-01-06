@@ -85,11 +85,15 @@ impl OwnedBitReader {
         }
     }
 
-    pub fn borrow(&self) -> BitReader {
+    pub fn borrow(&'_ self) -> BitReader<'_> {
         BitReader {
             state: self.state,
             buffer: &self.buffer,
         }
+    }
+
+    pub fn take_buffer(self) -> Box<[u8]> {
+        self.buffer
     }
 }
 

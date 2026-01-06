@@ -9,6 +9,7 @@ cfg_if! {
 
         use super::compression_config::CompressionMode;
 
+        #[derive(Clone)]
         pub struct Encoder {
             result: Vec<u8>,
             encoder: EncoderType,
@@ -51,11 +52,13 @@ cfg_if! {
             }
         }
 
+        #[derive(Clone)]
         pub enum EncoderType {
             Compressor(Compressor<'static>),
             DictionaryTrainer(DictionaryTrainer),
         }
 
+        #[derive(Clone)]
         pub struct DictionaryTrainer {
             sample_data: Vec<u8>,
             sample_sizes: Vec<usize>,
@@ -126,6 +129,7 @@ cfg_if! {
     {
         use super::compression_config::CompressionMode;
 
+        #[derive(Clone)]
         pub struct Encoder {
             result: Vec<u8>
         }

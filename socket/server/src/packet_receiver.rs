@@ -24,7 +24,7 @@ impl PacketReceiverImpl {
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
     ) -> Self {
-        PacketReceiverImpl {
+        Self {
             channel_receiver,
             last_payload: None,
         }

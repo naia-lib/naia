@@ -1,5 +1,8 @@
 use naia_shared::{Property, Replicate, Serde};
 
+#[cfg(feature = "bevy_support")]
+use bevy_ecs::component::Component;
+
 /// Here's an example of a Custom Property
 #[derive(Serde, PartialEq, Clone)]
 pub struct FullName {
@@ -9,6 +12,7 @@ pub struct FullName {
     pub last: String,
 }
 
+#[cfg_attr(feature = "bevy_support", derive(Component))]
 #[derive(Replicate)]
 pub struct Character {
     pub x: Property<u8>,

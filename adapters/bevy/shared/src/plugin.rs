@@ -1,14 +1,14 @@
 use std::marker::PhantomData;
 
 use bevy_app::{App, Plugin as PluginType, Update};
-use bevy_ecs::schedule::{IntoSystemConfigs, IntoSystemSetConfigs};
+use bevy_ecs::schedule::IntoScheduleConfigs;
 
 use log::info;
 
 use crate::{
     change_detection::{on_despawn, on_host_owned_added, HostSyncEvent},
-    system_set::{BeforeHostSyncChangeTracking, HostSyncChangeTracking},
-    BeforeReceiveEvents, HostOwnedMap, ReceiveEvents,
+    system_set::{HostSyncChangeTracking, HostSyncOwnedAddedTracking},
+    HostOwnedMap,
 };
 
 pub struct SharedPlugin<T: Send + Sync + 'static> {
@@ -32,20 +32,16 @@ impl<T: Send + Sync + 'static> PluginType for SharedPlugin<T> {
         app
             // RESOURCES //
             .init_resource::<HostOwnedMap>()
-            // EVENTS //
-            .add_event::<HostSyncEvent>()
-            // SYSTEM SETS //
-            .configure_sets(
-                Update,
-                BeforeHostSyncChangeTracking.before(HostSyncChangeTracking),
-            )
-            .configure_sets(Update, HostSyncChangeTracking.before(BeforeReceiveEvents))
-            .configure_sets(Update, BeforeReceiveEvents.before(ReceiveEvents))
+            // MESSAGES //
+            .add_message::<HostSyncEvent>()
             // SYSTEMS //
             .add_systems(
                 Update,
-                on_host_owned_added.in_set(BeforeHostSyncChangeTracking),
+                bevy_ecs::system::IntoSystem::into_system(on_host_owned_added).in_set(HostSyncOwnedAddedTracking),
             )
-            .add_systems(Update, on_despawn.in_set(HostSyncChangeTracking));
+            .add_systems(
+                Update,
+                bevy_ecs::system::IntoSystem::into_system(on_despawn).in_set(HostSyncChangeTracking),
+            );
     }
 }

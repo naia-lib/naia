@@ -1,7 +1,9 @@
+use log::{info, warn};
+
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
 
-use crate::messages::channels::senders::request_sender::LocalRequestId;
+use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::{
     messages::{
         channels::{
@@ -11,12 +13,12 @@ use crate::{
                 indexed_message_reader::IndexedMessageReader,
                 reliable_receiver::ReliableReceiver,
             },
-            senders::request_sender::LocalRequestOrResponseId,
+            senders::request_sender::{LocalRequestId, LocalRequestOrResponseId},
         },
         message_kinds::MessageKinds,
     },
     types::MessageIndex,
-    world::remote::entity_waitlist::{EntityWaitlist, WaitlistStore},
+    world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
     LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RequestOrResponse,
 };
 
@@ -57,15 +59,18 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
     fn push_message(
         &mut self,
         message_kinds: &MessageKinds,
-        entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        local_world_manager: &mut LocalWorldManager,
         message_index: MessageIndex,
         message: MessageContainer,
     ) {
         let Some((start_message_index, end_message_index, full_message)) = ({
             if message.is_fragment() {
-                self.fragment_receiver
-                    .receive(message_kinds, converter, message_index, message)
+                self.fragment_receiver.receive(
+                    message_kinds,
+                    local_world_manager.entity_converter(),
+                    message_index,
+                    message,
+                )
             } else {
                 Some((message_index, message_index, message))
             }
@@ -73,31 +78,38 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             return;
         };
 
-        if let Some(entity_set) = full_message.relations_waiting() {
-            //warn!("Queuing waiting message!");
-            entity_waitlist.queue(
-                &entity_set,
+        if let Some(remote_entity_set) = full_message.relations_waiting() {
+            warn!(
+                "Queuing waiting message {:?}! Waiting on entities: {:?}",
+                full_message.name(),
+                remote_entity_set
+            );
+            local_world_manager.entity_waitlist_queue(
+                &remote_entity_set,
                 &mut self.waitlist_store,
                 (start_message_index, end_message_index, full_message),
             );
             return;
         } else {
-            //info!("Received message!");
+            info!("Received message {:?}!", full_message.name());
         }
 
         let incoming_messages =
             self.arranger
                 .process(start_message_index, end_message_index, full_message);
         for message in incoming_messages {
-            self.receive_message(message_kinds, converter, message);
+            self.receive_message(
+                message_kinds,
+                local_world_manager.entity_converter(),
+                message,
+            );
         }
     }
 
     pub fn buffer_message(
         &mut self,
         message_kinds: &MessageKinds,
-        entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        local_world_manager: &mut LocalWorldManager,
         message_index: MessageIndex,
         message: MessageContainer,
     ) {
@@ -107,8 +119,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         for (received_message_id, received_message) in received_messages {
             self.push_message(
                 message_kinds,
-                entity_waitlist,
-                converter,
+                local_world_manager,
                 received_message_id,
                 received_message,
             )
@@ -162,7 +173,7 @@ impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageR
         &mut self,
         message_kinds: &MessageKinds,
         now: &Instant,
-        entity_waitlist: &mut EntityWaitlist,
+        entity_waitlist: &mut RemoteEntityWaitlist,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {
@@ -186,13 +197,16 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
     fn read_messages(
         &mut self,
         message_kinds: &MessageKinds,
-        entity_waitlist: &mut EntityWaitlist,
-        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        local_world_manager: &mut LocalWorldManager,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let id_w_msgs = IndexedMessageReader::read_messages(message_kinds, converter, reader)?;
+        let id_w_msgs = IndexedMessageReader::read_messages(
+            message_kinds,
+            local_world_manager.entity_converter(),
+            reader,
+        )?;
         for (id, message) in id_w_msgs {
-            self.buffer_message(message_kinds, entity_waitlist, converter, id, message);
+            self.buffer_message(message_kinds, local_world_manager, id, message);
         }
         Ok(())
     }

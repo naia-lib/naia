@@ -21,7 +21,7 @@ impl ConnectionConfig {
         heartbeat_interval: Duration,
         bandwidth_measure_duration: Option<Duration>,
     ) -> Self {
-        ConnectionConfig {
+        Self {
             disconnection_timeout_duration,
             heartbeat_interval,
             bandwidth_measure_duration,

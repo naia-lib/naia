@@ -9,7 +9,7 @@ mod constants;
 mod error;
 mod file_bit_writer;
 mod impls;
-mod integer;
+mod number;
 mod outgoing_packet;
 mod serde;
 
@@ -19,8 +19,9 @@ pub use bit_writer::{BitWrite, BitWriter};
 pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
 pub use error::SerdeErr;
 pub use file_bit_writer::FileBitWriter;
-pub use integer::{
-    SerdeIntegerConversion, SignedInteger, SignedVariableInteger, UnsignedInteger,
+pub use number::{
+    SerdeFloatConversion, SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat,
+    SignedVariableInteger, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
     UnsignedVariableInteger,
 };
 pub use outgoing_packet::OutgoingPacket;

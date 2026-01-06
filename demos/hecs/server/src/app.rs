@@ -11,7 +11,7 @@ use naia_hecs_demo_shared::protocol;
 use super::systems::{
     events::process_events,
     startup::app_init,
-    tick::{check_scopes, march_and_mark, send_updates},
+    tick::{check_scopes, march_and_mark, send_all_packets},
 };
 
 pub type Server = NaiaServer<Entity>;
@@ -51,6 +51,6 @@ impl App {
     pub fn tick(&mut self) {
         march_and_mark(self);
         check_scopes(self);
-        send_updates(self);
+        send_all_packets(self);
     }
 }

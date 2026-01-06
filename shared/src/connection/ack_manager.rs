@@ -1,9 +1,6 @@
-use std::{collections::HashMap, hash::Hash};
+use std::collections::HashMap;
 
-use crate::{
-    messages::message_manager::MessageManager, types::PacketIndex,
-    wrapping_number::sequence_greater_than, HostWorldManager, LocalWorldManager,
-};
+use crate::{types::PacketIndex, wrapping_number::sequence_greater_than};
 
 use super::{
     packet_notifiable::PacketNotifiable, packet_type::PacketType, sequence_buffer::SequenceBuffer,
@@ -53,6 +50,13 @@ impl AckManager {
         self.should_send_empty_ack = false;
     }
 
+    /// Take the should_send_empty_ack flag (returns and clears it)
+    pub fn take_should_send_empty_ack(&mut self) -> bool {
+        let result = self.should_send_empty_ack;
+        self.should_send_empty_ack = false;
+        result
+    }
+
     /// Get the index of the next outgoing packet
     pub fn next_sender_packet_index(&self) -> PacketIndex {
         self.next_packet_index
@@ -60,12 +64,10 @@ impl AckManager {
 
     /// Process an incoming packet, handle notifications of delivered / dropped
     /// packets
-    pub fn process_incoming_header<E: Copy + Eq + Hash + Send + Sync>(
+    pub fn process_incoming_header(
         &mut self,
         header: &StandardHeader,
-        message_manager: &mut MessageManager,
-        host_world_manager: &mut HostWorldManager<E>,
-        local_world_manager: &mut LocalWorldManager<E>,
+        base_packet_notifiables: &mut [&mut dyn PacketNotifiable],
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
         let sender_packet_index = header.sender_packet_index;
@@ -77,8 +79,8 @@ impl AckManager {
 
         // ensure that `self.sender_ack_index` is always increasing (with
         // wrapping)
-        if sequence_greater_than(sender_ack_index, self.last_recv_packet_index) {
-            self.last_recv_packet_index = sender_ack_index;
+        if sequence_greater_than(sender_packet_index, self.last_recv_packet_index) {
+            self.last_recv_packet_index = sender_packet_index;
         }
 
         // the current `sender_ack_index` was (clearly) received so we should remove it
@@ -86,9 +88,7 @@ impl AckManager {
             if sent_packet.packet_type == PacketType::Data {
                 self.notify_packet_delivered(
                     sender_ack_index,
-                    message_manager,
-                    host_world_manager,
-                    local_world_manager,
+                    base_packet_notifiables,
                     packet_notifiables,
                 );
             }
@@ -106,9 +106,7 @@ impl AckManager {
                     if sent_packet.packet_type == PacketType::Data {
                         self.notify_packet_delivered(
                             sent_packet_index,
-                            message_manager,
-                            host_world_manager,
-                            local_world_manager,
+                            base_packet_notifiables,
                             packet_notifiables,
                         );
                     }
@@ -136,13 +134,10 @@ impl AckManager {
 
     pub fn next_outgoing_packet_header(&mut self, packet_type: PacketType) -> StandardHeader {
         let next_packet_index = self.next_sender_packet_index();
+        let last_rx = self.last_received_packet_index();
+        let ack_bits = self.ack_bitfield();
 
-        let outgoing = StandardHeader::new(
-            packet_type,
-            next_packet_index,
-            self.last_received_packet_index(),
-            self.ack_bitfield(),
-        );
+        let outgoing = StandardHeader::new(packet_type, next_packet_index, last_rx, ack_bits);
 
         self.track_packet(packet_type, next_packet_index);
         self.increment_local_packet_index();
@@ -150,23 +145,22 @@ impl AckManager {
         outgoing
     }
 
-    fn notify_packet_delivered<E: Copy + Eq + Hash + Send + Sync>(
+    fn notify_packet_delivered(
         &self,
         sent_packet_index: PacketIndex,
-        message_manager: &mut MessageManager,
-        host_world_manager: &mut HostWorldManager<E>,
-        local_world_manager: &mut LocalWorldManager<E>,
+        base_packet_notifiables: &mut [&mut dyn PacketNotifiable],
         packet_notifiables: &mut [&mut dyn PacketNotifiable],
     ) {
-        message_manager.notify_packet_delivered(sent_packet_index);
-        host_world_manager.notify_packet_delivered(sent_packet_index, local_world_manager);
+        for notifiable in base_packet_notifiables {
+            notifiable.notify_packet_delivered(sent_packet_index);
+        }
         for notifiable in packet_notifiables {
             notifiable.notify_packet_delivered(sent_packet_index);
         }
     }
 
-    fn last_received_packet_index(&self) -> PacketIndex {
-        self.received_packets.sequence_num().wrapping_sub(1)
+    pub fn last_received_packet_index(&self) -> PacketIndex {
+        self.last_recv_packet_index
     }
 
     fn ack_bitfield(&self) -> u32 {
