@@ -84,6 +84,7 @@ This includes entities created and destroyed entirely while `C` is out of scope.
 **Rule:** When a component change is applied to an entity `E` on client `C`, the Events API **MUST** surface exactly one corresponding event for that applied change:
 
 - Insert: exactly once when a component becomes present on `E`
+    - If a replicated-backed component replaces a local-only component instance of the same type (see `entity_replication.md`), the Events API MUST emit an Insert event (not Update) for that transition.
 - Update: exactly once per distinct applied update
 - Remove: exactly once when a component is removed from `E`
 

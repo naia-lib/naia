@@ -75,8 +75,8 @@ This is a hard invariant: **no update-before-spawn** observability.
 If the client receives any entity/component replication action referencing an entity lifetime that is not currently active (i.e. before Spawn for that lifetime, or after Despawn for that lifetime):
 
 - Naia MUST ignore the action (it MUST NOT mutate world state).
-- In production builds, this SHOULD be silent.
-- In debug builds, Naia SHOULD emit a debug warning.
+- In production, this MUST be silent.
+- When diagnostics are enabled, Naia MAY emit a warning.
 
 This applies to:
 - late packets from a prior lifetime

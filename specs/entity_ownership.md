@@ -39,7 +39,8 @@ Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()`
 - **entity-ownership-02**: The server MAY ignore unauthorized writes silently and/or record a metric/log, but MUST NOT apply them.
 
 ### Server-owned entities (server view)
-- **entity-ownership-03**: For a **server-owned Entity E** (not client-owned), the server MUST NOT accept **writes** for E from any client.
+- **entity-ownership-03**: For any server-owned entity `E` that is NOT delegated (`replication_config(E) != Some(Delegated)`), the server MUST NOT accept replicated writes from any client for `E`. Such writes MUST be ignored/dropped.
+- **entity-ownership-03**: For delegated entities, client writes are governed by `entity_delegation.md` / `entity_authority.md` (authority holder may write; others must not).
 - **entity-ownership-03**: The server MAY ignore unauthorized writes silently and/or record a metric/log, but MUST NOT apply them.
 
 ### Ownership does not emit authority events for client-owned entities
@@ -49,11 +50,16 @@ Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()`
 
 ## Client-side Safety Rules (Panic Contracts)
 
-### Clients must never write unowned entities
-- **entity-ownership-05**: A client MUST NOT write (replicate over the wire) any update for an Entity it does not own.
-- **entity-ownership-05**: If Naia would enqueue/serialize/send a replication write for an unowned entity, Naia MUST panic.
+### Client must never write without permission
+- **entity-ownership-05**: A client MUST NOT write/replicate entity updates unless it is a permitted writer for that entity.
+- **entity-ownership-05**: A client is a permitted writer for entity `E` iff:
+    - `owner(E) == EntityOwner::Client(this_client)`, OR
+    - `replication_config(E) == Some(Delegated)` AND `authority(E) ∈ {Granted, Releasing}`.
 
-This is a hard invariant: Naia guarantees well-behaved clients never attempt such writes.
+- **entity-ownership-05**: If Naia would enqueue/serialize/send a replication write from a client that is not a permitted writer: Naia MUST panic.
+
+Cross-link:
+- Delegated authority write permission is defined in `entity_delegation.md` / `entity_authority.md`.
 
 ### Ownership visibility on the client is intentionally coarse
 - **entity-ownership-06**: On the client, `entity(...).owner()` MUST return an `EntityOwner` enum.
@@ -68,7 +74,7 @@ This is a hard invariant: Naia guarantees well-behaved clients never attempt suc
 ## Mutate vs Write Behavior on Clients (Local Prediction & Local-Only State)
 
 ### Non-owners may mutate locally, but must never write
-- **entity-ownership-07**: A client MAY mutate entities it does not own (insert/remove/update components, and despawn locally), but such mutations MUST NOT write/replicate to the server.
+- **entity-ownership-07**: A client MAY mutate entities it does not own (insert/remove/update components), but such mutations MUST NOT write/replicate to the server.
 - **entity-ownership-07**: Any replicated updates received from the server for that entity MUST overwrite the client’s local state for the relevant replicated components.
 
 ### Local-only components persist until despawn (even if the type is replicated)
@@ -112,8 +118,8 @@ Note: “delegated” here describes the downstream Authority/permission model; 
 
 ## Out-of-scope / unpublished write attempts
 
-- **entity-ownership-14**: A client MUST NOT write about an entity it does not own.
-- **entity-ownership-14**: Naia MUST guarantee that a client does not write about entities that are out-of-scope/unpublished and unowned by it; if such a write would occur, Naia MUST panic.
+- **entity-ownership-14**: A client MUST NOT write/replicate updates for any entity that it is not a permitted writer for (see `entity-ownership-05`).
+- **entity-ownership-14**: Naia MUST guarantee it never attempts to write/replicate for entities that are out-of-scope on that client; if such a write would occur, Naia MUST panic.
 
 Exception note: `EntityProperty` may refer to entities as data (identity/reference semantics). This is a read/reference mechanism and MUST NOT be treated as “writing an entity the client does not own.”
 
