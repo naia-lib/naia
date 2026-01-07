@@ -31,7 +31,7 @@ pub fn process_events(app: &mut App) {
             app.has_user = true;
         }
         for (_user_key, user) in events.read::<DisconnectEvent>() {
-            info!("Naia Server disconnected from: {:?}", user.address);
+            info!("Naia Server disconnected from: {:?}", user.address());
         }
         for _ in events.read::<TickEvent>() {
             app.tick();

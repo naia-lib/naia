@@ -33,7 +33,7 @@ impl MessageKind {
 
     pub fn de(message_kinds: &MessageKinds, reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let net_id: NetId = NetId::de(reader)?;
-        Ok(message_kinds.net_id_to_kind(&net_id))
+        Ok(message_kinds.net_id_to_kind(&net_id)?)
     }
 }
 
@@ -79,10 +79,11 @@ impl MessageKinds {
         return self.kind_to_builder(&message_kind).read(reader, converter);
     }
 
-    fn net_id_to_kind(&self, net_id: &NetId) -> MessageKind {
-        return *self.net_id_map.get(net_id).expect(
-            "Must properly initialize Message with Protocol via `add_message()` function!",
-        );
+    fn net_id_to_kind(&self, net_id: &NetId) -> Result<MessageKind, SerdeErr> {
+        match self.net_id_map.get(net_id) {
+            Some(kind) => Ok(*kind),
+            None => Err(SerdeErr),
+        }
     }
 
     fn kind_to_net_id(&self, message_kind: &MessageKind) -> NetId {
