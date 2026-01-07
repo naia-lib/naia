@@ -24,7 +24,22 @@ Local-only components may exist on entities a host does not own.
 
 ### Owner
 
-Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()` on both server and client. The server’s view is more detailed; the client’s view is intentionally coarse.
+Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()` on both server and client.
+
+### EntityOwner (ownership-only)
+
+`EntityOwner` is a statement of **who owns the entity**, and it MUST be independent of publication / scope / replication configuration.
+
+- `EntityOwner::Server` — server-owned entity.
+- `EntityOwner::Client(UserKey)` — client-owned entity (owned by the specified user).
+- `EntityOwner::Local` — local-only entity (never networked; MUST NOT participate in Naia replication, publication, scopes, delegation, or authority).
+
+**Normative:**
+- `server.entity(entity).owner()` MUST return only: `Server | Client(UserKey) | Local`.
+- `client.entity(entity).owner()` MUST return:
+  - `Client(<this client’s UserKey>)` for client-owned entities owned by this client.
+  - `Server` for all entities not owned by this client (including entities owned by other clients).
+  - `Local` only for local-only entities (which MUST NOT interact with Naia networking).
 
 ---
 
@@ -61,13 +76,37 @@ Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()`
 Cross-link:
 - Delegated authority write permission is defined in `entity_delegation.md` / `entity_authority.md`.
 
+### Mutate vs Write (ownership gate)
+
+Definitions:
+- **Mutate**: local ECS changes (insert/remove/update components, or despawn) that may be purely local.
+- **Write**: producing *replication writes* that are sent over the wire (component field updates, insert/remove replication messages, despawn replication messages).
+
+Normative:
+- A client MUST be able to **mutate** unowned entities locally (subject to the rules below).
+- A client MUST NEVER **write** replication updates for an entity it does not own.
+  - If Naia attempts to write for an unowned entity, it MUST panic (this is a framework-internal invariant violation).
+
+Local-only components on unowned entities:
+- If a client inserts any component (replicated or non-replicated) onto an unowned entity, and the server never supplies that component for that entity, the component MUST persist locally until:
+  - the client removes it (allowed), or
+  - the entity despawns (scope-leave/unpublish/etc), which destroys all local-only components.
+
+Unauthorized removal:
+- If a client attempts to remove a **replicated component instance** that was originally supplied by the server (i.e., it exists in the entity due to replication), that removal MUST panic.
+- If a client removes a component that exists only locally (never supplied by the server for that entity lifetime), that removal MUST be allowed.
+
+Overwrite by later replication:
+- If a local-only component exists and later the server begins replicating that component for the entity, the incoming replicated component MUST overwrite the local-only instance.
+- This overwrite MUST be treated as a **component Insert** in client events/observability (not an Update).
+
 ### Ownership visibility on the client is intentionally coarse
 - **entity-ownership-06**: On the client, `entity(...).owner()` MUST return an `EntityOwner` enum.
 - **entity-ownership-06**: For the client, any entity not owned by that client MUST be reported as `EntityOwner::Server` (i.e., the client MUST NOT observe “owned by another client”).
 - **entity-ownership-06**: Client-owned entities visible to the owning client MUST be reported as `EntityOwner::Client`.
 - **entity-ownership-06**: Local-only entities MUST be reported as `EntityOwner::Local`.
 
-(As of the current public server API, the server’s `EntityOwner` has richer variants such as `Client`, `ClientWaiting`, and `ClientPublic`.) :contentReference[oaicite:0]{index=0}
+ 
 
 ---
 
@@ -103,8 +142,10 @@ Rationale: removing a server-replicated component locally creates a misleading �
 
 Note: “delegated” here describes the downstream Authority/permission model; ownership itself is simply “server-owned” after the transfer.
 
-### Client-owned entities are inherently always in-scope for the owner client
-- **entity-ownership-12**: While the owning client is connected, a client-owned entity MUST be considered in-scope for that owning client (the owning client must never lose scope for its client-owned entities).
+### Ownership and scope
+
+- A client MUST always see its own client-owned entities as in-scope (they MUST NOT be despawned due to scope changes on that owning client).
+- For non-owner clients, when an entity leaves scope (unpublish/room divergence/exclude/etc), the entity MUST despawn client-side.
 
 ---
 

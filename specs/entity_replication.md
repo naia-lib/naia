@@ -23,6 +23,16 @@ This spec does **not** define:
 
 ---
 
+### Entity lifetime (client)
+
+For a given client, an entity lifetime is:
+`scope enter` → `scope leave`, with the rule that re-entering scope after ≥ 1 tick out-of-scope is a fresh lifetime.
+
+Normative:
+- Entity-specific replicated writes (insert/remove/update) MUST be ignored if they refer to an entity outside its current lifetime.
+- If an Update arrives before its corresponding Insert due to packet reordering, the Update MUST be buffered until the Insert arrives (or discarded if the lifetime ends first).
+
+
 ## Contract
 
 ### entity-replication-01 — Global identity stability

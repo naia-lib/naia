@@ -75,6 +75,8 @@ When a client-owned, Published entity `E` migrates into a server-owned delegated
 - the previous owner client MUST immediately become the authority holder.
 - on that previous owner client, `EntityAuthStatus(E)` MUST be `Granted`.
 
+When a client-owned, published entity migrates to server-owned delegated, the previous owner client MUST immediately start with `EntityAuthStatus::Granted` for that entity.
+
 Rationale:
 - delegation migration should not create a behavior cliff for the former owner.
 
@@ -86,6 +88,16 @@ Rationale:
 If `E` is delegated and currently has no client authority holder (i.e., authority is `Available`):
 - the first in-scope client to request authority MUST be granted authority.
 - while a client holds authority, no other client may be granted authority until it is released or reset.
+
+### Authority requests are NOT queued
+
+Normative:
+- If a delegated entity’s authority is currently held by some holder (client or server),
+  then **the server MUST NOT transfer authority to a different client** just because that client requests authority.
+- Requests made while authority is held MUST resolve as `Denied` for the requester (i.e., “someone else holds it”).
+- When the current holder releases authority (or the server revokes/releases it), the entity becomes `Available`.
+  - Other clients do NOT automatically receive authority.
+  - A client MUST call `request_authority()` again while `Available` to obtain authority.
 
 ### entity-delegation-07 — Meaning of Denied
 For a client `C` and delegated entity `E`:
