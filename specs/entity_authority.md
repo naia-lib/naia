@@ -1,123 +1,216 @@
-# Spec: Entity Authority (Delegated Entities)
-Defines the only valid semantics for authority holder, client/server authority operations, status fanout, and events.
+# Spec: Entity Authority
 
-**Status:** Active  
-**Version:** v1  
-**Related specs:** `entity_delegation.md`, `entity_scopes.md`, `entity_replication.md`, `entity_ownership.md`  
-**Applies to:** server + client
+Entity Authority defines how a client can acquire and release the right to **write replicated updates** for a
+**server-owned delegated** entity, and what each side can observe about that right.
 
-**Contract ID format:** `entity-authority-<nn>` (stable; never reused; never renumbered)
+Authority is distinct from:
+- **Ownership** (see `entity_ownership.md`): who ultimately owns the entity
+- **Delegation** (see `entity_delegation.md`): how delegated entities arbitrate authority (first-request wins)
+- **Scope** (see `entity_scopes.md`): whether the entity exists on the client
+- **Replication** (see `entity_replication.md`): ordering/lifetime/reordering semantics
 
----
-
-## 1) Scope & Vocabulary
-
-**In scope**
-- Authority holder states for delegated entities only.
-- Status visibility (Granted/Denied/Available) and fanout.
-- Client/server authority APIs and error semantics.
-- Authority release semantics and event emission rules.
-
-**Out of scope**
-- Delegation enable/disable and migration (see `entity_delegation.md`).
-- Delivery guarantees (see `entity_replication.md`).
-
-**Vocabulary**
-- **Delegated(E)**: defined in `entity_delegation.md`.
-- **Authority Holder** (delegated only): `None`, `Server`, or `Client(A)`.
-- **Status observed by client**: `Granted`, `Denied`, or `Available`.
+This spec defines:
+- the authority state machine (`EntityAuthStatus`)
+- client request/release semantics (including optimistic `Requested`)
+- server-controlled authority (server as a holder; server override/reset)
+- required behavior for illegal cases, duplicates, and out-of-scope conditions
 
 ---
 
-## 2) Contract (Rules)
+## 1) Definitions
 
-### entity-authority-01 — Authority exists only for delegated entities
-Authority status/events MUST exist only for delegated entities.
-For non-delegated entities, authority MUST NOT be queried, stored, inferred, or surfaced.
+### Authority applies only to delegated entities
+Authority exists only for entities where:
+- `replication_config(E) == Some(Delegated)` (see `entity_delegation.md` / `entity_publication.md`)
 
-### entity-authority-02 — Authority holder state is exactly one of three
-For delegated `E`, Authority Holder MUST be exactly one of:
-- `None`, `Server`, `Client(A)`.
+### EntityAuthStatus
+`EntityAuthStatus` is observable on the client via `client.entity(...).authority()` (and/or entity_mut variants)
+and has the following values:
 
-### entity-authority-03 — Status fanout (Denied broadcast rule)
-For each client `C` with `InScope(C,E)`:
-- If holder is `Client(A)`: A observes `Granted`, all `C != A` observe `Denied`.
-- If holder is `Server`: all observe `Denied`.
-- If holder is `None`: all observe `Available`.
+- `Available`: no client currently holds authority; eligible clients may request authority.
+- `Requested`: this client has requested authority; request is pending server resolution.
+- `Granted`: this client currently holds authority and may write replicated updates.
+- `Releasing`: this client is releasing authority; writing may still be permitted until the release finalizes.
+- `Denied`: authority is currently held by another client OR by the server, so this client cannot obtain it now.
 
-### entity-authority-04 — Client request/release operations and errors
-A client `A` MAY call:
-- `request_authority(E)` only if delegated, in-scope, and A observes `Available`.
-- `release_authority(E)` only if delegated, in-scope, and A observes `Granted`.
+Non-normative note:
+- This aligns with the shared client-side permission split where `can_mutate()` may become true earlier than
+  `can_write()`, but writing is only legal under `Granted` (and possibly `Releasing`).
 
-Calls MUST return `Result` errors:
-- `ErrNotDelegated` if not delegated.
-- `ErrNotInScope` if out-of-scope (defined even if “should be unreachable”).
-- `ErrNotAvailable` if request when not `Available`.
-- `ErrNotHolder` if release when not `Granted`.
-
-### entity-authority-05 — Server give/take/release operations and errors
-Server MAY call:
-- `give_authority(A,E)` only if delegated and `InScope(A,E)`.
-- `take_authority(E)` only if delegated.
-- `release_authority(E)` only if delegated.
-
-On non-delegated entities, server authority calls MUST return `ErrNotDelegated` and MUST NOT panic.
-
-### entity-authority-06 — Server priority in conflicts
-If multiple authority actions apply in the same tick, server actions have priority over client actions:
-- `take_authority` and `give_authority` override client request/release in that tick.
-
-### entity-authority-07 — Delegated write acceptance
-For delegated `E`:
-- If holder is `Client(A)`: server MUST accept writes from `A`, reject/ignore from others.
-- If holder is `Server` or `None`: server MUST reject/ignore all client writes.
-
-### entity-authority-08 — Authority release conditions
-Authority MUST be released (holder becomes `None`) when any occur:
-- holder client successfully calls `release_authority(E)`;
-- server calls `release_authority(E)`;
-- server calls `give_authority` or `take_authority` (overwrites prior holder);
-- holder client becomes out-of-scope for `E`;
-- holder client disconnects.
-
-### entity-authority-09 — Denied → Available must be observable on release
-When authority is released from a state where non-holders observed `Denied`,
-those clients MUST observe `Denied → Available` (explicitly signaling “up for grabs”).
-
-### entity-authority-10 — Events exist only for delegated entities and are transition-driven
-For delegated `E` and client `C`:
-- `AuthGranted(E)` iff C transitions to observing `Granted`.
-- `AuthDenied(E)` iff C transitions to observing `Denied` from a non-Denied state.
-- `AuthLost(E)` iff C transitions from `Granted` to anything else (`Available` or `Denied`).
-
-Events MUST be emitted exactly once per actual status transition and MUST NOT be emitted for redundant no-op updates.
-
-### entity-authority-11 — Same-to-same status transitions are forbidden as a correctness requirement
-Implementations MUST NOT rely on same-to-same status transitions (e.g., `Denied → Denied`) for correctness.
+### Diagnostics enabled
+When diagnostics are enabled, Naia MAY emit warnings on illegal/bug states; otherwise it MUST remain silent
+in production.
 
 ---
 
-## 3) Contract IDs (Obligations)
-(These map to the authority files: client ops, server ops, scope coupling, migration/events.)
+## 2) Core Contracts
+
+### entity-authority-01 — Authority is defined only for delegated entities
+For any entity `E`:
+- If `replication_config(E) != Some(Delegated)`, then `authority(E)` MUST be `None` on clients (no authority state).
+- Any attempt to request or release authority on a non-delegated entity MUST return an error (see below).
+
+### entity-authority-02 — Single-writer rule (client-side)
+For any delegated entity `E` and a given client `C`:
+- `C` MUST only be permitted to **write** replicated updates for `E` when `EntityAuthStatus(C,E)` is:
+    - `Granted`, or
+    - `Releasing` (until release finalizes)
+
+For all other statuses (`Available`, `Requested`, `Denied`):
+- if Naia would enqueue/serialize/send a replication write for `E`, it MUST panic.
+
+This is a hard invariant: Naia controls writing and must enforce it strictly.
+
+### entity-authority-03 — Meaning of Denied
+For a delegated entity `E` as observed by a client `C`:
+- `Denied` MUST mean: authority is currently held by another client OR by the server.
+- While `Denied`, the client MUST NOT be granted authority until the current holder releases or the server resets.
+- When authority becomes available again, `Denied` MUST transition to `Available`.
+
+This is not “you asked and were rejected”; it is “currently unavailable.”
 
 ---
 
-## 4) Interfaces & Observability
-- All in-scope clients observe exactly one of {Granted, Denied, Available}.
-- If server holds authority, all clients observe Denied.
+## 3) Client API Semantics (Request / Release)
+
+### entity-authority-04 — request_authority() is optimistic: Available → Requested immediately
+If a client calls `request_authority(E)` for a delegated entity `E` and the client is eligible (in-scope, etc.):
+- the client MUST transition locally from `Available` → `Requested` immediately (optimistic pending),
+  without waiting for a server round-trip.
+
+### entity-authority-05 — request_authority() completion transitions
+After `Requested`, the client MUST eventually observe one of:
+
+- `Requested → Granted` if the server grants authority
+- `Requested → Denied` if authority is held by another client or by the server (first-request-wins arbitration)
+- `Requested → Available` if the server resets authority globally (e.g., server override) before granting
+
+The client MUST NOT remain permanently in `Requested` unless the entity/lifetime ends (see scope/lifetime rules).
+
+### entity-authority-06 — release_authority() transitions: Granted → Releasing → Available
+If the client currently holds authority:
+- `release_authority(E)` MUST transition `Granted → Releasing` immediately (local optimistic),
+- and MUST eventually finalize to `Available` after the server processes release.
+
+If the client is `Requested` and calls `release_authority(E)`:
+- it MUST cancel its request locally and transition to `Available`.
+- the server MAY ignore the cancellation if it never observed the request; behavior must remain convergent.
+
+### entity-authority-07 — Client-side error returns (Result semantics)
+`request_authority(E)` and `release_authority(E)` MAY return errors. At minimum:
+
+- If `replication_config(E) != Some(Delegated)`: MUST return an error (e.g., `ErrNotDelegated`)
+- If the entity is out-of-scope on this client: MUST return an error (e.g., `ErrNotInScope`)
+- If the entity does not exist in the client’s current lifetime: MUST return an error (e.g., `ErrNoSuchEntity`)
+
+Errors MUST NOT mutate authority status except where explicitly specified (e.g., cancel Requested on release).
+
+Non-normative note:
+- Even with client-side errors, the server must still be safe if it receives invalid requests; see §6.
 
 ---
 
-## 5) Invariants & Non-Goals
+## 4) Server Semantics (Grant / Reset / Server as Holder)
 
-**Always true**
-- Authority is an entity-level delegated concept (not per-component).
+### entity-authority-08 — First-request wins arbitration (delegation law)
+Authority arbitration MUST follow the rules defined in `entity_delegation.md`:
+- first eligible request wins
+- others remain denied until release/reset
 
-**Non-goals**
-- Does not define transport delivery mechanics (see `entity_replication.md`).
+Authority spec defines the client-observable status transitions and events resulting from that law.
+
+### entity-authority-09 — Server may hold authority and block clients
+The server MAY act as an authority holder for a delegated entity.
+
+If the server is holding authority for `E`:
+- all clients observing `E` MUST be in `Denied` for `E` (except a client currently in `Requested`, which must
+  transition to `Denied` once the server state is observed/applied).
+
+### entity-authority-10 — Server override/reset
+The server MAY reset authority for a delegated entity at any time.
+
+When the server resets authority for `E`:
+- any client in `Granted` or `Releasing` MUST transition to `Available` (authority revoked)
+- any client in `Denied` MUST transition to `Available`
+- any client in `Requested` MUST transition to `Available` (request cleared)
+
+This is the server’s “break glass” control.
 
 ---
 
-## 6) Changelog
-- v1: extracted from prior omnibus contract.
+## 5) Scope, Lifetime, and Disconnect Interactions
+
+### entity-authority-11 — Out-of-scope ends authority for that client
+If a client becomes out-of-scope for delegated entity `E` (or the entity despawns due to publication/scope):
+- the client MUST treat the entity’s lifetime as ended
+- any authority status for that entity MUST be cleared (entity no longer exists locally)
+- any pending buffered actions for that entity MUST be discarded (see `entity_replication.md`)
+
+### entity-authority-12 — Authority holder losing scope forces global release/reset
+If the authority-holding client loses scope for `E` (or disconnects):
+- the server MUST release/reset authority for `E`
+- other in-scope clients MUST transition from `Denied` to `Available`
+
+(Exact timing is per replication tick semantics; clients must converge.)
+
+### entity-authority-13 — Delegation disable clears authority
+If an entity stops being delegated (`replication_config` changes away from `Delegated`):
+- authority MUST become `None` on all clients for that entity
+- any pending `Requested` MUST be cleared
+- any `Granted/Releasing` MUST be revoked (server wins)
+
+---
+
+## 6) Illegal / Misuse Cases (Robustness)
+
+### entity-authority-14 — Out-of-scope requests are ignored server-side
+If the server receives an authority request for `(U,E)` while `OutOfScope(U,E)`:
+- in production, it MUST ignore it silently
+- when diagnostics are enabled, it MAY emit a warning
+
+This complements client-side `ErrNotInScope`. The system must remain safe even if invalid requests occur.
+
+### entity-authority-15 — Duplicate/late authority signals are idempotent
+Authority grant/reset signals may be duplicated or reordered.
+
+Clients MUST:
+- not emit duplicate observable “grant” effects for the same lifetime
+- converge to the server’s final resolved authority state
+- ignore authority signals for entities not in the active lifetime (see `entity_replication.md`)
+
+---
+
+## 7) Observability (Events)
+
+Authority changes MUST be observable via:
+- `authority()` (status) while the entity is delegated and in the client’s lifetime
+- client/server events as defined in `client_events_api.md` and `server_events_api.md`
+
+This spec defines semantics, not exact event names. At minimum, the event layer MUST be able to represent:
+- “authority granted to this client for entity E”
+- “authority reset/revoked for entity E”
+
+---
+
+## 8) Test obligations (TODO placeholders; not implementing yet)
+
+- entity-authority-01: authority exists only for delegated entities (None otherwise)
+- entity-authority-02: writing without permission panics
+- entity-authority-04/05: Available→Requested optimistic; Requested resolves to Granted/Denied/Available appropriately
+- entity-authority-06: release transitions Granted→Releasing→Available; cancels Requested
+- entity-authority-07: request/release return errors for not delegated / not in scope / no entity
+- entity-authority-09/10: server can hold authority; server reset clears all client states
+- entity-authority-12: holder scope-loss/disconnect releases authority and unblocks others
+- entity-authority-13: delegation disable clears authority and revokes grants
+- entity-authority-14: out-of-scope requests ignored server-side (warn only in diagnostics)
+- entity-authority-15: duplicates/reordering are idempotent and lifetime-safe
+
+---
+
+## 9) Cross-references
+
+- Delegation: `entity_delegation.md`
+- Ownership: `entity_ownership.md`
+- Scopes & lifetimes: `entity_scopes.md`
+- Replication ordering/lifetime gating: `entity_replication.md`
+- Events: `server_events_api.md`, `client_events_api.md`, `world_integration.md`
