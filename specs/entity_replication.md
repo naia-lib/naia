@@ -1,78 +1,198 @@
-# Spec: Entity Replication (Delivery, Ordering, Identity)
-Defines the only valid semantics for identity continuity and required delivery/ordering guarantees relevant to entity behavior.
+# Spec: Entity Replication
 
-**Status:** Active  
-**Version:** v1  
-**Related specs:** `entity_scopes.md`, `entity_authority.md`, `entity_publication.md`  
-**Applies to:** server + client
+This spec defines the **client-observable behavior** of Naia’s entity/component replication over the wire:
+- entity spawn/despawn as perceived by a client
+- replicated component insert/update/remove ordering
+- tolerance to packet **reordering**, **duplication**, and **late arrival**
+- entity identity across **lifetimes** (scope enter → scope leave, with the ≥1 tick rule)
 
-**Contract ID format:** `entity-replication-<nn>` (stable; never reused; never renumbered)
-
----
-
-## 1) Scope & Vocabulary
-
-**In scope**
-- Required guarantees about identity continuity and steady-state consistency.
-- Required ordering/atomicity at the semantic level for state changes relevant to entities.
-
-**Out of scope**
-- Transport-specific mechanics and performance targets (bandwidth, latency).
-- Adapter/engine integration details.
-
-**Vocabulary**
-- **GlobalEntity**: server canonical entity identifier.
-- **LocalEntity**: client-local identifier mapping to a GlobalEntity.
-- **Logical identity**: same GlobalEntity represents the same conceptual entity across server/clients.
+This spec does **not** define:
+- RPC/message semantics (see `messaging.md`)
+- the internal serialization format
+- bandwidth/compression strategies
 
 ---
 
-## 2) Contract (Rules)
+## Glossary
 
-### entity-replication-01 — Stable logical identity
-A GlobalEntity MUST represent the same logical entity for all observers while it exists.
-
-### entity-replication-02 — Mapping consistency in steady state
-In steady state, all in-scope clients MUST converge on:
-- identical GlobalEntity identity for a given logical entity;
-- component state consistent with authoritative replication rules for that entity type.
-
-### entity-replication-03 — Semantic ordering: server tick law for entity state changes
-The server MUST compute entity state changes atomically per tick, in this order:
-1) Apply scope membership changes.
-2) Apply delegation enable/disable and client-owned migration.
-3) Apply authority actions (server and client requests/releases).
-4) Emit resulting authority statuses/events to in-scope clients per `entity_authority.md`.
-
-### entity-replication-04 — No out-of-order application of authority statuses
-Receivers MUST NOT observe out-of-order authority status application.
-
-### entity-replication-05 — Duplicate deliveries must not be required for correctness
-Duplicate deliveries MUST NOT be required for correctness; same-to-same status transitions MUST NOT be relied upon.
-(This supports the `entity_authority.md` rule that events are transition-driven.)
+- **Replicated component**: a component type that is part of the Protocol and may be synced over the wire.
+- **Local-only component**: a component instance present only in a local World that is not (currently) server-replicated for that entity.
+- **Entity lifetime (client-side)**: `scope enter → scope leave`, where re-entering scope after being out-of-scope for **≥ 1 tick** is a **new lifetime** (fresh spawn semantics). See `entity_scopes.md`.
+- **GlobalEntity**: global identity of an entity across the server’s lifetime (monotonically increasing u64; practical uniqueness).
+- **LocalEntity (HostEntity/RemoteEntity)**: per-connection entity handle(s) that may wrap/reuse across lifetimes; must be disambiguated by lifetime rules.
 
 ---
 
-## 3) Contract IDs (Obligations)
-(These map primarily to `entities_lifetime_identity.rs` and cross-cutting ordering expectations in authority/delegation tests.)
+## Contract
+
+### entity-replication-01 — Global identity stability
+While an entity exists on the server:
+- The entity MUST have a stable **GlobalEntity**.
+- The server MUST NOT change an entity’s GlobalEntity during its existence.
+
+When the server despawns the entity:
+- That entity ceases to exist. Any future entity with a different lifetime is a different entity, even if some local IDs are reused.
 
 ---
 
-## 4) Interfaces & Observability
-- Identity mapping is observable as stable GlobalEntity identity across clients.
-- Ordering is observable indirectly via transition-correct behavior (no forbidden intermediate states).
+### entity-replication-02 — Client-visible lifetime boundaries
+For any given client `C` and entity `E`, Naia MUST model a client-visible **lifetime**:
+
+- Lifetime **begins** when `E` enters `C`’s scope and Naia emits a **Spawn** to `C`.
+- Lifetime **ends** when `E` leaves `C`’s scope (including unpublish) and Naia emits a **Despawn** to `C`.
+- If `E` re-enters scope after being out-of-scope for **≥ 1 tick**, Naia MUST treat this as a **new lifetime** with **fresh spawn snapshot semantics**.
+
+Cross-link:
+- Scope/lifetime rules are defined in `entity_scopes.md` and are binding here.
 
 ---
 
-## 5) Invariants & Non-Goals
+### entity-replication-03 — Spawn snapshot semantics (baseline state)
+When `E` enters scope for client `C`, the Spawn sent to `C` MUST include:
 
-**Always true**
-- A client cannot safely depend on internal packet structure; only on the semantic outcomes above.
+- The set of replicated components present on `E` **at the time the Spawn is sent**
+- For each included replicated component, the full replicated field state necessary to establish the baseline
 
-**Non-goals**
-- Does not specify how to implement monotonic id/ack; only that semantic ordering must hold.
+Client-side requirement:
+- The client MUST be able to materialize the entity’s replicated baseline solely from the Spawn snapshot.
+
+Non-normative note:
+- This allows replication to avoid requiring “insert-before-update” for initial state; Spawn is the baseline.
 
 ---
 
-## 6) Changelog
-- v1: replaces older identity spec by folding identity + relevant ordering guarantees.
+### entity-replication-04 — No observable replication before Spawn
+For a given client-visible lifetime of `(C, E)`:
+
+- The client MUST NOT observe any replicated component Insert/Update/Remove for `E` **before** it observes the Spawn for that lifetime.
+- If delivery order causes the client to receive component actions before Spawn, Naia MUST ensure those actions are **not observable early** (either by buffering or by deferring application until Spawn becomes available).
+
+This is a hard invariant: **no update-before-spawn** observability.
+
+---
+
+### entity-replication-05 — Actions outside lifetime are ignored
+If the client receives any entity/component replication action referencing an entity lifetime that is not currently active (i.e. before Spawn for that lifetime, or after Despawn for that lifetime):
+
+- Naia MUST ignore the action (it MUST NOT mutate world state).
+- In production builds, this SHOULD be silent.
+- In debug builds, Naia SHOULD emit a debug warning.
+
+This applies to:
+- late packets from a prior lifetime
+- reordered packets that arrive after the lifetime ended
+- packets referencing entities that are out-of-scope
+
+---
+
+### entity-replication-06 — Update-before-Insert buffering (within lifetime)
+Within an active lifetime:
+
+- If a replicated component **Update** is received before the corresponding replicated component **Insert** has been applied, Naia MUST buffer the Update and apply it after Insert arrives.
+- Buffered updates MUST be dropped when the lifetime ends (on Despawn), if they have not been applied.
+- Naia MUST NOT apply a buffered Update to an entity/component that belongs to a different lifetime.
+
+The same rule applies symmetrically for any component action that requires the component to exist first (e.g. Remove received before Insert): Naia MUST ensure the action is not misapplied.
+
+---
+
+### entity-replication-07 — Local-only component overwrite by server replication
+If, at the time a replicated component Insert (or Spawn snapshot) is applied, the client already has a **local-only** component instance of the same component type on that entity:
+
+- This overwrite MUST be surfaced as an Insert (replicated-backed component becomes present), even though a local-only instance existed.
+- Naia MUST treat the replicated state as authoritative going forward.
+
+Observability rule:
+- If a local-only component existed and is overwritten by an incoming server-replicated component Insert (or Spawn snapshot),
+  Naia MUST emit a client-visible **Insert** event for that component (presence becomes “replicated-backed”),
+  not an Update event.
+
+Cross-link:
+- Ownership rules for local-only components vs server-backed replicated components are defined in `entity_ownership.md`. This contract ensures replication behavior conforms.
+
+---
+
+### entity-replication-08 — Collapse to final state per tick (no intermediate transitions)
+Within a single server tick, if an entity/component undergoes multiple changes that would otherwise create intermediate states (insert+remove, multiple updates, etc.):
+
+- The server MUST collapse replication to the **final state** for that tick.
+- The client MUST NOT be forced to observe intermediate states that did not persist across ticks.
+
+This mirrors the “final state only” principle used in scope transitions.
+
+---
+
+### entity-replication-09 — Duplicate delivery is idempotent
+If the client receives duplicate replication actions (e.g. due to retransmission):
+
+- Applying the same logical action more than once MUST NOT create additional observable effects.
+- Naia MUST remain convergent to the server’s final replicated state.
+
+Examples (normative intent):
+- duplicate Spawn for an already-spawned active lifetime MUST NOT create a second entity
+- duplicate Despawn MUST NOT error
+- duplicate Insert/Remove MUST not create oscillation
+- duplicate Update MUST not break determinism
+
+---
+
+### entity-replication-10 — Identity reuse safety (LocalEntity wrap/reuse)
+Local entity identifiers (HostEntity/RemoteEntity) may wrap/reuse over time.
+
+Naia MUST ensure:
+- Late or reordered replication actions from an old lifetime cannot corrupt a new lifetime, even if LocalEntity IDs are reused.
+- Some lifetime-disambiguating information MUST gate applicability of replication actions to the correct lifetime.
+
+Non-normative note:
+- A common strategy is to gate by tick boundaries (spawn/despawn tick), but the contract is the invariant: **no cross-lifetime corruption**.
+
+---
+
+### entity-replication-11 — GlobalEntity rollover is a terminal error
+GlobalEntity is treated as effectively unique.
+
+If the server’s monotonic GlobalEntity counter would roll over:
+- Naia MUST NOT silently wrap/reuse GlobalEntity values.
+- Naia MUST enter a **terminal error mode** (fail-fast / abort / panic), because continued operation would violate identity stability.
+
+This is intentionally strict: rollover is astronomically unlikely and correctness beats availability here.
+
+---
+
+### entity-replication-12 — Conflict resolution: server wins for replicated state
+If a conflict occurs between client-local state and server-replicated state for any replicated component:
+
+- The server’s replicated state MUST overwrite the client’s local state (convergence requirement).
+
+Additional design constraint (to avoid conflicts by construction):
+- While an entity is client-owned and not delegated, the server SHOULD NOT originate replicated component mutations for that entity except those derived from accepted owner writes and server-driven lifecycle transitions (scope/publish/delegation/despawn). If it does, the “server wins” rule still applies.
+
+---
+
+## Test obligations (TODO placeholders)
+
+For each contract above, Naia MUST eventually have at least one E2E test proving it.
+
+- entity-replication-01 — TODO: stable GlobalEntity across lifetime
+- entity-replication-02 — TODO: lifetime boundaries; fresh spawn after ≥1 tick out-of-scope
+- entity-replication-03 — TODO: Spawn contains full baseline state
+- entity-replication-04 — TODO: no observable update/insert/remove before Spawn
+- entity-replication-05 — TODO: late/out-of-lifetime actions ignored
+- entity-replication-06 — TODO: update-before-insert buffered then applied
+- entity-replication-07 — TODO: local-only overwritten by server replication
+- entity-replication-08 — TODO: collapse to final per tick; no intermediate states
+- entity-replication-09 — TODO: duplicates idempotent
+- entity-replication-10 — TODO: LocalEntity reuse cannot corrupt new lifetime
+- entity-replication-11 — TODO: GlobalEntity rollover fail-fast (unit-level)
+- entity-replication-12 — TODO: server-wins convergence for replicated state
+
+---
+
+## Cross-references
+
+- `entity_scopes.md` — defines scope enter/leave semantics and the ≥1 tick lifetime rule
+- `entity_publication.md` — defines publish/unpublish interactions with scope
+- `entity_ownership.md` — defines local-only mutation rules and ownership write constraints
+- `entity_delegation.md` / `entity_authority.md` — define delegation and authority semantics
+- `client_events_api.md` — defines client-observable event ordering/meaning
+- `time_ticks_commands.md` — defines tick semantics (including wrap considerations)
