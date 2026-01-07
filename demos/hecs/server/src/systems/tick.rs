@@ -107,9 +107,9 @@ pub fn check_scopes(app: &mut App) {
                 let x = *position.x;
 
                 if (50..=200).contains(&x) {
-                    server.user_scope(&user_key).include(&entity);
+                    server.user_scope_mut(&user_key).include(&entity);
                 } else {
-                    server.user_scope(&user_key).exclude(&entity);
+                    server.user_scope_mut(&user_key).exclude(&entity);
                 }
             }
         }
