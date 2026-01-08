@@ -177,6 +177,12 @@ If a conflict occurs between client-local state and server-replicated state for 
 Additional design constraint (to avoid conflicts by construction):
 - While an entity is client-owned and not delegated, the server SHOULD NOT originate replicated component mutations for that entity except those derived from accepted owner writes and server-driven lifecycle transitions (scope/publish/delegation/despawn). If it does, the “server wins” rule still applies.
 
+- Delegated authority refinement:
+    - For delegated entities, the server’s outbound replicated state remains the canonical convergence source for all clients.
+    - While a client holds authority (Granted/Releasing), the server MUST treat the authority holder’s accepted writes as the source for that canonical replicated state (plus lifecycle transitions).
+    - Therefore, the server MUST NOT originate independent conflicting replicated component mutations for `E` while a client holds authority.
+    - If the server revokes/resets authority, the canonical source may transition back to server-originated state after the reset boundary (see `entity_authority.md`).
+
 ---
 
 ## Test obligations (TODO placeholders)

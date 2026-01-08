@@ -43,6 +43,8 @@ Therefore:
 - If status is `Granted` or `Releasing`: `can_read = false`.
 - If status is `Available`, `Requested`, or `Denied`: `can_read = true`.
 
+`can_read = false` means the authority holder MUST NOT apply incoming *replicated component updates* from the peer for `E`; it does NOT prevent observing authority-control transitions (`Granted`/`Denied`/`Reset`) or lifecycle events (spawn/despawn), which must still be processed.
+
 Normative safety:
 - If Naia attempts to write while `can_write = false`, it MUST panic.
 

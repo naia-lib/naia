@@ -49,7 +49,9 @@ If an entity is not delegated, this spec’s authority arbitration does not appl
 ### entity-delegation-02 — Single-writer invariant
 For any delegated entity `E`, at any time:
 - at most one client MAY be the authority holder for `E`.
-- the server MAY always write (server authority overrides all client authority).
+- the server MAY reset/revoke authority at any time (see `entity_authority.md`).
+- the server MAY hold authority (server-as-holder) which forces all clients to observe `Denied`.
+- while a client holds authority (Granted/Releasing), the server MUST NOT originate independent replicated component writes for `E`; the server’s replicated state MUST be derived from the current authority holder’s accepted writes plus server-driven lifecycle transitions.
 
 Client-visible implication:
 - exactly one client can have `EntityAuthStatus::Granted` at a time for a given delegated entity.
@@ -114,9 +116,11 @@ When a client requests authority and is in `Requested`:
 
 ### entity-delegation-09 — Granted means writes allowed; single writer enforced
 When a client is in `Granted` for delegated entity `E`:
-- that client MAY write replicated updates for `E`.
-- all other clients MUST be in `Denied` for `E` (or `Available` only if not tracking the entity’s status explicitly).
-- the server MAY still write at any time; server writes override client writes on conflict (see `entity_replication.md`).
+  - that client MAY write replicated updates for `E`.
+  - all other clients MUST be in `Denied` for `E` (or `Available` only if not tracking the entity’s status explicitly).
+  - While a client is `Granted`/`Releasing` for `E`, the authority holder is the sole origin of replicated component updates for `E`.
+  - The server MUST NOT attempt to ‘override’ by sending conflicting component writes while the client holds authority.
+  - If the server needs to override, it MUST first reset/revoke authority (`entity-authority-10`), optionally become the holder (`entity-authority-09`), and then replicate its authoritative state.
 
 ### entity-delegation-10 — Releasing means writes may still occur until release finalizes
 When a client enters `Releasing`:

@@ -44,7 +44,7 @@ If `SharesRoom(U,E) == false`, then `OutOfScope(U,E)` MUST hold.
 Assuming `SharesRoom(U,E) == true`, the server MUST apply the per-user filter as follows:
 
 - If `Exclude(U,E)` is active, then `OutOfScope(U,E)` MUST hold.
-- Else if `Include(U,E)` is active, then `InScope(U,E)` MAY hold (subject to other gates like publication).
+- Else if `Include(U,E)` is active, then `InScope(U,E)` MUST hold (subject to other gates like publication).
 - Else (neither active), the default MUST be `InScope(U,E)` (subject to other gates like publication).
 
 ### entity-scopes-03 — Include/Exclude ordering: last call wins
