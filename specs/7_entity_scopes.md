@@ -1,4 +1,4 @@
-# Spec: Entity Scopes
+# Entity Scopes
 
 Entity Scopes define whether a given Entity `E` is **in-scope** or **out-of-scope** for a given User/Client `U`,
 and the required observable consequences of scope transitions.
@@ -10,10 +10,10 @@ This spec defines:
 - Required behavior under reordering / illegal states.
 
 This spec does not define:
-- Ownership write permissions (see `entity_ownership.md`)
-- Publication gating for client-owned entities (see `entity_publication.md`)
-- Delegation/authority semantics (see `entity_delegation.md`, `entity_authority.md`)
-- Replication ordering/wire format (see `entity_replication.md`)
+- Ownership write permissions (see `9_entity_ownership.md`)
+- Publication gating for client-owned entities (see `10_entity_publication.md`)
+- Delegation/authority semantics (see `11_entity_delegation.md`, `12_entity_authority.md`)
+- Replication ordering/wire format (see `8_entity_replication.md`)
 
 ---
 
@@ -69,13 +69,13 @@ For a client-owned entity `E` with owning client `A`:
 - `InScope(A,E)` MUST always hold while `A` is connected.
 - Publication and per-user scope filters MUST NOT remove `E` from `A`’s scope.
 
-(This restates the required coupling from `entity_ownership.md` / `entity_publication.md` as a scope invariant.)
+(This restates the required coupling from `9_entity_ownership.md` / `10_entity_publication.md` as a scope invariant.)
 
 ### entity-scopes-06 — Publication can force non-owners out-of-scope
 For client-owned entities, publication state MUST be treated as an additional gate for non-owners:
 - If client-owned `E` is Unpublished/Private, then for all `U != Owner(E)`, `OutOfScope(U,E)` MUST hold.
 
-(See `entity_publication.md` for publication semantics; this spec defines the scope consequence.)
+(See `10_entity_publication.md` for publication semantics; this spec defines the scope consequence.)
 
 ---
 
@@ -136,7 +136,7 @@ When a client disconnects (user `U` removed from the server connection set):
 - `OutOfScope(U,E)` MUST be treated as holding for all entities `E` immediately.
 - The server MUST cease replicating entities to that client.
 
-Note: Separately, `entity_ownership.md` defines that client-owned entities are globally despawned when their owning
+Note: Separately, `9_entity_ownership.md` defines that client-owned entities are globally despawned when their owning
 client disconnects. This spec does not redefine that rule; it defines per-user scope state.
 
 ---
@@ -173,8 +173,8 @@ If the server receives (or internally attempts) a scope operation referencing an
 
 ## 9) Cross-references
 
-- Ownership: `entity_ownership.md`
-- Publication: `entity_publication.md`
-- Replication ordering/wire rules: `entity_replication.md`
-- Delegation/Authority coupling: `entity_delegation.md`, `entity_authority.md`
-- Events/lifetimes: `server_events_api.md`, `client_events_api.md`, `world_integration.md`
+- Ownership: `9_entity_ownership.md`
+- Publication: `10_entity_publication.md`
+- Replication ordering/wire rules: `8_entity_replication.md`
+- Delegation/Authority coupling: `11_entity_delegation.md`, `12_entity_authority.md`
+- Events/lifetimes: `13_server_events_api.md`, `14_client_events_api.md`, `15_world_integration.md`

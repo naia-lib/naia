@@ -12,9 +12,9 @@ It owns:
 - Buffering bounds & TTLs required for determinism + memory safety
 
 It does NOT own:
-- Transport adapter behavior (see `transport.md`)
+- Transport adapter behavior (see `3_transport.md`)
 - Entity replication semantics (see entity suite specs)
-- Connection/auth handshake rules (see `connection_lifecycle.md`)
+- Connection/auth handshake rules (see `2_connection_lifecycle.md`)
 
 ---
 
@@ -29,7 +29,7 @@ It does NOT own:
 - **Sequenced**: Messages represent “current state”; older state MUST NOT be observed after newer state has been observed (no rollback). Intermediate states MAY be skipped.
 - **TickBuffered**: Messages are grouped by tick and exposed per tick in tick order.
 - **Tick**: A shared tick value used by Naia; `Tick` is `u16` and wraps. :contentReference[oaicite:4]{index=4}
-- **Entity lifetime** (client-side): scope enter → scope leave, with the “≥ 1 tick out-of-scope” rule (see `entity_scopes.md` / `entity_replication.md`).
+- **Entity lifetime** (client-side): scope enter → scope leave, with the “≥ 1 tick out-of-scope” rule (see `7_entity_scopes.md` / `8_entity_replication.md`).
 
 Normative keywords: MUST, MUST NOT, MAY, SHOULD.
 
@@ -59,7 +59,7 @@ A given connection MUST have compatible channel registrations:
 - Same ChannelKind refers to the same logical channel
 - ChannelMode and ChannelDirection MUST be compatible
 
-If channel registrations are incompatible, connection establishment MUST fail (see `connection_lifecycle.md` for failure surfacing).
+If channel registrations are incompatible, connection establishment MUST fail (see `2_connection_lifecycle.md` for failure surfacing).
 
 ### messaging-05 — ChannelDirection is enforced at send-time
 If local code attempts to send a message on a channel that is not configured for that direction, Naia MUST return `Result::Err`. (user-initiated)

@@ -19,9 +19,9 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ## References
 
-- `transport.md` (fault model, heartbeats/acks, ordering/duplication behavior)
-- `connection_lifecycle.md` (connect/disconnect lifecycle, timeouts, cleanup)
-- `time_ticks_commands.md` (time source expectations, tick/time monotonicity)
+- `3_transport.md` (fault model, heartbeats/acks, ordering/duplication behavior)
+- `2_connection_lifecycle.md` (connect/disconnect lifecycle, timeouts, cleanup)
+- `5_time_ticks_commands.md` (time source expectations, tick/time monotonicity)
 
 ---
 

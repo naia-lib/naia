@@ -59,14 +59,81 @@ All specifications in this directory MUST follow these rules:
 - **MUST** be explicit about edge cases
 - **MUST** specify ordering when it matters
 
-## Style Guide
-
-Reference `OWNERSHIP_DELEGATION_AUTH.md` as the canonical example of spec style and structure.
-
 ## Template
 
-Use `_template.md` as a starting point for new specifications.
+Use `1_template.md` as a starting point for new specifications.
 
 ## Test Obligations
 
 Each spec MUST include a "Test Obligations" section that lists the E2E test names that verify the spec. This creates traceability from spec → test.
+
+---
+
+## Master Glossary
+
+Terms defined here are normative across all specs. Individual specs MAY add spec-specific terms in their Vocabulary sections but MUST NOT redefine master terms.
+
+### Connection & Session
+
+- **Client**: A Naia client instance attempting to establish and maintain a connection to a server.
+- **Server**: A Naia server instance accepting client connections and managing authoritative state.
+- **User** (`UserKey`): The server's internal identifier for a connected client. Used in server-side APIs.
+- **Session**: The period from `ConnectEvent` to `DisconnectEvent` for a single connection.
+- **Connection**: The underlying transport-level link between client and server.
+
+### Time & Ticks
+
+- **Tick**: A `u16` simulation step counter that wraps at 65535. All tick comparisons MUST use wrap-safe arithmetic.
+- **TickRate**: The configured duration per tick (milliseconds), shared between client and server.
+- **Server Tick**: The authoritative tick counter maintained by the server.
+- **Client Tick**: The client's tick counter, which MAY lead the server tick for command timing.
+
+### Entities & Components
+
+- **Entity**: A networked object tracked by Naia replication, identified by `GlobalEntity` (server) or `LocalEntity` (per-connection).
+- **GlobalEntity**: A `u64` monotonically-increasing identifier unique across the server's lifetime.
+- **LocalEntity** (`HostEntity`/`RemoteEntity`): Per-connection entity handles that may wrap/reuse across lifetimes.
+- **Entity Lifetime** (client-side): The period from scope-enter to scope-leave. Re-entering scope after ≥1 tick out-of-scope creates a new lifetime.
+- **Replicated Component**: A component type registered in the Protocol for network synchronization.
+- **Local-only Component**: A component instance existing only locally, not backed by replication.
+
+### Ownership & Authority
+
+- **EntityOwner**: Enum indicating who owns an entity: `Server`, `Client(UserKey)`, or `Local`.
+- **Owner**: The single actor permitted to write replicated updates for an entity (exclusive, per-entity).
+- **Authority**: Write permission for a delegated server-owned entity. Only the authority holder may write.
+- **EntityAuthStatus**: The client's authority state for a delegated entity: `Available`, `Requested`, `Granted`, `Releasing`, or `Denied`.
+
+### Scoping & Publication
+
+- **InScope(U, E)**: Predicate indicating entity E is visible to user U.
+- **OutOfScope(U, E)**: Entity E is not visible to user U; implies despawn on that client.
+- **Room**: A server-managed grouping for coarse scope gating. Users and entities may belong to multiple rooms.
+- **SharesRoom(U, E)**: True if user U and entity E share at least one common room.
+- **ReplicationConfig**: Configuration for an entity's replication behavior: `Private`, `Public`, or `Delegated`.
+- **Published** (client-owned): Entity is visible to non-owners (subject to scope policy).
+- **Unpublished** (client-owned): Entity is NOT visible to any non-owner.
+
+### Events & API
+
+- **Drain**: Reading and removing events from a pending queue. Drains are destructive (read+remove).
+- **Receive Step**: Ingesting packets from transport into internal buffer (no state changes).
+- **Process Step**: Processing buffered packets, applying protocol semantics, producing events.
+- **ConnectEvent**: Emitted when a connection is fully established (after auth, handshake, and tick sync).
+- **DisconnectEvent**: Emitted when a connection is terminated.
+
+### Build & Runtime Modes
+
+- **Debug Mode** (`debug_assertions`): Compile-time mode when `debug_assertions` is enabled. Additional checks and warnings are active.
+- **Prod Mode**: Compile-time mode when `debug_assertions` is disabled. Silent handling of remote anomalies.
+- **Diagnostics Mode**: Runtime configuration (independent of debug_assertions). When enabled, warnings MAY be emitted for illegal/impossible states.
+
+### Error Handling Policy
+
+All specs follow this error handling policy:
+
+| Error Type | Handling |
+|------------|----------|
+| User/API misuse | Return `Result::Err` |
+| Remote/untrusted input anomalies | Prod: ignore silently; Debug: warn |
+| Framework invariant violation | **PANIC** |

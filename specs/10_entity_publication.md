@@ -1,4 +1,4 @@
-# Spec: Entity Publication
+# Entity Publication
 
 Entity Publication defines the **only valid semantics** for whether a *client-owned* entity may be replicated (spawned/updated) to **non-owning clients**.
 
@@ -20,19 +20,19 @@ This spec is intentionally narrow:
 - Observable publication state via `replication_config()` on server/client entities.
 
 ### Out of scope (defined elsewhere)
-- Ownership write acceptance / panics (`entity_ownership.md`)
-- Scope computation & in-scope/out-of-scope mechanics (`entity_scopes.md`)
-- Replication ordering / wire semantics (`entity_replication.md`)
-- Delegation migration & delegated authority (`entity_delegation.md`, `entity_authority.md`)
+- Ownership write acceptance / panics (`9_entity_ownership.md`)
+- Scope computation & in-scope/out-of-scope mechanics (`7_entity_scopes.md`)
+- Replication ordering / wire semantics (`8_entity_replication.md`)
+- Delegation migration & delegated authority (`11_entity_delegation.md`, `12_entity_authority.md`)
 
 ---
 
 ## 2) Vocabulary
 
-- **Owner(E)**: The owner of entity `E` (see `entity_ownership.md`).
+- **Owner(E)**: The owner of entity `E` (see `9_entity_ownership.md`).
 - **Owning client A**: A client `A` such that `Owner(E) == A`.
 - **Non-owner client C**: A client `C` such that `C != Owner(E)`.
-- **InScope(C,E)** / **OutOfScope(C,E)**: defined in `entity_scopes.md`.
+- **InScope(C,E)** / **OutOfScope(C,E)**: defined in `7_entity_scopes.md`.
 - **Despawn (client-side)**: `E` is removed from the client’s networked entity pool (and all of its components in that pool are destroyed).
 - **Publication state (client-owned only)**:
   - **Published**: the server MAY scope `E` to non-owners (subject to scope policy).
@@ -49,7 +49,7 @@ This spec defines how `ReplicationConfig::{Private,Public,Delegated}` maps onto 
 
 ### entity-publication-01 — Publication gates only client-owned visibility to non-owners
 Publication semantics apply only to **client-owned** entities as a gate for **non-owner** visibility.
-This spec does not impose additional constraints on server-owned entities beyond what `entity_scopes.md` / `entity_replication.md` specify.
+This spec does not impose additional constraints on server-owned entities beyond what `7_entity_scopes.md` / `8_entity_replication.md` specify.
 
 ### entity-publication-02 — Unpublished client-owned entities are never in-scope for non-owners
 If `E` is client-owned and **Unpublished** with owner `A`:
@@ -91,7 +91,7 @@ If a non-owner client `C != Owner(E)` transitions to `OutOfScope(C,E)` due to pu
 - `E` MUST despawn on that client (be removed from the client’s networked entity pool).
 - All components attached to `E` in that client’s pool (including any “local-only” components) MUST be destroyed.
 
-This is intentionally aligned with the general “OutOfScope ⇒ despawn” rule in `entity_scopes.md`;
+This is intentionally aligned with the general “OutOfScope ⇒ despawn” rule in `7_entity_scopes.md`;
 publication is just one cause of OutOfScope.
 
 ### entity-publication-09 — Publication MUST be observable via replication_config
@@ -104,12 +104,12 @@ For a non-owner client `C != Owner(E)`:
   (Because `Some(Private)` would mean Unpublished, which must be OutOfScope for non-owners.)
 
 ### entity-publication-10 — Delegation migration ends “client-owned publication” semantics
-If a client-owned entity `E` migrates into a **delegated server-owned entity** (see `entity_delegation.md`):
+If a client-owned entity `E` migrates into a **delegated server-owned entity** (see `11_entity_delegation.md`):
 - `E` is no longer client-owned, and publication semantics in this spec no longer apply.
 - Non-owners are no longer gated by “Published/Unpublished client-owned rules”; the entity is now governed by
   server-owned scoping + delegated rules.
 
-Cross-constraint (restated for coherence; the detailed rule lives in `entity_delegation.md`):
+Cross-constraint (restated for coherence; the detailed rule lives in `11_entity_delegation.md`):
 - A client-owned entity MUST be Published before it may migrate into delegated server-owned form.
 
 ---
@@ -143,7 +143,7 @@ Rationale: this restores the invariant required by entity-publication-02/09 with
 
 ## 6) Cross-references
 
-- Ownership: `entity_ownership.md`
-- Scopes: `entity_scopes.md`
-- Replication ordering/wire behavior: `entity_replication.md`
-- Delegation & authority: `entity_delegation.md`, `entity_authority.md`
+- Ownership: `9_entity_ownership.md`
+- Scopes: `7_entity_scopes.md`
+- Replication ordering/wire behavior: `8_entity_replication.md`
+- Delegation & authority: `11_entity_delegation.md`, `12_entity_authority.md`

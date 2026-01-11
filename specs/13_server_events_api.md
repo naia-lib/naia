@@ -22,7 +22,7 @@ Related specs:
 - **Process step**: The act of processing all buffered packets, applying protocol semantics, and producing new pending events.
 - **Drain**: Reading events from the API such that they are removed from the pending queue (pure read+remove).
 - **In scope**: A user is considered a recipient for an entity only if `InScope(user, entity)` per `entity_scopes`.
-- **Tick**: Server simulation tick as defined in `time_ticks_commands.md`. (Wrap-safe ordering applies.)
+- **Tick**: Server simulation tick as defined in `5_time_ticks_commands.md`. (Wrap-safe ordering applies.)
 
 ---
 
@@ -101,7 +101,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ### server-events-06 — Disconnect cleanup is consistent with scope + ownership contracts
 **Rule**
 - After a disconnect is observed, the server MUST have cleaned up all per-connection scoped state attributable solely to that session (no “ghost” scoped entities for that user).
-- Additionally, ownership cleanup MUST follow `entity_ownership.md` (client-owned entities despawn when owner disconnects).
+- Additionally, ownership cleanup MUST follow `9_entity_ownership.md` (client-owned entities despawn when owner disconnects).
 
 **Test obligations**
 - `server-events-06.t1` (TODO) Disconnect while scoped → scope membership removed.
@@ -138,7 +138,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ### server-events-09 — Despawn/leave-scope events are exactly-once and end that user’s lifecycle
 **Rule**
 - When `E` leaves scope for `U` (scope change or true despawn), the World events stream MUST expose exactly one despawn/exit event for `(U, E)`.
-- After `(U, E)` has exited, the server MUST NOT surface further insert/update/remove events for `(U, E, *)` unless `E` re-enters scope for `U` as a new lifecycle (per `entity_scopes.md` + `entity_replication.md`).
+- After `(U, E)` has exited, the server MUST NOT surface further insert/update/remove events for `(U, E, *)` unless `E` re-enters scope for `U` as a new lifecycle (per `7_entity_scopes.md` + `8_entity_replication.md`).
 
 **Test obligations**
 - `server-events-09.t1` (TODO) Despawn while in scope → exit once; no further component events for that lifecycle.
@@ -178,7 +178,7 @@ Additional requirements:
 ### server-events-12 — Request/response events: exactly-once surfacing, correct matching, drain once
 **Rule**
 - For each incoming request accepted by the protocol layer, the server MUST surface exactly one corresponding request event/handle to the application.
-- Any response matching MUST be correct per `messaging.md` and MUST NOT surface duplicates under retransmit/duplication.
+- Any response matching MUST be correct per `4_messaging.md` and MUST NOT surface duplicates under retransmit/duplication.
 - Draining request/response events MUST be destructive and MUST NOT replay already-drained items.
 
 **Test obligations**
