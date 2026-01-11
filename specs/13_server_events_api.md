@@ -1,6 +1,6 @@
 # Server Events API
 
-This spec defines the **only** valid semantics for the server-side Events API surface: what is collected, how it is grouped, how it is drained, and what ordering/duplication guarantees exist.
+This spec defines the **only** valid semantics for the server-side Events API surface: what is collected, when it becomes observable, how it is drained, and what ordering/duplication guarantees exist.
 
 Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 
@@ -8,183 +8,201 @@ Related specs:
 - `specs/entity_replication.md` (spawn/update/remove/despawn semantics)
 - `specs/entity_scopes.md` (in-scope vs out-of-scope and snapshot behavior)
 - `specs/messaging.md` (message ordering, reliability, request/response semantics)
-- `specs/connection_lifecycle.md` (connect/disconnect events and cleanup)
+- `specs/time_ticks_commands.md` (tick definition, wrap ordering, command timing model)
+- `specs/connection_lifecycle.md` (connect/disconnect/auth ordering + cleanup)
 
 ---
 
 ## Glossary
 
-- **Tick**: One server simulation step / update cycle.
-- **Events API**: The server-facing interface that buffers and exposes observable happenings (connects, disconnects, entity/component changes, messages, requests).
-- **Drain**: A “take_*” style read that removes buffered events from the internal queue.
-- **Event batch**: The set of events returned by a single drain call.
+- **Events API**: The server-facing interface that buffers and exposes observable happenings (auth/connect/disconnect, world mutations, messages, requests).
+- **World events**: Events that describe replicated-world changes and inbound app-level messages (spawn/despawn, insert/update/remove, message/request/response).
+- **Tick events**: Events that describe connection/tick/session-level happenings (auth/connect/disconnect, tick-related meta events if any).
+- **Receive step**: The act of ingesting available packets from the transport into Naia’s internal packet buffer.
+- **Process step**: The act of processing all buffered packets, applying protocol semantics, and producing new pending events.
+- **Drain**: Reading events from the API such that they are removed from the pending queue (pure read+remove).
 - **In scope**: A user is considered a recipient for an entity only if `InScope(user, entity)` per `entity_scopes`.
+- **Tick**: Server simulation tick as defined in `time_ticks_commands.md`. (Wrap-safe ordering applies.)
+
+---
+
+## API boundary model (normative)
+
+This spec standardizes the server loop boundary as:
+
+1) `receive_all_packets()`  (Receive step)
+2) `process_all_packets()`  (Process step)
+3) `take_tick_events()` and/or `take_world_events()` (Drain steps)
+
+The *names* above reflect the current API. The **semantics** below are the contract.
+
+### server-events-00 — Receive step is ingestion only
+- The Receive step MUST only ingest packets into an internal buffer.
+- The Receive step MUST NOT advance tick, mutate the world, or produce observable events directly.
+
+### server-events-01 — Process step is the only event-production boundary
+- New events MUST become pending/observable only as a result of the Process step.
+- If no Process step occurs, drains MUST NOT “discover” new events.
+
+### server-events-02 — Drains are pure read+remove
+- `take_world_events()` and `take_tick_events()` MUST be pure drains:
+  - MUST NOT receive packets
+  - MUST NOT process packets
+  - MUST NOT advance tick
+  - MUST have no side effects other than removing the drained events from the pending queue
 
 ---
 
 ## Contracts
 
-### server-events-01 — Drain operations are destructive and idempotent per tick
+### server-events-03 — Drain operations are destructive and idempotent (no replay without new Process step)
 **Rule**
-- Each drain call (e.g., `take_*`) MUST remove the returned events from the Events buffer.
-- Repeating the same drain call again **without new underlying changes** MUST return an empty result.
-- This MUST hold regardless of whether the drain is called multiple times within the same tick.
+- Each drain call MUST remove the returned events from the pending buffer.
+- Repeating the same drain call again **without any intervening Process step that produced new pending events** MUST return empty.
+- This MUST hold even if drains are called multiple times within the same server tick.
 
 **Notes**
 - “Idempotent” here means “subsequent drains see nothing,” not “same payload returned.”
 
 **Test obligations**
-- `server-events-01.t1` (TODO) Given one component insert+update+remove in one tick, When calling the corresponding drains twice, Then first call returns expected events and second call returns none.
-- `server-events-01.t2` (TODO) Given no new world changes, When calling all drains, Then all are empty.
+- `server-events-03.t1` (TODO) Given one insert+update+remove becomes pending, When draining twice without another Process step, Then first drain returns expected events and second drain returns none.
+- `server-events-03.t2` (TODO) Given no new pending events, When calling all drains, Then all are empty.
 
 ---
 
-### server-events-02 — Event types are partitioned; no cross-contamination
+### server-events-04 — Event types are partitioned; no cross-contamination
 **Rule**
-- Entity/component lifecycle events MUST NOT appear in message/request drains.
-- Message events MUST NOT appear in entity/component drains.
-- Connect/disconnect/auth events MUST NOT appear in any world-change drains.
+- World mutation events MUST NOT appear in message/request streams.
+- Message/request streams MUST NOT appear in world mutation streams.
+- Tick/session events (auth/connect/disconnect) MUST NOT appear in world mutation streams.
 
 **Test obligations**
-- `server-events-02.t1` (TODO) Given mixed activity in one tick (spawn + message + request), When draining each category, Then each event appears only in its correct drain.
+- `server-events-04.t1` (TODO) Given mixed activity (spawn + message + request + connect), When draining each category, Then each appears only in the correct stream.
 
 ---
 
-### server-events-03 — Connect events: exactly-once and stable ordering
+### server-events-05 — Auth/connect/disconnect ordering is stable and exactly-once per session transition
 **Rule**
-- For each successful connection establishment, the Events API MUST expose exactly one connect event.
-- Connect events MUST be ordered by their occurrence in server processing (the server’s canonical order).
-- Duplicate connect events MUST NOT be emitted for the same connection/session.
+- For each connection attempt when auth is enabled:
+  - exactly one auth decision event MUST be exposed
+  - if accepted, exactly one connect event MUST be exposed after auth for that session
+  - if rejected, a connect event MUST NOT occur for that attempt
+- For each session termination:
+  - exactly one disconnect event MUST be exposed
+  - duplicate lower-level disconnect signals MUST NOT duplicate the disconnect event
 
 **Test obligations**
-- `server-events-03.t1` (TODO) Given A connects then B connects, When draining connect events, Then order is [A, B] exactly once each.
-- `server-events-03.t2` (TODO) Given a reconnect model that produces a new session, When draining connect events, Then it produces exactly one connect for the new session.
+- `server-events-05.t1` (TODO) `require_auth=true`, valid credentials → auth event occurs before connect.
+- `server-events-05.t2` (TODO) invalid credentials → auth event occurs, connect does not.
+- `server-events-05.t3` (TODO) duplicate disconnect signals → exactly one disconnect event.
 
 ---
 
-### server-events-04 — Disconnect events: exactly-once, cleanup-consistent, and idempotent
+### server-events-06 — Disconnect cleanup is consistent with scope + ownership contracts
 **Rule**
-- For each connection/session termination, the Events API MUST expose exactly one disconnect event.
-- Disconnect handling MUST be idempotent: duplicate lower-level disconnect signals MUST NOT produce multiple disconnect events.
-- After a disconnect is observed, the server MUST have cleaned up all per-connection scoped state for that connection (no “ghost” scoped entities attributable solely to the disconnected session).
+- After a disconnect is observed, the server MUST have cleaned up all per-connection scoped state attributable solely to that session (no “ghost” scoped entities for that user).
+- Additionally, ownership cleanup MUST follow `entity_ownership.md` (client-owned entities despawn when owner disconnects).
 
 **Test obligations**
-- `server-events-04.t1` (TODO) Given A disconnects and a duplicate disconnect signal arrives, When draining disconnect events, Then exactly one disconnect event exists.
-- `server-events-04.t2` (TODO) Given A disconnects while scoped to entities, Then scoped membership for A is fully removed.
+- `server-events-06.t1` (TODO) Disconnect while scoped → scope membership removed.
+- `server-events-06.t2` (TODO) Disconnect owner → owned entities are despawned (ownership contract).
 
 ---
 
-### server-events-05 — Auth events (when enabled) precede connect events
+### server-events-07 — Entity spawn/enter events: per user, in-scope only, exactly-once
 **Rule**
-- If authentication is enabled (per `connection_lifecycle`), and a client attempts to connect:
-  - An auth decision event MUST be emitted for that attempt.
-  - If accepted, the connect event MUST occur **after** the auth event for the same session.
-  - If rejected, a connect event MUST NOT occur for that attempt.
+- When an entity `E` enters scope for user `U` (including initial join snapshot), the World events stream MUST expose exactly one spawn/enter event for `(U, E)`.
+- Spawn/enter events MUST be emitted only for users for which `InScope(U, E)` becomes true.
+- Spawn/enter events MUST NOT be emitted for out-of-scope users.
 
 **Test obligations**
-- `server-events-05.t1` (TODO) Given `require_auth=true` and valid credentials, When draining events, Then auth event appears before connect event.
-- `server-events-05.t2` (TODO) Given invalid credentials, Then auth event exists and connect event does not.
+- `server-events-07.t1` (TODO) E becomes in-scope for A but not B → only A gets spawn/enter.
+- `server-events-07.t2` (TODO) Late join snapshot → spawn/enter for all in-scope entities exactly once.
 
 ---
 
-### server-events-06 — Entity spawn events: per user, in-scope only, exactly-once
+### server-events-08 — Component insert/update/remove: per user and per component, no duplicates
 **Rule**
-- When an entity `E` enters scope for user `U` (including initial join snapshot), the Events API MUST expose exactly one “spawn/enter” event for `(U, E)` (or its equivalent canonical representation).
-- Spawn events MUST be emitted only for users for which `InScope(U, E)` becomes true.
-- Spawn events MUST NOT be emitted for users that are out of scope.
+- For each user `U` with `InScope(U, E)` at the time the change becomes observable:
+  - inserting component `C` on `E` MUST produce exactly one insert event for `(U, E, C)`
+  - updating MUST produce exactly one update event per underlying applied update
+  - removing MUST produce exactly one remove event per underlying removal
+- Duplicate packets/retries MUST NOT create duplicate events unless they cause a new applied transition.
 
 **Test obligations**
-- `server-events-06.t1` (TODO) Given E becomes in-scope for A but not B, Then only A’s spawn event is present.
-- `server-events-06.t2` (TODO) Given B joins late and receives snapshot, Then B gets spawn events for all in-scope entities exactly once.
+- `server-events-08.t1` (TODO) One update replicated to two users → two update events, no duplicates.
+- `server-events-08.t2` (TODO) Insert then update then remove in same tick → each appears exactly once.
 
 ---
 
-### server-events-07 — Component insert/update/remove events: per user and per component, no duplicates
+### server-events-09 — Despawn/leave-scope events are exactly-once and end that user’s lifecycle
 **Rule**
-- If the server inserts component `C` on entity `E`, then for each user `U` such that `InScope(U, E)` holds at the time the change becomes observable, the Events API MUST include exactly one “insert” event for `(U, E, C)`.
-- Similarly, updates MUST emit exactly one “update” event per `(U, E, C)` change occurrence, and removes MUST emit exactly one “remove” event per `(U, E, C)` change occurrence.
-- The Events API MUST NOT emit duplicate insert/update/remove events for the same underlying change.
-
-**Notes**
-- This contract is about Events API reporting. Replication semantics live in `entity_replication`.
+- When `E` leaves scope for `U` (scope change or true despawn), the World events stream MUST expose exactly one despawn/exit event for `(U, E)`.
+- After `(U, E)` has exited, the server MUST NOT surface further insert/update/remove events for `(U, E, *)` unless `E` re-enters scope for `U` as a new lifecycle (per `entity_scopes.md` + `entity_replication.md`).
 
 **Test obligations**
-- `server-events-07.t1` (TODO) Given server updates one component once while replicated to two users, Then two update events exist (one per user) and no duplicates.
-- `server-events-07.t2` (TODO) Given insert then update then remove in the same tick, Then each appears exactly once in the appropriate drains.
+- `server-events-09.t1` (TODO) Despawn while in scope → exit once; no further component events for that lifecycle.
+- `server-events-09.t2` (TODO) Leave scope then re-enter after ≥1 tick → fresh spawn/enter event.
 
 ---
 
-### server-events-08 — Despawn/leave-scope events are emitted exactly once and end the lifecycle for that user
+### server-events-10 — No “component events before spawn/enter” for any user
 **Rule**
-- When `E` leaves scope for user `U` (either due to scope policy change or true despawn), the Events API MUST expose exactly one “despawn/exit” event for `(U, E)` for that transition.
-- After `(U, E)` has an exit event, the Events API MUST NOT emit further insert/update/remove events for `(U, E, *)` unless `E` re-enters scope for `U` as a new lifecycle per `entity_scopes` and `entity_replication`.
+- For any user `U`, the World events stream MUST NOT surface insert/update/remove events for entity `E` before `U` has observed spawn/enter for `E`.
+- Under reordering/duplication, internal buffering is allowed, but the API-visible ordering MUST respect this invariant.
 
 **Test obligations**
-- `server-events-08.t1` (TODO) Given E despawns while in scope, Then despawn event appears once and no subsequent component events for that user occur.
-- `server-events-08.t2` (TODO) Given E leaves scope (not despawned globally), Then exit event occurs and later re-entry yields a fresh spawn event (per model in scopes spec).
+- `server-events-10.t1` (TODO) Under simulated reorder, assert no insert/update/remove for `(U, E)` is observed before spawn/enter for `(U, E)`.
 
 ---
 
-### server-events-09 — No “updates before spawn” for any user
+### server-events-11 — Message events: grouped by channel and message type; each yields sender + payload; drain once
 **Rule**
-- For any user `U`, the Events API MUST NOT surface component insert/update/remove events for entity `E` before `U` has observed a spawn/enter event for `E`.
-- If underlying processing receives late/out-of-order data, it MUST be ignored or buffered such that the Events API invariant holds.
+- Inbound messages MUST be exposed via typed message events grouped by:
+  - **channel type** and
+  - **message type**
+- Iteration MUST yield the sender user key and the decoded message payload.
+
+(Example shape: `world_events.read::<MessageEvent<Channel, Msg>>() -> (user_key, msg)`.)
+
+Additional requirements:
+- Each inbound delivered message MUST appear exactly once to the application across drains.
+- Messages MUST be decoded to the correct message type per protocol configuration and MUST NOT be misrouted to the wrong channel/type.
 
 **Test obligations**
-- `server-events-09.t1` (TODO) Under simulated reordering, assert that `take_updates` cannot return an event for `(U, E)` before `take_spawns` (or equivalent) has produced `(U, E)`.
+- `server-events-11.t1` (TODO) Multiple senders + channels → correct channel/type grouping; each yields correct sender; each appears once.
+- `server-events-11.t2` (TODO) Mixed message types → decoded to correct type and not misrouted.
 
 ---
 
-### server-events-10 — Message events: grouped by channel and sender, drained once
+### server-events-12 — Request/response events: exactly-once surfacing, correct matching, drain once
 **Rule**
-- The Events API MUST expose inbound messages received by the server, grouped in a stable, documented structure (at minimum by channel and by sender).
-- Each inbound message MUST appear exactly once across drains.
-- Messages MUST be typed correctly (decoded to the correct message type per protocol configuration) and MUST NOT be misrouted to the wrong channel/type bucket.
+- For each incoming request accepted by the protocol layer, the server MUST surface exactly one corresponding request event/handle to the application.
+- Any response matching MUST be correct per `messaging.md` and MUST NOT surface duplicates under retransmit/duplication.
+- Draining request/response events MUST be destructive and MUST NOT replay already-drained items.
 
 **Test obligations**
-- `server-events-10.t1` (TODO) Given multiple senders and channels in one tick, Then drains group by channel and sender correctly and each message appears once.
-- `server-events-10.t2` (TODO) Given mixed message types, Then each is decoded to the right type and appears in the right bucket.
+- `server-events-12.t1` (TODO) One request → exactly one server-visible request event.
+- `server-events-12.t2` (TODO) Duplicate packets → still exactly one request event.
 
 ---
 
-### server-events-11 — Request/response events: exactly-once delivery and matching handles
+### server-events-13 — API misuse safety: drains MUST NOT panic
 **Rule**
-- For each incoming request to the server that is accepted by the protocol layer, the Events API MUST surface exactly one request event (or request handle) to the application.
-- For each response sent by the application, the system MUST ensure that on the receiving side the matching is correct and duplicates are not surfaced, per `messaging`.
-- Draining requests/responses MUST be destructive (covered by server-events-01) and MUST NOT re-emit already-drained request/response events.
+- Calling any drain method at any time (including when empty) MUST NOT panic.
+- Empty drains MUST return empty.
 
 **Test obligations**
-- `server-events-11.t1` (TODO) Given a client sends a request and server responds, Then server sees exactly one request event and no duplicates.
-- `server-events-11.t2` (TODO) Given duplicate packets, Then server still surfaces only one request event.
-
----
-
-### server-events-12 — API misuse safety: drains MUST NOT panic
-**Rule**
-- Calling any Events API drain method at any time (including when empty) MUST NOT panic.
-- Empty drains MUST return empty collections/results.
-
-**Test obligations**
-- `server-events-12.t1` (TODO) Call all drains repeatedly in an empty world; assert no panic and empties returned.
-
----
-
-## Cross-spec constraints
-
-### server-events-13 — Scope-aware per-user event attribution
-**Rule**
-- Any per-user entity/component event attribution MUST be consistent with `entity_scopes`.
-- If a user is not in scope for an entity at the time an event would otherwise be attributed, that event MUST NOT be attributed to that user.
-
-**Test obligations**
-- `server-events-13.t1` (TODO) Move entity in/out of a user’s scope while mutating; assert only in-scope intervals produce events.
+- `server-events-13.t1` (TODO) Call drains repeatedly in an empty world; assert empties and no panic.
 
 ---
 
 ## Forbidden behaviors
 
-- Emitting duplicate connect/disconnect/auth events for a single session transition.
-- Emitting component events for a user/entity before that user has observed a spawn/enter event for that entity.
-- Emitting component events for out-of-scope users.
-- Re-emitting already-drained events.
+- Producing new observable events during drains (drains must be pure).
+- Replaying already-drained events without an intervening Process step producing new pending events.
+- Emitting component events for `(U, E)` before spawn/enter for `(U, E)`.
+- Emitting entity/component events for out-of-scope users.
+- Duplicating auth/connect/disconnect events for a single session transition.
+- Misrouting messages to the wrong channel/type or losing sender attribution.
 - Panicking on empty drains or repeated drains.
