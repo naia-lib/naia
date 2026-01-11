@@ -1,128 +1,95 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Naia is a cross-platform Rust networking engine for multiplayer games. Architecture follows the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf).
 
-## Project Overview
+## Spec-Driven Development (CRITICAL)
 
-Naia is a cross-platform (including Wasm) networking engine for multiplayer game development in Rust. It provides:
-- **ECS replication**: Entities/components on the server automatically sync to clients when "in scope"
-- **Message passing**: Reliable/unreliable, ordered/unordered channels
-- **Efficient serialization**: Bit-packing and delta-compression
+**Specs are the source of truth.** If implementation differs from spec, the implementation is wrong.
 
-The architecture follows the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf).
+```
+specs/*.md (contracts) → test/tests/*.rs (E2E tests) → Implementation
+```
 
-## Build and Test Commands
+**The SDD Loop:**
+1. **SPEC**: Define/find contract `[contract-id]` in `specs/`
+2. **TEST**: Write test with `/// Contract: [contract-id]` annotation
+3. **IMPL**: Make test pass with minimal code changes
+4. **VALID**: Update spec's Test Obligations section
+
+## Essential Commands
 
 ```bash
-# Run all workspace tests
-cargo test --workspace
+# Spec operations (run from specs/)
+./spec_tool.sh lint           # Validate specs (MUST pass before commits)
+./spec_tool.sh coverage       # Check contract test coverage
+./spec_tool.sh gen-test <id>  # Generate test skeleton for contract
 
-# Run the main test package (integration/E2E tests)
-cargo test --package naia-test
+# Testing
+cargo test --package naia-test              # E2E tests
+cargo test --package naia-test <test_name>  # Single test
 
-# Run tests with output visible
-cargo test --package naia-test -- --nocapture
-
-# Run a specific test
-cargo test --package naia-test test_name
-
-# Check formatting
-cargo fmt -- --check
-
-# Run clippy (note: demos excluded from default-members due to feature conflicts)
-cargo clippy --no-deps
-
-# Generate coverage report
-./scripts/test_coverage.sh
+# Quality gates
+cargo clippy --no-deps && cargo fmt -- --check
 ```
 
-## Architecture
+## Crate Map
 
-### Crate Hierarchy
+| Crate | Purpose |
+|-------|---------|
+| `shared/` | Core abstractions, Protocol, serde |
+| `client/` | Client networking |
+| `server/` | Server networking |
+| `socket/` | Transport layer (WebRTC) |
+| `test/` | E2E harness + tests |
+| `adapters/` | Bevy/hecs integrations |
 
-```
-socket/           # Transport layer (WebRTC protocol implementation)
-  ├── shared/     # Common socket types
-  ├── client/     # Client-side socket
-  └── server/     # Server-side socket
-
-shared/           # Core networking abstractions
-  ├── serde/      # Bit-packing serialization (naia-serde)
-  └── derive/     # Proc macros for Message, Replicate, Channel
-
-client/           # Game client networking
-server/           # Game server networking
-
-adapters/         # ECS framework integrations
-  ├── bevy/       # Bevy ECS adapter (client, server, shared)
-  └── hecs/       # Hecs ECS adapter (client, server, shared)
-
-test/             # E2E testing harness
-```
-
-### Key Abstractions
-
-**Protocol**: Defines the shared contract between client and server. Built using a builder pattern that registers:
-- Components (via `#[derive(Replicate)]`)
-- Messages (via `#[derive(Message)]`)
-- Channels (via `#[derive(Channel)]`)
-
-Example:
-```rust
-Protocol::builder()
-    .add_component::<Position>()
-    .add_message::<Auth>()
-    .add_channel::<ReliableChannel>(
-        ChannelDirection::Bidirectional,
-        ChannelMode::OrderedReliable(ReliableSettings::default()),
-    )
-    .build()
-```
-
-**Property<T>**: Wrapper enabling change-detection for delta-compression. Required for component fields.
-
-**Rooms**: Entities are "scoped" to clients via rooms. Entities in the same room as a user are synced to that user.
-
-### Testing Infrastructure
-
-The `test/` crate contains a deterministic testing harness using local transport:
-
-- **Scenario**: Test fixture that simulates server + multiple clients
-- **mutate/expect pattern**: Tests alternate between mutation phases and expectation phases
-- **TestClock**: Deterministic time control via `test_time` feature
+## Test Harness Pattern
 
 ```rust
-let mut scenario = Scenario::new();
-scenario.server_start(ServerConfig::default(), protocol());
-let client = scenario.client_start("player", Auth::new("user", "pass"), ...);
+/// Contract: [entity-scopes-07]
+#[test]
+fn entity_scopes_07_scenario_name() {
+    let mut scenario = Scenario::new();
+    scenario.server_start(ServerConfig::default(), protocol());
 
-scenario.mutate(|ctx| {
-    // Spawn entities, send messages
-});
-
-scenario.expect(|ctx| {
-    // Assert on events, entity state
-    Some(()) // Return Some when expectations met
-});
+    scenario.mutate(|ctx| { /* setup/action */ });
+    scenario.expect(|ctx| { /* verify */ Some(()) });
+}
 ```
 
-### Feature Flags
+**Rules:** Must alternate `mutate()` ↔ `expect()`. Use `test_client_config()` for clients.
 
-Important features that affect compilation:
-- `wbindgen` / `mquad`: Required for Wasm targets (mutually exclusive)
-- `transport_udp` / `transport_local`: Transport implementations
-- `bevy_support`: Enable Bevy ECS integration
-- `test_time`: Enable deterministic time for testing
-- `interior_visibility`: Expose `LocalEntity` type
-- `e2e_debug`: Enable debug counters for E2E tests
+## Key References
 
-## Specifications
+| Document                                | Purpose |
+|-----------------------------------------|---------|
+| `specs/NAIA_SPEC_DRIVEN_DEVELOPMENT.md` | Full SDD process, tooling, workflows |
+| `specs/CONTRACT_REGISTRY.md`            | All 185 contract IDs indexed |
+| `specs/NAIA_SPECS.md`                   | Bundled specifications |
+| `specs/0_README.md`                     | Master glossary |
 
-The `specs/` directory contains normative specifications using RFC 2119 keywords (MUST, SHOULD, MAY). Specs are authoritative - if implementation differs from spec, the implementation is wrong.
+## Cost Optimization
 
-## Development Notes
+**DO:**
+- Use `grep`/`sed` for multi-file changes over individual edits
+- Read specific line ranges (`offset`/`limit`) not full files
+- Run parallel tool calls when operations are independent
+- Reference existing patterns; don't repeat code in prompts
 
-- Demos are excluded from default workspace members due to conflicting feature flags
-- Miniquad clients require: `sudo apt-get install libxi-dev libgl1-mesa-dev`
-- The codebase uses WebRTC for cross-platform networking (works on Web + Native)
-- Naia does NOT provide client-prediction, lag compensation, or snapshot interpolation - these are game-specific
+**DON'T:**
+- Read NAIA_SPECS.md (3000+ lines) unless searching for specific contract
+- Generate tests without checking existing patterns in `test/tests/`
+- Over-engineer; implement minimal code to pass tests
+
+## Workflow Quick Reference
+
+**New feature:** Read spec → `gen-test` → implement test → implement code → validate
+**Bug fix:** Find contract → check/write test → fix code → verify
+**Spec work:** Edit `specs/*.md` → `lint` → `bundle` → `registry`
+
+## Constraints
+
+- Demos excluded from workspace (feature conflicts)
+- Wasm: use `wbindgen` OR `mquad`, not both
+- All tick math must be wrap-safe (u16 wraps at 65535)
+- Specs use RFC 2119: MUST/MUST NOT/MAY/SHOULD/SHALL
