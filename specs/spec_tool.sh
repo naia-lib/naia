@@ -11,6 +11,9 @@
 #   check-orphans   Find MUST/MUST NOT without contract IDs
 #   check-refs      Verify all cross-reference links
 #   stats           Show statistics about specs
+#   coverage        Analyze contract test coverage
+#   gen-test        Generate test skeleton for a contract
+#   traceability    Generate contract-to-test matrix
 #   help            Show this help message
 
 set -e
@@ -111,6 +114,15 @@ COMMANDS:
     check-refs          Verify all cross-reference links resolve
 
     stats               Show statistics about specifications
+
+    coverage            Analyze contract test coverage
+                        Shows which contracts have test annotations
+
+    gen-test <id>       Generate test skeleton for a contract
+                        Example: ./spec_tool.sh gen-test entity-scopes-07
+
+    traceability [out]  Generate contract-to-test traceability matrix
+                        Default output: TRACEABILITY.md
 
     help                Show this help message
 
@@ -622,6 +634,269 @@ cmd_validate() {
 }
 
 # ============================================================================
+# Command: coverage
+# ============================================================================
+
+cmd_coverage() {
+    print_header "Contract Coverage Analysis"
+
+    local test_dir="$SCRIPT_DIR/../test/tests"
+
+    if [[ ! -d "$test_dir" ]]; then
+        print_error "Test directory not found: $test_dir"
+        return 1
+    fi
+
+    # Extract contract IDs from test annotations
+    # Pattern: /// Contract: [contract-id] or // Contract: [contract-id]
+    local test_contracts=$(grep -rhoE '(///|//) Contract: \[[a-z-]+-[0-9]+\]' "$test_dir"/*.rs 2>/dev/null \
+        | grep -oE '\[[a-z-]+-[0-9]+\]' | tr -d '[]' | sort -u)
+
+    # Get all contracts from registry
+    local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+`' "$SCRIPT_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
+        | tr -d '`' | sort -u)
+
+    local covered_count=0
+    local total_count=0
+
+    if [[ -n "$test_contracts" ]]; then
+        covered_count=$(echo "$test_contracts" | grep -c '[a-z]' 2>/dev/null || true)
+        [[ -z "$covered_count" ]] && covered_count=0
+    fi
+
+    if [[ -n "$all_contracts" ]]; then
+        total_count=$(echo "$all_contracts" | grep -c '[a-z]' 2>/dev/null || true)
+        [[ -z "$total_count" ]] && total_count=0
+    fi
+
+    if [[ $total_count -eq 0 ]]; then
+        print_error "No contracts found. Run ./spec_tool.sh registry first."
+        return 1
+    fi
+
+    local coverage_pct=$((covered_count * 100 / total_count))
+
+    echo "Coverage Summary"
+    echo "━━━━━━━━━━━━━━━━"
+    echo "Contracts with test annotations: $covered_count"
+    echo "Total contracts in registry:     $total_count"
+    echo "Coverage:                        $coverage_pct%"
+    echo ""
+
+    # Find uncovered contracts
+    local uncovered=$(comm -23 <(echo "$all_contracts") <(echo "$test_contracts") 2>/dev/null)
+    local uncovered_count=0
+    if [[ -n "$uncovered" ]]; then
+        uncovered_count=$(echo "$uncovered" | grep -c '[a-z]' 2>/dev/null || true)
+        [[ -z "$uncovered_count" ]] && uncovered_count=0
+    fi
+
+    if [[ $uncovered_count -gt 0 ]]; then
+        echo "Uncovered Contracts ($uncovered_count):"
+        echo "━━━━━━━━━━━━━━━━━━━━"
+        echo "$uncovered" | while read -r id; do
+            [[ -n "$id" ]] && echo "  - $id"
+        done
+    else
+        print_success "All contracts have test annotations!"
+    fi
+
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    if [[ $coverage_pct -ge 80 ]]; then
+        print_success "Coverage target met (≥80%)"
+    else
+        print_warning "Coverage below target (<80%)"
+    fi
+}
+
+# ============================================================================
+# Command: gen-test
+# ============================================================================
+
+cmd_gen_test() {
+    local contract_id="$1"
+
+    if [[ -z "$contract_id" ]]; then
+        print_error "Usage: ./spec_tool.sh gen-test <contract-id>"
+        echo "Example: ./spec_tool.sh gen-test entity-scopes-07"
+        return 1
+    fi
+
+    # Find the spec file containing this contract
+    local spec_file=$(grep -l "\[$contract_id\]" "$SCRIPT_DIR"/*.md 2>/dev/null | grep -v REGISTRY | head -1)
+
+    if [[ -z "$spec_file" ]]; then
+        print_error "Contract [$contract_id] not found in any spec file"
+        return 1
+    fi
+
+    local spec_basename=$(basename "$spec_file")
+    print_info "Found contract in: $spec_basename"
+    echo ""
+
+    # Extract contract section (up to next ### or ## or end of file)
+    local contract_content=$(sed -n "/### \[$contract_id\]/,/^##/p" "$spec_file" | head -n -1)
+
+    if [[ -z "$contract_content" ]]; then
+        # Try alternative format (without brackets)
+        contract_content=$(sed -n "/### $contract_id —/,/^##/p" "$spec_file" | head -n -1)
+    fi
+
+    # Extract title
+    local title=$(echo "$contract_content" | head -1 | sed 's/^### //' | sed 's/\[.*\] — //' | sed 's/ — .*//')
+
+    # Convert contract-id to function name (replace - with _)
+    local fn_name=$(echo "$contract_id" | tr '-' '_')
+
+    cat << EOF
+/// Contract: [$contract_id]
+/// Source: $spec_basename
+///
+/// Guarantee: TODO - Copy from spec
+///
+/// Scenario: TODO - Describe Given/When/Then
+/// Given:
+///   - TODO: Initial conditions
+/// When:
+///   - TODO: Trigger action
+/// Then:
+///   - TODO: Expected outcome
+#[test]
+fn ${fn_name}_scenario_1() {
+    use naia_server::ServerConfig;
+    use naia_test::{protocol, Auth, Scenario};
+
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| {
+        ctx.server(|server| server.make_room().key())
+    });
+
+    // TODO: Connect clients as needed
+    // let client_key = client_connect(&mut scenario, &room_key, "Client", Auth::new("user", "pass"), test_client_config(), test_protocol);
+
+    // TODO: Setup preconditions (Given)
+    scenario.mutate(|ctx| {
+        // Setup
+    });
+
+    // TODO: Trigger action (When)
+    scenario.mutate(|ctx| {
+        // Action
+    });
+
+    // TODO: Verify postconditions (Then)
+    scenario.expect(|ctx| {
+        // Assertion
+        todo!("Implement assertion for [$contract_id]")
+    });
+}
+EOF
+}
+
+# ============================================================================
+# Command: traceability
+# ============================================================================
+
+cmd_traceability() {
+    local output_file="${1:-$SCRIPT_DIR/TRACEABILITY.md}"
+
+    print_header "Generating Traceability Matrix"
+
+    local test_dir="$SCRIPT_DIR/../test/tests"
+
+    {
+        cat << EOF
+# Contract Traceability Matrix
+
+**Generated:** $(date -u +"%Y-%m-%d %H:%M UTC")
+
+This matrix shows the bidirectional mapping between contracts and tests.
+
+---
+
+## Contracts → Tests
+
+| Contract | Test Function | Test File | Status |
+|----------|---------------|-----------|--------|
+EOF
+
+        # Get all contracts from registry
+        local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+`' "$SCRIPT_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
+            | tr -d '`' | sort -u)
+
+        echo "$all_contracts" | while read -r contract; do
+            [[ -z "$contract" ]] && continue
+
+            # Search for this contract in test files
+            local test_match=$(grep -rln "Contract: \[$contract\]" "$test_dir"/*.rs 2>/dev/null | head -1)
+
+            if [[ -n "$test_match" ]]; then
+                local test_file=$(basename "$test_match")
+                # Try to find the function name (line after Contract annotation)
+                local fn_name=$(grep -A5 "Contract: \[$contract\]" "$test_match" 2>/dev/null \
+                    | grep -oE '^fn [a-z_0-9]+' | head -1 | sed 's/^fn //')
+                [[ -z "$fn_name" ]] && fn_name="(manual check)"
+                echo "| \`$contract\` | \`$fn_name\` | $test_file | COVERED |"
+            else
+                echo "| \`$contract\` | - | - | **UNCOVERED** |"
+            fi
+        done
+
+        cat << EOF
+
+---
+
+## Tests → Contracts
+
+| Test File | Test Function | Contracts Verified |
+|-----------|---------------|--------------------|
+EOF
+
+        # List tests with their contracts
+        for test_file in "$test_dir"/*.rs; do
+            [[ ! -f "$test_file" ]] && continue
+            local basename_file=$(basename "$test_file")
+
+            # Find all contract annotations in this file
+            local contracts_in_file=$(grep -oE 'Contract: \[[a-z-]+-[0-9]+\]' "$test_file" 2>/dev/null \
+                | grep -oE '\[[a-z-]+-[0-9]+\]' | tr -d '[]' | sort -u | tr '\n' ', ' | sed 's/, $//')
+
+            if [[ -n "$contracts_in_file" ]]; then
+                # Get function names
+                local fn_names=$(grep -B5 'Contract: \[' "$test_file" 2>/dev/null \
+                    | grep -oE '^fn [a-z_0-9]+' | sed 's/^fn //' | sort -u | head -5 | tr '\n' ', ' | sed 's/, $//')
+                [[ -z "$fn_names" ]] && fn_names="(check manually)"
+                echo "| $basename_file | $fn_names | $contracts_in_file |"
+            fi
+        done
+
+        cat << EOF
+
+---
+
+## Summary
+
+EOF
+        local total=$(echo "$all_contracts" | grep -c '[a-z]' 2>/dev/null || echo 0)
+        local covered=$(grep -rhoE 'Contract: \[[a-z-]+-[0-9]+\]' "$test_dir"/*.rs 2>/dev/null \
+            | grep -oE '\[[a-z-]+-[0-9]+\]' | tr -d '[]' | sort -u | grep -c '[a-z]' 2>/dev/null || echo 0)
+        local pct=$((covered * 100 / total))
+
+        echo "- **Total Contracts:** $total"
+        echo "- **Contracts with Tests:** $covered"
+        echo "- **Coverage:** $pct%"
+
+    } > "$output_file"
+
+    print_success "Generated: $output_file"
+}
+
+# ============================================================================
 # Main Entry Point
 # ============================================================================
 
@@ -653,6 +928,15 @@ main() {
             ;;
         stats)
             cmd_stats "$@"
+            ;;
+        coverage)
+            cmd_coverage "$@"
+            ;;
+        gen-test)
+            cmd_gen_test "$@"
+            ;;
+        traceability)
+            cmd_traceability "$@"
             ;;
         *)
             print_error "Unknown command: $command"
