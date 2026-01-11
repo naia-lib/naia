@@ -137,3 +137,12 @@ All specs follow this error handling policy:
 | User/API misuse | Return `Result::Err` |
 | Remote/untrusted input anomalies | Prod: ignore silently; Debug: warn |
 | Framework invariant violation | **PANIC** |
+
+### Temporal Semantics
+
+- **Immediately**: Within the same tick as the triggering event, before any events for that tick are drained to the application. The transition MUST be observable on the next API query within that tick.
+- **Eventually**: Will occur at some future tick while the connection remains active. No specific tick bound is guaranteed unless otherwise stated.
+- **Before [X]**: MUST complete before X begins. If X is a tick boundary, the action completes before the tick advances.
+- **After [X]**: MUST occur after X has completed. May be same tick or later tick.
+- **Within N ticks**: MUST occur before N ticks have elapsed from the triggering event.
+- **Same tick**: Occurs during the same server tick as the triggering event. Intermediate states within a tick are collapsed and not observable.

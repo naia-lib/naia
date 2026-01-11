@@ -36,7 +36,7 @@ This spec does **not** own:
 
 ## Contracts
 
-### transport-01 — Naia assumes transport is unordered & unreliable
+### [transport-01] — Naia assumes transport is unordered & unreliable
 Naia MUST assume packets may be dropped, duplicated, and reordered, and MUST NOT rely on:
 - in-order delivery
 - exactly-once delivery
@@ -46,21 +46,21 @@ Naia MUST assume packets may be dropped, duplicated, and reordered, and MUST NOT
 
 ---
 
-### transport-02 — MTU boundary is defined by `naia_shared::MTU_SIZE_BYTES`
+### [transport-02] — MTU boundary is defined by `naia_shared::MTU_SIZE_BYTES`
 Naia MUST treat `MTU_SIZE_BYTES` as the maximum size of a **single packet payload**. :contentReference[oaicite:5]{index=5}
 
 Naia MUST NOT knowingly ask a transport adapter to send a packet payload larger than `MTU_SIZE_BYTES`.
 
 ---
 
-### transport-03 — Oversize outbound packet attempt returns `Err` at Naia layer
+### [transport-03] — Oversize outbound packet attempt returns `Err` at Naia layer
 If Naia is asked (directly or indirectly) to send data that would require an outbound packet payload larger than `MTU_SIZE_BYTES`, Naia MUST return `Result::Err` from the initiating Naia-layer API.
 
 This is a Naia contract (even if a particular transport adapter would panic). Naia must validate before calling the adapter.
 
 ---
 
-### transport-04 — Malformed or oversize inbound packets are dropped
+### [transport-04] — Malformed or oversize inbound packets are dropped
 If Naia receives a packet that is:
 - larger than `MTU_SIZE_BYTES`, or
 - malformed / cannot be decoded at the packet boundary,
@@ -73,7 +73,7 @@ then:
 
 ---
 
-### transport-05 — No transport-specific guarantees may leak upward
+### [transport-05] — No transport-specific guarantees may leak upward
 Naia’s higher layers (messaging/replication) MUST behave identically regardless of whether the underlying transport happens to be “better” (e.g. local channels).
 Any guarantee stronger than transport-01 MUST be explicitly specified in `4_messaging.md`, not inferred from the transport adapter.
 

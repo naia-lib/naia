@@ -53,36 +53,36 @@ This spec does NOT own:
 
 ## Global error-handling policy
 
-### time-01 — User-initiated misuse returns Result::Err
+### [time-01] — User-initiated misuse returns Result::Err
 If a failure is caused by local application misuse/configuration at the Naia API layer, Naia MUST return `Result::Err` from the initiating API.
 
-### time-02 — Remote/untrusted anomalies MUST NOT panic
+### [time-02] — Remote/untrusted anomalies MUST NOT panic
 If a failure is caused by remote input or network behavior (duplicates, reordering, late arrival), Naia MUST NOT panic.
 - Prod: ignore/drop silently
 - Debug: ignore/drop with warning
 
-### time-03 — Framework invariant violations MUST panic
+### [time-03] — Framework invariant violations MUST panic
 If Naia violates an invariant stated in this spec (e.g., tick goes backwards in public API, wrap-order is applied incorrectly, commands are applied more than once), Naia MUST panic.
 
 ---
 
 ## Canonical time source
 
-### time-04 — All durations use Naia’s monotonic time provider
+### [time-04] — All durations use Naia’s monotonic time provider
 All duration-based behavior in Naia (tick advancement, TTL expiry, lead targeting, timeouts if applicable) MUST be derived from Naia’s monotonic Time Provider (Instant/Duration), not wall-clock time.
 
-### time-05 — Determinism under deterministic time provider
+### [time-05] — Determinism under deterministic time provider
 If the Time Provider is deterministic (e.g. in tests), and the sequence of Time Provider advancements is identical, then tick advancement and time-based decisions MUST be deterministic.
 
 ---
 
 ## Tick semantics
 
-### time-06 — TickRate is fixed and shared
+### [time-06] — TickRate is fixed and shared
 TickRate is configured as a duration per tick (milliseconds) and MUST be shared between client and server configs for a connection.
 TickRate MUST NOT change during a connection’s lifetime.
 
-### time-07 — Server Tick advances from elapsed time
+### [time-07] — Server Tick advances from elapsed time
 The server MUST advance its tick counter based on elapsed duration and TickRate.
 
 - The server MUST NOT “invent” ticks without elapsed time.
@@ -91,10 +91,10 @@ The server MUST advance its tick counter based on elapsed duration and TickRate.
 
 (Best-practice note: if the host loop is delayed, processing multiple ticks to catch up is preferred over permanently slowing simulation.)
 
-### time-08 — Client Tick is monotonic and wrap-safe
+### [time-08] — Client Tick is monotonic and wrap-safe
 The client tick MUST be monotonic non-decreasing in the wrap-safe sense (see time-09). It MUST NOT move backwards.
 
-### time-09 — Wrap-safe tick ordering rule
+### [time-09] — Wrap-safe tick ordering rule
 Tick is `u16` and wraps. Naia MUST define “newer than / older than” with a wrap-safe comparison:
 
 Let `diff = (a - b) mod 2^16` (u16 wrapping subtraction interpreted as 0..65535).
@@ -109,7 +109,7 @@ Tie-break rule (half-range ambiguity):
 
 ## Tick synchronization
 
-### time-10 — ConnectEvent implies tick sync complete
+### [time-10] — ConnectEvent implies tick sync complete
 A successful connection handshake MUST include tick synchronization, and the client MUST NOT emit `ConnectEvent` until tick sync is complete. (See `2_connection_lifecycle.md`.)
 
 Tick sync guarantees:
@@ -120,7 +120,7 @@ Tick sync guarantees:
 
 ## Client tick lead targeting (Overwatch-style)
 
-### time-11 — Client tick targets a lead ahead of server tick
+### [time-11] — Client tick targets a lead ahead of server tick
 The client MUST attempt to keep its tick ahead of the server by a target lead duration:
 
 `target_lead = RTT + (jitter_std_dev * 3) + TickRate`
@@ -129,7 +129,7 @@ Where:
 - RTT and jitter_std_dev are estimated by Naia’s connection measurement.
 - TickRate is the configured duration-per-tick.
 
-### time-12 — Client pacing may adjust to maintain lead
+### [time-12] — Client pacing may adjust to maintain lead
 To maintain the target lead:
 - The client MAY slightly speed up or slow down its tick pacing relative to the base TickRate.
 - The client MUST remain monotonic (time-08).
@@ -141,14 +141,14 @@ This spec does not mandate the exact controller (PID, clamp, etc.), but it DOES 
 
 ## Commands
 
-### commands-01 — Every command is tagged to a tick
+### [commands-01] — Every command is tagged to a tick
 Every command sent by the client MUST be tagged with a tick value.
 
-### commands-02 — Server applies commands at most once
+### [commands-02] — Server applies commands at most once
 The server MUST apply a given logical command at most once to authoritative simulation.
 Duplicates (retransmits, duplicates at network layer) MUST NOT cause double-application.
 
-### commands-03 — “Arrives in time” acceptance rule
+### [commands-03] — “Arrives in time” acceptance rule
 A command tagged for tick `T` is considered on-time iff it is received by the server before the server begins processing tick `T`.
 
 - If received on-time, the server MAY apply it when processing tick `T` (exact ordering among multiple commands for the same tick is implementation-defined, but MUST be deterministic).
@@ -160,10 +160,10 @@ Ignored late commands are remote/untrusted input outcomes:
 
 (There is no public “rejected command error” surfaced to the client; the contract is that late commands are ignored.)
 
-### commands-04 — Client lead targeting is the primary mechanism to avoid late commands
+### [commands-04] — Client lead targeting is the primary mechanism to avoid late commands
 The intended mechanism to ensure commands arrive on-time is client lead targeting (time-11/time-12). The server remains authoritative and will ignore late commands regardless.
 
-### commands-05 — Disconnect cleans in-flight command state
+### [commands-05] — Disconnect cleans in-flight command state
 On disconnect:
 - any buffered/in-flight commands for that session MUST be discarded,
 - no commands from that session may be applied after disconnect.

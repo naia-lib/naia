@@ -290,7 +290,7 @@ cmd_lint() {
     echo "Checking for test obligations sections..."
     for file in "${SPEC_FILES[@]}"; do
         local basename_file=$(basename "$file")
-        if ! grep -qE '^## Test [Oo]bligations' "$file"; then
+        if ! grep -qiE '^## ([0-9]+\) )?Test [Oo]bligations' "$file"; then
             if [[ "$basename_file" != "0_README.md" && "$basename_file" != "1_template.md" ]]; then
                 print_warning "$basename_file: Missing '## Test obligations' section"
                 ((warnings++)) || true
@@ -401,12 +401,16 @@ cmd_check_orphans() {
                 local context_start=$((line_num - 10))
                 [[ $context_start -lt 1 ]] && context_start=1
 
-                local has_contract_id=$(sed -n "${context_start},${line_num}p" "$file" | grep -cE '\[[a-z-]+-[0-9]+\]|[a-z-]+-[0-9]+ —|> [a-z-]+-[0-9]+')
+                local has_contract_id=$(sed -n "${context_start},${line_num}p" "$file" | grep -cE '\[[a-z-]+-[0-9]+\]|[a-z-]+-[0-9]+ —|> [a-z-]+-[0-9]+|\*\*[a-z-]+-[0-9]+\*\*:')
 
                 if [[ $has_contract_id -eq 0 ]]; then
                     # Check if it's in a definition/glossary section (allowed)
                     local section=$(sed -n "1,${line_num}p" "$file" | grep -E '^## ' | tail -1)
-                    if ! echo "$section" | grep -qiE '(glossary|vocabulary|definition|scope)'; then
+                    # Also skip if line itself is normative keyword declaration
+                    if echo "$line" | grep -qiE '^Normative keywords:'; then
+                        continue
+                    fi
+                    if ! echo "$section" | grep -qiE '(glossary|vocabulary|definition|scope|normative)'; then
                         if [[ $file_orphans -eq 0 ]]; then
                             echo ""
                             echo "$basename_file:"

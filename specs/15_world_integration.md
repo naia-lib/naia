@@ -43,7 +43,7 @@ Related specs:
 
 ## Contracts
 
-### world-integration-01 — World mirrors Naia view
+### [world-integration-01] — World mirrors Naia view
 
 For any participant `P` (server or client), if an External World is integrated, it MUST converge to exactly the Naia World View for `P` as mutations are drained and applied.
 
@@ -59,7 +59,7 @@ Test obligations:
 
 ---
 
-### world-integration-02 — Mutation ordering is deterministic per tick
+### [world-integration-02] — Mutation ordering is deterministic per tick
 
 Within a single tick and for a single entity `E`, the integration adapter MUST apply mutations in a deterministic, valid order:
 
@@ -83,7 +83,7 @@ Test obligations:
 
 ---
 
-### world-integration-03 — Exactly-once delivery per drain
+### [world-integration-03] — Exactly-once delivery per drain
 
 For a given participant `P`, each discrete world mutation produced by Naia MUST be consumable exactly once by the integration adapter.
 
@@ -99,7 +99,7 @@ Test obligations:
 
 ---
 
-### world-integration-04 — Scope changes map to spawn/despawn in External World
+### [world-integration-04] — Scope changes map to spawn/despawn in External World
 
 On clients, scope governs presence. The integration adapter MUST reflect scope transitions as:
 
@@ -112,7 +112,7 @@ Test obligations:
 
 ---
 
-### world-integration-05 — Join-in-progress and reconnect yield coherent External World
+### [world-integration-05] — Join-in-progress and reconnect yield coherent External World
 
 If a client joins late or reconnects, the External World MUST be reconstructed purely from current server state and current scope, not from stale client-local leftovers.
 
@@ -125,7 +125,7 @@ Test obligations:
 
 ---
 
-### world-integration-06 — Stable identity mapping at the integration boundary
+### [world-integration-06] — Stable identity mapping at the integration boundary
 
 The integration adapter MUST treat Naia’s entity identity as stable for the lifetime the entity is present in the Naia World View.
 
@@ -140,7 +140,7 @@ Test obligations:
 
 ---
 
-### world-integration-07 — Component type correctness
+### [world-integration-07] — Component type correctness
 
 For every component mutation surfaced to the adapter, the component type MUST be correct and match the protocol/schema.
 
@@ -153,7 +153,7 @@ Test obligations:
 
 ---
 
-### world-integration-08 — Misuse safety: no panics, defined failures
+### [world-integration-08] — Misuse safety: no panics, defined failures
 
 The integration boundary MUST be robust to reasonable misuse:
 
@@ -170,7 +170,7 @@ Test obligations:
 
 ---
 
-### world-integration-09 — Zero-leak lifecycle cleanup
+### [world-integration-09] — Zero-leak lifecycle cleanup
 
 Across repeated connect/disconnect cycles and scope churn, the integration adapter MUST allow External World to reach a clean empty state when Naia’s view is empty.
 
@@ -188,3 +188,7 @@ Test obligations:
 - For server integration, the External World is typically updated from server-side inserts/updates/removes/despawns (see `specs/server_events_api.md`).
 - For client integration, the External World is typically updated from client-side world events (see `specs/client_events_api.md`), and scope governs presence (`specs/entity_scopes.md`).
 - This spec is satisfied whether the adapter is “push” (callbacks) or “pull” (drain + apply), as long as contracts above hold.
+
+## Test obligations
+
+TODO: Define test obligations for this specification.

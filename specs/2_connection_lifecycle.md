@@ -63,9 +63,13 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 - **Connecting** (includes: “auth in progress” when applicable; transport handshake in progress; tick sync in progress)
 - **Connected**
 
-> connection-01 (MUST): Client behavior MUST be describable by the above conceptual states, even if the implementation uses different internal states.
+### [connection-01] —
 
-> connection-02 (MUST NOT): The client MUST NOT expose a public “Rejected” connection state. Rejection is an event (RejectEvent), not a persistent state.
+Client behavior MUST be describable by the above conceptual states, even if the implementation uses different internal states.
+
+### [connection-02] —
+
+The client MUST NOT expose a public “Rejected” connection state. Rejection is an event (RejectEvent), not a persistent state.
 
 ### Server states (per-client-session conceptual)
 
@@ -73,7 +77,9 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 - **Handshaking**
 - **Connected**
 
-> connection-03 (MUST): The server MUST NOT treat a client as “Connected” (for purposes of entity replication, message delivery, tick semantics, etc.) until the handshake is finalized including tick sync.
+### [connection-03] —
+
+The server MUST NOT treat a client as “Connected” (for purposes of entity replication, message delivery, tick semantics, etc.) until the handshake is finalized including tick sync.
 
 ---
 
@@ -81,9 +87,13 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 
 ### `require_auth = false`
 
-> connection-04 (MUST): If `require_auth = false`, the server MUST allow clients to attempt connection without any pre-auth step.
+### [connection-04] —
 
-> connection-05 (MAY): Implementations MAY still support optional application-level auth, but it must not be required by Naia for connection establishment when `require_auth = false`.
+If `require_auth = false`, the server MUST allow clients to attempt connection without any pre-auth step.
+
+### [connection-05] —
+
+Implementations MAY still support optional application-level auth, but it must not be required by Naia for connection establishment when `require_auth = false`.
 
 ### `require_auth = true`
 
@@ -91,39 +101,63 @@ This mode uses an out-of-band HTTP auth step and a one-time identity token.
 
 #### Pre-transport auth request (HTTP)
 
-> connection-06 (MUST): When `require_auth = true`, a client MUST obtain a server-issued identity token via an out-of-band auth request (HTTP) BEFORE initializing the transport connection attempt.
+### [connection-06] —
 
-> connection-07 (MUST): The server MUST evaluate the auth request and return either:
+When `require_auth = true`, a client MUST obtain a server-issued identity token via an out-of-band auth request (HTTP) BEFORE initializing the transport connection attempt.
+
+### [connection-07] —
+
+The server MUST evaluate the auth request and return either:
 - `200 OK` (accepted) with an identity token, or
 - `401 Unauthorized` (rejected) with no identity token.
 
-> connection-08 (MUST): When the server receives an auth request in this mode, it MUST emit exactly one `AuthEvent` for that request.
+### [connection-08] —
 
-> connection-09 (MUST): There is no Naia-level “auth timeout” during the transport handshake, because auth is completed before the transport session begins.
+When the server receives an auth request in this mode, it MUST emit exactly one `AuthEvent` for that request.
+
+### [connection-09] —
+
+There is no Naia-level “auth timeout” during the transport handshake, because auth is completed before the transport session begins.
 
 #### Identity token properties
 
-> connection-10 (MUST): An identity token MUST be:
+### [connection-10] —
+
+An identity token MUST be:
 - **One-time use** (cannot be used successfully more than once), and
 - **Time-limited** with TTL = **1 hour** from issuance.
 
-> connection-11 (MUST): If a token is expired, already-used, or invalid, the server MUST explicitly reject the connection attempt (see “Explicit rejection”).
+### [connection-11] —
 
-> connection-12 (MUST): Identity tokens MUST be required for **all transports** when `require_auth = true` (not only WebRTC).
+If a token is expired, already-used, or invalid, the server MUST explicitly reject the connection attempt (see “Explicit rejection”).
 
-> connection-13 (MUST): On first successful validation attempt, the server MUST mark the token as used (consumed). Replays MUST fail.
+### [connection-12] —
+
+Identity tokens MUST be required for **all transports** when `require_auth = true` (not only WebRTC).
+
+### [connection-13] —
+
+On first successful validation attempt, the server MUST mark the token as used (consumed). Replays MUST fail.
 
 ---
 
 ## Transport handshake & tick sync
 
-> connection-14 (MUST): A successful connection handshake MUST include a tick synchronization step. A client MUST NOT be considered “Connected” until tick sync completes.
+### [connection-14] —
 
-> connection-15 (MUST): The client MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
+A successful connection handshake MUST include a tick synchronization step. A client MUST NOT be considered “Connected” until tick sync completes.
 
-> connection-16 (MUST): The server MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
+### [connection-15] —
 
-> connection-17 (MUST): Naia MUST NOT deliver any entity replication “writes” as part of an established session until after `ConnectEvent` is emitted for that session (server-side), and the client MUST NOT apply any such writes until after it has emitted `ConnectEvent`.
+The client MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
+
+### [connection-16] —
+
+The server MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
+
+### [connection-17] —
+
+Naia MUST NOT deliver any entity replication “writes” as part of an established session until after `ConnectEvent` is emitted for that session (server-side), and the client MUST NOT apply any such writes until after it has emitted `ConnectEvent`.
 
 (See `5_time_ticks_commands.md` for tick semantics and how tick sync interacts with command history.)
 
@@ -131,27 +165,39 @@ This mode uses an out-of-band HTTP auth step and a one-time identity token.
 
 ## Explicit rejection
 
-> connection-18 (MUST): The server MUST explicitly reject a connection attempt when:
+### [connection-18] —
+
+The server MUST explicitly reject a connection attempt when:
 - `require_auth = true` and the client presents no identity token,
 - the presented token is invalid/expired/already-used,
 - the server otherwise chooses to deny the attempt before session establishment.
 
-> connection-19 (MUST): When the server explicitly rejects:
+### [connection-19] —
+
+When the server explicitly rejects:
 - The client MUST emit `RejectEvent`.
 - The client MUST NOT emit `ConnectEvent`.
 - The client MUST NOT emit `DisconnectEvent` (because it was never connected).
 
-> connection-20 (MUST): After a `RejectEvent`, the client’s public `ConnectionStatus` MUST be (or return to) a non-connected state (e.g. Disconnected), with no special “Rejected” status.
+### [connection-20] —
+
+After a `RejectEvent`, the client’s public `ConnectionStatus` MUST be (or return to) a non-connected state (e.g. Disconnected), with no special “Rejected” status.
 
 ---
 
 ## Disconnect semantics
 
-> connection-21 (MUST): `DisconnectEvent` (client-side) MUST only be emitted if the client previously emitted `ConnectEvent` for the session.
+### [connection-21] —
 
-> connection-22 (MUST): `DisconnectEvent` (server-side) MUST only be emitted if the server previously emitted `ConnectEvent` for the session.
+`DisconnectEvent` (client-side) MUST only be emitted if the client previously emitted `ConnectEvent` for the session.
 
-> connection-23 (MUST): When a client disconnects (or is disconnected) after session establishment:
+### [connection-22] —
+
+`DisconnectEvent` (server-side) MUST only be emitted if the server previously emitted `ConnectEvent` for the session.
+
+### [connection-23] —
+
+When a client disconnects (or is disconnected) after session establishment:
 - It is treated as immediately out-of-scope for all entities, and
 - Any client-owned entities owned by that client MUST be despawned by the server.
 (See `9_entity_ownership.md` and `7_entity_scopes.md`.)
@@ -162,24 +208,32 @@ This mode uses an out-of-band HTTP auth step and a one-time identity token.
 
 ### Successful session (require_auth = true)
 
-> connection-24 (MUST): For a single successful connection where `require_auth = true`, the server MUST observe events in this order:
+### [connection-24] —
+
+For a single successful connection where `require_auth = true`, the server MUST observe events in this order:
 1. `AuthEvent`
 2. `ConnectEvent`
 3. `DisconnectEvent` (eventually)
 
 ### Successful session (require_auth = false)
 
-> connection-25 (MUST): For a single successful connection where `require_auth = false`, the server MUST observe:
+### [connection-25] —
+
+For a single successful connection where `require_auth = false`, the server MUST observe:
 1. `ConnectEvent`
 2. `DisconnectEvent` (eventually)
 
 ### Client-side ordering (all modes)
 
-> connection-26 (MUST): For a single successful session, the client MUST observe:
+### [connection-26] —
+
+For a single successful session, the client MUST observe:
 1. `ConnectEvent`
 2. `DisconnectEvent` (eventually)
 
-> connection-27 (MUST): For a rejected attempt, the client MUST observe:
+### [connection-27] —
+
+For a rejected attempt, the client MUST observe:
 1. `RejectEvent`
 …and MUST NOT observe `ConnectEvent` or `DisconnectEvent` for that attempt.
 
@@ -191,3 +245,7 @@ This mode uses an out-of-band HTTP auth step and a one-time identity token.
 - Transport-specific wire details for how the token is conveyed.
 - Engine adapter (bevy/hecs) implementation details.
 - Retry/backoff policies for repeated connection attempts (may be defined in a future spec if needed).
+
+## Test obligations
+
+TODO: Define test obligations for this specification.

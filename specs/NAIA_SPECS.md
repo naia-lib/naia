@@ -2,24 +2,26 @@
 
 This document contains all normative specifications for the Naia networking engine, concatenated into a single reference.
 
-**Generated:** 2026-01-11 20:02 UTC
+**Generated:** 2026-01-11 22:55 UTC
+**Spec Count:** 16
 
 ---
 
 ## Table of Contents
 
 - [0. Naia Specifications](#naia-specifications)
+- [1. <Human-Readable Name>](#human-readable-name)
 - [2. Connection Lifecycle](#connection-lifecycle)
 - [3. Transport](#transport)
 - [4. Messaging](#messaging)
 - [5. Time, Ticks & Commands](#time-ticks--commands)
 - [6. Observability Metrics](#observability-metrics)
-- [7. Spec: Entity Scopes](#spec-entity-scopes)
-- [8. Spec: Entity Replication](#spec-entity-replication)
+- [7. Entity Scopes](#entity-scopes)
+- [8. Entity Replication](#entity-replication)
 - [9. Entity Ownership](#entity-ownership)
-- [10. Spec: Entity Publication](#spec-entity-publication)
-- [11. Spec: Entity Delegation](#spec-entity-delegation)
-- [12. Spec: Entity Authority](#spec-entity-authority)
+- [10. Entity Publication](#entity-publication)
+- [11. Entity Delegation](#entity-delegation)
+- [12. Entity Authority](#entity-authority)
 - [13. Server Events API](#server-events-api)
 - [14. Client Events API Contract](#client-events-api-contract)
 - [15. World Integration Contract](#world-integration-contract)
@@ -91,18 +93,184 @@ All specifications in this directory MUST follow these rules:
 - **MUST** be explicit about edge cases
 - **MUST** specify ordering when it matters
 
-## Style Guide
-
-Reference `OWNERSHIP_DELEGATION_AUTH.md` as the canonical example of spec style and structure.
-
 ## Template
 
-Use `_template.md` as a starting point for new specifications.
+Use `1_template.md` as a starting point for new specifications.
 
 ## Test Obligations
 
 Each spec MUST include a "Test Obligations" section that lists the E2E test names that verify the spec. This creates traceability from spec → test.
 
+---
+
+## Master Glossary
+
+Terms defined here are normative across all specs. Individual specs MAY add spec-specific terms in their Vocabulary sections but MUST NOT redefine master terms.
+
+### Connection & Session
+
+- **Client**: A Naia client instance attempting to establish and maintain a connection to a server.
+- **Server**: A Naia server instance accepting client connections and managing authoritative state.
+- **User** (`UserKey`): The server's internal identifier for a connected client. Used in server-side APIs.
+- **Session**: The period from `ConnectEvent` to `DisconnectEvent` for a single connection.
+- **Connection**: The underlying transport-level link between client and server.
+
+### Time & Ticks
+
+- **Tick**: A `u16` simulation step counter that wraps at 65535. All tick comparisons MUST use wrap-safe arithmetic.
+- **TickRate**: The configured duration per tick (milliseconds), shared between client and server.
+- **Server Tick**: The authoritative tick counter maintained by the server.
+- **Client Tick**: The client's tick counter, which MAY lead the server tick for command timing.
+
+### Entities & Components
+
+- **Entity**: A networked object tracked by Naia replication, identified by `GlobalEntity` (server) or `LocalEntity` (per-connection).
+- **GlobalEntity**: A `u64` monotonically-increasing identifier unique across the server's lifetime.
+- **LocalEntity** (`HostEntity`/`RemoteEntity`): Per-connection entity handles that may wrap/reuse across lifetimes.
+- **Entity Lifetime** (client-side): The period from scope-enter to scope-leave. Re-entering scope after ≥1 tick out-of-scope creates a new lifetime.
+- **Replicated Component**: A component type registered in the Protocol for network synchronization.
+- **Local-only Component**: A component instance existing only locally, not backed by replication.
+
+### Ownership & Authority
+
+- **EntityOwner**: Enum indicating who owns an entity: `Server`, `Client(UserKey)`, or `Local`.
+- **Owner**: The single actor permitted to write replicated updates for an entity (exclusive, per-entity).
+- **Authority**: Write permission for a delegated server-owned entity. Only the authority holder may write.
+- **EntityAuthStatus**: The client's authority state for a delegated entity: `Available`, `Requested`, `Granted`, `Releasing`, or `Denied`.
+
+### Scoping & Publication
+
+- **InScope(U, E)**: Predicate indicating entity E is visible to user U.
+- **OutOfScope(U, E)**: Entity E is not visible to user U; implies despawn on that client.
+- **Room**: A server-managed grouping for coarse scope gating. Users and entities may belong to multiple rooms.
+- **SharesRoom(U, E)**: True if user U and entity E share at least one common room.
+- **ReplicationConfig**: Configuration for an entity's replication behavior: `Private`, `Public`, or `Delegated`.
+- **Published** (client-owned): Entity is visible to non-owners (subject to scope policy).
+- **Unpublished** (client-owned): Entity is NOT visible to any non-owner.
+
+### Events & API
+
+- **Drain**: Reading and removing events from a pending queue. Drains are destructive (read+remove).
+- **Receive Step**: Ingesting packets from transport into internal buffer (no state changes).
+- **Process Step**: Processing buffered packets, applying protocol semantics, producing events.
+- **ConnectEvent**: Emitted when a connection is fully established (after auth, handshake, and tick sync).
+- **DisconnectEvent**: Emitted when a connection is terminated.
+
+### Build & Runtime Modes
+
+- **Debug Mode** (`debug_assertions`): Compile-time mode when `debug_assertions` is enabled. Additional checks and warnings are active.
+- **Prod Mode**: Compile-time mode when `debug_assertions` is disabled. Silent handling of remote anomalies.
+- **Diagnostics Mode**: Runtime configuration (independent of debug_assertions). When enabled, warnings MAY be emitted for illegal/impossible states.
+
+### Error Handling Policy
+
+All specs follow this error handling policy:
+
+| Error Type | Handling |
+|------------|----------|
+| User/API misuse | Return `Result::Err` |
+| Remote/untrusted input anomalies | Prod: ignore silently; Debug: warn |
+| Framework invariant violation | **PANIC** |
+
+### Temporal Semantics
+
+- **Immediately**: Within the same tick as the triggering event, before any events for that tick are drained to the application. The transition MUST be observable on the next API query within that tick.
+- **Eventually**: Will occur at some future tick while the connection remains active. No specific tick bound is guaranteed unless otherwise stated.
+- **Before [X]**: MUST complete before X begins. If X is a tick boundary, the action completes before the tick advances.
+- **After [X]**: MUST occur after X has completed. May be same tick or later tick.
+- **Within N ticks**: MUST occur before N ticks have elapsed from the triggering event.
+- **Same tick**: Occurs during the same server tick as the triggering event. Intermediate states within a tick are collapsed and not observable.
+
+
+---
+
+<!-- ======================================================================== -->
+<!-- Source: 1_template.md -->
+<!-- ======================================================================== -->
+
+# Spec: <Human-Readable Name>
+<One sentence: what this spec guarantees.>
+
+**Status:** Draft | Active | Deprecated  
+**Version:** v1  
+**Related specs:** <links>  
+**Applies to:** <server | client | both | adapter> (pick one or more)
+
+---
+
+## 1) Scope & Vocabulary
+
+**In scope:**  
+- <what this spec covers, concretely>
+
+**Out of scope:**  
+- <explicit exclusions + link to the spec that owns them>
+
+**Vocabulary (only terms used normatively below):**  
+- **<Term>**: <definition>  
+- **<Term>**: <definition>
+
+---
+
+## 2) Contract (Rules)
+
+Write the contract as **numbered rules**. Each rule MUST be testable.
+
+**R1. <Short title>**  
+MUST/MUST NOT/MAY/SHOULD: <precise behavior>  
+Clarifies: <only if needed to avoid misread>  
+
+**R2. <Short title>**  
+MUST/MUST NOT/MAY/SHOULD: <precise behavior>
+
+(keep going)
+
+---
+
+## 3) Contract IDs (Obligations)
+
+Contract IDs are the stable “handles” for enforcement + audits.
+
+**Contract ID format:** `<spec-slug>-<nn>`  
+Examples: `entities-identity-01`, `client-owned-publication-06`  
+Rules: IDs MUST be stable, MUST NOT be reused, MUST NOT be renumbered.
+
+For each obligation:
+
+### <spec-slug>-<nn> — <short title>
+**Guarantee:** <one sentence, no ambiguity>  
+**Covered by tests:**  
+- `test/tests/<file>.rs::<test_fn>` (or `TODO` if not implemented yet)  
+**Notes:** <only if needed>
+
+---
+
+## 4) Interfaces & Observability
+
+Everything here is about what callers/observers can rely on.
+
+**Operations / Inputs:**  
+- `<op or message>` → <what it means, at the contract level>
+
+**Visible outcomes:**  
+- What the server can observe: <facts>  
+- What a client can observe: <facts>  
+
+**Errors / illegal use:**  
+- If <bad call / impossible case>: MUST <return error | ignore | disconnect | etc>, MUST NOT panic (unless explicitly stated)
+
+**Events / statuses (if any):**  
+- `<event/status>` emitted/visible when <condition> (exactly-once rules if relevant)
+
+---
+
+## 5) Invariants & Non-Goals
+
+**Always true:**  
+- <invariant that must hold across all operations>
+
+**Non-goals:**  
+- <what this spec intentionally does not guarantee>
 
 ---
 
@@ -126,7 +294,7 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 
 - **Client**: a Naia client instance attempting to establish and maintain a session with a Server.
 - **Server**: a Naia server instance accepting client sessions.
-- **Transport**: the underlying network mechanism (e.g. UDP, WebRTC). Transport-specific mechanics are defined in `transport.md`, but lifecycle semantics are defined here.
+- **Transport**: the underlying network mechanism (e.g. UDP, WebRTC). Transport-specific mechanics are defined in `3_transport.md`, but lifecycle semantics are defined here.
 - **Session**: the period from “connected” until “disconnected”.
 - **Explicit reject**: the server deliberately refuses a connection attempt in a way the client can observe as a rejection (as opposed to generic network failure).
 - **Auth request**: the application-defined credential payload sent Client → Server **out-of-band** (HTTP) before the transport session is initialized.
@@ -175,9 +343,13 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 - **Connecting** (includes: “auth in progress” when applicable; transport handshake in progress; tick sync in progress)
 - **Connected**
 
-> connection-01 (MUST): Client behavior MUST be describable by the above conceptual states, even if the implementation uses different internal states.
+### [connection-01] —
 
-> connection-02 (MUST NOT): The client MUST NOT expose a public “Rejected” connection state. Rejection is an event (RejectEvent), not a persistent state.
+Client behavior MUST be describable by the above conceptual states, even if the implementation uses different internal states.
+
+### [connection-02] —
+
+The client MUST NOT expose a public “Rejected” connection state. Rejection is an event (RejectEvent), not a persistent state.
 
 ### Server states (per-client-session conceptual)
 
@@ -185,7 +357,9 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 - **Handshaking**
 - **Connected**
 
-> connection-03 (MUST): The server MUST NOT treat a client as “Connected” (for purposes of entity replication, message delivery, tick semantics, etc.) until the handshake is finalized including tick sync.
+### [connection-03] —
+
+The server MUST NOT treat a client as “Connected” (for purposes of entity replication, message delivery, tick semantics, etc.) until the handshake is finalized including tick sync.
 
 ---
 
@@ -193,9 +367,13 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 
 ### `require_auth = false`
 
-> connection-04 (MUST): If `require_auth = false`, the server MUST allow clients to attempt connection without any pre-auth step.
+### [connection-04] —
 
-> connection-05 (MAY): Implementations MAY still support optional application-level auth, but it must not be required by Naia for connection establishment when `require_auth = false`.
+If `require_auth = false`, the server MUST allow clients to attempt connection without any pre-auth step.
+
+### [connection-05] —
+
+Implementations MAY still support optional application-level auth, but it must not be required by Naia for connection establishment when `require_auth = false`.
 
 ### `require_auth = true`
 
@@ -203,70 +381,106 @@ This mode uses an out-of-band HTTP auth step and a one-time identity token.
 
 #### Pre-transport auth request (HTTP)
 
-> connection-06 (MUST): When `require_auth = true`, a client MUST obtain a server-issued identity token via an out-of-band auth request (HTTP) BEFORE initializing the transport connection attempt.
+### [connection-06] —
 
-> connection-07 (MUST): The server MUST evaluate the auth request and return either:
+When `require_auth = true`, a client MUST obtain a server-issued identity token via an out-of-band auth request (HTTP) BEFORE initializing the transport connection attempt.
+
+### [connection-07] —
+
+The server MUST evaluate the auth request and return either:
 - `200 OK` (accepted) with an identity token, or
 - `401 Unauthorized` (rejected) with no identity token.
 
-> connection-08 (MUST): When the server receives an auth request in this mode, it MUST emit exactly one `AuthEvent` for that request.
+### [connection-08] —
 
-> connection-09 (MUST): There is no Naia-level “auth timeout” during the transport handshake, because auth is completed before the transport session begins.
+When the server receives an auth request in this mode, it MUST emit exactly one `AuthEvent` for that request.
+
+### [connection-09] —
+
+There is no Naia-level “auth timeout” during the transport handshake, because auth is completed before the transport session begins.
 
 #### Identity token properties
 
-> connection-10 (MUST): An identity token MUST be:
+### [connection-10] —
+
+An identity token MUST be:
 - **One-time use** (cannot be used successfully more than once), and
 - **Time-limited** with TTL = **1 hour** from issuance.
 
-> connection-11 (MUST): If a token is expired, already-used, or invalid, the server MUST explicitly reject the connection attempt (see “Explicit rejection”).
+### [connection-11] —
 
-> connection-12 (MUST): Identity tokens MUST be required for **all transports** when `require_auth = true` (not only WebRTC).
+If a token is expired, already-used, or invalid, the server MUST explicitly reject the connection attempt (see “Explicit rejection”).
 
-> connection-13 (MUST): On first successful validation attempt, the server MUST mark the token as used (consumed). Replays MUST fail.
+### [connection-12] —
+
+Identity tokens MUST be required for **all transports** when `require_auth = true` (not only WebRTC).
+
+### [connection-13] —
+
+On first successful validation attempt, the server MUST mark the token as used (consumed). Replays MUST fail.
 
 ---
 
 ## Transport handshake & tick sync
 
-> connection-14 (MUST): A successful connection handshake MUST include a tick synchronization step. A client MUST NOT be considered “Connected” until tick sync completes.
+### [connection-14] —
 
-> connection-15 (MUST): The client MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
+A successful connection handshake MUST include a tick synchronization step. A client MUST NOT be considered “Connected” until tick sync completes.
 
-> connection-16 (MUST): The server MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
+### [connection-15] —
 
-> connection-17 (MUST): Naia MUST NOT deliver any entity replication “writes” as part of an established session until after `ConnectEvent` is emitted for that session (server-side), and the client MUST NOT apply any such writes until after it has emitted `ConnectEvent`.
+The client MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
 
-(See `time_ticks_commands.md` for tick semantics and how tick sync interacts with command history.)
+### [connection-16] —
+
+The server MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
+
+### [connection-17] —
+
+Naia MUST NOT deliver any entity replication “writes” as part of an established session until after `ConnectEvent` is emitted for that session (server-side), and the client MUST NOT apply any such writes until after it has emitted `ConnectEvent`.
+
+(See `5_time_ticks_commands.md` for tick semantics and how tick sync interacts with command history.)
 
 ---
 
 ## Explicit rejection
 
-> connection-18 (MUST): The server MUST explicitly reject a connection attempt when:
+### [connection-18] —
+
+The server MUST explicitly reject a connection attempt when:
 - `require_auth = true` and the client presents no identity token,
 - the presented token is invalid/expired/already-used,
 - the server otherwise chooses to deny the attempt before session establishment.
 
-> connection-19 (MUST): When the server explicitly rejects:
+### [connection-19] —
+
+When the server explicitly rejects:
 - The client MUST emit `RejectEvent`.
 - The client MUST NOT emit `ConnectEvent`.
 - The client MUST NOT emit `DisconnectEvent` (because it was never connected).
 
-> connection-20 (MUST): After a `RejectEvent`, the client’s public `ConnectionStatus` MUST be (or return to) a non-connected state (e.g. Disconnected), with no special “Rejected” status.
+### [connection-20] —
+
+After a `RejectEvent`, the client’s public `ConnectionStatus` MUST be (or return to) a non-connected state (e.g. Disconnected), with no special “Rejected” status.
 
 ---
 
 ## Disconnect semantics
 
-> connection-21 (MUST): `DisconnectEvent` (client-side) MUST only be emitted if the client previously emitted `ConnectEvent` for the session.
+### [connection-21] —
 
-> connection-22 (MUST): `DisconnectEvent` (server-side) MUST only be emitted if the server previously emitted `ConnectEvent` for the session.
+`DisconnectEvent` (client-side) MUST only be emitted if the client previously emitted `ConnectEvent` for the session.
 
-> connection-23 (MUST): When a client disconnects (or is disconnected) after session establishment:
+### [connection-22] —
+
+`DisconnectEvent` (server-side) MUST only be emitted if the server previously emitted `ConnectEvent` for the session.
+
+### [connection-23] —
+
+When a client disconnects (or is disconnected) after session establishment:
 - It is treated as immediately out-of-scope for all entities, and
 - Any client-owned entities owned by that client MUST be despawned by the server.
-(See `entity_ownership.md` and `entity_scopes.md`.)
+(See `9_entity_ownership.md` and `7_entity_scopes.md`.)
 
 ---
 
@@ -274,24 +488,32 @@ This mode uses an out-of-band HTTP auth step and a one-time identity token.
 
 ### Successful session (require_auth = true)
 
-> connection-24 (MUST): For a single successful connection where `require_auth = true`, the server MUST observe events in this order:
+### [connection-24] —
+
+For a single successful connection where `require_auth = true`, the server MUST observe events in this order:
 1. `AuthEvent`
 2. `ConnectEvent`
 3. `DisconnectEvent` (eventually)
 
 ### Successful session (require_auth = false)
 
-> connection-25 (MUST): For a single successful connection where `require_auth = false`, the server MUST observe:
+### [connection-25] —
+
+For a single successful connection where `require_auth = false`, the server MUST observe:
 1. `ConnectEvent`
 2. `DisconnectEvent` (eventually)
 
 ### Client-side ordering (all modes)
 
-> connection-26 (MUST): For a single successful session, the client MUST observe:
+### [connection-26] —
+
+For a single successful session, the client MUST observe:
 1. `ConnectEvent`
 2. `DisconnectEvent` (eventually)
 
-> connection-27 (MUST): For a rejected attempt, the client MUST observe:
+### [connection-27] —
+
+For a rejected attempt, the client MUST observe:
 1. `RejectEvent`
 …and MUST NOT observe `ConnectEvent` or `DisconnectEvent` for that attempt.
 
@@ -303,6 +525,10 @@ This mode uses an out-of-band HTTP auth step and a one-time identity token.
 - Transport-specific wire details for how the token is conveyed.
 - Engine adapter (bevy/hecs) implementation details.
 - Retry/backoff policies for repeated connection attempts (may be defined in a future spec if needed).
+
+## Test obligations
+
+TODO: Define test obligations for this specification.
 
 
 ---
@@ -318,7 +544,7 @@ Last updated: 2026-01-08
 This spec defines the transport boundary contract for **Naia** (`naia_client` + `naia_server`).
 It is **transport-agnostic**: Naia can run over UDP, WebRTC, or local channels. Naia assumes transports are unordered/unreliable and does not rely on stronger guarantees even if a transport happens to provide them.
 
-Reliability, ordering, fragmentation, resend, and dedupe guarantees belong to `messaging.md`.
+Reliability, ordering, fragmentation, resend, and dedupe guarantees belong to `4_messaging.md`.
 
 ---
 
@@ -331,9 +557,9 @@ This spec owns:
 
 This spec does **not** own:
 - Socket-crate-specific behavior (`naia_client_socket`, `naia_server_socket`)
-- Message reliability/ordering/fragmentation semantics (see `messaging.md`)
+- Message reliability/ordering/fragmentation semantics (see `4_messaging.md`)
 - Entity replication semantics (see entity suite specs)
-- Auth semantics (see `connection_lifecycle.md`)
+- Auth semantics (see `2_connection_lifecycle.md`)
 
 ---
 
@@ -349,7 +575,7 @@ This spec does **not** own:
 
 ## Contracts
 
-### transport-01 — Naia assumes transport is unordered & unreliable
+### [transport-01] — Naia assumes transport is unordered & unreliable
 Naia MUST assume packets may be dropped, duplicated, and reordered, and MUST NOT rely on:
 - in-order delivery
 - exactly-once delivery
@@ -359,21 +585,21 @@ Naia MUST assume packets may be dropped, duplicated, and reordered, and MUST NOT
 
 ---
 
-### transport-02 — MTU boundary is defined by `naia_shared::MTU_SIZE_BYTES`
+### [transport-02] — MTU boundary is defined by `naia_shared::MTU_SIZE_BYTES`
 Naia MUST treat `MTU_SIZE_BYTES` as the maximum size of a **single packet payload**. :contentReference[oaicite:5]{index=5}
 
 Naia MUST NOT knowingly ask a transport adapter to send a packet payload larger than `MTU_SIZE_BYTES`.
 
 ---
 
-### transport-03 — Oversize outbound packet attempt returns `Err` at Naia layer
+### [transport-03] — Oversize outbound packet attempt returns `Err` at Naia layer
 If Naia is asked (directly or indirectly) to send data that would require an outbound packet payload larger than `MTU_SIZE_BYTES`, Naia MUST return `Result::Err` from the initiating Naia-layer API.
 
 This is a Naia contract (even if a particular transport adapter would panic). Naia must validate before calling the adapter.
 
 ---
 
-### transport-04 — Malformed or oversize inbound packets are dropped
+### [transport-04] — Malformed or oversize inbound packets are dropped
 If Naia receives a packet that is:
 - larger than `MTU_SIZE_BYTES`, or
 - malformed / cannot be decoded at the packet boundary,
@@ -386,9 +612,9 @@ then:
 
 ---
 
-### transport-05 — No transport-specific guarantees may leak upward
+### [transport-05] — No transport-specific guarantees may leak upward
 Naia’s higher layers (messaging/replication) MUST behave identically regardless of whether the underlying transport happens to be “better” (e.g. local channels).
-Any guarantee stronger than transport-01 MUST be explicitly specified in `messaging.md`, not inferred from the transport adapter.
+Any guarantee stronger than transport-01 MUST be explicitly specified in `4_messaging.md`, not inferred from the transport adapter.
 
 ---
 
@@ -418,9 +644,9 @@ It owns:
 - Buffering bounds & TTLs required for determinism + memory safety
 
 It does NOT own:
-- Transport adapter behavior (see `transport.md`)
+- Transport adapter behavior (see `3_transport.md`)
 - Entity replication semantics (see entity suite specs)
-- Connection/auth handshake rules (see `connection_lifecycle.md`)
+- Connection/auth handshake rules (see `2_connection_lifecycle.md`)
 
 ---
 
@@ -435,7 +661,7 @@ It does NOT own:
 - **Sequenced**: Messages represent “current state”; older state MUST NOT be observed after newer state has been observed (no rollback). Intermediate states MAY be skipped.
 - **TickBuffered**: Messages are grouped by tick and exposed per tick in tick order.
 - **Tick**: A shared tick value used by Naia; `Tick` is `u16` and wraps. :contentReference[oaicite:4]{index=4}
-- **Entity lifetime** (client-side): scope enter → scope leave, with the “≥ 1 tick out-of-scope” rule (see `entity_scopes.md` / `entity_replication.md`).
+- **Entity lifetime** (client-side): scope enter → scope leave, with the “≥ 1 tick out-of-scope” rule (see `7_entity_scopes.md` / `8_entity_replication.md`).
 
 Normative keywords: MUST, MUST NOT, MAY, SHOULD.
 
@@ -443,15 +669,15 @@ Normative keywords: MUST, MUST NOT, MAY, SHOULD.
 
 ## Global error-handling policy
 
-### messaging-01 — User-initiated errors are Results
+### [messaging-01] — User-initiated errors are Results
 When an error is caused by local application code or local configuration (e.g. invalid channel configuration, oversize payload send), Naia MUST return `Result::Err` from the initiating API rather than panicking.
 
-### messaging-02 — Remote/untrusted input MUST NOT panic
+### [messaging-02] — Remote/untrusted input MUST NOT panic
 When an error is caused by remote input or the network (malformed payload, reorder, duplicates, stale ticks, unresolved entity references, spam), Naia MUST NOT panic.
 - In Prod: drop silently
 - In Debug: drop and emit a warning (exact text not specified)
 
-### messaging-03 — Framework invariant violations MUST panic
+### [messaging-03] — Framework invariant violations MUST panic
 If Naia violates its own declared invariants (e.g. delivers older state after newer on a sequenced channel, attempts internal send exceeding declared bounds), Naia MUST panic.
 
 (These conditions are considered Naia bugs and are expected to be unreachable in correct implementations.)
@@ -460,14 +686,14 @@ If Naia violates its own declared invariants (e.g. delivers older state after ne
 
 ## Channel configuration
 
-### messaging-04 — Protocol registration must match on both sides
+### [messaging-04] — Protocol registration must match on both sides
 A given connection MUST have compatible channel registrations:
 - Same ChannelKind refers to the same logical channel
 - ChannelMode and ChannelDirection MUST be compatible
 
-If channel registrations are incompatible, connection establishment MUST fail (see `connection_lifecycle.md` for failure surfacing).
+If channel registrations are incompatible, connection establishment MUST fail (see `2_connection_lifecycle.md` for failure surfacing).
 
-### messaging-05 — ChannelDirection is enforced at send-time
+### [messaging-05] — ChannelDirection is enforced at send-time
 If local code attempts to send a message on a channel that is not configured for that direction, Naia MUST return `Result::Err`. (user-initiated)
 
 ---
@@ -489,7 +715,7 @@ This table defines the observable application-level contract.
 
 ## UnorderedUnreliable
 
-### messaging-06 — Best-effort, no ordering, duplicates allowed
+### [messaging-06] — Best-effort, no ordering, duplicates allowed
 UnorderedUnreliable:
 - MAY drop messages
 - MAY deliver messages out of send order
@@ -499,7 +725,7 @@ UnorderedUnreliable:
 
 ## SequencedUnreliable
 
-### messaging-07 — Best-effort, “latest wins”, no rollback
+### [messaging-07] — Best-effort, “latest wins”, no rollback
 SequencedUnreliable:
 - MAY drop messages
 - MAY deliver out of send order
@@ -513,7 +739,7 @@ Duplicates MAY occur (unreliable), and MUST NOT cause rollback.
 
 ## UnorderedReliable
 
-### messaging-08 — Reliable delivery, deduped, unordered
+### [messaging-08] — Reliable delivery, deduped, unordered
 UnorderedReliable:
 - MUST ensure eventual delivery while the connection remains active
 - MUST dedupe so each message is observed at most once
@@ -523,7 +749,7 @@ UnorderedReliable:
 
 ## OrderedReliable
 
-### messaging-09 — Reliable + strict send-order delivery
+### [messaging-09] — Reliable + strict send-order delivery
 OrderedReliable:
 - MUST ensure eventual delivery while connected
 - MUST dedupe so each message is observed at most once
@@ -534,7 +760,7 @@ OrderedReliable:
 
 ## SequencedReliable
 
-### messaging-10 — Reliable + “latest wins” + no rollback
+### [messaging-10] — Reliable + “latest wins” + no rollback
 SequencedReliable is intended for “current-state streams”.
 
 SequencedReliable:
@@ -551,24 +777,24 @@ SequencedReliable:
 
 TickBuffered is a standalone ChannelMode with TickBufferSettings. :contentReference[oaicite:5]{index=5}
 
-### messaging-11 — TickBuffered is Client→Server only
+### [messaging-11] — TickBuffered is Client→Server only
 TickBuffered channels MUST be configurable only for Client→Server direction.
 If configured for any other direction, Naia MUST return `Result::Err`. (user-initiated)
 
-### messaging-12 — TickBuffered groups messages by tick and exposes ticks in order
+### [messaging-12] — TickBuffered groups messages by tick and exposes ticks in order
 TickBuffered:
 - Each message is associated with a Tick.
 - The receiver MUST buffer messages grouped by Tick.
 - When the receiver exposes buffered messages, it MUST expose ticks in increasing tick order (wrap-safe).
 - A tick MAY have zero, one, or many messages.
 
-### messaging-13 — TickBuffered capacity and eviction
+### [messaging-13] — TickBuffered capacity and eviction
 TickBuffered has a fixed `message_capacity`.
 - The receiver MUST NOT retain more than `message_capacity` total buffered messages.
 - If adding a message would exceed capacity, the receiver MUST evict the oldest buffered tick groups first (oldest ticks) until within capacity.
 - Eviction is considered remote/untrusted pressure; Naia MUST NOT panic. (See messaging-02)
 
-### messaging-14 — TickBuffered discards very-late ticks
+### [messaging-14] — TickBuffered discards very-late ticks
 If a message arrives for a tick that is older than the oldest tick currently retained (i.e., it would fall behind the retained window), the receiver MUST discard it.
 - Prod: discard silently
 - Debug: discard with warning
@@ -579,11 +805,11 @@ If a message arrives for a tick that is older than the oldest tick currently ret
 
 Naia defines a maximum packet payload size `MTU_SIZE_BYTES` at the transport boundary. :contentReference[oaicite:6]{index=6}
 
-### messaging-15 — Unreliable channels MUST NOT fragment
+### [messaging-15] — Unreliable channels MUST NOT fragment
 For UnorderedUnreliable and SequencedUnreliable:
 - If a message payload would require fragmentation, Naia MUST return `Result::Err` from the send call. (user-initiated)
 
-### messaging-16 — Reliable channels MAY fragment up to a hard bound
+### [messaging-16] — Reliable channels MAY fragment up to a hard bound
 For UnorderedReliable / OrderedReliable / SequencedReliable:
 - Naia MAY fragment a message across multiple packets.
 - Maximum fragments per message is a fixed bound:
@@ -599,7 +825,7 @@ For UnorderedReliable / OrderedReliable / SequencedReliable:
 
 Tick and (where applicable) channel indices/sequence numbers wrap and must be compared using wrap-safe logic. Naia provides explicit wrapping helpers in shared code. :contentReference[oaicite:7]{index=7}
 
-### messaging-17 — Wrap-around MUST NOT break ordering or sequencing contracts
+### [messaging-17] — Wrap-around MUST NOT break ordering or sequencing contracts
 All ordering/sequence comparisons (OrderedReliable ordering, Sequenced* “newer than” checks, TickBuffered tick ordering) MUST be correct across wrap-around.
 
 ---
@@ -608,7 +834,7 @@ All ordering/sequence comparisons (OrderedReliable ordering, Sequenced* “newer
 
 Messages may contain EntityProperty values which refer to entities that may or may not currently exist in the receiver’s active entity lifetime. :contentReference[oaicite:8]{index=8}
 
-### messaging-18 — EntityProperty must not violate entity lifetime
+### [messaging-18] — EntityProperty must not violate entity lifetime
 A message that contains an EntityProperty MUST NOT be applied to an entity outside its current active lifetime.
 If the referenced entity is not currently present in the receiver’s active lifetime:
 - Naia MAY buffer the message for later resolution (see TTL below), or
@@ -616,7 +842,7 @@ If the referenced entity is not currently present in the receiver’s active lif
 
 Naia MUST NOT apply a buffered EntityProperty message after the referenced entity has completed a lifetime and despawned (no cross-lifetime leakage).
 
-### messaging-19 — EntityProperty resolution TTL (bounded buffering by time)
+### [messaging-19] — EntityProperty resolution TTL (bounded buffering by time)
 If Naia buffers messages due to unresolved EntityProperty references, it MUST enforce a TTL:
 
 `ENTITY_PROPERTY_RESOLUTION_TTL = 60 seconds`
@@ -630,7 +856,7 @@ If Naia buffers messages due to unresolved EntityProperty references, it MUST en
 Determinism requirement:
 - Under a deterministic time source (test clock), identical scripted time advancement MUST produce identical TTL drop behavior.
 
-### messaging-20 — EntityProperty buffering hard cap
+### [messaging-20] — EntityProperty buffering hard cap
 In addition to TTL, Naia MUST enforce a hard cap to prevent unbounded memory growth:
 
 - `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_CONNECTION = 4096`
@@ -690,10 +916,10 @@ This spec owns:
 - command acceptance semantics
 
 This spec does NOT own:
-- transport drop/dup/reorder assumptions (see `transport.md`)
-- message channel ordering/reliability (see `messaging.md`)
+- transport drop/dup/reorder assumptions (see `3_transport.md`)
+- message channel ordering/reliability (see `4_messaging.md`)
 - entity replication/lifetime (see entity suite)
-- connection admission/auth steps (see `connection_lifecycle.md`)
+- connection admission/auth steps (see `2_connection_lifecycle.md`)
 
 ---
 
@@ -719,36 +945,36 @@ This spec does NOT own:
 
 ## Global error-handling policy
 
-### time-01 — User-initiated misuse returns Result::Err
+### [time-01] — User-initiated misuse returns Result::Err
 If a failure is caused by local application misuse/configuration at the Naia API layer, Naia MUST return `Result::Err` from the initiating API.
 
-### time-02 — Remote/untrusted anomalies MUST NOT panic
+### [time-02] — Remote/untrusted anomalies MUST NOT panic
 If a failure is caused by remote input or network behavior (duplicates, reordering, late arrival), Naia MUST NOT panic.
 - Prod: ignore/drop silently
 - Debug: ignore/drop with warning
 
-### time-03 — Framework invariant violations MUST panic
+### [time-03] — Framework invariant violations MUST panic
 If Naia violates an invariant stated in this spec (e.g., tick goes backwards in public API, wrap-order is applied incorrectly, commands are applied more than once), Naia MUST panic.
 
 ---
 
 ## Canonical time source
 
-### time-04 — All durations use Naia’s monotonic time provider
+### [time-04] — All durations use Naia’s monotonic time provider
 All duration-based behavior in Naia (tick advancement, TTL expiry, lead targeting, timeouts if applicable) MUST be derived from Naia’s monotonic Time Provider (Instant/Duration), not wall-clock time.
 
-### time-05 — Determinism under deterministic time provider
+### [time-05] — Determinism under deterministic time provider
 If the Time Provider is deterministic (e.g. in tests), and the sequence of Time Provider advancements is identical, then tick advancement and time-based decisions MUST be deterministic.
 
 ---
 
 ## Tick semantics
 
-### time-06 — TickRate is fixed and shared
+### [time-06] — TickRate is fixed and shared
 TickRate is configured as a duration per tick (milliseconds) and MUST be shared between client and server configs for a connection.
 TickRate MUST NOT change during a connection’s lifetime.
 
-### time-07 — Server Tick advances from elapsed time
+### [time-07] — Server Tick advances from elapsed time
 The server MUST advance its tick counter based on elapsed duration and TickRate.
 
 - The server MUST NOT “invent” ticks without elapsed time.
@@ -757,10 +983,10 @@ The server MUST advance its tick counter based on elapsed duration and TickRate.
 
 (Best-practice note: if the host loop is delayed, processing multiple ticks to catch up is preferred over permanently slowing simulation.)
 
-### time-08 — Client Tick is monotonic and wrap-safe
+### [time-08] — Client Tick is monotonic and wrap-safe
 The client tick MUST be monotonic non-decreasing in the wrap-safe sense (see time-09). It MUST NOT move backwards.
 
-### time-09 — Wrap-safe tick ordering rule
+### [time-09] — Wrap-safe tick ordering rule
 Tick is `u16` and wraps. Naia MUST define “newer than / older than” with a wrap-safe comparison:
 
 Let `diff = (a - b) mod 2^16` (u16 wrapping subtraction interpreted as 0..65535).
@@ -775,8 +1001,8 @@ Tie-break rule (half-range ambiguity):
 
 ## Tick synchronization
 
-### time-10 — ConnectEvent implies tick sync complete
-A successful connection handshake MUST include tick synchronization, and the client MUST NOT emit `ConnectEvent` until tick sync is complete. (See `connection_lifecycle.md`.)
+### [time-10] — ConnectEvent implies tick sync complete
+A successful connection handshake MUST include tick synchronization, and the client MUST NOT emit `ConnectEvent` until tick sync is complete. (See `2_connection_lifecycle.md`.)
 
 Tick sync guarantees:
 - The client knows the server’s current tick at connection time (or a tick sufficiently recent to compute lead targeting).
@@ -786,7 +1012,7 @@ Tick sync guarantees:
 
 ## Client tick lead targeting (Overwatch-style)
 
-### time-11 — Client tick targets a lead ahead of server tick
+### [time-11] — Client tick targets a lead ahead of server tick
 The client MUST attempt to keep its tick ahead of the server by a target lead duration:
 
 `target_lead = RTT + (jitter_std_dev * 3) + TickRate`
@@ -795,7 +1021,7 @@ Where:
 - RTT and jitter_std_dev are estimated by Naia’s connection measurement.
 - TickRate is the configured duration-per-tick.
 
-### time-12 — Client pacing may adjust to maintain lead
+### [time-12] — Client pacing may adjust to maintain lead
 To maintain the target lead:
 - The client MAY slightly speed up or slow down its tick pacing relative to the base TickRate.
 - The client MUST remain monotonic (time-08).
@@ -807,14 +1033,14 @@ This spec does not mandate the exact controller (PID, clamp, etc.), but it DOES 
 
 ## Commands
 
-### commands-01 — Every command is tagged to a tick
+### [commands-01] — Every command is tagged to a tick
 Every command sent by the client MUST be tagged with a tick value.
 
-### commands-02 — Server applies commands at most once
+### [commands-02] — Server applies commands at most once
 The server MUST apply a given logical command at most once to authoritative simulation.
 Duplicates (retransmits, duplicates at network layer) MUST NOT cause double-application.
 
-### commands-03 — “Arrives in time” acceptance rule
+### [commands-03] — “Arrives in time” acceptance rule
 A command tagged for tick `T` is considered on-time iff it is received by the server before the server begins processing tick `T`.
 
 - If received on-time, the server MAY apply it when processing tick `T` (exact ordering among multiple commands for the same tick is implementation-defined, but MUST be deterministic).
@@ -826,10 +1052,10 @@ Ignored late commands are remote/untrusted input outcomes:
 
 (There is no public “rejected command error” surfaced to the client; the contract is that late commands are ignored.)
 
-### commands-04 — Client lead targeting is the primary mechanism to avoid late commands
+### [commands-04] — Client lead targeting is the primary mechanism to avoid late commands
 The intended mechanism to ensure commands arrive on-time is client lead targeting (time-11/time-12). The server remains authoritative and will ignore late commands regardless.
 
-### commands-05 — Disconnect cleans in-flight command state
+### [commands-05] — Disconnect cleans in-flight command state
 On disconnect:
 - any buffered/in-flight commands for that session MUST be discarded,
 - no commands from that session may be applied after disconnect.
@@ -875,15 +1101,15 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ## References
 
-- `transport.md` (fault model, heartbeats/acks, ordering/duplication behavior)
-- `connection_lifecycle.md` (connect/disconnect lifecycle, timeouts, cleanup)
-- `time_ticks_commands.md` (time source expectations, tick/time monotonicity)
+- `3_transport.md` (fault model, heartbeats/acks, ordering/duplication behavior)
+- `2_connection_lifecycle.md` (connect/disconnect lifecycle, timeouts, cleanup)
+- `5_time_ticks_commands.md` (time source expectations, tick/time monotonicity)
 
 ---
 
 ## Contracts
 
-### observability-01 — Metric scope and non-normative gameplay impact
+### [observability-01] — Metric scope and non-normative gameplay impact
 **Rule:** Observability metrics MUST NOT affect replicated state correctness, authority, scope, message delivery semantics, or any other gameplay-visible contract. Metrics are observational only.
 
 **Clarifications:**
@@ -894,7 +1120,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-02 — Metric query safety and availability
+### [observability-02] — Metric query safety and availability
 **Rule:** Metrics APIs MUST be safe to query at any time after client/server object construction and MUST NOT panic. If a metric cannot be computed yet (insufficient data), it MUST return a well-defined default.
 
 **Required defaults:**
@@ -907,7 +1133,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-03 — RTT must be non-negative and bounded
+### [observability-03] — RTT must be non-negative and bounded
 **Rule:** RTT estimates MUST be non-negative. RTT MUST NOT overflow or become NaN/Infinity. Under stable link conditions, RTT SHOULD converge within a reasonable tolerance of the configured/true RTT.
 
 **Interpretation:**
@@ -919,7 +1145,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-04 — RTT behavior under jitter, loss, and reordering
+### [observability-04] — RTT behavior under jitter, loss, and reordering
 **Rule:** Under the transport fault model, RTT estimates MAY fluctuate but MUST remain stable in the sense that:
 - It MUST NOT become negative.
 - It MUST NOT oscillate wildly due to duplicate packets alone.
@@ -931,7 +1157,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-05 — Throughput must be non-negative and monotonic per window semantics
+### [observability-05] — Throughput must be non-negative and monotonic per window semantics
 **Rule:** Throughput (bytes/sec) MUST be non-negative and MUST NOT overflow or become NaN/Infinity. Throughput computations MUST be consistent with the documented windowing method.
 
 **Clarifications:**
@@ -945,7 +1171,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-06 — Bandwidth accounting includes retries/overhead if documented
+### [observability-06] — Bandwidth accounting includes retries/overhead if documented
 **Rule:** If Naia exposes both “payload bytes” and “wire bytes” (or equivalent), then:
 - Payload bytes MUST count only application payload (messages/components).
 - Wire bytes MUST include protocol overhead and retransmissions.
@@ -957,7 +1183,7 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 
 ---
 
-### observability-07 — Metrics reset/cleanup on connection lifecycle
+### [observability-07] — Metrics reset/cleanup on connection lifecycle
 **Rule:** On disconnect, Naia MUST clean up connection-scoped metric state so that:
 - New connections do not inherit stale samples from prior connections.
 - Metrics for a disconnected session MUST not continue accumulating samples.
@@ -971,7 +1197,7 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 
 ---
 
-### observability-08 — Time source assumptions
+### [observability-08] — Time source assumptions
 **Rule:** Metrics computations MUST rely on the same monotonic time source used by Naia’s tick/time system. Metrics MUST NOT assume wall-clock correctness. If the time source is paused (per deterministic test clock), metrics MUST behave consistently:
 - No negative durations.
 - No division by zero.
@@ -983,7 +1209,7 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 
 ---
 
-### observability-09 — Per-direction and per-transport consistency (if applicable)
+### [observability-09] — Per-direction and per-transport consistency (if applicable)
 **Rule:** If Naia exposes separate send/receive metrics, they MUST reflect direction correctly (send counts bytes sent, receive counts bytes received). If multiple transports exist, semantics MUST be consistent across transports (modulo known transport overhead differences).
 
 **Test obligations:**
@@ -1004,6 +1230,36 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
   - Window/estimator
   - Reset/freeze behavior on disconnect
 
+---
+
+## Appendix: Test Tolerance Constants
+
+These constants define acceptable tolerances for E2E test assertions:
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `RTT_TOLERANCE_PERCENT` | 20 | Acceptable deviation from expected RTT |
+| `RTT_MIN_SAMPLES` | 10 | Minimum samples before asserting RTT convergence |
+| `RTT_MAX_VALUE_MS` | 10000 | Maximum valid RTT (sanity bound) |
+| `THROUGHPUT_TOLERANCE_PERCENT` | 15 | Acceptable deviation from expected throughput |
+| `THROUGHPUT_MIN_SAMPLES` | 5 | Minimum samples before asserting throughput |
+| `LEAD_CONVERGENCE_TICKS` | 60 | Ticks to allow client tick lead to stabilize |
+| `METRIC_WINDOW_DURATION_MS` | 1000 | Default metric aggregation window |
+
+**Usage in tests:**
+```rust
+// Assert RTT within tolerance
+assert!(
+    (measured_rtt - expected_rtt).abs() <= expected_rtt * RTT_TOLERANCE_PERCENT / 100,
+    "RTT {} not within {}% of expected {}",
+    measured_rtt, RTT_TOLERANCE_PERCENT, expected_rtt
+);
+```
+
+## Test obligations
+
+TODO: Define test obligations for this specification.
+
 
 ---
 
@@ -1011,7 +1267,7 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 <!-- Source: 7_entity_scopes.md -->
 <!-- ======================================================================== -->
 
-# Spec: Entity Scopes
+# Entity Scopes
 
 Entity Scopes define whether a given Entity `E` is **in-scope** or **out-of-scope** for a given User/Client `U`,
 and the required observable consequences of scope transitions.
@@ -1023,10 +1279,10 @@ This spec defines:
 - Required behavior under reordering / illegal states.
 
 This spec does not define:
-- Ownership write permissions (see `entity_ownership.md`)
-- Publication gating for client-owned entities (see `entity_publication.md`)
-- Delegation/authority semantics (see `entity_delegation.md`, `entity_authority.md`)
-- Replication ordering/wire format (see `entity_replication.md`)
+- Ownership write permissions (see `9_entity_ownership.md`)
+- Publication gating for client-owned entities (see `10_entity_publication.md`)
+- Delegation/authority semantics (see `11_entity_delegation.md`, `12_entity_authority.md`)
+- Replication ordering/wire format (see `8_entity_replication.md`)
 
 ---
 
@@ -1047,27 +1303,27 @@ This spec does not define:
 
 ## 2) Core Scope Predicate
 
-### entity-scopes-01 — Rooms are a required coarse gate for non-owners
+### [entity-scopes-01] — Rooms are a required coarse gate for non-owners
 For any user `U` and entity `E`, `SharesRoom(U,E)` MUST be a necessary precondition for `InScope(U,E)`, except where
 other specs explicitly override (e.g. owning client always in-scope for its client-owned entities; see below).
 
 If `SharesRoom(U,E) == false`, then `OutOfScope(U,E)` MUST hold.
 
-### entity-scopes-02 — Per-user include/exclude is an additional filter (additive after Rooms)
+### [entity-scopes-02] — Per-user include/exclude is an additional filter (additive after Rooms)
 Assuming `SharesRoom(U,E) == true`, the server MUST apply the per-user filter as follows:
 
 - If `Exclude(U,E)` is active, then `OutOfScope(U,E)` MUST hold.
 - Else if `Include(U,E)` is active, then `InScope(U,E)` MUST hold (subject to other gates like publication).
 - Else (neither active), the default MUST be `InScope(U,E)` (subject to other gates like publication).
 
-### entity-scopes-03 — Include/Exclude ordering: last call wins
+### [entity-scopes-03] — Include/Exclude ordering: last call wins
 If both `Include(U,E)` and `Exclude(U,E)` are applied over time, the effective filter state MUST be determined by
 the most recently applied call for that `(U,E)` pair (last call wins).
 
 This rule is defined in terms of the server’s resolved mutation order (i.e. “last call” means last in the server’s
 finalized application order for that tick).
 
-### entity-scopes-04 — Roomless entities are out-of-scope for all non-owners
+### [entity-scopes-04] — Roomless entities are out-of-scope for all non-owners
 If `E` is in zero rooms, then for all users `U` that are not explicitly forced in-scope by other specs,
 `OutOfScope(U,E)` MUST hold, regardless of `Include(U,E)`.
 
@@ -1077,18 +1333,18 @@ If `E` is in zero rooms, then for all users `U` that are not explicitly forced i
 
 ## 3) Required Coupling to Ownership & Publication
 
-### entity-scopes-05 — Owning client is always in-scope for its client-owned entities
+### [entity-scopes-05] — Owning client is always in-scope for its client-owned entities
 For a client-owned entity `E` with owning client `A`:
 - `InScope(A,E)` MUST always hold while `A` is connected.
 - Publication and per-user scope filters MUST NOT remove `E` from `A`’s scope.
 
-(This restates the required coupling from `entity_ownership.md` / `entity_publication.md` as a scope invariant.)
+(This restates the required coupling from `9_entity_ownership.md` / `10_entity_publication.md` as a scope invariant.)
 
-### entity-scopes-06 — Publication can force non-owners out-of-scope
+### [entity-scopes-06] — Publication can force non-owners out-of-scope
 For client-owned entities, publication state MUST be treated as an additional gate for non-owners:
 - If client-owned `E` is Unpublished/Private, then for all `U != Owner(E)`, `OutOfScope(U,E)` MUST hold.
 
-(See `entity_publication.md` for publication semantics; this spec defines the scope consequence.)
+(See `10_entity_publication.md` for publication semantics; this spec defines the scope consequence.)
 
 ---
 
@@ -1098,23 +1354,23 @@ For each pair `(U,E)` from the server’s perspective, the scope state is exactl
 - `InScope(U,E)`
 - `OutOfScope(U,E)`
 
-### entity-scopes-07 — OutOfScope ⇒ despawn on that client
+### [entity-scopes-07] — OutOfScope ⇒ despawn on that client
 When a client corresponding to user `U` becomes `OutOfScope(U,E)`:
 - `E` MUST be despawned on that client (removed from the client’s networked entity pool).
 
-### entity-scopes-08 — Despawn destroys all components, including local-only components
+### [entity-scopes-08] — Despawn destroys all components, including local-only components
 When `E` despawns on a client due to leaving scope:
 - all components associated with `E` in that client’s networked entity pool MUST be destroyed,
   including any local-only components the client may have attached.
 
-### entity-scopes-09 — OutOfScope ⇒ ignore late replication updates for that entity
+### [entity-scopes-09] — OutOfScope ⇒ ignore late replication updates for that entity
 If a client receives replication updates for an entity `E` that is currently `OutOfScope` on that client:
 - the client MUST ignore them silently in production.
 - when diagnostics are enabled, the client MAY emit a warning.
 
 This rule exists to make the protocol tolerant to packet reordering and racey delivery.
 
-### entity-scopes-10 — InScope ⇒ entity exists in networked entity pool
+### [entity-scopes-10] — InScope ⇒ entity exists in networked entity pool
 If a client is `InScope(U,E)`, then `E` MUST exist in that client’s networked entity pool (i.e. be present as a
 replicated/spawned entity), subject to normal replication delivery and eventual consistency.
 
@@ -1122,7 +1378,7 @@ replicated/spawned entity), subject to normal replication delivery and eventual 
 
 ## 5) Tick Semantics & Collapse Rules
 
-### entity-scopes-11 — Scope is resolved per server tick; intermediate states are not observable
+### [entity-scopes-11] — Scope is resolved per server tick; intermediate states are not observable
 The server MUST resolve the final scope state for each `(U,E)` once per server tick and emit only the delta from
 the prior tick’s resolved state.
 
@@ -1130,7 +1386,7 @@ If within one server tick operations would cause `InScope(U,E)` to flip multiple
 include/exclude toggles), the server MUST collapse to the final resolved state and MUST NOT emit intermediate
 spawn/despawn transitions.
 
-### entity-scopes-12 — Leaving scope for ≥1 tick creates a new lifetime on re-entry
+### [entity-scopes-12] — Leaving scope for ≥1 tick creates a new lifetime on re-entry
 If a client transitions `InScope(U,E) → OutOfScope(U,E)` and remains OutOfScope for at least one full server tick,
 then the next transition `OutOfScope(U,E) → InScope(U,E)` MUST be treated by the client as a **fresh spawn lifetime**:
 - the entity MUST spawn as if new,
@@ -1144,12 +1400,12 @@ boundary occurs (no observable spawn/despawn).
 
 ## 6) Disconnect Handling
 
-### entity-scopes-13 — Disconnect implies OutOfScope for that user for all entities
+### [entity-scopes-13] — Disconnect implies OutOfScope for that user for all entities
 When a client disconnects (user `U` removed from the server connection set):
 - `OutOfScope(U,E)` MUST be treated as holding for all entities `E` immediately.
 - The server MUST cease replicating entities to that client.
 
-Note: Separately, `entity_ownership.md` defines that client-owned entities are globally despawned when their owning
+Note: Separately, `9_entity_ownership.md` defines that client-owned entities are globally despawned when their owning
 client disconnects. This spec does not redefine that rule; it defines per-user scope state.
 
 ---
@@ -1158,15 +1414,28 @@ client disconnects. This spec does not redefine that rule; it defines per-user s
 
 These cases SHOULD NOT occur in correct usage, but behavior is defined for determinism and safety.
 
-### entity-scopes-14 — Include/exclude without shared room cannot force scope
+### [entity-scopes-14] — Include/exclude without shared room cannot force scope
 If `Include(U,E)` is active but `SharesRoom(U,E) == false`, then `OutOfScope(U,E)` MUST hold.
 
 When diagnostics are enabled, the server MAY emit a warning indicating the include is ineffective due to room gating.
 
-### entity-scopes-15 — Unknown entity/user references
+### [entity-scopes-15] — Unknown entity/user references
 If the server receives (or internally attempts) a scope operation referencing an unknown entity or unknown user:
 - in production, it MUST ignore the operation silently.
 - when diagnostics are enabled, it MAY emit a warning.
+
+---
+
+## State Transition Table: Scope
+
+| Current State | Trigger | Preconditions | Next State | Side Effects |
+|---------------|---------|---------------|------------|--------------|
+| OutOfScope(U,E) | Entity added to shared room | SharesRoom(U,E) becomes true, not Excluded | InScope(U,E) | Spawn E on U's client |
+| OutOfScope(U,E) | Include(U,E) called | SharesRoom(U,E) == true | InScope(U,E) | Spawn E on U's client |
+| InScope(U,E) | Entity removed from all shared rooms | SharesRoom(U,E) becomes false | OutOfScope(U,E) | Despawn E on U's client |
+| InScope(U,E) | Exclude(U,E) called | - | OutOfScope(U,E) | Despawn E on U's client |
+| InScope(U,E) | User disconnects | - | OutOfScope(U,E) | Session ends, no despawn event |
+| InScope(U,E) | Entity despawned globally | - | (removed) | Despawn E on U's client |
 
 ---
 
@@ -1186,11 +1455,11 @@ If the server receives (or internally attempts) a scope operation referencing an
 
 ## 9) Cross-references
 
-- Ownership: `entity_ownership.md`
-- Publication: `entity_publication.md`
-- Replication ordering/wire rules: `entity_replication.md`
-- Delegation/Authority coupling: `entity_delegation.md`, `entity_authority.md`
-- Events/lifetimes: `server_events_api.md`, `client_events_api.md`, `world_integration.md`
+- Ownership: `9_entity_ownership.md`
+- Publication: `10_entity_publication.md`
+- Replication ordering/wire rules: `8_entity_replication.md`
+- Delegation/Authority coupling: `11_entity_delegation.md`, `12_entity_authority.md`
+- Events/lifetimes: `13_server_events_api.md`, `14_client_events_api.md`, `15_world_integration.md`
 
 
 ---
@@ -1199,7 +1468,7 @@ If the server receives (or internally attempts) a scope operation referencing an
 <!-- Source: 8_entity_replication.md -->
 <!-- ======================================================================== -->
 
-# Spec: Entity Replication
+# Entity Replication
 
 This spec defines the **client-observable behavior** of Naia’s entity/component replication over the wire:
 - entity spawn/despawn as perceived by a client
@@ -1208,7 +1477,7 @@ This spec defines the **client-observable behavior** of Naia’s entity/componen
 - entity identity across **lifetimes** (scope enter → scope leave, with the ≥1 tick rule)
 
 This spec does **not** define:
-- RPC/message semantics (see `messaging.md`)
+- RPC/message semantics (see `4_messaging.md`)
 - the internal serialization format
 - bandwidth/compression strategies
 
@@ -1218,7 +1487,7 @@ This spec does **not** define:
 
 - **Replicated component**: a component type that is part of the Protocol and may be synced over the wire.
 - **Local-only component**: a component instance present only in a local World that is not (currently) server-replicated for that entity.
-- **Entity lifetime (client-side)**: `scope enter → scope leave`, where re-entering scope after being out-of-scope for **≥ 1 tick** is a **new lifetime** (fresh spawn semantics). See `entity_scopes.md`.
+- **Entity lifetime (client-side)**: `scope enter → scope leave`, where re-entering scope after being out-of-scope for **≥ 1 tick** is a **new lifetime** (fresh spawn semantics). See `7_entity_scopes.md`.
 - **GlobalEntity**: global identity of an entity across the server’s lifetime (monotonically increasing u64; practical uniqueness).
 - **LocalEntity (HostEntity/RemoteEntity)**: per-connection entity handle(s) that may wrap/reuse across lifetimes; must be disambiguated by lifetime rules.
 
@@ -1236,7 +1505,7 @@ Normative:
 
 ## Contract
 
-### entity-replication-01 — Global identity stability
+### [entity-replication-01] — Global identity stability
 While an entity exists on the server:
 - The entity MUST have a stable **GlobalEntity**.
 - The server MUST NOT change an entity’s GlobalEntity during its existence.
@@ -1246,7 +1515,7 @@ When the server despawns the entity:
 
 ---
 
-### entity-replication-02 — Client-visible lifetime boundaries
+### [entity-replication-02] — Client-visible lifetime boundaries
 For any given client `C` and entity `E`, Naia MUST model a client-visible **lifetime**:
 
 - Lifetime **begins** when `E` enters `C`’s scope and Naia emits a **Spawn** to `C`.
@@ -1254,11 +1523,11 @@ For any given client `C` and entity `E`, Naia MUST model a client-visible **life
 - If `E` re-enters scope after being out-of-scope for **≥ 1 tick**, Naia MUST treat this as a **new lifetime** with **fresh spawn snapshot semantics**.
 
 Cross-link:
-- Scope/lifetime rules are defined in `entity_scopes.md` and are binding here.
+- Scope/lifetime rules are defined in `7_entity_scopes.md` and are binding here.
 
 ---
 
-### entity-replication-03 — Spawn snapshot semantics (baseline state)
+### [entity-replication-03] — Spawn snapshot semantics (baseline state)
 When `E` enters scope for client `C`, the Spawn sent to `C` MUST include:
 
 - The set of replicated components present on `E` **at the time the Spawn is sent**
@@ -1272,7 +1541,7 @@ Non-normative note:
 
 ---
 
-### entity-replication-04 — No observable replication before Spawn
+### [entity-replication-04] — No observable replication before Spawn
 For a given client-visible lifetime of `(C, E)`:
 
 - The client MUST NOT observe any replicated component Insert/Update/Remove for `E` **before** it observes the Spawn for that lifetime.
@@ -1282,7 +1551,7 @@ This is a hard invariant: **no update-before-spawn** observability.
 
 ---
 
-### entity-replication-05 — Actions outside lifetime are ignored
+### [entity-replication-05] — Actions outside lifetime are ignored
 If the client receives any entity/component replication action referencing an entity lifetime that is not currently active (i.e. before Spawn for that lifetime, or after Despawn for that lifetime):
 
 - Naia MUST ignore the action (it MUST NOT mutate world state).
@@ -1296,7 +1565,7 @@ This applies to:
 
 ---
 
-### entity-replication-06 — Update-before-Insert buffering (within lifetime)
+### [entity-replication-06] — Update-before-Insert buffering (within lifetime)
 Within an active lifetime:
 
 - If a replicated component **Update** is received before the corresponding replicated component **Insert** has been applied, Naia MUST buffer the Update and apply it after Insert arrives.
@@ -1307,7 +1576,7 @@ The same rule applies symmetrically for any component action that requires the c
 
 ---
 
-### entity-replication-07 — Local-only component overwrite by server replication
+### [entity-replication-07] — Local-only component overwrite by server replication
 If, at the time a replicated component Insert (or Spawn snapshot) is applied, the client already has a **local-only** component instance of the same component type on that entity:
 
 - This overwrite MUST be surfaced as an Insert (replicated-backed component becomes present), even though a local-only instance existed.
@@ -1319,11 +1588,11 @@ Observability rule:
   not an Update event.
 
 Cross-link:
-- Ownership rules for local-only components vs server-backed replicated components are defined in `entity_ownership.md`. This contract ensures replication behavior conforms.
+- Ownership rules for local-only components vs server-backed replicated components are defined in `9_entity_ownership.md`. This contract ensures replication behavior conforms.
 
 ---
 
-### entity-replication-08 — Collapse to final state per tick (no intermediate transitions)
+### [entity-replication-08] — Collapse to final state per tick (no intermediate transitions)
 Within a single server tick, if an entity/component undergoes multiple changes that would otherwise create intermediate states (insert+remove, multiple updates, etc.):
 
 - The server MUST collapse replication to the **final state** for that tick.
@@ -1333,7 +1602,7 @@ This mirrors the “final state only” principle used in scope transitions.
 
 ---
 
-### entity-replication-09 — Duplicate delivery is idempotent
+### [entity-replication-09] — Duplicate delivery is idempotent
 If the client receives duplicate replication actions (e.g. due to retransmission):
 
 - Applying the same logical action more than once MUST NOT create additional observable effects.
@@ -1347,7 +1616,7 @@ Examples (normative intent):
 
 ---
 
-### entity-replication-10 — Identity reuse safety (LocalEntity wrap/reuse)
+### [entity-replication-10] — Identity reuse safety (LocalEntity wrap/reuse)
 Local entity identifiers (HostEntity/RemoteEntity) may wrap/reuse over time.
 
 Naia MUST ensure:
@@ -1359,7 +1628,7 @@ Non-normative note:
 
 ---
 
-### entity-replication-11 — GlobalEntity rollover is a terminal error
+### [entity-replication-11] — GlobalEntity rollover is a terminal error
 GlobalEntity is treated as effectively unique.
 
 If the server’s monotonic GlobalEntity counter would roll over:
@@ -1370,7 +1639,7 @@ This is intentionally strict: rollover is astronomically unlikely and correctnes
 
 ---
 
-### entity-replication-12 — Conflict resolution: server wins for replicated state
+### [entity-replication-12] — Conflict resolution: server wins for replicated state
 If a conflict occurs between client-local state and server-replicated state for any replicated component:
 
 - The server’s replicated state MUST overwrite the client’s local state (convergence requirement).
@@ -1382,7 +1651,7 @@ Additional design constraint (to avoid conflicts by construction):
     - For delegated entities, the server’s outbound replicated state remains the canonical convergence source for all clients.
     - While a client holds authority (Granted/Releasing), the server MUST treat the authority holder’s accepted writes as the source for that canonical replicated state (plus lifecycle transitions).
     - Therefore, the server MUST NOT originate independent conflicting replicated component mutations for `E` while a client holds authority.
-    - If the server revokes/resets authority, the canonical source may transition back to server-originated state after the reset boundary (see `entity_authority.md`).
+    - If the server revokes/resets authority, the canonical source may transition back to server-originated state after the reset boundary (see `12_entity_authority.md`).
 
 ---
 
@@ -1407,12 +1676,12 @@ For each contract above, Naia MUST eventually have at least one E2E test proving
 
 ## Cross-references
 
-- `entity_scopes.md` — defines scope enter/leave semantics and the ≥1 tick lifetime rule
-- `entity_publication.md` — defines publish/unpublish interactions with scope
-- `entity_ownership.md` — defines local-only mutation rules and ownership write constraints
-- `entity_delegation.md` / `entity_authority.md` — define delegation and authority semantics
-- `client_events_api.md` — defines client-observable event ordering/meaning
-- `time_ticks_commands.md` — defines tick semantics (including wrap considerations)
+- `7_entity_scopes.md` — defines scope enter/leave semantics and the ≥1 tick lifetime rule
+- `10_entity_publication.md` — defines publish/unpublish interactions with scope
+- `9_entity_ownership.md` — defines local-only mutation rules and ownership write constraints
+- `11_entity_delegation.md` / `12_entity_authority.md` — define delegation and authority semantics
+- `14_client_events_api.md` — defines client-observable event ordering/meaning
+- `5_time_ticks_commands.md` — defines tick semantics (including wrap considerations)
 
 
 ---
@@ -1478,7 +1747,7 @@ Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()`
 
 ### Server-owned entities (server view)
 - **entity-ownership-03**: For any server-owned entity `E` that is NOT delegated (`replication_config(E) != Some(Delegated)`), the server MUST NOT accept replicated writes from any client for `E`. Such writes MUST be ignored/dropped.
-- **entity-ownership-03**: For delegated entities, client writes are governed by `entity_delegation.md` / `entity_authority.md` (authority holder may write; others must not).
+- **entity-ownership-03**: For delegated entities, client writes are governed by `11_entity_delegation.md` / `12_entity_authority.md` (authority holder may write; others must not).
 - **entity-ownership-03**: The server MAY ignore unauthorized writes silently and/or record a metric/log, but MUST NOT apply them.
 
 ### Ownership does not emit authority events for client-owned entities
@@ -1497,7 +1766,7 @@ Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()`
 - **entity-ownership-05**: If Naia would enqueue/serialize/send a replication write from a client that is not a permitted writer: Naia MUST panic.
 
 Cross-link:
-- Delegated authority write permission is defined in `entity_delegation.md` / `entity_authority.md`.
+- Delegated authority write permission is defined in `11_entity_delegation.md` / `12_entity_authority.md`.
 
 ### Mutate vs Write (ownership gate)
 
@@ -1605,7 +1874,7 @@ Exception note: `EntityProperty` may refer to entities as data (identity/referen
 <!-- Source: 10_entity_publication.md -->
 <!-- ======================================================================== -->
 
-# Spec: Entity Publication
+# Entity Publication
 
 Entity Publication defines the **only valid semantics** for whether a *client-owned* entity may be replicated (spawned/updated) to **non-owning clients**.
 
@@ -1627,19 +1896,19 @@ This spec is intentionally narrow:
 - Observable publication state via `replication_config()` on server/client entities.
 
 ### Out of scope (defined elsewhere)
-- Ownership write acceptance / panics (`entity_ownership.md`)
-- Scope computation & in-scope/out-of-scope mechanics (`entity_scopes.md`)
-- Replication ordering / wire semantics (`entity_replication.md`)
-- Delegation migration & delegated authority (`entity_delegation.md`, `entity_authority.md`)
+- Ownership write acceptance / panics (`9_entity_ownership.md`)
+- Scope computation & in-scope/out-of-scope mechanics (`7_entity_scopes.md`)
+- Replication ordering / wire semantics (`8_entity_replication.md`)
+- Delegation migration & delegated authority (`11_entity_delegation.md`, `12_entity_authority.md`)
 
 ---
 
 ## 2) Vocabulary
 
-- **Owner(E)**: The owner of entity `E` (see `entity_ownership.md`).
+- **Owner(E)**: The owner of entity `E` (see `9_entity_ownership.md`).
 - **Owning client A**: A client `A` such that `Owner(E) == A`.
 - **Non-owner client C**: A client `C` such that `C != Owner(E)`.
-- **InScope(C,E)** / **OutOfScope(C,E)**: defined in `entity_scopes.md`.
+- **InScope(C,E)** / **OutOfScope(C,E)**: defined in `7_entity_scopes.md`.
 - **Despawn (client-side)**: `E` is removed from the client’s networked entity pool (and all of its components in that pool are destroyed).
 - **Publication state (client-owned only)**:
   - **Published**: the server MAY scope `E` to non-owners (subject to scope policy).
@@ -1654,19 +1923,19 @@ This spec defines how `ReplicationConfig::{Private,Public,Delegated}` maps onto 
 
 ## 3) Contract (Rules)
 
-### entity-publication-01 — Publication gates only client-owned visibility to non-owners
+### [entity-publication-01] — Publication gates only client-owned visibility to non-owners
 Publication semantics apply only to **client-owned** entities as a gate for **non-owner** visibility.
-This spec does not impose additional constraints on server-owned entities beyond what `entity_scopes.md` / `entity_replication.md` specify.
+This spec does not impose additional constraints on server-owned entities beyond what `7_entity_scopes.md` / `8_entity_replication.md` specify.
 
-### entity-publication-02 — Unpublished client-owned entities are never in-scope for non-owners
+### [entity-publication-02] — Unpublished client-owned entities are never in-scope for non-owners
 If `E` is client-owned and **Unpublished** with owner `A`:
 - for all clients `C != A`, `OutOfScope(C,E)` MUST hold.
 
-### entity-publication-03 — Published client-owned entities may be in-scope for non-owners
+### [entity-publication-03] — Published client-owned entities may be in-scope for non-owners
 If `E` is client-owned and **Published** with owner `A`:
 - the server MAY place `E` into scope of clients `C != A` per normal scope policy.
 
-### entity-publication-04 — Only the server or owning client may change publication; server wins conflicts
+### [entity-publication-04] — Only the server or owning client may change publication; server wins conflicts
 Only the server OR the owning client MAY cause `E` to transition:
 - Unpublished ↔ Published
 
@@ -1677,31 +1946,31 @@ Notes:
 - There is no requirement that publication transitions are exposed as a public API; they MAY be system-driven.
 - This rule defines *authority to cause the transition*, not how the API is shaped.
 
-### entity-publication-05 — Unpublish forces immediate OutOfScope for all non-owners
+### [entity-publication-05] — Unpublish forces immediate OutOfScope for all non-owners
 When client-owned `E` transitions **Published → Unpublished**:
 - all non-owner clients MUST become `OutOfScope(C,E)` for `C != Owner(E)` as part of the next resolved scope update.
 
-### entity-publication-06 — Publish enables later scoping; does not guarantee scoping
+### [entity-publication-06] — Publish enables later scoping; does not guarantee scoping
 When client-owned `E` transitions **Unpublished → Published**:
 - the server MAY later scope `E` to non-owners per policy;
 - publication does not itself guarantee that any particular non-owner becomes in-scope.
 
-### entity-publication-07 — Owning client is always in-scope for its owned entities
+### [entity-publication-07] — Owning client is always in-scope for its owned entities
 For any client-owned entity `E` with owner `A`:
 - `InScope(A,E)` MUST always hold.
 - Publication MUST NOT remove `E` from the owning client’s scope.
 
 (If the entity ceases to exist—e.g. it is despawned—this rule no longer applies.)
 
-### entity-publication-08 — Non-owner unpublish/out-of-scope implies despawn and destroys local-only components
+### [entity-publication-08] — Non-owner unpublish/out-of-scope implies despawn and destroys local-only components
 If a non-owner client `C != Owner(E)` transitions to `OutOfScope(C,E)` due to publication becoming Unpublished:
 - `E` MUST despawn on that client (be removed from the client’s networked entity pool).
 - All components attached to `E` in that client’s pool (including any “local-only” components) MUST be destroyed.
 
-This is intentionally aligned with the general “OutOfScope ⇒ despawn” rule in `entity_scopes.md`;
+This is intentionally aligned with the general “OutOfScope ⇒ despawn” rule in `7_entity_scopes.md`;
 publication is just one cause of OutOfScope.
 
-### entity-publication-09 — Publication MUST be observable via replication_config
+### [entity-publication-09] — Publication MUST be observable via replication_config
 For a client-owned entity `E` that exists on the server:
 - `Published` MUST correspond to `replication_config(E) == Some(Public)`
 - `Unpublished` MUST correspond to `replication_config(E) == Some(Private)`
@@ -1710,13 +1979,13 @@ For a non-owner client `C != Owner(E)`:
 - If `E` exists in the client’s networked entity pool, then `replication_config(E)` MUST NOT be `Some(Private)`.
   (Because `Some(Private)` would mean Unpublished, which must be OutOfScope for non-owners.)
 
-### entity-publication-10 — Delegation migration ends “client-owned publication” semantics
-If a client-owned entity `E` migrates into a **delegated server-owned entity** (see `entity_delegation.md`):
+### [entity-publication-10] — Delegation migration ends “client-owned publication” semantics
+If a client-owned entity `E` migrates into a **delegated server-owned entity** (see `11_entity_delegation.md`):
 - `E` is no longer client-owned, and publication semantics in this spec no longer apply.
 - Non-owners are no longer gated by “Published/Unpublished client-owned rules”; the entity is now governed by
   server-owned scoping + delegated rules.
 
-Cross-constraint (restated for coherence; the detailed rule lives in `entity_delegation.md`):
+Cross-constraint (restated for coherence; the detailed rule lives in `11_entity_delegation.md`):
 - A client-owned entity MUST be Published before it may migrate into delegated server-owned form.
 
 ---
@@ -1726,13 +1995,24 @@ Cross-constraint (restated for coherence; the detailed rule lives in `entity_del
 This section exists to prevent “undefined behavior pockets.” These situations MUST NOT occur in correct Naia usage,
 but if they do occur due to a bug or misuse, behavior is still defined.
 
-### entity-publication-11 — If a non-owner observes a client-owned Private entity, it MUST be treated as OutOfScope
+### [entity-publication-11] — If a non-owner observes a client-owned Private entity, it MUST be treated as OutOfScope
 If a non-owner client `C != Owner(E)` ever reaches a state where:
 - `E` exists in the client’s networked entity pool AND `replication_config(E) == Some(Private)`
 
 then the client MUST immediately treat `E` as `OutOfScope(C,E)` and despawn it.
 
 Rationale: this restores the invariant required by entity-publication-02/09 without relying on perfect server behavior.
+
+---
+
+## State Transition Table: Publication (Client-Owned Entities)
+
+| Current State | Trigger | Who Can Trigger | Next State | Effect on Non-Owners |
+|---------------|---------|-----------------|------------|----------------------|
+| Unpublished | configure_replication(Public) | Owner or Server | Published | MAY enter scope per policy |
+| Published | configure_replication(Private) | Owner or Server | Unpublished | MUST exit scope immediately |
+| Published | configure_replication(Delegated) | Owner or Server | (Delegated) | Ownership transfers to server |
+| (any) | Owner disconnects | (automatic) | (despawned) | Entity despawned globally |
 
 ---
 
@@ -1750,10 +2030,10 @@ Rationale: this restores the invariant required by entity-publication-02/09 with
 
 ## 6) Cross-references
 
-- Ownership: `entity_ownership.md`
-- Scopes: `entity_scopes.md`
-- Replication ordering/wire behavior: `entity_replication.md`
-- Delegation & authority: `entity_delegation.md`, `entity_authority.md`
+- Ownership: `9_entity_ownership.md`
+- Scopes: `7_entity_scopes.md`
+- Replication ordering/wire behavior: `8_entity_replication.md`
+- Delegation & authority: `11_entity_delegation.md`, `12_entity_authority.md`
 
 
 ---
@@ -1762,16 +2042,16 @@ Rationale: this restores the invariant required by entity-publication-02/09 with
 <!-- Source: 11_entity_delegation.md -->
 <!-- ======================================================================== -->
 
-# Spec: Entity Delegation
+# Entity Delegation
 
 Entity Delegation defines how a **server-owned delegated entity** grants temporary **Authority** to clients so that
 exactly one client at a time may **write** replicated updates for that entity.
 
 Delegation is distinct from:
-- **Ownership**: who ultimately owns the entity (see `entity_ownership.md`).
-- **Publication**: whether client-owned entities are visible to non-owners (see `entity_publication.md`).
-- **Scope**: whether an entity exists on a client at all (see `entity_scopes.md`).
-- **Replication**: spawn/update ordering and lifetime rules (see `entity_replication.md`).
+- **Ownership**: who ultimately owns the entity (see `9_entity_ownership.md`).
+- **Publication**: whether client-owned entities are visible to non-owners (see `10_entity_publication.md`).
+- **Scope**: whether an entity exists on a client at all (see `7_entity_scopes.md`).
+- **Replication**: spawn/update ordering and lifetime rules (see `8_entity_replication.md`).
 
 This spec defines:
 - the meaning of the `Delegated` replication configuration
@@ -1803,24 +2083,24 @@ Non-normative note:
 
 ## 2) Core Model
 
-### entity-delegation-01 — Delegation applies only to server-owned delegated entities
+### [entity-delegation-01] — Delegation applies only to server-owned delegated entities
 Authority delegation semantics apply only when:
 - the entity is server-owned, and
 - `replication_config(E) == Some(Delegated)`.
 
 If an entity is not delegated, this spec’s authority arbitration does not apply.
 
-### entity-delegation-02 — Single-writer invariant
+### [entity-delegation-02] — Single-writer invariant
 For any delegated entity `E`, at any time:
 - at most one client MAY be the authority holder for `E`.
-- the server MAY reset/revoke authority at any time (see `entity_authority.md`).
+- the server MAY reset/revoke authority at any time (see `12_entity_authority.md`).
 - the server MAY hold authority (server-as-holder) which forces all clients to observe `Denied`.
 - while a client holds authority (Granted/Releasing), the server MUST NOT originate independent replicated component writes for `E`; the server’s replicated state MUST be derived from the current authority holder’s accepted writes plus server-driven lifecycle transitions.
 
 Client-visible implication:
 - exactly one client can have `EntityAuthStatus::Granted` at a time for a given delegated entity.
 
-### entity-delegation-03 — Authority is scoped: only in-scope clients participate
+### [entity-delegation-03] — Authority is scoped: only in-scope clients participate
 Only clients for which `InScope(U,E)` holds MAY request authority for `E`.
 
 If a client is out-of-scope for `E`, it MUST NOT request authority for `E` and MUST NOT be granted authority for `E`.
@@ -1829,15 +2109,15 @@ If a client is out-of-scope for `E`, it MUST NOT request authority for `E` and M
 
 ## 3) Entering Delegation (Migration)
 
-### entity-delegation-04 — Client-owned → server-owned delegated migration requires Published
+### [entity-delegation-04] — Client-owned → server-owned delegated migration requires Published
 A client-owned entity MUST be Published/`Public` before it may migrate into a server-owned delegated entity.
 
-(Ownership/publication constraints are defined in `entity_ownership.md` and `entity_publication.md`;
+(Ownership/publication constraints are defined in `9_entity_ownership.md` and `10_entity_publication.md`;
 this rule is restated here as a delegation precondition.)
 
-### entity-delegation-05 — Migration grants authority to previous owner
+### [entity-delegation-05] — Migration grants authority to previous owner
 When a client-owned, Published entity `E` migrates into a server-owned delegated entity:
-- ownership transfers to the server (per `entity_ownership.md`).
+- ownership transfers to the server (per `9_entity_ownership.md`).
 - the previous owner client MUST immediately become the authority holder.
 - on that previous owner client, `EntityAuthStatus(E)` MUST be `Granted`.
 
@@ -1850,7 +2130,7 @@ Rationale:
 
 ## 4) Authority Arbitration (Request/Grant/Deny/Release)
 
-### entity-delegation-06 — First request wins
+### [entity-delegation-06] — First request wins
 If `E` is delegated and currently has no client authority holder (i.e., authority is `Available`):
 - the first in-scope client to request authority MUST be granted authority.
 - while a client holds authority, no other client may be granted authority until it is released or reset.
@@ -1865,7 +2145,7 @@ Normative:
   - Other clients do NOT automatically receive authority.
   - A client MUST call `request_authority()` again while `Available` to obtain authority.
 
-### entity-delegation-07 — Meaning of Denied
+### [entity-delegation-07] — Meaning of Denied
 For a client `C` and delegated entity `E`:
 - `EntityAuthStatus(C,E) == Denied` MUST mean: authority is currently held by another client OR by the server.
 - A client in `Denied` status MUST remain denied until authority is released or reset by the holder or the server,
@@ -1873,12 +2153,12 @@ For a client `C` and delegated entity `E`:
 
 This is not a “request rejection” outcome; it is a “currently unavailable” outcome.
 
-### entity-delegation-08 — Requested means pending; no writes allowed
+### [entity-delegation-08] — Requested means pending; no writes allowed
 When a client requests authority and is in `Requested`:
 - the client MAY mutate locally (prediction/local prep) but MUST NOT write replicated updates.
 - if Naia would attempt to write while in `Requested`, it MUST panic.
 
-### entity-delegation-09 — Granted means writes allowed; single writer enforced
+### [entity-delegation-09] — Granted means writes allowed; single writer enforced
 When a client is in `Granted` for delegated entity `E`:
   - that client MAY write replicated updates for `E`.
   - all other clients MUST be in `Denied` for `E` (or `Available` only if not tracking the entity’s status explicitly).
@@ -1886,13 +2166,13 @@ When a client is in `Granted` for delegated entity `E`:
   - The server MUST NOT attempt to ‘override’ by sending conflicting component writes while the client holds authority.
   - If the server needs to override, it MUST first reset/revoke authority (`entity-authority-10`), optionally become the holder (`entity-authority-09`), and then replicate its authoritative state.
 
-### entity-delegation-10 — Releasing means writes may still occur until release finalizes
+### [entity-delegation-10] — Releasing means writes may still occur until release finalizes
 When a client enters `Releasing`:
 - the client MAY continue to write replicated updates until the release is finalized,
   after which it MUST become `Available`.
 - other clients MUST remain `Denied` until the release finalizes and authority becomes `Available`.
 
-### entity-delegation-11 — Release transitions authority back to Available
+### [entity-delegation-11] — Release transitions authority back to Available
 If the authority holder releases authority (or the server releases/resets it):
 - the authority state MUST become `Available`.
 - all clients that were `Denied` due to another holder MUST transition to `Available`.
@@ -1901,7 +2181,7 @@ If the authority holder releases authority (or the server releases/resets it):
 
 ## 5) Client Safety (Panic Contracts)
 
-### entity-delegation-12 — Client must never write without permission
+### [entity-delegation-12] — Client must never write without permission
 If Naia would enqueue/serialize/send a replication write for a delegated entity `E` from a client that is not permitted
 to write (`EntityAuthStatus != Granted/Releasing`):
 - Naia MUST panic.
@@ -1912,48 +2192,50 @@ This is a hard invariant: Naia framework controls writing and must enforce this 
 
 ## 6) Scope/Disconnect Interactions
 
-### entity-delegation-13 — Losing scope ends client authority
+### [entity-delegation-13] — Losing scope ends client authority
 If a client that holds authority for `E` becomes out-of-scope for `E`:
 - authority MUST be released/reset by the server.
 - other in-scope clients MUST transition to `Available` (subject to first-request wins on new requests).
 
 Cross-link:
-- Scope transitions and despawn semantics are defined in `entity_scopes.md`.
+- Scope transitions and despawn semantics are defined in `7_entity_scopes.md`.
 
-### entity-delegation-14 — Disconnect releases authority
+### [entity-delegation-14] — Disconnect releases authority
 If the authority-holding client disconnects:
 - the server MUST release/reset authority for `E`.
 - other in-scope clients MUST transition to `Available`.
 
-If the disconnected client also owned client-owned entities, those are despawned globally per `entity_ownership.md`.
+If the disconnected client also owned client-owned entities, those are despawned globally per `9_entity_ownership.md`.
 This rule concerns only delegated server-owned entities.
 
 ---
 
 ## 7) Observability (Events & Queryability)
 
+### [entity-delegation-17] — Delegation observability
+
 Delegation MUST be observable through:
 - `replication_config(E) == Some(Delegated)` (server + client observable)
-- authority status and events (defined in `entity_authority.md` and the events API specs)
+- authority status and events (defined in `12_entity_authority.md` and the events API specs)
 
 This spec defines the required semantics; the concrete event types and delivery guarantees are specified in:
-- `server_events_api.md`
-- `client_events_api.md`
-- `entity_authority.md`
+- `13_server_events_api.md`
+- `14_client_events_api.md`
+- `12_entity_authority.md`
 
 ---
 
 ## 8) Illegal / Misuse Cases
 
-### entity-delegation-15 — Requesting authority while out-of-scope is ignored (warn in diagnostics)
+### [entity-delegation-15] — Requesting authority while out-of-scope is ignored (warn in diagnostics)
 If a client requests authority for `E` while out-of-scope:
 - server MUST ignore the request silently in production.
 - server MAY emit a warning when diagnostics are enabled.
 
-### entity-delegation-16 — Conflicting reconfiguration is resolved by server final state
+### [entity-delegation-16] — Conflicting reconfiguration is resolved by server final state
 If configuration changes (e.g., toggling Delegated on/off) would produce conflicting intermediate states within a tick:
-- the server MUST collapse to the final resolved state per tick, consistent with `entity_replication.md` and
-  `entity_scopes.md`.
+- the server MUST collapse to the final resolved state per tick, consistent with `8_entity_replication.md` and
+  `7_entity_scopes.md`.
 - clients MUST observe only the final state transitions (no intermediate oscillations).
 
 ---
@@ -1974,11 +2256,11 @@ If configuration changes (e.g., toggling Delegated on/off) would produce conflic
 
 ## 10) Cross-references
 
-- Ownership: `entity_ownership.md`
-- Publication: `entity_publication.md`
-- Scopes: `entity_scopes.md`
-- Replication: `entity_replication.md`
-- Authority & events: `entity_authority.md`, `server_events_api.md`, `client_events_api.md`
+- Ownership: `9_entity_ownership.md`
+- Publication: `10_entity_publication.md`
+- Scopes: `7_entity_scopes.md`
+- Replication: `8_entity_replication.md`
+- Authority & events: `12_entity_authority.md`, `13_server_events_api.md`, `14_client_events_api.md`
 
 
 ---
@@ -1987,16 +2269,16 @@ If configuration changes (e.g., toggling Delegated on/off) would produce conflic
 <!-- Source: 12_entity_authority.md -->
 <!-- ======================================================================== -->
 
-# Spec: Entity Authority
+# Entity Authority
 
 Entity Authority defines how a client can acquire and release the right to **write replicated updates** for a
 **server-owned delegated** entity, and what each side can observe about that right.
 
 Authority is distinct from:
-- **Ownership** (see `entity_ownership.md`): who ultimately owns the entity
-- **Delegation** (see `entity_delegation.md`): how delegated entities arbitrate authority (first-request wins)
-- **Scope** (see `entity_scopes.md`): whether the entity exists on the client
-- **Replication** (see `entity_replication.md`): ordering/lifetime/reordering semantics
+- **Ownership** (see `9_entity_ownership.md`): who ultimately owns the entity
+- **Delegation** (see `11_entity_delegation.md`): how delegated entities arbitrate authority (first-request wins)
+- **Scope** (see `7_entity_scopes.md`): whether the entity exists on the client
+- **Replication** (see `8_entity_replication.md`): ordering/lifetime/reordering semantics
 
 This spec defines:
 - the authority state machine (`EntityAuthStatus`)
@@ -2010,7 +2292,7 @@ This spec defines:
 
 ### Authority applies only to delegated entities
 Authority exists only for entities where:
-- `replication_config(E) == Some(Delegated)` (see `entity_delegation.md` / `entity_publication.md`)
+- `replication_config(E) == Some(Delegated)` (see `11_entity_delegation.md` / `10_entity_publication.md`)
 
 ### EntityAuthStatus (client-visible)
 
@@ -2045,12 +2327,12 @@ in production.
 
 ## 2) Core Contracts
 
-### entity-authority-01 — Authority is defined only for delegated entities
+### [entity-authority-01] — Authority is defined only for delegated entities
 For any entity `E`:
 - If `replication_config(E) != Some(Delegated)`, then `authority(E)` MUST be `None` on clients (no authority state).
 - Any attempt to request or release authority on a non-delegated entity MUST return an error (see below).
 
-### entity-authority-02 — Single-writer rule (client-side)
+### [entity-authority-02] — Single-writer rule (client-side)
 For any delegated entity `E` and a given client `C`:
 - `C` MUST only be permitted to **write** replicated updates for `E` when `EntityAuthStatus(C,E)` is:
     - `Granted`, or
@@ -2061,7 +2343,7 @@ For all other statuses (`Available`, `Requested`, `Denied`):
 
 This is a hard invariant: Naia controls writing and must enforce it strictly.
 
-### entity-authority-03 — Meaning of Denied
+### [entity-authority-03] — Meaning of Denied
 For a delegated entity `E` as observed by a client `C`:
 - `Denied` MUST mean: authority is currently held by another client OR by the server.
 - While `Denied`, the client MUST NOT be granted authority until the current holder releases or the server resets.
@@ -2073,7 +2355,7 @@ This is not “you asked and were rejected”; it is “currently unavailable.�
 
 ## 3) Client API Semantics (Request / Release)
 
-### entity-authority-04 — request_authority() is optimistic: Available → Requested immediately
+### [entity-authority-04] — request_authority() is optimistic: Available → Requested immediately
 If a client calls `request_authority(E)` for a delegated entity `E` and the client is eligible (in-scope, etc.):
 - the client MUST transition locally from `Available` → `Requested` immediately (optimistic pending),
   without waiting for a server round-trip.
@@ -2085,7 +2367,7 @@ If a client calls `request_authority(E)` for a delegated entity `E` and the clie
   - If authority is `Available`, the first request received wins and becomes `Granted`.
   - If authority is held by someone else (client or server), the requester MUST become `Denied` (no queue).
 
-### entity-authority-05 — request_authority() completion transitions
+### [entity-authority-05] — request_authority() completion transitions
 After `Requested`, the client MUST eventually observe one of:
 
 - `Requested → Granted` if the server grants authority
@@ -2094,7 +2376,7 @@ After `Requested`, the client MUST eventually observe one of:
 
 The client MUST NOT remain permanently in `Requested` unless the entity/lifetime ends (see scope/lifetime rules).
 
-### entity-authority-06 — release_authority() transitions: Granted → Releasing → Available
+### [entity-authority-06] — release_authority() transitions: Granted → Releasing → Available
 If the client currently holds authority:
 - `release_authority(E)` MUST transition `Granted → Releasing` immediately (local optimistic),
 - and MUST eventually finalize to `Available` after the server processes release.
@@ -2103,7 +2385,7 @@ If the client is `Requested` and calls `release_authority(E)`:
 - it MUST cancel its request locally and transition to `Available`.
 - the server MAY ignore the cancellation if it never observed the request; behavior must remain convergent.
 
-### entity-authority-07 — Client-side error returns (Result semantics)
+### [entity-authority-07] — Client-side error returns (Result semantics)
 `request_authority(E)` and `release_authority(E)` MAY return errors. At minimum:
 
 - If `replication_config(E) != Some(Delegated)`: MUST return an error (e.g., `ErrNotDelegated`)
@@ -2119,21 +2401,21 @@ Non-normative note:
 
 ## 4) Server Semantics (Grant / Reset / Server as Holder)
 
-### entity-authority-08 — First-request wins arbitration (delegation law)
-Authority arbitration MUST follow the rules defined in `entity_delegation.md`:
+### [entity-authority-08] — First-request wins arbitration (delegation law)
+Authority arbitration MUST follow the rules defined in `11_entity_delegation.md`:
 - first eligible request wins
 - others remain denied until release/reset
 
 Authority spec defines the client-observable status transitions and events resulting from that law.
 
-### entity-authority-09 — Server may hold authority and block clients
+### [entity-authority-09] — Server may hold authority and block clients
 The server MAY act as an authority holder for a delegated entity.
 
 If the server is holding authority for `E`:
 - all clients observing `E` MUST be in `Denied` for `E` (except a client currently in `Requested`, which must
   transition to `Denied` once the server state is observed/applied).
 
-### entity-authority-10 — Server override/reset
+### [entity-authority-10] — Server override/reset
 The server MAY reset authority for a delegated entity at any time.
 
 When the server resets authority for `E`:
@@ -2147,20 +2429,20 @@ This is the server’s “break glass” control.
 
 ## 5) Scope, Lifetime, and Disconnect Interactions
 
-### entity-authority-11 — Out-of-scope ends authority for that client
+### [entity-authority-11] — Out-of-scope ends authority for that client
 If a client becomes out-of-scope for delegated entity `E` (or the entity despawns due to publication/scope):
 - the client MUST treat the entity’s lifetime as ended
 - any authority status for that entity MUST be cleared (entity no longer exists locally)
-- any pending buffered actions for that entity MUST be discarded (see `entity_replication.md`)
+- any pending buffered actions for that entity MUST be discarded (see `8_entity_replication.md`)
 
-### entity-authority-12 — Authority holder losing scope forces global release/reset
+### [entity-authority-12] — Authority holder losing scope forces global release/reset
 If the authority-holding client loses scope for `E` (or disconnects):
 - the server MUST release/reset authority for `E`
 - other in-scope clients MUST transition from `Denied` to `Available`
 
 (Exact timing is per replication tick semantics; clients must converge.)
 
-### entity-authority-13 — Delegation disable clears authority
+### [entity-authority-13] — Delegation disable clears authority
 If an entity stops being delegated (`replication_config` changes away from `Delegated`):
 - authority MUST become `None` on all clients for that entity
 - any pending `Requested` MUST be cleared
@@ -2170,32 +2452,51 @@ If an entity stops being delegated (`replication_config` changes away from `Dele
 
 ## 6) Illegal / Misuse Cases (Robustness)
 
-### entity-authority-14 — Out-of-scope requests are ignored server-side
+### [entity-authority-14] — Out-of-scope requests are ignored server-side
 If the server receives an authority request for `(U,E)` while `OutOfScope(U,E)`:
 - in production, it MUST ignore it silently
 - when diagnostics are enabled, it MAY emit a warning
 
 This complements client-side `ErrNotInScope`. The system must remain safe even if invalid requests occur.
 
-### entity-authority-15 — Duplicate/late authority signals are idempotent
+### [entity-authority-15] — Duplicate/late authority signals are idempotent
 Authority grant/reset signals may be duplicated or reordered.
 
 Clients MUST:
 - not emit duplicate observable “grant” effects for the same lifetime
 - converge to the server’s final resolved authority state
-- ignore authority signals for entities not in the active lifetime (see `entity_replication.md`)
+- ignore authority signals for entities not in the active lifetime (see `8_entity_replication.md`)
 
 ---
 
 ## 7) Observability (Events)
 
+### [entity-authority-16] — Authority observability
+
 Authority changes MUST be observable via:
 - `authority()` (status) while the entity is delegated and in the client’s lifetime
-- client/server events as defined in `client_events_api.md` and `server_events_api.md`
+- client/server events as defined in `14_client_events_api.md` and `13_server_events_api.md`
 
 This spec defines semantics, not exact event names. At minimum, the event layer MUST be able to represent:
-- “authority granted to this client for entity E”
-- “authority reset/revoked for entity E”
+- "authority granted to this client for entity E"
+- "authority reset/revoked for entity E"
+
+---
+
+## State Transition Table: EntityAuthStatus
+
+| Current State | Trigger | Preconditions | Next State | can_write | can_read |
+|---------------|---------|---------------|------------|-----------|----------|
+| Available | request_authority() | InScope(C,E) | Requested | false | true |
+| Requested | Server grants | First request wins | Granted | true | false |
+| Requested | Server denies | Another holds | Denied | false | true |
+| Requested | Server resets | - | Available | false | true |
+| Granted | release_authority() | - | Releasing | true | false |
+| Granted | Server resets/revokes | - | Available | false | true |
+| Granted | Lose scope | - | (cleared) | - | - |
+| Releasing | Server confirms | - | Available | false | true |
+| Denied | Holder releases | - | Available | false | true |
+| Denied | Server resets | - | Available | false | true |
 
 ---
 
@@ -2216,11 +2517,11 @@ This spec defines semantics, not exact event names. At minimum, the event layer 
 
 ## 9) Cross-references
 
-- Delegation: `entity_delegation.md`
-- Ownership: `entity_ownership.md`
-- Scopes & lifetimes: `entity_scopes.md`
-- Replication ordering/lifetime gating: `entity_replication.md`
-- Events: `server_events_api.md`, `client_events_api.md`, `world_integration.md`
+- Delegation: `11_entity_delegation.md`
+- Ownership: `9_entity_ownership.md`
+- Scopes & lifetimes: `7_entity_scopes.md`
+- Replication ordering/lifetime gating: `8_entity_replication.md`
+- Events: `13_server_events_api.md`, `14_client_events_api.md`, `15_world_integration.md`
 
 ---
 
@@ -2252,7 +2553,7 @@ Related specs:
 - **Process step**: The act of processing all buffered packets, applying protocol semantics, and producing new pending events.
 - **Drain**: Reading events from the API such that they are removed from the pending queue (pure read+remove).
 - **In scope**: A user is considered a recipient for an entity only if `InScope(user, entity)` per `entity_scopes`.
-- **Tick**: Server simulation tick as defined in `time_ticks_commands.md`. (Wrap-safe ordering applies.)
+- **Tick**: Server simulation tick as defined in `5_time_ticks_commands.md`. (Wrap-safe ordering applies.)
 
 ---
 
@@ -2266,15 +2567,15 @@ This spec standardizes the server loop boundary as:
 
 The *names* above reflect the current API. The **semantics** below are the contract.
 
-### server-events-00 — Receive step is ingestion only
+### [server-events-00] — Receive step is ingestion only
 - The Receive step MUST only ingest packets into an internal buffer.
 - The Receive step MUST NOT advance tick, mutate the world, or produce observable events directly.
 
-### server-events-01 — Process step is the only event-production boundary
+### [server-events-01] — Process step is the only event-production boundary
 - New events MUST become pending/observable only as a result of the Process step.
 - If no Process step occurs, drains MUST NOT “discover” new events.
 
-### server-events-02 — Drains are pure read+remove
+### [server-events-02] — Drains are pure read+remove
 - `take_world_events()` and `take_tick_events()` MUST be pure drains:
   - MUST NOT receive packets
   - MUST NOT process packets
@@ -2285,7 +2586,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ## Contracts
 
-### server-events-03 — Drain operations are destructive and idempotent (no replay without new Process step)
+### [server-events-03] — Drain operations are destructive and idempotent (no replay without new Process step)
 **Rule**
 - Each drain call MUST remove the returned events from the pending buffer.
 - Repeating the same drain call again **without any intervening Process step that produced new pending events** MUST return empty.
@@ -2300,7 +2601,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### server-events-04 — Event types are partitioned; no cross-contamination
+### [server-events-04] — Event types are partitioned; no cross-contamination
 **Rule**
 - World mutation events MUST NOT appear in message/request streams.
 - Message/request streams MUST NOT appear in world mutation streams.
@@ -2311,7 +2612,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### server-events-05 — Auth/connect/disconnect ordering is stable and exactly-once per session transition
+### [server-events-05] — Auth/connect/disconnect ordering is stable and exactly-once per session transition
 **Rule**
 - For each connection attempt when auth is enabled:
   - exactly one auth decision event MUST be exposed
@@ -2328,10 +2629,10 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### server-events-06 — Disconnect cleanup is consistent with scope + ownership contracts
+### [server-events-06] — Disconnect cleanup is consistent with scope + ownership contracts
 **Rule**
 - After a disconnect is observed, the server MUST have cleaned up all per-connection scoped state attributable solely to that session (no “ghost” scoped entities for that user).
-- Additionally, ownership cleanup MUST follow `entity_ownership.md` (client-owned entities despawn when owner disconnects).
+- Additionally, ownership cleanup MUST follow `9_entity_ownership.md` (client-owned entities despawn when owner disconnects).
 
 **Test obligations**
 - `server-events-06.t1` (TODO) Disconnect while scoped → scope membership removed.
@@ -2339,7 +2640,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### server-events-07 — Entity spawn/enter events: per user, in-scope only, exactly-once
+### [server-events-07] — Entity spawn/enter events: per user, in-scope only, exactly-once
 **Rule**
 - When an entity `E` enters scope for user `U` (including initial join snapshot), the World events stream MUST expose exactly one spawn/enter event for `(U, E)`.
 - Spawn/enter events MUST be emitted only for users for which `InScope(U, E)` becomes true.
@@ -2351,7 +2652,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### server-events-08 — Component insert/update/remove: per user and per component, no duplicates
+### [server-events-08] — Component insert/update/remove: per user and per component, no duplicates
 **Rule**
 - For each user `U` with `InScope(U, E)` at the time the change becomes observable:
   - inserting component `C` on `E` MUST produce exactly one insert event for `(U, E, C)`
@@ -2365,10 +2666,10 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### server-events-09 — Despawn/leave-scope events are exactly-once and end that user’s lifecycle
+### [server-events-09] — Despawn/leave-scope events are exactly-once and end that user’s lifecycle
 **Rule**
 - When `E` leaves scope for `U` (scope change or true despawn), the World events stream MUST expose exactly one despawn/exit event for `(U, E)`.
-- After `(U, E)` has exited, the server MUST NOT surface further insert/update/remove events for `(U, E, *)` unless `E` re-enters scope for `U` as a new lifecycle (per `entity_scopes.md` + `entity_replication.md`).
+- After `(U, E)` has exited, the server MUST NOT surface further insert/update/remove events for `(U, E, *)` unless `E` re-enters scope for `U` as a new lifecycle (per `7_entity_scopes.md` + `8_entity_replication.md`).
 
 **Test obligations**
 - `server-events-09.t1` (TODO) Despawn while in scope → exit once; no further component events for that lifecycle.
@@ -2376,7 +2677,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### server-events-10 — No “component events before spawn/enter” for any user
+### [server-events-10] — No “component events before spawn/enter” for any user
 **Rule**
 - For any user `U`, the World events stream MUST NOT surface insert/update/remove events for entity `E` before `U` has observed spawn/enter for `E`.
 - Under reordering/duplication, internal buffering is allowed, but the API-visible ordering MUST respect this invariant.
@@ -2386,7 +2687,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### server-events-11 — Message events: grouped by channel and message type; each yields sender + payload; drain once
+### [server-events-11] — Message events: grouped by channel and message type; each yields sender + payload; drain once
 **Rule**
 - Inbound messages MUST be exposed via typed message events grouped by:
   - **channel type** and
@@ -2405,10 +2706,10 @@ Additional requirements:
 
 ---
 
-### server-events-12 — Request/response events: exactly-once surfacing, correct matching, drain once
+### [server-events-12] — Request/response events: exactly-once surfacing, correct matching, drain once
 **Rule**
 - For each incoming request accepted by the protocol layer, the server MUST surface exactly one corresponding request event/handle to the application.
-- Any response matching MUST be correct per `messaging.md` and MUST NOT surface duplicates under retransmit/duplication.
+- Any response matching MUST be correct per `4_messaging.md` and MUST NOT surface duplicates under retransmit/duplication.
 - Draining request/response events MUST be destructive and MUST NOT replay already-drained items.
 
 **Test obligations**
@@ -2417,7 +2718,7 @@ Additional requirements:
 
 ---
 
-### server-events-13 — API misuse safety: drains MUST NOT panic
+### [server-events-13] — API misuse safety: drains MUST NOT panic
 **Rule**
 - Calling any drain method at any time (including when empty) MUST NOT panic.
 - Empty drains MUST return empty.
@@ -2436,6 +2737,10 @@ Additional requirements:
 - Duplicating auth/connect/disconnect events for a single session transition.
 - Misrouting messages to the wrong channel/type or losing sender attribution.
 - Panicking on empty drains or repeated drains.
+
+## Test obligations
+
+TODO: Define test obligations for this specification.
 
 
 ---
@@ -2460,8 +2765,8 @@ Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 - **Receive step**: Ingesting packets from the transport into Naia’s internal packet buffer.
 - **Process step**: Processing all buffered packets, applying protocol semantics, and producing new pending events / applying replicated state changes.
 - **Drain**: Reading events such that they are removed from the pending queue (pure read+remove).
-- **Tick**: Client tick as defined in `time_ticks_commands.md`. (Wrap-safe ordering applies.)
-- **InScope(C,E)** / **OutOfScope(C,E)**: Whether entity `E` exists in client `C`’s local world (see `entity_scopes.md`).
+- **Tick**: Client tick as defined in `5_time_ticks_commands.md`. (Wrap-safe ordering applies.)
+- **InScope(C,E)** / **OutOfScope(C,E)**: Whether entity `E` exists in client `C`’s local world (see `7_entity_scopes.md`).
 - **Entity lifetime**: scope enter → scope leave, with the ≥1 tick out-of-scope rule (see entity suite).
 
 ---
@@ -2486,15 +2791,15 @@ This spec standardizes the client loop boundary as:
 
 The *names* above reflect the current API. The **semantics** below are the contract.
 
-### client-events-00 — Receive step is ingestion only
+### [client-events-00] — Receive step is ingestion only
 - The Receive step MUST only ingest packets into an internal buffer.
 - The Receive step MUST NOT directly mutate the client world or produce observable events.
 
-### client-events-01 — Process step is the only event-production / world-application boundary
+### [client-events-01] — Process step is the only event-production / world-application boundary
 - Replicated state application and new pending events MUST occur only as a result of the Process step.
 - Drains MUST NOT “discover” new events unless a prior Process step produced them.
 
-### client-events-02 — Drains are pure read+remove
+### [client-events-02] — Drains are pure read+remove
 - `take_world_events()` and `take_tick_events()` MUST be pure drains:
   - MUST NOT receive packets
   - MUST NOT process packets
@@ -2505,7 +2810,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ## Contracts
 
-### client-events-03 — Drain is destructive and idempotent (no replay without new Process step)
+### [client-events-03] — Drain is destructive and idempotent (no replay without new Process step)
 **Rule:** Draining a given event stream MUST remove those events from the pending queue, and subsequent drains without an intervening Process step producing new pending events MUST return empty.
 
 - Draining twice “back-to-back” MUST NOT return the same event twice.
@@ -2516,7 +2821,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### client-events-04 — Spawn is the first event for an entity lifetime on that client
+### [client-events-04] — Spawn is the first event for an entity lifetime on that client
 **Rule:** For any entity `E` that becomes present on client `C`, the first observable entity-lifetime event for that lifetime MUST be `Spawn(E)` (or an equivalent spawn event). The client MUST NOT observe component Update/Remove events for `E` before Spawn for that lifetime.
 
 - Initial component presence delivered with the spawn snapshot MAY be represented as:
@@ -2530,7 +2835,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 
 ---
 
-### client-events-05 — No events for entities that were never in scope
+### [client-events-05] — No events for entities that were never in scope
 **Rule:** If `E` is never `InScope(C,E)` for client `C` during a connection lifetime, the client Events API MUST not emit any entity events for `E` (no spawn/insert/update/remove/despawn).
 
 This includes entities created and destroyed entirely while `C` is out of scope.
@@ -2540,10 +2845,10 @@ This includes entities created and destroyed entirely while `C` is out of scope.
 
 ---
 
-### client-events-06 — Despawn ends the entity lifetime; no further events for that lifetime
+### [client-events-06] — Despawn ends the entity lifetime; no further events for that lifetime
 **Rule:** After `Despawn(E)` is emitted for client `C`, the Events API MUST NOT emit any further entity-related events for that lifetime of `E` on `C`.
 
-- Late packets referencing the despawned lifetime MUST be ignored safely (see `entity_replication.md`).
+- Late packets referencing the despawned lifetime MUST be ignored safely (see `8_entity_replication.md`).
 - If `E` later re-enters scope as a new lifetime under the scope model, that is a new Spawn and a new lifetime.
 
 **Test obligations:**
@@ -2551,7 +2856,7 @@ This includes entities created and destroyed entirely while `C` is out of scope.
 
 ---
 
-### client-events-07 — Component insert/update/remove are one-shot per applied change
+### [client-events-07] — Component insert/update/remove are one-shot per applied change
 **Rule:** When a component change is applied to an entity `E` on client `C`, the Events API MUST surface exactly one corresponding event for that applied change.
 
 - Insert: exactly once when a component becomes present on `E`
@@ -2566,7 +2871,7 @@ Duplicate packets or retries MUST NOT cause duplicate events if they do not caus
 
 ---
 
-### client-events-08 — Per-entity ordering: spawn → (inserts/updates/removes)* → despawn
+### [client-events-08] — Per-entity ordering: spawn → (inserts/updates/removes)* → despawn
 **Rule:** For a given entity lifetime on client `C`, the API-visible ordering MUST respect:
 
 `Spawn(E)` happens before any component events for that lifetime, and `Despawn(E)` happens after all component events for that lifetime.
@@ -2578,8 +2883,8 @@ This is an observability constraint: internal buffering/reordering is allowed, b
 
 ---
 
-### client-events-09 — Scope transitions are reflected as spawn/despawn (with the defined model)
-**Rule:** When an entity `E` transitions between OutOfScope and InScope on client `C`, the client Events API MUST reflect that transition using spawn/despawn semantics consistent with `entity_scopes.md`.
+### [client-events-09] — Scope transitions are reflected as spawn/despawn (with the defined model)
+**Rule:** When an entity `E` transitions between OutOfScope and InScope on client `C`, the client Events API MUST reflect that transition using spawn/despawn semantics consistent with `7_entity_scopes.md`.
 
 - Leaving scope MUST cause Despawn(E) (entity removed from client world).
 - Re-entering scope MUST cause Spawn(E) with a coherent snapshot, consistent with the identity/lifetime model.
@@ -2589,7 +2894,7 @@ This is an observability constraint: internal buffering/reordering is allowed, b
 
 ---
 
-### client-events-10 — Message events are typed, correctly routed, and drain once
+### [client-events-10] — Message events are typed, correctly routed, and drain once
 **Rule:** Client message events:
 - MUST be exposed via typed message events grouped by:
   - channel type, and
@@ -2601,18 +2906,18 @@ This is an observability constraint: internal buffering/reordering is allowed, b
 Additional requirements:
 - MUST be drained exactly once (no duplicates on repeated drains).
 - MUST NOT be emitted for messages not actually delivered (e.g., dropped unreliable traffic).
-- Ordering/reliability constraints are defined in `messaging.md`; this contract covers API surfacing correctness + drain semantics.
+- Ordering/reliability constraints are defined in `4_messaging.md`; this contract covers API surfacing correctness + drain semantics.
 
 **Test obligations:**
 - `TODO: client_events_api::message_events_are_typed_routed_and_one_shot`
 
 ---
 
-### client-events-11 — Request/response events are matched, one-shot, and cleaned up on disconnect
+### [client-events-11] — Request/response events are matched, one-shot, and cleaned up on disconnect
 **Rule:** If the client exposes request/response events via its Events API:
 - Each delivered request/response MUST be surfaced exactly once and drain cleanly.
 - Responses MUST be matchable to the originating request handle/ID per the public API.
-- On disconnect with in-flight requests, the client MUST follow the defined failure behavior and MUST NOT leak request tracking state (see `messaging.md`).
+- On disconnect with in-flight requests, the client MUST follow the defined failure behavior and MUST NOT leak request tracking state (see `4_messaging.md`).
 
 **Test obligations:**
 - `TODO: client_events_api::request_response_events_are_one_shot_and_matched`
@@ -2620,8 +2925,8 @@ Additional requirements:
 
 ---
 
-### client-events-12 — Authority events are out of scope for this spec
-**Rule:** Authority-related events MUST follow `entity_authority.md`. This spec does not define them, except:
+### [client-events-12] — Authority events are out of scope for this spec
+**Rule:** Authority-related events MUST follow `12_entity_authority.md`. This spec does not define them, except:
 
 - If authority events are surfaced through the same drain mechanism, they MUST obey drain semantics (no duplicates) as per this spec.
 
@@ -2639,6 +2944,10 @@ Additional requirements:
 - Emitting entity events after Despawn for that lifetime.
 - Misrouting message events to the wrong channel/type.
 - Panicking on empty drains or repeated drains.
+
+## Test obligations
+
+TODO: Define test obligations for this specification.
 
 
 ---
@@ -2692,7 +3001,7 @@ Related specs:
 
 ## Contracts
 
-### world-integration-01 — World mirrors Naia view
+### [world-integration-01] — World mirrors Naia view
 
 For any participant `P` (server or client), if an External World is integrated, it MUST converge to exactly the Naia World View for `P` as mutations are drained and applied.
 
@@ -2708,7 +3017,7 @@ Test obligations:
 
 ---
 
-### world-integration-02 — Mutation ordering is deterministic per tick
+### [world-integration-02] — Mutation ordering is deterministic per tick
 
 Within a single tick and for a single entity `E`, the integration adapter MUST apply mutations in a deterministic, valid order:
 
@@ -2732,7 +3041,7 @@ Test obligations:
 
 ---
 
-### world-integration-03 — Exactly-once delivery per drain
+### [world-integration-03] — Exactly-once delivery per drain
 
 For a given participant `P`, each discrete world mutation produced by Naia MUST be consumable exactly once by the integration adapter.
 
@@ -2748,7 +3057,7 @@ Test obligations:
 
 ---
 
-### world-integration-04 — Scope changes map to spawn/despawn in External World
+### [world-integration-04] — Scope changes map to spawn/despawn in External World
 
 On clients, scope governs presence. The integration adapter MUST reflect scope transitions as:
 
@@ -2761,7 +3070,7 @@ Test obligations:
 
 ---
 
-### world-integration-05 — Join-in-progress and reconnect yield coherent External World
+### [world-integration-05] — Join-in-progress and reconnect yield coherent External World
 
 If a client joins late or reconnects, the External World MUST be reconstructed purely from current server state and current scope, not from stale client-local leftovers.
 
@@ -2774,7 +3083,7 @@ Test obligations:
 
 ---
 
-### world-integration-06 — Stable identity mapping at the integration boundary
+### [world-integration-06] — Stable identity mapping at the integration boundary
 
 The integration adapter MUST treat Naia’s entity identity as stable for the lifetime the entity is present in the Naia World View.
 
@@ -2789,7 +3098,7 @@ Test obligations:
 
 ---
 
-### world-integration-07 — Component type correctness
+### [world-integration-07] — Component type correctness
 
 For every component mutation surfaced to the adapter, the component type MUST be correct and match the protocol/schema.
 
@@ -2802,7 +3111,7 @@ Test obligations:
 
 ---
 
-### world-integration-08 — Misuse safety: no panics, defined failures
+### [world-integration-08] — Misuse safety: no panics, defined failures
 
 The integration boundary MUST be robust to reasonable misuse:
 
@@ -2819,7 +3128,7 @@ Test obligations:
 
 ---
 
-### world-integration-09 — Zero-leak lifecycle cleanup
+### [world-integration-09] — Zero-leak lifecycle cleanup
 
 Across repeated connect/disconnect cycles and scope churn, the integration adapter MUST allow External World to reach a clean empty state when Naia’s view is empty.
 
@@ -2837,6 +3146,10 @@ Test obligations:
 - For server integration, the External World is typically updated from server-side inserts/updates/removes/despawns (see `specs/server_events_api.md`).
 - For client integration, the External World is typically updated from client-side world events (see `specs/client_events_api.md`), and scope governs presence (`specs/entity_scopes.md`).
 - This spec is satisfied whether the adapter is “push” (callbacks) or “pull” (drain + apply), as long as contracts above hold.
+
+## Test obligations
+
+TODO: Define test obligations for this specification.
 
 
 ---

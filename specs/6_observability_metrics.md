@@ -27,7 +27,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ## Contracts
 
-### observability-01 — Metric scope and non-normative gameplay impact
+### [observability-01] — Metric scope and non-normative gameplay impact
 **Rule:** Observability metrics MUST NOT affect replicated state correctness, authority, scope, message delivery semantics, or any other gameplay-visible contract. Metrics are observational only.
 
 **Clarifications:**
@@ -38,7 +38,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-02 — Metric query safety and availability
+### [observability-02] — Metric query safety and availability
 **Rule:** Metrics APIs MUST be safe to query at any time after client/server object construction and MUST NOT panic. If a metric cannot be computed yet (insufficient data), it MUST return a well-defined default.
 
 **Required defaults:**
@@ -51,7 +51,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-03 — RTT must be non-negative and bounded
+### [observability-03] — RTT must be non-negative and bounded
 **Rule:** RTT estimates MUST be non-negative. RTT MUST NOT overflow or become NaN/Infinity. Under stable link conditions, RTT SHOULD converge within a reasonable tolerance of the configured/true RTT.
 
 **Interpretation:**
@@ -63,7 +63,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-04 — RTT behavior under jitter, loss, and reordering
+### [observability-04] — RTT behavior under jitter, loss, and reordering
 **Rule:** Under the transport fault model, RTT estimates MAY fluctuate but MUST remain stable in the sense that:
 - It MUST NOT become negative.
 - It MUST NOT oscillate wildly due to duplicate packets alone.
@@ -75,7 +75,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-05 — Throughput must be non-negative and monotonic per window semantics
+### [observability-05] — Throughput must be non-negative and monotonic per window semantics
 **Rule:** Throughput (bytes/sec) MUST be non-negative and MUST NOT overflow or become NaN/Infinity. Throughput computations MUST be consistent with the documented windowing method.
 
 **Clarifications:**
@@ -89,7 +89,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ---
 
-### observability-06 — Bandwidth accounting includes retries/overhead if documented
+### [observability-06] — Bandwidth accounting includes retries/overhead if documented
 **Rule:** If Naia exposes both “payload bytes” and “wire bytes” (or equivalent), then:
 - Payload bytes MUST count only application payload (messages/components).
 - Wire bytes MUST include protocol overhead and retransmissions.
@@ -101,7 +101,7 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 
 ---
 
-### observability-07 — Metrics reset/cleanup on connection lifecycle
+### [observability-07] — Metrics reset/cleanup on connection lifecycle
 **Rule:** On disconnect, Naia MUST clean up connection-scoped metric state so that:
 - New connections do not inherit stale samples from prior connections.
 - Metrics for a disconnected session MUST not continue accumulating samples.
@@ -115,7 +115,7 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 
 ---
 
-### observability-08 — Time source assumptions
+### [observability-08] — Time source assumptions
 **Rule:** Metrics computations MUST rely on the same monotonic time source used by Naia’s tick/time system. Metrics MUST NOT assume wall-clock correctness. If the time source is paused (per deterministic test clock), metrics MUST behave consistently:
 - No negative durations.
 - No division by zero.
@@ -127,7 +127,7 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 
 ---
 
-### observability-09 — Per-direction and per-transport consistency (if applicable)
+### [observability-09] — Per-direction and per-transport consistency (if applicable)
 **Rule:** If Naia exposes separate send/receive metrics, they MUST reflect direction correctly (send counts bytes sent, receive counts bytes received). If multiple transports exist, semantics MUST be consistent across transports (modulo known transport overhead differences).
 
 **Test obligations:**
@@ -147,3 +147,33 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
   - Units
   - Window/estimator
   - Reset/freeze behavior on disconnect
+
+---
+
+## Appendix: Test Tolerance Constants
+
+These constants define acceptable tolerances for E2E test assertions:
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `RTT_TOLERANCE_PERCENT` | 20 | Acceptable deviation from expected RTT |
+| `RTT_MIN_SAMPLES` | 10 | Minimum samples before asserting RTT convergence |
+| `RTT_MAX_VALUE_MS` | 10000 | Maximum valid RTT (sanity bound) |
+| `THROUGHPUT_TOLERANCE_PERCENT` | 15 | Acceptable deviation from expected throughput |
+| `THROUGHPUT_MIN_SAMPLES` | 5 | Minimum samples before asserting throughput |
+| `LEAD_CONVERGENCE_TICKS` | 60 | Ticks to allow client tick lead to stabilize |
+| `METRIC_WINDOW_DURATION_MS` | 1000 | Default metric aggregation window |
+
+**Usage in tests:**
+```rust
+// Assert RTT within tolerance
+assert!(
+    (measured_rtt - expected_rtt).abs() <= expected_rtt * RTT_TOLERANCE_PERCENT / 100,
+    "RTT {} not within {}% of expected {}",
+    measured_rtt, RTT_TOLERANCE_PERCENT, expected_rtt
+);
+```
+
+## Test obligations
+
+TODO: Define test obligations for this specification.
