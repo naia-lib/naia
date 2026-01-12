@@ -53,19 +53,11 @@ print_info() {
     echo -e "${BLUE}ℹ${NC} $1"
 }
 
-# Get all spec files (numbered markdown files)
+# Get all spec files (numbered markdown files in contracts/)
 get_spec_files() {
-    local include_template="${1:-false}"
-    if [[ "$include_template" == "true" ]]; then
-        find "$CONTRACTS_DIR" -maxdepth 1 -name '*.md' -type f \
-            | grep -E '/[0-9]+_' \
-            | sort -t'/' -k2 -V
-    else
-        find "$CONTRACTS_DIR" -maxdepth 1 -name '*.md' -type f \
-            | grep -E '/[0-9]+_' \
-            | grep -v '_template\.md' \
-            | sort -t'/' -k2 -V
-    fi
+    find "$CONTRACTS_DIR" -maxdepth 1 -name '*.md' -type f \
+        | grep -E '/[0-9]+_' \
+        | sort -t'/' -k2 -V
 }
 
 # Extract title from a spec file (first # heading)
@@ -144,22 +136,11 @@ EOF
 
 cmd_bundle() {
     local output_file="${1:-$GENERATED_DIR/NAIA_SPECS.md}"
-    local include_template="true"
-
-    # Parse options
-    for arg in "$@"; do
-        case $arg in
-            --no-template)
-                include_template="false"
-                shift
-                ;;
-        esac
-    done
 
     print_header "Generating NAIA_SPECS.md Bundle"
 
     # Collect spec files
-    mapfile -t SPEC_FILES < <(get_spec_files "$include_template")
+    mapfile -t SPEC_FILES < <(get_spec_files)
 
     print_info "Found ${#SPEC_FILES[@]} specification files"
 
@@ -230,7 +211,7 @@ cmd_lint() {
     local issues=0
     local warnings=0
 
-    mapfile -t SPEC_FILES < <(get_spec_files "false")
+    mapfile -t SPEC_FILES < <(get_spec_files)
 
     # Check 1: Title format inconsistency (Spec: prefix)
     echo "Checking title format..."
@@ -305,10 +286,8 @@ cmd_lint() {
     for file in "${SPEC_FILES[@]}"; do
         local basename_file=$(basename "$file")
         if ! grep -qiE '^## ([0-9]+\) )?Test [Oo]bligations' "$file"; then
-            if [[ "$basename_file" != "README.md" && "$basename_file" != "_template.md" ]]; then
-                print_warning "$basename_file: Missing '## Test obligations' section"
-                ((warnings++)) || true
-            fi
+            print_warning "$basename_file: Missing '## Test obligations' section"
+            ((warnings++)) || true
         fi
     done
 
@@ -332,7 +311,7 @@ cmd_check_refs() {
 
     local errors=0
 
-    mapfile -t SPEC_FILES < <(get_spec_files "true")
+    mapfile -t SPEC_FILES < <(get_spec_files)
 
     # Build list of valid spec names (with and without numeric prefix)
     declare -A valid_specs
@@ -393,16 +372,11 @@ cmd_check_orphans() {
 
     local orphans=0
 
-    mapfile -t SPEC_FILES < <(get_spec_files "false")
+    mapfile -t SPEC_FILES < <(get_spec_files)
 
     for file in "${SPEC_FILES[@]}"; do
         local basename_file=$(basename "$file")
         local file_orphans=0
-
-        # Skip README and template
-        if [[ "$basename_file" == "README.md" || "$basename_file" == "_template.md" ]]; then
-            continue
-        fi
 
         # Find all lines with MUST or MUST NOT
         local line_num=0
@@ -458,7 +432,7 @@ cmd_registry() {
 
     print_header "Generating Contract Registry"
 
-    mapfile -t SPEC_FILES < <(get_spec_files "false")
+    mapfile -t SPEC_FILES < <(get_spec_files)
 
     local total_contracts=0
     declare -A contracts_by_spec
@@ -565,7 +539,7 @@ EOF
 cmd_stats() {
     print_header "Specification Statistics"
 
-    mapfile -t SPEC_FILES < <(get_spec_files "true")
+    mapfile -t SPEC_FILES < <(get_spec_files)
 
     local total_lines=0
     local total_words=0
