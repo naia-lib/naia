@@ -38,3 +38,4 @@ pub use server_events::{
 };
 pub use ticks::{Ticks, ToTicks};
 pub use until_ctx::UntilCtx;
+pub use entity_owner::EntityOwner;

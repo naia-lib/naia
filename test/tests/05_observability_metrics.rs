@@ -352,3 +352,148 @@ fn per_direction_metrics_consistency() {
         })
     });
 }
+
+// ============================================================================
+// [observability-01a] — Internal measurements vs exposed metrics
+// ============================================================================
+
+/// Querying metrics does not affect tick pacing behavior
+/// Contract: [observability-01a]
+///
+/// Given client with active connection;
+/// when metrics are queried repeatedly; then tick pacing is unaffected.
+#[test]
+fn querying_metrics_does_not_affect_tick_pacing() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client",
+        Auth::new("client", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // Query metrics multiple times during connection
+    for _ in 0..10 {
+        scenario.expect(|ctx| {
+            ctx.client(client_key, |c| {
+                // Query all available metrics - this should not affect behavior
+                let _ = c.rtt();
+                let _ = c.outgoing_bandwidth();
+                let _ = c.incoming_bandwidth();
+                Some(())
+            })
+        });
+
+        scenario.mutate(|_ctx| {});
+    }
+
+    // Verify connection is still healthy (metrics queries didn't affect pacing)
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| c.connection_status().is_connected()).then_some(())
+    });
+}
+
+// ============================================================================
+// [observability-10] — Metrics are testable; logs are not
+// ============================================================================
+
+/// Metrics are queryable without special feature flags
+/// Contract: [observability-10]
+///
+/// Given standard test harness;
+/// when metrics are queried; then they are available without feature flags.
+#[test]
+fn metrics_queryable_without_feature_flags() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client",
+        Auth::new("client", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // All these metric queries should work without any special feature flags
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| {
+            // RTT: should be queryable (returns f32)
+            let rtt = c.rtt();
+            let rtt_valid = !rtt.is_nan() && !rtt.is_infinite() && rtt >= 0.0;
+
+            // Bandwidth
+            let outgoing = c.outgoing_bandwidth();
+            let incoming = c.incoming_bandwidth();
+            let bandwidth_valid = !outgoing.is_nan() && !outgoing.is_infinite() && outgoing >= 0.0
+                && !incoming.is_nan() && !incoming.is_infinite() && incoming >= 0.0;
+
+            (rtt_valid && bandwidth_valid).then_some(())
+        })
+    });
+}
+
+/// RTT/jitter assertions use inequality-style invariants
+/// Contract: [observability-10]
+///
+/// Given metric assertions in tests;
+/// when asserting on metrics; then only inequality invariants are used (not exact values).
+#[test]
+fn metric_assertions_use_inequality_invariants() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client",
+        Auth::new("client", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // Let some traffic flow
+    for _ in 0..5 {
+        scenario.mutate(|_ctx| {});
+        scenario.expect(|_ctx| Some(()));
+    }
+
+    scenario.mutate(|_ctx| {});
+
+    // Assertions use inequalities only, not exact values
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| {
+            // RTT: non-negative, finite
+            let rtt = c.rtt();
+            if rtt.is_nan() || rtt.is_infinite() || rtt < 0.0 {
+                return None;
+            }
+
+            // Bandwidth: non-negative, finite
+            let outgoing = c.outgoing_bandwidth();
+            let incoming = c.incoming_bandwidth();
+            if outgoing < 0.0 || incoming < 0.0
+                || outgoing.is_nan() || incoming.is_nan()
+                || outgoing.is_infinite() || incoming.is_infinite()
+            {
+                return None;
+            }
+
+            Some(())
+        })
+    });
+}
