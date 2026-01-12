@@ -211,4 +211,4 @@ For each contract above, Naia MUST eventually have at least one E2E test proving
 - `8_entity_ownership.md` — defines local-only mutation rules and ownership write constraints
 - `10_entity_delegation.md` / `11_entity_authority.md` — define delegation and authority semantics
 - `13_client_events_api.md` — defines client-observable event ordering/meaning
-- `5_time_ticks_commands.md` — defines tick semantics (including wrap considerations)
+- `4_time_ticks_commands.md` — defines tick semantics (including wrap considerations)

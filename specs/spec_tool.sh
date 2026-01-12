@@ -28,6 +28,13 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # ============================================================================
+# Contract ID Regex Constants (Single Source of Truth)
+# ============================================================================
+
+CONTRACT_ID_RE='[a-z][a-z0-9-]*-[0-9]+[a-z]*'
+BRACKETED_CONTRACT_RE="\[${CONTRACT_ID_RE}\]"
+
+# ============================================================================
 # Helper Functions
 # ============================================================================
 
@@ -77,6 +84,32 @@ get_spec_slug() {
     basename "$file" | sed -E 's/^[0-9]+_//' | sed 's/\.md$//' | tr '_' '-'
 }
 
+# Extract all contract IDs from a line (handles multiple [id], [id], [id] patterns)
+# Uses grep -P if available, otherwise falls back to perl
+extract_contract_ids() {
+    local line="$1"
+
+    # Try grep -P first (faster)
+    if echo "$line" | grep -P "$BRACKETED_CONTRACT_RE" &>/dev/null; then
+        echo "$line" | grep -oP "$BRACKETED_CONTRACT_RE" | tr -d '[]'
+    else
+        # Fallback to perl (more portable)
+        echo "$line" | perl -nle "print for /\\[${CONTRACT_ID_RE}\\]/g" | tr -d '[]'
+    fi
+}
+
+# Find all test files containing a specific contract ID
+find_test_files_for_contract() {
+    local contract_id="$1"
+    local test_dir="$SCRIPT_DIR/../test/tests"
+
+    # Search for contract ID anywhere on a Contract: line
+    grep -rlE "Contract:.*\[${contract_id}\]" "$test_dir"/*.rs 2>/dev/null \
+        | xargs -r basename -a \
+        | sed 's/\.rs$//' \
+        | sort -u
+}
+
 # ============================================================================
 # Command: help
 # ============================================================================
@@ -117,6 +150,14 @@ COMMANDS:
 
     traceability [out]  Generate contract-to-test traceability matrix
                         Default output: TRACEABILITY.md
+
+    verify [options]    CI-grade verification: validate + lint + tests + coverage
+                        Options:
+                          --contract <id>       Run tests only for specific contract
+                          --strict-orphans      Fail if orphan MUSTs exist
+                          --strict-coverage     Fail if any contracts uncovered
+                          --full-report         Include full reports with --contract
+                          --write-report <path> Write summary to file
 
     help                Show this help message
 
@@ -875,6 +916,246 @@ EOF
 }
 
 # ============================================================================
+# Command: verify
+# ============================================================================
+
+cmd_verify() {
+    print_header "Naia Verification Pipeline"
+
+    # Parse options
+    local target_contract=""
+    local strict_orphans=0
+    local strict_coverage=0
+    local full_report=0
+    local write_report=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --contract)
+                target_contract="$2"
+                shift 2
+                ;;
+            --strict-orphans)
+                strict_orphans=1
+                shift
+                ;;
+            --strict-coverage)
+                strict_coverage=1
+                shift
+                ;;
+            --full-report)
+                full_report=1
+                shift
+                ;;
+            --write-report)
+                write_report="$2"
+                shift 2
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+
+    local total_errors=0
+    local test_status="UNKNOWN"
+    local test_dir="$SCRIPT_DIR/../test/tests"
+
+    # Step 1: Validate spec structure
+    print_info "Running: validate (spec structure)"
+    if ! cmd_validate; then
+        print_error "Spec validation failed"
+        return 1
+    fi
+
+    # Step 2: Check orphans (capture count for summary)
+    echo ""
+    print_info "Running: check-orphans"
+    local orphan_count=0
+    local orphan_files=""
+
+    # Capture orphan check output
+    local orphan_output
+    orphan_output=$(cmd_check_orphans 2>&1)
+    echo "$orphan_output"
+
+    # Extract orphan count from output
+    if echo "$orphan_output" | grep -q "orphan statements found"; then
+        orphan_count=$(echo "$orphan_output" | grep -oE '[0-9]+ potential orphan' | grep -oE '[0-9]+' | head -1)
+        [[ -z "$orphan_count" ]] && orphan_count=0
+    fi
+
+    if [[ $strict_orphans -eq 1 && $orphan_count -gt 0 ]]; then
+        print_error "Strict orphan check failed ($orphan_count orphans)"
+        return 1
+    fi
+
+    # Step 3: Run tests (targeted or full)
+    echo ""
+    if [[ -n "$target_contract" ]]; then
+        print_info "Running: targeted tests for contract [$target_contract]"
+
+        # Find test files containing this contract
+        local test_files
+        test_files=$(find_test_files_for_contract "$target_contract")
+
+        if [[ -z "$test_files" ]]; then
+            print_error "No test files found for contract [$target_contract]"
+            print_info "Contract may be uncovered. Run './spec_tool.sh coverage' to check."
+            return 1
+        fi
+
+        print_info "Found contract in test files: $(echo "$test_files" | tr '\n' ', ' | sed 's/, $//')"
+
+        # Run tests for each matching file
+        local test_failed=0
+        while IFS= read -r test_file; do
+            [[ -z "$test_file" ]] && continue
+            echo ""
+            print_info "Running: cargo test -p naia-test --test $test_file -- --nocapture --test-threads=1"
+            if ! cargo test -p naia-test --test "$test_file" -- --nocapture --test-threads=1; then
+                test_failed=1
+            fi
+        done <<< "$test_files"
+
+        if [[ $test_failed -eq 1 ]]; then
+            test_status="FAIL"
+            ((total_errors++)) || true
+        else
+            test_status="PASS"
+        fi
+
+        # Skip coverage/traceability unless --full-report
+        if [[ $full_report -eq 0 ]]; then
+            echo ""
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            if [[ $total_errors -eq 0 ]]; then
+                print_success "VERIFY: PASS (targeted test for [$target_contract])"
+            else
+                print_error "VERIFY: FAIL (tests failed)"
+            fi
+            echo ""
+            print_info "tests: $test_status"
+            print_info "contract: $target_contract"
+            print_info "test files: $(echo "$test_files" | wc -l | tr -d ' ')"
+            return $total_errors
+        fi
+    else
+        print_info "Running: cargo test -p naia-test -- --nocapture --test-threads=1"
+        if cargo test -p naia-test -- --nocapture --test-threads=1; then
+            test_status="PASS"
+        else
+            test_status="FAIL"
+            ((total_errors++)) || true
+        fi
+    fi
+
+    # Step 4: Coverage analysis
+    echo ""
+    print_info "Running: coverage"
+
+    # Capture coverage output
+    local coverage_output
+    coverage_output=$(cmd_coverage 2>&1)
+    echo "$coverage_output"
+
+    # Extract coverage metrics
+    local covered_count=0
+    local total_count=0
+    local coverage_pct=0
+    local uncovered_list=""
+
+    if echo "$coverage_output" | grep -q "Contracts with test annotations:"; then
+        covered_count=$(echo "$coverage_output" | grep "Contracts with test annotations:" | grep -oE '[0-9]+' | head -1)
+        total_count=$(echo "$coverage_output" | grep "Total contracts in registry:" | grep -oE '[0-9]+' | head -1)
+        coverage_pct=$(echo "$coverage_output" | grep "Coverage:" | grep -oE '[0-9]+%' | tr -d '%')
+
+        # Extract uncovered list
+        uncovered_list=$(echo "$coverage_output" | sed -n '/^Uncovered Contracts/,/^━/p' | grep '  - ' | sed 's/  - //' | head -30)
+    fi
+
+    if [[ $strict_coverage -eq 1 ]]; then
+        local uncovered_count=$((total_count - covered_count))
+        if [[ $uncovered_count -gt 0 ]]; then
+            print_error "Strict coverage check failed ($uncovered_count uncovered)"
+            ((total_errors++)) || true
+        fi
+    fi
+
+    # Step 5: Traceability
+    echo ""
+    print_info "Running: traceability (regenerating matrix)"
+    cmd_traceability >/dev/null
+
+    # Step 6: Final summary
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+    if [[ $total_errors -eq 0 ]]; then
+        print_success "VERIFY: PASS"
+    else
+        print_error "VERIFY: FAIL"
+    fi
+
+    echo ""
+    echo "Summary:"
+    echo "  tests:             $test_status"
+    echo "  coverage:          ${coverage_pct}% ($covered_count/$total_count)"
+
+    if [[ -n "$uncovered_list" ]]; then
+        local uncovered_count
+        uncovered_count=$(echo "$uncovered_list" | wc -l | tr -d ' ')
+        echo "  uncovered:         $uncovered_count contracts"
+        if [[ $uncovered_count -le 30 ]]; then
+            echo ""
+            echo "Uncovered contracts:"
+            echo "$uncovered_list" | head -30 | sed 's/^/    /'
+        fi
+    else
+        echo "  uncovered:         0 contracts"
+    fi
+
+    if [[ $orphan_count -gt 0 ]]; then
+        if [[ $strict_orphans -eq 1 ]]; then
+            echo "  orphans:           $orphan_count (strict mode - FAILED)"
+        else
+            echo "  orphans:           $orphan_count (non-strict)"
+        fi
+    else
+        echo "  orphans:           0"
+    fi
+
+    # Write report file if requested
+    if [[ -n "$write_report" ]]; then
+        {
+            echo "# Naia Verification Report"
+            echo ""
+            echo "**Generated:** $(date -u +"%Y-%m-%d %H:%M UTC")"
+            echo ""
+            echo "## Summary"
+            echo ""
+            echo "- **Overall:** $([ $total_errors -eq 0 ] && echo "PASS" || echo "FAIL")"
+            echo "- **Tests:** $test_status"
+            echo "- **Coverage:** ${coverage_pct}% ($covered_count/$total_count)"
+            echo "- **Uncovered:** $(echo "$uncovered_list" | wc -l | tr -d ' ') contracts"
+            echo "- **Orphans:** $orphan_count"
+            echo ""
+            echo "## Uncovered Contracts"
+            echo ""
+            if [[ -n "$uncovered_list" ]]; then
+                echo "$uncovered_list" | sed 's/^/- /'
+            else
+                echo "All contracts covered!"
+            fi
+        } > "$write_report"
+        print_info "Report written to: $write_report"
+    fi
+
+    return $total_errors
+}
+
+# ============================================================================
 # Main Entry Point
 # ============================================================================
 
@@ -915,6 +1196,9 @@ main() {
             ;;
         traceability)
             cmd_traceability "$@"
+            ;;
+        verify)
+            cmd_verify "$@"
             ;;
         *)
             print_error "Unknown command: $command"

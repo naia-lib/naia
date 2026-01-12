@@ -8,7 +8,7 @@ Related specs:
 - `7_entity_replication.md` (spawn/update/remove/despawn semantics)
 - `6_entity_scopes.md` (in-scope vs out-of-scope and snapshot behavior)
 - `3_messaging.md` (message ordering, reliability, request/response semantics)
-- `5_time_ticks_commands.md` (tick definition, wrap ordering, command timing model)
+- `4_time_ticks_commands.md` (tick definition, wrap ordering, command timing model)
 - `1_connection_lifecycle.md` (connect/disconnect/auth ordering + cleanup)
 
 ---
@@ -22,7 +22,7 @@ Related specs:
 - **Process step**: The act of processing all buffered packets, applying protocol semantics, and producing new pending events.
 - **Drain**: Reading events from the API such that they are removed from the pending queue (pure read+remove).
 - **In scope**: A user is considered a recipient for an entity only if `InScope(user, entity)` per `entity_scopes`.
-- **Tick**: Server simulation tick as defined in `5_time_ticks_commands.md`. (Wrap-safe ordering applies.)
+- **Tick**: Server simulation tick as defined in `4_time_ticks_commands.md`. (Wrap-safe ordering applies.)
 
 ---
 

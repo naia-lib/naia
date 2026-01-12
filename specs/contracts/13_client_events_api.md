@@ -14,7 +14,7 @@ Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 - **Receive step**: Ingesting packets from the transport into Naia’s internal packet buffer.
 - **Process step**: Processing all buffered packets, applying protocol semantics, and producing new pending events / applying replicated state changes.
 - **Drain**: Reading events such that they are removed from the pending queue (pure read+remove).
-- **Tick**: Client tick as defined in `5_time_ticks_commands.md`. (Wrap-safe ordering applies.)
+- **Tick**: Client tick as defined in `4_time_ticks_commands.md`. (Wrap-safe ordering applies.)
 - **InScope(C,E)** / **OutOfScope(C,E)**: Whether entity `E` exists in client `C`’s local world (see `6_entity_scopes.md`).
 - **Entity lifetime**: scope enter → scope leave, with the ≥1 tick out-of-scope rule (see entity suite).
 
@@ -22,7 +22,7 @@ Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 
 ## Cross-References
 
-- Tick + time model: `5_time_ticks_commands.md`
+- Tick + time model: `4_time_ticks_commands.md`
 - Identity, replication legality, and "no updates before spawn / none after despawn": `7_entity_replication.md`
 - Scope transitions, join snapshots, and scope leave/re-enter semantics: `6_entity_scopes.md`
 - Messaging ordering/reliability: `3_messaging.md`

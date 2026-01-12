@@ -172,7 +172,7 @@ The server MUST emit `ConnectEvent` only at the moment the handshake is finalize
 
 Naia MUST NOT deliver any entity replication "writes" as part of an established session until after `ConnectEvent` is emitted for that session (server-side), and the client MUST NOT apply any such writes until after it has emitted `ConnectEvent`.
 
-(See `5_time_ticks_commands.md` for tick semantics and how tick sync interacts with command history.)
+(See `4_time_ticks_commands.md` for tick semantics and how tick sync interacts with command history.)
 
 ---
 
