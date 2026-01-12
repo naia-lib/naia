@@ -23,12 +23,12 @@ It does NOT own:
 - **Channel**: A configured lane used to send/receive Messages (and optionally Requests/Responses).
 - **ChannelKind**: A unique identifier for a channel type in a Protocol.
 - **ChannelDirection**: The allowed send direction for a channel (Client→Server or Server→Client, as configured).
-- **ChannelMode**: The delivery/ordering semantics of a channel. Naia exposes multiple modes. :contentReference[oaicite:3]{index=3}
+- **ChannelMode**: The delivery/ordering semantics of a channel. Naia exposes multiple modes.
 - **Reliable**: Naia guarantees eventual delivery of a message while the connection remains active, and ensures the application observes the message at most once (deduped).
 - **Ordered**: Application observes messages in the same order they were sent on that channel.
 - **Sequenced**: Messages represent “current state”; older state MUST NOT be observed after newer state has been observed (no rollback). Intermediate states MAY be skipped.
 - **TickBuffered**: Messages are grouped by tick and exposed per tick in tick order.
-- **Tick**: A shared tick value used by Naia; `Tick` is `u16` and wraps. :contentReference[oaicite:4]{index=4}
+- **Tick**: A shared tick value used by Naia; `Tick` is `u16` and wraps.
 - **Entity lifetime** (client-side): scope enter → scope leave, with the “≥ 1 tick out-of-scope” rule (see `6_entity_scopes.md` / `7_entity_replication.md`).
 
 Normative keywords: MUST, MUST NOT, MAY, SHOULD.
@@ -143,7 +143,7 @@ SequencedReliable:
 
 ## TickBuffered
 
-TickBuffered is a standalone ChannelMode with TickBufferSettings. :contentReference[oaicite:5]{index=5}
+TickBuffered is a standalone ChannelMode with TickBufferSettings.
 
 ### [messaging-11] — TickBuffered is Client→Server only
 TickBuffered channels MUST be configurable only for Client→Server direction.
@@ -171,7 +171,7 @@ If a message arrives for a tick that is older than the oldest tick currently ret
 
 ## Fragmentation and MTU
 
-Naia defines a maximum packet payload size `MTU_SIZE_BYTES` at the transport boundary. :contentReference[oaicite:6]{index=6}
+Naia defines a maximum packet payload size `MTU_SIZE_BYTES` at the transport boundary.
 
 ### [messaging-15] — Unreliable channels MUST NOT fragment
 For UnorderedUnreliable and SequencedUnreliable:
@@ -191,7 +191,7 @@ For UnorderedReliable / OrderedReliable / SequencedReliable:
 
 ## Wrap-around safety
 
-Tick and (where applicable) channel indices/sequence numbers wrap and must be compared using wrap-safe logic. Naia provides explicit wrapping helpers in shared code. :contentReference[oaicite:7]{index=7}
+Tick and (where applicable) channel indices/sequence numbers wrap and must be compared using wrap-safe logic. Naia provides explicit wrapping helpers in shared code.
 
 ### [messaging-17] — Wrap-around MUST NOT break ordering or sequencing contracts
 All ordering/sequence comparisons (OrderedReliable ordering, Sequenced* “newer than” checks, TickBuffered tick ordering) MUST be correct across wrap-around.
@@ -200,7 +200,7 @@ All ordering/sequence comparisons (OrderedReliable ordering, Sequenced* “newer
 
 ## Messages containing EntityProperty
 
-Messages may contain EntityProperty values which refer to entities that may or may not currently exist in the receiver’s active entity lifetime. :contentReference[oaicite:8]{index=8}
+Messages may contain EntityProperty values which refer to entities that may or may not currently exist in the receiver’s active entity lifetime.
 
 ### [messaging-18] — EntityProperty must not violate entity lifetime
 A message that contains an EntityProperty MUST NOT be applied to an entity outside its current active lifetime.

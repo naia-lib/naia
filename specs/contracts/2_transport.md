@@ -29,7 +29,7 @@ This spec does **not** own:
 - **Transport adapter**: the implementation used by Naia to send/receive packets (UDP/WebRTC/local).
 - **Packet**: a single datagram-like unit delivered by the transport adapter.
 - **Packet payload**: the bytes Naia asks the transport adapter to send in one packet.
-- **MTU_SIZE_BYTES**: the maximum packet payload allowed by Naia core, exposed via `naia_shared`. :contentReference[oaicite:3]{index=3}
+- **MTU_SIZE_BYTES**: the maximum packet payload allowed by Naia core, exposed via `naia_shared`.
 - **Prod vs Debug**: Debug means `debug_assertions` enabled; Prod means disabled.
 
 ---
@@ -42,12 +42,12 @@ Naia MUST assume packets may be dropped, duplicated, and reordered, and MUST NOT
 - exactly-once delivery
 - guaranteed delivery
 
-(UDP/WebRTC/local are all valid so long as Naia can treat them as such.) :contentReference[oaicite:4]{index=4}
+(UDP/WebRTC/local are all valid so long as Naia can treat them as such.)
 
 ---
 
 ### [transport-02] — MTU boundary is defined by `naia_shared::MTU_SIZE_BYTES`
-Naia MUST treat `MTU_SIZE_BYTES` as the maximum size of a **single packet payload**. :contentReference[oaicite:5]{index=5}
+Naia MUST treat `MTU_SIZE_BYTES` as the maximum size of a **single packet payload**.
 
 Naia MUST NOT knowingly ask a transport adapter to send a packet payload larger than `MTU_SIZE_BYTES`.
 
