@@ -1,7 +1,7 @@
 # Naia Development Plan
 
 **Status:** Active - Phase B (Fix Implementation)
-**Updated:** 2026-01-11
+**Updated:** 2026-01-12
 **Goal:** Get all E2E tests passing
 
 ---
@@ -19,7 +19,6 @@
 - Run all tests, observe failures
 - Systematically fix implementation and test structure
 - Failing tests are the bug tracker
-- **Current: 158/200 tests passing (79%)**
 
 **Key insight:** A `todo!()` in a test is a **specification gap**, not an implementation bug. Write what you *expect* to happen, and let the test fail.
 
@@ -171,6 +170,14 @@ cargo test --package naia-test 2>&1 | grep FAILED       # Quick: see only failur
 cargo test --package naia-test --test <file>             # Alternative: single file
 ./specs/spec_tool.sh verify                              # Full: check no regressions
 
+# Phase 3: Adequacy Review (optional - for contract verification)
+./specs/spec_tool.sh verify --contract <id>              # Run tests
+./specs/spec_tool.sh packet <id>                         # Generate review packet
+# Paste packet into LLM for adequacy review
+# Map spec guarantee/preconditions/postconditions to test assertion indices
+# Add expect_msg labels for deterministic review as needed
+./specs/spec_tool.sh verify --contract <id>              # Verify again after fixes
+
 # Update docs
 # Update PLAN.md current state numbers
 # Note any learnings in CLAUDE.md or DEV_PROCESS.md
@@ -281,14 +288,14 @@ grep -r "todo!" test/tests/*.rs        # Verify no incomplete tests
 
 ## Session History
 
-### 2026-01-11 (Current)
+### 2026-01-11
 - **Spec hardening:** Added 51 new contracts
   - Protocol identity (`protocol_id`) with u128 little-endian encoding
   - Command sequence with `MAX_COMMANDS_PER_TICK_PER_CONNECTION = 64`
   - Error taxonomy with `ProtocolMismatch` error type
   - Metrics testability with inequality-style assertions
 - **Tool fix:** Updated `spec_tool.sh` to support alphanumeric contract suffixes
-- **Status:** Phase A incomplete (185/236 contracts covered)
+- **Status:** Completed Phase A (236/236 contracts covered, 0 todos)
 
 ### Previous Sessions
 - Completed tests for original 185 contracts

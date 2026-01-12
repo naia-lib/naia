@@ -36,7 +36,7 @@ Contracts → Compiling Tests (no todo!())
 ```
 - Every spec contract has a compiling E2E test
 - Tests are allowed to FAIL - failures indicate implementation gaps
-- Goal: 185/185 contracts covered, zero `todo!()` macros
+- Goal: 100% coverage (N/N - see PLAN.md for current count), zero `todo!()` macros
 
 **Phase B: Fix Implementation**
 ```
@@ -79,7 +79,7 @@ Development proceeds in two distinct phases:
 ║  │   Find   │     │  Write   │     │ Coverage │                  ║
 ║  └──────────┘     └──────────┘     └──────────┘                  ║
 ║                                                                   ║
-║  Goal: 185/185 contracts have compiling tests, zero todo!()       ║
+║  Goal: 100% coverage, zero todo!() (see PLAN.md for N/N count)   ║
 ║  Tests are ALLOWED TO FAIL - that documents implementation gaps   ║
 ╚═══════════════════════════════════════════════════════════════════╝
 
@@ -173,7 +173,7 @@ Development proceeds in two distinct phases:
 
 **Goal:** See which tests fail and understand the implementation gaps.
 
-**Prerequisites:** Phase A complete (185/185 coverage, zero `todo!()`)
+**Prerequisites:** Phase A complete (100% coverage, zero `todo!()`)
 
 **Steps:**
 1. Run all tests:
@@ -216,6 +216,39 @@ Development proceeds in two distinct phases:
    ```bash
    cargo test --package naia-test
    ```
+
+### 2.8 Phase 3: Adequacy Review (Optional)
+
+**Goal:** Verify tests adequately cover contract semantics before claiming implementation complete.
+
+**When to use:** After implementation passes but before marking contract complete.
+
+**Steps:**
+1. Generate review packet:
+   ```bash
+   ./specs/spec_tool.sh packet <contract-id>              # Concise mode
+   ./specs/spec_tool.sh packet <contract-id> --full-tests # Include full test code
+   ```
+2. Review packet contents:
+   - Contract guarantee, preconditions, postconditions
+   - Test assertion indices (expect_msg labels)
+   - Full test code (if --full-tests used)
+3. Map spec semantics to test assertions:
+   - Does each postcondition have a corresponding assertion?
+   - Are preconditions properly set up?
+   - Is the guarantee actually tested?
+4. Add `expect_msg` labels for deterministic review:
+   ```rust
+   scenario.expect_msg("Client receives entity", |ctx| {
+       ctx.client(key, |c| c.has_entity(&entity)).then_some(())
+   });
+   ```
+5. Re-verify after improvements:
+   ```bash
+   ./specs/spec_tool.sh verify --contract <id>
+   ```
+
+**Purpose:** Ensures tests are comprehensive and maintainable, not just passing.
 
 ---
 
@@ -460,6 +493,7 @@ scenario.expect(|_| Some(()));
 | `./specs/spec_tool.sh verify` | Full verification pipeline (specs + tests + coverage) | Phase B: Check overall health |
 | `./specs/spec_tool.sh verify --contract <id>` | Run tests for one contract only | Phase B: Fast iteration loop |
 | `./specs/spec_tool.sh coverage` | Show covered/uncovered contracts | Phase A: Track coverage progress |
+| `./specs/spec_tool.sh packet <id>` | Generate adequacy review packet | Phase 3: Contract verification |
 | `./specs/spec_tool.sh traceability` | Generate contract↔test matrix | After adding tests |
 | `./specs/spec_tool.sh lint` | Validate spec format | After editing specs |
 | `./specs/spec_tool.sh gen-test <id>` | Generate test skeleton | Starting new test |
@@ -647,7 +681,7 @@ cargo test --package naia-test test_3
 
 ### 6.3 Phase B: Fix Failing Test
 
-**Prerequisites:** Phase A complete (236/236 coverage, zero `todo!()`)
+**Prerequisites:** Phase A complete (100% coverage, zero `todo!()`)
 
 ```
 1. ./specs/spec_tool.sh verify --contract <id>  # Fast: see targeted failures
