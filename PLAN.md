@@ -155,9 +155,10 @@ These are likely real implementation bugs in the delegation/authority state mach
 ## Session Workflow for Phase B
 
 ```bash
-# Start of session
-cargo test --package naia-test 2>&1 | grep "test result:" | grep FAILED  # See failures
-cargo test --package naia-test --test <file>  # Focus on one file
+# Start of session - pick one approach:
+./specs/spec_tool.sh verify                              # Full health check (5-10 min)
+./specs/spec_tool.sh verify --contract <id>              # Fast: target specific contract
+cargo test --package naia-test 2>&1 | grep FAILED       # Quick: see only failures
 
 # Fix approach
 1. Identify failure type (panic location, timeout, assertion)
@@ -165,9 +166,10 @@ cargo test --package naia-test --test <file>  # Focus on one file
 3. For timeouts → implementation gap or wrong assertion
 4. For assertion failures → logic bug
 
-# Verify fix
-cargo test --package naia-test --test <file>  # Should pass
-cargo test --package naia-test  # No regressions
+# Verify fix (fast iteration)
+./specs/spec_tool.sh verify --contract <id>              # Fast: targeted verification
+cargo test --package naia-test --test <file>             # Alternative: single file
+./specs/spec_tool.sh verify                              # Full: check no regressions
 
 # Update docs
 # Update PLAN.md current state numbers

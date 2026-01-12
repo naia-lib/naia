@@ -38,15 +38,17 @@ specs/contracts/N_domain.md  →  test/tests/0N_domain.rs
 **Execute this sequence at session start:**
 
 ```bash
-# 1. Check current coverage
-./specs/spec_tool.sh coverage
+# 1. Quick health check (optional, shows test status + coverage)
+./specs/spec_tool.sh verify --contract <working-on> || ./specs/spec_tool.sh coverage
 
-# 2. Check for blocked work
+# 2. Check for blocked work (Phase A only)
 grep -r "todo!" test/tests/*.rs
 
 # 3. Read PLAN.md for next actions
 # 4. Begin work following SDD loop
 ```
+
+**Phase B tip:** Use `verify --contract <id>` for fast feedback on the contract you're fixing.
 
 ## Spec-Driven Development (CRITICAL)
 
@@ -84,10 +86,10 @@ specs/contracts/*.md (contracts) → test/tests/*.rs (E2E tests) → Implementat
 
 ```bash
 # Spec operations (run from project root)
-./specs/spec_tool.sh lint           # Validate specs
-./specs/spec_tool.sh coverage       # Check contract test coverage
-./specs/spec_tool.sh traceability   # Generate contract↔test matrix
-./specs/spec_tool.sh gen-test <id>  # Generate test skeleton
+./specs/spec_tool.sh verify                  # Full verification pipeline (specs + tests + coverage)
+./specs/spec_tool.sh verify --contract <id>  # Fast: test only one contract
+./specs/spec_tool.sh coverage                # Check contract test coverage
+./specs/spec_tool.sh lint                    # Validate specs only
 
 # Testing
 cargo test --package naia-test                        # All E2E tests

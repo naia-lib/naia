@@ -457,13 +457,21 @@ scenario.expect(|_| Some(()));
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
-| `./specs/spec_tool.sh coverage` | Show covered/uncovered contracts | Every session start |
+| `./specs/spec_tool.sh verify` | Full verification pipeline (specs + tests + coverage) | Phase B: Check overall health |
+| `./specs/spec_tool.sh verify --contract <id>` | Run tests for one contract only | Phase B: Fast iteration loop |
+| `./specs/spec_tool.sh coverage` | Show covered/uncovered contracts | Phase A: Track coverage progress |
 | `./specs/spec_tool.sh traceability` | Generate contract↔test matrix | After adding tests |
 | `./specs/spec_tool.sh lint` | Validate spec format | After editing specs |
 | `./specs/spec_tool.sh gen-test <id>` | Generate test skeleton | Starting new test |
 | `./specs/spec_tool.sh bundle` | Generate NAIA_SPECS.md | After spec changes |
 | `./specs/spec_tool.sh registry` | Generate CONTRACT_REGISTRY.md | After adding contracts |
 | `./specs/spec_tool.sh check-orphans` | Find untracked MUSTs | Spec cleanup |
+
+**Verify Command Options:**
+- `--contract <id>`: Run tests only for specific contract (fast iteration)
+- `--strict-coverage`: Fail if any contracts uncovered (CI enforcement)
+- `--strict-orphans`: Fail if orphan MUST statements exist (CI enforcement)
+- `--write-report <path>`: Write summary to markdown file
 
 ### 4.2 Cargo Test Commands
 
@@ -639,18 +647,21 @@ cargo test --package naia-test test_3
 
 ### 6.3 Phase B: Fix Failing Test
 
-**Prerequisites:** Phase A complete (185/185 coverage, zero `todo!()`)
+**Prerequisites:** Phase A complete (236/236 coverage, zero `todo!()`)
 
 ```
-1. cargo test --package naia-test  # See all failures
-2. Pick a failing test
+1. ./specs/spec_tool.sh verify --contract <id>  # Fast: see targeted failures
+   OR cargo test --package naia-test            # Full: see all failures
+2. Pick a failing test/contract
 3. Read the test to understand expected behavior
 4. Read the spec contract for context
 5. Fix implementation (minimal changes)
-6. cargo test --package naia-test <test_name>  # Should pass
+6. ./specs/spec_tool.sh verify --contract <id>  # Fast: verify fix
 7. Run 3x for flakiness
-8. cargo test --package naia-test  # No regressions
+8. ./specs/spec_tool.sh verify                  # Full: check no regressions
 ```
+
+**Tip:** Use `verify --contract <id>` for fast iteration (~5-10 sec vs ~5-10 min)
 
 ### 6.4 New Feature
 
@@ -813,8 +824,7 @@ use test_helpers::{test_client_config, client_connect};
 ```
 [ ] Read CLAUDE.md (if unfamiliar)
 [ ] Read PLAN.md (always)
-[ ] Run ./specs/spec_tool.sh coverage
-[ ] Check grep -r "todo!" test/tests/*.rs
+[ ] Run ./specs/spec_tool.sh verify (optional health check)
 [ ] Determine current phase (A or B)
 [ ] Identify next action
 ```
@@ -830,18 +840,18 @@ use test_helpers::{test_client_config, client_connect};
 
 **Phase B work (Fix Implementation):**
 ```
-[ ] Prerequisites: 185/185 coverage, zero todo!()
-[ ] Run all tests: cargo test --package naia-test
-[ ] Pick failing test
+[ ] Prerequisites: 236/236 coverage, zero todo!()
+[ ] Run ./specs/spec_tool.sh verify --contract <id>  # Fast iteration
+[ ] Pick failing test/contract
 [ ] Fix implementation (minimal changes)
+[ ] Run ./specs/spec_tool.sh verify --contract <id>  # Verify fix
 [ ] Run 3x for flakiness
-[ ] Check no regressions
+[ ] Run ./specs/spec_tool.sh verify                  # Check no regressions
 ```
 
 **End of session:**
 ```
-[ ] Run ./specs/spec_tool.sh coverage
-[ ] Run grep -r "todo!" test/tests/*.rs
+[ ] Run ./specs/spec_tool.sh verify (optional: final health check)
 [ ] Update PLAN.md if state changed
 [ ] Run ./specs/spec_tool.sh traceability if tests added
 ```
