@@ -713,11 +713,45 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .global_world_manager
             .server_take_authority(&global_entity);
 
-        if result.is_ok() {
-            self.send_reset_authority_messages(&global_entity);
+        if let Ok(previous_owner) = result {
+            // When server takes authority, send Denied to clients whose state will change:
+            // - If there was a client holder (Granted→Denied): send only to that client
+            // - If no holder (Available→Denied): send to all clients in scope
+            self.send_take_authority_messages(&global_entity, previous_owner);
             self.incoming_world_events.push_auth_reset(world_entity);
         }
-        result
+        result.map(|_| ())
+    }
+
+    fn send_take_authority_messages(&mut self, global_entity: &GlobalEntity, previous_owner: AuthOwner) {
+        // Server has taken authority - send appropriate messages based on previous state
+        match previous_owner {
+            AuthOwner::Client(prev_holder_key) => {
+                // There was a client holder - only they need to transition (Granted→Denied)
+                // Other clients were already Denied, no message needed
+                if let Some(user) = self.users.get(&prev_holder_key) {
+                    if let Some(connection) = self.user_connections.get_mut(&user.address()) {
+                        if connection.base.world_manager.has_global_entity(global_entity) {
+                            connection.base.world_manager.host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                        }
+                    }
+                }
+            }
+            AuthOwner::None => {
+                // No holder - all clients were Available, all need to transition to Denied
+                for (_user_key, user) in self.users.iter() {
+                    if let Some(connection) = self.user_connections.get_mut(&user.address()) {
+                        if !connection.base.world_manager.has_global_entity(global_entity) {
+                            continue;
+                        }
+                        connection.base.world_manager.host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                    }
+                }
+            }
+            AuthOwner::Server => {
+                // Server already had authority - no change needed
+            }
+        }
     }
 
     fn send_reset_authority_messages(&mut self, global_entity: &GlobalEntity) {

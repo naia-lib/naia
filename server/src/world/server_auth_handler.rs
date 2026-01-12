@@ -116,7 +116,7 @@ impl ServerAuthHandler {
         }
     }
 
-    pub(crate) fn server_take_authority(&mut self, entity: &GlobalEntity) -> Result<(), AuthorityError> {
+    pub(crate) fn server_take_authority(&mut self, entity: &GlobalEntity) -> Result<AuthOwner, AuthorityError> {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
             return Err(AuthorityError::NotDelegated);
         };
@@ -125,7 +125,7 @@ impl ServerAuthHandler {
         *owner = AuthOwner::None;
         self.release_all_authority(entity, previous_owner);
 
-        Ok(())
+        Ok(previous_owner)
     }
 
     fn release_all_authority(&mut self, entity: &GlobalEntity, owner: AuthOwner) -> bool {

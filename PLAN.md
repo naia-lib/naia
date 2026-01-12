@@ -1,8 +1,25 @@
 # Naia Development Plan
 
-**Status:** Active - Phase 3 (Fill Coverage Gaps)
+**Status:** Active - Phase A (Complete Test Coverage)
 **Updated:** 2026-01-12
-**Goal:** 100% spec coverage, feature-complete implementation
+**Goal:** All spec contracts have compiling tests, then fix implementation
+
+---
+
+## Two-Phase Development Process
+
+**Phase A: Complete Test Coverage (CURRENT)**
+- Every spec contract has a compiling E2E test
+- Tests MUST compile with NO `todo!()` macros
+- Tests are allowed to FAIL - that indicates implementation gaps
+- Goal: 185/185 contracts covered, zero `todo!()`
+
+**Phase B: Fix Implementation (AFTER Phase A)**
+- Run all tests, observe failures
+- Systematically fix implementation
+- Failing tests are the bug tracker
+
+**Key insight:** A `todo!()` in a test is a **specification gap**, not an implementation bug. Write what you *expect* to happen, and let the test fail.
 
 ---
 
@@ -10,138 +27,123 @@
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| Contract coverage | 176/185 (95%) | 185/185 (100%) |
-| Covered contracts | 176 | 185 |
-| Blocked by impl bug | 0 | 0 |
-| Need harness extension | 9 | 0 |
+| Contracts with compiling tests | 176/185 (95%) | 185/185 (100%) |
+| Tests with `todo!()` | TBD (run grep) | 0 |
+| Harness gaps (observability) | 9 | 0 |
 
 ---
 
-## Session 2026-01-12 Progress
+## Immediate Next Actions (Phase A)
 
-### Completed
-1. **Fixed entity-authority-11/12 implementation bug** ✓
-   - Fixed 3 locations in `remote_world_manager.rs` (graceful error handling for missing entities)
-   - Added `user_is_authority_holder()` helper to `server_auth_handler.rs`
-   - Added automatic authority release when holder loses scope in `world_server.rs`
-   - Test `out_of_scope_ends_authority_for_that_client` now passes 3x
-
-2. **Implemented 8 test stubs in entity_authority_server_ops.rs**
-   - 3 tests pass: `duplicate_authority_signals_are_idempotent`, `out_of_scope_ends_authority_for_that_client`, `give_authority_assigns_to_client_and_denies_everyone_else`
-   - 5 tests need API investigation (see below)
-
-3. **Added e2e_debug documentation** to CLAUDE.md, DEV_PROCESS.md, and PLAN.md
-
-### In Progress: API Investigation Needed
-Several tests fail due to API semantics misunderstanding:
-- `take_authority()` - Sets authority to None/Available, not Server-held Denied
-- `release_authority()` - Only works when server is holder, not when client holds
-
-**Tests needing fixes:**
-- `take_authority_forces_server_hold_all_clients_denied` - timeout
-- `server_held_authority_is_indistinguishable_from_client_is_denied` - timeout
-- `server_priority_take_authority_overrides_a_client_holder` - timeout
-- `server_release_authority_clears_holder_all_clients_available` - NotHolder error
-- `former_holder_sees_granted_to_available_on_server_release` - NotHolder error
-
----
-
-## Immediate Next Actions
-
-### Priority 1: Fix Remaining Server Ops Tests
-Investigate and fix the 5 failing tests by understanding the actual API semantics:
+### Priority 1: Eliminate All `todo!()` Macros
 
 ```bash
-# Run with debug to understand flow
-cargo test --package naia-test --features e2e_debug server_release_authority -- --nocapture
-
-# Check API documentation
-grep -A 20 "fn take_authority" server/src/world/entity_mut.rs
-grep -A 20 "fn release_authority" server/src/world/entity_mut.rs
+# Find all todo!() in tests
+grep -rn "todo!" test/tests/*.rs
 ```
 
-**Key question:** Does `release_authority()` release any holder, or only server-held authority?
+For each `todo!()`:
+1. Read the spec contract it references
+2. Write actual test assertions (what SHOULD happen)
+3. Test must COMPILE - failure is acceptable
+4. The test failure documents the implementation gap
 
-### Priority 2: Assess Observability APIs (Unblocks 9 contracts)
+### Priority 2: Cover Remaining 9 Contracts (observability-01 through 09)
 
-**Contracts:** observability-01 through observability-09
-
-**Steps:**
-```
-1. Grep for existing metrics APIs:
-   grep -rn "rtt\|throughput\|connection.*count\|latency" server/src/ client/src/
-
-2. For each observability contract, check if API exists:
-   - observability-01: Connection count → server.users_count()?
-   - observability-02: Disconnection count → track in test?
-   - observability-03: Message throughput → needs harness
-   - observability-04: RTT → client.rtt()?
-   - observability-05: Latency → needs harness
-   - observability-06: Entity count → server.entities_count()?
-
-3. If API exists: Write test
-4. If API missing: Design minimal harness extension
-```
-
-**Harness Extension Option (if needed):**
-```rust
-#[cfg(feature = "test-metrics")]
-impl Server {
-    pub fn test_get_metrics(&self) -> TestMetrics { ... }
-}
-```
-
----
-
-### Priority 3: Full Validation
-
-After above priorities complete:
+**Approach:** Write tests that assert expected behavior. If APIs don't exist, tests will fail - that's fine, it documents the gap.
 
 ```bash
-# 1. Run full test suite 3x
-cargo test --package naia-test
-cargo test --package naia-test
-cargo test --package naia-test
-
-# 2. Verify coverage
-./specs/spec_tool.sh coverage  # Should show 185/185 (100%)
-
-# 3. Regenerate artifacts
-./specs/spec_tool.sh traceability
-./specs/spec_tool.sh bundle
-
-# 4. Quality gates
-cargo clippy --no-deps
-cargo fmt -- --check
+# Check what APIs exist
+grep -rn "rtt\|throughput\|connection.*count\|latency" server/src/ client/src/
 ```
+
+For each observability contract:
+1. Read the spec
+2. Write a compiling test asserting expected behavior
+3. If API missing, test will fail with clear error - that's OK
+4. Coverage tool sees the annotation
+
+### Priority 3: Verify Phase A Complete
+
+```bash
+# 1. Check coverage (must be 185/185)
+./specs/spec_tool.sh coverage
+
+# 2. Check for todo!() (must be 0)
+grep -r "todo!" test/tests/*.rs
+
+# 3. Verify all tests compile
+cargo test --package naia-test --no-run
+```
+
+**Phase A is complete when:**
+- `spec_tool.sh coverage` shows 185/185 (100%)
+- `grep -r "todo!" test/tests/*.rs` returns nothing
+- `cargo test --package naia-test --no-run` succeeds
 
 ---
 
-## Phase Progress
+## Phase A Progress
 
-| Phase | Status | Key Deliverable |
-|-------|--------|-----------------|
-| Phase 1: Establish Traceability | **DONE** | All 154 tests annotated with contracts |
-| Phase 2: Gap Analysis | **DONE** | GAP_ANALYSIS.md created, 83 gaps identified |
-| Phase 3: Fill Coverage Gaps | **95% DONE** | 176/185 covered, 9 remaining |
-| Phase 4: Spec Refinements | Pending | Orphan MUSTs → contracts |
-| Phase 5: Automation & CI | Pending | GitHub Actions workflow |
+| Task | Status |
+|------|--------|
+| Annotate all existing tests | **DONE** |
+| Gap analysis | **DONE** |
+| Write tests for 176 contracts | **DONE** |
+| Eliminate `todo!()` macros | **IN PROGRESS** |
+| Write tests for 9 observability contracts | **PENDING** |
+
+---
+
+## After Phase A: Phase B Planning
+
+Once Phase A is complete, Phase B will:
+
+1. Run all tests: `cargo test --package naia-test`
+2. Collect list of failing tests
+3. Prioritize by importance/risk
+4. Systematically fix implementation
+5. Each fix: run 3x for flakiness, check no regressions
+
+**Do not start Phase B until Phase A is complete.**
+
+---
+
+## Session History
+
+### 2026-01-12
+- **Process change:** Adopted two-phase development (Phase A: tests, Phase B: impl)
+- Updated CLAUDE.md, DEV_PROCESS.md, PLAN.md to reflect new process
+
+### Previous Sessions
+- Fixed entity-authority-11/12 implementation bug
+- Fixed take_authority() sending wrong messages
+- Added e2e_debug documentation
+- Annotated 154 tests with contract IDs
+- Generated GAP_ANALYSIS.md with 83 gaps identified
 
 ---
 
 ## Completion Checklist
 
 ```
-[x] Phase 1: Annotate all existing tests with contract IDs
-[x] Phase 2: Generate gap analysis and prioritize
-[x] Phase 3a: Cover high-risk contracts (authority, delegation, publication)
-[x] Phase 3b: Fix entity-authority-11/12 implementation bug (2026-01-12)
-[ ] Phase 3c: Fix remaining server ops tests (5 failing - API semantics)
-[ ] Phase 3d: Assess and test observability contracts
-[ ] Verify 185/185 coverage
-[ ] Run full test suite 3x for flakiness
-[ ] Phase 4: Resolve orphan MUST statements
-[ ] Phase 5: Add CI pipeline for spec validation
+[x] Annotate all existing tests with contract IDs
+[x] Generate gap analysis
+[x] Write tests for 176 contracts
+
+--- PHASE A: Complete Test Coverage ---
+[ ] Eliminate ALL todo!() macros (write actual assertions)
+[ ] Write compiling tests for 9 observability contracts
+[ ] Verify: spec_tool.sh coverage shows 185/185
+[ ] Verify: grep -r "todo!" returns nothing
+[ ] Verify: cargo test --package naia-test --no-run succeeds
+
+--- PHASE B: Fix Implementation (after Phase A) ---
+[ ] Run all tests, collect failures
+[ ] Prioritize fixes by importance
+[ ] Fix implementation systematically
+[ ] All tests pass
+[ ] Run 3x for flakiness
 ```
 
 ---
@@ -204,11 +206,17 @@ Test files now map directly to spec files for instant traceability:
 
 ## Quality Rules for Tests
 
+**Phase A requirements (test coverage):**
+1. **Must compile** - No `todo!()` macros, actual assertions
+2. **Contract annotations required** - Every test needs `/// Contract: [id]`
+3. **Minimal assertions** - Test exactly what the contract specifies
+4. **Failures are OK** - Test documents implementation gap
+
+**Phase B requirements (implementation fixes):**
 1. **No timing hacks** - Use `expect()` polling, not `sleep()`
 2. **Reordering-tolerant** - Tests must pass regardless of async message order
-3. **Contract annotations required** - Every test needs `/// Contract: [id]`
-4. **Minimal assertions** - Test exactly what the contract specifies
-5. **Run 3x** - Verify no flakiness before marking complete
+3. **Run 3x** - Verify no flakiness before marking complete
+4. **No regressions** - Full test suite must still pass
 
 ---
 
@@ -216,20 +224,25 @@ Test files now map directly to spec files for instant traceability:
 
 ```bash
 # Start of session
-./specs/spec_tool.sh coverage          # Check current state
-grep -r "todo!" test/tests/*.rs        # Find blocked tests
+./specs/spec_tool.sh coverage          # Check contracts with tests (target: 185/185)
+grep -r "todo!" test/tests/*.rs        # Find incomplete tests (target: 0)
 
-# Working on contracts (1:1 mapping makes this easy)
+# Phase A work: Write compiling tests
 # For entity-authority contracts → open 11_entity_authority.rs
-# For messaging contracts → open 03_messaging.rs
-cargo test --package naia-test --test 11_entity_authority  # Run test file
+cargo test --package naia-test --test 11_entity_authority --no-run  # Must compile
+cargo test --package naia-test --test 11_entity_authority           # May fail - OK!
+
+# Phase B work (ONLY after Phase A complete): Fix implementation
+cargo test --package naia-test         # See all failures
+# Fix implementation, then verify:
+cargo test --package naia-test <test_name>  # 3x for flakiness
 
 # Debugging failing tests (enable detailed tracing)
 cargo test --package naia-test --features e2e_debug <test_name> -- --nocapture
 
 # End of session
-./specs/spec_tool.sh coverage          # Verify improvement
-./specs/spec_tool.sh traceability      # Update matrix
+./specs/spec_tool.sh coverage          # Verify annotation coverage
+grep -r "todo!" test/tests/*.rs        # Verify no incomplete tests
 ```
 
 ### e2e_debug Feature

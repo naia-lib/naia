@@ -26,22 +26,36 @@
 
 **If implementation differs from spec, the implementation is wrong.**
 
-The specification documents in `specs/contracts/*.md` define the correct behavior of Naia. When a test fails, it usually means the implementation has a bug, not that the spec is wrong.
+The specification documents in `specs/contracts/*.md` define the correct behavior of Naia. When a test fails, it means the implementation has a bug, not that the spec is wrong.
 
-### 1.2 The Flywheel
+### 1.2 Two-Phase Development
 
+**Phase A: Complete Test Coverage**
 ```
-Contracts → Tests → Implementation → Validation
-    ↑                                      ↓
-    └──────── Spec Refinements ←──────────┘
+Contracts → Compiling Tests (no todo!())
 ```
+- Every spec contract has a compiling E2E test
+- Tests are allowed to FAIL - failures indicate implementation gaps
+- Goal: 185/185 contracts covered, zero `todo!()` macros
 
-Each cycle:
-1. Improves both specs and implementation
-2. Catches bugs before they ship
-3. Creates documentation as a side effect
+**Phase B: Fix Implementation**
+```
+Failing Tests → Implementation Fixes → Passing Tests
+```
+- Run all tests, observe failures
+- Systematically fix implementation
+- Failing tests are the bug tracker
 
-### 1.3 Minimal Diffs Win
+**Key Insight:** A `todo!()` in a test is a **specification gap**, not an implementation bug. Write what you *expect* to happen, and let the test fail if the implementation is wrong. The failing test documents exactly what's broken.
+
+### 1.3 Why This Order Matters
+
+1. **Complete visibility:** You can't fix what you can't see. All spec behavior must be tested first.
+2. **Prioritization:** Once all tests exist, you can prioritize fixes by importance, not by which test you wrote first.
+3. **Regression prevention:** New tests don't get blocked by existing bugs.
+4. **Clear separation:** Test writing is about understanding specs; implementation fixing is about code.
+
+### 1.4 Minimal Diffs Win
 
 - Prefer Edit over Write
 - Prefer adding annotation over adding test (if test exists)
@@ -52,18 +66,38 @@ Each cycle:
 
 ## 2. The SDD Loop
 
-### 2.1 Overview
+### 2.1 Overview: Two Phases
+
+Development proceeds in two distinct phases:
 
 ```
-┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
-│  1.SPEC  │────▶│  2.TEST  │────▶│  3.IMPL  │────▶│  4.VALID │
-│  Define  │     │  Write   │     │  Build   │     │  Verify  │
-└──────────┘     └──────────┘     └──────────┘     └──────────┘
-      ▲                                                  │
-      └──────────────────────────────────────────────────┘
+╔═══════════════════════════════════════════════════════════════════╗
+║  PHASE A: Complete Test Coverage                                  ║
+║                                                                   ║
+║  ┌──────────┐     ┌──────────┐     ┌──────────┐                  ║
+║  │  1.SPEC  │────▶│  2.TEST  │────▶│  3.VALID │                  ║
+║  │   Find   │     │  Write   │     │ Coverage │                  ║
+║  └──────────┘     └──────────┘     └──────────┘                  ║
+║                                                                   ║
+║  Goal: 185/185 contracts have compiling tests, zero todo!()       ║
+║  Tests are ALLOWED TO FAIL - that documents implementation gaps   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+                              ↓ Phase A complete
+
+╔═══════════════════════════════════════════════════════════════════╗
+║  PHASE B: Fix Implementation                                      ║
+║                                                                   ║
+║  ┌──────────┐     ┌──────────┐     ┌──────────┐                  ║
+║  │  1.RUN   │────▶│  2.FIX   │────▶│ 3.VERIFY │                  ║
+║  │  Tests   │     │   Impl   │     │  Passes  │                  ║
+║  └──────────┘     └──────────┘     └──────────┘                  ║
+║                                                                   ║
+║  Goal: All tests pass, implementation matches spec                ║
+╚═══════════════════════════════════════════════════════════════════╝
 ```
 
-### 2.2 Phase 1: SPEC (Find or Define Contract)
+### 2.2 Phase A, Step 1: SPEC (Find Contract)
 
 **Goal:** Identify the contract that defines the behavior.
 
@@ -87,9 +121,11 @@ Each cycle:
    ```
 4. Validate: `./specs/spec_tool.sh lint`
 
-### 2.3 Phase 2: TEST (Write E2E Test)
+### 2.3 Phase A, Step 2: TEST (Write Compiling Test)
 
-**Goal:** Create a test that verifies the contract.
+**Goal:** Create a compiling test that asserts the contract's expected behavior.
+
+**Critical:** NO `todo!()` macros. Write actual assertions. If the test fails, that's fine - it documents an implementation gap.
 
 **Steps:**
 1. Find similar existing tests:
@@ -103,34 +139,24 @@ Each cycle:
    #[test]
    fn contract_name_scenario() {
        let mut scenario = Scenario::new();
-       // ...
+       // ... setup ...
+
+       // Assert expected behavior (test may fail - that's OK!)
+       scenario.expect(|ctx| {
+           let result = ctx.client(client_key, |c| c.has_entity(&entity));
+           result.then_some(())
+       });
    }
    ```
-4. Run test (should fail or pass depending on impl state):
+4. Verify test COMPILES (failure is acceptable):
    ```bash
-   cargo test --package naia-test contract_name_scenario
+   cargo test --package naia-test --test <file> --no-run  # Must compile
+   cargo test --package naia-test contract_name_scenario   # May fail
    ```
 
-### 2.4 Phase 3: IMPL (Make Test Pass)
+### 2.4 Phase A, Step 3: VALID (Verify Coverage)
 
-**Goal:** Implement or fix code to satisfy the contract.
-
-**Steps:**
-1. If test fails, identify the implementation gap
-2. Make minimal changes to the relevant crate:
-   - `shared/` for protocol-level changes
-   - `client/` for client-side behavior
-   - `server/` for server-side behavior
-3. Run test until it passes
-4. Run quality checks:
-   ```bash
-   cargo clippy --no-deps
-   cargo fmt -- --check
-   ```
-
-### 2.5 Phase 4: VALID (Verify Coverage)
-
-**Goal:** Confirm the contract is now covered.
+**Goal:** Confirm the contract has a compiling test.
 
 **Steps:**
 1. Run coverage check:
@@ -138,11 +164,57 @@ Each cycle:
    ./specs/spec_tool.sh coverage
    ```
 2. Verify the contract ID appears in "covered" output
-3. Run test 3x for flakiness check:
+3. Check for remaining todos:
+   ```bash
+   grep -r "todo!" test/tests/*.rs
+   ```
+
+### 2.5 Phase B, Step 1: RUN (Identify Failures)
+
+**Goal:** See which tests fail and understand the implementation gaps.
+
+**Prerequisites:** Phase A complete (185/185 coverage, zero `todo!()`)
+
+**Steps:**
+1. Run all tests:
+   ```bash
+   cargo test --package naia-test
+   ```
+2. Collect list of failing tests
+3. Prioritize by importance/risk
+
+### 2.6 Phase B, Step 2: FIX (Implement Correct Behavior)
+
+**Goal:** Make the test pass by fixing the implementation.
+
+**Steps:**
+1. Read the failing test to understand expected behavior
+2. Read the spec contract for context
+3. Make minimal changes to the relevant crate:
+   - `shared/` for protocol-level changes
+   - `client/` for client-side behavior
+   - `server/` for server-side behavior
+4. Run test until it passes
+5. Run quality checks:
+   ```bash
+   cargo clippy --no-deps
+   cargo fmt -- --check
+   ```
+
+### 2.7 Phase B, Step 3: VERIFY (Confirm Fix)
+
+**Goal:** Confirm the fix is correct and doesn't regress other tests.
+
+**Steps:**
+1. Run test 3x for flakiness check:
    ```bash
    cargo test --package naia-test contract_name_scenario
    cargo test --package naia-test contract_name_scenario
    cargo test --package naia-test contract_name_scenario
+   ```
+2. Run full test suite to check for regressions:
+   ```bash
+   cargo test --package naia-test
    ```
 
 ---
@@ -269,21 +341,42 @@ fn delegation_enables_authority_semantics() {
 }
 ```
 
-### 3.5 Blocked Test Pattern
+### 3.5 Failing Test Pattern (Preferred)
 
-When a test is blocked by an implementation bug:
+When a test fails due to an implementation bug, **write the full test anyway**:
 
 ```rust
 /// Contract: [entity-authority-11]
 /// Contract: [entity-authority-12]
-///
-/// TODO: Blocked by implementation bug in remote_world_manager.rs
-/// Error: EntityDoesNotExistError when authority holder goes out of scope
 #[test]
 fn out_of_scope_ends_authority_for_that_client() {
-    todo!("Blocked by implementation bug: authority holder going out of scope panics")
+    let mut scenario = Scenario::new();
+    // ... full setup ...
+
+    // Remove client from scope
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.user_scope_mut(&client_key).unwrap().exclude(&entity);
+        });
+    });
+
+    // Assert expected behavior (may fail - that's OK!)
+    // The failure message documents the implementation gap
+    scenario.expect(|ctx| {
+        let status = ctx.client(client_key, |c| {
+            c.entity(&entity).and_then(|e| e.authority())
+        });
+        // Client should no longer have the entity
+        (status.is_none()).then_some(())
+    });
 }
 ```
+
+**Why this is better than `todo!()`:**
+- Test compiles and runs
+- Failure message documents exactly what's broken
+- Coverage tools see the test
+- When implementation is fixed, test automatically passes
 
 ---
 
@@ -449,54 +542,56 @@ cargo test --package naia-test test_3
 
 ## 6. Workflow Templates
 
-### 6.1 Coverage Improvement
+### 6.1 Phase A: Add Test Coverage for Contract
 
 ```
 1. ./specs/spec_tool.sh coverage
 2. Pick uncovered contract from output
 3. grep -l "<domain>" test/tests/*.rs
 4. Read similar test (targeted)
-5. Write test with annotation
-6. cargo test --package naia-test <test_name>
-7. Fix if needed, run 3x for flakiness
-8. ./specs/spec_tool.sh coverage (verify)
+5. Write COMPILING test with annotation (no todo!())
+6. cargo test --package naia-test --test <file> --no-run  # Must compile
+7. cargo test --package naia-test <test_name>              # May fail - OK!
+8. ./specs/spec_tool.sh coverage (verify annotation)
 ```
 
-### 6.2 Bug Fix (Implementation)
+### 6.2 Phase A: Eliminate todo!() Macro
 
 ```
-1. Identify contract from spec
-2. grep for contract ID in tests
-3. If test exists and passes: spec might be wrong (investigate)
-4. If test exists and fails: fix implementation
-5. If no test: write one that reproduces bug
-6. Fix implementation
-7. Verify test passes
-8. Run 3x for flakiness
+1. grep -r "todo!" test/tests/*.rs
+2. Read the test with todo!()
+3. Read the spec contract it references
+4. Write actual assertions for expected behavior
+5. cargo test --package naia-test --test <file> --no-run  # Must compile
+6. cargo test --package naia-test <test_name>              # May fail - OK!
 ```
 
-### 6.3 New Feature
+### 6.3 Phase B: Fix Failing Test
+
+**Prerequisites:** Phase A complete (185/185 coverage, zero `todo!()`)
+
+```
+1. cargo test --package naia-test  # See all failures
+2. Pick a failing test
+3. Read the test to understand expected behavior
+4. Read the spec contract for context
+5. Fix implementation (minimal changes)
+6. cargo test --package naia-test <test_name>  # Should pass
+7. Run 3x for flakiness
+8. cargo test --package naia-test  # No regressions
+```
+
+### 6.4 New Feature
 
 ```
 1. Draft contracts in spec file
 2. ./specs/spec_tool.sh lint
 3. ./specs/spec_tool.sh gen-test <contract-id>
-4. Implement test (should fail)
-5. Implement feature code
-6. Verify test passes
-7. ./specs/spec_tool.sh coverage
-```
-
-### 6.4 Unblock todo!() Test
-
-```
-1. Read the todo!() message for context
-2. Read the implementation location mentioned
-3. Understand the bug
-4. Implement fix (minimal)
-5. Remove todo!() from test
-6. Implement actual test body
-7. Run test
+4. Write FULL test (no todo!()) - test will fail
+5. ./specs/spec_tool.sh coverage  # Verify annotation
+--- Phase A complete for this feature ---
+6. Implement feature code
+7. Verify test passes
 8. Run 3x for flakiness
 ```
 
@@ -649,20 +744,33 @@ use test_helpers::{test_client_config, client_connect};
 [ ] Read PLAN.md (always)
 [ ] Run ./specs/spec_tool.sh coverage
 [ ] Check grep -r "todo!" test/tests/*.rs
+[ ] Determine current phase (A or B)
 [ ] Identify next action
 ```
 
-**During work:**
+**Phase A work (Complete Test Coverage):**
 ```
-[ ] Use grep before read
-[ ] Use parallel tool calls
-[ ] Run test file, not individual tests
+[ ] Pick uncovered contract OR test with todo!()
+[ ] Write COMPILING test (no todo!())
+[ ] Verify test compiles: cargo test --package naia-test --test <file> --no-run
+[ ] Test may FAIL - that's acceptable
+[ ] Verify coverage: ./specs/spec_tool.sh coverage
+```
+
+**Phase B work (Fix Implementation):**
+```
+[ ] Prerequisites: 185/185 coverage, zero todo!()
+[ ] Run all tests: cargo test --package naia-test
+[ ] Pick failing test
+[ ] Fix implementation (minimal changes)
 [ ] Run 3x for flakiness
+[ ] Check no regressions
 ```
 
 **End of session:**
 ```
 [ ] Run ./specs/spec_tool.sh coverage
+[ ] Run grep -r "todo!" test/tests/*.rs
 [ ] Update PLAN.md if state changed
 [ ] Run ./specs/spec_tool.sh traceability if tests added
 ```

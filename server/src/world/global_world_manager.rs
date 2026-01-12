@@ -317,7 +317,7 @@ impl GlobalWorldManager {
     pub(crate) fn server_take_authority(
         &mut self,
         global_entity: &GlobalEntity,
-    ) -> Result<(), AuthorityError> {
+    ) -> Result<AuthOwner, AuthorityError> {
         if !self.entity_is_delegated(global_entity) {
             return Err(AuthorityError::NotDelegated);
         }

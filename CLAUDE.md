@@ -2,12 +2,15 @@
 
 Naia is a cross-platform Rust networking engine for multiplayer games. Architecture follows the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf).
 
-## Current State (2026-01-11)
+## Current State (2026-01-12)
 
 | Metric | Value |
 |--------|-------|
-| Contract coverage | 176/185 (95%) |
-| Need harness extension | 9 (observability-01 through 09) |
+| Contracts with compiling tests | 176/185 (95%) |
+| Tests with `todo!()` | TBD |
+| Harness gaps (observability) | 9 |
+
+**Goal:** 185/185 contracts have compiling tests with NO `todo!()` macros.
 
 ## Test File Organization (1:1 Mapping)
 
@@ -50,11 +53,26 @@ grep -r "todo!" test/tests/*.rs
 specs/contracts/*.md (contracts) → test/tests/*.rs (E2E tests) → Implementation
 ```
 
-**The SDD Loop:**
-1. **SPEC**: Define/find contract `[contract-id]` in `specs/contracts/`
-2. **TEST**: Write test with `/// Contract: [contract-id]` annotation
-3. **IMPL**: Make test pass with minimal code changes
-4. **VALID**: Run `./specs/spec_tool.sh coverage` to verify
+### Two-Phase Development Process
+
+**Phase A: Complete Test Coverage (CURRENT PRIORITY)**
+- Write compiling E2E tests for ALL spec contracts
+- Tests MUST compile with NO `todo!()` macros
+- Tests are allowed to FAIL - that indicates implementation gaps
+- Goal: `spec_tool.sh coverage` shows 185/185 (100%)
+
+**Phase B: Fix Implementation**
+- Run all tests, observe failures
+- Systematically fix implementation to make tests pass
+- Failing tests are the bug tracker
+
+**Key insight:** A `todo!()` in a test is a **specification gap**, not an implementation bug. Write what you *expect* to happen, and let the test fail if the implementation is wrong.
+
+**The SDD Loop (Phase A):**
+1. **SPEC**: Find contract `[contract-id]` in `specs/contracts/`
+2. **TEST**: Write compiling test with `/// Contract: [contract-id]` annotation
+3. **VERIFY**: Ensure test compiles (allowed to fail)
+4. **VALID**: Run `./specs/spec_tool.sh coverage` to verify annotation
 
 ## Essential Commands
 
@@ -142,10 +160,11 @@ fn contract_name_scenario() {
 | `specs/generated/TRACEABILITY.md` | Contract↔test mapping | Checking coverage |
 | `specs/generated/GAP_ANALYSIS.md` | Prioritized uncovered contracts | Planning work |
 
-## Known Blockers
+## Known Gaps
 
 ### Harness Gap: observability-01 through 09
 - Metrics contracts require APIs not exposed in test harness
+- **Phase A approach:** Write tests that assert expected behavior; if APIs don't exist, tests will fail to compile or fail at runtime - that's fine, it documents the gap
 - Options: Check existing APIs (rtt, connection_count), or add feature-gated test hooks
 
 ## Initiative Guidelines
@@ -163,28 +182,29 @@ fn contract_name_scenario() {
 
 ## Workflow Quick Reference
 
-**Coverage improvement:**
+**Phase A: Complete test coverage (CURRENT PRIORITY)**
 1. Run `./specs/spec_tool.sh coverage`
 2. Pick uncovered contract from output
 3. Grep for similar tests: `grep -l "entity-authority" test/tests/*.rs`
 4. Read similar test for pattern
-5. Write test with contract annotation
-6. Run test, fix if needed
-7. Run coverage again to verify
+5. Write COMPILING test with contract annotation (no `todo!()`)
+6. Verify test compiles: `cargo test --package naia-test --test <file> --no-run`
+7. Run coverage again to verify annotation
+8. Test is allowed to FAIL - that's fine for Phase A
 
-**Bug fix:**
-1. Identify contract from spec
-2. Check if test exists (grep for contract ID)
-3. If no test, write one that reproduces bug
-4. Fix implementation
+**Phase A: Eliminate todo!() macros**
+1. Run `grep -r "todo!" test/tests/*.rs`
+2. For each todo!(), write actual test assertions
+3. Test must COMPILE (failures are OK)
+4. The test failure message documents the implementation gap
+
+**Phase B: Fix implementation (AFTER Phase A complete)**
+1. Run `cargo test --package naia-test` to see all failures
+2. Pick a failing test
+3. Understand what the test expects (read the spec)
+4. Fix implementation to match spec
 5. Verify test passes
-
-**Implementation fix (like entity-authority-11/12):**
-1. Read the error location
-2. Understand the code path
-3. Make minimal fix
-4. Remove `todo!()` from test
-5. Run test to verify
+6. Run 3x for flakiness
 
 ## Debugging Tests
 
