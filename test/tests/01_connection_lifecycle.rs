@@ -1,18 +1,33 @@
+#![allow(unused_imports)]
+
 use std::time::Duration;
 
-use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig};
-use naia_server::ServerConfig;
+use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientReplicationConfig};
+use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
+use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
 use naia_test::{
-    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientKey, ClientRejectEvent,
-    Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
+    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
+    ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
+    ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
+    ToTicks,
 };
 
-mod test_helpers;
-use test_helpers::{client_connect, server_and_client_connected, test_client_config};
+// Test protocol types (channels and messages)
+use naia_test::test_protocol::{
+    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel,
+    TestMessage, TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel,
+    UnreliableChannel,
+};
+
+mod _helpers;
+use _helpers::{client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config};
+
 
 // ============================================================================
-// Domain 1.1: Connection & User Lifecycle
+// Connection Lifecycle Tests
+// ============================================================================
+// Tests organized by contract ID to match specs/contracts/1_connection_lifecycle.md
 // ============================================================================
 
 /// Basic connect/disconnect lifecycle
@@ -67,7 +82,7 @@ fn basic_connect_disconnect_lifecycle() {
     let entity_a = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
-                e.configure_replication(ReplicationConfig::Public)
+                e.configure_replication(ClientReplicationConfig::Public)
                     .insert_component(Position::new(1.0, 2.0));
             })
         })
@@ -118,6 +133,87 @@ fn basic_connect_disconnect_lifecycle() {
     // The test plan says "all entities/scope for A are cleaned up" but this might
     // mean scope cleanup, not necessarily entity despawn. The entity cleanup
     // behavior may be implementation-dependent.
+}
+
+/// Invalid credentials are rejected
+/// Contract: [connection-02]
+/// Contract: [connection-09]
+/// Contract: [connection-11]
+///
+/// Given `require_auth = true` and an auth handler rejecting bad credentials;
+/// when A connects with invalid auth; then server emits an auth event but no connect event,
+/// A never appears as connected, and receives no replication.
+#[test]
+fn invalid_credentials_rejected() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    let mut server_config = ServerConfig::default();
+    server_config.require_auth = true;
+    scenario.server_start(server_config, test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let invalid_auth = Auth::new("invalid_user", "wrong_password");
+    let client_a_key = scenario.client_start(
+        "Client A",
+        invalid_auth.clone(),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+
+    // Server: read auth event
+    let mut auth_event_received = false;
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_client_key, incoming_auth)) =
+                server.read_event::<ServerAuthEvent<Auth>>()
+            {
+                if incoming_client_key == client_a_key && incoming_auth == invalid_auth {
+                    auth_event_received = true;
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+
+    assert!(auth_event_received, "Auth event should be received");
+
+    // Server: reject connection (don't accept)
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.reject_connection(&client_a_key);
+        });
+    });
+
+    // Wait a few ticks and verify no connect event
+    let mut connect_event_received = false;
+    for _ in 0..10 {
+        scenario.expect(|ctx| {
+            ctx.server(|server| {
+                if server.read_event::<ServerConnectEvent>().is_some() {
+                    connect_event_received = true;
+                }
+                Some(())
+            })
+        });
+        scenario.mutate(|_ctx| {});
+    }
+
+    assert!(
+        !connect_event_received,
+        "No connect event should be emitted for rejected auth"
+    );
+
+    // Verify A is not connected and doesn't receive replication
+    scenario.expect(|ctx| {
+        let not_connected = !ctx.client(client_a_key, |c| c.connection_status().is_connected());
+        let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
+        let is_rejected = ctx.client(client_a_key, |c| c.is_rejected());
+
+        (not_connected && !user_exists && is_rejected).then_some(())
+    });
 }
 
 /// Connect event ordering is stable
@@ -327,10 +423,6 @@ fn disconnect_idempotent_and_clean() {
     });
 }
 
-// ============================================================================
-// Domain 1.2: Auth
-// ============================================================================
-
 /// Successful auth with `require_auth = true`
 /// Contract: [connection-07], [connection-08]
 ///
@@ -391,87 +483,6 @@ fn successful_auth_with_require_auth() {
         ctx.client(client_a_key, |client| {
             client.has_entity(&entity).then_some(())
         })
-    });
-}
-
-/// Invalid credentials are rejected
-/// Contract: [connection-02]
-/// Contract: [connection-09]
-/// Contract: [connection-11]
-///
-/// Given `require_auth = true` and an auth handler rejecting bad credentials;
-/// when A connects with invalid auth; then server emits an auth event but no connect event,
-/// A never appears as connected, and receives no replication.
-#[test]
-fn invalid_credentials_rejected() {
-    let mut scenario = Scenario::new();
-    let test_protocol = protocol();
-
-    let mut server_config = ServerConfig::default();
-    server_config.require_auth = true;
-    scenario.server_start(server_config, test_protocol.clone());
-
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
-
-    let invalid_auth = Auth::new("invalid_user", "wrong_password");
-    let client_a_key = scenario.client_start(
-        "Client A",
-        invalid_auth.clone(),
-        test_client_config(),
-        test_protocol.clone(),
-    );
-
-    // Server: read auth event
-    let mut auth_event_received = false;
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some((incoming_client_key, incoming_auth)) =
-                server.read_event::<ServerAuthEvent<Auth>>()
-            {
-                if incoming_client_key == client_a_key && incoming_auth == invalid_auth {
-                    auth_event_received = true;
-                    return Some(());
-                }
-            }
-            None
-        })
-    });
-
-    assert!(auth_event_received, "Auth event should be received");
-
-    // Server: reject connection (don't accept)
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.reject_connection(&client_a_key);
-        });
-    });
-
-    // Wait a few ticks and verify no connect event
-    let mut connect_event_received = false;
-    for _ in 0..10 {
-        scenario.expect(|ctx| {
-            ctx.server(|server| {
-                if server.read_event::<ServerConnectEvent>().is_some() {
-                    connect_event_received = true;
-                }
-                Some(())
-            })
-        });
-        scenario.mutate(|_ctx| {});
-    }
-
-    assert!(
-        !connect_event_received,
-        "No connect event should be emitted for rejected auth"
-    );
-
-    // Verify A is not connected and doesn't receive replication
-    scenario.expect(|ctx| {
-        let not_connected = !ctx.client(client_a_key, |c| c.connection_status().is_connected());
-        let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
-        let is_rejected = ctx.client(client_a_key, |c| c.is_rejected());
-
-        (not_connected && !user_exists && is_rejected).then_some(())
     });
 }
 
@@ -675,10 +686,6 @@ fn no_mid_session_reauth() {
         });
     }
 }
-
-// ============================================================================
-// Domain 1.3: Connection Errors, Rejects & Timeouts
-// ============================================================================
 
 /// Server capacity-based reject produces RejectEvent, not ConnectEvent
 /// Contract: [connection-17], [connection-18]
@@ -907,10 +914,6 @@ fn protocol_handshake_mismatch_fails() {
         })
     });
 }
-
-// ============================================================================
-// Domain 1.4: Identity Token & Handshake Semantics
-// ============================================================================
 
 /// Malformed or tampered identity token is rejected cleanly
 /// Contract: [connection-23], [connection-24]

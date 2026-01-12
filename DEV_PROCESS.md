@@ -604,20 +604,28 @@ This shows network events like `[SERVER_SEND]` and `[CLIENT_RECV]` with entity I
 | `client-events-` | Client event API | 13_client_events_api.md |
 | `world-integration-` | ECS integration | 14_world_integration.md |
 
-### Appendix B: Test File Map
+### Appendix B: Test File Map (1:1 Spec Mapping)
 
-| Domain | Test File |
-|--------|-----------|
-| connection-* | `connection_auth_identity.rs` |
-| entity-authority-* | `entity_authority_server_ops.rs`, `entity_authority_client_ops.rs` |
-| entity-delegation-* | `entity_delegation_toggle.rs`, `entity_migration_and_events.rs` |
-| entity-ownership-* | `entity_client_owned.rs` |
-| entity-publication-* | `entity_client_owned.rs` |
-| entity-replication-* | `entities_lifetime_identity.rs` |
-| entity-scopes-* | `rooms_scope_snapshot.rs`, `entity_scope_coupling.rs` |
-| messaging-* | `messaging_channels.rs`, `protocol_schema_versioning.rs` |
-| server-events-*, client-events-*, world-integration-* | `events_world_integration.rs` |
-| time-*, commands-*, transport-* | `time_ticks_transport.rs`, `integration_transport_parity.rs` |
+Test files now map 1:1 to spec files for instant traceability:
+
+| Spec File | Test File |
+|-----------|-----------|
+| `1_connection_lifecycle.md` | `01_connection_lifecycle.rs` |
+| `2_transport.md` | `02_transport.rs` |
+| `3_messaging.md` | `03_messaging.rs` |
+| `4_time_ticks_commands.md` | `04_time_ticks_commands.rs` |
+| `5_observability_metrics.md` | `05_observability_metrics.rs` |
+| `6_entity_scopes.md` | `06_entity_scopes.rs` |
+| `7_entity_replication.md` | `07_entity_replication.rs` |
+| `8_entity_ownership.md` | `08_entity_ownership.rs` |
+| `9_entity_publication.md` | `09_entity_publication.rs` |
+| `10_entity_delegation.md` | `10_entity_delegation.rs` |
+| `11_entity_authority.md` | `11_entity_authority.rs` |
+| `12_server_events_api.md` | `12_server_events_api.rs` |
+| `13_client_events_api.md` | `13_client_events_api.rs` |
+| `14_world_integration.md` | `14_world_integration.rs` |
+
+**Finding tests:** To find tests for spec `N_domain.md`, open `NN_domain.rs`
 
 ### Appendix C: Imports Reference
 

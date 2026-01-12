@@ -7,8 +7,25 @@ Naia is a cross-platform Rust networking engine for multiplayer games. Architect
 | Metric | Value |
 |--------|-------|
 | Contract coverage | 176/185 (95%) |
-| Blocked by impl bug | 2 (entity-authority-11/12) |
 | Need harness extension | 9 (observability-01 through 09) |
+
+## Test File Organization (1:1 Mapping)
+
+Test files map directly to spec files for instant traceability:
+
+```
+specs/contracts/N_domain.md  →  test/tests/0N_domain.rs
+```
+
+| Spec | Test File |
+|------|-----------|
+| `1_connection_lifecycle.md` | `01_connection_lifecycle.rs` |
+| `2_transport.md` | `02_transport.rs` |
+| `3_messaging.md` | `03_messaging.rs` |
+| ... | ... |
+| `14_world_integration.md` | `14_world_integration.rs` |
+
+**To find tests for a contract:** Open the matching numbered test file
 
 ## Session Startup Protocol
 
@@ -107,7 +124,7 @@ fn contract_name_scenario() {
 **DO:**
 - Use Grep first, then targeted Read with offset/limit
 - Run parallel tool calls for independent operations
-- Run full test file, not individual tests: `cargo test --package naia-test --test entity_authority_server_ops`
+- Run full test file, not individual tests: `cargo test --package naia-test --test 11_entity_authority`
 - Reference existing test patterns; don't repeat code
 
 **DON'T:**
@@ -126,12 +143,6 @@ fn contract_name_scenario() {
 | `specs/generated/GAP_ANALYSIS.md` | Prioritized uncovered contracts | Planning work |
 
 ## Known Blockers
-
-### Implementation Bug: entity-authority-11/12
-- **Location:** `shared/src/world/remote/remote_world_manager.rs:146`
-- **Error:** `EntityDoesNotExistError` when authority holder goes out of scope
-- **Test:** `out_of_scope_ends_authority_for_that_client()` (currently `todo!()`)
-- **Fix:** Check entity existence before cleanup, or handle error gracefully
 
 ### Harness Gap: observability-01 through 09
 - Metrics contracts require APIs not exposed in test harness
