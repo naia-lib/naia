@@ -24,10 +24,10 @@ This spec owns:
 - command acceptance semantics
 
 This spec does NOT own:
-- transport drop/dup/reorder assumptions (see `3_transport.md`)
-- message channel ordering/reliability (see `4_messaging.md`)
+- transport drop/dup/reorder assumptions (see `2_transport.md`)
+- message channel ordering/reliability (see `3_messaging.md`)
 - entity replication/lifetime (see entity suite)
-- connection admission/auth steps (see `2_connection_lifecycle.md`)
+- connection admission/auth steps (see `1_connection_lifecycle.md`)
 
 ---
 
@@ -110,7 +110,7 @@ Tie-break rule (half-range ambiguity):
 ## Tick synchronization
 
 ### [time-10] — ConnectEvent implies tick sync complete
-A successful connection handshake MUST include tick synchronization, and the client MUST NOT emit `ConnectEvent` until tick sync is complete. (See `2_connection_lifecycle.md`.)
+A successful connection handshake MUST include tick synchronization, and the client MUST NOT emit `ConnectEvent` until tick sync is complete. (See `1_connection_lifecycle.md`.)
 
 Tick sync guarantees:
 - The client knows the server’s current tick at connection time (or a tick sufficiently recent to compute lead targeting).

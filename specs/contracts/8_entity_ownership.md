@@ -55,7 +55,7 @@ Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()`
 
 ### Server-owned entities (server view)
 - **entity-ownership-03**: For any server-owned entity `E` that is NOT delegated (`replication_config(E) != Some(Delegated)`), the server MUST NOT accept replicated writes from any client for `E`. Such writes MUST be ignored/dropped.
-- **entity-ownership-03**: For delegated entities, client writes are governed by `11_entity_delegation.md` / `12_entity_authority.md` (authority holder may write; others must not).
+- **entity-ownership-03**: For delegated entities, client writes are governed by `10_entity_delegation.md` / `11_entity_authority.md` (authority holder may write; others must not).
 - **entity-ownership-03**: The server MAY ignore unauthorized writes silently and/or record a metric/log, but MUST NOT apply them.
 
 ### Ownership does not emit authority events for client-owned entities
@@ -74,7 +74,7 @@ Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()`
 - **entity-ownership-05**: If Naia would enqueue/serialize/send a replication write from a client that is not a permitted writer: Naia MUST panic.
 
 Cross-link:
-- Delegated authority write permission is defined in `11_entity_delegation.md` / `12_entity_authority.md`.
+- Delegated authority write permission is defined in `10_entity_delegation.md` / `11_entity_authority.md`.
 
 ### Mutate vs Write (ownership gate)
 

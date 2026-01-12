@@ -588,21 +588,21 @@ This shows network events like `[SERVER_SEND]` and `[CLIENT_RECV]` with entity I
 
 | Prefix | Domain | Spec File |
 |--------|--------|-----------|
-| `connection-` | Connection lifecycle | 2_connection_lifecycle.md |
-| `transport-` | Transport layer | 3_transport.md |
-| `messaging-` | Message passing | 4_messaging.md |
+| `connection-` | Connection lifecycle | 1_connection_lifecycle.md |
+| `transport-` | Transport layer | 2_transport.md |
+| `messaging-` | Message passing | 3_messaging.md |
 | `time-` | Time/tick semantics | 5_time_ticks_commands.md |
 | `commands-` | Command buffer | 5_time_ticks_commands.md |
-| `observability-` | Metrics | 6_observability_metrics.md |
-| `entity-scopes-` | Scope predicates | 7_entity_scopes.md |
-| `entity-replication-` | Replication protocol | 8_entity_replication.md |
-| `entity-ownership-` | Ownership rules | 9_entity_ownership.md |
-| `entity-publication-` | Publication state | 10_entity_publication.md |
-| `entity-delegation-` | Delegation mechanics | 11_entity_delegation.md |
-| `entity-authority-` | Authority state machine | 12_entity_authority.md |
-| `server-events-` | Server event API | 13_server_events_api.md |
-| `client-events-` | Client event API | 14_client_events_api.md |
-| `world-integration-` | ECS integration | 15_world_integration.md |
+| `observability-` | Metrics | 5_observability_metrics.md |
+| `entity-scopes-` | Scope predicates | 6_entity_scopes.md |
+| `entity-replication-` | Replication protocol | 7_entity_replication.md |
+| `entity-ownership-` | Ownership rules | 8_entity_ownership.md |
+| `entity-publication-` | Publication state | 9_entity_publication.md |
+| `entity-delegation-` | Delegation mechanics | 10_entity_delegation.md |
+| `entity-authority-` | Authority state machine | 11_entity_authority.md |
+| `server-events-` | Server event API | 12_server_events_api.md |
+| `client-events-` | Client event API | 13_client_events_api.md |
+| `world-integration-` | ECS integration | 14_world_integration.md |
 
 ### Appendix B: Test File Map
 

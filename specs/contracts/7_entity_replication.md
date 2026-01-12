@@ -7,7 +7,7 @@ This spec defines the **client-observable behavior** of Naia’s entity/componen
 - entity identity across **lifetimes** (scope enter → scope leave, with the ≥1 tick rule)
 
 This spec does **not** define:
-- RPC/message semantics (see `4_messaging.md`)
+- RPC/message semantics (see `3_messaging.md`)
 - the internal serialization format
 - bandwidth/compression strategies
 
@@ -17,7 +17,7 @@ This spec does **not** define:
 
 - **Replicated component**: a component type that is part of the Protocol and may be synced over the wire.
 - **Local-only component**: a component instance present only in a local World that is not (currently) server-replicated for that entity.
-- **Entity lifetime (client-side)**: `scope enter → scope leave`, where re-entering scope after being out-of-scope for **≥ 1 tick** is a **new lifetime** (fresh spawn semantics). See `7_entity_scopes.md`.
+- **Entity lifetime (client-side)**: `scope enter → scope leave`, where re-entering scope after being out-of-scope for **≥ 1 tick** is a **new lifetime** (fresh spawn semantics). See `6_entity_scopes.md`.
 - **GlobalEntity**: global identity of an entity across the server’s lifetime (monotonically increasing u64; practical uniqueness).
 - **LocalEntity (HostEntity/RemoteEntity)**: per-connection entity handle(s) that may wrap/reuse across lifetimes; must be disambiguated by lifetime rules.
 
@@ -53,7 +53,7 @@ For any given client `C` and entity `E`, Naia MUST model a client-visible **life
 - If `E` re-enters scope after being out-of-scope for **≥ 1 tick**, Naia MUST treat this as a **new lifetime** with **fresh spawn snapshot semantics**.
 
 Cross-link:
-- Scope/lifetime rules are defined in `7_entity_scopes.md` and are binding here.
+- Scope/lifetime rules are defined in `6_entity_scopes.md` and are binding here.
 
 ---
 
@@ -118,7 +118,7 @@ Observability rule:
   not an Update event.
 
 Cross-link:
-- Ownership rules for local-only components vs server-backed replicated components are defined in `9_entity_ownership.md`. This contract ensures replication behavior conforms.
+- Ownership rules for local-only components vs server-backed replicated components are defined in `8_entity_ownership.md`. This contract ensures replication behavior conforms.
 
 ---
 
@@ -181,7 +181,7 @@ Additional design constraint (to avoid conflicts by construction):
     - For delegated entities, the server’s outbound replicated state remains the canonical convergence source for all clients.
     - While a client holds authority (Granted/Releasing), the server MUST treat the authority holder’s accepted writes as the source for that canonical replicated state (plus lifecycle transitions).
     - Therefore, the server MUST NOT originate independent conflicting replicated component mutations for `E` while a client holds authority.
-    - If the server revokes/resets authority, the canonical source may transition back to server-originated state after the reset boundary (see `12_entity_authority.md`).
+    - If the server revokes/resets authority, the canonical source may transition back to server-originated state after the reset boundary (see `11_entity_authority.md`).
 
 ---
 
@@ -206,9 +206,9 @@ For each contract above, Naia MUST eventually have at least one E2E test proving
 
 ## Cross-references
 
-- `7_entity_scopes.md` — defines scope enter/leave semantics and the ≥1 tick lifetime rule
-- `10_entity_publication.md` — defines publish/unpublish interactions with scope
-- `9_entity_ownership.md` — defines local-only mutation rules and ownership write constraints
-- `11_entity_delegation.md` / `12_entity_authority.md` — define delegation and authority semantics
-- `14_client_events_api.md` — defines client-observable event ordering/meaning
+- `6_entity_scopes.md` — defines scope enter/leave semantics and the ≥1 tick lifetime rule
+- `9_entity_publication.md` — defines publish/unpublish interactions with scope
+- `8_entity_ownership.md` — defines local-only mutation rules and ownership write constraints
+- `10_entity_delegation.md` / `11_entity_authority.md` — define delegation and authority semantics
+- `13_client_events_api.md` — defines client-observable event ordering/meaning
 - `5_time_ticks_commands.md` — defines tick semantics (including wrap considerations)

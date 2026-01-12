@@ -4,10 +4,10 @@ Entity Delegation defines how a **server-owned delegated entity** grants tempora
 exactly one client at a time may **write** replicated updates for that entity.
 
 Delegation is distinct from:
-- **Ownership**: who ultimately owns the entity (see `9_entity_ownership.md`).
-- **Publication**: whether client-owned entities are visible to non-owners (see `10_entity_publication.md`).
-- **Scope**: whether an entity exists on a client at all (see `7_entity_scopes.md`).
-- **Replication**: spawn/update ordering and lifetime rules (see `8_entity_replication.md`).
+- **Ownership**: who ultimately owns the entity (see `8_entity_ownership.md`).
+- **Publication**: whether client-owned entities are visible to non-owners (see `9_entity_publication.md`).
+- **Scope**: whether an entity exists on a client at all (see `6_entity_scopes.md`).
+- **Replication**: spawn/update ordering and lifetime rules (see `7_entity_replication.md`).
 
 This spec defines:
 - the meaning of the `Delegated` replication configuration
@@ -49,7 +49,7 @@ If an entity is not delegated, this spec’s authority arbitration does not appl
 ### [entity-delegation-02] — Single-writer invariant
 For any delegated entity `E`, at any time:
 - at most one client MAY be the authority holder for `E`.
-- the server MAY reset/revoke authority at any time (see `12_entity_authority.md`).
+- the server MAY reset/revoke authority at any time (see `11_entity_authority.md`).
 - the server MAY hold authority (server-as-holder) which forces all clients to observe `Denied`.
 - while a client holds authority (Granted/Releasing), the server MUST NOT originate independent replicated component writes for `E`; the server’s replicated state MUST be derived from the current authority holder’s accepted writes plus server-driven lifecycle transitions.
 
@@ -68,12 +68,12 @@ If a client is out-of-scope for `E`, it MUST NOT request authority for `E` and M
 ### [entity-delegation-04] — Client-owned → server-owned delegated migration requires Published
 A client-owned entity MUST be Published/`Public` before it may migrate into a server-owned delegated entity.
 
-(Ownership/publication constraints are defined in `9_entity_ownership.md` and `10_entity_publication.md`;
+(Ownership/publication constraints are defined in `8_entity_ownership.md` and `9_entity_publication.md`;
 this rule is restated here as a delegation precondition.)
 
 ### [entity-delegation-05] — Migration grants authority to previous owner
 When a client-owned, Published entity `E` migrates into a server-owned delegated entity:
-- ownership transfers to the server (per `9_entity_ownership.md`).
+- ownership transfers to the server (per `8_entity_ownership.md`).
 - the previous owner client MUST immediately become the authority holder.
 - on that previous owner client, `EntityAuthStatus(E)` MUST be `Granted`.
 
@@ -154,14 +154,14 @@ If a client that holds authority for `E` becomes out-of-scope for `E`:
 - other in-scope clients MUST transition to `Available` (subject to first-request wins on new requests).
 
 Cross-link:
-- Scope transitions and despawn semantics are defined in `7_entity_scopes.md`.
+- Scope transitions and despawn semantics are defined in `6_entity_scopes.md`.
 
 ### [entity-delegation-14] — Disconnect releases authority
 If the authority-holding client disconnects:
 - the server MUST release/reset authority for `E`.
 - other in-scope clients MUST transition to `Available`.
 
-If the disconnected client also owned client-owned entities, those are despawned globally per `9_entity_ownership.md`.
+If the disconnected client also owned client-owned entities, those are despawned globally per `8_entity_ownership.md`.
 This rule concerns only delegated server-owned entities.
 
 ---
@@ -172,12 +172,12 @@ This rule concerns only delegated server-owned entities.
 
 Delegation MUST be observable through:
 - `replication_config(E) == Some(Delegated)` (server + client observable)
-- authority status and events (defined in `12_entity_authority.md` and the events API specs)
+- authority status and events (defined in `11_entity_authority.md` and the events API specs)
 
 This spec defines the required semantics; the concrete event types and delivery guarantees are specified in:
-- `13_server_events_api.md`
-- `14_client_events_api.md`
-- `12_entity_authority.md`
+- `12_server_events_api.md`
+- `13_client_events_api.md`
+- `11_entity_authority.md`
 
 ---
 
@@ -190,8 +190,8 @@ If a client requests authority for `E` while out-of-scope:
 
 ### [entity-delegation-16] — Conflicting reconfiguration is resolved by server final state
 If configuration changes (e.g., toggling Delegated on/off) would produce conflicting intermediate states within a tick:
-- the server MUST collapse to the final resolved state per tick, consistent with `8_entity_replication.md` and
-  `7_entity_scopes.md`.
+- the server MUST collapse to the final resolved state per tick, consistent with `7_entity_replication.md` and
+  `6_entity_scopes.md`.
 - clients MUST observe only the final state transitions (no intermediate oscillations).
 
 ---
@@ -212,8 +212,8 @@ If configuration changes (e.g., toggling Delegated on/off) would produce conflic
 
 ## 10) Cross-references
 
-- Ownership: `9_entity_ownership.md`
-- Publication: `10_entity_publication.md`
-- Scopes: `7_entity_scopes.md`
-- Replication: `8_entity_replication.md`
-- Authority & events: `12_entity_authority.md`, `13_server_events_api.md`, `14_client_events_api.md`
+- Ownership: `8_entity_ownership.md`
+- Publication: `9_entity_publication.md`
+- Scopes: `6_entity_scopes.md`
+- Replication: `7_entity_replication.md`
+- Authority & events: `11_entity_authority.md`, `12_server_events_api.md`, `13_client_events_api.md`

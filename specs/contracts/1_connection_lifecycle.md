@@ -14,7 +14,7 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 
 - **Client**: a Naia client instance attempting to establish and maintain a session with a Server.
 - **Server**: a Naia server instance accepting client sessions.
-- **Transport**: the underlying network mechanism (e.g. UDP, WebRTC). Transport-specific mechanics are defined in `3_transport.md`, but lifecycle semantics are defined here.
+- **Transport**: the underlying network mechanism (e.g. UDP, WebRTC). Transport-specific mechanics are defined in `2_transport.md`, but lifecycle semantics are defined here.
 - **Session**: the period from “connected” until “disconnected”.
 - **Explicit reject**: the server deliberately refuses a connection attempt in a way the client can observe as a rejection (as opposed to generic network failure).
 - **Auth request**: the application-defined credential payload sent Client → Server **out-of-band** (HTTP) before the transport session is initialized.
@@ -200,7 +200,7 @@ After a `RejectEvent`, the client’s public `ConnectionStatus` MUST be (or retu
 When a client disconnects (or is disconnected) after session establishment:
 - It is treated as immediately out-of-scope for all entities, and
 - Any client-owned entities owned by that client MUST be despawned by the server.
-(See `9_entity_ownership.md` and `7_entity_scopes.md`.)
+(See `8_entity_ownership.md` and `6_entity_scopes.md`.)
 
 ---
 

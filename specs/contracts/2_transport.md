@@ -5,7 +5,7 @@ Last updated: 2026-01-08
 This spec defines the transport boundary contract for **Naia** (`naia_client` + `naia_server`).
 It is **transport-agnostic**: Naia can run over UDP, WebRTC, or local channels. Naia assumes transports are unordered/unreliable and does not rely on stronger guarantees even if a transport happens to provide them.
 
-Reliability, ordering, fragmentation, resend, and dedupe guarantees belong to `4_messaging.md`.
+Reliability, ordering, fragmentation, resend, and dedupe guarantees belong to `3_messaging.md`.
 
 ---
 
@@ -18,9 +18,9 @@ This spec owns:
 
 This spec does **not** own:
 - Socket-crate-specific behavior (`naia_client_socket`, `naia_server_socket`)
-- Message reliability/ordering/fragmentation semantics (see `4_messaging.md`)
+- Message reliability/ordering/fragmentation semantics (see `3_messaging.md`)
 - Entity replication semantics (see entity suite specs)
-- Auth semantics (see `2_connection_lifecycle.md`)
+- Auth semantics (see `1_connection_lifecycle.md`)
 
 ---
 
@@ -75,7 +75,7 @@ then:
 
 ### [transport-05] — No transport-specific guarantees may leak upward
 Naia’s higher layers (messaging/replication) MUST behave identically regardless of whether the underlying transport happens to be “better” (e.g. local channels).
-Any guarantee stronger than transport-01 MUST be explicitly specified in `4_messaging.md`, not inferred from the transport adapter.
+Any guarantee stronger than transport-01 MUST be explicitly specified in `3_messaging.md`, not inferred from the transport adapter.
 
 ---
 

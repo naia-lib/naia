@@ -15,17 +15,17 @@ This spec covers:
 - Misuse safety requirements at the integration boundary (no panics, defined no-ops/errors).
 
 This spec does **not** define:
-- The replication rules themselves (see `8_entity_replication.md`).
-- Scope policy semantics (see `7_entity_scopes.md`).
-- Ownership/delegation/authority rules (see `9_entity_ownership.md`, `11_entity_delegation.md`, `12_entity_authority.md`).
-- Messaging and request/response (see `4_messaging.md`).
-- Transport behavior (see `3_transport.md`).
+- The replication rules themselves (see `7_entity_replication.md`).
+- Scope policy semantics (see `6_entity_scopes.md`).
+- Ownership/delegation/authority rules (see `8_entity_ownership.md`, `10_entity_delegation.md`, `11_entity_authority.md`).
+- Messaging and request/response (see `3_messaging.md`).
+- Transport behavior (see `2_transport.md`).
 
 Related specs:
-- `8_entity_replication.md`
-- `7_entity_scopes.md`
-- `13_server_events_api.md`
-- `14_client_events_api.md`
+- `7_entity_replication.md`
+- `6_entity_scopes.md`
+- `12_server_events_api.md`
+- `13_client_events_api.md`
 
 ---
 
@@ -37,7 +37,7 @@ Related specs:
 - **World Mutation**: One of: Spawn, Despawn, ComponentInsert, ComponentUpdate, ComponentRemove.
 - **Tick**: The discrete step at which Naia advances and produces mutations/events.
 - **Drain**: A single pass where the integration adapter consumes the available Naia events/mutations for a tick (or for a poll loop iteration).
-- **In Scope**: An entity is present in the client's Naia World View (see `7_entity_scopes.md`).
+- **In Scope**: An entity is present in the client's Naia World View (see `6_entity_scopes.md`).
 
 ---
 
@@ -103,7 +103,7 @@ Test obligations:
 
 On clients, scope governs presence. The integration adapter MUST reflect scope transitions as:
 
-- When an entity `E` transitions OutOfScope → InScope for client `C`, the External World for `C` MUST receive a Spawn(E) (or equivalent "create entity") and initial component inserts sufficient to form a coherent snapshot. (Snapshot semantics are defined in `7_entity_scopes.md` and `8_entity_replication.md`.)
+- When an entity `E` transitions OutOfScope → InScope for client `C`, the External World for `C` MUST receive a Spawn(E) (or equivalent "create entity") and initial component inserts sufficient to form a coherent snapshot. (Snapshot semantics are defined in `6_entity_scopes.md` and `7_entity_replication.md`.)
 - When `E` transitions InScope → OutOfScope for client `C`, the External World for `C` MUST receive a Despawn(E) (or equivalent “remove entity”).
 
 Test obligations:
@@ -132,7 +132,7 @@ The integration adapter MUST treat Naia’s entity identity as stable for the li
 - If Naia indicates the “same entity” across ticks (same logical identity), the External World MUST keep the same external handle for that entity (or maintain an injective mapping).
 - If an entity despawns and later a different entity appears, the adapter MUST NOT accidentally alias them as the same external entity.
 
-This relies on identity semantics in `8_entity_replication.md`; this contract ensures the adapter doesn't break identity.
+This relies on identity semantics in `7_entity_replication.md`; this contract ensures the adapter doesn't break identity.
 
 Test obligations:
 - `world-integration-06.t1` (TODO → `test/tests/world_integration.rs::no_identity_aliasing_across_lifetimes`)
@@ -145,7 +145,7 @@ Test obligations:
 For every component mutation surfaced to the adapter, the component type MUST be correct and match the protocol/schema.
 
 - The adapter MUST NOT be asked to apply a component mutation of a different type than declared.
-- If a component cannot be decoded due to schema mismatch or decode failure, behavior MUST follow `3_transport.md` / protocol contracts (e.g., reject connection or safely ignore that mutation), and the adapter MUST NOT panic.
+- If a component cannot be decoded due to schema mismatch or decode failure, behavior MUST follow `2_transport.md` / protocol contracts (e.g., reject connection or safely ignore that mutation), and the adapter MUST NOT panic.
 
 Test obligations:
 - `world-integration-07.t1` (TODO → `test/tests/world_integration.rs::component_types_are_correct_and_never_misrouted`)
@@ -185,8 +185,8 @@ Test obligations:
 
 ## Notes for Implementers
 
-- For server integration, the External World is typically updated from server-side inserts/updates/removes/despawns (see `13_server_events_api.md`).
-- For client integration, the External World is typically updated from client-side world events (see `14_client_events_api.md`), and scope governs presence (`7_entity_scopes.md`).
+- For server integration, the External World is typically updated from server-side inserts/updates/removes/despawns (see `12_server_events_api.md`).
+- For client integration, the External World is typically updated from client-side world events (see `13_client_events_api.md`), and scope governs presence (`6_entity_scopes.md`).
 - This spec is satisfied whether the adapter is “push” (callbacks) or “pull” (drain + apply), as long as contracts above hold.
 
 ## Test obligations
