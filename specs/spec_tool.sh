@@ -648,9 +648,10 @@ cmd_coverage() {
     fi
 
     # Extract contract IDs from test annotations
-    # Pattern: /// Contract: [contract-id] or // Contract: [contract-id]
-    local test_contracts=$(grep -rhoE '(///|//) Contract: \[[a-z-]+-[0-9]+\]' "$test_dir"/*.rs 2>/dev/null \
-        | grep -oE '\[[a-z-]+-[0-9]+\]' | tr -d '[]' | sort -u)
+    # Find lines with Contract: then extract ALL [contract-id] patterns from those lines
+    # Uses -oP (PCRE) to capture all bracket patterns, not just first per line
+    local test_contracts=$(grep -rhE '(///|//) Contract:' "$test_dir"/*.rs 2>/dev/null \
+        | grep -oP '\[[a-z][a-z0-9-]*-[0-9]+\]' | tr -d '[]' | sort -u)
 
     # Get all contracts from registry
     local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+`' "$SCRIPT_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
@@ -832,13 +833,13 @@ EOF
         echo "$all_contracts" | while read -r contract; do
             [[ -z "$contract" ]] && continue
 
-            # Search for this contract in test files
-            local test_match=$(grep -rln "Contract: \[$contract\]" "$test_dir"/*.rs 2>/dev/null | head -1)
+            # Search for this contract in test files (match anywhere on Contract: line)
+            local test_match=$(grep -rlE "Contract:.*\[$contract\]" "$test_dir"/*.rs 2>/dev/null | head -1)
 
             if [[ -n "$test_match" ]]; then
                 local test_file=$(basename "$test_match")
-                # Try to find the function name (line after Contract annotation)
-                local fn_name=$(grep -A5 "Contract: \[$contract\]" "$test_match" 2>/dev/null \
+                # Try to find the function name (line after Contract annotation containing this contract)
+                local fn_name=$(grep -A5 -E "Contract:.*\[$contract\]" "$test_match" 2>/dev/null \
                     | grep -oE '^fn [a-z_0-9]+' | head -1 | sed 's/^fn //')
                 [[ -z "$fn_name" ]] && fn_name="(manual check)"
                 echo "| \`$contract\` | \`$fn_name\` | $test_file | COVERED |"
@@ -862,9 +863,10 @@ EOF
             [[ ! -f "$test_file" ]] && continue
             local basename_file=$(basename "$test_file")
 
-            # Find all contract annotations in this file
-            local contracts_in_file=$(grep -oE 'Contract: \[[a-z-]+-[0-9]+\]' "$test_file" 2>/dev/null \
-                | grep -oE '\[[a-z-]+-[0-9]+\]' | tr -d '[]' | sort -u | tr '\n' ', ' | sed 's/, $//')
+            # Find all contract annotations in this file (extract ALL IDs from Contract: lines)
+            # Uses -oP (PCRE) to capture all bracket patterns, not just first per line
+            local contracts_in_file=$(grep -E 'Contract:' "$test_file" 2>/dev/null \
+                | grep -oP '\[[a-z][a-z0-9-]*-[0-9]+\]' | tr -d '[]' | sort -u | tr '\n' ', ' | sed 's/, $//')
 
             if [[ -n "$contracts_in_file" ]]; then
                 # Get function names
@@ -883,8 +885,8 @@ EOF
 
 EOF
         local total=$(echo "$all_contracts" | grep -c '[a-z]' 2>/dev/null || echo 0)
-        local covered=$(grep -rhoE 'Contract: \[[a-z-]+-[0-9]+\]' "$test_dir"/*.rs 2>/dev/null \
-            | grep -oE '\[[a-z-]+-[0-9]+\]' | tr -d '[]' | sort -u | grep -c '[a-z]' 2>/dev/null || echo 0)
+        local covered=$(grep -rhE 'Contract:' "$test_dir"/*.rs 2>/dev/null \
+            | grep -oP '\[[a-z][a-z0-9-]*-[0-9]+\]' | tr -d '[]' | sort -u | grep -c '[a-z]' 2>/dev/null || echo 0)
         local pct=$((covered * 100 / total))
 
         echo "- **Total Contracts:** $total"
