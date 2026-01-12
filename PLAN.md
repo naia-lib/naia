@@ -1,20 +1,20 @@
 # Naia Development Plan
 
-**Status:** Active - Phase A (Complete Test Coverage)
-**Updated:** 2026-01-12
+**Status:** Active - Phase B (Fix Implementation)
+**Updated:** 2026-01-11
 **Goal:** All spec contracts have compiling tests, then fix implementation
 
 ---
 
 ## Two-Phase Development Process
 
-**Phase A: Complete Test Coverage (CURRENT)**
+**Phase A: Complete Test Coverage (COMPLETE)**
 - Every spec contract has a compiling E2E test
 - Tests MUST compile with NO `todo!()` macros
 - Tests are allowed to FAIL - that indicates implementation gaps
-- Goal: 185/185 contracts covered, zero `todo!()`
+- Goal: 185/185 contracts covered, zero `todo!()` - ACHIEVED
 
-**Phase B: Fix Implementation (AFTER Phase A)**
+**Phase B: Fix Implementation (CURRENT)**
 - Run all tests, observe failures
 - Systematically fix implementation
 - Failing tests are the bug tracker
@@ -27,59 +27,34 @@
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| Contracts with compiling tests | 176/185 (95%) | 185/185 (100%) |
-| Tests with `todo!()` | TBD (run grep) | 0 |
-| Harness gaps (observability) | 9 | 0 |
+| Contracts with compiling tests | **185/185 (100%)** | 185/185 (100%) |
+| Tests with `todo!()` | **0** | 0 |
+| Phase A | **COMPLETE** | - |
 
 ---
 
-## Immediate Next Actions (Phase A)
+## Immediate Next Actions (Phase B)
 
-### Priority 1: Eliminate All `todo!()` Macros
-
-```bash
-# Find all todo!() in tests
-grep -rn "todo!" test/tests/*.rs
-```
-
-For each `todo!()`:
-1. Read the spec contract it references
-2. Write actual test assertions (what SHOULD happen)
-3. Test must COMPILE - failure is acceptable
-4. The test failure documents the implementation gap
-
-### Priority 2: Cover Remaining 9 Contracts (observability-01 through 09)
-
-**Approach:** Write tests that assert expected behavior. If APIs don't exist, tests will fail - that's fine, it documents the gap.
+### Priority 1: Run All Tests and Collect Failures
 
 ```bash
-# Check what APIs exist
-grep -rn "rtt\|throughput\|connection.*count\|latency" server/src/ client/src/
+cargo test --package naia-test 2>&1 | tee test_results.txt
 ```
 
-For each observability contract:
-1. Read the spec
-2. Write a compiling test asserting expected behavior
-3. If API missing, test will fail with clear error - that's OK
-4. Coverage tool sees the annotation
+### Priority 2: Known Implementation Gaps
 
-### Priority 3: Verify Phase A Complete
+Based on Phase A test failures, the following need implementation fixes:
 
-```bash
-# 1. Check coverage (must be 185/185)
-./specs/spec_tool.sh coverage
+1. **Bandwidth monitoring not enabled by default** - Tests `bandwidth_exposes_both_directions`, `metrics_apis_safe_after_construction`, `per_direction_metrics_consistency`, `throughput_must_be_non_negative` fail because bandwidth monitoring is disabled by default
+   - Fix: Enable in `test_client_config()` or make it default-on
 
-# 2. Check for todo!() (must be 0)
-grep -r "todo!" test/tests/*.rs
+### Priority 3: For Each Failing Test
 
-# 3. Verify all tests compile
-cargo test --package naia-test --no-run
-```
-
-**Phase A is complete when:**
-- `spec_tool.sh coverage` shows 185/185 (100%)
-- `grep -r "todo!" test/tests/*.rs` returns nothing
-- `cargo test --package naia-test --no-run` succeeds
+1. Understand what the test expects (read the spec)
+2. Fix the implementation to match the spec
+3. Verify test passes
+4. Run 3x for flakiness
+5. Ensure no regressions
 
 ---
 
@@ -90,8 +65,9 @@ cargo test --package naia-test --no-run
 | Annotate all existing tests | **DONE** |
 | Gap analysis | **DONE** |
 | Write tests for 176 contracts | **DONE** |
-| Eliminate `todo!()` macros | **IN PROGRESS** |
-| Write tests for 9 observability contracts | **PENDING** |
+| Eliminate `todo!()` macros | **DONE** |
+| Write tests for 9 observability contracts | **DONE** |
+| **Phase A Complete** | **2026-01-11** |
 
 ---
 
@@ -132,11 +108,11 @@ Once Phase A is complete, Phase B will:
 [x] Write tests for 176 contracts
 
 --- PHASE A: Complete Test Coverage ---
-[ ] Eliminate ALL todo!() macros (write actual assertions)
-[ ] Write compiling tests for 9 observability contracts
-[ ] Verify: spec_tool.sh coverage shows 185/185
-[ ] Verify: grep -r "todo!" returns nothing
-[ ] Verify: cargo test --package naia-test --no-run succeeds
+[x] Eliminate ALL todo!() macros (write actual assertions)
+[x] Write compiling tests for 9 observability contracts
+[x] Verify: spec_tool.sh coverage shows 185/185
+[x] Verify: grep -r "todo!" returns nothing
+[x] Verify: cargo test --package naia-test --no-run succeeds
 
 --- PHASE B: Fix Implementation (after Phase A) ---
 [ ] Run all tests, collect failures

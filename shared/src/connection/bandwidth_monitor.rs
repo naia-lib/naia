@@ -23,9 +23,16 @@ impl BandwidthMonitor {
         self.time_queue.add_item(bytes);
     }
 
-    pub fn bandwidth(&mut self) -> f32 {
+    /// Perform housekeeping - clear expired packets from the measurement window.
+    /// Call this during the update phase of the tick cycle.
+    pub fn tick(&mut self) {
         self.clear_expired_packets();
+    }
 
+    /// Returns the current bandwidth in kbps.
+    /// This is a pure read-only query - call `tick()` during the update phase
+    /// to ensure expired packets are cleared.
+    pub fn bandwidth(&self) -> f32 {
         self.total_bytes as f32 * self.to_kbps_factor
     }
 

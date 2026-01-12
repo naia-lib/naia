@@ -231,4 +231,5 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
         let state = self.ctx.scenario().client_state(&self.client_key);
         state.client().client_tick()
     }
+
 }

@@ -152,19 +152,28 @@ impl Io {
         }
     }
 
-    pub fn outgoing_bandwidth(&mut self) -> f32 {
-        return self
-            .outgoing_bandwidth_monitor
-            .as_mut()
-            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .bandwidth();
+    /// Tick bandwidth monitors to clear expired packets.
+    /// Call this during the update phase of the tick cycle.
+    pub fn tick_bandwidth_monitors(&mut self) {
+        if let Some(monitor) = &mut self.outgoing_bandwidth_monitor {
+            monitor.tick();
+        }
+        if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
+            monitor.tick();
+        }
     }
 
-    pub fn incoming_bandwidth(&mut self) -> f32 {
-        return self
-            .incoming_bandwidth_monitor
-            .as_mut()
+    pub fn outgoing_bandwidth(&self) -> f32 {
+        self.outgoing_bandwidth_monitor
+            .as_ref()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .bandwidth();
+            .bandwidth()
+    }
+
+    pub fn incoming_bandwidth(&self) -> f32 {
+        self.incoming_bandwidth_monitor
+            .as_ref()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .bandwidth()
     }
 }

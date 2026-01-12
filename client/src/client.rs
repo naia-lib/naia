@@ -850,11 +850,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     // Bandwidth monitoring
-    pub fn outgoing_bandwidth(&mut self) -> f32 {
+    pub fn outgoing_bandwidth(&self) -> f32 {
         self.io.outgoing_bandwidth()
     }
 
-    pub fn incoming_bandwidth(&mut self) -> f32 {
+    pub fn incoming_bandwidth(&self) -> f32 {
         self.io.incoming_bandwidth()
     }
 
@@ -1356,6 +1356,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     fn maintain_socket(&mut self) {
+        // Tick bandwidth monitors to clear expired packets
+        self.io.tick_bandwidth_monitors();
+
         if self.server_connection.is_none() {
             self.maintain_handshake();
         } else {

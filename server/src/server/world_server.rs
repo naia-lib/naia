@@ -225,6 +225,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Maintain connection with a client and read all incoming packet data
     pub fn receive_all_packets(&mut self) {
+        // Tick bandwidth monitors to clear expired packets
+        self.io.tick_bandwidth_monitors();
+
         self.handle_disconnects();
         self.handle_pings();
         self.handle_heartbeats();
@@ -1200,19 +1203,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     // Bandwidth monitoring
-    pub fn outgoing_bandwidth_total(&mut self) -> f32 {
+    pub fn outgoing_bandwidth_total(&self) -> f32 {
         self.io.outgoing_bandwidth_total()
     }
 
-    pub fn incoming_bandwidth_total(&mut self) -> f32 {
+    pub fn incoming_bandwidth_total(&self) -> f32 {
         self.io.incoming_bandwidth_total()
     }
 
-    pub fn outgoing_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
+    pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
         self.io.outgoing_bandwidth_to_client(address)
     }
 
-    pub fn incoming_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
+    pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
         self.io.incoming_bandwidth_from_client(address)
     }
 

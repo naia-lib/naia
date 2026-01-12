@@ -151,35 +151,42 @@ impl Io {
             .delete_client(address);
     }
 
-    pub fn outgoing_bandwidth_total(&mut self) -> f32 {
-        return self
-            .outgoing_bandwidth_monitor
-            .as_mut()
-            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .total_bandwidth();
+    /// Tick bandwidth monitors to clear expired packets.
+    /// Call this during the update phase of the tick cycle.
+    pub fn tick_bandwidth_monitors(&mut self) {
+        if let Some(monitor) = &mut self.outgoing_bandwidth_monitor {
+            monitor.tick();
+        }
+        if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
+            monitor.tick();
+        }
     }
 
-    pub fn incoming_bandwidth_total(&mut self) -> f32 {
-        return self
-            .incoming_bandwidth_monitor
-            .as_mut()
+    pub fn outgoing_bandwidth_total(&self) -> f32 {
+        self.outgoing_bandwidth_monitor
+            .as_ref()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .total_bandwidth();
+            .total_bandwidth()
     }
 
-    pub fn outgoing_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
-        return self
-            .outgoing_bandwidth_monitor
-            .as_mut()
+    pub fn incoming_bandwidth_total(&self) -> f32 {
+        self.incoming_bandwidth_monitor
+            .as_ref()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .client_bandwidth(address);
+            .total_bandwidth()
     }
 
-    pub fn incoming_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
-        return self
-            .incoming_bandwidth_monitor
-            .as_mut()
+    pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
+        self.outgoing_bandwidth_monitor
+            .as_ref()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .client_bandwidth(address);
+            .client_bandwidth(address)
+    }
+
+    pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
+        self.incoming_bandwidth_monitor
+            .as_ref()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .client_bandwidth(address)
     }
 }

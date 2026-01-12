@@ -2,15 +2,15 @@
 
 Naia is a cross-platform Rust networking engine for multiplayer games. Architecture follows the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf).
 
-## Current State (2026-01-12)
+## Current State (2026-01-11)
 
 | Metric | Value |
 |--------|-------|
-| Contracts with compiling tests | 176/185 (95%) |
-| Tests with `todo!()` | TBD |
-| Harness gaps (observability) | 9 |
+| Contracts with compiling tests | **185/185 (100%)** |
+| Tests with `todo!()` | **0** |
+| Phase A | **COMPLETE** |
 
-**Goal:** 185/185 contracts have compiling tests with NO `todo!()` macros.
+**Goal:** Phase B - make failing tests pass by fixing implementation.
 
 ## Test File Organization (1:1 Mapping)
 
@@ -136,6 +136,7 @@ fn contract_name_scenario() {
 - Must alternate `mutate()` ↔ `expect()`
 - Use `test_client_config()` for all clients
 - Multi-contract annotation: `/// Contract: [a-01], [b-02]`
+- If a spec requires APIs not exposed in the harness, **IMPLEMENT them** in `test/src/harness/`
 
 ## Token Optimization (CRITICAL)
 
@@ -162,10 +163,7 @@ fn contract_name_scenario() {
 
 ## Known Gaps
 
-### Harness Gap: observability-01 through 09
-- Metrics contracts require APIs not exposed in test harness
-- **Phase A approach:** Write tests that assert expected behavior; if APIs don't exist, tests will fail to compile or fail at runtime - that's fine, it documents the gap
-- Options: Check existing APIs (rtt, connection_count), or add feature-gated test hooks
+No known harness gaps. If a spec requires APIs not in the harness, implement them.
 
 ## Initiative Guidelines
 

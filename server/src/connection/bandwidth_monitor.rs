@@ -37,13 +37,22 @@ impl BandwidthMonitor {
         }
     }
 
-    pub fn total_bandwidth(&mut self) -> f32 {
+    /// Tick all bandwidth monitors to clear expired packets.
+    /// Call this during the update phase of the tick cycle.
+    pub fn tick(&mut self) {
+        self.total_monitor.tick();
+        for monitor in self.client_monitors.values_mut() {
+            monitor.tick();
+        }
+    }
+
+    pub fn total_bandwidth(&self) -> f32 {
         self.total_monitor.bandwidth()
     }
 
-    pub fn client_bandwidth(&mut self, address: &SocketAddr) -> f32 {
+    pub fn client_bandwidth(&self, address: &SocketAddr) -> f32 {
         self.client_monitors
-            .get_mut(address)
+            .get(address)
             .expect("client associated with address does not exist")
             .bandwidth()
     }

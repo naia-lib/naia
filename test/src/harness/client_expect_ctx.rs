@@ -175,4 +175,30 @@ impl<'a> ClientExpectCtx<'a> {
         let state = self.scenario.client_state(&self.client_key);
         state.client().client_tick()
     }
+
+    /// Get the round-trip time (RTT) estimate in seconds
+    /// This is an observability metric per [observability-03]
+    pub fn rtt(&self) -> f32 {
+        let state = self.scenario.client_state(&self.client_key);
+        state.client().rtt()
+    }
+
+    /// Get outgoing bandwidth in kbps
+    /// This is an observability metric per [observability-05], [observability-06]
+    pub fn outgoing_bandwidth(&self) -> f32 {
+        let state = self.scenario.client_state(&self.client_key);
+        state.client().outgoing_bandwidth()
+    }
+
+    /// Get incoming bandwidth in kbps
+    /// This is an observability metric per [observability-05], [observability-06]
+    pub fn incoming_bandwidth(&self) -> f32 {
+        let state = self.scenario.client_state(&self.client_key);
+        state.client().incoming_bandwidth()
+    }
+
+    /// Check if this client is connected to the server
+    pub fn is_connected(&self) -> bool {
+        self.connection_status() == ConnectionStatus::Connected
+    }
 }

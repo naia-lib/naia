@@ -401,19 +401,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     // Bandwidth monitoring
-    pub fn outgoing_bandwidth_total(&mut self) -> f32 {
+    pub fn outgoing_bandwidth_total(&self) -> f32 {
         self.world_server.outgoing_bandwidth_total()
     }
 
-    pub fn incoming_bandwidth_total(&mut self) -> f32 {
+    pub fn incoming_bandwidth_total(&self) -> f32 {
         self.world_server.incoming_bandwidth_total()
     }
 
-    pub fn outgoing_bandwidth_to_client(&mut self, address: &SocketAddr) -> f32 {
+    pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
         self.world_server.outgoing_bandwidth_to_client(address)
     }
 
-    pub fn incoming_bandwidth_from_client(&mut self, address: &SocketAddr) -> f32 {
+    pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
         self.world_server.incoming_bandwidth_from_client(address)
     }
 
