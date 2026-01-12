@@ -171,23 +171,29 @@ Ignored late commands are remote/untrusted input outcomes (per `0_common.md`):
 
 ---
 
-### [commands-03a] — Deterministic ordering for same-tick commands
+### [commands-03a] — Per-tick sequence for deterministic ordering
 
-When multiple commands are tagged for the same tick `T`, the server MUST process them in a deterministic order:
+Every command sent for a given tick MUST include a per-tick monotonically increasing `sequence` number assigned by the sender:
+- The sequence starts at 0 for the first command of each tick
+- Each subsequent command for the same tick increments the sequence by 1
+- The `(tick, sequence)` pair uniquely identifies a command within a connection
 
-**Ordering rule:**
-1. Commands received in separate packets: process in packet receipt order (first packet received, first processed)
-2. Commands within the same packet: process in serialization order (first serialized, first processed)
-3. Commands from different clients for the same tick: process in client connection order (earlier connection first), then by receipt order within each client
+**Server ordering rule:**
+The server MUST apply commands for the same tick in ascending `sequence` order (i.e., **send order**), regardless of arrival order on the wire.
 
-This ensures reproducible behavior across identical input sequences.
+**Duplicate handling:**
+If two commands arrive with the same `(tick, sequence)` for a connection:
+- The first received command is applied
+- The later duplicate MUST be dropped (treated as a retransmit duplicate)
+- Per `0_common.md`: MUST NOT panic (remote/untrusted input)
 
 **Observable signals:**
-- Command handlers invoked in deterministic order
+- Command handlers invoked in `sequence` order within each tick
+- E2E tests can force packet reordering on the wire and still observe deterministic application order matching the original send order
 
 **Test obligations:**
-- `commands-03a.t1`: Same-tick commands processed in receipt order
-- `commands-03a.t2`: Same-packet commands processed in serialization order
+- `commands-03a.t1`: Reordered packets still apply commands in sequence order
+- `commands-03a.t2`: Duplicate `(tick, sequence)` commands are dropped
 
 ### [commands-04] — Client lead targeting is the primary mechanism to avoid late commands
 The intended mechanism to ensure commands arrive on-time is client lead targeting (time-11/time-12). The server remains authoritative and will ignore late commands regardless.

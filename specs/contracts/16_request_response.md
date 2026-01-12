@@ -64,24 +64,34 @@ A Response MUST be matched to its Request by Request ID:
 
 ---
 
-### [rpc-03] — Timeout semantics
+### [rpc-03] — Per-type timeout semantics
 
-Pending requests MAY have an optional timeout:
-- If a Response is not received within the timeout, the Request MUST be canceled locally
+Each Request type defined in the shared protocol crate MAY specify a timeout duration:
+- Timeout MAY be specified as compile-time metadata or static configuration per Request type
+- If a Request type does not specify a timeout, a **default timeout** applies
+
+**Default timeout:**
+`DEFAULT_REQUEST_TIMEOUT = 30 seconds` (configurable default in SharedConfig)
+
+**Timeout behavior:**
+- If a Response is not received within the applicable timeout, the Request MUST be canceled locally
 - Timeout is measured using Naia's monotonic time source (see `0_common.md`)
-- Canceled Requests MUST invoke their error/timeout handler (if provided)
+- On timeout, the requester MUST receive a **timeout result/error** distinguishable from other errors
 - Late Responses for timed-out Requests MUST be ignored
 
-If no timeout is specified, Requests remain pending until:
-- Response is received, OR
-- Connection disconnects (rpc-04)
+**Override hierarchy:**
+1. Per-Request-type timeout (if specified in protocol crate)
+2. Default timeout (if no per-type timeout specified)
+3. Infinite wait (only if explicitly configured; not recommended)
 
 **Observable signals:**
-- Timeout handler invoked after timeout elapses
+- Timeout handler/result invoked after timeout elapses
+- Timeout error is distinguishable from disconnect error and other errors
 
 **Test obligations:**
 - `rpc-03.t1`: Request times out if no Response within timeout
 - `rpc-03.t2`: Late Response after timeout is ignored
+- `rpc-03.t3`: Per-type timeout overrides default timeout
 
 ---
 
@@ -103,18 +113,32 @@ This ensures cleanup and prevents resource leaks.
 
 ---
 
-### [rpc-05] — Deduplication under retransmit
+### [rpc-05] — Request/Response transport and deduplication
 
-If underlying transport causes Request or Response to be retransmitted:
-- Duplicate Requests MUST NOT cause duplicate processing on receiver
-- Duplicate Responses MUST NOT cause duplicate delivery to requester
-- Deduplication MUST use Request ID (same ID = same logical request)
+**Transport channel:**
+Requests and Responses are transported over a **reliable, ordered channel** (OrderedReliable mode per `3_messaging.md`).
 
-Per `3_messaging.md`, reliable channels already provide deduplication at the message level. This contract ensures RPC semantics are maintained.
+**Deduplication semantics:**
+Naia MUST deduplicate Requests by `(connection, request_id)`:
+- The server handler MUST be invoked **at most once** per `(connection, request_id)` tuple
+- Duplicate Request deliveries (due to retransmit) MUST be ignored after the first is processed
+- Duplicate Request deliveries MUST NOT cause duplicate handler invocations
+
+**Response handling for duplicates:**
+- If Naia receives a duplicate Request after the original was already processed:
+  - The duplicate MUST be ignored (no handler invocation)
+  - Naia does NOT cache and resend the original response (stateless deduplication)
+- If the original Response was lost, the requester will timeout (rpc-03)
+
+**Rationale:** Stateless deduplication (ignore duplicates, don't cache responses) is simpler and sufficient because:
+1. Reliable channel ensures Response delivery once processed
+2. Timeout handles genuinely lost responses
+3. Avoids unbounded response caching
 
 **Observable signals:**
 - Request handler invoked exactly once per logical Request
 - Response handler invoked exactly once per logical Response
+- E2E: Duplicate Request injection does not trigger multiple handler events
 
 **Test obligations:**
 - `rpc-05.t1`: Duplicate Request delivery does not duplicate processing

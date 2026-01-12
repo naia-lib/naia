@@ -54,12 +54,25 @@ If Naia violates its own declared invariants (e.g. delivers older state after ne
 
 ## Channel configuration
 
-### [messaging-04] — Protocol registration must match on both sides
-A given connection MUST have compatible channel registrations:
-- Same ChannelKind refers to the same logical channel
-- ChannelMode and ChannelDirection MUST be compatible
+### [messaging-04] — Protocol crate identity determines channel compatibility
 
-If channel registrations are incompatible, connection establishment MUST fail (see `1_connection_lifecycle.md` for failure surfacing).
+Server and client MUST be built against the **same compiled version of the shared protocol crate** that defines the channel registry.
+
+**Protocol crate identity requirement:**
+- The connection handshake MUST include a protocol crate identity value (see `15_protocol_compatibility.md`)
+- If the protocol crate identity differs between client and server, the connection MUST be rejected
+
+**Consequence of identity match:**
+- Since the protocol crate identity MUST match, ChannelKind mapping MAY be derived from registration order in that crate
+- Same ChannelKind refers to the same logical channel (guaranteed by identical protocol crate)
+- ChannelMode and ChannelDirection are guaranteed compatible (same compiled protocol)
+
+**Observable signals:**
+- Connection rejected with protocol mismatch error if identities differ
+
+**Test obligations:**
+- `messaging-04.t1`: Mismatched protocol crate identity causes connection rejection
+- `messaging-04.t2`: Matched protocol crate allows successful connection
 
 ### [messaging-05] — ChannelDirection is enforced at send-time
 If local code attempts to send a message on a channel that is not configured for that direction, Naia MUST return `Result::Err`. (user-initiated)
@@ -157,10 +170,12 @@ TickBuffered:
 - A tick MAY have zero, one, or many messages.
 
 ### [messaging-13] — TickBuffered capacity and eviction
-TickBuffered has a fixed `message_capacity`.
-- The receiver MUST NOT retain more than `message_capacity` total buffered messages.
-- If adding a message would exceed capacity, the receiver MUST evict the oldest buffered tick groups first (oldest ticks) until within capacity.
+TickBuffered has a configurable `tick_buffer_capacity` (number of ticks that can be buffered).
+- The receiver MUST NOT retain messages for more than `tick_buffer_capacity` distinct ticks.
+- If adding a message for a new tick would exceed capacity, the receiver MUST evict the **oldest buffered tick groups first** (oldest ticks, in wrap-safe order) until within capacity.
 - Eviction is considered remote/untrusted pressure; Naia MUST NOT panic. (See messaging-02)
+
+**Eviction policy:** Always evict oldest tick first (FIFO by tick order).
 
 ### [messaging-14] — TickBuffered discards very-late ticks
 If a message arrives for a tick that is older than the oldest tick currently retained (i.e., it would fall behind the retained window), the receiver MUST discard it.
@@ -180,10 +195,14 @@ If a message arrives for a tick that is older than the oldest tick currently ret
 
 If a TickBuffered message arrives with tick > `current_server_tick + MAX_FUTURE_TICKS`, it MUST be dropped (no processing, no panic).
 
-**Constant:**
-- `MAX_FUTURE_TICKS = 120` (approximately 2 seconds at 60 tick/s; configurable default)
+**Derived bound:**
+- `MAX_FUTURE_TICKS = tick_buffer_capacity - 1`
+- This bound is derived from the configured `tick_buffer_capacity` for the channel
 
-**Rationale:** Prevents clients from sending messages tagged with arbitrarily far-future ticks that would cause unbounded memory growth or processing delays.
+**Rationale:** The future bound is tied to capacity because:
+1. Messages for ticks beyond the buffer capacity would immediately cause eviction
+2. This prevents clients from sending messages tagged with arbitrarily far-future ticks
+3. The bound ensures the buffer window is predictable and memory-bounded
 
 **Error handling (per `0_common.md`):**
 - Prod: drop silently
@@ -232,29 +251,44 @@ All ordering/sequence comparisons (OrderedReliable ordering, Sequenced* “newer
 
 ## Messages containing EntityProperty
 
-Messages may contain EntityProperty values which refer to entities that may or may not currently exist in the receiver’s active entity lifetime.
+Messages may contain EntityProperty values which refer to entities that may or may not currently exist in the receiver's active entity lifetime.
 
-### [messaging-18] — EntityProperty must not violate entity lifetime
+### [messaging-18] — EntityProperty resolution policy: buffer until mapped
+
 A message that contains an EntityProperty MUST NOT be applied to an entity outside its current active lifetime.
-If the referenced entity is not currently present in the receiver’s active lifetime:
-- Naia MAY buffer the message for later resolution (see TTL below), or
-- Naia MAY drop the message (prod silent, debug warn)
 
-Naia MUST NOT apply a buffered EntityProperty message after the referenced entity has completed a lifetime and despawned (no cross-lifetime leakage).
+**Default resolution policy (buffer until mapped):**
+If the entity mapping is not yet known on receipt, the client MUST buffer the EntityProperty message until:
+1. **The entity becomes mapped** (entity spawn is received and processed) → then apply the message, OR
+2. **The `ENTITY_PROPERTY_RESOLUTION_TTL` expires** → then drop the message
+
+**Lifetime safety:**
+- Naia MUST NOT apply a buffered EntityProperty message after the referenced entity has completed a lifetime and despawned (no cross-lifetime leakage).
+- If an entity despawns while messages are buffered for it, those buffered messages MUST be dropped.
+
+**Observable signals:**
+- Tests can deliver EntityProperty before spawn and still expect eventual application after spawn within TTL
+
+**Test obligations:**
+- `messaging-18.t1`: EntityProperty received before spawn is applied after spawn
+- `messaging-18.t2`: EntityProperty for despawned entity is never applied
 
 ### [messaging-19] — EntityProperty resolution TTL (bounded buffering by time)
-If Naia buffers messages due to unresolved EntityProperty references, it MUST enforce a TTL:
+Naia MUST enforce a TTL on buffered EntityProperty messages:
 
-`ENTITY_PROPERTY_RESOLUTION_TTL = 60 seconds`
+`ENTITY_PROPERTY_RESOLUTION_TTL = 60 seconds` (configurable default)
 
-- The TTL MUST be measured using Naia’s monotonic time source (not wall-clock time).
+- The TTL MUST be measured using Naia's monotonic time source (not wall-clock time).
 - A buffered message that remains unresolved longer than TTL MUST be dropped.
   - Prod: drop silently
-  - Debug: drop with warning
+  - Debug: drop with warning (non-normative)
 - TTL expiry is remote/untrusted input pressure; Naia MUST NOT panic.
 
-Determinism requirement:
+**Determinism requirement:**
 - Under a deterministic time source (test clock), identical scripted time advancement MUST produce identical TTL drop behavior.
+
+**Test obligations:**
+- `messaging-19.t1`: Buffered EntityProperty dropped after TTL expires
 
 ### [messaging-20] — EntityProperty buffering hard cap
 In addition to TTL, Naia MUST enforce a hard cap to prevent unbounded memory growth:
@@ -262,11 +296,16 @@ In addition to TTL, Naia MUST enforce a hard cap to prevent unbounded memory gro
 - `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_CONNECTION = 4096`
 - `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_ENTITY = 128`
 
+**Eviction policy:** When cap would be exceeded, evict **oldest messages first** (FIFO).
+
 If the cap would be exceeded:
-- Naia MUST drop buffered messages using an eviction policy that guarantees bounded memory (recommended: drop oldest first).
+- Naia MUST drop buffered messages using oldest-first eviction until within cap.
 - Prod: silent
-- Debug: warning
+- Debug: warning (non-normative)
 - MUST NOT panic
+
+**Test obligations:**
+- `messaging-20.t1`: Buffer cap enforced with oldest-first eviction
 
 ---
 

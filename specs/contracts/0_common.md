@@ -174,11 +174,12 @@ Some values are **fixed invariants** that MUST NOT be configurable:
 | Invariant | Value | Rationale | Spec |
 |-----------|-------|-----------|------|
 | `MAX_RELIABLE_MESSAGE_FRAGMENTS` | 2^16 | Protocol limit | `3_messaging.md` |
-| `GlobalEntity` rollover | Panic | Correctness over availability | `7_entity_replication.md` |
+| `GlobalEntity` rollover behavior | Panic | Correctness over availability | `7_entity_replication.md` |
 | Tick type | u16 | Wire protocol | `4_time_ticks_commands.md` |
 | Wrap-safe half-range | 32768 | Tick ordering math | `4_time_ticks_commands.md` |
+| Request ID uniqueness scope | Per-connection | RPC semantics | `16_request_response.md` |
 
-These values are part of the protocol identity and changing them would break compatibility.
+These values are part of the protocol identity and/or correctness requirements. Changing them would break compatibility or violate safety invariants.
 
 ---
 
@@ -192,11 +193,28 @@ Some values are **configurable defaults** that MAY be overridden via configurati
 | `ENTITY_PROPERTY_RESOLUTION_TTL` | 60 seconds | SharedConfig | `3_messaging.md` |
 | `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_CONNECTION` | 4096 | SharedConfig | `3_messaging.md` |
 | `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_ENTITY` | 128 | SharedConfig | `3_messaging.md` |
-| `MAX_FUTURE_TICKS` | 120 | SharedConfig | `3_messaging.md` |
-| TickBuffered `message_capacity` | Per-channel | ChannelConfig | `3_messaging.md` |
+| TickBuffered `tick_buffer_capacity` | Per-channel | ChannelConfig | `3_messaging.md` |
+| `MAX_FUTURE_TICKS` | Derived from `tick_buffer_capacity - 1` | Automatic | `3_messaging.md` |
 | Tick rate | Per-protocol | SharedConfig | `4_time_ticks_commands.md` |
+| `DEFAULT_REQUEST_TIMEOUT` | 30 seconds | SharedConfig | `16_request_response.md` |
 
 **Compatibility rule:** When configurable values differ between client and server (where applicable), the more restrictive value MUST be used for safety, or connection MUST fail if incompatible.
+
+---
+
+### [common-11a] — New constants start as invariants
+
+Any **new constant** introduced by this spec suite MUST be written as an **invariant initially** (with exact value documented).
+
+**Policy:**
+- New constants MAY be promoted to configurable later with proper versioning
+- The spec MUST note when a constant becomes configurable
+- This prevents accidental reliance on flexibility that doesn't exist yet
+
+**Existing reality rule:**
+- If Naia already exposes a value as config → spec MUST describe it as config
+- If Naia already treats a value as invariant → spec MUST keep it invariant
+- Specs MUST NOT claim configurability that doesn't exist in implementation
 
 ---
 

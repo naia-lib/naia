@@ -116,12 +116,22 @@ Test obligations:
 
 If a client joins late or reconnects, the External World MUST be reconstructed purely from current server state and current scope, not from stale client-local leftovers.
 
-- On reconnect, the External World MUST NOT retain entities/components from the prior disconnected session.
-- After initial snapshot application, the External World MUST match the client’s Naia World View.
+**Reconnect is always a fresh session (see `connection-28` in `1_connection_lifecycle.md`):**
+- "Reconnect" means establishing a new connection/session after disconnecting
+- **No session resumption** is implied or supported by this spec suite
+- World state on reconnect MUST be reconstructed via the normal replication/snapshot process
+- On reconnect, the External World MUST NOT retain entities/components from the prior disconnected session
+
+**Join-in-progress:**
+- A client joining a running game receives current server state via snapshot
+- After initial snapshot application, the External World MUST match the client's Naia World View
+
+**Cross-reference:** Session resumption is explicitly out of scope per `1_connection_lifecycle.md`. Any language suggesting prior state carryover should be interpreted as "state is reconstructed from scratch via normal replication."
 
 Test obligations:
 - `world-integration-05.t1` (TODO → `test/tests/world_integration.rs::late_join_builds_world_from_snapshot_only`)
 - `world-integration-05.t2` (TODO → `test/tests/world_integration.rs::reconnect_clears_old_world_and_rebuilds_cleanly`)
+- `world-integration-05.t3`: Reconnecting client does not retain authority from previous session
 
 ---
 

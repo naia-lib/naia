@@ -145,19 +145,35 @@ On first successful validation attempt, the server MUST mark the token as used (
 
 ### [connection-14] —
 
-A successful connection handshake MUST include a tick synchronization step. A client MUST NOT be considered “Connected” until tick sync completes.
+A successful connection handshake MUST include a tick synchronization step. A client MUST NOT be considered "Connected" until tick sync completes.
+
+### [connection-14a] — Protocol crate identity check during handshake
+
+The connection handshake MUST verify **protocol crate identity** (see `15_protocol_compatibility.md`) BEFORE:
+1. `ConnectEvent` is emitted on either side
+2. Entity replication begins
+3. Any messages are delivered
+
+**Ordering within handshake:**
+1. Transport connection established
+2. Protocol crate identity exchange and verification
+3. Auth validation (if `require_auth = true`)
+4. Tick synchronization
+5. `ConnectEvent` emitted (connection ready)
+
+If protocol crate identity does not match, the server MUST reject with a protocol mismatch indication before proceeding to later handshake steps.
 
 ### [connection-15] —
 
-The client MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
+The client MUST emit `ConnectEvent` only at the moment the handshake is finalized (including protocol identity verification and tick sync).
 
 ### [connection-16] —
 
-The server MUST emit `ConnectEvent` only at the moment the handshake is finalized (including tick sync).
+The server MUST emit `ConnectEvent` only at the moment the handshake is finalized (including protocol identity verification and tick sync).
 
 ### [connection-17] —
 
-Naia MUST NOT deliver any entity replication “writes” as part of an established session until after `ConnectEvent` is emitted for that session (server-side), and the client MUST NOT apply any such writes until after it has emitted `ConnectEvent`.
+Naia MUST NOT deliver any entity replication "writes" as part of an established session until after `ConnectEvent` is emitted for that session (server-side), and the client MUST NOT apply any such writes until after it has emitted `ConnectEvent`.
 
 (See `5_time_ticks_commands.md` for tick semantics and how tick sync interacts with command history.)
 

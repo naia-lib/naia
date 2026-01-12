@@ -20,40 +20,45 @@ This spec does NOT own:
 
 ## 2) Definitions
 
-- **Protocol**: the user-defined message/component/channel registry built via `Protocol::builder()`.
-- **Protocol identity**: a fingerprint derived from the Protocol's structure.
-- **Compatible**: client and server Protocols have identical Protocol identity.
-- **Incompatible**: Protocol identities differ.
+- **Protocol crate**: the shared Rust crate that defines the message/component/channel registry via `Protocol::builder()`.
+- **Protocol crate identity**: a compiled fingerprint of the protocol crate (includes version + build hash or equivalent).
+- **Compatible**: client and server are built against the **same compiled protocol crate identity**.
+- **Incompatible**: protocol crate identities differ.
 
 ---
 
 ## 3) Contracts
 
-### [protocol-01] — Protocol identity inputs
+### [protocol-01] — Protocol crate identity is REQUIRED to match
 
-Protocol identity MUST be derived from:
-- Channel registry (kinds, directions, modes)
-- Message type registry (type IDs, field schemas)
-- Component type registry (type IDs, field schemas)
+**Strict requirement:** Server and client MUST be built against the **same compiled version of the shared protocol crate**.
+
+**Protocol crate identity MUST be derived from:**
+- Compiled protocol crate version
+- Protocol crate build hash (or equivalent deterministic fingerprint)
+- Channel registry (kinds, directions, modes, registration order)
+- Message type registry (type IDs, field schemas, registration order)
+- Component type registry (type IDs, field schemas, registration order)
 - Replicated field order and types within each component
+- Naia wire protocol version
 
-Protocol identity SHOULD also include:
-- Naia wire protocol version (major version changes break compatibility)
+**Implementation flexibility:**
+- The exact mechanism for computing protocol crate identity is implementation-defined
+- Common approaches: compile-time hash, version + git hash, deterministic schema hash
+- The identity MUST be stable across identical builds of the same protocol crate
 
-Protocol identity MAY include:
-- Compression settings (if they affect wire format)
-
-**Non-inputs:**
-- Naia crate version (patch/minor versions are compatible)
-- Application version strings (unless explicitly added to Protocol)
+**No partial compatibility:**
+- There is NO extension negotiation
+- There is NO partial compatibility mode
+- Either the protocol crate identity matches exactly, or the connection is rejected
 
 **Observable signals:**
-- Protocol hash/fingerprint is queryable (implementation-defined format)
+- Protocol crate identity is queryable at runtime (implementation-defined format)
 
 **Test obligations:**
-- `protocol-01.t1`: Different channel registrations produce different Protocol identity
-- `protocol-01.t2`: Different component schemas produce different Protocol identity
-- `protocol-01.t3`: Same Protocol produces same identity across builds
+- `protocol-01.t1`: Different channel registrations produce different protocol crate identity
+- `protocol-01.t2`: Different component schemas produce different protocol crate identity
+- `protocol-01.t3`: Same protocol crate produces same identity across builds
 
 ---
 
@@ -72,25 +77,25 @@ Protocol compatibility MUST be verified during the connection handshake, BEFORE:
 
 ---
 
-### [protocol-03] — Mismatch rejection behavior
+### [protocol-03] — Protocol crate identity mismatch rejection
 
-If client and server Protocols are incompatible:
+If client and server protocol crate identities do not match:
 - Server MUST explicitly reject the connection attempt
 - Client MUST emit `RejectEvent` (not `DisconnectEvent`)
 - Client MUST NOT emit `ConnectEvent`
-- Rejection reason SHOULD indicate protocol mismatch (implementation-defined text)
+- Rejection reason MUST indicate **protocol crate identity mismatch** (implementation-defined text, but must be distinguishable from other rejection reasons)
 
 Per `0_common.md`:
-- This is a user-initiated configuration error, so rejection is appropriate
-- No panic occurs; connection simply fails
+- This is a user-initiated configuration error (wrong protocol crate version deployed)
+- No panic occurs; connection simply fails with clear rejection
 
 **Observable signals:**
-- `RejectEvent` on client
-- Rejection event on server (if applicable)
+- `RejectEvent` on client with protocol mismatch indication
+- Server may log/emit rejection event (implementation-defined)
 
 **Test obligations:**
-- `protocol-03.t1`: Incompatible client receives `RejectEvent`
-- `protocol-03.t2`: Compatible client receives `ConnectEvent`
+- `protocol-03.t1`: Mismatched protocol crate identity causes `RejectEvent` on client
+- `protocol-03.t2`: Matched protocol crate identity allows `ConnectEvent`
 
 ---
 

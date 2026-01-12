@@ -166,6 +166,36 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 
 ---
 
+### [observability-10] — Metrics are testable; logs are not
+
+**Metrics are normative and testable:**
+- The following metrics are **guaranteed stable** and E2E tests MAY assert on them:
+  - RTT estimate (non-negative, converges under stable conditions)
+  - Throughput estimate (non-negative, converges under stable conditions)
+  - Bandwidth counters (if exposed)
+- Metrics MUST be available in the test harness **without requiring feature flags**
+- Metric values MUST be queryable via public API
+
+**Logs are non-normative:**
+- Debug warnings, log messages, and diagnostic output are **non-normative**
+- Tests MUST NOT assert on log output content, presence, or format
+- Log output MAY change between versions without being considered a breaking change
+- Any "debug warn" wording in specs is explicitly non-testable and MUST NOT gate correctness
+
+**Feature flag rule:**
+- Metrics do NOT require special feature flags to be available
+- Debug logging MAY be gated by feature flags, but correctness MUST NOT depend on it
+
+**Observable signals:**
+- Metrics are queryable at runtime
+- (Logs are intentionally not observable in specs)
+
+**Test obligations:**
+- `observability-10.t1`: Metrics are queryable without special feature flags
+- `observability-10.t2`: Tests can assert on RTT/throughput convergence
+
+---
+
 ## Notes for implementers
 
 - This spec does not mandate a particular estimator (EWMA vs rolling window), but it DOES mandate:
