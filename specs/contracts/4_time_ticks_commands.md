@@ -171,29 +171,88 @@ Ignored late commands are remote/untrusted input outcomes (per `0_common.md`):
 
 ---
 
-### [commands-03a] — Per-tick sequence for deterministic ordering
+### [commands-03a] — Command sequence is required
 
-Every command sent for a given tick MUST include a per-tick monotonically increasing `sequence` number assigned by the sender:
-- The sequence starts at 0 for the first command of each tick
-- Each subsequent command for the same tick increments the sequence by 1
+Every command message MUST include a `sequence` number that identifies its position within a tick.
+
+**Sequence assignment rules:**
+- `sequence` is per-connection, per-tick
+- `sequence` MUST start at `0` for the first command of each tick
+- `sequence` MUST increment by exactly `+1` for each subsequent command in the same tick (no gaps)
 - The `(tick, sequence)` pair uniquely identifies a command within a connection
 
-**Server ordering rule:**
-The server MUST apply commands for the same tick in ascending `sequence` order (i.e., **send order**), regardless of arrival order on the wire.
+**Wire encoding:**
+- `sequence` MUST be encoded as an **unsigned variable-length integer (varint)**.
 
-**Duplicate handling:**
-If two commands arrive with the same `(tick, sequence)` for a connection:
-- The first received command is applied
-- The later duplicate MUST be dropped (treated as a retransmit duplicate)
-- Per `0_common.md`: MUST NOT panic (remote/untrusted input)
+**Observable signals:**
+- `sequence` is observable on received commands
+
+**Test obligations:**
+- `commands-03a.t1`: Every command includes a valid `sequence` value
+
+---
+
+### [commands-03b] — Server applies commands in sequence order
+
+**Server ordering rule:**
+For a given tick, the server MUST apply commands in ascending `sequence` order (i.e., **send order**), regardless of arrival order on the wire.
+
+**Buffering behavior:**
+- If command with `sequence=2` arrives before `sequence=1`, the server MUST buffer `sequence=2` until `sequence=1` arrives
+- Once all earlier sequences are received (or tick processing deadline is reached), apply in order
 
 **Observable signals:**
 - Command handlers invoked in `sequence` order within each tick
-- E2E tests can force packet reordering on the wire and still observe deterministic application order matching the original send order
+- E2E tests can force packet reordering and still observe deterministic application order
 
 **Test obligations:**
-- `commands-03a.t1`: Reordered packets still apply commands in sequence order
-- `commands-03a.t2`: Duplicate `(tick, sequence)` commands are dropped
+- `commands-03b.t1`: Reordered packets still apply commands in sequence order
+- `commands-03b.t2`: Commands are applied in send order regardless of arrival order
+
+---
+
+### [commands-03c] — Command cap per tick
+
+**Invariant constant:**
+`MAX_COMMANDS_PER_TICK_PER_CONNECTION = 64`
+
+A sender MUST NOT send more than 64 commands for the same tick on the same connection.
+
+**Local API enforcement:**
+- Attempting to enqueue the 65th command for the same tick MUST return `Result::Err`
+- This is user-initiated misuse (per `0_common.md`)
+
+**Remote enforcement:**
+- If a receiver observes `sequence >= 64`, it MUST treat it as invalid remote input
+- The command MUST be dropped (no panic, per `0_common.md`)
+- Valid commands with `sequence < 64` for the same tick MUST still be processed normally
+
+**Observable signals:**
+- API returns `Err` when cap exceeded locally
+- Commands with `sequence >= 64` are not applied
+
+**Test obligations:**
+- `commands-03c.t1`: Enqueueing 65th command returns `Err`
+- `commands-03c.t2`: Received `sequence >= 64` is dropped without panic
+- `commands-03c.t3`: Valid commands are unaffected by invalid sequence in same tick
+
+---
+
+### [commands-03d] — Duplicate command handling
+
+**Duplicate detection:**
+If two commands arrive with the same `(tick, sequence)` for a connection:
+- The first received command is applied
+- The later duplicate(s) MUST be dropped (treated as retransmit duplicates)
+- MUST NOT panic (remote/untrusted input, per `0_common.md`)
+- MUST NOT re-apply the command
+
+**Observable signals:**
+- Command handler invoked exactly once per `(tick, sequence)`
+
+**Test obligations:**
+- `commands-03d.t1`: Duplicate `(tick, sequence)` commands are dropped
+- `commands-03d.t2`: First-received duplicate wins
 
 ### [commands-04] — Client lead targeting is the primary mechanism to avoid late commands
 The intended mechanism to ensure commands arrive on-time is client lead targeting (time-11/time-12). The server remains authoritative and will ignore late commands regardless.
@@ -205,13 +264,31 @@ On disconnect:
 
 ---
 
-## Test obligations (TODO)
+## Test obligations
 
-- time-04/time-05: deterministic time provider yields deterministic tick progression
-- time-07: server tick advances exactly as implied by elapsed time and TickRate (no invented ticks)
-- time-09: wrap-safe ordering holds across wrap; half-range tie is deterministic and does not corrupt ordering logic
-- time-10: ConnectEvent only after tick sync complete
-- time-11/time-12: client lead converges toward target_lead under changing RTT/jitter estimates
-- commands-02: duplicate command deliveries do not double-apply
-- commands-03: late commands are ignored deterministically
-- commands-05: disconnect prevents any further command application
+Summary of test obligations from contracts above:
+
+**Time & Ticks:**
+- `time-04.t1`: All durations use monotonic time provider
+- `time-05.t1`: Deterministic time provider yields deterministic tick progression
+- `time-07.t1`: Server tick advances exactly as implied by elapsed time and TickRate
+- `time-09.t1`: Wrap-safe ordering holds across wrap boundary
+- `time-09.t2`: Half-range tie is deterministic and does not corrupt ordering
+- `time-10.t1`: ConnectEvent only after tick sync complete
+- `time-11.t1`: Client lead converges toward target_lead
+- `time-12.t1`: Client pacing adjusts to maintain lead
+
+**Commands:**
+- `commands-01.t1`: Every command is tagged to a tick
+- `commands-02.t1`: Duplicate command deliveries do not double-apply
+- `commands-03.t1`: On-time command is processed
+- `commands-03.t2`: Late command is ignored
+- `commands-03a.t1`: Every command includes a valid `sequence` value
+- `commands-03b.t1`: Reordered packets still apply commands in sequence order
+- `commands-03b.t2`: Commands are applied in send order regardless of arrival order
+- `commands-03c.t1`: Enqueueing 65th command returns `Err`
+- `commands-03c.t2`: Received `sequence >= 64` is dropped without panic
+- `commands-03c.t3`: Valid commands are unaffected by invalid sequence in same tick
+- `commands-03d.t1`: Duplicate `(tick, sequence)` commands are dropped
+- `commands-03d.t2`: First-received duplicate wins
+- `commands-05.t1`: Disconnect prevents any further command application

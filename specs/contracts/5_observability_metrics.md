@@ -57,14 +57,18 @@ Naia uses internal RTT/jitter estimates for:
 
 **Rule:** Exposed observability metrics are read-only snapshots. They MUST NOT be used as inputs to Naia's internal algorithms. The internal algorithms use their own measurements.
 
-**Clarification:** Tests MUST NOT assert on logs, warnings, or debug output (per `0_common.md`). Metric values are testable; log content is not.
+**Reconciling "metrics don't affect gameplay" with tick pacing:**
+- Internal RTT/jitter estimates ARE used by tick lead pacing (this is internal behavior, not metrics)
+- Reading/exposing metrics via public API MUST NOT influence internal behavior
+- The distinction: internal estimates drive pacing; public metrics are for monitoring only
+- Tests that query metrics MUST NOT cause different tick pacing than tests that don't
 
 **Observable signals:**
 - (Internal measurements are not externally observable)
 - Exposed metrics are available via API
 
 **Test obligations:**
-- (Internal measurement behavior is not directly testable; covered by tick sync and lead convergence tests)
+- `observability-01a.t1`: Querying metrics does not affect tick pacing behavior
 
 ---
 
@@ -171,10 +175,21 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 **Metrics are normative and testable:**
 - The following metrics are **guaranteed stable** and E2E tests MAY assert on them:
   - RTT estimate (non-negative, converges under stable conditions)
+  - Jitter estimate (non-negative)
   - Throughput estimate (non-negative, converges under stable conditions)
   - Bandwidth counters (if exposed)
 - Metrics MUST be available in the test harness **without requiring feature flags**
 - Metric values MUST be queryable via public API
+
+**Assertion style for RTT/jitter:**
+- Tests MUST NOT assert on exact RTT or jitter values (timing-sensitive, implementation-dependent)
+- Tests MAY assert only **inequality-style invariants**:
+  - `rtt_ms >= 0` (always)
+  - `rtt_ms > 0` after traffic has occurred
+  - `jitter_ms >= 0` (always)
+  - `rtt_ms < RTT_MAX_VALUE_MS` (finite, not NaN/Infinity)
+  - `rtt_ms` converges within tolerance after N samples (see Appendix)
+- Exact value assertions are fragile and MUST NOT be used
 
 **Logs are non-normative:**
 - Debug warnings, log messages, and diagnostic output are **non-normative**
@@ -192,7 +207,8 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 
 **Test obligations:**
 - `observability-10.t1`: Metrics are queryable without special feature flags
-- `observability-10.t2`: Tests can assert on RTT/throughput convergence
+- `observability-10.t2`: RTT/jitter assertions use only inequality-style invariants
+- `observability-10.t3`: Tests do not assert on log output
 
 ---
 
@@ -236,4 +252,35 @@ assert!(
 
 ## Test obligations
 
-TODO: Define test obligations for this specification.
+Summary of test obligations from contracts above:
+
+**Core Behavior:**
+- `observability-01.t1`: Metrics queried vs not queried produces identical replication/events
+- `observability-01a.t1`: Querying metrics does not affect tick pacing behavior
+- `observability-02.t1`: Query metrics before connect, during handshake, after connect without panic
+- `observability-02.t2`: Query metrics after disconnect without panic
+
+**RTT:**
+- `observability-03.t1`: RTT converges near expected RTT under stable conditions, never negative
+- `observability-03.t2`: RTT remains finite, non-negative, bounded under jitter/loss
+- `observability-04.t1`: Packet duplication does not cause unbounded RTT spike
+- `observability-04.t2`: Reordering does not cause negative or invalid RTT
+
+**Throughput:**
+- `observability-05.t1`: Throughput rises during high-traffic, decays during idle
+- `observability-05.t2`: Throughput stabilizes near expected rate under constant traffic
+- `observability-06.t1`: Wire vs payload throughput accounting matches documentation
+
+**Lifecycle:**
+- `observability-07.t1`: Reconnect does not inherit stale RTT from prior session
+- `observability-08.t1`: Paused time does not cause panic or invalid metrics
+- `observability-08.t2`: Resumed time continues updating metrics normally
+
+**Direction & Transport:**
+- `observability-09.t1`: Send/receive metrics reflect asymmetric traffic correctly
+- `observability-09.t2`: Metrics are consistent across transports
+
+**Testability:**
+- `observability-10.t1`: Metrics are queryable without special feature flags
+- `observability-10.t2`: RTT/jitter assertions use only inequality-style invariants
+- `observability-10.t3`: Tests do not assert on log output

@@ -13,6 +13,21 @@ All other specs MUST reference this document for these concerns and MUST NOT con
 
 ## 1) Error Handling Taxonomy
 
+This section defines the **canonical error handling rules** for all Naia specifications. All specs MUST follow this taxonomy.
+
+### Error/Failure Mode Summary
+
+| Condition | Response | Panic? |
+|-----------|----------|--------|
+| Public API misuse | Return `Result::Err` | No |
+| Remote/untrusted input | Drop (optionally warn in debug) | No |
+| Protocol mismatch | Reject with `ProtocolMismatch` | No |
+| Framework invariant violation | Panic | Yes |
+
+**Key principle:** Panic is reserved for internal invariant violations only. No user action via public API can trigger a panic.
+
+---
+
 ### [common-01] — User-initiated misuse returns Result::Err
 
 When an error is caused by **local application code** or **local configuration** at the Naia API layer, Naia MUST return `Result::Err` from the initiating API.
@@ -24,8 +39,11 @@ Examples:
 - Authority request on non-delegated entity
 - Write attempt to entity the caller doesn't have permission to write
 - Removing a server-replicated component from an unowned entity
+- Enqueueing more than `MAX_COMMANDS_PER_TICK_PER_CONNECTION` commands
 
 This applies when the **caller can reasonably check preconditions** before calling.
+
+**Rule:** If user code can trigger a condition via public API, that condition MUST NOT panic. It MUST return `Err` or be prevented by the API design.
 
 ---
 
@@ -49,6 +67,19 @@ Examples:
 - TickBuffered message for evicted/old tick
 - TickBuffered message too far in the future
 - EntityProperty referencing unknown entity
+- Command with `sequence >= MAX_COMMANDS_PER_TICK_PER_CONNECTION`
+- Invalid Request ID in response
+
+---
+
+### [common-02a] — Protocol mismatch is a deployment error
+
+When `protocol_id` does not match between client and server (see `1_connection_lifecycle.md`):
+- Connection MUST be rejected with `ProtocolMismatch` error/event
+- Client MUST receive distinguishable `ProtocolMismatch` indication
+- MUST NOT panic (this is a deployment configuration error, not a runtime error)
+
+**Classification:** Protocol mismatch is neither user API misuse nor remote attack—it's a **deployment configuration error** (wrong client/server versions deployed together).
 
 ---
 
@@ -65,7 +96,7 @@ Examples:
 - Internal write path attempts to replicate entity client doesn't own
 - GlobalEntity counter rollover
 
-These panics are for **internal invariants only**, not for user-reachable error paths.
+**Key rule:** These panics are for **internal invariants only**. If user code via public API can trigger the condition, it MUST NOT panic—use `Result::Err` instead or prevent the condition via API design.
 
 ---
 
@@ -178,6 +209,9 @@ Some values are **fixed invariants** that MUST NOT be configurable:
 | Tick type | u16 | Wire protocol | `4_time_ticks_commands.md` |
 | Wrap-safe half-range | 32768 | Tick ordering math | `4_time_ticks_commands.md` |
 | Request ID uniqueness scope | Per-connection | RPC semantics | `3_messaging.md` |
+| `MAX_COMMANDS_PER_TICK_PER_CONNECTION` | 64 | Command cap per tick | `4_time_ticks_commands.md` |
+| `protocol_id` wire encoding | u128 little-endian | Protocol identity | `1_connection_lifecycle.md` |
+| Command `sequence` encoding | varint | Wire protocol | `4_time_ticks_commands.md` |
 
 These values are part of the protocol identity and/or correctness requirements. Changing them would break compatibility or violate safety invariants.
 
@@ -279,14 +313,27 @@ Rationale: Simplifies implementation and ensures clean state.
 
 ## Test obligations
 
-The contracts in this document are cross-cutting policies. They are tested indirectly through:
-- Error handling tests in domain-specific specs (common-01, common-02, common-03)
-- Determinism tests under controlled time/input (common-05, common-06)
-- Log assertion prohibition is a test convention, not a runtime behavior (common-07)
+The contracts in this document are cross-cutting policies. They are tested indirectly through domain-specific specs, but the following direct tests apply:
 
-Direct tests:
+**Error Handling:**
+- `common-01.t1`: API misuse returns `Err`, not panic
+- `common-02.t1`: Remote/untrusted input is dropped without panic
+- `common-02a.t1`: Protocol mismatch produces `ProtocolMismatch` error, not panic
+- `common-03.t1`: Internal invariant violation panics (framework test only)
+
+**Determinism:**
 - `common-05.t1`: Identical inputs produce identical outputs under deterministic time
 - `common-06.t1`: Same-tick operations resolve deterministically
+
+**Test Conventions:**
+- `common-07.t1`: No test asserts on log content (policy check)
+
+**Observability:**
+- `common-12.t1`: Reading metrics does not influence internal behavior
+- `common-13.t1`: Metric values do not affect replicated state
+
+**Connection:**
+- `common-14.t1`: Reconnect builds fresh state, not resumed state
 
 ---
 

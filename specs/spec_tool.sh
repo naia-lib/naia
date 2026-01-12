@@ -237,11 +237,11 @@ cmd_lint() {
 
         # Format 3: **contract-id**:
         local format3
-        format3=$(grep -cE '^\*\*[a-z-]+-[0-9]+\*\*:' "$file" 2>/dev/null) || format3=0
+        format3=$(grep -cE '^\*\*[a-z-]+-[0-9]+[a-z]*\*\*:' "$file" 2>/dev/null) || format3=0
 
         # Target format: ### [contract-id] —
         local target
-        target=$(grep -cE '^### \[[a-z-]+-[0-9]+\] — ' "$file" 2>/dev/null) || target=0
+        target=$(grep -cE '^### \[[a-z-]+-[0-9]+[a-z]*\] — ' "$file" 2>/dev/null) || target=0
 
         if [[ $format1 -gt 0 ]]; then
             print_warning "$basename_file: Has $format1 contract IDs in format '> id (MUST):' (migrate to '### [id] —')"
@@ -389,7 +389,7 @@ cmd_check_orphans() {
                 local context_start=$((line_num - 10))
                 [[ $context_start -lt 1 ]] && context_start=1
 
-                local has_contract_id=$(sed -n "${context_start},${line_num}p" "$file" | grep -cE '\[[a-z-]+-[0-9]+\]|[a-z-]+-[0-9]+ —|> [a-z-]+-[0-9]+|\*\*[a-z-]+-[0-9]+\*\*:')
+                local has_contract_id=$(sed -n "${context_start},${line_num}p" "$file" | grep -cE '\[[a-z-]+-[0-9]+[a-z]*\]|[a-z-]+-[0-9]+[a-z]* —|> [a-z-]+-[0-9]+[a-z]*|\*\*[a-z-]+-[0-9]+[a-z]*\*\*:')
 
                 if [[ $has_contract_id -eq 0 ]]; then
                     # Check if it's in a definition/glossary section (allowed)
@@ -443,29 +443,29 @@ cmd_registry() {
         local spec_slug=$(get_spec_slug "$file")
         local file_contracts=()
 
-        # Pattern 1: ### [contract-id] —
+        # Pattern 1: ### [contract-id] — (supports alphanumeric suffixes like -03a)
         while IFS= read -r line; do
-            local id=$(echo "$line" | grep -oE '\[[a-z-]+-[0-9]+\]' | tr -d '[]')
+            local id=$(echo "$line" | grep -oE '\[[a-z-]+-[0-9]+[a-z]*\]' | tr -d '[]')
             [[ -n "$id" ]] && file_contracts+=("$id")
-        done < <(grep -E '### \[[a-z-]+-[0-9]+\]' "$file" 2>/dev/null)
+        done < <(grep -E '### \[[a-z-]+-[0-9]+[a-z]*\]' "$file" 2>/dev/null)
 
         # Pattern 2: ### contract-id —
         while IFS= read -r line; do
-            local id=$(echo "$line" | grep -oE '^### [a-z-]+-[0-9]+' | sed 's/^### //')
+            local id=$(echo "$line" | grep -oE '^### [a-z-]+-[0-9]+[a-z]*' | sed 's/^### //')
             [[ -n "$id" ]] && file_contracts+=("$id")
-        done < <(grep -E '^### [a-z-]+-[0-9]+ — ' "$file" 2>/dev/null)
+        done < <(grep -E '^### [a-z-]+-[0-9]+[a-z]* — ' "$file" 2>/dev/null)
 
         # Pattern 3: > contract-id (MUST
         while IFS= read -r line; do
-            local id=$(echo "$line" | grep -oE '> [a-z-]+-[0-9]+' | sed 's/^> //')
+            local id=$(echo "$line" | grep -oE '> [a-z-]+-[0-9]+[a-z]*' | sed 's/^> //')
             [[ -n "$id" ]] && file_contracts+=("$id")
-        done < <(grep -E '> [a-z-]+-[0-9]+ \(MUST' "$file" 2>/dev/null)
+        done < <(grep -E '> [a-z-]+-[0-9]+[a-z]* \(MUST' "$file" 2>/dev/null)
 
         # Pattern 4: **contract-id**:
         while IFS= read -r line; do
-            local id=$(echo "$line" | grep -oE '\*\*[a-z-]+-[0-9]+\*\*' | tr -d '*')
+            local id=$(echo "$line" | grep -oE '\*\*[a-z-]+-[0-9]+[a-z]*\*\*' | tr -d '*')
             [[ -n "$id" ]] && file_contracts+=("$id")
-        done < <(grep -E '^\*\*[a-z-]+-[0-9]+\*\*:' "$file" 2>/dev/null)
+        done < <(grep -E '^\*\*[a-z-]+-[0-9]+[a-z]*\*\*:' "$file" 2>/dev/null)
 
         # Remove duplicates and sort
         local unique_contracts=$(printf '%s\n' "${file_contracts[@]}" | sort -u -V)
@@ -554,7 +554,7 @@ cmd_stats() {
         local basename_file=$(basename "$file")
         local lines=$(wc -l < "$file")
         local words=$(wc -w < "$file")
-        local contracts=$(grep -cE '(\[[a-z-]+-[0-9]+\]|^### [a-z]+(-[a-z]+)*-[0-9]+ |> [a-z-]+-[0-9]+ \(MUST|\*\*[a-z-]+-[0-9]+\*\*)' "$file" 2>/dev/null || true)
+        local contracts=$(grep -cE '(\[[a-z-]+-[0-9]+[a-z]*\]|^### [a-z]+(-[a-z]+)*-[0-9]+[a-z]* |> [a-z-]+-[0-9]+[a-z]* \(MUST|\*\*[a-z-]+-[0-9]+[a-z]*\*\*)' "$file" 2>/dev/null || true)
         [[ -z "$contracts" ]] && contracts=0
 
         printf "%-35s %8d %8d %10d\n" "$basename_file" "$lines" "$words" "$contracts"
@@ -627,10 +627,10 @@ cmd_coverage() {
     # Find lines with Contract: then extract ALL [contract-id] patterns from those lines
     # Uses -oP (PCRE) to capture all bracket patterns, not just first per line
     local test_contracts=$(grep -rhE '(///|//) Contract:' "$test_dir"/*.rs 2>/dev/null \
-        | grep -oP '\[[a-z][a-z0-9-]*-[0-9]+\]' | tr -d '[]' | sort -u)
+        | grep -oP '\[[a-z][a-z0-9-]*-[0-9]+[a-z]*\]' | tr -d '[]' | sort -u)
 
-    # Get all contracts from registry
-    local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+`' "$GENERATED_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
+    # Get all contracts from registry (supports alphanumeric suffixes like -03a)
+    local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+[a-z]*`' "$GENERATED_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
         | tr -d '`' | sort -u)
 
     local covered_count=0
@@ -802,8 +802,8 @@ This matrix shows the bidirectional mapping between contracts and tests.
 |----------|---------------|-----------|--------|
 EOF
 
-        # Get all contracts from registry
-        local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+`' "$GENERATED_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
+        # Get all contracts from registry (supports alphanumeric suffixes like -03a)
+        local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+[a-z]*`' "$GENERATED_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
             | tr -d '`' | sort -u)
 
         echo "$all_contracts" | while read -r contract; do
