@@ -227,6 +227,129 @@ unset SPEC_TOOL_FORCE_PERL
 echo ""
 
 # ============================================================================
+# Test Case E: Packet generation - spec excerpt extraction
+# ============================================================================
+
+echo "Test Case E: Packet generation - spec excerpt extraction"
+echo "---------------------------------------------------------"
+
+# Create a minimal fixture spec
+cat > "$TMP/contracts/1_test.md" << 'EOF'
+# Test Spec
+
+## Contracts
+
+### [connection-01] — First Contract
+
+**Guarantee:** The system MUST do something.
+
+**Preconditions:**
+- Condition A MUST be true
+
+**Postconditions:**
+- Effect X MUST occur
+
+### [connection-02] — Second Contract
+
+**Guarantee:** The system MUST do something else.
+EOF
+
+# Generate packet for connection-01
+"$SPEC_TOOL" packet connection-01 --out "$TMP/packet-01.md" >/dev/null 2>&1
+PACKET_01=$(cat "$TMP/packet-01.md")
+
+assert_contains "$PACKET_01" "### [connection-01] — First Contract" "Packet contains contract heading"
+assert_contains "$PACKET_01" "**Guarantee:** The system MUST do something." "Packet contains guarantee"
+assert_contains "$PACKET_01" "**Preconditions:**" "Packet contains preconditions"
+assert_contains "$PACKET_01" "Effect X MUST occur" "Packet contains postconditions"
+
+# Ensure it doesn't include connection-02 content
+if echo "$PACKET_01" | grep -q "Second Contract"; then
+    fail "Packet should not include content from next contract (connection-02)"
+else
+    pass "Packet correctly stops at next contract heading"
+fi
+
+echo ""
+
+# ============================================================================
+# Test Case F: Packet generation - multi-ID test parsing
+# ============================================================================
+
+echo "Test Case F: Packet generation - multi-ID test parsing"
+echo "-------------------------------------------------------"
+
+# The packet for connection-01 should find the test in a.rs that covers both connection-01 and connection-02
+assert_contains "$PACKET_01" "test_multi_contract" "Packet finds multi-ID test function"
+assert_contains "$PACKET_01" "Contract: [connection-01], [connection-02]" "Packet includes multi-ID annotation"
+assert_contains "$PACKET_01" "Test File: \`a.rs\`" "Packet identifies correct test file"
+
+echo ""
+
+# ============================================================================
+# Test Case G: Packet generation - concise vs full-tests mode
+# ============================================================================
+
+echo "Test Case G: Packet generation - concise vs full-tests mode"
+echo "------------------------------------------------------------"
+
+# Create a test with assertions
+cat > "$TMP/test/tests/c.rs" << 'EOF'
+/// Contract: [connection-02]
+#[test]
+fn test_with_assertions() {
+    let scenario = Scenario::new();
+
+    scenario.mutate(|ctx| {
+        // Do setup
+    });
+
+    scenario.expect(|ctx| {
+        // Check something
+    });
+
+    assert_eq!(1, 1);
+}
+EOF
+
+# Generate concise packet
+"$SPEC_TOOL" packet connection-02 --out "$TMP/packet-02-concise.md" >/dev/null 2>&1
+PACKET_02_CONCISE=$(cat "$TMP/packet-02-concise.md")
+
+# Generate full packet
+"$SPEC_TOOL" packet connection-02 --out "$TMP/packet-02-full.md" --full-tests >/dev/null 2>&1
+PACKET_02_FULL=$(cat "$TMP/packet-02-full.md")
+
+assert_contains "$PACKET_02_CONCISE" "scenario.expect(" "Concise packet shows assertion lines"
+assert_contains "$PACKET_02_CONCISE" "assert_eq!" "Concise packet shows assert_ lines"
+assert_contains "$PACKET_02_CONCISE" "(use --full-tests to see complete body)" "Concise packet has full-tests hint"
+
+assert_contains "$PACKET_02_FULL" "let scenario = Scenario::new();" "Full packet shows setup"
+assert_contains "$PACKET_02_FULL" "scenario.mutate(" "Full packet shows full body"
+
+echo ""
+
+# ============================================================================
+# Test Case H: Packet generation - error handling
+# ============================================================================
+
+echo "Test Case H: Packet generation - error handling"
+echo "------------------------------------------------"
+
+# Test with non-existent contract
+if "$SPEC_TOOL" packet nonexistent-99 --out "$TMP/packet-fail.md" >/dev/null 2>&1; then
+    fail "Packet should fail with non-existent contract"
+else
+    pass "Packet correctly fails with non-existent contract"
+fi
+
+echo ""
+
+unset SPEC_TOOL_FORCE_PERL
+
+echo ""
+
+# ============================================================================
 # Summary
 # ============================================================================
 

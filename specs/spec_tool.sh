@@ -158,6 +158,12 @@ COMMANDS:
     traceability [out]  Generate contract-to-test traceability matrix
                         Default output: TRACEABILITY.md
 
+    packet <id> [opts]  Generate contract review packet (spec + tests)
+                        Options:
+                          --out <path>      Output path (default: packets/<id>.md)
+                          --full-tests      Include full test bodies (default: assertions only)
+                        Example: ./spec_tool.sh packet connection-01
+
     verify [options]    CI-grade verification: validate + lint + tests + coverage
                         Options:
                           --contract <id>       Run tests only for specific contract
@@ -919,6 +925,271 @@ EOF
 }
 
 # ============================================================================
+# Command: packet
+# ============================================================================
+
+cmd_packet() {
+    local contract_id="$1"
+    shift || true
+
+    local output_file=""
+    local full_tests=0
+
+    # Parse options
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --out)
+                output_file="$2"
+                shift 2
+                ;;
+            --full-tests)
+                full_tests=1
+                shift
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                return 1
+                ;;
+        esac
+    done
+
+    if [[ -z "$contract_id" ]]; then
+        print_error "Usage: ./spec_tool.sh packet <contract-id> [--out <path>] [--full-tests]"
+        echo "Example: ./spec_tool.sh packet connection-01"
+        return 1
+    fi
+
+    # Set default output path
+    if [[ -z "$output_file" ]]; then
+        output_file="$GENERATED_DIR/packets/${contract_id}.md"
+        mkdir -p "$GENERATED_DIR/packets"
+    fi
+
+    print_header "Generating Contract Review Packet: $contract_id"
+
+    # Step 1: Find spec file containing the contract
+    print_info "Searching for contract [$contract_id] in spec files..."
+    local spec_file=$(grep -l "### \[$contract_id\]" "$CONTRACTS_DIR"/*.md 2>/dev/null | head -1)
+
+    if [[ -z "$spec_file" ]]; then
+        print_error "Contract [$contract_id] not found in any spec file"
+        return 1
+    fi
+
+    local spec_basename=$(basename "$spec_file")
+    local spec_title=$(get_title "$spec_file")
+    print_success "Found in: $spec_basename"
+
+    # Step 2: Extract spec excerpt
+    print_info "Extracting spec excerpt..."
+    local spec_excerpt=""
+    local in_contract=0
+    local line_num=0
+
+    while IFS= read -r line; do
+        ((line_num++)) || true
+
+        # Start capturing at contract heading
+        if [[ "$line" =~ ^###[[:space:]]\[$contract_id\] ]]; then
+            in_contract=1
+            spec_excerpt="$line"
+            continue
+        fi
+
+        # Stop at next contract heading or section heading
+        if [[ $in_contract -eq 1 ]]; then
+            if [[ "$line" =~ ^###[[:space:]] ]] || [[ "$line" =~ ^##[[:space:]] ]]; then
+                break
+            fi
+            spec_excerpt="${spec_excerpt}"$'\n'"${line}"
+        fi
+    done < "$spec_file"
+
+    if [[ -z "$spec_excerpt" ]]; then
+        print_error "Failed to extract spec excerpt for [$contract_id]"
+        return 1
+    fi
+
+    # Step 3: Find tests referencing this contract
+    print_info "Searching for tests covering [$contract_id]..."
+    local test_files=$(grep -rlE "Contract:.*\[$contract_id\]" "$TEST_DIR"/*.rs 2>/dev/null || true)
+    local test_count=0
+
+    if [[ -n "$test_files" ]]; then
+        test_count=$(echo "$test_files" | wc -l | tr -d ' ')
+    fi
+
+    if [[ $test_count -eq 0 ]]; then
+        print_warning "No tests found for contract [$contract_id]"
+    else
+        print_success "Found tests in $test_count file(s)"
+    fi
+
+    # Step 4: Generate output file
+    print_info "Writing packet to: $output_file"
+
+    {
+        # Header
+        cat << EOF
+# Contract Review Packet: $contract_id
+
+**Generated:** $(date -u +"%Y-%m-%d %H:%M UTC")
+**Spec File:** $spec_basename
+**Test Files:** $test_count
+
+---
+
+## Spec: $spec_title
+
+**Source:** \`$spec_basename\`
+
+EOF
+
+        # Spec excerpt
+        echo '```'
+        echo "$spec_excerpt"
+        echo '```'
+        echo ""
+        echo "---"
+        echo ""
+
+        # Tests section
+        echo "## Tests"
+        echo ""
+
+        if [[ $test_count -eq 0 ]]; then
+            echo "**⚠️ WARNING:** No tests found for this contract."
+            echo ""
+        else
+            # Process each test file
+            while IFS= read -r test_file; do
+                [[ -z "$test_file" ]] && continue
+
+                local test_basename=$(basename "$test_file")
+                echo "### Test File: \`$test_basename\`"
+                echo ""
+
+                # Find all test functions that reference this contract
+                local in_doc_comment=0
+                local doc_comment=""
+                local fn_signature=""
+                local fn_body=""
+                local test_attrs=""
+                local in_function=0
+                local brace_depth=0
+
+                while IFS= read -r line; do
+                    # Check for doc comment line
+                    if [[ "$line" =~ ^///[[:space:]]?Contract:.*\[$contract_id\] ]]; then
+                        in_doc_comment=1
+                        doc_comment="$line"
+                        continue
+                    fi
+
+                    # Continue collecting doc comments
+                    if [[ $in_doc_comment -eq 1 && "$line" =~ ^/// ]]; then
+                        doc_comment="${doc_comment}"$'\n'"${line}"
+                        continue
+                    fi
+
+                    # Collect #[test] or #[...] attributes after doc comment
+                    if [[ $in_doc_comment -eq 1 && "$line" =~ ^#\[ ]]; then
+                        test_attrs="${test_attrs}${line}"$'\n'
+                        continue
+                    fi
+
+                    # Check for function signature after doc comment
+                    if [[ $in_doc_comment -eq 1 && "$line" =~ ^fn[[:space:]] ]]; then
+                        fn_signature="$line"
+                        in_function=1
+                        brace_depth=0
+                        fn_body=""
+
+                        # Count opening braces on the signature line
+                        local open_braces=$(echo "$line" | grep -o '{' | wc -l)
+                        brace_depth=$((brace_depth + open_braces))
+                        continue
+                    fi
+
+                    # Collect function body
+                    if [[ $in_function -eq 1 ]]; then
+                        # Count braces
+                        local open_braces=$(echo "$line" | grep -o '{' | wc -l)
+                        local close_braces=$(echo "$line" | grep -o '}' | wc -l)
+                        brace_depth=$((brace_depth + open_braces - close_braces))
+
+                        fn_body="${fn_body}${line}"$'\n'
+
+                        # Function complete when braces balanced
+                        if [[ $brace_depth -eq 0 ]]; then
+                            # Output the test
+                            echo '```rust'
+                            echo "$doc_comment"
+                            echo "$test_attrs"
+                            echo "$fn_signature"
+
+                            if [[ $full_tests -eq 1 ]]; then
+                                # Full test mode: output entire body
+                                echo "$fn_body"
+                            else
+                                # Concise mode: only assertion lines
+                                echo "    // ... setup ..."
+                                echo ""
+                                echo "$fn_body" | grep -E '(expect_msg\(|expect\(|assert_|panic!|until\()' | sed 's/^/    /'
+                                echo ""
+                                echo "    // ... (use --full-tests to see complete body) ..."
+                            fi
+                            echo '```'
+                            echo ""
+
+                            # Reset state
+                            in_doc_comment=0
+                            in_function=0
+                            doc_comment=""
+                            fn_signature=""
+                            fn_body=""
+                            test_attrs=""
+                        fi
+                    fi
+
+                    # Reset if we hit a non-related line
+                    if [[ $in_doc_comment -eq 1 && $in_function -eq 0 && ! "$line" =~ ^/// && ! "$line" =~ ^#\[ && ! "$line" =~ ^fn[[:space:]] ]]; then
+                        in_doc_comment=0
+                        doc_comment=""
+                        test_attrs=""
+                    fi
+                done < "$test_file"
+
+                echo ""
+            done <<< "$test_files"
+        fi
+
+        # Footer
+        cat << EOF
+
+---
+
+**Note:** This packet was generated for contract adequacy review.
+- To see full test implementations, use: \`--full-tests\`
+- To run tests for this contract: \`./spec_tool.sh verify --contract $contract_id\`
+EOF
+
+    } > "$output_file"
+
+    print_success "Packet generated: $output_file"
+
+    # Show summary
+    echo ""
+    echo "Summary:"
+    echo "  Contract:     $contract_id"
+    echo "  Spec:         $spec_basename"
+    echo "  Test files:   $test_count"
+    echo "  Output:       $output_file"
+
+    return 0
+}
+
+# ============================================================================
 # Command: verify
 # ============================================================================
 
@@ -1198,6 +1469,9 @@ main() {
             ;;
         traceability)
             cmd_traceability "$@"
+            ;;
+        packet)
+            cmd_packet "$@"
             ;;
         verify)
             cmd_verify "$@"
