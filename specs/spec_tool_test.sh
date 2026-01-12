@@ -254,6 +254,17 @@ cat > "$TMP/contracts/1_test.md" << 'EOF'
 **Guarantee:** The system MUST do something else.
 EOF
 
+# Create another spec file for entity-scopes-03a
+cat > "$TMP/contracts/6_entity_scopes.md" << 'EOF'
+# Entity Scopes
+
+## Contracts
+
+### [entity-scopes-03a] — Scope Contract
+
+**Guarantee:** The system MUST handle scopes.
+EOF
+
 # Generate packet for connection-01
 "$SPEC_TOOL" packet connection-01 --out "$TMP/packet-01.md" >/dev/null 2>&1
 PACKET_01=$(cat "$TMP/packet-01.md")
@@ -293,7 +304,7 @@ echo ""
 echo "Test Case G: Packet generation - concise vs full-tests mode"
 echo "------------------------------------------------------------"
 
-# Create a test with assertions
+# Create a test with expect_msg labels
 cat > "$TMP/test/tests/c.rs" << 'EOF'
 /// Contract: [connection-02]
 #[test]
@@ -306,7 +317,11 @@ fn test_with_assertions() {
 
     scenario.expect(|ctx| {
         // Check something
-    });
+    }).expect_msg("server sees connect");
+
+    scenario.until(|ctx| {
+        // Wait for condition
+    }).expect_msg("client receives entity");
 
     assert_eq!(1, 1);
 }
@@ -320,20 +335,62 @@ PACKET_02_CONCISE=$(cat "$TMP/packet-02-concise.md")
 "$SPEC_TOOL" packet connection-02 --out "$TMP/packet-02-full.md" --full-tests >/dev/null 2>&1
 PACKET_02_FULL=$(cat "$TMP/packet-02-full.md")
 
-assert_contains "$PACKET_02_CONCISE" "scenario.expect(" "Concise packet shows assertion lines"
-assert_contains "$PACKET_02_CONCISE" "assert_eq!" "Concise packet shows assert_ lines"
+# Concise mode should show assertion index
+assert_contains "$PACKET_02_CONCISE" "// Assertion Index:" "Concise packet shows assertion index header"
+assert_contains "$PACKET_02_CONCISE" 'expect_msg("server sees connect")' "Concise packet lists first expect_msg"
+assert_contains "$PACKET_02_CONCISE" 'expect_msg("client receives entity")' "Concise packet lists second expect_msg"
 assert_contains "$PACKET_02_CONCISE" "(use --full-tests to see complete body)" "Concise packet has full-tests hint"
 
+# Full mode should show complete test body
 assert_contains "$PACKET_02_FULL" "let scenario = Scenario::new();" "Full packet shows setup"
 assert_contains "$PACKET_02_FULL" "scenario.mutate(" "Full packet shows full body"
+assert_contains "$PACKET_02_FULL" ".expect_msg(\"server sees connect\");" "Full packet preserves expect_msg calls"
 
 echo ""
 
 # ============================================================================
-# Test Case H: Packet generation - error handling
+# Test Case H: Packet generation - fallback when no expect_msg labels
 # ============================================================================
 
-echo "Test Case H: Packet generation - error handling"
+echo "Test Case H: Packet generation - fallback when no expect_msg labels"
+echo "---------------------------------------------------------------------"
+
+# Create a test without expect_msg labels
+cat > "$TMP/test/tests/d.rs" << 'EOF'
+/// Contract: [entity-scopes-03a]
+#[test]
+fn test_without_expect_msg() {
+    let scenario = Scenario::new();
+
+    scenario.expect(|ctx| {
+        // Check 1
+    });
+
+    scenario.expect(|ctx| {
+        // Check 2
+    });
+
+    scenario.until(|ctx| {
+        // Wait
+    });
+}
+EOF
+
+# Generate packet
+"$SPEC_TOOL" packet entity-scopes-03a --out "$TMP/packet-03a.md" >/dev/null 2>&1
+PACKET_03A=$(cat "$TMP/packet-03a.md")
+
+assert_contains "$PACKET_03A" "NOTE: No expect_msg labels found" "Fallback shows NOTE message"
+assert_contains "$PACKET_03A" "2x scenario.expect()" "Fallback counts scenario.expect()"
+assert_contains "$PACKET_03A" "1x scenario.until()" "Fallback counts scenario.until()"
+
+echo ""
+
+# ============================================================================
+# Test Case I: Packet generation - error handling
+# ============================================================================
+
+echo "Test Case I: Packet generation - error handling"
 echo "------------------------------------------------"
 
 # Test with non-existent contract

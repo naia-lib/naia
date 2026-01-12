@@ -1132,10 +1132,24 @@ EOF
                                 # Full test mode: output entire body
                                 echo "$fn_body"
                             else
-                                # Concise mode: only assertion lines
-                                echo "    // ... setup ..."
+                                # Concise mode: extract assertion index
                                 echo ""
-                                echo "$fn_body" | grep -E '(expect_msg\(|expect\(|assert_|panic!|until\()' | sed 's/^/    /'
+                                echo "    // Assertion Index:"
+
+                                # Extract expect_msg strings
+                                local expect_msgs=$(echo "$fn_body" | grep -oE '\.?expect_msg\("([^"\\]|\\.)*"\)' | sed 's/^\.//; s/expect_msg(//; s/)$//' | sort -u)
+
+                                if [[ -n "$expect_msgs" ]]; then
+                                    echo "$expect_msgs" | while IFS= read -r msg; do
+                                        [[ -n "$msg" ]] && echo "    //   - expect_msg($msg)"
+                                    done
+                                else
+                                    # No expect_msg found, show counts
+                                    local expect_count=$(echo "$fn_body" | grep -c 'scenario\.expect(' || echo 0)
+                                    local until_count=$(echo "$fn_body" | grep -c 'scenario\.until(' || echo 0)
+                                    echo "    //   NOTE: No expect_msg labels found. Add expect_msg(...) to make adequacy review deterministic."
+                                    echo "    //   Signal: ${expect_count}x scenario.expect(), ${until_count}x scenario.until()"
+                                fi
                                 echo ""
                                 echo "    // ... (use --full-tests to see complete body) ..."
                             fi
