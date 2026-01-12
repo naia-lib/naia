@@ -1,6 +1,6 @@
 # Contract Traceability Matrix
 
-**Generated:** 2026-01-12 01:06 UTC
+**Generated:** 2026-01-12 02:13 UTC
 
 This matrix shows the bidirectional mapping between contracts and tests.
 
@@ -65,11 +65,11 @@ This matrix shows the bidirectional mapping between contracts and tests.
 | `entity-authority-08` | `request_authority_available_grants_to_requester_and_denies_everyone_else` | entity_authority_client_ops.rs | COVERED |
 | `entity-authority-09` | `give_authority_assigns_to_client_and_denies_everyone_else` | entity_authority_server_ops.rs | COVERED |
 | `entity-authority-10` | `give_authority_assigns_to_client_and_denies_everyone_else` | entity_authority_server_ops.rs | COVERED |
-| `entity-authority-11` | - | - | **UNCOVERED** |
+| `entity-authority-11` | `(manual check)` | entity_authority_server_ops.rs | COVERED |
 | `entity-authority-12` | `holder_release_authority_transitions_everyone_to_available` | entity_authority_client_ops.rs | COVERED |
-| `entity-authority-13` | - | - | **UNCOVERED** |
+| `entity-authority-13` | `disable_delegation_clears_authority_semantics` | entity_delegation_toggle.rs | COVERED |
 | `entity-authority-14` | `server_give_authority_requires_scope` | entity_authority_server_ops.rs | COVERED |
-| `entity-authority-15` | - | - | **UNCOVERED** |
+| `entity-authority-15` | `(manual check)` | entity_authority_server_ops.rs | COVERED |
 | `entity-authority-16` | `give_authority_assigns_to_client_and_denies_everyone_else` | entity_authority_server_ops.rs | COVERED |
 | `entity-delegation-01` | `server_owned_undelegated_accepts_only_server_writes` | entity_delegation_toggle.rs | COVERED |
 | `entity-delegation-02` | `(manual check)` | entity_delegation_toggle.rs | COVERED |
@@ -86,19 +86,19 @@ This matrix shows the bidirectional mapping between contracts and tests.
 | `entity-delegation-13` | `disable_delegation_while_client_holds_authority` | entity_delegation_toggle.rs | COVERED |
 | `entity-delegation-14` | `auth_granted_emitted_exactly_once_on_available_to_granted` | entity_migration_and_events.rs | COVERED |
 | `entity-delegation-15` | `auth_granted_emitted_exactly_once_on_available_to_granted` | entity_migration_and_events.rs | COVERED |
-| `entity-delegation-16` | `disable_delegation_clears_authority_semantics` | entity_delegation_toggle.rs | COVERED |
+| `entity-delegation-16` | `disable_delegation_while_client_holds_authority` | entity_delegation_toggle.rs | COVERED |
 | `entity-delegation-17` | `server_owned_undelegated_has_no_authority_status_and_no_auth_events` | entity_delegation_toggle.rs | COVERED |
 | `entity-publication-01` | `client_owned_published_rejects_non_owner_mutations` | entity_client_owned.rs | COVERED |
 | `entity-publication-02` | `client_owned_unpublished_is_visible_only_to_owner` | entity_client_owned.rs | COVERED |
 | `entity-publication-03` | `client_owned_published_may_be_scoped_to_non_owners` | entity_client_owned.rs | COVERED |
-| `entity-publication-04` | - | - | **UNCOVERED** |
+| `entity-publication-04` | `(manual check)` | entity_client_owned.rs | COVERED |
 | `entity-publication-05` | `publish_toggle_published_to_unpublished_forcibly_despawns_for_non_owners` | entity_client_owned.rs | COVERED |
 | `entity-publication-06` | `client_owned_published_may_be_scoped_to_non_owners` | entity_client_owned.rs | COVERED |
 | `entity-publication-07` | `client_owned_unpublished_is_visible_only_to_owner` | entity_client_owned.rs | COVERED |
 | `entity-publication-08` | `publish_toggle_published_to_unpublished_forcibly_despawns_for_non_owners` | entity_client_owned.rs | COVERED |
 | `entity-publication-09` | `client_owned_published_rejects_non_owner_mutations` | entity_client_owned.rs | COVERED |
-| `entity-publication-10` | - | - | **UNCOVERED** |
-| `entity-publication-11` | - | - | **UNCOVERED** |
+| `entity-publication-10` | `(manual check)` | entity_client_owned.rs | COVERED |
+| `entity-publication-11` | `(manual check)` | entity_client_owned.rs | COVERED |
 | `entity-replication-01` | `stable_logical_identity_across_clients_in_steady_state` | entities_lifetime_identity.rs | COVERED |
 | `entity-replication-02` | `despawn_semantics` | entities_lifetime_identity.rs | COVERED |
 | `entity-replication-03` | `server_spawned_public_entity_replicates_to_all_scoped_clients` | entities_lifetime_identity.rs | COVERED |
@@ -205,9 +205,9 @@ This matrix shows the bidirectional mapping between contracts and tests.
 | connection_auth_identity.rs | (check manually) | connection-01,connection-02,connection-03,connection-04,connection-05,connection-06,connection-07,connection-08,connection-09,connection-10,connection-11,connection-12,connection-13,connection-14,connection-15,connection-16,connection-17,connection-18,connection-19,connection-20,connection-21,connection-22,connection-23,connection-24,connection-25,connection-26,connection-27, |
 | entities_lifetime_identity.rs | (check manually) | entity-replication-01,entity-replication-02,entity-replication-03,entity-replication-04,entity-replication-05,entity-replication-06,entity-replication-08,entity-replication-09,entity-replication-12,entity-scopes-01,entity-scopes-02,entity-scopes-05,entity-scopes-06,entity-scopes-07,entity-scopes-09,entity-scopes-10,entity-scopes-12, |
 | entity_authority_client_ops.rs | denied_client_request_authority_fails_err_not_available,holder_can_mutate_delegated_entity,holder_release_authority_transitions_everyone_to_available,non_holder_cannot_mutate_delegated_entity,request_authority_available_grants_to_requester_and_denies_everyone_else, | entity-authority-02,entity-authority-04,entity-authority-05,entity-authority-06,entity-authority-07,entity-authority-08,entity-authority-12, |
-| entity_authority_server_ops.rs | former_holder_sees_granted_to_available_on_server_release,give_authority_assigns_to_client_and_denies_everyone_else,server_held_authority_is_indistinguishable_from_client_is_denied,server_priority_give_authority_overrides_current_holder,server_priority_take_authority_overrides_a_client_holder, | entity-authority-03,entity-authority-09,entity-authority-10,entity-authority-12,entity-authority-14,entity-authority-16, |
-| entity_client_owned.rs | (check manually) | entity-publication-01,entity-publication-02,entity-publication-03,entity-publication-05,entity-publication-06,entity-publication-07,entity-publication-08,entity-publication-09, |
-| entity_delegation_toggle.rs | (check manually) | entity-authority-01,entity-delegation-01,entity-delegation-02,entity-delegation-03,entity-delegation-13,entity-delegation-16,entity-delegation-17, |
+| entity_authority_server_ops.rs | (check manually) | entity-authority-03,entity-authority-09,entity-authority-10,entity-authority-11,entity-authority-12,entity-authority-14,entity-authority-15,entity-authority-16, |
+| entity_client_owned.rs | (check manually) | entity-publication-01,entity-publication-02,entity-publication-03,entity-publication-04,entity-publication-05,entity-publication-06,entity-publication-07,entity-publication-08,entity-publication-09,entity-publication-10,entity-publication-11, |
+| entity_delegation_toggle.rs | (check manually) | entity-authority-01,entity-authority-13,entity-delegation-01,entity-delegation-02,entity-delegation-03,entity-delegation-13,entity-delegation-16,entity-delegation-17, |
 | entity_migration_and_events.rs | after_migration_writes_follow_delegated_rules,auth_denied_emitted_exactly_once_per_transition_into_denied,auth_granted_emitted_exactly_once_on_available_to_granted,auth_lost_emitted_exactly_once_per_transition_out_of_granted,cannot_delegate_client_owned_unpublished_err_not_published, | entity-delegation-01,entity-delegation-02,entity-delegation-03,entity-delegation-04,entity-delegation-05,entity-delegation-06,entity-delegation-07,entity-delegation-08,entity-delegation-09,entity-delegation-10,entity-delegation-11,entity-delegation-12,entity-delegation-13,entity-delegation-14,entity-delegation-15,entity-delegation-16,entity-delegation-17, |
 | entity_scope_coupling.rs | authority_releases_when_holder_disconnects,authority_releases_when_holder_goes_out_of_scope, | entity-delegation-10,entity-delegation-11,entity-scopes-06,entity-scopes-07,entity-scopes-08,entity-scopes-09,entity-scopes-11,entity-scopes-12,entity-scopes-13, |
 | events_world_integration.rs | (check manually) | client-events-00,client-events-01,client-events-02,client-events-03,client-events-04,client-events-05,client-events-06,client-events-07,client-events-08,client-events-09,client-events-10,client-events-11,client-events-12,entity-scopes-02,entity-scopes-05,entity-scopes-10,messaging-01,messaging-02,messaging-03,messaging-04,messaging-05,messaging-06,messaging-15,messaging-16,messaging-17,messaging-18,messaging-19,messaging-20,server-events-00,server-events-01,server-events-02,server-events-03,server-events-04,server-events-05,server-events-06,server-events-07,server-events-08,server-events-09,server-events-10,server-events-11,server-events-12,server-events-13,world-integration-01,world-integration-02,world-integration-03,world-integration-04,world-integration-05,world-integration-06,world-integration-07,world-integration-08, |
@@ -223,5 +223,5 @@ This matrix shows the bidirectional mapping between contracts and tests.
 ## Summary
 
 - **Total Contracts:** 185
-- **Contracts with Tests:** 170
-- **Coverage:** 91%
+- **Contracts with Tests:** 176
+- **Coverage:** 95%

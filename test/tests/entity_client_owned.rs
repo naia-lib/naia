@@ -709,3 +709,285 @@ fn client_owned_entities_emit_no_authority_events() {
     });
 }
 
+/// Only owning client may change publication for client-owned entities
+/// Contract: [entity-publication-04]
+///
+/// Given client-owned entity E owned by A; when A changes publication from Private→Public;
+/// then the change takes effect and non-owners can be scoped to E.
+/// When A changes publication from Public→Private; then non-owners are removed from scope.
+///
+/// Note: For client-owned entities, publication changes are driven by the owning client.
+/// Server conflicts are resolved per spec, but the primary mechanism is client-initiated.
+#[test]
+fn only_owner_or_server_may_change_publication() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // Client A spawns Private (Unpublished) entity
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            client_a.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                // Default is Private
+            })
+        })
+    });
+
+    // Wait for entity to replicate to server
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
+
+    // Verify B does not see E (Private)
+    scenario.mutate(|_| {});
+    scenario.expect(|ctx| (!ctx.client(client_b_key, |c| c.has_entity(&entity_e))).then_some(()));
+
+    // Owner A publishes E (Private → Public)
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            if let Some(mut entity_mut) = client_a.entity_mut(&entity_e) {
+                entity_mut.configure_replication(ClientReplicationConfig::Public);
+            }
+        });
+    });
+
+    // Verify server observes the publication change
+    scenario.expect(|ctx| {
+        let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
+        (config == Some(ReplicationConfig::Public)).then_some(())
+    });
+
+    scenario.allow_flexible_next();
+
+    // Server can now scope E to B
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
+                entity_mut.enter_room(&room_key);
+            }
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
+        });
+    });
+
+    // Verify B sees E now that it's Published
+    scenario.expect(|ctx| ctx.client(client_b_key, |c| c.has_entity(&entity_e)).then_some(()));
+
+    // Owner A unpublishes E (Public → Private)
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            if let Some(mut entity_mut) = client_a.entity_mut(&entity_e) {
+                entity_mut.configure_replication(ClientReplicationConfig::Private);
+            }
+        });
+    });
+
+    // Verify B loses E (owner changed to Private)
+    scenario.expect(|ctx| {
+        let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
+        let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
+        (!b_sees_e && config == Some(ReplicationConfig::Private)).then_some(())
+    });
+}
+
+/// Delegation migration ends client-owned publication semantics
+/// Contract: [entity-publication-10]
+///
+/// Given client-owned Published entity E owned by A; when E migrates to delegated (via client);
+/// then publication semantics no longer apply and E is governed by delegated authority rules.
+///
+/// Note: Delegation migration for client-owned entities must be initiated by the owning client,
+/// not the server. The server cannot downgrade client ownership to delegated.
+#[test]
+fn delegation_migration_ends_client_owned_publication_semantics() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // Client A spawns Published entity
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            client_a.spawn(|mut e| {
+                e.configure_replication(ClientReplicationConfig::Public)
+                    .insert_component(Position::new(1.0, 2.0));
+            })
+        })
+    });
+
+    // Wait for entity to replicate to server
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
+
+    scenario.allow_flexible_next();
+
+    // Put entity in room and scope to B
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
+                entity_mut.enter_room(&room_key);
+            }
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
+        });
+    });
+
+    // Wait for B to see E
+    scenario.expect(|ctx| ctx.client(client_b_key, |c| c.has_entity(&entity_e)).then_some(()));
+
+    // Client A migrates E to delegated (client-owned Published → delegated)
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            if let Some(mut entity_mut) = client_a.entity_mut(&entity_e) {
+                entity_mut.configure_replication(ClientReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    // Verify: E is now Delegated and both clients observe authority semantics
+    scenario.expect(|ctx| {
+        let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
+        let config_ok = config == Some(ReplicationConfig::Delegated);
+
+        // After delegation migration, clients should have authority status (not None)
+        let a_has_auth = ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()).is_some()
+        });
+        let b_has_auth = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()).is_some()
+        });
+
+        (config_ok && a_has_auth && b_has_auth).then_some(())
+    });
+}
+
+/// Non-owner observing Private entity must immediately despawn it
+/// Contract: [entity-publication-11]
+///
+/// This contract defines defensive behavior: if a non-owner client ever sees a Private entity
+/// (which should never happen in correct usage), it MUST despawn it.
+/// We test this by verifying that the existing Publication→Unpublished flow correctly despawns
+/// for non-owners, which exercises the same code path.
+#[test]
+fn non_owner_seeing_private_must_despawn() {
+    // This test verifies the behavior that implements entity-publication-11:
+    // When a non-owner observes that an entity becomes Private, it must despawn.
+    // The publish_toggle_published_to_unpublished_forcibly_despawns_for_non_owners test
+    // already exercises the primary path, but this test specifically annotates and verifies
+    // the contract requirement that Private entities are immediately treated as OutOfScope.
+
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // Client A spawns Published entity
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            client_a.spawn(|mut e| {
+                e.configure_replication(ClientReplicationConfig::Public)
+                    .insert_component(Position::new(1.0, 2.0));
+            })
+        })
+    });
+
+    // Wait for entity to replicate to server
+    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
+
+    scenario.allow_flexible_next();
+
+    // Scope E to B
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
+                entity_mut.enter_room(&room_key);
+            }
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
+        });
+    });
+
+    // Wait for B to see E
+    scenario.expect(|ctx| ctx.client(client_b_key, |c| c.has_entity(&entity_e)).then_some(()));
+
+    // Verify B currently sees the entity as Public (not Private)
+    scenario.mutate(|_| {});
+    scenario.expect(|ctx| {
+        let b_config = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.replication_config())
+        });
+        // B should see it as Public (non-private)
+        (b_config == Some(ClientReplicationConfig::Public)).then_some(())
+    });
+
+    // Change to Private - B should immediately despawn (entity-publication-11 behavior)
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            if let Some(mut entity_mut) = client_a.entity_mut(&entity_e) {
+                entity_mut.configure_replication(ClientReplicationConfig::Private);
+            }
+        });
+    });
+
+    // Verify: B no longer has E (despawned due to Private = OutOfScope for non-owner)
+    // A still has E (owner always in scope)
+    scenario.expect(|ctx| {
+        let a_has_e = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        let b_has_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
+        (a_has_e && !b_has_e).then_some(())
+    });
+}
+

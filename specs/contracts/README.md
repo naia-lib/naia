@@ -7,7 +7,7 @@ This directory contains **normative specifications** that define the expected be
 Specs establish the normative contract that flows downstream:
 
 ```
-specs/*.md (normative)
+specs/contracts/*.md (normative)
     ↓
 test/E2E_TEST_PLAN.md (test coverage plan)
     ↓
@@ -61,7 +61,7 @@ All specifications in this directory MUST follow these rules:
 
 ## Template
 
-Use `1_template.md` as a starting point for new specifications.
+Use `_template.md` as a starting point for new specifications.
 
 ## Test Obligations
 

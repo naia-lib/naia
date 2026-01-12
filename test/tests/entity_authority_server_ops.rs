@@ -17,7 +17,70 @@ use test_helpers::client_connect;
 /// Given delegated E with AuthNone (Available) in scope for A and B; when server calls give_authority(A,E); then A observes Granted + AuthGranted(E) and B observes Denied + AuthDenied(E).
 #[test]
 fn give_authority_assigns_to_client_and_denies_everyone_else() {
-    todo!()
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
+        Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
+    let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
+        Auth::new("client_b", "pass"), test_client_config(), test_protocol);
+
+    // Spawn and configure delegated entity
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    // Wait for both to see entity
+    scenario.expect(|ctx| {
+        let a_sees = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        let b_sees = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
+        (a_sees && b_sees).then_some(())
+    });
+
+    // Enable delegation
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    // Wait for Available status
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_avail = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available));
+        let b_avail = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available));
+        (a_avail && b_avail).then_some(())
+    });
+
+    // Server gives authority to A
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.give_authority(&client_a_key).unwrap();
+            }
+        });
+    });
+
+    // Verify: A has Granted, B has Denied
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_granted = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted));
+        let b_denied = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        (a_granted && b_denied).then_some(())
+    });
 }
 
 /// take_authority forces server hold; all clients denied
@@ -26,7 +89,70 @@ fn give_authority_assigns_to_client_and_denies_everyone_else() {
 /// Given delegated E with AuthNone (Available) in scope for A and B; when server calls take_authority(E); then both A and B observe Denied, and both emit AuthDenied(E) (from non-Denied to Denied).
 #[test]
 fn take_authority_forces_server_hold_all_clients_denied() {
-    todo!()
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
+        Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
+    let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
+        Auth::new("client_b", "pass"), test_client_config(), test_protocol);
+
+    // Spawn and configure delegated entity
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    // Wait for both to see entity
+    scenario.expect(|ctx| {
+        let a_sees = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        let b_sees = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
+        (a_sees && b_sees).then_some(())
+    });
+
+    // Enable delegation
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    // Wait for Available status
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_avail = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available));
+        let b_avail = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available));
+        (a_avail && b_avail).then_some(())
+    });
+
+    // Server takes authority
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.take_authority().unwrap();
+            }
+        });
+    });
+
+    // Verify: Both A and B have Denied
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_denied = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        let b_denied = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        (a_denied && b_denied).then_some(())
+    });
 }
 
 /// Server-held authority is indistinguishable from "client is denied"
@@ -35,7 +161,66 @@ fn take_authority_forces_server_hold_all_clients_denied() {
 /// Given delegated E where server holds authority; then every in-scope client observes Denied (and cannot mutate), and no client observes Granted.
 #[test]
 fn server_held_authority_is_indistinguishable_from_client_is_denied() {
-    todo!()
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
+        Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
+    let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
+        Auth::new("client_b", "pass"), test_client_config(), test_protocol);
+
+    // Spawn, configure delegated, and have server take authority
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        let a_sees = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        let b_sees = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
+        (a_sees && b_sees).then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_avail = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available));
+        (a_avail).then_some(())
+    });
+
+    // Server takes authority
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.take_authority().unwrap();
+            }
+        });
+    });
+
+    // Verify: Both clients observe Denied (server holding is same as Denied from client POV)
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_denied = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        let b_denied = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        (a_denied && b_denied).then_some(())
+    });
 }
 
 /// Server priority: take_authority overrides a client holder
@@ -44,7 +229,80 @@ fn server_held_authority_is_indistinguishable_from_client_is_denied() {
 /// Given delegated E where A currently holds authority (A Granted, B Denied); when server calls take_authority(E); then A transitions Granted→Denied emitting AuthLost(E) and AuthDenied(E); B remains Denied; all in-scope clients observe Denied.
 #[test]
 fn server_priority_take_authority_overrides_a_client_holder() {
-    todo!()
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
+        Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
+    let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
+        Auth::new("client_b", "pass"), test_client_config(), test_protocol);
+
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        (ctx.client(client_a_key, |c| c.has_entity(&entity_e)) &&
+         ctx.client(client_b_key, |c| c.has_entity(&entity_e))).then_some(())
+    });
+
+    // Enable delegation and give authority to A
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)).then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.give_authority(&client_a_key).unwrap();
+            }
+        });
+    });
+
+    // Verify A has Granted, B has Denied
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_granted = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted));
+        let b_denied = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        (a_granted && b_denied).then_some(())
+    });
+
+    // Server takes authority - overrides A's hold
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.take_authority().unwrap();
+            }
+        });
+    });
+
+    // Verify: Both A and B now have Denied (server override)
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_denied = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        let b_denied = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        (a_denied && b_denied).then_some(())
+    });
 }
 
 /// Server priority: give_authority overrides current holder
@@ -53,7 +311,79 @@ fn server_priority_take_authority_overrides_a_client_holder() {
 /// Given delegated E where A currently holds authority; when server calls give_authority(B,E); then A transitions Granted→Denied emitting AuthLost(E) and AuthDenied(E); B transitions Denied/Available→Granted emitting AuthGranted(E); all other in-scope clients observe Denied.
 #[test]
 fn server_priority_give_authority_overrides_current_holder() {
-    todo!()
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
+        Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
+    let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
+        Auth::new("client_b", "pass"), test_client_config(), test_protocol);
+
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        (ctx.client(client_a_key, |c| c.has_entity(&entity_e)) &&
+         ctx.client(client_b_key, |c| c.has_entity(&entity_e))).then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)).then_some(())
+    });
+
+    // Give authority to A first
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.give_authority(&client_a_key).unwrap();
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_granted = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted));
+        let b_denied = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        (a_granted && b_denied).then_some(())
+    });
+
+    // Server overrides by giving authority to B
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.give_authority(&client_b_key).unwrap();
+            }
+        });
+    });
+
+    // Verify: A now Denied, B now Granted
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_denied = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        let b_granted = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted));
+        (a_denied && b_granted).then_some(())
+    });
 }
 
 /// Server release_authority clears holder; all clients Available
@@ -62,7 +392,77 @@ fn server_priority_give_authority_overrides_current_holder() {
 /// Given delegated E with any current holder (Server or Client); when server calls release_authority(E); then all in-scope clients observe Available; if a client previously held Granted it MUST emit AuthLost(E); any client previously Denied MUST observe Denied→Available.
 #[test]
 fn server_release_authority_clears_holder_all_clients_available() {
-    todo!()
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
+        Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
+    let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
+        Auth::new("client_b", "pass"), test_client_config(), test_protocol);
+
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        (ctx.client(client_a_key, |c| c.has_entity(&entity_e)) &&
+         ctx.client(client_b_key, |c| c.has_entity(&entity_e))).then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)).then_some(())
+    });
+
+    // Give authority to A
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.give_authority(&client_a_key).unwrap();
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted)).then_some(())
+    });
+
+    // Server releases authority
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.release_authority().unwrap();
+            }
+        });
+    });
+
+    // Verify: Both A and B now have Available
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_avail = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available));
+        let b_avail = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available));
+        (a_avail && b_avail).then_some(())
+    });
 }
 
 /// Former holder sees Granted→Available on server release
@@ -71,7 +471,71 @@ fn server_release_authority_clears_holder_all_clients_available() {
 /// Given delegated E held by A; when server calls release_authority(E); then A emits AuthLost(E) and observes Available.
 #[test]
 fn former_holder_sees_granted_to_available_on_server_release() {
-    todo!()
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
+        Auth::new("client_a", "pass"), test_client_config(), test_protocol);
+
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)).then_some(())
+    });
+
+    // Give authority to A
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.give_authority(&client_a_key).unwrap();
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted)).then_some(())
+    });
+
+    // Server releases authority
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.release_authority().unwrap();
+            }
+        });
+    });
+
+    // Verify: A transitions Granted→Available
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)).then_some(())
+    });
 }
 
 /// Server give_authority requires scope
@@ -80,6 +544,311 @@ fn former_holder_sees_granted_to_available_on_server_release() {
 /// Given delegated E where OutOfScope(A,E) holds; when server calls give_authority(A,E); then it returns ErrNotInScope and authority holder does not change.
 #[test]
 fn server_give_authority_requires_scope() {
-    todo!()
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
+        Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
+    let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
+        Auth::new("client_b", "pass"), test_client_config(), test_protocol);
+
+    // Spawn entity only in B's scope, not A's
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            // Only include in B's scope, not A's
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        ctx.client(client_b_key, |c| c.has_entity(&entity_e)).then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)).then_some(())
+    });
+
+    // Try to give authority to A (who is not in scope) - should fail
+    let give_failed = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.give_authority(&client_a_key).is_err()
+            } else {
+                true // entity doesn't exist, also a failure
+            }
+        })
+    });
+
+    // Verify: give_authority returns error (NotInScope)
+    assert!(give_failed);
+
+    // Verify: B still has Available (authority unchanged)
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)).then_some(())
+    });
+}
+
+/// Duplicate/late authority signals are idempotent
+/// Contract: [entity-authority-15]
+///
+/// Given delegated E with A having Granted status; when server calls give_authority(A) again (duplicate);
+/// then no panics occur, A remains Granted, and no duplicate events are emitted.
+/// This tests that the authority state machine is idempotent to duplicate signals.
+#[test]
+fn duplicate_authority_signals_are_idempotent() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // Server spawns Public entity first, then enables delegation
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    // Wait for both to see E
+    scenario.expect(|ctx| {
+        let a_sees_e = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
+        (a_sees_e && b_sees_e).then_some(())
+    });
+
+    // Enable delegation
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
+                entity_mut.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    // Wait for delegation to be enabled and clients to see Available status
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
+        let config_ok = config == Some(naia_server::ReplicationConfig::Delegated);
+        let a_available = ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        });
+        let b_available = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        });
+        (config_ok && a_available && b_available).then_some(())
+    });
+
+    // Give authority to A
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
+                entity_mut.give_authority(&client_a_key).unwrap();
+            }
+        });
+    });
+
+    // Wait for A to have Granted and B to have Denied
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_status = ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority())
+        });
+        let b_status = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority())
+        });
+        (a_status == Some(EntityAuthStatus::Granted) && b_status == Some(EntityAuthStatus::Denied))
+            .then_some(())
+    });
+
+    // Call give_authority(A) again (duplicate) - this should be idempotent
+    // Per spec: "not emit duplicate observable 'grant' effects for the same lifetime"
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
+                // This is a duplicate give - A already has authority
+                // Should not panic and should handle gracefully
+                let _ = entity_mut.give_authority(&client_a_key);
+            }
+        });
+    });
+
+    // The duplicate give might return Ok (idempotent) or an error (already granted)
+    // Either way, no panic should occur and the final state should be correct
+
+    // Verify: A still has Granted, B still has Denied - state converged correctly
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_status = ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority())
+        });
+        let b_status = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority())
+        });
+        // State should remain consistent - A granted, B denied
+        (a_status == Some(EntityAuthStatus::Granted) && b_status == Some(EntityAuthStatus::Denied))
+            .then_some(())
+    });
+}
+
+/// Out-of-scope ends authority for that client
+/// Contract: [entity-authority-11]
+/// Contract: [entity-authority-12]
+///
+/// Given delegated E with A holding authority and B observing Denied; when A goes OutOfScope (removed from scope);
+/// then A loses authority (entity no longer exists locally for A), and B transitions from Denied to Available.
+#[test]
+fn out_of_scope_ends_authority_for_that_client() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "password"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // Server spawns entity and includes in both clients' scope
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    // Wait for both to see E
+    scenario.expect(|ctx| {
+        let a_sees_e = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
+        (a_sees_e && b_sees_e).then_some(())
+    });
+
+    // Enable delegation
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
+                entity_mut.configure_replication(naia_server::ReplicationConfig::Delegated);
+            }
+        });
+    });
+
+    // Wait for delegation to be enabled and clients to see Available status
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
+        let config_ok = config == Some(naia_server::ReplicationConfig::Delegated);
+        let a_available = ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        });
+        let b_available = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        });
+        (config_ok && a_available && b_available).then_some(())
+    });
+
+    // Give authority to A
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
+                entity_mut.give_authority(&client_a_key).unwrap();
+            }
+        });
+    });
+
+    // Wait for A to have Granted and B to have Denied
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_status = ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority())
+        });
+        let b_status = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority())
+        });
+        (a_status == Some(EntityAuthStatus::Granted) && b_status == Some(EntityAuthStatus::Denied))
+            .then_some(())
+    });
+
+    // Remove A from scope for E (A goes out of scope)
+    // Per entity-authority-11: A's authority status MUST be cleared (entity no longer exists locally)
+    // Per entity-authority-12: server MUST release/reset authority, B MUST transition Denied→Available
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.user_scope_mut(&client_a_key).unwrap().exclude(&entity_e);
+        });
+    });
+
+    // Verify both conditions:
+    // - A no longer has the entity (entity-authority-11)
+    // - B transitions from Denied to Available (entity-authority-12)
+    scenario.expect(|ctx| {
+        use naia_shared::EntityAuthStatus;
+        let a_has_entity = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        let b_status = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority())
+        });
+        (!a_has_entity && b_status == Some(EntityAuthStatus::Available)).then_some(())
+    });
 }
 

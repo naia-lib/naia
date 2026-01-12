@@ -5,11 +5,11 @@ This spec defines the **only** valid semantics for the server-side Events API su
 Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 
 Related specs:
-- `specs/entity_replication.md` (spawn/update/remove/despawn semantics)
-- `specs/entity_scopes.md` (in-scope vs out-of-scope and snapshot behavior)
-- `specs/messaging.md` (message ordering, reliability, request/response semantics)
-- `specs/time_ticks_commands.md` (tick definition, wrap ordering, command timing model)
-- `specs/connection_lifecycle.md` (connect/disconnect/auth ordering + cleanup)
+- `8_entity_replication.md` (spawn/update/remove/despawn semantics)
+- `7_entity_scopes.md` (in-scope vs out-of-scope and snapshot behavior)
+- `4_messaging.md` (message ordering, reliability, request/response semantics)
+- `5_time_ticks_commands.md` (tick definition, wrap ordering, command timing model)
+- `2_connection_lifecycle.md` (connect/disconnect/auth ordering + cleanup)
 
 ---
 

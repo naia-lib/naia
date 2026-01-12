@@ -19,6 +19,8 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONTRACTS_DIR="$SCRIPT_DIR/contracts"
+GENERATED_DIR="$SCRIPT_DIR/generated"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -55,13 +57,13 @@ print_info() {
 get_spec_files() {
     local include_template="${1:-false}"
     if [[ "$include_template" == "true" ]]; then
-        find "$SCRIPT_DIR" -maxdepth 1 -name '*.md' -type f \
+        find "$CONTRACTS_DIR" -maxdepth 1 -name '*.md' -type f \
             | grep -E '/[0-9]+_' \
             | sort -t'/' -k2 -V
     else
-        find "$SCRIPT_DIR" -maxdepth 1 -name '*.md' -type f \
+        find "$CONTRACTS_DIR" -maxdepth 1 -name '*.md' -type f \
             | grep -E '/[0-9]+_' \
-            | grep -v '1_template\.md' \
+            | grep -v '_template\.md' \
             | sort -t'/' -k2 -V
     fi
 }
@@ -141,7 +143,7 @@ EOF
 # ============================================================================
 
 cmd_bundle() {
-    local output_file="${1:-$SCRIPT_DIR/NAIA_SPECS.md}"
+    local output_file="${1:-$GENERATED_DIR/NAIA_SPECS.md}"
     local include_template="true"
 
     # Parse options
@@ -291,8 +293,8 @@ cmd_lint() {
 
     # Check 4: Terminology consistency (Debug vs Diagnostics)
     echo "Checking terminology consistency..."
-    local debug_files=$(grep -l 'In Debug:' "$SCRIPT_DIR"/*.md 2>/dev/null | wc -l)
-    local diag_files=$(grep -l 'diagnostics.*enabled' "$SCRIPT_DIR"/*.md 2>/dev/null | wc -l)
+    local debug_files=$(grep -l 'In Debug:' "$CONTRACTS_DIR"/*.md 2>/dev/null | wc -l)
+    local diag_files=$(grep -l 'diagnostics.*enabled' "$CONTRACTS_DIR"/*.md 2>/dev/null | wc -l)
     if [[ $debug_files -gt 0 && $diag_files -gt 0 ]]; then
         print_warning "Mixed terminology: $debug_files files use 'Debug', $diag_files use 'Diagnostics'"
         ((warnings++)) || true
@@ -303,7 +305,7 @@ cmd_lint() {
     for file in "${SPEC_FILES[@]}"; do
         local basename_file=$(basename "$file")
         if ! grep -qiE '^## ([0-9]+\) )?Test [Oo]bligations' "$file"; then
-            if [[ "$basename_file" != "0_README.md" && "$basename_file" != "1_template.md" ]]; then
+            if [[ "$basename_file" != "README.md" && "$basename_file" != "_template.md" ]]; then
                 print_warning "$basename_file: Missing '## Test obligations' section"
                 ((warnings++)) || true
             fi
@@ -398,7 +400,7 @@ cmd_check_orphans() {
         local file_orphans=0
 
         # Skip README and template
-        if [[ "$basename_file" == "0_README.md" || "$basename_file" == "1_template.md" ]]; then
+        if [[ "$basename_file" == "README.md" || "$basename_file" == "_template.md" ]]; then
             continue
         fi
 
@@ -452,7 +454,7 @@ cmd_check_orphans() {
 # ============================================================================
 
 cmd_registry() {
-    local output_file="${1:-$SCRIPT_DIR/CONTRACT_REGISTRY.md}"
+    local output_file="${1:-$GENERATED_DIR/CONTRACT_REGISTRY.md}"
 
     print_header "Generating Contract Registry"
 
@@ -654,7 +656,7 @@ cmd_coverage() {
         | grep -oP '\[[a-z][a-z0-9-]*-[0-9]+\]' | tr -d '[]' | sort -u)
 
     # Get all contracts from registry
-    local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+`' "$SCRIPT_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
+    local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+`' "$GENERATED_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
         | tr -d '`' | sort -u)
 
     local covered_count=0
@@ -725,7 +727,7 @@ cmd_gen_test() {
     fi
 
     # Find the spec file containing this contract
-    local spec_file=$(grep -l "\[$contract_id\]" "$SCRIPT_DIR"/*.md 2>/dev/null | grep -v REGISTRY | head -1)
+    local spec_file=$(grep -l "\[$contract_id\]" "$CONTRACTS_DIR"/*.md 2>/dev/null | grep -v REGISTRY | head -1)
 
     if [[ -z "$spec_file" ]]; then
         print_error "Contract [$contract_id] not found in any spec file"
@@ -804,7 +806,7 @@ EOF
 # ============================================================================
 
 cmd_traceability() {
-    local output_file="${1:-$SCRIPT_DIR/TRACEABILITY.md}"
+    local output_file="${1:-$GENERATED_DIR/TRACEABILITY.md}"
 
     print_header "Generating Traceability Matrix"
 
@@ -827,7 +829,7 @@ This matrix shows the bidirectional mapping between contracts and tests.
 EOF
 
         # Get all contracts from registry
-        local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+`' "$SCRIPT_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
+        local all_contracts=$(grep -oE '`[a-z-]+-[0-9]+`' "$GENERATED_DIR/CONTRACT_REGISTRY.md" 2>/dev/null \
             | tr -d '`' | sort -u)
 
         echo "$all_contracts" | while read -r contract; do

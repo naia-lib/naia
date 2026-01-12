@@ -22,11 +22,11 @@ Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 
 ## Cross-References
 
-- Tick + time model: `specs/time_ticks_commands.md`
-- Identity, replication legality, and “no updates before spawn / none after despawn”: `specs/entity_replication.md`
-- Scope transitions, join snapshots, and scope leave/re-enter semantics: `specs/entity_scopes.md`
-- Messaging ordering/reliability: `specs/messaging.md`
-- Ownership/delegation/authority semantics (not defined here): `specs/entity_ownership.md`, `specs/entity_delegation.md`, `specs/entity_authority.md`
+- Tick + time model: `5_time_ticks_commands.md`
+- Identity, replication legality, and "no updates before spawn / none after despawn": `8_entity_replication.md`
+- Scope transitions, join snapshots, and scope leave/re-enter semantics: `7_entity_scopes.md`
+- Messaging ordering/reliability: `4_messaging.md`
+- Ownership/delegation/authority semantics (not defined here): `9_entity_ownership.md`, `11_entity_delegation.md`, `12_entity_authority.md`
 
 ---
 

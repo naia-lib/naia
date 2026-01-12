@@ -1291,6 +1291,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .global_entity_map
             .entity_to_global_entity(world_entity)
             .unwrap();
+
+        // Per [entity-authority-12]: If the authority-holding client loses scope for E,
+        // the server MUST release/reset authority for E.
+        // Check if user is being removed from scope and is the authority holder
+        if !is_contained
+            && self
+                .global_world_manager
+                .user_is_authority_holder(user_key, &global_entity)
+        {
+            // Release authority - the user is losing scope while holding authority
+            let releaser = AuthOwner::Client(*user_key);
+            if self
+                .global_world_manager
+                .client_release_authority(&global_entity, &releaser)
+                .is_ok()
+            {
+                // Notify other clients that authority is now Available
+                self.send_reset_authority_messages(&global_entity);
+            }
+        }
+
         self.entity_scope_map
             .insert(*user_key, global_entity, is_contained);
     }

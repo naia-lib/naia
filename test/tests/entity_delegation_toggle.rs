@@ -444,6 +444,7 @@ fn enable_delegation_makes_entity_available_for_all_in_scope_clients() {
 /// Contract: [entity-delegation-02]
 /// Contract: [entity-delegation-16]
 /// Contract: [entity-delegation-17]
+/// Contract: [entity-authority-13]
 ///
 /// Given delegated E in scope for A and B with some current authority holder; when server disables delegation on E; then E becomes server-owned undelegated and clients MUST NOT receive further authority statuses/events for E; subsequent client request_authority returns ErrNotDelegated.
 #[test]

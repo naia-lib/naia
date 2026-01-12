@@ -355,6 +355,15 @@ impl GlobalWorldManager {
         self.auth_handler.user_all_owned_entities(user_key)
     }
 
+    /// Check if a user is the authority holder for a specific entity
+    pub(crate) fn user_is_authority_holder(
+        &self,
+        user_key: &UserKey,
+        global_entity: &GlobalEntity,
+    ) -> bool {
+        self.auth_handler.user_is_authority_holder(user_key, global_entity)
+    }
+
     pub(crate) fn pause_entity_replication(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");

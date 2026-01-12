@@ -2,15 +2,13 @@
 
 This document contains all normative specifications for the Naia networking engine, concatenated into a single reference.
 
-**Generated:** 2026-01-11 22:55 UTC
-**Spec Count:** 16
+**Generated:** 2026-01-12 02:13 UTC
+**Spec Count:** 14
 
 ---
 
 ## Table of Contents
 
-- [0. Naia Specifications](#naia-specifications)
-- [1. <Human-Readable Name>](#human-readable-name)
 - [2. Connection Lifecycle](#connection-lifecycle)
 - [3. Transport](#transport)
 - [4. Messaging](#messaging)
@@ -25,252 +23,6 @@ This document contains all normative specifications for the Naia networking engi
 - [13. Server Events API](#server-events-api)
 - [14. Client Events API Contract](#client-events-api-contract)
 - [15. World Integration Contract](#world-integration-contract)
-
----
-
-<!-- ======================================================================== -->
-<!-- Source: 0_README.md -->
-<!-- ======================================================================== -->
-
-# Naia Specifications
-
-This directory contains **normative specifications** that define the expected behavior of the Naia networking engine. Specs are the source of truth for what the system MUST, MUST NOT, MAY, SHALL, and SHOULD do.
-
-## Downstream Chain
-
-Specs establish the normative contract that flows downstream:
-
-```
-specs/*.md (normative)
-    ↓
-test/E2E_TEST_PLAN.md (test coverage plan)
-    ↓
-test/tests/*.rs (E2E test implementations)
-    ↓
-Implementation (production code)
-```
-
-**Specs are authoritative**: If a test or implementation contradicts a spec, the spec is correct and the test/implementation must be fixed.
-
-## Spec Rules
-
-All specifications in this directory MUST follow these rules:
-
-### 1. Finite-State Models
-- **MUST** use explicit state lists (all possible states enumerated)
-- **MUST** define state transitions explicitly (inputs → preconditions → effects)
-- **MUST NOT** use ambiguous or implicit state definitions
-
-### 2. Explicit Transitions
-- **MUST** specify:
-  - Inputs (what triggers the transition)
-  - Preconditions (what must be true before the transition)
-  - Effects (what changes, including state transitions)
-  - Postconditions (what must be true after the transition)
-
-### 3. Observability
-- **MUST** specify what each client can observe
-- **MUST** specify what the server observes
-- **MUST** distinguish between observable state and internal state
-
-### 4. Illegal Behavior
-- **MUST** define what happens when preconditions are violated
-- **MUST** specify error conditions and error handling
-- **MUST NOT** leave illegal cases undefined
-
-### 5. Normative Keywords
-- **MUST** use RFC 2119 keywords: **MUST**, **MUST NOT**, **MAY**, **SHALL**, **SHOULD**, **SHOULD NOT**
-- **MUST NOT** use ambiguous language like "should probably" or "might"
-- **MUST** use definitive statements only
-
-### 6. Glossary
-- **MUST** define all terms once in a glossary section
-- **MUST** use terms consistently throughout the spec
-- **MUST NOT** introduce new terms without definition
-
-### 7. No Ambiguity
-- **MUST** avoid ambiguous statements
-- **MUST** be explicit about edge cases
-- **MUST** specify ordering when it matters
-
-## Template
-
-Use `1_template.md` as a starting point for new specifications.
-
-## Test Obligations
-
-Each spec MUST include a "Test Obligations" section that lists the E2E test names that verify the spec. This creates traceability from spec → test.
-
----
-
-## Master Glossary
-
-Terms defined here are normative across all specs. Individual specs MAY add spec-specific terms in their Vocabulary sections but MUST NOT redefine master terms.
-
-### Connection & Session
-
-- **Client**: A Naia client instance attempting to establish and maintain a connection to a server.
-- **Server**: A Naia server instance accepting client connections and managing authoritative state.
-- **User** (`UserKey`): The server's internal identifier for a connected client. Used in server-side APIs.
-- **Session**: The period from `ConnectEvent` to `DisconnectEvent` for a single connection.
-- **Connection**: The underlying transport-level link between client and server.
-
-### Time & Ticks
-
-- **Tick**: A `u16` simulation step counter that wraps at 65535. All tick comparisons MUST use wrap-safe arithmetic.
-- **TickRate**: The configured duration per tick (milliseconds), shared between client and server.
-- **Server Tick**: The authoritative tick counter maintained by the server.
-- **Client Tick**: The client's tick counter, which MAY lead the server tick for command timing.
-
-### Entities & Components
-
-- **Entity**: A networked object tracked by Naia replication, identified by `GlobalEntity` (server) or `LocalEntity` (per-connection).
-- **GlobalEntity**: A `u64` monotonically-increasing identifier unique across the server's lifetime.
-- **LocalEntity** (`HostEntity`/`RemoteEntity`): Per-connection entity handles that may wrap/reuse across lifetimes.
-- **Entity Lifetime** (client-side): The period from scope-enter to scope-leave. Re-entering scope after ≥1 tick out-of-scope creates a new lifetime.
-- **Replicated Component**: A component type registered in the Protocol for network synchronization.
-- **Local-only Component**: A component instance existing only locally, not backed by replication.
-
-### Ownership & Authority
-
-- **EntityOwner**: Enum indicating who owns an entity: `Server`, `Client(UserKey)`, or `Local`.
-- **Owner**: The single actor permitted to write replicated updates for an entity (exclusive, per-entity).
-- **Authority**: Write permission for a delegated server-owned entity. Only the authority holder may write.
-- **EntityAuthStatus**: The client's authority state for a delegated entity: `Available`, `Requested`, `Granted`, `Releasing`, or `Denied`.
-
-### Scoping & Publication
-
-- **InScope(U, E)**: Predicate indicating entity E is visible to user U.
-- **OutOfScope(U, E)**: Entity E is not visible to user U; implies despawn on that client.
-- **Room**: A server-managed grouping for coarse scope gating. Users and entities may belong to multiple rooms.
-- **SharesRoom(U, E)**: True if user U and entity E share at least one common room.
-- **ReplicationConfig**: Configuration for an entity's replication behavior: `Private`, `Public`, or `Delegated`.
-- **Published** (client-owned): Entity is visible to non-owners (subject to scope policy).
-- **Unpublished** (client-owned): Entity is NOT visible to any non-owner.
-
-### Events & API
-
-- **Drain**: Reading and removing events from a pending queue. Drains are destructive (read+remove).
-- **Receive Step**: Ingesting packets from transport into internal buffer (no state changes).
-- **Process Step**: Processing buffered packets, applying protocol semantics, producing events.
-- **ConnectEvent**: Emitted when a connection is fully established (after auth, handshake, and tick sync).
-- **DisconnectEvent**: Emitted when a connection is terminated.
-
-### Build & Runtime Modes
-
-- **Debug Mode** (`debug_assertions`): Compile-time mode when `debug_assertions` is enabled. Additional checks and warnings are active.
-- **Prod Mode**: Compile-time mode when `debug_assertions` is disabled. Silent handling of remote anomalies.
-- **Diagnostics Mode**: Runtime configuration (independent of debug_assertions). When enabled, warnings MAY be emitted for illegal/impossible states.
-
-### Error Handling Policy
-
-All specs follow this error handling policy:
-
-| Error Type | Handling |
-|------------|----------|
-| User/API misuse | Return `Result::Err` |
-| Remote/untrusted input anomalies | Prod: ignore silently; Debug: warn |
-| Framework invariant violation | **PANIC** |
-
-### Temporal Semantics
-
-- **Immediately**: Within the same tick as the triggering event, before any events for that tick are drained to the application. The transition MUST be observable on the next API query within that tick.
-- **Eventually**: Will occur at some future tick while the connection remains active. No specific tick bound is guaranteed unless otherwise stated.
-- **Before [X]**: MUST complete before X begins. If X is a tick boundary, the action completes before the tick advances.
-- **After [X]**: MUST occur after X has completed. May be same tick or later tick.
-- **Within N ticks**: MUST occur before N ticks have elapsed from the triggering event.
-- **Same tick**: Occurs during the same server tick as the triggering event. Intermediate states within a tick are collapsed and not observable.
-
-
----
-
-<!-- ======================================================================== -->
-<!-- Source: 1_template.md -->
-<!-- ======================================================================== -->
-
-# Spec: <Human-Readable Name>
-<One sentence: what this spec guarantees.>
-
-**Status:** Draft | Active | Deprecated  
-**Version:** v1  
-**Related specs:** <links>  
-**Applies to:** <server | client | both | adapter> (pick one or more)
-
----
-
-## 1) Scope & Vocabulary
-
-**In scope:**  
-- <what this spec covers, concretely>
-
-**Out of scope:**  
-- <explicit exclusions + link to the spec that owns them>
-
-**Vocabulary (only terms used normatively below):**  
-- **<Term>**: <definition>  
-- **<Term>**: <definition>
-
----
-
-## 2) Contract (Rules)
-
-Write the contract as **numbered rules**. Each rule MUST be testable.
-
-**R1. <Short title>**  
-MUST/MUST NOT/MAY/SHOULD: <precise behavior>  
-Clarifies: <only if needed to avoid misread>  
-
-**R2. <Short title>**  
-MUST/MUST NOT/MAY/SHOULD: <precise behavior>
-
-(keep going)
-
----
-
-## 3) Contract IDs (Obligations)
-
-Contract IDs are the stable “handles” for enforcement + audits.
-
-**Contract ID format:** `<spec-slug>-<nn>`  
-Examples: `entities-identity-01`, `client-owned-publication-06`  
-Rules: IDs MUST be stable, MUST NOT be reused, MUST NOT be renumbered.
-
-For each obligation:
-
-### <spec-slug>-<nn> — <short title>
-**Guarantee:** <one sentence, no ambiguity>  
-**Covered by tests:**  
-- `test/tests/<file>.rs::<test_fn>` (or `TODO` if not implemented yet)  
-**Notes:** <only if needed>
-
----
-
-## 4) Interfaces & Observability
-
-Everything here is about what callers/observers can rely on.
-
-**Operations / Inputs:**  
-- `<op or message>` → <what it means, at the contract level>
-
-**Visible outcomes:**  
-- What the server can observe: <facts>  
-- What a client can observe: <facts>  
-
-**Errors / illegal use:**  
-- If <bad call / impossible case>: MUST <return error | ignore | disconnect | etc>, MUST NOT panic (unless explicitly stated)
-
-**Events / statuses (if any):**  
-- `<event/status>` emitted/visible when <condition> (exactly-once rules if relevant)
-
----
-
-## 5) Invariants & Non-Goals
-
-**Always true:**  
-- <invariant that must hold across all operations>
-
-**Non-goals:**  
-- <what this spec intentionally does not guarantee>
 
 ---
 
@@ -2536,11 +2288,11 @@ This spec defines the **only** valid semantics for the server-side Events API su
 Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 
 Related specs:
-- `specs/entity_replication.md` (spawn/update/remove/despawn semantics)
-- `specs/entity_scopes.md` (in-scope vs out-of-scope and snapshot behavior)
-- `specs/messaging.md` (message ordering, reliability, request/response semantics)
-- `specs/time_ticks_commands.md` (tick definition, wrap ordering, command timing model)
-- `specs/connection_lifecycle.md` (connect/disconnect/auth ordering + cleanup)
+- `8_entity_replication.md` (spawn/update/remove/despawn semantics)
+- `7_entity_scopes.md` (in-scope vs out-of-scope and snapshot behavior)
+- `4_messaging.md` (message ordering, reliability, request/response semantics)
+- `5_time_ticks_commands.md` (tick definition, wrap ordering, command timing model)
+- `2_connection_lifecycle.md` (connect/disconnect/auth ordering + cleanup)
 
 ---
 
@@ -2773,11 +2525,11 @@ Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 
 ## Cross-References
 
-- Tick + time model: `specs/time_ticks_commands.md`
-- Identity, replication legality, and “no updates before spawn / none after despawn”: `specs/entity_replication.md`
-- Scope transitions, join snapshots, and scope leave/re-enter semantics: `specs/entity_scopes.md`
-- Messaging ordering/reliability: `specs/messaging.md`
-- Ownership/delegation/authority semantics (not defined here): `specs/entity_ownership.md`, `specs/entity_delegation.md`, `specs/entity_authority.md`
+- Tick + time model: `5_time_ticks_commands.md`
+- Identity, replication legality, and "no updates before spawn / none after despawn": `8_entity_replication.md`
+- Scope transitions, join snapshots, and scope leave/re-enter semantics: `7_entity_scopes.md`
+- Messaging ordering/reliability: `4_messaging.md`
+- Ownership/delegation/authority semantics (not defined here): `9_entity_ownership.md`, `11_entity_delegation.md`, `12_entity_authority.md`
 
 ---
 
@@ -2973,17 +2725,17 @@ This spec covers:
 - Misuse safety requirements at the integration boundary (no panics, defined no-ops/errors).
 
 This spec does **not** define:
-- The replication rules themselves (see `specs/entity_replication.md`).
-- Scope policy semantics (see `specs/entity_scopes.md`).
-- Ownership/delegation/authority rules (see `specs/entity_ownership.md`, `specs/entity_delegation.md`, `specs/entity_authority.md`).
-- Messaging and request/response (see `specs/messaging.md`).
-- Transport behavior (see `specs/transport.md`).
+- The replication rules themselves (see `8_entity_replication.md`).
+- Scope policy semantics (see `7_entity_scopes.md`).
+- Ownership/delegation/authority rules (see `9_entity_ownership.md`, `11_entity_delegation.md`, `12_entity_authority.md`).
+- Messaging and request/response (see `4_messaging.md`).
+- Transport behavior (see `3_transport.md`).
 
 Related specs:
-- `specs/entity_replication.md`
-- `specs/entity_scopes.md`
-- `specs/server_events_api.md`
-- `specs/client_events_api.md`
+- `8_entity_replication.md`
+- `7_entity_scopes.md`
+- `13_server_events_api.md`
+- `14_client_events_api.md`
 
 ---
 
@@ -2995,7 +2747,7 @@ Related specs:
 - **World Mutation**: One of: Spawn, Despawn, ComponentInsert, ComponentUpdate, ComponentRemove.
 - **Tick**: The discrete step at which Naia advances and produces mutations/events.
 - **Drain**: A single pass where the integration adapter consumes the available Naia events/mutations for a tick (or for a poll loop iteration).
-- **In Scope**: An entity is present in the client’s Naia World View (see `specs/entity_scopes.md`).
+- **In Scope**: An entity is present in the client's Naia World View (see `7_entity_scopes.md`).
 
 ---
 
@@ -3061,7 +2813,7 @@ Test obligations:
 
 On clients, scope governs presence. The integration adapter MUST reflect scope transitions as:
 
-- When an entity `E` transitions OutOfScope → InScope for client `C`, the External World for `C` MUST receive a Spawn(E) (or equivalent “create entity”) and initial component inserts sufficient to form a coherent snapshot. (Snapshot semantics are defined in `specs/entity_scopes.md` and `specs/entity_replication.md`.)
+- When an entity `E` transitions OutOfScope → InScope for client `C`, the External World for `C` MUST receive a Spawn(E) (or equivalent "create entity") and initial component inserts sufficient to form a coherent snapshot. (Snapshot semantics are defined in `7_entity_scopes.md` and `8_entity_replication.md`.)
 - When `E` transitions InScope → OutOfScope for client `C`, the External World for `C` MUST receive a Despawn(E) (or equivalent “remove entity”).
 
 Test obligations:
@@ -3090,7 +2842,7 @@ The integration adapter MUST treat Naia’s entity identity as stable for the li
 - If Naia indicates the “same entity” across ticks (same logical identity), the External World MUST keep the same external handle for that entity (or maintain an injective mapping).
 - If an entity despawns and later a different entity appears, the adapter MUST NOT accidentally alias them as the same external entity.
 
-This relies on identity semantics in `specs/entity_replication.md`; this contract ensures the adapter doesn’t break identity.
+This relies on identity semantics in `8_entity_replication.md`; this contract ensures the adapter doesn't break identity.
 
 Test obligations:
 - `world-integration-06.t1` (TODO → `test/tests/world_integration.rs::no_identity_aliasing_across_lifetimes`)
@@ -3103,7 +2855,7 @@ Test obligations:
 For every component mutation surfaced to the adapter, the component type MUST be correct and match the protocol/schema.
 
 - The adapter MUST NOT be asked to apply a component mutation of a different type than declared.
-- If a component cannot be decoded due to schema mismatch or decode failure, behavior MUST follow `specs/transport.md` / protocol contracts (e.g., reject connection or safely ignore that mutation), and the adapter MUST NOT panic.
+- If a component cannot be decoded due to schema mismatch or decode failure, behavior MUST follow `3_transport.md` / protocol contracts (e.g., reject connection or safely ignore that mutation), and the adapter MUST NOT panic.
 
 Test obligations:
 - `world-integration-07.t1` (TODO → `test/tests/world_integration.rs::component_types_are_correct_and_never_misrouted`)
@@ -3143,8 +2895,8 @@ Test obligations:
 
 ## Notes for Implementers
 
-- For server integration, the External World is typically updated from server-side inserts/updates/removes/despawns (see `specs/server_events_api.md`).
-- For client integration, the External World is typically updated from client-side world events (see `specs/client_events_api.md`), and scope governs presence (`specs/entity_scopes.md`).
+- For server integration, the External World is typically updated from server-side inserts/updates/removes/despawns (see `13_server_events_api.md`).
+- For client integration, the External World is typically updated from client-side world events (see `14_client_events_api.md`), and scope governs presence (`7_entity_scopes.md`).
 - This spec is satisfied whether the adapter is “push” (callbacks) or “pull” (drain + apply), as long as contracts above hold.
 
 ## Test obligations

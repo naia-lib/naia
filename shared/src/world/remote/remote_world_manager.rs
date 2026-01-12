@@ -141,9 +141,12 @@ impl RemoteWorldManager {
             let Some(remote_channel) = self.remote_engine.get_world().get(remote_entity) else {
                 continue;
             };
-            let global_entity = local_converter
-                .remote_entity_to_global_entity(remote_entity)
-                .unwrap();
+            // Entity may no longer exist in the map if it went out of scope.
+            // In that case, skip this entity - it's no longer relevant for updates.
+            let Ok(global_entity) = local_converter.remote_entity_to_global_entity(remote_entity)
+            else {
+                continue;
+            };
             let remote_component_kinds = remote_channel.component_kinds();
             if let Some(existing) = updatable_world.get_mut(&global_entity) {
                 existing.extend(&remote_component_kinds);
@@ -163,9 +166,15 @@ impl RemoteWorldManager {
         command: EntityCommand,
     ) {
         let global_entity = command.entity();
-        let remote_entity = converter
-            .global_entity_to_remote_entity(&global_entity)
-            .unwrap();
+        // Entity may no longer exist if it went out of scope before this command
+        // was processed. In that case, the command is no longer relevant - silently skip.
+        let Ok(remote_entity) = converter.global_entity_to_remote_entity(&global_entity) else {
+            warn!(
+                "send_entity_command: entity {:?} no longer exists (likely out of scope), skipping",
+                global_entity
+            );
+            return;
+        };
         self.remote_engine
             .send_entity_command(remote_entity, command);
     }
@@ -176,9 +185,15 @@ impl RemoteWorldManager {
         command: EntityCommand,
     ) {
         let global_entity = command.entity();
-        let remote_entity = converter
-            .global_entity_to_remote_entity(&global_entity)
-            .unwrap(); // error triggered here
+        // Entity may no longer exist if it went out of scope before this auth command
+        // was processed. In that case, the command is no longer relevant - silently skip.
+        let Ok(remote_entity) = converter.global_entity_to_remote_entity(&global_entity) else {
+            warn!(
+                "send_auth_command: entity {:?} no longer exists (likely out of scope), skipping",
+                global_entity
+            );
+            return;
+        };
         self.remote_engine.send_auth_command(remote_entity, command);
     }
 
