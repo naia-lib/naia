@@ -13,6 +13,7 @@ use test_helpers::client_connect;
 // ============================================================================
 
 /// Entities only replicate when room & scope match
+/// Contract: [entity-scopes-01], [entity-replication-01]
 ///
 /// Given Room1 with A and Room2 with B; when server spawns public E in Room1 and public F in Room2;
 /// then A sees only E, B sees only F, and server room state is E∈Room1, F∈Room2.
@@ -101,6 +102,7 @@ fn entities_only_replicate_when_room_scope_match() {
 }
 
 /// Moving a user between rooms updates scope
+/// Contract: [entity-scopes-02], [entity-scopes-09]
 ///
 /// Given E public in Room1, A in Room1, B in Room2; when server moves B from Room2 to Room1;
 /// then B spawns E, A continues to see E, and B never sees entities that exist only in Room2.
@@ -196,6 +198,7 @@ fn moving_user_between_rooms_updates_scope() {
 }
 
 /// Moving an entity between rooms updates scope
+/// Contract: [entity-scopes-03], [entity-scopes-10]
 ///
 /// Given A and B in Room1 and public E in Room1 visible to both; when server moves E to Room2;
 /// then A and B despawn E, and clients in Room2 see E.
@@ -297,6 +300,7 @@ fn moving_entity_between_rooms_updates_scope() {
 }
 
 /// Custom viewport scoping function (position-based scope)
+/// Contract: [entity-scopes-04], [entity-replication-02]
 ///
 /// Given A and B in same room, entity E with Position, and per-client viewports;
 /// when E's Position moves from A's viewport region into B's; then A initially sees E then despawns it on exit,
@@ -381,6 +385,7 @@ fn custom_viewport_scoping_function() {
 // ============================================================================
 
 /// Entity belonging to multiple rooms projects correctly to different users
+/// Contract: [entity-scopes-05], [entity-replication-03]
 ///
 /// Given E in both RoomA and RoomB; when U1 is only in RoomA, U2 only in RoomB, U3 in both;
 /// then U1 sees E once, U2 sees E once, U3 sees E once, and removing E from one room only affects
@@ -511,6 +516,7 @@ fn entity_in_multiple_rooms_projects_correctly() {
 }
 
 /// Manual user-scope include overrides room absence
+/// Contract: [entity-scopes-06], [entity-scopes-11]
 ///
 /// Given E in RoomA and U not in RoomA; when server manually includes E in U's user scope;
 /// then U sees E while override is active, and despawns E when override is removed
@@ -590,6 +596,7 @@ fn manual_user_scope_include_overrides_room_absence() {
 }
 
 /// Manual user-scope exclude hides an entity despite shared room
+/// Contract: [entity-scopes-07], [entity-scopes-12]
 ///
 /// Given E and U both in RoomA; when server explicitly excludes E from U's scope;
 /// then U does not see E while override is active, and E reappears for U once override is removed.
@@ -668,6 +675,7 @@ fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
 }
 
 /// Publish/unpublish vs spawn/despawn semantics are distinct
+/// Contract: [entity-scopes-08], [entity-replication-04]
 ///
 /// Given E exists on server; when server publishes E to a room, later unpublishes it, then finally despawns it;
 /// then clients see E appear on publish, disappear on unpublish, and never see E again after despawn
@@ -766,6 +774,7 @@ fn publish_unpublish_vs_spawn_despawn_semantics_distinct() {
 // ============================================================================
 
 /// Snapshot on join-in-progress
+/// Contract: [entity-replication-05], [entity-replication-06]
 ///
 /// Given Room with entities E1–E3 already replicated to existing clients;
 /// when B connects and joins Room; then B's initial snapshot includes all in-scope entities
@@ -895,6 +904,7 @@ fn snapshot_on_join_in_progress() {
 }
 
 /// Clean reconnect
+/// Contract: [entity-replication-07], [entity-scopes-13]
 ///
 /// Given A and B connected and seeing same entities; when A disconnects (graceful or simulated loss)
 /// and later reconnects as same or new logical player per chosen model; then after rejoin A's world
@@ -1052,6 +1062,7 @@ fn clean_reconnect() {
 /// Given E1–E3 exist, updated, and published in RoomR with A observing;
 /// when B joins RoomR; then B's first world view contains E1–E3 with all components at current values,
 /// with no partially-populated entities.
+/// Contract: [entity-replication-08], [entity-replication-09]
 #[test]
 fn late_joining_client_receives_full_current_snapshot() {
     let mut scenario = Scenario::new();
@@ -1214,6 +1225,7 @@ fn late_joining_client_receives_full_current_snapshot() {
 }
 
 /// Late-joining client does not see removed components or despawned entities from history
+/// Contract: [entity-replication-10]
 ///
 /// Given entities were spawned, modified, some components removed, some entities despawned before B connects;
 /// when B joins; then B only sees currently alive entities with current components, and no historical
@@ -1314,6 +1326,7 @@ fn late_joining_client_no_removed_components_or_despawned_entities() {
 }
 
 /// Entering scope mid-lifetime yields consistent snapshot without historical diffs
+/// Contract: [entity-scopes-14], [entity-replication-11]
 ///
 /// Given E existed and changed while A was out of scope; when A's scope changes so that E becomes in-scope;
 /// then A first sees E as a coherent snapshot of its current state, without replaying older intermediate diffs.
@@ -1406,6 +1419,7 @@ fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
 }
 
 /// Leaving scope vs despawn are distinguishable and behave consistently
+/// Contract: [entity-scopes-15], [entity-replication-12]
 ///
 /// Given A sees E; when E leaves A's scope but is not despawned; then A sees E disappear without a "despawn"
 /// lifetime event, and later re-entering scope shows E again with fresh snapshot; when E is truly despawned,
@@ -1526,6 +1540,7 @@ fn leaving_scope_vs_despawn_distinguishable() {
 }
 
 /// Reconnect always yields a clean snapshot independent of prior connection state
+/// Contract: [entity-replication-01]
 ///
 /// Given A connects, sees entities, then disconnects; when A reconnects and rejoins rooms;
 /// then A receives a fresh snapshot based solely on current server state with no accidental

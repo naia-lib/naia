@@ -12,6 +12,7 @@ use test_helpers::client_connect;
 // ============================================================================
 
 /// Cannot delegate client-owned Unpublished (ErrNotPublished)
+/// Contract: [entity-delegation-01], [entity-delegation-02]
 ///
 /// Given client-owned Unpublished E owned by A; when server (or A) attempts to delegate E; then operation fails with ErrNotPublished and E remains client-owned Unpublished.
 #[test]
@@ -20,6 +21,7 @@ fn cannot_delegate_client_owned_unpublished_err_not_published() {
 }
 
 /// Delegating client-owned Published migrates identity without despawn+spawn
+/// Contract: [entity-delegation-03], [entity-delegation-04], [entity-delegation-05]
 ///
 /// Given client-owned Published E owned by A and in scope for A and B; when server (or A) delegates E; then E remains the same identity on clients (continuity), and becomes server-owned delegated.
 #[test]
@@ -28,6 +30,7 @@ fn delegating_client_owned_published_migrates_identity_without_despawn_spawn() {
 }
 
 /// Migration assigns initial authority to owner if owner in scope
+/// Contract: [entity-delegation-06], [entity-delegation-07]
 ///
 /// Given client-owned Published E owned by A and InScope(A,E); when E is delegated (migrates); then resulting delegated E has holder Client(A): A observes Granted + AuthGranted(E), and every other in-scope client observes Denied + AuthDenied(E).
 #[test]
@@ -36,6 +39,7 @@ fn migration_assigns_initial_authority_to_owner_if_owner_in_scope() {
 }
 
 /// Migration yields no holder if owner out of scope
+/// Contract: [entity-delegation-08], [entity-delegation-09]
 ///
 /// Given client-owned Published E owned by A but OutOfScope(A,E) at migration moment; when E is delegated (migrates); then resulting delegated E has AuthNone and every in-scope client observes Available (no initial holder).
 #[test]
@@ -44,6 +48,7 @@ fn migration_yields_no_holder_if_owner_out_of_scope() {
 }
 
 /// After migration, writes follow delegated rules
+/// Contract: [entity-delegation-12], [entity-delegation-13]
 ///
 /// Given migrated delegated E; when owner A is not the authority holder; then A's mutations are ignored/rejected; when A later acquires authority (Available→Granted) then A's mutations are accepted.
 #[test]
@@ -52,6 +57,7 @@ fn after_migration_writes_follow_delegated_rules() {
 }
 
 /// AuthGranted emitted exactly once on Available→Granted
+/// Contract: [entity-delegation-14], [entity-delegation-15]
 ///
 /// Given delegated E Available for A; when A becomes holder (via request_authority or give_authority); then exactly one AuthGranted(E) is emitted to A for that transition.
 #[test]
@@ -60,6 +66,7 @@ fn auth_granted_emitted_exactly_once_on_available_to_granted() {
 }
 
 /// AuthDenied emitted exactly once per transition into Denied
+/// Contract: [entity-delegation-16]
 ///
 /// Given delegated E where a client C transitions into Denied (from Available or Granted); then exactly one AuthDenied(E) is emitted for that transition.
 #[test]
@@ -68,6 +75,7 @@ fn auth_denied_emitted_exactly_once_per_transition_into_denied() {
 }
 
 /// AuthLost emitted exactly once per transition out of Granted
+/// Contract: [entity-delegation-17]
 ///
 /// Given delegated E where client A transitions from Granted to (Denied or Available); then exactly one AuthLost(E) is emitted for that transition.
 #[test]
@@ -76,6 +84,7 @@ fn auth_lost_emitted_exactly_once_per_transition_out_of_granted() {
 }
 
 /// No auth events for non-delegated entities, ever
+/// Contract: [entity-delegation-10], [entity-delegation-11]
 ///
 /// Given any non-delegated entity (server-owned undelegated or any client-owned); then AuthGranted/AuthDenied/AuthLost MUST NOT be emitted regardless of scope/mutations.
 #[test]
@@ -84,6 +93,7 @@ fn no_auth_events_for_non_delegated_entities_ever() {
 }
 
 /// Duplicate SetAuthority does not emit duplicate events
+/// Contract: [entity-delegation-12]
 ///
 /// Given delegated E in a stable status S for client C; when server re-sends SetAuthority(S) (same status); then C emits no additional auth events and status remains S.
 #[test]

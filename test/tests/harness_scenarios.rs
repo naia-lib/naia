@@ -8,6 +8,7 @@ mod test_helpers;
 use test_helpers::client_connect;
 
 /// Test: single client spawn replicates to server
+/// Contract: [entity-replication-01]
 #[test]
 fn harness_single_client_spawn_replicates_to_server() {
     let mut scenario = Scenario::new();
@@ -42,6 +43,7 @@ fn harness_single_client_spawn_replicates_to_server() {
 }
 
 /// Test: two clients see the same logical entity
+/// Contract: [entity-replication-01], [entity-scopes-01]
 #[test]
 fn harness_two_clients_entity_mapping() {
     let mut scenario = Scenario::new();

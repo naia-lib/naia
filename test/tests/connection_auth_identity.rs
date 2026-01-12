@@ -16,6 +16,7 @@ use test_helpers::{client_connect, server_and_client_connected, test_client_conf
 // ============================================================================
 
 /// Basic connect/disconnect lifecycle
+/// Contract: [connection-01], [connection-02], [connection-10]
 ///
 /// Given an empty server; when A connects, then B connects, then A disconnects;
 /// then connect events are [A, B], only B remains connected, and all entities/scope for A are cleaned up.
@@ -120,6 +121,7 @@ fn basic_connect_disconnect_lifecycle() {
 }
 
 /// Connect event ordering is stable
+/// Contract: [connection-03], [connection-04]
 ///
 /// Given a server; when A connects then B connects;
 /// then exactly two connect events appear in order [A, B] with no duplicates.
@@ -260,6 +262,7 @@ fn connect_event_ordering_stable() {
 }
 
 /// Disconnect is idempotent and clean
+/// Contract: [connection-05], [connection-06], [connection-10]
 ///
 /// Given A and B connected; when A disconnects and later a duplicate/connection-lost for A is processed;
 /// then only one disconnect event for A is exposed, A is fully removed from users and scoping, and B never sees ghost entities from A.
@@ -329,6 +332,7 @@ fn disconnect_idempotent_and_clean() {
 // ============================================================================
 
 /// Successful auth with `require_auth = true`
+/// Contract: [connection-07], [connection-08]
 ///
 /// Given `require_auth = true` and an auth handler accepting certain credentials;
 /// when A connects with valid auth; then server emits one auth event then one connect event for A,
@@ -391,6 +395,7 @@ fn successful_auth_with_require_auth() {
 }
 
 /// Invalid credentials are rejected
+/// Contract: [connection-09], [connection-11]
 ///
 /// Given `require_auth = true` and an auth handler rejecting bad credentials;
 /// when A connects with invalid auth; then server emits an auth event but no connect event,
@@ -469,6 +474,7 @@ fn invalid_credentials_rejected() {
 }
 
 /// Auth disabled connects without auth event
+/// Contract: [connection-12]
 ///
 /// Given `require_auth = false`; when A connects (with or without auth payload);
 /// then a connect event is emitted, and A becomes a normal connected user.
@@ -504,6 +510,7 @@ fn auth_disabled_connects_without_auth_event() {
 }
 
 /// No replication before auth decision
+/// Contract: [connection-13], [connection-14]
 ///
 /// Given `require_auth = true` and existing in-scope entities;
 /// when A connects and auth is delayed; then until auth is accepted, A is not treated as connected
@@ -593,6 +600,7 @@ fn no_replication_before_auth_decision() {
 }
 
 /// No mid-session re-auth or identity swap
+/// Contract: [connection-15], [connection-16]
 ///
 /// Given A authenticated and connected; when A sends additional auth payload mid-session
 /// trying to change identity; then identity does not change, the attempt is ignored or rejected
@@ -671,6 +679,7 @@ fn no_mid_session_reauth() {
 // ============================================================================
 
 /// Server capacity-based reject produces RejectEvent, not ConnectEvent
+/// Contract: [connection-17], [connection-18]
 ///
 /// Given server at max concurrent users; when another client tries to connect;
 /// then a reject indication is emitted, no connect event is emitted, and the client remains/ends disconnected.
@@ -751,6 +760,7 @@ fn server_capacity_reject_produces_reject_event() {
 }
 
 /// Client disconnects due to heartbeat/timeout
+/// Contract: [connection-19], [connection-20]
 ///
 /// Given configured heartbeat/timeout; when traffic stops longer than timeout;
 /// then both sides eventually emit a timeout disconnect event and all entities for that connection are cleaned up.
@@ -856,6 +866,7 @@ fn client_disconnects_due_to_heartbeat_timeout() {
 }
 
 /// Protocol or handshake mismatch fails before connection
+/// Contract: [connection-21], [connection-22]
 ///
 /// Given server expecting a specific handshake/protocol; when client connects with incompatible
 /// handshake or version; then handshake fails, an error/reject is surfaced, no connect event or
@@ -900,6 +911,7 @@ fn protocol_handshake_mismatch_fails() {
 // ============================================================================
 
 /// Malformed or tampered identity token is rejected cleanly
+/// Contract: [connection-23], [connection-24]
 ///
 /// Given server expecting well-formed identity tokens; when client uses a malformed/tampered token;
 /// then handshake fails, client never becomes connected, an error/reject is surfaced, and no half-connected state remains.
@@ -960,6 +972,7 @@ fn malformed_identity_token_rejected() {
 }
 
 /// Expired or reused identity token obeys documented semantics
+/// Contract: [connection-25], [connection-26]
 ///
 /// Given a token valid only once or within a time window; when client uses an expired or already-used token;
 /// then server enforces the documented rule (e.g., explicit rejection or forced new identity) and does not silently accept it as a fresh session.
@@ -1057,6 +1070,7 @@ fn expired_or_reused_token_obeys_semantics() {
 }
 
 /// Valid identity token round-trips from server generation to client use
+/// Contract: [connection-27]
 ///
 /// Given server generates a token via public API and passes it to a client;
 /// when that client uses it to connect; then handshake succeeds, connection is associated with

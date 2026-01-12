@@ -18,6 +18,7 @@ use naia_test::test_protocol::{
 // ============================================================================
 
 /// Reliable server-to-clients broadcast respects rooms
+/// Contract: [messaging-08]
 ///
 /// Given RoomR with A,B and RoomS with C; when server broadcasts a reliable message on a channel to RoomR;
 /// then A and B each receive exactly one copy in-order on that channel, and C receives none.
@@ -97,6 +98,7 @@ fn reliable_server_to_clients_broadcast_respects_rooms() {
 }
 
 /// Reliable point-to-point request/response
+/// Contract: [messaging-08]
 ///
 /// Given A connected and server listening for request type; when A sends a reliable request and server replies reliably only to A;
 /// then A sees exactly one response after its request, no other client sees it, and from A's perspective response comes after its request.
@@ -190,6 +192,7 @@ fn reliable_point_to_point_request_response() {
 }
 
 /// Per-channel ordering
+/// Contract: [messaging-09]
 ///
 /// Given Channels 1 and 2 and shared scope between A and B; when server sends M1,M2,M3 on Channel1 and N1,N2 on Channel2 in that order;
 /// then on A and B each channel preserves its own order (M1→M2→M3; N1→N2) regardless of interleaving between channels.
@@ -283,6 +286,7 @@ fn per_channel_ordering() {
 // ============================================================================
 
 /// Ordered reliable channel keeps order under latency and reordering
+/// Contract: [messaging-09]
 ///
 /// Given ordered reliable channel; when server sends A,B,C and transport reorders packets;
 /// then client receives exactly one A,B,C in order A→B→C.
@@ -327,6 +331,7 @@ fn ordered_reliable_channel_keeps_order_under_latency_and_reordering() {
 }
 
 /// Ordered reliable channel ignores duplicated packets
+/// Contract: [messaging-09], [messaging-17]
 ///
 /// Given ordered reliable channel; when transport duplicates packets for A,B;
 /// then client still surfaces exactly one A and one B in order with no duplicates.
@@ -371,6 +376,7 @@ fn ordered_reliable_channel_ignores_duplicated_packets() {
 }
 
 /// Unordered reliable channel delivers all messages but in arbitrary order
+/// Contract: [messaging-08]
 ///
 /// Given unordered reliable channel; when server sends A,B,C under latency/reordering;
 /// then client receives exactly one A,B,C in some order not guaranteed to match send order.
@@ -419,6 +425,7 @@ fn unordered_reliable_channel_delivers_all_messages_but_in_arbitrary_order() {
 }
 
 /// Unordered unreliable channel shows best-effort semantics
+/// Contract: [messaging-06]
 ///
 /// Given unordered unreliable channel with configurable loss; when server sends a sequence at fixed rate;
 /// then with no loss all messages arrive once; with configured loss some messages never arrive and are not retried.
@@ -465,6 +472,7 @@ fn unordered_unreliable_channel_shows_best_effort_semantics() {
 }
 
 /// Sequenced reliable channel only exposes the latest message in a stream
+/// Contract: [messaging-10]
 ///
 /// Given sequenced reliable "current state" stream; when server sends S1,S2,S3 for same stream under delay/reordering;
 /// then client may drop older states but ends up exposing S3 only and never reverts to S1 or S2 after seeing S3.
@@ -515,6 +523,7 @@ fn sequenced_reliable_channel_only_exposes_the_latest_message_in_a_stream() {
 }
 
 /// Sequenced unreliable channel discards late outdated updates
+/// Contract: [messaging-07]
 ///
 /// Given sequenced unreliable channel; when server sends U1..U10 and network delivers U3,U4 after U8,U9;
 /// then client drops U3,U4 and only applies newest sequence, never reverting.
@@ -563,6 +572,7 @@ fn sequenced_unreliable_channel_discards_late_outdated_updates() {
 }
 
 /// Tick-buffered channel groups messages by tick
+/// Contract: [messaging-12]
 ///
 /// Given tick-buffered channel with known tick rate; when server sends messages tagged with ticks T,T+1,T+2 with packet reordering;
 /// then client exposes buffered messages grouped by tick and never surfaces messages for T+1 before it has processed tick T.
@@ -668,6 +678,7 @@ fn tick_buffered_channel_groups_messages_by_tick() {
 }
 
 /// Tick-buffered channel discards messages for ticks that are too old
+/// Contract: [messaging-14]
 ///
 /// Given tick-buffered channel with sliding window; when messages for ticks T,T+1,T+2 are sent but tick T arrives long after client has advanced beyond T;
 /// then late tick-T messages are discarded and not applied to current state.
@@ -699,6 +710,7 @@ fn tick_buffered_channel_discards_messages_for_ticks_that_are_too_old() {
 // ============================================================================
 
 /// Client-to-server request yields exactly one response
+/// Contract: [messaging-08]
 ///
 /// Given typed request/response; when client sends request R with ID and server processes it;
 /// then client eventually observes exactly one matching response for that ID, even under packet duplication.
@@ -771,6 +783,7 @@ fn client_to_server_request_yields_exactly_one_response() {
 }
 
 /// Server-to-client request yields exactly one response
+/// Contract: [messaging-08]
 ///
 /// Given server sending requests to client; when server sends request Q and client replies;
 /// then server observes exactly one matching response for Q with no duplicates even if packets duplicate.
@@ -840,6 +853,7 @@ fn server_to_client_request_yields_exactly_one_response() {
 }
 
 /// Request timeouts are surfaced and cleaned up
+/// Contract: [messaging-05]
 ///
 /// Given client sends request R; when server never replies and timeout elapses;
 /// then client surfaces a timeout result for R, releases tracking, and does not leak resources.
@@ -906,6 +920,7 @@ fn request_timeouts_are_surfaced_and_cleaned_up() {
 }
 
 /// Requests fail cleanly on disconnect mid-flight
+/// Contract: [messaging-05]
 ///
 /// Given in-flight request R from client; when connection drops before response;
 /// then both sides eventually mark R failed/cancelled, do not leak state, and ignore any late response for R after reconnect.
@@ -994,6 +1009,7 @@ fn requests_fail_cleanly_on_disconnect_mid_flight() {
 // ============================================================================
 
 /// Many concurrent requests from a single client remain distinct
+/// Contract: [messaging-08]
 ///
 /// Given one client issuing many concurrent requests; when server processes them in arbitrary order and replies out-of-order;
 /// then client gets exactly one response per request and correctly matches responses to original requests without collisions.
@@ -1086,6 +1102,7 @@ fn many_concurrent_requests_from_a_single_client_remain_distinct() {
 }
 
 /// Concurrent requests from multiple clients stay isolated per client
+/// Contract: [messaging-08]
 ///
 /// Given multiple clients issuing overlapping request IDs (e.g., each uses 0,1,2); when server handles all and responds;
 /// then each client only sees responses to its own requests and no response is misrouted to another client.
@@ -1208,6 +1225,7 @@ fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
 }
 
 /// Response completion order is well-defined and documented
+/// Contract: [messaging-08]
 ///
 /// Given multiple requests from one client completed in a different order than they were sent; when client observes responses;
 /// then they arrive in the order promised by the contract (e.g., completion order), and the test forces a send-order/completion-order mismatch to verify behavior.

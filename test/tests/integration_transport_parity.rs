@@ -14,6 +14,7 @@ use naia_test::test_protocol::{Position, TestMessage};
 // ============================================================================
 
 /// Core replication scenario behaves identically over UDP and WebRTC
+/// Contract: [transport-01], [transport-02], [transport-03]
 ///
 /// Given simple multi-client scenario (spawn/update/despawn and some messages);
 /// when run once over UDP and once over WebRTC with equivalent link conditions;
@@ -29,6 +30,7 @@ fn core_replication_scenario_behaves_identically_over_udp_and_webrtc() {
 }
 
 /// Transport-specific connection failure surfaces cleanly
+/// Contract: [transport-04]
 ///
 /// Given WebRTC transport configured so ICE/signalling fails; when client attempts to connect;
 /// then connection eventually fails with clear error, no partial user/room state is created on server,
@@ -40,6 +42,7 @@ fn transport_specific_connection_failure_surfaces_cleanly() {
 }
 
 /// Integrated "everything at once" scenario stays consistent and error-free
+/// Contract: [world-integration-09], [entity-scopes-01], [entity-scopes-03], [entity-scopes-04], [world-integration-01], [world-integration-02], [world-integration-03]
 ///
 /// Given a complex scenario exercising all major features simultaneously (multiple clients, rooms, scoping,
 /// entity replication with ownership/delegation, messages on multiple channels, requests/responses, tick-buffered commands);

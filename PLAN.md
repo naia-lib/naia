@@ -279,9 +279,9 @@ Require for all PRs:
 
 | Milestone | Metric | Target | Status |
 |-----------|--------|--------|--------|
-| Phase 1 complete | Test annotations | 149/149 | Pending |
-| Phase 1 complete | Coverage tracking | >50% | Pending |
-| Phase 2 complete | Gap analysis | Complete | Pending |
+| Phase 1 complete | Test annotations | 154/154 | **Done** (all 14 test files, 154 tests annotated) |
+| Phase 1 complete | Coverage tracking | >50% | **Done** (55% = 102/185 contracts) |
+| Phase 2 complete | Gap analysis | Complete | **Done** (see specs/GAP_ANALYSIS.md) |
 | Phase 3 complete | Contract coverage | >80% | Pending |
 | Phase 4 complete | Orphan statements | 0 | Pending |
 | Phase 5 complete | CI pipeline | Active | Pending |

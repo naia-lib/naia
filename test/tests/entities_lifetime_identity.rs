@@ -13,6 +13,7 @@ use test_helpers::{client_connect, test_client_config};
 // ============================================================================
 
 /// Server-spawned public entity replicates to all scoped clients
+/// Contract: [entity-replication-03], [entity-scopes-01], [entity-scopes-02], [entity-scopes-10]
 ///
 /// Given A and B in same room; when server spawns public E with Position;
 /// then A and B both see E with same Position.
@@ -101,6 +102,7 @@ fn server_spawned_public_entity_replicates_to_all_scoped_clients() {
 }
 
 /// Private replication: only owner sees it
+/// Contract: [entity-scopes-05], [entity-scopes-06]
 ///
 /// Given A and B in same room; when A spawns E with owner-only/private replication;
 /// then A (and server) see E, but B never sees E or its components.
@@ -151,6 +153,7 @@ fn private_replication_only_owner_sees_it() {
 }
 
 /// Component insertion after initial spawn
+/// Contract: [entity-replication-03], [entity-replication-06]
 ///
 /// Given E with Position replicated to A and B; when server inserts new component Velocity;
 /// then A and B see E with Velocity added and Position unchanged, and any later-joining client sees E with both components.
@@ -256,6 +259,7 @@ fn component_insertion_after_initial_spawn() {
 }
 
 /// Component updates propagate consistently across clients
+/// Contract: [entity-replication-08], [entity-replication-12]
 ///
 /// Given E with Position and Health visible to A and B; when server updates both components across ticks;
 /// then A and B never observe impossible combinations and converge to same final (Position, Health) as server.
@@ -362,6 +366,7 @@ fn component_updates_propagate_consistently_across_clients() {
 }
 
 /// Component removal
+/// Contract: [entity-replication-03]
 ///
 /// Given E with Position and Health visible to A and B; when server removes Health;
 /// then A and B see E without Health (Position intact), and joiners see E without Health.
@@ -448,6 +453,7 @@ fn component_removal() {
 }
 
 /// Despawn semantics
+/// Contract: [entity-replication-02], [entity-scopes-07], [entity-scopes-09]
 ///
 /// Given E visible to A and B; when server despawns E;
 /// then A and B despawn E, no further updates for E are processed client-side, and late packets referencing E are ignored safely.
@@ -536,6 +542,7 @@ fn despawn_semantics() {
 }
 
 /// No updates before spawn and none after despawn
+/// Contract: [entity-replication-04], [entity-replication-05]
 ///
 /// Given entities spawned, updated, and despawned under packet reordering;
 /// then each client only sees updates after a spawn for that entity and never sees updates/messages referencing the entity after its despawn.
@@ -628,6 +635,7 @@ fn no_updates_before_spawn_and_none_after_despawn() {
 // ============================================================================
 
 /// Stable logical identity across clients in steady state
+/// Contract: [entity-replication-01], [entity-replication-09]
 ///
 /// Given A spawns public E replicated to B; when A mutates E's components over time;
 /// then whenever both see E, they refer to the same logical entity and observe the same component values.
@@ -756,6 +764,7 @@ fn stable_logical_identity_across_clients_in_steady_state() {
 }
 
 /// Late-joining client gets consistent identity mapping
+/// Contract: [entity-replication-01], [entity-replication-02], [entity-replication-03]
 ///
 /// Given A already seeing E in a room; when B later joins that room;
 /// then B's initial snapshot includes E, and subsequent mutations to E are consistently observed on both A and B as the same logical entity.
@@ -863,6 +872,7 @@ fn late_joining_client_gets_consistent_identity_mapping() {
 }
 
 /// Scope leave and re-enter semantics (decided model)
+/// Contract: [entity-scopes-12]
 ///
 /// Given E public and A initially in scope; when A leaves E's scope and despawns E, then later re-enters scope;
 /// then behavior matches the chosen model (new lifetime vs reappearance of same logical entity), and the test asserts the chosen contract.
@@ -953,6 +963,7 @@ fn scope_leave_and_re_enter_semantics() {
 // ============================================================================
 
 /// Long-running connect/disconnect and spawn/despawn cycles do not leak
+/// Contract: [entity-replication-01], [entity-replication-02], [entity-scopes-07]
 ///
 /// Given a test that repeatedly connects/disconnects clients and spawns/despawns entities over many cycles;
 /// when it completes; then server and clients report zero users/entities, and internal counts remain bounded (no leaks).

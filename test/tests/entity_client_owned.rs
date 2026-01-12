@@ -12,6 +12,7 @@ use test_helpers::client_connect;
 // ============================================================================
 
 /// Client-owned (Unpublished) is visible only to owner
+/// Contract: [entity-publication-02], [entity-publication-07]
 ///
 /// Given client A owns client-owned entity E in **Unpublished** state; when E exists; then A can see E, server can see E, and every non-owner client B MUST NOT have E in scope (E absent in B's world).
 #[test]
@@ -65,6 +66,7 @@ fn client_owned_unpublished_is_visible_only_to_owner() {
 }
 
 /// Client-owned (Unpublished) replication is owner→server only
+/// Contract: [entity-publication-02], [entity-publication-07]
 ///
 /// Given client-owned Unpublished E owned by A; when A mutates E; then server reflects the mutation; and any non-owner client B never observes E (no visibility, no replication to B).
 #[test]
@@ -139,6 +141,7 @@ fn client_owned_unpublished_replication_is_owner_to_server_only() {
 }
 
 /// Client-owned (Published) may be scoped to non-owners
+/// Contract: [entity-publication-03], [entity-publication-06]
 ///
 /// Given client-owned Published E owned by A; when server includes E in B's scope; then B observes E (E appears in B's world) with correct replicated state.
 #[test]
@@ -226,6 +229,7 @@ fn client_owned_published_may_be_scoped_to_non_owners() {
 }
 
 /// Client-owned (Published) rejects non-owner mutations
+/// Contract: [entity-publication-01], [entity-publication-09]
 ///
 /// Given client-owned Published E owned by A and in scope for B; when B attempts to mutate E; then server ignores/rejects B's mutation and authoritative state remains driven by A (and/or server replication), with no panics.
 #[test]
@@ -315,6 +319,7 @@ fn client_owned_published_rejects_non_owner_mutations() {
 }
 
 /// Client-owned (Published) accepts owner mutations and propagates
+/// Contract: [entity-publication-01], [entity-publication-03]
 ///
 /// Given client-owned Published E owned by A and in scope for B; when A mutates E; then server accepts and both A and B observe the updated state.
 #[test]
@@ -412,6 +417,7 @@ fn client_owned_published_accepts_owner_mutations_and_propagates() {
 }
 
 /// Publish toggle: Published → Unpublished forcibly despawns for non-owners
+/// Contract: [entity-publication-05], [entity-publication-07], [entity-publication-08]
 ///
 /// Given client-owned Published E owned by A and currently in scope for B; when E becomes Unpublished (by server or owner A); then B MUST lose E from its world (OutOfScope), while A and server retain E.
 #[test]
@@ -490,6 +496,7 @@ fn publish_toggle_published_to_unpublished_forcibly_despawns_for_non_owners() {
 }
 
 /// Publish toggle: Unpublished → Published enables scoping to non-owners
+/// Contract: [entity-publication-06], [entity-publication-09]
 ///
 /// Given client-owned Unpublished E owned by A; when E becomes Published; then server can include E in B's scope and B observes E normally.
 #[test]
@@ -581,6 +588,7 @@ fn publish_toggle_unpublished_to_published_enables_scoping_to_non_owners() {
 }
 
 /// Client-owned entities emit NO authority events
+/// Contract: [entity-publication-01], [entity-publication-03]
 ///
 /// Given client-owned E (Published or Unpublished); when any replication and mutations occur; then clients MUST observe **no** AuthGranted/AuthDenied/AuthLost events for E.
 #[test]

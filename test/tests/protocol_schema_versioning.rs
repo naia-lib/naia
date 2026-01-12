@@ -14,6 +14,7 @@ use naia_test::test_protocol::{Position, TestMessage};
 // ============================================================================
 
 /// Serialization failures are surfaced without poisoning the connection
+/// Contract: [messaging-10], [messaging-11]
 ///
 /// Given a type that can be forced to fail (de)serialization; when such a failure occurs;
 /// then side detecting error surfaces an appropriate error, ignores the failing message/entity,
@@ -26,6 +27,7 @@ fn serialization_failures_are_surfaced_without_poisoning_the_connection() {
 }
 
 /// Multi-type mapping across messages, components, and channels
+/// Contract: [messaging-07], [messaging-08], [messaging-09]
 ///
 /// Given protocol with multiple message types on multiple channels and multiple component types;
 /// when server/client exchange mixed messages and entity updates;
@@ -150,6 +152,7 @@ fn multi_type_mapping_across_messages_components_and_channels() {
 }
 
 /// Channel separation for different message types
+/// Contract: [messaging-12], [messaging-13], [messaging-14]
 ///
 /// Given messages bound to ChannelA vs ChannelB; when server sends A1,A2 on A and B1,B2 on B;
 /// then client observes A1,A2 only through ChannelA API and B1,B2 only through ChannelB API.
@@ -216,6 +219,7 @@ fn channel_separation_for_different_message_types() {
 /// Given server/client with intentionally mismatched protocol definitions (type ID ordering differs);
 /// when client connects; then handshake fails early with clear mismatch outcome,
 /// no gameplay events are generated, and both sides clean up.
+/// Contract: [transport-01], [transport-02]
 #[test]
 fn protocol_type_order_mismatch_fails_fast_at_handshake() {
     // TODO: This test requires creating mismatched protocol definitions
@@ -224,6 +228,7 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
 }
 
 /// Client missing a type that the server uses
+/// Contract: [transport-03], [transport-04]
 ///
 /// Given server protocol with an extra type not in client protocol; when client connects and server uses that type;
 /// then either connection is rejected as incompatible or server avoids sending unsupported type;
@@ -237,6 +242,7 @@ fn client_missing_a_type_that_the_server_uses() {
 }
 
 /// Safe extension: server knows extra type but still interoperates
+/// Contract: [transport-04], [transport-05]
 ///
 /// Given server protocol defines extra message type `Extra` beyond baseline while client only knows baseline;
 /// when client connects; then behavior follows documented rule: either `Extra` is never sent to that client
@@ -249,6 +255,7 @@ fn safe_extension_server_knows_extra_type_but_still_interoperates() {
 }
 
 /// Schema incompatibility produces immediate, clear failure
+/// Contract: [transport-01], [transport-05]
 ///
 /// Given server/client with incompatible schemas for a shared type; when they attempt to exchange that type;
 /// then incompatibility is detected and surfaced as error/disconnect before corrupted values reach public API.

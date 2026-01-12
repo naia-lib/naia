@@ -16,6 +16,7 @@ use naia_test::test_protocol::{
 // ============================================================================
 
 /// Deterministic replay of a scenario
+/// Contract: [time-01]
 ///
 /// Given fully scripted scenario and deterministic clock/seed; when scenario executes twice;
 /// then externally observable events and world states on all clients are identical across runs.
@@ -80,6 +81,7 @@ fn deterministic_replay_of_a_scenario() {
 }
 
 /// Robustness under simulated packet loss
+/// Contract: [transport-01], [transport-02]
 ///
 /// Given A and B seeing replicated E; when server updates E while test transport drops a substantial fraction of packets;
 /// then after loss subsides both clients converge to server's latest E state without permanent divergence.
@@ -190,6 +192,7 @@ fn robustness_under_simulated_packet_loss() {
 }
 
 /// Out-of-order packet handling does not regress to older state
+/// Contract: [transport-03], [transport-04]
 ///
 /// Given E updated monotonically; when some packets carrying older states are delayed until after newer states;
 /// then clients never regress to older state once newer state applied, and eventually report latest state.
@@ -277,6 +280,7 @@ fn out_of_order_packet_handling_does_not_regress_to_older_state() {
 // ============================================================================
 
 /// Server and client tick indices advance monotonically
+/// Contract: [time-02], [time-03]
 ///
 /// Given server and client with matching tick rates; when simulation runs;
 /// then both server tick and client's notion of server tick advance monotonically, never decreasing or rolling back.
@@ -358,6 +362,7 @@ fn server_and_client_tick_indices_advance_monotonically() {
 }
 
 /// Pausing and resuming time does not create extra ticks
+/// Contract: [time-04], [time-05]
 ///
 /// Given deterministic time source; when time is paused (no tick advancement) then resumed;
 /// then no ticks are generated during pause and progression resumes smoothly from last tick index.
@@ -388,6 +393,7 @@ fn pausing_and_resuming_time_does_not_create_extra_ticks() {
 }
 
 /// Command history preserves and replays commands after correction
+/// Contract: [commands-01], [commands-02], [time-06]
 ///
 /// Given client sends per-tick input and server sends authoritative state; when client receives corrected state for earlier tick while holding newer commands;
 /// then client replays newer commands in order on corrected state and reaches same final state as if correction had been there from start.
@@ -398,6 +404,7 @@ fn command_history_preserves_and_replays_commands_after_correction() {
 }
 
 /// Command history discards old commands beyond its window
+/// Contract: [commands-03], [commands-04]
 ///
 /// Given bounded command history; when many ticks pass and commands are inserted;
 /// then commands older than window are discarded, and late corrections for ticks outside window do not attempt to replay discarded commands.
@@ -412,6 +419,7 @@ fn command_history_discards_old_commands_beyond_its_window() {
 // ============================================================================
 
 /// Tick index wraparound does not break progression or ordering
+/// Contract: [time-07], [time-08]
 ///
 /// Given deterministic time and known tick counter max; when server and client tick through wraparound;
 /// then tick ordering stays correct, channels/tick-buffer semantics still hold, and no panics/invalid state occur.
@@ -422,6 +430,7 @@ fn tick_index_wraparound_does_not_break_progression_or_ordering() {
 }
 
 /// Sequence number wraparound for channels preserves ordering semantics
+/// Contract: [time-09], [transport-05]
 ///
 /// Given ordered channel with wrapping sequence numbers; when enough messages force wrap;
 /// then ordered semantics still hold across wrap and later messages are still treated as newer.
@@ -432,6 +441,7 @@ fn sequence_number_wraparound_for_channels_preserves_ordering_semantics() {
 }
 
 /// Long-running scenario maintains stable memory and state
+/// Contract: [time-10], [time-11]
 ///
 /// Given long scenario with frequent connects/disconnects, spawns/updates/despawns, and messages; when test finishes;
 /// then user/entity counts and buffer sizes remain bounded, and no ghost users/entities remain.
@@ -498,6 +508,7 @@ fn long_running_scenario_maintains_stable_memory_and_state() {
 // ============================================================================
 
 /// Extreme jitter and reordering preserve channel contracts
+/// Contract: [transport-01], [transport-02], [commands-05]
 ///
 /// Given link conditioner with high jitter and reordering; when sending messages and replication updates over ordered/unordered/sequenced/tick-buffered channels;
 /// then each channel still satisfies its documented ordering/reliability/latest-only semantics.
@@ -589,6 +600,7 @@ fn extreme_jitter_and_reordering_preserve_channel_contracts() {
 }
 
 /// Packet duplication does not surface duplicate events
+/// Contract: [transport-03], [transport-04]
 ///
 /// Given link conditioner that duplicates packets at high rate; when server sends entity updates and messages;
 /// then clients never observe duplicate spawn/despawn/message/response events, and state does not regress even if older duplicates arrive after newer packets.
@@ -710,6 +722,7 @@ fn packet_duplication_does_not_surface_duplicate_events() {
 // ============================================================================
 
 /// Large entity update that exceeds MTU is correctly reassembled
+/// Contract: [transport-04], [transport-05]
 ///
 /// Given E whose update exceeds single MTU; when server sends full update;
 /// then client applies a complete coherent update only after all fragments arrive, never partial component state, even with delayed/duplicated fragments.
@@ -721,6 +734,7 @@ fn large_entity_update_that_exceeds_mtu_is_correctly_reassembled() {
 }
 
 /// Fragment loss causes older state until a full later update
+/// Contract: [transport-02], [transport-04]
 ///
 /// Given repeated large updates for E with fragmentation; when one update loses a fragment but a later full update arrives intact;
 /// then client stays at previous valid state until later full update is applied, never applying a partially missing update.
@@ -732,6 +746,7 @@ fn fragment_loss_causes_older_state_until_a_full_later_update() {
 }
 
 /// Compression on/off does not change observable semantics
+/// Contract: [transport-05]
 ///
 /// Given scenario with entities/messages; when run once with compression off and once on;
 /// then sequence of API-visible events, entity states, and messages is identical between runs (only bandwidth differs).
@@ -747,6 +762,7 @@ fn compression_on_off_does_not_change_observable_semantics() {
 // ============================================================================
 
 /// Reliable retry/timeout settings produce defined failure behaviour
+/// Contract: [commands-01]
 ///
 /// Given reliable channel with limited retries/timeouts; when server sends reliable message over link that can't deliver within budget;
 /// then sender surfaces a clear failure/timeout, stops retrying, and system does not hang or leak.
@@ -808,6 +824,7 @@ fn reliable_retry_timeout_settings_produce_defined_failure_behaviour() {
 }
 
 /// Minimal retry reliable settings produce clear delivery failure semantics
+/// Contract: [commands-02]
 ///
 /// Given reliable channel with extremely low retries/timeouts; when messages cannot be delivered within constraints;
 /// then sender reports "delivery failed" or timeout, stops retrying, and no internal state is left stuck.
@@ -876,6 +893,7 @@ fn minimal_retry_reliable_settings_produce_clear_delivery_failure_semantics() {
 }
 
 /// Very aggressive heartbeat/timeout still leads to clean disconnect
+/// Contract: [time-12]
 ///
 /// Given very small heartbeat/timeout values; when traffic briefly pauses or link is stressed;
 /// then connection may time out but disconnect remains clean (events emitted, state cleared) with no partial user state.
@@ -934,6 +952,7 @@ fn very_aggressive_heartbeat_timeout_still_leads_to_clean_disconnect() {
 }
 
 /// Tiny tick-buffer window behaves correctly for old ticks
+/// Contract: [time-06], [commands-05]
 ///
 /// Given tick-buffer with very small window; when messages tagged with old ticks arrive after window advanced;
 /// then they are dropped according to semantics and never applied to current state or regress tick index.
@@ -945,6 +964,7 @@ fn tiny_tick_buffer_window_behaves_correctly_for_old_ticks() {
 }
 
 /// Switching a channel from reliable to unreliable (or ordered to unordered) only changes documented semantics
+/// Contract: [commands-01], [commands-02], [commands-03]
 ///
 /// Given two runs of same scenario, one with channel reliable/ordered, another unreliable/unordered; when comparing;
 /// then only the documented differences (loss/reordering) appear, with no unintended effects like instability or desync.
@@ -959,6 +979,7 @@ fn switching_channel_reliability_only_changes_documented_semantics() {
 // ============================================================================
 
 /// Reported ping/RTT converges under steady latency
+/// Contract: [time-11], [commands-04]
 ///
 /// Given link with fixed RTT and low jitter/loss; when client/server exchange several heartbeats;
 /// then reported ping/RTT converges near configured latency and is never negative or wildly unstable.
@@ -1008,6 +1029,7 @@ fn reported_ping_rtt_converges_under_steady_latency() {
 }
 
 /// Reported ping remains bounded under jitter and loss
+/// Contract: [time-11], [time-12]
 ///
 /// Given link with significant jitter and modest loss; when running;
 /// then ping/RTT fluctuates but stays finite, non-negative, and below a reasonable ceiling (no overflow/garbage values).
@@ -1057,6 +1079,7 @@ fn reported_ping_remains_bounded_under_jitter_and_loss() {
 }
 
 /// Bandwidth monitor reflects changes in traffic volume
+/// Contract: [commands-04]
 ///
 /// Given bandwidth metric; when system alternates between high traffic and near-idle;
 /// then reported bandwidth rises during high activity and drops during idle, without staying stuck at stale values.
@@ -1068,6 +1091,7 @@ fn bandwidth_monitor_reflects_changes_in_traffic_volume() {
 }
 
 /// Compression toggling affects bandwidth metrics but not logical events
+/// Contract: [transport-05]
 ///
 /// Given scripted replication/messages; when run once with compression off and once on;
 /// then compressed run shows fewer bytes sent, while logical events and world states stay identical.

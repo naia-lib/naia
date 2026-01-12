@@ -14,6 +14,7 @@ use naia_test::test_protocol::{Position, TestMessage};
 // ============================================================================
 
 /// Inserts/updates/removes are one-shot and non-duplicated
+/// Contract: [server-events-00], [server-events-01]
 ///
 /// Given server spawns E, updates a component, then removes it in one tick;
 /// when main loop calls `take_inserts`, `take_updates`, `take_removes` once;
@@ -109,6 +110,7 @@ fn inserts_updates_removes_are_one_shot_and_non_duplicated() {
 }
 
 /// Component update events reflect correct multiplicity per user
+/// Contract: [server-events-02], [server-events-03]
 ///
 /// Given component replicated to multiple users; when server changes component once;
 /// then `take_updates` returns one event per in-scope user with no duplicates or missing entries.
@@ -180,6 +182,7 @@ fn component_update_events_reflect_correct_multiplicity_per_user() {
 }
 
 /// Message events grouped correctly by channel and type
+/// Contract: [server-events-04], [messaging-01], [messaging-02]
 ///
 /// Given multiple message types from multiple users across multiple channels in one tick;
 /// when Events API drains messages; then grouping matches documented structure (by channel/type/user),
@@ -262,6 +265,7 @@ fn message_events_grouped_correctly_by_channel_and_type() {
 }
 
 /// Request/response events via Events API are drained and do not reappear
+/// Contract: [server-events-05], [server-events-06], [messaging-15], [messaging-16]
 ///
 /// Given multiple client requests and server responses in a tick;
 /// when Events API drains request/response events; then each appears exactly once
@@ -382,6 +386,7 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
 // ============================================================================
 
 /// Client spawn/insert/update/remove events occur once per change and drain cleanly
+/// Contract: [client-events-00], [client-events-01], [client-events-02]
 ///
 /// Given E is spawned, component inserted, updated, then removed while in A's scope;
 /// when A processes events for those ticks; then A sees one spawn, one insert, appropriate updates, and one remove,
@@ -452,6 +457,7 @@ fn client_spawn_insert_update_remove_events_occur_once_per_change_and_drain_clea
 }
 
 /// Client never sees update or remove events for entities that were never in scope
+/// Contract: [client-events-03], [client-events-04], [entity-scopes-02]
 ///
 /// Given entities created/destroyed entirely while A is out of scope;
 /// when A drains events; then A sees no events for those entities.
@@ -505,6 +511,7 @@ fn client_never_sees_update_or_remove_events_for_entities_that_were_never_in_sco
 }
 
 /// Client never sees update or insert events before seeing a spawn event
+/// Contract: [client-events-05], [client-events-06], [client-events-07]
 ///
 /// Given E is spawned then updated/extended; when A processes events;
 /// then first event for E is spawn (plus possible initial inserts) and no update/remove is seen before spawn.
@@ -557,6 +564,7 @@ fn client_never_sees_update_or_insert_events_before_seeing_a_spawn_event() {
 }
 
 /// Client never sees events after despawn for a given entity
+/// Contract: [client-events-08], [client-events-09], [entity-scopes-05]
 ///
 /// Given E is spawned, updated, then despawned while in A's scope;
 /// when A processes events after despawn, including under packet reordering;
@@ -628,6 +636,7 @@ fn client_never_sees_events_after_despawn_for_a_given_entity() {
 }
 
 /// Client message events are grouped and typed correctly per channel
+/// Contract: [client-events-10], [messaging-05], [messaging-06]
 ///
 /// Given A receives multiple message types over multiple channels in one tick;
 /// when A drains message events; then each message appears once with correct type and bound to correct channel.
@@ -684,6 +693,7 @@ fn client_message_events_are_grouped_and_typed_correctly_per_channel() {
 }
 
 /// Client request/response events are drained once and matched correctly
+/// Contract: [client-events-11], [client-events-12], [messaging-17], [messaging-18]
 ///
 /// Given multiple server-to-client requests and client responses across ticks;
 /// when client processes its request/response events; then each incoming request and outgoing response appears once,
@@ -785,6 +795,7 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
 // ============================================================================
 
 /// Server world integration receives every insert/update/remove exactly once
+/// Contract: [world-integration-01], [world-integration-02], [world-integration-03]
 ///
 /// Given fake world wired via `WorldMutType`; when entities spawn, components change, and entities despawn;
 /// then fake world sees each operation exactly once, in same order as Naia's internal world.
@@ -878,6 +889,7 @@ fn server_world_integration_receives_every_insert_update_remove_exactly_once() {
 }
 
 /// Client world integration stays in lockstep with Naia's view
+/// Contract: [world-integration-04], [world-integration-05]
 ///
 /// Given fake client world updated from client events; when server spawns/updates/despawns entities;
 /// then at each tick integrated world has same entities and component values as Naia client.
@@ -889,6 +901,7 @@ fn client_world_integration_stays_in_lockstep_with_naias_view() {
 }
 
 /// World integration cleans up completely on disconnect and reconnect
+/// Contract: [world-integration-06], [world-integration-07], [world-integration-08]
 ///
 /// Given clients connect, cause world changes, then disconnect and later reconnect;
 /// when inspecting fake world after each cycle; then it only contains entities for currently connected sessions
@@ -962,6 +975,7 @@ fn world_integration_cleans_up_completely_on_disconnect_and_reconnect() {
 // ============================================================================
 
 /// Accessing non-existent entity yields safe failure, not panic
+/// Contract: [server-events-07], [server-events-08]
 ///
 /// Given no entity with a certain ID; when code attempts to access it via read/write APIs;
 /// then APIs return "not found"/`None`/error without panicking or corrupting state.
@@ -1014,6 +1028,7 @@ fn accessing_non_existent_entity_yields_safe_failure_not_panic() {
 }
 
 /// Accessing an entity after despawn is safely rejected
+/// Contract: [server-events-09], [server-events-10], [client-events-00]
 ///
 /// Given E was spawned then despawned; when code attempts to read/mutate E after despawn;
 /// then calls fail gracefully and do not recreate E or panic.
@@ -1084,6 +1099,7 @@ fn accessing_an_entity_after_despawn_is_safely_rejected() {
 }
 
 /// Mutating out-of-scope entity for a given user is ignored or errors predictably
+/// Contract: [server-events-11], [server-events-12], [entity-scopes-10]
 ///
 /// Given E not in A's scope; when A tries to mutate E via client APIs or server applies per-user operation assuming A sees E;
 /// then Naia either ignores the operation or returns a defined error, without corrupting scoped state.
@@ -1129,6 +1145,7 @@ fn mutating_out_of_scope_entity_for_a_given_user_is_ignored_or_errors_predictabl
 }
 
 /// Sending messages or requests on a disconnected or rejected connection is safe
+/// Contract: [server-events-13], [messaging-19], [messaging-20]
 ///
 /// Given a connection that is disconnected or rejected; when code sends a message/request on it;
 /// then attempt is ignored or returns clear error, and does not resurrect connection or panic.
@@ -1173,6 +1190,7 @@ fn sending_messages_or_requests_on_a_disconnected_or_rejected_connection_is_safe
 }
 
 /// Misusing channel types (e.g., sending too-large message) yields defined failure
+/// Contract: [messaging-03], [messaging-04]
 ///
 /// Given a channel with constraints (e.g., max message size); when caller sends a violating message;
 /// then Naia surfaces a defined error/refusal and does not fall into undefined behavior or corruption.

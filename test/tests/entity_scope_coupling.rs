@@ -12,6 +12,7 @@ use test_helpers::client_connect;
 // ============================================================================
 
 /// Authority releases when holder goes OutOfScope
+/// Contract: [entity-scopes-06], [entity-scopes-07], [entity-delegation-10]
 ///
 /// Given delegated E where A holds authority and B observes Denied; when server removes E from A's scope (so A despawns E); then authority MUST release to None, and B MUST observe Denied→Available.
 #[test]
@@ -20,6 +21,7 @@ fn authority_releases_when_holder_goes_out_of_scope() {
 }
 
 /// Authority releases when holder disconnects
+/// Contract: [entity-scopes-08], [entity-scopes-09], [entity-delegation-11]
 ///
 /// Given delegated E where A holds authority and B is in scope; when A disconnects; then authority MUST release to None, and B MUST observe Available (or Denied→Available if previously denied), with E still alive and replicated per server policy.
 #[test]
@@ -28,6 +30,7 @@ fn authority_releases_when_holder_disconnects() {
 }
 
 /// Re-entering scope yields correct current auth status
+/// Contract: [entity-scopes-11], [entity-scopes-12], [entity-scopes-13]
 ///
 /// Given delegated E where A holds authority and B is Denied; when B goes out of scope then later comes back into scope; then B observes Denied (and emits AuthDenied only on transition into Denied, not on spawn if already Denied).
 #[test]
