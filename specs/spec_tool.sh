@@ -71,7 +71,7 @@ make_anchor() {
     echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9 -]//g' | sed 's/ /-/g'
 }
 
-# Extract spec slug from filename (e.g., "7_entity_scopes.md" -> "entity-scopes")
+# Extract spec slug from filename (e.g., "6_entity_scopes.md" -> "entity-scopes")
 get_spec_slug() {
     local file="$1"
     basename "$file" | sed -E 's/^[0-9]+_//' | sed 's/\.md$//' | tr '_' '-'
