@@ -197,6 +197,35 @@ impl Scenario {
         self.expect_with_ticks_internal_msg(DEFAULT_MAX_EXPECT_TICKS, msg, f)
     }
 
+    /// Register a labeled expectation for spec obligation tracing.
+    ///
+    /// This is the primary API for assertions that verify spec contract obligations.
+    /// Labels should follow the format: `<contract-id>.tN: <description>` for obligations,
+    /// or `<contract-id>: <description>` for contract-level assertions.
+    ///
+    /// The closure is called each tick and should return `Some(T)` when expectations are met.
+    /// Ticks the simulation until the closure returns `Some(value)` or the maximum tick count is reached.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// scenario.spec_expect("messaging-15-a.t2: boundary tick is accepted", |ctx| {
+    ///     ctx.client(key, |c| c.has_message()).then_some(())
+    /// });
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if called immediately after another `expect()` call. Tests MUST alternate
+    /// between `mutate()` and `expect()` calls.
+    pub fn spec_expect<T>(
+        &mut self,
+        label: impl AsRef<str>,
+        f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>,
+    ) -> T {
+        self.expect_with_ticks_internal_msg(DEFAULT_MAX_EXPECT_TICKS, label.as_ref(), f)
+    }
+
     /// Internal method for expectations with a custom tick limit.
     /// Use `scenario.until(ticks).expect(...)` instead.
     ///

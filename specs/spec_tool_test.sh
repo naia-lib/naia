@@ -337,8 +337,8 @@ PACKET_02_FULL=$(cat "$TMP/packet-02-full.md")
 
 # Concise mode should show assertion index
 assert_contains "$PACKET_02_CONCISE" "// Assertion Index:" "Concise packet shows assertion index header"
-assert_contains "$PACKET_02_CONCISE" 'expect_msg("server sees connect")' "Concise packet lists first expect_msg"
-assert_contains "$PACKET_02_CONCISE" 'expect_msg("client receives entity")' "Concise packet lists second expect_msg"
+assert_contains "$PACKET_02_CONCISE" '"server sees connect"' "Concise packet lists first expect_msg label"
+assert_contains "$PACKET_02_CONCISE" '"client receives entity"' "Concise packet lists second expect_msg label"
 assert_contains "$PACKET_02_CONCISE" "(use --full-tests to see complete body)" "Concise packet has full-tests hint"
 
 # Full mode should show complete test body
@@ -380,7 +380,7 @@ EOF
 "$SPEC_TOOL" packet entity-scopes-03a --out "$TMP/packet-03a.md" >/dev/null 2>&1
 PACKET_03A=$(cat "$TMP/packet-03a.md")
 
-assert_contains "$PACKET_03A" "NOTE: No expect_msg labels found" "Fallback shows NOTE message"
+assert_contains "$PACKET_03A" "NOTE: No labeled assertions found" "Fallback shows NOTE message"
 assert_contains "$PACKET_03A" "2x scenario.expect()" "Fallback counts scenario.expect()"
 assert_contains "$PACKET_03A" "1x scenario.until()" "Fallback counts scenario.until()"
 
@@ -403,6 +403,117 @@ fi
 echo ""
 
 unset SPEC_TOOL_FORCE_PERL
+
+# ============================================================================
+# Test Case J: Obligation mapping - present labels must not report MISSING
+# ============================================================================
+
+echo "Test Case J: Obligation mapping - present labels should be detected"
+echo "--------------------------------------------------------------------"
+
+# Create a spec with obligations
+cat > "$TMP/contracts/99_obligation_test.md" << 'EOF'
+# Obligation Test Spec
+
+## Contracts
+
+### [obl-test-01] — Contract with Obligations
+
+**Guarantee:** The system MUST handle multiple obligations.
+
+**Obligations:**
+- **t1**: First obligation description
+- **t2**: Second obligation description
+
+**Preconditions:**
+- System is running
+
+**Postconditions:**
+- All obligations met
+EOF
+
+# Create a test with proper obligation labels
+cat > "$TMP/test/tests/obl_test.rs" << 'EOF'
+/// Contract: [obl-test-01]
+#[test]
+fn test_obligation_mapping() {
+    let scenario = Scenario::new();
+
+    scenario.mutate(|ctx| {
+        // Setup for t1
+    });
+
+    scenario.expect(|ctx| {
+        // Check t1
+    }).spec_expect("obl-test-01.t1: first obligation check");
+
+    scenario.mutate(|ctx| {
+        // Setup for t2
+    });
+
+    scenario.expect(|ctx| {
+        // Check t2
+    }).spec_expect("obl-test-01.t2: second obligation check");
+}
+EOF
+
+# Update registry to include obl-test-01
+cat >> "$TMP/generated/CONTRACT_REGISTRY.md" << 'EOF'
+
+### Obligation Test (99_obligation_test.md)
+
+- `obl-test-01`
+
+EOF
+
+# Test adequacy command - should show obl-test-01 in OK category
+ADEQUACY_OUTPUT=$("$SPEC_TOOL" adequacy 2>&1 | strip_ansi)
+
+# The contract should be in OK category (not in missing obligations)
+if echo "$ADEQUACY_OUTPUT" | grep -A20 "OK: Adequacy Met" | grep -q "obl-test-01"; then
+    pass "Adequacy command recognizes obligations are covered (not in MISSING_OBLIGATIONS)"
+elif echo "$ADEQUACY_OUTPUT" | grep -A20 "Missing Obligation Mappings" | grep -q "obl-test-01"; then
+    fail "Adequacy command incorrectly reports present labels as MISSING (bug not fixed)"
+else
+    # Contract might be in OK section but not explicitly listed (counted in summary)
+    OK_COUNT=$(echo "$ADEQUACY_OUTPUT" | grep "Adequacy met:" | grep -oE '[0-9]+' | tail -1)
+    if [[ "$OK_COUNT" -ge 1 ]]; then
+        pass "Adequacy command counts contract with obligations as OK"
+    else
+        fail "Adequacy command did not find obl-test-01 in any category"
+    fi
+fi
+
+# Test packet command - should show both obligations as covered
+"$SPEC_TOOL" packet obl-test-01 --out "$TMP/packet-obl.md" >/dev/null 2>&1
+PACKET_OBL=$(cat "$TMP/packet-obl.md")
+
+assert_contains "$PACKET_OBL" "**t1**" "Packet lists t1 obligation"
+assert_contains "$PACKET_OBL" "**t2**" "Packet lists t2 obligation"
+
+# Critical: both obligations should show as covered (✅), not missing (❌)
+if echo "$PACKET_OBL" | grep -q "✅ \*\*t1\*\*"; then
+    pass "Packet shows t1 as covered (✅)"
+else
+    if echo "$PACKET_OBL" | grep -q "❌ \*\*t1\*\*"; then
+        fail "Packet incorrectly shows t1 as MISSING despite label being present (mapping bug)"
+    else
+        fail "Packet does not show t1 mapping status"
+    fi
+fi
+
+if echo "$PACKET_OBL" | grep -q "✅ \*\*t2\*\*"; then
+    pass "Packet shows t2 as covered (✅)"
+else
+    if echo "$PACKET_OBL" | grep -q "❌ \*\*t2\*\*"; then
+        fail "Packet incorrectly shows t2 as MISSING despite label being present (mapping bug)"
+    else
+        fail "Packet does not show t2 mapping status"
+    fi
+fi
+
+assert_contains "$PACKET_OBL" "obl-test-01.t1: first obligation check" "Packet shows t1 label"
+assert_contains "$PACKET_OBL" "obl-test-01.t2: second obligation check" "Packet shows t2 label"
 
 echo ""
 

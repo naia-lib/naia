@@ -12,6 +12,7 @@
 #   check-refs      Verify all cross-reference links
 #   stats           Show statistics about specs
 #   coverage        Analyze contract test coverage
+#   adequacy        Check obligation-to-label mapping adequacy (no cargo)
 #   gen-test        Generate test skeleton for a contract
 #   traceability    Generate contract-to-test matrix
 #   help            Show this help message
@@ -151,6 +152,14 @@ COMMANDS:
 
     coverage            Analyze contract test coverage
                         Shows which contracts have test annotations
+
+    adequacy [options]  Check obligation-to-label mapping adequacy (no cargo)
+                        Options:
+                          --strict      Fail if any contracts don't meet adequacy
+                        Checks:
+                          - Contracts have test functions
+                          - Tests have labeled assertions (spec_expect)
+                          - Obligation IDs map to labeled assertions
 
     gen-test <id>       Generate test skeleton for a contract
                         Example: ./spec_tool.sh gen-test entity-scopes-07
@@ -740,6 +749,193 @@ cmd_coverage() {
 }
 
 # ============================================================================
+# Command: adequacy
+# ============================================================================
+
+cmd_adequacy() {
+    local strict_mode=0
+
+    # Parse options
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --strict)
+                strict_mode=1
+                shift
+                ;;
+            *)
+                print_error "Unknown option: $1"
+                echo "Usage: ./spec_tool.sh adequacy [--strict]"
+                return 1
+                ;;
+        esac
+    done
+
+    print_header "Contract Adequacy Analysis"
+
+    if [[ ! -d "$TEST_DIR" ]]; then
+        print_error "Test directory not found: $TEST_DIR"
+        return 1
+    fi
+
+    # Check if python3 is available
+    if ! command -v python3 &> /dev/null; then
+        print_error "python3 is required for adequacy command"
+        return 1
+    fi
+
+    # Check if spec_index.py exists
+    local spec_index_script="$SCRIPT_DIR/spec_index.py"
+    if [[ ! -f "$spec_index_script" ]]; then
+        print_error "spec_index.py not found at: $spec_index_script"
+        return 1
+    fi
+
+    # Run spec_index.py and parse JSON output
+    print_info "Analyzing contracts and tests..."
+    local json_output
+    json_output=$(python3 "$spec_index_script" "$CONTRACTS_DIR" "$TEST_DIR" 2>&1)
+    local python_exit=$?
+
+    if [[ $python_exit -ne 0 ]]; then
+        print_error "spec_index.py failed:"
+        echo "$json_output"
+        return 1
+    fi
+
+    # Parse JSON using python (jq might not be installed)
+    local total_contracts=$(echo "$json_output" | python3 -c "import sys, json; print(json.load(sys.stdin)['total_contracts'])")
+    local needs_tests_count=$(echo "$json_output" | python3 -c "import sys, json; print(json.load(sys.stdin)['summary']['needs_tests'])")
+    local missing_obligations_count=$(echo "$json_output" | python3 -c "import sys, json; print(json.load(sys.stdin)['summary']['missing_obligations'])")
+    local needs_labels_count=$(echo "$json_output" | python3 -c "import sys, json; print(json.load(sys.stdin)['summary']['needs_labels'])")
+    local ok_count=$(echo "$json_output" | python3 -c "import sys, json; print(json.load(sys.stdin)['summary']['ok'])")
+
+    echo "  Found $total_contracts contracts in specs"
+    echo ""
+
+    print_header "Adequacy To-Do Queue (Ranked)"
+
+    local has_issues=0
+
+    # Priority 1: Missing tests
+    if [[ $needs_tests_count -gt 0 ]]; then
+        has_issues=1
+        echo -e "${RED}━━━ Priority 1: Missing Tests ($needs_tests_count contracts) ━━━${NC}"
+        echo ""
+        echo "$json_output" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for item in data['categories']['NEEDS_TESTS']:
+    cid = item['contract']
+    # Find spec file
+    import os, glob
+    spec_files = glob.glob('$CONTRACTS_DIR/*.md')
+    spec_file = 'unknown'
+    for f in spec_files:
+        with open(f, 'r') as fh:
+            if f'[{cid}]' in fh.read():
+                spec_file = os.path.basename(f)
+                break
+    print(f'  ❌ {cid}')
+    print(f'     Spec: {spec_file}')
+    print(f'     Status: No test functions annotated')
+    print(f'     Next: Write test with /// Contract: [{cid}] annotation')
+    print()
+"
+    fi
+
+    # Priority 2: Missing obligation mappings
+    if [[ $missing_obligations_count -gt 0 ]]; then
+        has_issues=1
+        echo -e "${YELLOW}━━━ Priority 2: Missing Obligation Mappings ($missing_obligations_count contracts) ━━━${NC}"
+        echo ""
+        echo "$json_output" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for item in data['categories']['MISSING_OBLIGATIONS']:
+    cid = item['contract']
+    test_files = ', '.join(item['test_files'])
+    missing = ', '.join(item['missing'])
+    # Find spec file
+    import os, glob
+    spec_files = glob.glob('$CONTRACTS_DIR/*.md')
+    spec_file = 'unknown'
+    for f in spec_files:
+        with open(f, 'r') as fh:
+            if f'[{cid}]' in fh.read():
+                spec_file = os.path.basename(f)
+                break
+    print(f'  ⚠️  {cid}')
+    print(f'     Spec: {spec_file}')
+    print(f'     Tests: {test_files}')
+    print(f'     Missing obligations: {missing}')
+    print(f'     Next: ./spec_tool.sh packet {cid}')
+    print()
+"
+    fi
+
+    # Priority 3: Missing any labels
+    if [[ $needs_labels_count -gt 0 ]]; then
+        has_issues=1
+        echo -e "${YELLOW}━━━ Priority 3: Missing Labels ($needs_labels_count contracts) ━━━${NC}"
+        echo ""
+        echo "$json_output" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+for item in data['categories']['NEEDS_LABELS']:
+    cid = item['contract']
+    test_files = ', '.join(item['test_files'])
+    # Find spec file
+    import os, glob
+    spec_files = glob.glob('$CONTRACTS_DIR/*.md')
+    spec_file = 'unknown'
+    for f in spec_files:
+        with open(f, 'r') as fh:
+            if f'[{cid}]' in fh.read():
+                spec_file = os.path.basename(f)
+                break
+    print(f'  ⚠️  {cid}')
+    print(f'     Spec: {spec_file}')
+    print(f'     Tests: {test_files}')
+    print(f'     Status: Tests exist but no labeled assertions')
+    print(f'     Next: Add spec_expect(\"{cid}: ...\") to tests')
+    print()
+"
+    fi
+
+    # OK contracts (summary only)
+    if [[ $ok_count -gt 0 ]]; then
+        echo -e "${GREEN}━━━ OK: Adequacy Met ($ok_count contracts) ━━━${NC}"
+        echo ""
+        echo "  All obligations mapped to labeled assertions (or no obligations with contract-level label)."
+        echo ""
+    fi
+
+    # Summary
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo ""
+    echo "Summary:"
+    echo "  Total contracts:             $total_contracts"
+    echo "  Missing tests:               $needs_tests_count"
+    echo "  Missing obligation mappings: $missing_obligations_count"
+    echo "  Missing labels:              $needs_labels_count"
+    echo "  Adequacy met:                $ok_count"
+    echo ""
+
+    if [[ $has_issues -eq 0 ]]; then
+        print_success "All contracts meet adequacy requirements! 🎉"
+        return 0
+    else
+        if [[ $strict_mode -eq 1 ]]; then
+            print_error "Adequacy check failed (--strict mode)"
+            return 1
+        else
+            print_warning "Adequacy issues found (use --strict to fail on issues)"
+            return 0
+        fi
+    fi
+}
+
+# ============================================================================
 # Command: gen-test
 # ============================================================================
 
@@ -1053,6 +1249,153 @@ EOF
         echo "---"
         echo ""
 
+        # Obligation extraction and mapping
+        echo "## Obligation Mapping"
+        echo ""
+
+        # Extract obligation IDs from spec (pattern: **t1**, **t2**, etc.)
+        local obligations=$(echo "$spec_excerpt" | grep -oE '\*\*t[0-9]+\*\*' | sed 's/\*\*//g' | sort -u)
+        local obligation_count=0
+        if [[ -n "$obligations" ]]; then
+            obligation_count=$(echo "$obligations" | wc -l | tr -d ' ')
+        fi
+
+        if [[ $obligation_count -gt 0 ]]; then
+            echo "**Obligations (from spec):** $obligation_count detected"
+            echo ""
+            echo "$obligations" | while IFS= read -r obl; do
+                [[ -n "$obl" ]] && echo "- $obl"
+            done
+            echo ""
+        else
+            echo "**Obligations (from spec):** (none detected)"
+            echo ""
+            echo "> NOTE: If this contract has multiple testable behaviors, consider adding obligation IDs like **t1**, **t2** to the spec."
+            echo ""
+        fi
+
+        # Collect all assertion labels from tests for this contract
+        echo "**Assertion Labels (from tests):**"
+        echo ""
+
+        local all_test_labels=""
+        if [[ $test_count -gt 0 ]]; then
+            while IFS= read -r test_file; do
+                [[ -z "$test_file" ]] && continue
+
+                # Find test functions for this contract and extract labels
+                local in_doc=0
+                local in_fn=0
+                local depth=0
+                local fn_body=""
+
+                while IFS= read -r line; do
+                    if [[ "$line" =~ ^///[[:space:]]?Contract:.*\[$contract_id\] ]]; then
+                        in_doc=1
+                        continue
+                    fi
+
+                    if [[ $in_doc -eq 1 && "$line" =~ ^fn[[:space:]] ]]; then
+                        in_fn=1
+                        depth=0
+                        fn_body=""
+                        local open=$(echo "$line" | grep -o '{' | wc -l)
+                        depth=$((depth + open))
+                        continue
+                    fi
+
+                    if [[ $in_fn -eq 1 ]]; then
+                        local open=$(echo "$line" | grep -o '{' | wc -l)
+                        local close=$(echo "$line" | grep -o '}' | wc -l)
+                        depth=$((depth + open - close))
+                        fn_body="${fn_body}${line}"$'\n'
+
+                        if [[ $depth -eq 0 ]]; then
+                            # Extract labels from this function
+                            local fn_labels=$(echo "$fn_body" | grep -oE '\.?(spec_expect|expect_msg)\("([^"\\]|\\.)*"' | sed 's/^\.//; s/spec_expect("//; s/expect_msg("//; s/"$//' | awk '!seen[$0]++')
+                            if [[ -n "$fn_labels" ]]; then
+                                if [[ -n "$all_test_labels" ]]; then
+                                    all_test_labels="${all_test_labels}"$'\n'"${fn_labels}"
+                                else
+                                    all_test_labels="$fn_labels"
+                                fi
+                            fi
+                            in_doc=0
+                            in_fn=0
+                            fn_body=""
+                        fi
+                    fi
+
+                    if [[ $in_doc -eq 1 && $in_fn -eq 0 && ! "$line" =~ ^/// && ! "$line" =~ ^#\[ && ! "$line" =~ ^fn[[:space:]] ]]; then
+                        in_doc=0
+                    fi
+                done < "$test_file"
+            done <<< "$test_files"
+        fi
+
+        if [[ -n "$all_test_labels" ]]; then
+            # Deduplicate all labels
+            all_test_labels=$(echo "$all_test_labels" | awk '!seen[$0]++')
+            echo "$all_test_labels" | while IFS= read -r label; do
+                [[ -n "$label" ]] && echo "- \`$label\`"
+            done
+            echo ""
+        else
+            echo "- (none found)"
+            echo ""
+            echo "> NOTE: Tests exist but have no labeled assertions. Add spec_expect(...) to enable obligation mapping."
+            echo ""
+        fi
+
+        # Mapping report
+        echo "**Mapping Report:**"
+        echo ""
+
+        if [[ $obligation_count -eq 0 ]]; then
+            # No obligations: check for at least one contract-level label
+            if [[ -n "$all_test_labels" ]]; then
+                local has_contract_label=$(echo "$all_test_labels" | grep -E "^${contract_id}[.:]" || true)
+                if [[ -n "$has_contract_label" ]]; then
+                    echo "✅ **OK:** No obligations defined; at least one contract-level label present."
+                else
+                    echo "⚠️ **NEEDS LABELS:** Tests have labels but none match \`${contract_id}:\` or \`${contract_id}.\` prefix."
+                fi
+            else
+                echo "⚠️ **NEEDS LABELS:** No obligations defined and no labeled assertions found."
+            fi
+        else
+            # Has obligations: check coverage
+            local missing_obligations=""
+            echo "$obligations" | while IFS= read -r obl; do
+                [[ -z "$obl" ]] && continue
+                local pattern="${contract_id}.${obl}:"
+                local covered=$(echo "$all_test_labels" | grep -F "$pattern" || true)
+                if [[ -n "$covered" ]]; then
+                    echo "- ✅ **$obl** → covered by: \`${covered}\`"
+                else
+                    echo "- ❌ **$obl** → MISSING (no label matching \`${pattern}\`)"
+                    if [[ -n "$missing_obligations" ]]; then
+                        missing_obligations="${missing_obligations}, $obl"
+                    else
+                        missing_obligations="$obl"
+                    fi
+                fi
+            done
+
+            echo ""
+            if [[ -z "$missing_obligations" ]]; then
+                echo "✅ **OK:** All obligations mapped to labeled assertions."
+            else
+                echo "⚠️ **MISSING:** $missing_obligations"
+                echo ""
+                echo "> Add spec_expect(\`${contract_id}.tN: ...\`) calls to cover these obligations."
+            fi
+        fi
+
+        echo ""
+        echo "---"
+        echo ""
+
         # Tests section
         echo "## Tests"
         echo ""
@@ -1136,18 +1479,32 @@ EOF
                                 echo ""
                                 echo "    // Assertion Index:"
 
-                                # Extract expect_msg strings (preserve order of appearance, dedupe on first occurrence)
-                                local expect_msgs=$(echo "$fn_body" | grep -oE '\.?expect_msg\("([^"\\]|\\.)*"\)' | sed 's/^\.//; s/expect_msg(//; s/)$//' | awk '!seen[$0]++')
+                                # Extract both spec_expect and expect_msg labels (preserve order, dedupe on first occurrence)
+                                local spec_labels=$(echo "$fn_body" | grep -oE '\.?spec_expect\("([^"\\]|\\.)*"' | sed 's/^\.//; s/spec_expect("//; s/"$//' | awk '!seen[$0]++')
+                                local expect_msgs=$(echo "$fn_body" | grep -oE '\.?expect_msg\("([^"\\]|\\.)*"' | sed 's/^\.//; s/expect_msg("//; s/"$//' | awk '!seen[$0]++')
 
+                                # Combine labels (spec_expect takes precedence)
+                                local all_labels=""
+                                if [[ -n "$spec_labels" ]]; then
+                                    all_labels="$spec_labels"
+                                fi
                                 if [[ -n "$expect_msgs" ]]; then
-                                    echo "$expect_msgs" | while IFS= read -r msg; do
-                                        [[ -n "$msg" ]] && echo "    //   - expect_msg($msg)"
+                                    if [[ -n "$all_labels" ]]; then
+                                        all_labels="${all_labels}"$'\n'"${expect_msgs}"
+                                    else
+                                        all_labels="$expect_msgs"
+                                    fi
+                                fi
+
+                                if [[ -n "$all_labels" ]]; then
+                                    echo "$all_labels" | while IFS= read -r label; do
+                                        [[ -n "$label" ]] && echo "    //   - \"$label\""
                                     done
                                 else
-                                    # No expect_msg found, show counts
+                                    # No labels found, show counts
                                     local expect_count=$(echo "$fn_body" | grep -c 'scenario\.expect(' || echo 0)
                                     local until_count=$(echo "$fn_body" | grep -c 'scenario\.until(' || echo 0)
-                                    echo "    //   NOTE: No expect_msg labels found. Add expect_msg(...) to make adequacy review deterministic."
+                                    echo "    //   NOTE: No labeled assertions found. Add spec_expect(...) to make adequacy review deterministic."
                                     echo "    //   Signal: ${expect_count}x scenario.expect(), ${until_count}x scenario.until()"
                                 fi
                                 echo ""
@@ -1477,6 +1834,9 @@ main() {
             ;;
         coverage)
             cmd_coverage "$@"
+            ;;
+        adequacy)
+            cmd_adequacy "$@"
             ;;
         gen-test)
             cmd_gen_test "$@"

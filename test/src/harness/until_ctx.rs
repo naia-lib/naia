@@ -30,4 +30,22 @@ impl<'scenario> UntilCtx<'scenario> {
     pub fn expect_msg<T>(self, msg: &str, f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
         self.scenario.expect_with_ticks_internal_msg(self.max_ticks, msg, f)
     }
+
+    /// Register a labeled expectation for spec obligation tracing with custom tick timeout.
+    ///
+    /// This is the primary API for assertions that verify spec contract obligations when you need
+    /// to override the default tick timeout. Labels should follow the format:
+    /// `<contract-id>.tN: <description>` for obligations, or `<contract-id>: <description>` for
+    /// contract-level assertions.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// scenario.until(200.ticks()).spec_expect("messaging-15-a.t2: boundary tick is accepted", |ctx| {
+    ///     ctx.client(key, |c| c.has_message()).then_some(())
+    /// });
+    /// ```
+    pub fn spec_expect<T>(self, label: impl AsRef<str>, f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
+        self.scenario.expect_with_ticks_internal_msg(self.max_ticks, label.as_ref(), f)
+    }
 }

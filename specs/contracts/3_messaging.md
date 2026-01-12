@@ -75,9 +75,9 @@ Channel registry compatibility is **guaranteed** by the `protocol_id` handshake 
 **Observable signals:**
 - Connection rejected with `ProtocolMismatch` if `protocol_id` differs (before any messaging)
 
-**Test obligations:**
-- `messaging-04.t1`: Mismatched `protocol_id` rejects before any message exchange
-- `messaging-04.t2`: Matched `protocol_id` guarantees channel compatibility
+**Obligations:**
+- **t1**: Mismatched `protocol_id` rejects connection before any message exchange
+- **t2**: Matched `protocol_id` guarantees channel compatibility (no runtime checks needed)
 
 ### [messaging-05] — ChannelDirection is enforced at send-time
 If local code attempts to send a message on a channel that is not configured for that direction, Naia MUST return `Result::Err`. (user-initiated)
