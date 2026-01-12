@@ -226,7 +226,7 @@ fn unordered_unreliable_channel_shows_best_effort_semantics() {
     });
 
     // Verify client receives some messages (best-effort, may not receive all)
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-06.t1: receiver tolerates best-effort delivery", |ctx| {
         let messages: Vec<u32> = ctx.client(client_a_key, |c| {
             c.read_message::<UnreliableChannel, TestMessage>()
                 .map(|m| m.value)
@@ -398,7 +398,7 @@ fn sequenced_unreliable_channel_discards_late_outdated_updates() {
     });
 
     // Verify client receives latest sequence (U10) and doesn't revert
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-07.t1: never rolls back after newer state", |ctx| {
         let messages: Vec<u32> = ctx.client(client_a_key, |c| {
             c.read_message::<SequencedChannel, TestMessage>()
                 .map(|m| m.value)
@@ -447,7 +447,7 @@ fn client_to_server_request_yields_exactly_one_response() {
     });
 
     // Server receives request and sends response
-    let response_id = scenario.expect(|ctx| {
+    let response_id = scenario.expect_msg("messaging-08.pre: server receives request reliably", |ctx| {
         ctx.server(|server| {
             for (client_key, response_id, request) in
                 server.read_request::<RequestResponseChannel, TestRequest>()
@@ -468,7 +468,7 @@ fn client_to_server_request_yields_exactly_one_response() {
     });
 
     // Wait for client to receive the response (must use expect to wait for network propagation)
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-08.t1: client observes exactly one response", |ctx| {
         ctx.client(client_a_key, |c| {
             // Check if response is available - expect will retry until it is
             c.has_response(&response_key).then_some(())
@@ -1080,7 +1080,7 @@ fn unordered_reliable_channel_delivers_all_messages_but_in_arbitrary_order() {
     });
 
     // Verify client receives exactly one A, B, C (order not guaranteed)
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-08.t1: dedupes and delivers all messages", |ctx| {
         let messages: Vec<u32> = ctx.client(client_a_key, |c| {
             c.read_message::<UnorderedChannel, TestMessage>()
                 .map(|m| m.value)
@@ -1129,7 +1129,7 @@ fn ordered_reliable_channel_ignores_duplicated_packets() {
 
     // Note: Local transport doesn't duplicate packets, but reliable channels should handle duplicates
     // Verify client receives exactly one A and one B in order
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-09.t1: delivers in send order despite duplicates", |ctx| {
         let messages: Vec<u32> = ctx.client(client_a_key, |c| {
             c.read_message::<OrderedChannel, TestMessage>()
                 .map(|m| m.value)
@@ -1174,7 +1174,7 @@ fn ordered_reliable_channel_keeps_order_under_latency_and_reordering() {
     });
 
     // Verify client receives exactly one A, B, C in order
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-09.t1: delivers in send order despite reordering", |ctx| {
         let messages: Vec<u32> = ctx.client(client_a_key, |c| {
             c.read_message::<OrderedChannel, TestMessage>()
                 .map(|m| m.value)
@@ -1239,7 +1239,7 @@ fn per_channel_ordering() {
     });
 
     // Verify both A and B receive messages in correct order per channel
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-09.t1: each channel preserves its own order", |ctx| {
         let a_ordered: Vec<u32> = ctx.client(client_a_key, |c| {
             c.read_message::<OrderedChannel, TestMessage>()
                 .map(|m| m.value)
@@ -1309,7 +1309,7 @@ fn sequenced_reliable_channel_only_exposes_the_latest_message_in_a_stream() {
     });
 
     // Verify client receives S3 (latest) and not older states
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-10.t1: exposes only latest, never rolls back", |ctx| {
         let messages: Vec<u32> = ctx.client(client_a_key, |c| {
             c.read_message::<SequencedChannel, TestMessage>()
                 .map(|m| m.value)
@@ -1376,7 +1376,7 @@ fn channel_separation_for_different_message_types() {
     });
 
     // Verify client receives messages on correct channels only
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-12.t1: channel separation maintained", |ctx| {
         let reliable_messages: Vec<u32> = ctx.client(client_a_key, |c| {
             c.read_message::<ReliableChannel, TestMessage>()
                 .map(|m| m.value)
@@ -1537,6 +1537,129 @@ fn tick_buffered_channel_discards_messages_for_ticks_that_are_too_old() {
 }
 
 // ============================================================================
+// [messaging-15-a] — TickBuffered discards too-far-ahead ticks
+// ============================================================================
+
+/// Tick-buffered channel discards messages that are too far in the future
+/// Contract: [messaging-15-a]
+///
+/// Given tick-buffered channel with MAX_FUTURE_TICKS bound; when client sends messages at exactly current_tick + MAX_FUTURE_TICKS (boundary),
+/// at current_tick + MAX_FUTURE_TICKS + 1 (beyond boundary), and much further ahead;
+/// then boundary message is accepted, beyond-boundary and far-ahead messages are dropped silently.
+#[test]
+fn tick_buffered_channel_discards_too_far_ahead_ticks() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    // Per spec: MAX_FUTURE_TICKS = tick_buffer_capacity - 1
+    // Assuming default tick_buffer_capacity = 64, thus MAX_FUTURE_TICKS = 63
+    const MAX_FUTURE_TICKS: u16 = 63;
+
+    // Get current server tick and calculate test ticks
+    let (current_tick, tick_at_max, tick_beyond_max, tick_far_ahead) = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let current = server.current_tick();
+            let at_max = current.wrapping_add(MAX_FUTURE_TICKS);
+            let beyond_max = current.wrapping_add(MAX_FUTURE_TICKS + 1);
+            let far_ahead = current.wrapping_add(MAX_FUTURE_TICKS + 100);
+            (current, at_max, beyond_max, far_ahead)
+        })
+    });
+
+    // Client sends tick-buffered messages at various future ticks
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client| {
+            // t2: Message at MAX_FUTURE_TICKS boundary - should be accepted
+            client.send_tick_buffer_message::<TickBufferedChannel, _>(
+                &tick_at_max,
+                &TestMessage::new(100),
+            );
+            // t3: Message at MAX_FUTURE_TICKS + 1 - should be dropped
+            client.send_tick_buffer_message::<TickBufferedChannel, _>(
+                &tick_beyond_max,
+                &TestMessage::new(200),
+            );
+            // t1: Message way too far ahead - should be dropped silently
+            client.send_tick_buffer_message::<TickBufferedChannel, _>(
+                &tick_far_ahead,
+                &TestMessage::new(300),
+            );
+        });
+    });
+
+    // Wait for server to advance well past tick_at_max
+    scenario
+        .until(200.ticks())
+        .expect_msg("messaging-15-a.pre: server advanced past all test ticks", |ctx| {
+            let now = ctx.server(|s| s.current_tick());
+            naia_shared::sequence_greater_than(now, tick_at_max.wrapping_add(10)).then_some(())
+        });
+
+    // Verify t2: Message at boundary was accepted
+    let at_max_messages = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let mut tick_buffer = server.receive_tick_buffer_messages(&tick_at_max);
+            tick_buffer.read::<TickBufferedChannel, TestMessage>()
+        })
+    });
+
+    assert_eq!(
+        at_max_messages.len(),
+        1,
+        "messaging-15-a.t2: Message at current_tick + MAX_FUTURE_TICKS should be accepted"
+    );
+    assert_eq!(
+        at_max_messages[0].1.value, 100,
+        "messaging-15-a.t2: Accepted message should have correct value"
+    );
+
+    scenario.expect_msg("messaging-15-a.t2: boundary message accepted", |_ctx| Some(()));
+
+    // Verify t3: Message beyond boundary was dropped
+    let beyond_max_messages = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let mut tick_buffer = server.receive_tick_buffer_messages(&tick_beyond_max);
+            tick_buffer.read::<TickBufferedChannel, TestMessage>()
+        })
+    });
+
+    assert_eq!(
+        beyond_max_messages.len(),
+        0,
+        "messaging-15-a.t3: Message at current_tick + MAX_FUTURE_TICKS + 1 should be dropped"
+    );
+
+    scenario.expect_msg("messaging-15-a.t3: beyond-boundary message dropped", |_ctx| Some(()));
+
+    // Verify t1: Far-ahead message was dropped silently (no panic, no delivery)
+    let far_ahead_messages = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let mut tick_buffer = server.receive_tick_buffer_messages(&tick_far_ahead);
+            tick_buffer.read::<TickBufferedChannel, TestMessage>()
+        })
+    });
+
+    assert_eq!(
+        far_ahead_messages.len(),
+        0,
+        "messaging-15-a.t1: Too-far-ahead message should be dropped silently"
+    );
+}
+
+// ============================================================================
 // [messaging-21] — Request ID uniqueness
 // ============================================================================
 
@@ -1579,7 +1702,7 @@ fn request_id_uniqueness() {
     // The keys are opaque but framework ensures uniqueness
     let _ = (key1, key2);
 
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-21.t1: multiple requests have distinct IDs", |ctx| {
         ctx.client(client_a_key, |_c| Some(()))
     });
 }
@@ -1620,7 +1743,7 @@ fn response_matching_to_request() {
     });
 
     // Server receives request and sends response
-    let response_id = scenario.expect(|ctx| {
+    let response_id = scenario.expect_msg("messaging-22.pre: server receives request", |ctx| {
         ctx.server(|server| {
             for (_, response_id, _request) in server.read_request::<RequestResponseChannel, TestRequest>() {
                 return Some(response_id);
@@ -1637,7 +1760,7 @@ fn response_matching_to_request() {
     });
 
     // Wait for client to have response
-    scenario.expect(|ctx| {
+    scenario.expect_msg("messaging-22.t1: response delivered to correct handler", |ctx| {
         ctx.client(client_a_key, |c| c.has_response(&response_key).then_some(()))
     });
 
