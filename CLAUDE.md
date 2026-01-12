@@ -6,11 +6,14 @@ Naia is a cross-platform Rust networking engine for multiplayer games. Architect
 
 | Metric | Value |
 |--------|-------|
-| Contracts with compiling tests | **185/185 (100%)** |
+| Contracts with compiling tests | **185/236 (78%)** |
 | Tests with `todo!()` | **0** |
-| Phase A | **COMPLETE** |
+| Uncovered contracts | **51** |
+| Phase A | **IN PROGRESS** |
 
-**Goal:** Phase B - make failing tests pass by fixing implementation.
+**Goal:** Phase A - write compiling E2E tests for all 236 contracts.
+
+**Recent:** Spec hardening added 51 new contracts (protocol_id, command sequence, error taxonomy). These need tests before Phase B can begin.
 
 ## Test File Organization (1:1 Mapping)
 
