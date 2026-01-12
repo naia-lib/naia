@@ -166,14 +166,14 @@ impl Io {
     pub fn outgoing_bandwidth(&self) -> f32 {
         self.outgoing_bandwidth_monitor
             .as_ref()
-            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .expect("Set ClientConfig.connection.bandwidth_measure_duration to enable bandwidth monitoring")
             .bandwidth()
     }
 
     pub fn incoming_bandwidth(&self) -> f32 {
         self.incoming_bandwidth_monitor
             .as_ref()
-            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .expect("Set ClientConfig.connection.bandwidth_measure_duration to enable bandwidth monitoring")
             .bandwidth()
     }
 }

@@ -214,11 +214,11 @@ fn client_owned_entity_does_not_emit_authority_events() {
         Auth::new("client_a", "pass"), test_client_config(), test_protocol);
 
     // Client spawns non-delegated (Private) entity - no authority system involvement
+    // Private is the default, so no need to configure_replication
     let entity_e = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
-                e.configure_replication(ClientReplicationConfig::Private)
-                    .insert_component(Position::new(1.0, 2.0));
+                e.insert_component(Position::new(1.0, 2.0));
             })
         })
     });
@@ -735,10 +735,6 @@ fn no_writes_for_out_of_scope_entities() {
             entity
         })
     });
-
-    // Give time for sync
-    scenario.mutate(|_| {});
-    scenario.expect(|_| Some(()));
 
     // Client should not have the entity (out of scope)
     scenario.expect(|ctx| {

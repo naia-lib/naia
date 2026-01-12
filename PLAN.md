@@ -1,8 +1,8 @@
 # Naia Development Plan
 
-**Status:** Active - Phase A (Complete Test Coverage)
+**Status:** Active - Phase B (Fix Implementation)
 **Updated:** 2026-01-11
-**Goal:** All spec contracts have compiling E2E tests
+**Goal:** Get all E2E tests passing
 
 ---
 
@@ -13,191 +13,218 @@
 - Tests MUST compile with NO `todo!()` macros
 - Tests are allowed to FAIL - that indicates implementation gaps
 - Goal: 236/236 contracts covered, zero `todo!()`
+- **STATUS: ACHIEVED** ✅
 
-**Phase B: Fix Implementation (BLOCKED until Phase A complete)**
+**Phase B: Fix Implementation (CURRENT)**
 - Run all tests, observe failures
-- Systematically fix implementation
+- Systematically fix implementation and test structure
 - Failing tests are the bug tracker
+- **Current: 158/200 tests passing (79%)**
 
 **Key insight:** A `todo!()` in a test is a **specification gap**, not an implementation bug. Write what you *expect* to happen, and let the test fail.
 
 ---
 
-## Current State
+## Current State (Phase B)
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| Contracts with compiling tests | **236/236 (100%)** | 236/236 (100%) |
-| Tests with `todo!()` | **0** | 0 |
-| Uncovered contracts | **0** | 0 |
-| Phase A | **COMPLETE** | - |
+| Tests passing | **158/200 (79%)** | 200/200 (100%) |
+| Tests failing | **42** | 0 |
+| Critical bugs fixed | **3** (overflow, bandwidth, replication) | - |
+| Phase A | **COMPLETE ✓** | - |
+| Phase B | **IN PROGRESS** | Complete |
+
+### Test Results by File
+
+| Test File | Status | Notes |
+|-----------|--------|-------|
+| 00_common | ✅ 17/17 | All passing |
+| 01_connection_lifecycle | ✅ 17/21 | 4 ignored (need harness features) |
+| 02_transport | ✅ 14/14 | All passing |
+| 03_messaging | ⚠️ 25/29 | 4 failures (timeout/structure) |
+| 04_time_ticks_commands | ✅ 20/20 | Fixed mutate violations |
+| 05_observability_metrics | ✅ 12/12 | Fixed via config |
+| 06_entity_scopes | ⚠️ 10/14 | 4 timeout failures |
+| 07_entity_replication | ✅ 16/16 | All passing |
+| 08_entity_ownership | ⚠️ 1/14 | 13 test structure issues |
+| 09_entity_publication | ✅ 11/11 | All passing |
+| 10_entity_delegation | ⚠️ 7/17 | 10 failures (needs investigation) |
+| 11_entity_authority | ⚠️ 11/16 | 5 failures (logic bugs) |
+| 12_server_events_api | ✅ 8/8 | All passing |
+| 13_client_events_api | ✅ 6/6 | All passing |
+| 14_world_integration | ✅ 4/4 | All passing |
 
 ---
 
-## Immediate Next Actions (Phase A)
+## Phase B: Implementation Fixes
 
-### Priority 1: Write Tests for New Spec Contracts (51 uncovered)
+### Completed Fixes (2026-01-11)
 
-The spec suite was expanded on 2026-01-11 with stronger contracts. These need E2E tests:
+1. **Arithmetic overflow in base_time_manager.rs:128**
+   - Issue: `round_trip_time_millis - server_process_time_millis` could underflow
+   - Fix: Used `saturating_sub()` for safe edge case handling
+   - Impact: Fixed 12+ messaging/observability test failures
 
-**Command Sequence (4 contracts) → `04_time_ticks_commands.rs`**
-- `commands-03a`: Command sequence is required (varint encoded)
-- `commands-03b`: Server applies commands in sequence order
-- `commands-03c`: Command cap per tick (`MAX_COMMANDS_PER_TICK_PER_CONNECTION = 64`)
-- `commands-03d`: Duplicate `(tick, sequence)` commands are dropped
+2. **Bandwidth monitoring panic in io.rs:169**
+   - Issue: Tests called `outgoing_bandwidth()` without enabling monitoring
+   - Fix: Enabled `bandwidth_measure_duration` in `test_client_config()`
+   - Impact: Fixed all 12 observability tests
+   - **Learning:** Don't return default values - implement the feature properly
 
-**Protocol Identity (6 contracts) → `01_connection_lifecycle.rs`**
-- `connection-14a`: protocol_id check during handshake
-- `connection-28`: Reconnect is fresh session
-- `connection-29`: protocol_id definition
-- `connection-30`: protocol_id wire encoding (u128 little-endian)
-- `connection-31`: protocol_id handshake gate (`ProtocolMismatch` error)
-- `connection-32`: What affects protocol_id
-- `connection-33`: No partial compatibility
+3. **Client.rs:660 replication config panic**
+   - Issue: Test called `configure_replication(Private)` when already Private by default
+   - Fix: Removed redundant configuration call
+   - Impact: Unblocked entity_ownership tests
 
-**Common/Cross-cutting (15 contracts) → `00_common.rs` (NEW FILE)**
-- `common-01`: User-initiated misuse returns `Result::Err`
-- `common-02`: Remote/untrusted input MUST NOT panic
-- `common-02a`: Protocol mismatch is deployment error
-- `common-03`: Framework invariant violations MUST panic
-- `common-04`: Warnings are debug-only and non-normative
-- `common-05`: Determinism under deterministic inputs
-- `common-06`: Per-tick determinism rule
-- `common-07`: Tests MUST NOT assert on logs
-- `common-08`: Test obligation template
-- `common-09`: Observable signals subsection
-- `common-10`: Fixed invariants are locked
-- `common-11`: Configurable defaults
-- `common-11a`: New constants start as invariants
-- `common-12`: Internal measurements vs exposed metrics
-- `common-12a`: Test tolerance constants
-- `common-13`: Metrics are non-normative for gameplay
-- `common-14`: Reconnect is fresh session
+4. **Test framework violations in 04_time_ticks_commands**
+   - Issue: Sequential `mutate()` calls without `expect()` between them
+   - Fix: Merged read+write operations into single `mutate()` block
+   - Impact: Fixed all 4 command tests (20/20 passing)
+   - **Learning:** Reading state is NOT mutation - combine with actual mutation
 
-**Entity Ownership (14 contracts) → `08_entity_ownership.rs`**
-- `entity-ownership-01` through `entity-ownership-14`
-- These were reformatted with proper headers; need dedicated tests
+### Current Failures (42 tests)
 
-**Observability (1 contract) → `05_observability_metrics.rs`**
-- `observability-01a`: Internal measurements vs exposed metrics
+**Category 1: Test Structure Issues (13 tests - LOW HANGING FRUIT)**
+- Location: `08_entity_ownership.rs`
+- Problem: Tests panic at `scenario.rs:213` (mutate/expect violations)
+- Fix needed: Audit tests, merge sequential mutates, ensure alternation
+- Priority: HIGH (easy wins)
 
-### Priority 2: Test File Creation Order
+**Category 2: Timeout Failures (8 tests)**
+- Files: `03_messaging` (4), `06_entity_scopes` (4)
+- Problem: `expect()` times out after 100 ticks
+- Likely cause: Missing implementation or incorrect assertions
+- Priority: MEDIUM
 
-1. **`00_common.rs`** - Create new test file for cross-cutting common contracts
-2. **`04_time_ticks_commands.rs`** - Add command sequence tests
-3. **`01_connection_lifecycle.rs`** - Add protocol_id tests
-4. **`08_entity_ownership.rs`** - Add entity ownership tests
-5. **`05_observability_metrics.rs`** - Add observability-01a test
+**Category 3: Delegation/Authority Logic (15 tests)**
+- Files: `10_entity_delegation` (10), `11_entity_authority` (5)
+- Problem: Complex state machine logic bugs
+- Priority: MEDIUM-HIGH
 
-### Priority 3: For Each Contract
-
-1. Read the contract in `specs/contracts/`
-2. Write a compiling test with `/// Contract: [contract-id]` annotation
-3. Test should assert what the spec requires
-4. Test is allowed to FAIL (implementation gap)
-5. Run `cargo test --package naia-test --test <file> --no-run` to verify compilation
-6. Run `./specs/spec_tool.sh coverage` to verify annotation
+**Category 4: Ignored Tests (4 tests)**
+- File: `01_connection_lifecycle`
+- Reason: Require harness features not yet implemented
+- Priority: LOW (defer until core tests pass)
 
 ---
 
-## Recent Spec Changes (2026-01-11)
+## Immediate Next Actions (Phase B)
 
-### 1. Protocol Identity Hardening
-- Defined `protocol_id` as deterministic 128-bit identifier
-- Wire encoding: u128 little-endian (16 bytes)
-- Handshake gate: `protocol_id` comparison before any other checks
-- New `ProtocolMismatch` error for deployment configuration errors
+### Priority 1: Fix Test Structure Issues (Target: +13 passing tests)
 
-### 2. Command Sequence Locking
-- `sequence` required on every command (varint encoded)
-- Server applies in sequence order regardless of arrival
-- `MAX_COMMANDS_PER_TICK_PER_CONNECTION = 64` invariant
-- Duplicate `(tick, sequence)` dropped
+**File:** `test/tests/08_entity_ownership.rs`
+**Work:** Audit all 13 failing tests for mutate/expect violations
 
-### 3. Channel Compatibility Simplification
-- All compatibility enforced via `protocol_id` gate
-- No runtime channel compatibility checks
-- messaging-04 updated to reference protocol_id
+**Common pattern to fix:**
+```rust
+// WRONG - client.spawn is followed by more mutate calls
+let entity = scenario.mutate(|ctx| {
+    ctx.client(key, |c| c.spawn(|e| { ... }))
+});
+// Another mutate WITHOUT expect in between
+scenario.mutate(|ctx| { ... });  // ← VIOLATION
+```
 
-### 4. Metrics Testability
-- Tests MAY assert on metrics
-- Tests MUST NOT assert on logs
-- RTT/jitter: inequality-style assertions only
+**Fix approach:**
+1. Identify sequential `mutate()` calls
+2. Merge them if logically related
+3. Add `expect()` if waiting for replication/state change
+4. Never use empty `expect(|_| Some(()))` as a spacer
 
-### 5. Error Taxonomy
-- Added `common-02a`: Protocol mismatch classification
-- Updated Error/Failure Mode Summary table
-- Clarified: panic reserved for internal invariants only
+**Expected outcome:** 14/14 passing in entity_ownership
 
-### 6. Tool Update
-- `spec_tool.sh` now supports alphanumeric contract suffixes (e.g., `-03a`)
+### Priority 2: Investigate Timeout Failures (8 tests)
 
----
+**Files affected:**
+- `03_messaging.rs` (4 failures)
+- `06_entity_scopes.rs` (4 failures)
 
-## Phase A Progress
+**Debugging approach:**
+1. Run failing test with `--features e2e_debug -- --nocapture`
+2. Check if `expect()` condition is ever becoming true
+3. Verify implementation matches spec requirements
+4. Check for missing replication triggers or state updates
 
-| Task | Status |
-|------|--------|
-| Annotate all existing tests | **DONE** |
-| Gap analysis | **DONE** |
-| Write tests for original 185 contracts | **DONE** |
-| Eliminate `todo!()` macros | **DONE** |
-| Spec hardening (2026-01-11) | **DONE** |
-| Write tests for 51 new contracts | **TODO** |
-| **Phase A Complete** | **BLOCKED** |
+**Common causes:**
+- Implementation missing entirely
+- Incorrect assertion (checking wrong thing)
+- Missing scope/publication setup
 
----
+### Priority 3: Fix Delegation/Authority Logic (15 tests)
 
-## Test Files (1:1 Spec Mapping)
+**Files:** `10_entity_delegation.rs` (10), `11_entity_authority.rs` (5)
 
-| Spec File | Test File | Contracts | Status |
-|-----------|-----------|-----------|--------|
-| `0_common.md` | `00_common.rs` | 15 | **NEW FILE NEEDED** |
-| `1_connection_lifecycle.md` | `01_connection_lifecycle.rs` | 33 | +6 needed |
-| `2_transport.md` | `02_transport.rs` | 5 | Covered |
-| `3_messaging.md` | `03_messaging.rs` | 27 | Covered |
-| `4_time_ticks_commands.md` | `04_time_ticks_commands.rs` | 17 | +4 needed |
-| `5_observability_metrics.md` | `05_observability_metrics.rs` | 11 | +1 needed |
-| `6_entity_scopes.md` | `06_entity_scopes.rs` | 15 | Covered |
-| `7_entity_replication.md` | `07_entity_replication.rs` | 12 | Covered |
-| `8_entity_ownership.md` | `08_entity_ownership.rs` | 14 | +14 needed |
-| `9_entity_publication.md` | `09_entity_publication.rs` | 11 | Covered |
-| `10_entity_delegation.md` | `10_entity_delegation.rs` | 17 | Covered |
-| `11_entity_authority.md` | `11_entity_authority.rs` | 16 | Covered |
-| `12_server_events_api.md` | `12_server_events_api.rs` | 14 | Covered |
-| `13_client_events_api.md` | `13_client_events_api.rs` | 13 | Covered |
-| `14_world_integration.md` | `14_world_integration.rs` | 9 | Covered |
-
-**To find tests for a contract:** Open the matching numbered test file
+These are likely real implementation bugs in the delegation/authority state machines. Defer until test structure issues are fixed.
 
 ---
 
-## Completion Checklist
+## Session Workflow for Phase B
+
+```bash
+# Start of session
+cargo test --package naia-test 2>&1 | grep "test result:" | grep FAILED  # See failures
+cargo test --package naia-test --test <file>  # Focus on one file
+
+# Fix approach
+1. Identify failure type (panic location, timeout, assertion)
+2. For panics at scenario.rs:155/213 → test structure issue
+3. For timeouts → implementation gap or wrong assertion
+4. For assertion failures → logic bug
+
+# Verify fix
+cargo test --package naia-test --test <file>  # Should pass
+cargo test --package naia-test  # No regressions
+
+# Update docs
+# Update PLAN.md current state numbers
+# Note any learnings in CLAUDE.md or DEV_PROCESS.md
+```
+
+---
+
+## Key Learnings (Phase B)
+
+### 1. Framework Violations Are Design Enforcement
+The harness panics on `mutate()` → `mutate()` by design. This prevents bad test patterns. **Never work around it** - fix the test structure.
+
+### 2. Implement Features, Don't Fake Them
+When tests need bandwidth monitoring, **enable it in config**, don't return 0.0 as a default. Quality engineering means implementing the feature properly.
+
+### 3. Reading State Is Not Mutation
+Getting a tick, querying a value, checking status - these aren't mutations. Combine them with actual state changes in a single `mutate()` block.
+
+### 4. Test Structure Issues vs Implementation Bugs
+Many "failures" are test structure problems, not implementation bugs. Fix test structure first before assuming implementation is broken.
+
+---
+
+## Phase B Completion Checklist
 
 ```
+--- PHASE A: Complete Test Coverage ---
 [x] Annotate all existing tests with contract IDs
 [x] Generate gap analysis
 [x] Write tests for original 185 contracts
 [x] Eliminate ALL todo!() macros
+[x] Write tests for 51 new spec contracts (236/236)
+[x] Verify: spec_tool.sh coverage shows 236/236
+[x] Verify: grep -r "todo!" returns nothing
+[x] Verify: cargo test --package naia-test --no-run succeeds
+[x] **PHASE A COMPLETE** ✅
 
---- PHASE A: Complete Test Coverage (CURRENT) ---
-[x] Harden specs with protocol_id, command sequence, etc.
-[ ] Create 00_common.rs test file
-[ ] Write tests for 4 command sequence contracts
-[ ] Write tests for 6 protocol_id contracts
-[ ] Write tests for 14 entity ownership contracts
-[ ] Write tests for 1 observability contract
-[ ] Write tests for 15 common contracts
-[ ] Verify: spec_tool.sh coverage shows 236/236
-[ ] Verify: grep -r "todo!" returns nothing
-[ ] Verify: cargo test --package naia-test --no-run succeeds
-
---- PHASE B: Fix Implementation (BLOCKED until above complete) ---
-[ ] Run all tests, collect failures
-[ ] Prioritize fixes by importance
-[ ] Fix implementation systematically
-[ ] All tests pass
+--- PHASE B: Fix Implementation (CURRENT) ---
+[x] Run all tests, catalog failures (42 failures identified)
+[x] Fix arithmetic overflow in base_time_manager.rs
+[x] Fix bandwidth monitoring (implement properly in config)
+[x] Fix test framework violations in 04_time_ticks_commands
+[x] Fix client.rs:660 replication panic
+[ ] Fix 13 test structure issues in 08_entity_ownership (HIGH PRIORITY)
+[ ] Investigate 8 timeout failures (03_messaging, 06_entity_scopes)
+[ ] Fix 15 delegation/authority logic bugs
+[ ] All tests pass (target: 200/200)
 [ ] Run 3x for flakiness
+[ ] **PHASE B COMPLETE**
 ```
 
 ---

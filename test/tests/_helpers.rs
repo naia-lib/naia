@@ -19,6 +19,8 @@ pub fn test_client_config() -> ClientConfig {
     let mut config = ClientConfig::default();
     config.send_handshake_interval = Duration::from_millis(0);
     config.jitter_buffer = JitterBufferType::Bypass;
+    // Enable bandwidth monitoring for observability tests (contract observability-02)
+    config.connection.bandwidth_measure_duration = Some(Duration::from_secs(1));
     config
 }
 

@@ -378,6 +378,77 @@ fn out_of_scope_ends_authority_for_that_client() {
 - Coverage tools see the test
 - When implementation is fixed, test automatically passes
 
+### 3.6 mutate() vs expect() - Critical Anti-Patterns
+
+**NEVER VIOLATE THE ALTERNATION RULE**
+
+The test harness enforces `mutate()` ↔ `expect()` alternation by design. Sequential `mutate()` calls will cause a panic. This is intentional - don't work around it!
+
+**Purpose:**
+- `mutate()` - **Change state only** (spawn, send messages, modify components)
+- `expect()` - **Wait/poll** until a condition becomes true
+
+**❌ ANTI-PATTERN 1: Empty expect() to "fix" sequential mutate()**
+```rust
+// WRONG - trying to get tick, then send message
+let tick = scenario.mutate(|ctx| {
+    ctx.client(key, |c| c.client_tick())  // Just reading state!
+});
+scenario.expect(|_| Some(()));  // ← WRONG! Empty wait does nothing!
+scenario.mutate(|ctx| {
+    ctx.client(key, |c| c.send_message(&tick, &msg));
+});
+```
+
+**✅ CORRECT: Merge into one mutate() block**
+```rust
+let tick = scenario.mutate(|ctx| {
+    ctx.client(key, |client| {
+        let tick = client.client_tick();  // Read AND use in same block
+        client.send_message(&tick, &msg);
+        tick
+    })
+});
+```
+
+**❌ ANTI-PATTERN 2: Using mutate() for queries**
+```rust
+// WRONG - mutate() is for changing state, not reading it
+let value = scenario.mutate(|ctx| {
+    ctx.server(|s| s.get_some_value())  // This is a query!
+});
+```
+
+**✅ CORRECT: Combine query with actual mutation**
+```rust
+scenario.mutate(|ctx| {
+    ctx.server(|server| {
+        let value = server.get_some_value();  // Read
+        server.do_something_with(value);       // Mutate
+    })
+});
+```
+
+**❌ ANTI-PATTERN 3: Empty no-op mutations**
+```rust
+// WRONG - does nothing!
+scenario.mutate(|_| {});
+scenario.expect(|_| Some(()));
+```
+
+**✅ CORRECT: Just use expect()**
+```rust
+scenario.expect(|_| Some(()));
+```
+
+**When you see sequential mutate() calls:**
+1. **Can they be merged?** → YES, merge them into one block
+2. **Is one just reading state?** → Move the read into the next mutation
+3. **Is one empty/no-op?** → Delete it
+4. **Is there real waiting needed?** → Add expect() with actual condition
+
+**The panic is your friend - it prevents bad test design. Fix the structure, don't hack around it.**
+
 ---
 
 ## 4. Tooling Reference
@@ -787,6 +858,97 @@ use test_helpers::{test_client_config, client_connect};
 - Challenge: Metrics APIs not exposed in test harness
 - Options: Check existing APIs, or add feature-gated test hooks
 - Status: Needs assessment
+
+---
+
+## Appendix F: Phase B Lessons Learned (2026-01-11)
+
+### Critical: Quality Engineering Over Quick Hacks
+
+**Lesson 1: Never Return Default Values - Implement Features Properly**
+
+❌ **WRONG - Silently returning defaults:**
+```rust
+pub fn outgoing_bandwidth(&self) -> f32 {
+    self.monitor.as_ref().map(|m| m.bandwidth()).unwrap_or(0.0)  // WRONG!
+}
+```
+
+✅ **CORRECT - Enable the feature in configuration:**
+```rust
+// In test config:
+config.connection.bandwidth_measure_duration = Some(Duration::from_secs(1));
+
+// In implementation:
+pub fn outgoing_bandwidth(&self) -> f32 {
+    self.monitor.as_ref()
+        .expect("Set bandwidth_measure_duration in config to enable monitoring")
+        .bandwidth()
+}
+```
+
+**Why this matters:** Tests should drive proper implementation, not paper over missing features. If a spec says metrics are queryable, implement the monitoring system properly.
+
+**Lesson 2: Framework Violations Are Intentional - Fix Test Structure**
+
+The test harness panics on `mutate()` → `mutate()` by design. This enforces good test patterns.
+
+❌ **WRONG - Adding empty expect() as a spacer:**
+```rust
+let tick = scenario.mutate(|ctx| { ctx.client(k, |c| c.get_tick()) });
+scenario.expect(|_| Some(()));  // WRONG! Does nothing!
+scenario.mutate(|ctx| { /* use tick */ });
+```
+
+✅ **CORRECT - Merge read+write operations:**
+```rust
+let tick = scenario.mutate(|ctx| {
+    ctx.client(k, |c| {
+        let tick = c.get_tick();  // Read
+        c.send_message(&tick, &msg);  // Write
+        tick
+    })
+});
+```
+
+**Why this matters:** Empty `expect()` calls don't wait for anything. They're a code smell that indicates bad test structure.
+
+**Lesson 3: Categorize Failures Before Fixing**
+
+Not all test failures are implementation bugs:
+
+| Failure Type | Indicator | Root Cause | Fix Strategy |
+|--------------|-----------|------------|--------------|
+| **Test Structure** | Panic at scenario.rs:155/213 | Sequential `mutate()` calls | Merge operations |
+| **Timeout** | Panic at scenario.rs:253 | Missing impl or wrong assertion | Debug with e2e_debug |
+| **Assertion** | Test fails at expect() | Logic bug | Fix implementation |
+| **Compilation** | Rust error | Missing API or wrong types | Implement feature |
+
+**Action:** Always categorize before fixing. Don't assume every failure is an implementation bug.
+
+**Lesson 4: Fix Low-Hanging Fruit First**
+
+In Phase B, we had:
+- 13 test structure issues (easy fixes - just merge mutate calls)
+- 8 timeout failures (medium difficulty - debug needed)
+- 15 logic bugs (hard - state machine issues)
+
+**Strategy:** Fix the 13 structure issues first for quick wins, then tackle harder problems. This builds momentum and reduces noise.
+
+**Lesson 5: Use Saturating Arithmetic for Edge Cases**
+
+❌ **WRONG - Assuming values are always ordered:**
+```rust
+let rtt_delay = round_trip_time - server_process_time;  // Can underflow!
+```
+
+✅ **CORRECT - Handle edge cases gracefully:**
+```rust
+// In fast tests or clock inconsistencies, server time might appear > RTT
+let rtt_delay = round_trip_time.saturating_sub(server_process_time);
+```
+
+**Why this matters:** E2E tests run in microseconds. Clock measurements can have unexpected orderings. Use saturating arithmetic for time calculations.
 
 ---
 

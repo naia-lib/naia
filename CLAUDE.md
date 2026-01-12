@@ -2,18 +2,18 @@
 
 Naia is a cross-platform Rust networking engine for multiplayer games. Architecture follows the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf).
 
-## Current State (2026-01-11)
+## Current State (2026-01-11 - Phase B Active)
 
 | Metric | Value |
 |--------|-------|
-| Contracts with compiling tests | **236/236 (100%)** |
-| Tests with `todo!()` | **0** |
-| Uncovered contracts | **0** |
-| Phase A | **COMPLETE ✓** |
+| Phase A | **COMPLETE ✓** (236/236 contracts, 0 todos) |
+| Phase B | **IN PROGRESS** (158/200 tests passing, 79%) |
+| Critical bugs fixed | **4** (overflow, bandwidth, replication, framework violations) |
+| Low-hanging fruit | **13 tests** (08_entity_ownership structure issues) |
 
-**Goal:** Phase B - run all tests and fix implementation gaps.
+**Goal:** Phase B - fix all implementation gaps and test structure issues.
 
-**Achieved:** All 236 contracts now have compiling E2E tests. Ready for Phase B: systematically run tests and fix any failures.
+**Progress:** Fixed critical bugs (overflow, bandwidth). Main work: fix test structure violations in entity_ownership, then tackle timeout/logic failures.
 
 ## Test File Organization (1:1 Mapping)
 
@@ -71,11 +71,14 @@ specs/contracts/*.md (contracts) → test/tests/*.rs (E2E tests) → Implementat
 
 **Key insight:** A `todo!()` in a test is a **specification gap**, not an implementation bug. Write what you *expect* to happen, and let the test fail if the implementation is wrong.
 
-**The SDD Loop (Phase A):**
-1. **SPEC**: Find contract `[contract-id]` in `specs/contracts/`
-2. **TEST**: Write compiling test with `/// Contract: [contract-id]` annotation
-3. **VERIFY**: Ensure test compiles (allowed to fail)
-4. **VALID**: Run `./specs/spec_tool.sh coverage` to verify annotation
+**The SDD Loop (Phase B - Current):**
+1. **RUN**: Run tests, identify failures by type (panic location, timeout, assertion)
+2. **DIAGNOSE**:
+   - Panic at scenario.rs:155/213 → Test structure issue (mutate/expect violation)
+   - Timeout → Implementation gap or wrong assertion
+   - Assertion failure → Logic bug
+3. **FIX**: Fix root cause (never hack around framework violations)
+4. **VERIFY**: Test passes, no regressions
 
 ## Essential Commands
 
@@ -141,6 +144,53 @@ fn contract_name_scenario() {
 - Multi-contract annotation: `/// Contract: [a-01], [b-02]`
 - If a spec requires APIs not exposed in the harness, **IMPLEMENT them** in `test/src/harness/`
 
+### Critical: mutate() vs expect() (NEVER VIOLATE THIS)
+
+**Purpose:**
+- `mutate()` - Change state (spawn entities, send messages, modify components)
+- `expect()` - Wait/poll until a condition is true (replication, connection, state changes)
+
+**ANTI-PATTERNS (NEVER DO THIS):**
+
+❌ **Adding empty expect() between mutate() calls:**
+```rust
+scenario.mutate(|ctx| { /* get tick */ });
+scenario.expect(|_| Some(()));  // ← WRONG! Empty wait does nothing!
+scenario.mutate(|ctx| { /* send message */ });
+```
+
+❌ **Using mutate() to read state (not mutate):**
+```rust
+let tick = scenario.mutate(|ctx| {
+    ctx.client(key, |c| c.client_tick())  // ← WRONG! This is a query, not mutation!
+});
+scenario.mutate(|ctx| { /* use tick */ });
+```
+
+❌ **Sequential empty mutations:**
+```rust
+scenario.mutate(|_| {});  // ← WRONG! Does nothing!
+scenario.expect(|_| Some(()));
+```
+
+✅ **CORRECT: Merge sequential mutate() calls:**
+```rust
+let tick = scenario.mutate(|ctx| {
+    ctx.client(key, |client| {
+        let tick = client.client_tick();  // Read and use in same block
+        client.send_message(&tick, &msg);
+        tick  // Return what you need
+    })
+});
+```
+
+**If you see sequential `mutate()` calls, ask:**
+1. Can these be merged into one mutate() block? (Usually YES)
+2. Is one of them just reading state? (Merge it with the next mutation)
+3. Is one of them empty/no-op? (Delete it)
+
+**The framework will panic on `mutate()` → `mutate()` violations. This is intentional. Don't work around it with empty expect() calls - fix the test structure.**
+
 ## Token Optimization (CRITICAL)
 
 **DO:**
@@ -164,9 +214,20 @@ fn contract_name_scenario() {
 | `specs/generated/TRACEABILITY.md` | Contract↔test mapping | Checking coverage |
 | `specs/generated/GAP_ANALYSIS.md` | Prioritized uncovered contracts | Planning work |
 
-## Known Gaps
+## Known Issues (Phase B)
 
-No known harness gaps. If a spec requires APIs not in the harness, implement them.
+**Test Structure Issues (13 tests):**
+- File: `08_entity_ownership.rs`
+- Problem: Sequential `mutate()` calls without `expect()` between them
+- Fix: Merge operations or add proper `expect()` with real condition
+
+**Timeout Failures (8 tests):**
+- Files: `03_messaging.rs` (4), `06_entity_scopes.rs` (4)
+- Debug with: `cargo test --features e2e_debug <test> -- --nocapture`
+
+**Delegation/Authority Bugs (15 tests):**
+- Files: `10_entity_delegation.rs` (10), `11_entity_authority.rs` (5)
+- Likely real state machine bugs - investigate after structure fixes
 
 ## Initiative Guidelines
 
