@@ -29,9 +29,9 @@
 
 | Metric | Value | Target |
 |--------|-------|--------|
-| Tests passing | **158/200 (79%)** | 200/200 (100%) |
-| Tests failing | **42** | 0 |
-| Critical bugs fixed | **3** (overflow, bandwidth, replication) | - |
+| Tests passing | **195/215 (91%)** | 215/215 (100%) |
+| Tests failing | **20** | 0 |
+| Critical bugs fixed | **5** (overflow, bandwidth, replication, 2x framework violations) | - |
 | Phase A | **COMPLETE ✓** | - |
 | Phase B | **IN PROGRESS** | Complete |
 
@@ -42,15 +42,15 @@
 | 00_common | ✅ 17/17 | All passing |
 | 01_connection_lifecycle | ✅ 17/21 | 4 ignored (need harness features) |
 | 02_transport | ✅ 14/14 | All passing |
-| 03_messaging | ⚠️ 25/29 | 4 failures (timeout/structure) |
-| 04_time_ticks_commands | ✅ 20/20 | Fixed mutate violations |
-| 05_observability_metrics | ✅ 12/12 | Fixed via config |
+| 03_messaging | ⚠️ 28/29 | 1 failure (disconnect_cancels_pending_requests) |
+| 04_time_ticks_commands | ✅ 20/20 | All passing |
+| 05_observability_metrics | ✅ 12/12 | All passing |
 | 06_entity_scopes | ⚠️ 10/14 | 4 timeout failures |
 | 07_entity_replication | ✅ 16/16 | All passing |
-| 08_entity_ownership | ⚠️ 1/14 | 13 test structure issues |
+| 08_entity_ownership | ⚠️ 13/14 | 1 delegation bug (enabling_delegation_transfers_ownership_to_server) |
 | 09_entity_publication | ✅ 11/11 | All passing |
-| 10_entity_delegation | ⚠️ 7/17 | 10 failures (needs investigation) |
-| 11_entity_authority | ⚠️ 11/16 | 5 failures (logic bugs) |
+| 10_entity_delegation | ⚠️ 8/17 | 9 failures (delegation state machine) |
+| 11_entity_authority | ⚠️ 11/16 | 5 failures (authority state machine) |
 | 12_server_events_api | ✅ 8/8 | All passing |
 | 13_client_events_api | ✅ 6/6 | All passing |
 | 14_world_integration | ✅ 4/4 | All passing |
@@ -59,7 +59,7 @@
 
 ## Phase B: Implementation Fixes
 
-### Completed Fixes (2026-01-11)
+### Completed Fixes (2026-01-12)
 
 1. **Arithmetic overflow in base_time_manager.rs:128**
    - Issue: `round_trip_time_millis - server_process_time_millis` could underflow
@@ -83,26 +83,40 @@
    - Impact: Fixed all 4 command tests (20/20 passing)
    - **Learning:** Reading state is NOT mutation - combine with actual mutation
 
-### Current Failures (42 tests)
+5. **Test framework violations in 08_entity_ownership (13 tests)** 🎉
+   - Issue: Sequential `expect()` → `expect()` calls violating mutate/expect alternation
+   - Fix: Merged sequential expect() blocks into single expect() with staged conditions
+   - Impact: **Fixed 13/14 entity_ownership tests** (1 remaining has delegation bug)
+   - **Learning:** Wait for replication THEN verify state in single expect() block
+   - **Progress:** +13 tests passing, revealed 1 implementation bug
 
-**Category 1: Test Structure Issues (13 tests - LOW HANGING FRUIT)**
-- Location: `08_entity_ownership.rs`
-- Problem: Tests panic at `scenario.rs:213` (mutate/expect violations)
-- Fix needed: Audit tests, merge sequential mutates, ensure alternation
-- Priority: HIGH (easy wins)
+6. **Delegation ownership restriction in world_server.rs**
+   - Issue: Server panicking when enabling delegation on client-owned entities
+   - Spec: [entity-ownership-11] allows server to enable delegation, transferring ownership
+   - Fix: Removed panics at lines 838 and 862 (spec vs implementation mismatch)
+   - Impact: Unblocked delegation transition path, revealed deeper message handling bug
+   - **Status:** Test now fails on message type handling, needs further investigation
 
-**Category 2: Timeout Failures (8 tests)**
-- Files: `03_messaging` (4), `06_entity_scopes` (4)
+### Current Failures (20 tests)
+
+**Category 1: Timeout Failures (5 tests - NEXT PRIORITY)** ⚠️
+- Files: `03_messaging` (1), `06_entity_scopes` (4)
 - Problem: `expect()` times out after 100 ticks
 - Likely cause: Missing implementation or incorrect assertions
-- Priority: MEDIUM
+- Priority: HIGH (reduced from 8 to 5 tests)
+- **Progress:** Fixed 3 messaging timeouts via structure fixes
 
-**Category 3: Delegation/Authority Logic (15 tests)**
-- Files: `10_entity_delegation` (10), `11_entity_authority` (5)
-- Problem: Complex state machine logic bugs
+**Category 2: Delegation/Authority Logic (14 tests)** ⚠️
+- Files: `08_entity_ownership` (1), `10_entity_delegation` (9), `11_entity_authority` (5)
+- Problem: Complex state machine bugs, message handling
+- Examples:
+  - `enabling_delegation_transfers_ownership_to_server`: EnableDelegation message not handled for client-owned entities
+  - 9 delegation tests: State transitions not implemented
+  - 5 authority tests: Authority grant/revoke logic bugs
 - Priority: MEDIUM-HIGH
+- **Progress:** Reduced from 15 to 14 tests, identified root causes
 
-**Category 4: Ignored Tests (4 tests)**
+**Category 3: Ignored Tests (4 tests)**
 - File: `01_connection_lifecycle`
 - Reason: Require harness features not yet implemented
 - Priority: LOW (defer until core tests pass)
@@ -111,33 +125,10 @@
 
 ## Immediate Next Actions (Phase B)
 
-### Priority 1: Fix Test Structure Issues (Target: +13 passing tests)
-
-**File:** `test/tests/08_entity_ownership.rs`
-**Work:** Audit all 13 failing tests for mutate/expect violations
-
-**Common pattern to fix:**
-```rust
-// WRONG - client.spawn is followed by more mutate calls
-let entity = scenario.mutate(|ctx| {
-    ctx.client(key, |c| c.spawn(|e| { ... }))
-});
-// Another mutate WITHOUT expect in between
-scenario.mutate(|ctx| { ... });  // ← VIOLATION
-```
-
-**Fix approach:**
-1. Identify sequential `mutate()` calls
-2. Merge them if logically related
-3. Add `expect()` if waiting for replication/state change
-4. Never use empty `expect(|_| Some(()))` as a spacer
-
-**Expected outcome:** 14/14 passing in entity_ownership
-
-### Priority 2: Investigate Timeout Failures (8 tests)
+### Priority 1: Investigate Timeout Failures (5 tests) ✅ NEXT
 
 **Files affected:**
-- `03_messaging.rs` (4 failures)
+- `03_messaging.rs` (1 failure: disconnect_cancels_pending_requests)
 - `06_entity_scopes.rs` (4 failures)
 
 **Debugging approach:**
@@ -151,7 +142,9 @@ scenario.mutate(|ctx| { ... });  // ← VIOLATION
 - Incorrect assertion (checking wrong thing)
 - Missing scope/publication setup
 
-### Priority 3: Fix Delegation/Authority Logic (15 tests)
+**Expected outcome:** Reduce from 5 to 0 timeout failures
+
+### Priority 2: Fix Delegation/Authority Logic (14 tests)
 
 **Files:** `10_entity_delegation.rs` (10), `11_entity_authority.rs` (5)
 
@@ -219,10 +212,12 @@ Many "failures" are test structure problems, not implementation bugs. Fix test s
 [x] Fix bandwidth monitoring (implement properly in config)
 [x] Fix test framework violations in 04_time_ticks_commands
 [x] Fix client.rs:660 replication panic
-[ ] Fix 13 test structure issues in 08_entity_ownership (HIGH PRIORITY)
-[ ] Investigate 8 timeout failures (03_messaging, 06_entity_scopes)
-[ ] Fix 15 delegation/authority logic bugs
-[ ] All tests pass (target: 200/200)
+[x] Fix 13 test structure issues in 08_entity_ownership ✅ **MAJOR WIN**
+[x] Reduce test failures from 42 to 20 (+37 tests passing!)
+[x] Improve coverage from 79% to 91%
+[ ] Investigate 5 timeout failures (03_messaging: 1, 06_entity_scopes: 4)
+[ ] Fix 14 delegation/authority logic bugs
+[ ] All tests pass (target: 215/215, currently 195/215)
 [ ] Run 3x for flakiness
 [ ] **PHASE B COMPLETE**
 ```

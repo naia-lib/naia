@@ -834,11 +834,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     }
                     ReplicationConfig::Delegated => {
                         // private -> delegated
-                        if client_owned {
-                            panic!("Cannot downgrade Client's ownership of Entity to Delegated. Do this Client-side if needed.");
-                            // The reasoning here is that the Client's ownership should be respected.
-                            // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
-                        }
+                        // Per spec [entity-ownership-11], server CAN enable delegation on client-owned entities,
+                        // which transfers ownership to server
                         self.publish_entity(world, &global_entity, world_entity, true);
                         self.entity_enable_delegation(world, &global_entity, world_entity, None);
                     }
@@ -858,11 +855,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     }
                     ReplicationConfig::Delegated => {
                         // public -> delegated
-                        if client_owned {
-                            panic!("Cannot downgrade Client's ownership of Entity to Delegated. Do this Client-side if needed.");
-                            // The reasoning here is that the Client's ownership should be respected.
-                            // Yes the Server typically has authority over all things, but I believe this will enforce better standards.
-                        }
+                        // Per spec [entity-ownership-11], server CAN enable delegation on client-owned entities,
+                        // which transfers ownership to server
                         self.entity_enable_delegation(world, &global_entity, world_entity, None);
                     }
                 }

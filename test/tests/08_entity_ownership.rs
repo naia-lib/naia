@@ -36,37 +36,37 @@ fn entity_has_exactly_one_owner_at_creation() {
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
 
-    // Server spawns server-owned entity
-    let server_entity = scenario.mutate(|ctx| {
-        ctx.server(|server| {
+    // Server spawns server-owned entity, then client spawns client-owned entity
+    let (server_entity, client_entity) = scenario.mutate(|ctx| {
+        let server_entity = ctx.server(|server| {
             let (entity, _) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
                 e.enter_room(&room_key);
             });
             server.user_scope_mut(&client_a_key).unwrap().include(&entity);
             entity
-        })
-    });
+        });
 
-    // Client spawns client-owned entity
-    let client_entity = scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |client_a| {
+        let client_entity = ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
                 e.configure_replication(ClientReplicationConfig::Public)
                     .insert_component(Position::new(3.0, 4.0));
             })
-        })
+        });
+
+        (server_entity, client_entity)
     });
 
-    // Wait for entities to replicate
+    // Wait for entities to replicate and verify ownership
     scenario.expect(|ctx| {
         let server_has_client_entity = ctx.server(|s| s.has_entity(&client_entity));
         let client_has_server_entity = ctx.client(client_a_key, |c| c.has_entity(&server_entity));
-        (server_has_client_entity && client_has_server_entity).then_some(())
-    });
 
-    // Verify: server entity is server-owned, client entity is client-owned
-    scenario.expect(|ctx| {
+        if !(server_has_client_entity && client_has_server_entity) {
+            return None;
+        }
+
+        // Verify: server entity is server-owned, client entity is client-owned
         let server_entity_owner = ctx.server(|s| s.entity(&server_entity).map(|e| e.owner()));
         let client_entity_owner = ctx.server(|s| s.entity(&client_entity).map(|e| e.owner()));
 
@@ -129,17 +129,19 @@ fn unauthorized_client_write_does_not_affect_server_state() {
         });
     });
 
-    // Wait for update to replicate
+    // Wait for update to replicate and verify ownership
     scenario.expect(|ctx| {
-        ctx.server(|server| {
+        let pos_updated = ctx.server(|server| {
             let entity = server.entity(&entity_e)?;
             let pos = entity.component::<Position>()?;
             (*pos.x == 5.0 && *pos.y == 6.0).then_some(())
-        })
-    });
+        });
 
-    // Verify ownership: A owns entity, B does not
-    scenario.expect(|ctx| {
+        if pos_updated.is_none() {
+            return None;
+        }
+
+        // Verify ownership: A owns entity, B does not
         let owner = ctx.server(|s| s.entity(&entity_e).map(|e| e.owner()));
         matches!(owner, Some(EntityOwner::Client(k)) if k == client_a_key).then_some(())
     });
@@ -174,20 +176,24 @@ fn client_writes_to_nondelegated_server_entity_are_ignored() {
         })
     });
 
-    // Wait for client to see entity
-    scenario.expect(|ctx| ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(()));
-
-    // Verify entity is server-owned (not delegated)
+    // Wait for client to see entity and verify ownership and position
     scenario.expect(|ctx| {
+        let client_has = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        if !client_has {
+            return None;
+        }
+
+        // Verify entity is server-owned (not delegated)
         let owner = ctx.server(|s| s.entity(&entity_e).map(|e| e.owner()));
         let config = ctx.server(|s| s.entity(&entity_e).map(|e| e.replication_config()));
         let is_server_owned = owner == Some(EntityOwner::Server);
         let is_not_delegated = config != Some(Some(ReplicationConfig::Delegated));
-        (is_server_owned && is_not_delegated).then_some(())
-    });
 
-    // Server position should remain (1.0, 2.0) since client has no authority
-    scenario.expect(|ctx| {
+        if !(is_server_owned && is_not_delegated) {
+            return None;
+        }
+
+        // Server position should remain (1.0, 2.0) since client has no authority
         ctx.server(|server| {
             let entity = server.entity(&entity_e)?;
             let pos = entity.component::<Position>()?;
@@ -223,12 +229,15 @@ fn client_owned_entity_does_not_emit_authority_events() {
         })
     });
 
-    // Wait for entity to replicate to server
-    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
-
-    // Verify: no authority events on client (Private entities don't participate in delegation)
-    // Entity should be client-owned but authority field should be None (not a delegated entity)
+    // Wait for entity to replicate to server and verify ownership/authority
     scenario.expect(|ctx| {
+        let server_has = ctx.server(|server| server.has_entity(&entity_e));
+        if !server_has {
+            return None;
+        }
+
+        // Verify: no authority events on client (Private entities don't participate in delegation)
+        // Entity should be client-owned but authority field should be None (not a delegated entity)
         let owner = ctx.server(|s| s.entity(&entity_e).map(|e| e.owner()));
         let auth_status = ctx.client(client_a_key, |c| c.entity(&entity_e).map(|e| e.authority()));
 
@@ -268,12 +277,15 @@ fn write_to_unowned_entity_returns_error() {
         })
     });
 
-    // Wait for client to see entity
-    scenario.expect(|ctx| ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(()));
-
-    // Verify client cannot write: entity_mut should not allow replication writes
-    // (The harness/naia should prevent this at the API level)
+    // Wait for client to see entity and verify ownership
     scenario.expect(|ctx| {
+        let client_has = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        if !client_has {
+            return None;
+        }
+
+        // Verify client cannot write: entity_mut should not allow replication writes
+        // (The harness/naia should prevent this at the API level)
         let owner = ctx.client(client_a_key, |c| c.entity(&entity_e).map(|e| e.owner()));
         // Client sees server-owned entities as Server-owned
         (owner == Some(EntityOwner::Server)).then_some(())
@@ -321,11 +333,14 @@ fn client_sees_other_clients_entities_as_server_owned() {
         });
     });
 
-    // Wait for B to see entity
-    scenario.expect(|ctx| ctx.client(client_b_key, |c| c.has_entity(&entity_e)).then_some(()));
-
-    // Verify: Server sees true owner (Client A), but Client B sees Server
+    // Wait for B to see entity and verify ownership visibility
     scenario.expect(|ctx| {
+        let b_has = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
+        if !b_has {
+            return None;
+        }
+
+        // Verify: Server sees true owner (Client A), but Client B sees Server
         let server_view = ctx.server(|s| s.entity(&entity_e).map(|e| e.owner()));
         let a_view = ctx.client(client_a_key, |c| c.entity(&entity_e).map(|e| e.owner()));
         let b_view = ctx.client(client_b_key, |c| c.entity(&entity_e).map(|e| e.owner()));
@@ -368,11 +383,14 @@ fn local_mutation_persists_until_server_update() {
         })
     });
 
-    // Wait for client to see entity
-    scenario.expect(|ctx| ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(()));
-
-    // Client sees initial position
+    // Wait for client to see entity and verify initial position
     scenario.expect(|ctx| {
+        let client_has = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        if !client_has {
+            return None;
+        }
+
+        // Client sees initial position
         ctx.client(client_a_key, |client| {
             let entity = client.entity(&entity_e)?;
             let pos = entity.component::<Position>()?;
@@ -431,15 +449,19 @@ fn local_only_component_persists_until_despawn() {
         })
     });
 
-    // Wait for client to see entity with component
+    // Wait for client to see entity with component and verify persistence
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| {
+        let has_component = ctx.client(client_a_key, |c| {
             c.entity(&entity_e)?.component::<Position>().map(|_| ())
-        })
-    });
+        });
 
-    // Entity persists on client until server despawns
-    scenario.expect(|ctx| ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(()));
+        if has_component.is_none() {
+            return None;
+        }
+
+        // Entity persists on client until server despawns
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
+    });
 }
 
 // ============================================================================
@@ -473,11 +495,14 @@ fn removing_server_component_from_unowned_entity_returns_error() {
         })
     });
 
-    // Wait for client to see entity
-    scenario.expect(|ctx| ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(()));
-
-    // Verify entity is server-owned (client cannot remove components)
+    // Wait for client to see entity and verify ownership
     scenario.expect(|ctx| {
+        let client_has = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        if !client_has {
+            return None;
+        }
+
+        // Verify entity is server-owned (client cannot remove components)
         let owner = ctx.client(client_a_key, |c| c.entity(&entity_e).map(|e| e.owner()));
         (owner == Some(EntityOwner::Server)).then_some(())
     });
@@ -512,17 +537,15 @@ fn server_owned_entity_cannot_become_client_owned() {
         })
     });
 
-    // Wait for client to see entity
-    scenario.expect(|ctx| ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(()));
-
-    // Verify entity is server-owned
+    // Wait for client to see entity and verify server ownership persists
     scenario.expect(|ctx| {
-        let owner = ctx.server(|s| s.entity(&entity_e).map(|e| e.owner()));
-        (owner == Some(EntityOwner::Server)).then_some(())
-    });
+        let client_has = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
+        if !client_has {
+            return None;
+        }
 
-    // Even after many ticks, entity remains server-owned (no migration possible)
-    scenario.expect(|ctx| {
+        // Verify entity is server-owned and remains server-owned
+        // (no migration from server-owned to client-owned is possible)
         let owner = ctx.server(|s| s.entity(&entity_e).map(|e| e.owner()));
         (owner == Some(EntityOwner::Server)).then_some(())
     });
@@ -555,11 +578,14 @@ fn enabling_delegation_transfers_ownership_to_server() {
         })
     });
 
-    // Wait for entity to replicate to server
-    scenario.expect(|ctx| ctx.server(|server| server.has_entity(&entity_e).then_some(())));
-
-    // Verify initially client-owned
+    // Wait for entity to replicate to server and verify initial client ownership
     scenario.expect(|ctx| {
+        let server_has = ctx.server(|server| server.has_entity(&entity_e));
+        if !server_has {
+            return None;
+        }
+
+        // Verify initially client-owned
         let owner = ctx.server(|s| s.entity(&entity_e).map(|e| e.owner()));
         matches!(owner, Some(EntityOwner::Client(k)) if k == client_a_key).then_some(())
     });
@@ -691,14 +717,14 @@ fn client_disconnect_despawns_owned_entities() {
         });
     });
 
-    // Wait for disconnect to process
+    // Wait for disconnect to process and verify entity despawn
     scenario.expect(|ctx| {
         let user_gone = !ctx.server(|s| s.user_exists(&client_a_key));
-        user_gone.then_some(())
-    });
+        if !user_gone {
+            return None;
+        }
 
-    // Entity should be despawned on server and B
-    scenario.expect(|ctx| {
+        // Entity should be despawned on server and B
         let server_has = ctx.server(|s| s.has_entity(&entity_e));
         let b_has = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
         (!server_has && !b_has).then_some(())
@@ -736,15 +762,12 @@ fn no_writes_for_out_of_scope_entities() {
         })
     });
 
-    // Client should not have the entity (out of scope)
+    // Verify client doesn't have entity (out of scope) but server does
     scenario.expect(|ctx| {
         let client_has = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
-        (!client_has).then_some(())
-    });
-
-    // Server still has entity
-    scenario.expect(|ctx| {
         let server_has = ctx.server(|s| s.has_entity(&entity_e));
-        server_has.then_some(())
+
+        // Client should not have entity (out of scope), but server should
+        (!client_has && server_has).then_some(())
     });
 }
