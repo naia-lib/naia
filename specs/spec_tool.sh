@@ -19,8 +19,12 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONTRACTS_DIR="$SCRIPT_DIR/contracts"
-GENERATED_DIR="$SCRIPT_DIR/generated"
+
+# Allow environment overrides for testing (defaults preserve existing behavior)
+CONTRACTS_DIR="${SPEC_TOOL_CONTRACTS_DIR:-$SCRIPT_DIR/contracts}"
+GENERATED_DIR="${SPEC_TOOL_GENERATED_DIR:-$SCRIPT_DIR/generated}"
+TEST_DIR="${SPEC_TOOL_TEST_DIR:-$SCRIPT_DIR/../test/tests}"
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -86,11 +90,15 @@ get_spec_slug() {
 
 # Extract all contract IDs from a line (handles multiple [id], [id], [id] patterns)
 # Uses grep -P if available, otherwise falls back to perl
+# Set SPEC_TOOL_FORCE_PERL=1 to force perl path for testing
 extract_contract_ids() {
     local line="$1"
 
-    # Try grep -P first (faster)
-    if echo "$line" | grep -P "$BRACKETED_CONTRACT_RE" &>/dev/null; then
+    # Force perl path if testing, otherwise try grep -P first (faster)
+    if [[ "${SPEC_TOOL_FORCE_PERL:-0}" == "1" ]]; then
+        # Forced perl path for testing
+        echo "$line" | perl -nle "print for /\\[${CONTRACT_ID_RE}\\]/g" | tr -d '[]'
+    elif echo "$line" | grep -P "$BRACKETED_CONTRACT_RE" &>/dev/null; then
         echo "$line" | grep -oP "$BRACKETED_CONTRACT_RE" | tr -d '[]'
     else
         # Fallback to perl (more portable)
@@ -101,10 +109,9 @@ extract_contract_ids() {
 # Find all test files containing a specific contract ID
 find_test_files_for_contract() {
     local contract_id="$1"
-    local test_dir="$SCRIPT_DIR/../test/tests"
 
     # Search for contract ID anywhere on a Contract: line
-    grep -rlE "Contract:.*\[${contract_id}\]" "$test_dir"/*.rs 2>/dev/null \
+    grep -rlE "Contract:.*\[${contract_id}\]" "$TEST_DIR"/*.rs 2>/dev/null \
         | xargs -r basename -a \
         | sed 's/\.rs$//' \
         | sort -u
@@ -657,17 +664,15 @@ cmd_validate() {
 cmd_coverage() {
     print_header "Contract Coverage Analysis"
 
-    local test_dir="$SCRIPT_DIR/../test/tests"
-
-    if [[ ! -d "$test_dir" ]]; then
-        print_error "Test directory not found: $test_dir"
+    if [[ ! -d "$TEST_DIR" ]]; then
+        print_error "Test directory not found: $TEST_DIR"
         return 1
     fi
 
     # Extract contract IDs from test annotations
     # Find lines with Contract: then extract ALL [contract-id] patterns from those lines
     # Uses -oP (PCRE) to capture all bracket patterns, not just first per line
-    local test_contracts=$(grep -rhE '(///|//) Contract:' "$test_dir"/*.rs 2>/dev/null \
+    local test_contracts=$(grep -rhE '(///|//) Contract:' "$TEST_DIR"/*.rs 2>/dev/null \
         | grep -oP '\[[a-z][a-z0-9-]*-[0-9]+[a-z]*\]' | tr -d '[]' | sort -u)
 
     # Get all contracts from registry (supports alphanumeric suffixes like -03a)
@@ -825,8 +830,6 @@ cmd_traceability() {
 
     print_header "Generating Traceability Matrix"
 
-    local test_dir="$SCRIPT_DIR/../test/tests"
-
     {
         cat << EOF
 # Contract Traceability Matrix
@@ -851,7 +854,7 @@ EOF
             [[ -z "$contract" ]] && continue
 
             # Search for this contract in test files (match anywhere on Contract: line)
-            local test_match=$(grep -rlE "Contract:.*\[$contract\]" "$test_dir"/*.rs 2>/dev/null | head -1)
+            local test_match=$(grep -rlE "Contract:.*\[$contract\]" "$TEST_DIR"/*.rs 2>/dev/null | head -1)
 
             if [[ -n "$test_match" ]]; then
                 local test_file=$(basename "$test_match")
@@ -876,7 +879,7 @@ EOF
 EOF
 
         # List tests with their contracts
-        for test_file in "$test_dir"/*.rs; do
+        for test_file in "$TEST_DIR"/*.rs; do
             [[ ! -f "$test_file" ]] && continue
             local basename_file=$(basename "$test_file")
 
@@ -902,7 +905,7 @@ EOF
 
 EOF
         local total=$(echo "$all_contracts" | grep -c '[a-z]' 2>/dev/null || echo 0)
-        local covered=$(grep -rhE 'Contract:' "$test_dir"/*.rs 2>/dev/null \
+        local covered=$(grep -rhE 'Contract:' "$TEST_DIR"/*.rs 2>/dev/null \
             | grep -oP '\[[a-z][a-z0-9-]*-[0-9]+\]' | tr -d '[]' | sort -u | grep -c '[a-z]' 2>/dev/null || echo 0)
         local pct=$((covered * 100 / total))
 
@@ -960,7 +963,6 @@ cmd_verify() {
 
     local total_errors=0
     local test_status="UNKNOWN"
-    local test_dir="$SCRIPT_DIR/../test/tests"
 
     # Step 1: Validate spec structure
     print_info "Running: validate (spec structure)"

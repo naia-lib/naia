@@ -102,6 +102,9 @@ cargo test --package naia-test --features e2e_debug <test_name> -- --nocapture
 
 # Quality gates
 cargo clippy --no-deps && cargo fmt -- --check
+
+# Tool development (when editing spec_tool.sh)
+./specs/spec_tool_test.sh                     # Run spec_tool.sh self-tests
 ```
 
 ## Crate Map
