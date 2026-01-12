@@ -1136,8 +1136,8 @@ EOF
                                 echo ""
                                 echo "    // Assertion Index:"
 
-                                # Extract expect_msg strings
-                                local expect_msgs=$(echo "$fn_body" | grep -oE '\.?expect_msg\("([^"\\]|\\.)*"\)' | sed 's/^\.//; s/expect_msg(//; s/)$//' | sort -u)
+                                # Extract expect_msg strings (preserve order of appearance, dedupe on first occurrence)
+                                local expect_msgs=$(echo "$fn_body" | grep -oE '\.?expect_msg\("([^"\\]|\\.)*"\)' | sed 's/^\.//; s/expect_msg(//; s/)$//' | awk '!seen[$0]++')
 
                                 if [[ -n "$expect_msgs" ]]; then
                                     echo "$expect_msgs" | while IFS= read -r msg; do
