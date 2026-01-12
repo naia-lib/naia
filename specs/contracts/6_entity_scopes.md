@@ -26,9 +26,9 @@ This spec does not define:
 - **Include(U,E)**: per-user scope inclusion filter set via `server.user_scope_mut(user_key).include(entity)`.
 - **Exclude(U,E)**: per-user scope exclusion filter set via `server.user_scope_mut(user_key).exclude(entity)`.
 
-### Diagnostics
-- **Diagnostics enabled**: a build/feature/runtime mode where Naia may emit warnings for illegal/impossible states.
-  When diagnostics are not enabled (production default), Naia must remain silent.
+### Debug mode
+- **Debug mode**: when `debug_assertions` are enabled (or equivalent feature flag), Naia MAY emit warnings for unusual but handled conditions.
+  In production (default), Naia MUST remain silent. Per `0_common.md`, tests MUST NOT assert on warning content.
 
 ---
 
@@ -65,11 +65,23 @@ If `E` is in zero rooms, then for all users `U` that are not explicitly forced i
 ## 3) Required Coupling to Ownership & Publication
 
 ### [entity-scopes-05] — Owning client is always in-scope for its client-owned entities
+
 For a client-owned entity `E` with owning client `A`:
 - `InScope(A,E)` MUST always hold while `A` is connected.
-- Publication and per-user scope filters MUST NOT remove `E` from `A`’s scope.
+- Publication and per-user scope filters MUST NOT remove `E` from `A`'s scope.
+- Room membership changes MUST NOT remove `E` from `A`'s scope.
+- `Exclude(A,E)` calls MUST be ignored for owner-owned entities (or return an error).
+
+**This is an absolute invariant:** No scoping, publication, or room operation may hide an entity from its owner while the owner is connected.
 
 (This restates the required coupling from `8_entity_ownership.md` / `9_entity_publication.md` as a scope invariant.)
+
+**Observable signals:**
+- Owning client never receives despawn for owned entity while connected
+
+**Test obligations:**
+- `entity-scopes-05.t1`: Owning client retains visibility of owned entity across all scope operations
+- `entity-scopes-05.t2`: Exclude(owner, owned_entity) has no effect or returns error
 
 ### [entity-scopes-06] — Publication can force non-owners out-of-scope
 For client-owned entities, publication state MUST be treated as an additional gate for non-owners:
@@ -97,7 +109,7 @@ When `E` despawns on a client due to leaving scope:
 ### [entity-scopes-09] — OutOfScope ⇒ ignore late replication updates for that entity
 If a client receives replication updates for an entity `E` that is currently `OutOfScope` on that client:
 - the client MUST ignore them silently in production.
-- when diagnostics are enabled, the client MAY emit a warning.
+- when Debug mode is enabled, the client MAY emit a warning.
 
 This rule exists to make the protocol tolerant to packet reordering and racey delivery.
 
@@ -148,12 +160,12 @@ These cases SHOULD NOT occur in correct usage, but behavior is defined for deter
 ### [entity-scopes-14] — Include/exclude without shared room cannot force scope
 If `Include(U,E)` is active but `SharesRoom(U,E) == false`, then `OutOfScope(U,E)` MUST hold.
 
-When diagnostics are enabled, the server MAY emit a warning indicating the include is ineffective due to room gating.
+When Debug mode is enabled, the server MAY emit a warning indicating the include is ineffective due to room gating.
 
 ### [entity-scopes-15] — Unknown entity/user references
 If the server receives (or internally attempts) a scope operation referencing an unknown entity or unknown user:
 - in production, it MUST ignore the operation silently.
-- when diagnostics are enabled, it MAY emit a warning.
+- when Debug mode is enabled, it MAY emit a warning.
 
 ---
 
@@ -177,7 +189,7 @@ If the server receives (or internally attempts) a scope operation referencing an
 - **entity-scopes-05**: Prove owning client always in-scope for its client-owned entities while connected.
 - **entity-scopes-06**: Prove Private/Unpublished forces OutOfScope for all non-owners.
 - **entity-scopes-07/08**: Prove leaving scope despawns and destroys all components including local-only.
-- **entity-scopes-09**: Prove late updates for out-of-scope entities are ignored (warn only when diagnostics enabled).
+- **entity-scopes-09**: Prove late updates for out-of-scope entities are ignored (warn only in Debug mode).
 - **entity-scopes-11**: Prove same-tick flip-flops collapse to final state; no intermediate spawn/despawn.
 - **entity-scopes-12**: Prove re-entry after ≥1 tick out-of-scope produces fresh spawn snapshot lifetime.
 - **entity-scopes-13**: Prove disconnect implies OutOfScope for that user and replication ceases.

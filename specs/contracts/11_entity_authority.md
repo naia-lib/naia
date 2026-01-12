@@ -48,9 +48,8 @@ Therefore:
 Normative safety:
 - If Naia attempts to write while `can_write = false`, it MUST panic.
 
-### Diagnostics enabled
-When diagnostics are enabled, Naia MAY emit warnings on illegal/bug states; otherwise it MUST remain silent
-in production.
+### Debug mode
+In Debug mode (`debug_assertions` enabled), Naia MAY emit warnings on unusual but handled conditions; in production it MUST remain silent. Per `0_common.md`, tests MUST NOT assert on warning content.
 
 ---
 
@@ -184,7 +183,7 @@ If an entity stops being delegated (`replication_config` changes away from `Dele
 ### [entity-authority-14] — Out-of-scope requests are ignored server-side
 If the server receives an authority request for `(U,E)` while `OutOfScope(U,E)`:
 - in production, it MUST ignore it silently
-- when diagnostics are enabled, it MAY emit a warning
+- when Debug mode are enabled, it MAY emit a warning
 
 This complements client-side `ErrNotInScope`. The system must remain safe even if invalid requests occur.
 
@@ -239,7 +238,7 @@ This spec defines semantics, not exact event names. At minimum, the event layer 
 - entity-authority-09/10: server can hold authority; server reset clears all client states
 - entity-authority-12: holder scope-loss/disconnect releases authority and unblocks others
 - entity-authority-13: delegation disable clears authority and revokes grants
-- entity-authority-14: out-of-scope requests ignored server-side (warn only in diagnostics)
+- entity-authority-14: out-of-scope requests ignored server-side (warn only in Debug mode)
 - entity-authority-15: duplicates/reordering are idempotent and lifetime-safe
 
 ---

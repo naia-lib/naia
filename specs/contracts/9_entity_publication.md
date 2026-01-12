@@ -80,11 +80,21 @@ When client-owned `E` transitions **Unpublished → Published**:
 - publication does not itself guarantee that any particular non-owner becomes in-scope.
 
 ### [entity-publication-07] — Owning client is always in-scope for its owned entities
+
 For any client-owned entity `E` with owner `A`:
-- `InScope(A,E)` MUST always hold.
-- Publication MUST NOT remove `E` from the owning client’s scope.
+- `InScope(A,E)` MUST always hold while `A` is connected.
+- Publication MUST NOT remove `E` from the owning client's scope.
+- Setting `replication_config(E)` to `Private` MUST NOT remove `E` from owner's scope.
+
+**This is an absolute invariant (restated from `6_entity_scopes.md`):** Publication/scoping MUST NOT hide an entity from its owner.
 
 (If the entity ceases to exist—e.g. it is despawned—this rule no longer applies.)
+
+**Observable signals:**
+- Owning client never receives despawn for owned entity due to publication changes
+
+**Test obligations:**
+- `entity-publication-07.t1`: Owning client retains visibility when setting entity to Private
 
 ### [entity-publication-08] — Non-owner unpublish/out-of-scope implies despawn and destroys local-only components
 If a non-owner client `C != Owner(E)` transitions to `OutOfScope(C,E)` due to publication becoming Unpublished:

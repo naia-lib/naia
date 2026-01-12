@@ -31,10 +31,40 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 **Rule:** Observability metrics MUST NOT affect replicated state correctness, authority, scope, message delivery semantics, or any other gameplay-visible contract. Metrics are observational only.
 
 **Clarifications:**
-- Metrics MAY be used by applications for UI, logging, or adaptive behavior, but Naia’s core semantics MUST remain correct regardless of whether metrics are queried.
+- Metrics MAY be used by applications for UI, logging, or adaptive behavior, but Naia's core semantics MUST remain correct regardless of whether metrics are queried.
+- Reading metrics via public API MUST NOT influence Naia's internal behavior.
+
+**Observable signals:**
+- Metric values accessible via public API
+- No change to replication/events based on metric queries
 
 **Test obligations:**
 - **observability-01.t1**: Run a representative scenario with metrics queried every tick vs never queried; externally observable replication/events MUST be identical.
+
+---
+
+### [observability-01a] — Internal measurements vs exposed metrics
+
+Naia uses internal RTT/jitter estimates for:
+- Client tick lead targeting (see `4_time_ticks_commands.md`)
+- Pacing decisions
+- Internal timeouts
+
+**Relationship to exposed metrics:**
+- Internal measurements MAY differ in precision, timing, or algorithm from exposed metrics
+- Internal measurements are for protocol behavior; exposed metrics are for monitoring
+- Internal measurement changes MUST NOT be observable via public metric APIs (beyond normal convergence)
+
+**Rule:** Exposed observability metrics are read-only snapshots. They MUST NOT be used as inputs to Naia's internal algorithms. The internal algorithms use their own measurements.
+
+**Clarification:** Tests MUST NOT assert on logs, warnings, or debug output (per `0_common.md`). Metric values are testable; log content is not.
+
+**Observable signals:**
+- (Internal measurements are not externally observable)
+- Exposed metrics are available via API
+
+**Test obligations:**
+- (Internal measurement behavior is not directly testable; covered by tick sync and lead convergence tests)
 
 ---
 

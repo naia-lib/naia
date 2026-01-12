@@ -183,10 +183,10 @@ This spec defines the required semantics; the concrete event types and delivery 
 
 ## 8) Illegal / Misuse Cases
 
-### [entity-delegation-15] — Requesting authority while out-of-scope is ignored (warn in diagnostics)
+### [entity-delegation-15] — Requesting authority while out-of-scope is ignored (warn in Debug mode)
 If a client requests authority for `E` while out-of-scope:
 - server MUST ignore the request silently in production.
-- server MAY emit a warning when diagnostics are enabled.
+- server MAY emit a warning when Debug mode are enabled.
 
 ### [entity-delegation-16] — Conflicting reconfiguration is resolved by server final state
 If configuration changes (e.g., toggling Delegated on/off) would produce conflicting intermediate states within a tick:
@@ -205,7 +205,7 @@ If configuration changes (e.g., toggling Delegated on/off) would produce conflic
 - entity-delegation-08/12: write while not allowed panics
 - entity-delegation-10: releasing allows writes until finalized
 - entity-delegation-13/14: losing scope/disconnect releases authority and unblocks others
-- entity-delegation-15: out-of-scope requests ignored (warn only in diagnostics)
+- entity-delegation-15: out-of-scope requests ignored (warn only in Debug mode)
 - entity-delegation-16: same-tick collapse yields final-only observability
 
 ---

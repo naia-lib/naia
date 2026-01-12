@@ -239,12 +239,39 @@ For a rejected attempt, the client MUST observe:
 
 ---
 
+## Reconnect semantics
+
+### [connection-28] — Reconnect is a fresh session
+
+When a client "reconnects" (disconnects and connects again):
+- This is a **fresh connection** that builds world state from a new snapshot
+- Session resumption is **out of scope** unless explicitly specified in a future spec
+- The server treats the reconnecting client as a new session
+- Any prior entity state, authority, buffered data from the previous session is discarded on the server
+
+**Implications:**
+- Client-owned entities from the previous session were despawned on disconnect (per `8_entity_ownership.md`)
+- The client receives fresh entity spawns for all in-scope entities
+- Authority state starts fresh (no carryover from previous session)
+- Pending requests/responses from previous session are not resumed
+
+**Observable signals:**
+- `ConnectEvent` on successful reconnect (same as first connect)
+- Fresh entity spawns (not updates from previous state)
+
+**Test obligations:**
+- `connection-28.t1`: Reconnecting client receives fresh entity spawns
+- `connection-28.t2`: Previous session authority does not carry over
+
+---
+
 ## Non-goals / Out of scope
 
 - The exact HTTP route(s), headers, or body format of the auth request.
 - Transport-specific wire details for how the token is conveyed.
 - Engine adapter (bevy/hecs) implementation details.
 - Retry/backoff policies for repeated connection attempts (may be defined in a future spec if needed).
+- Session resumption / state persistence across reconnects.
 
 ## Test obligations
 

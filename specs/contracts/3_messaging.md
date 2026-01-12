@@ -165,7 +165,39 @@ TickBuffered has a fixed `message_capacity`.
 ### [messaging-14] — TickBuffered discards very-late ticks
 If a message arrives for a tick that is older than the oldest tick currently retained (i.e., it would fall behind the retained window), the receiver MUST discard it.
 - Prod: discard silently
-- Debug: discard with warning
+- Debug: discard with warning (non-normative; tests MUST NOT assert on warning)
+
+**Observable signals:**
+- Message is not delivered (no handler invocation)
+- (Debug only) Warning may be emitted
+
+**Test obligations:**
+- `messaging-14.t1`: Very-late tick message is not delivered
+
+---
+
+### [messaging-15-a] — TickBuffered discards too-far-ahead ticks
+
+If a TickBuffered message arrives with tick > `current_server_tick + MAX_FUTURE_TICKS`, it MUST be dropped (no processing, no panic).
+
+**Constant:**
+- `MAX_FUTURE_TICKS = 120` (approximately 2 seconds at 60 tick/s; configurable default)
+
+**Rationale:** Prevents clients from sending messages tagged with arbitrarily far-future ticks that would cause unbounded memory growth or processing delays.
+
+**Error handling (per `0_common.md`):**
+- Prod: drop silently
+- Debug: drop with warning (non-normative)
+- MUST NOT panic (remote/untrusted input)
+
+**Observable signals:**
+- Message is not delivered (no handler invocation)
+- (Debug only) Warning may be emitted
+
+**Test obligations:**
+- `messaging-15-a.t1`: Too-far-ahead tick message is dropped silently
+- `messaging-15-a.t2`: Message at `current_tick + MAX_FUTURE_TICKS` is accepted
+- `messaging-15-a.t3`: Message at `current_tick + MAX_FUTURE_TICKS + 1` is dropped
 
 ---
 

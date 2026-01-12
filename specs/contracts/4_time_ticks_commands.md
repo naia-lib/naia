@@ -148,17 +148,46 @@ Every command sent by the client MUST be tagged with a tick value.
 The server MUST apply a given logical command at most once to authoritative simulation.
 Duplicates (retransmits, duplicates at network layer) MUST NOT cause double-application.
 
-### [commands-03] — “Arrives in time” acceptance rule
+### [commands-03] — "Arrives in time" acceptance rule
 A command tagged for tick `T` is considered on-time iff it is received by the server before the server begins processing tick `T`.
 
-- If received on-time, the server MAY apply it when processing tick `T` (exact ordering among multiple commands for the same tick is implementation-defined, but MUST be deterministic).
+- If received on-time, the server MUST apply it when processing tick `T`.
 - If received late (server has already begun or completed processing tick `T`), the server MUST ignore it.
 
-Ignored late commands are remote/untrusted input outcomes:
+Ignored late commands are remote/untrusted input outcomes (per `0_common.md`):
 - Prod: ignore silently
-- Debug: ignore with warning
+- Debug: ignore with warning (non-normative)
+- MUST NOT panic
 
-(There is no public “rejected command error” surfaced to the client; the contract is that late commands are ignored.)
+(There is no public "rejected command error" surfaced to the client; the contract is that late commands are ignored.)
+
+**Observable signals:**
+- Command handler invoked during tick `T` processing if on-time
+- No handler invocation for late commands
+
+**Test obligations:**
+- `commands-03.t1`: On-time command is processed
+- `commands-03.t2`: Late command is ignored
+
+---
+
+### [commands-03a] — Deterministic ordering for same-tick commands
+
+When multiple commands are tagged for the same tick `T`, the server MUST process them in a deterministic order:
+
+**Ordering rule:**
+1. Commands received in separate packets: process in packet receipt order (first packet received, first processed)
+2. Commands within the same packet: process in serialization order (first serialized, first processed)
+3. Commands from different clients for the same tick: process in client connection order (earlier connection first), then by receipt order within each client
+
+This ensures reproducible behavior across identical input sequences.
+
+**Observable signals:**
+- Command handlers invoked in deterministic order
+
+**Test obligations:**
+- `commands-03a.t1`: Same-tick commands processed in receipt order
+- `commands-03a.t2`: Same-packet commands processed in serialization order
 
 ### [commands-04] — Client lead targeting is the primary mechanism to avoid late commands
 The intended mechanism to ensure commands arrive on-time is client lead targeting (time-11/time-12). The server remains authoritative and will ignore late commands regardless.

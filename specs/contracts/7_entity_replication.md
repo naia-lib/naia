@@ -86,7 +86,7 @@ If the client receives any entity/component replication action referencing an en
 
 - Naia MUST ignore the action (it MUST NOT mutate world state).
 - In production, this MUST be silent.
-- When diagnostics are enabled, Naia MAY emit a warning.
+- In Debug mode, Naia MAY emit a warning.
 
 This applies to:
 - late packets from a prior lifetime
