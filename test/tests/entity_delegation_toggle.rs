@@ -207,6 +207,7 @@ fn server_owned_undelegated_has_no_authority_status_and_no_auth_events() {
 
 /// Client request_authority on non-delegated returns ErrNotDelegated
 /// Contract: [entity-delegation-01]
+/// Contract: [entity-authority-01]
 ///
 /// Given server-owned undelegated E in scope for A; when A calls request_authority(E); then the call returns ErrNotDelegated and no state/events change.
 #[test]
@@ -278,6 +279,7 @@ fn client_request_authority_on_non_delegated_returns_err_not_delegated() {
 
 /// Server authority APIs on non-delegated return ErrNotDelegated
 /// Contract: [entity-delegation-01]
+/// Contract: [entity-authority-01]
 ///
 /// Given server-owned undelegated E; when server calls give_authority/take_authority/release_authority for E; then each returns ErrNotDelegated and E remains undelegated.
 #[test]
@@ -438,7 +440,10 @@ fn enable_delegation_makes_entity_available_for_all_in_scope_clients() {
 }
 
 /// Disable delegation clears authority semantics
-/// Contract: [entity-delegation-01], [entity-delegation-16], [entity-delegation-17]
+/// Contract: [entity-delegation-01]
+/// Contract: [entity-delegation-02]
+/// Contract: [entity-delegation-16]
+/// Contract: [entity-delegation-17]
 ///
 /// Given delegated E in scope for A and B with some current authority holder; when server disables delegation on E; then E becomes server-owned undelegated and clients MUST NOT receive further authority statuses/events for E; subsequent client request_authority returns ErrNotDelegated.
 #[test]
