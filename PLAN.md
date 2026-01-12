@@ -146,22 +146,28 @@ cargo fmt -- --check
 
 ---
 
-## Test Files by Domain
+## Test Files (1:1 Spec Mapping)
 
-| Domain | Test File | Status |
-|--------|-----------|--------|
-| connection-* | `connection_auth_identity.rs` | Mostly covered |
-| entity-authority-* | `entity_authority_server_ops.rs`, `entity_authority_client_ops.rs` | 3/10 pass, 5 need API fix |
-| entity-delegation-* | `entity_delegation_toggle.rs`, `entity_migration_and_events.rs` | Covered |
-| entity-publication-* | `entity_client_owned.rs` | Covered |
-| entity-replication-* | `entities_lifetime_identity.rs` | Mostly covered |
-| entity-scopes-* | `rooms_scope_snapshot.rs`, `entity_scope_coupling.rs` | Covered |
-| messaging-* | `messaging_channels.rs`, `protocol_schema_versioning.rs` | Covered |
-| observability-* | (none yet) | 9 uncovered |
-| server-events-* | `events_world_integration.rs` | Mostly covered |
-| client-events-* | `events_world_integration.rs` | Mostly covered |
-| time-*, commands-* | `time_ticks_transport.rs` | Covered |
-| transport-* | `integration_transport_parity.rs` | Fully covered |
+Test files now map directly to spec files for instant traceability:
+
+| Spec File | Test File | Status |
+|-----------|-----------|--------|
+| `1_connection_lifecycle.md` | `01_connection_lifecycle.rs` | Mostly covered |
+| `2_transport.md` | `02_transport.rs` | Fully covered |
+| `3_messaging.md` | `03_messaging.rs` | Covered |
+| `4_time_ticks_commands.md` | `04_time_ticks_commands.rs` | Covered |
+| `5_observability_metrics.md` | `05_observability_metrics.rs` | 9 uncovered (needs harness) |
+| `6_entity_scopes.md` | `06_entity_scopes.rs` | Covered |
+| `7_entity_replication.md` | `07_entity_replication.rs` | Mostly covered |
+| `8_entity_ownership.md` | `08_entity_ownership.rs` | (via publication tests) |
+| `9_entity_publication.md` | `09_entity_publication.rs` | Covered |
+| `10_entity_delegation.md` | `10_entity_delegation.rs` | Covered |
+| `11_entity_authority.md` | `11_entity_authority.rs` | Covered |
+| `12_server_events_api.md` | `12_server_events_api.rs` | Mostly covered |
+| `13_client_events_api.md` | `13_client_events_api.rs` | Mostly covered |
+| `14_world_integration.md` | `14_world_integration.rs` | Covered |
+
+**To find tests for a contract:** Open the matching numbered test file
 
 ---
 
@@ -213,11 +219,10 @@ cargo fmt -- --check
 ./specs/spec_tool.sh coverage          # Check current state
 grep -r "todo!" test/tests/*.rs        # Find blocked tests
 
-# Working on contracts
-grep -l "entity-authority" test/tests/*.rs  # Find relevant test files
-# Read similar tests for patterns
-# Write/fix test
-cargo test --package naia-test --test <file>  # Run test file
+# Working on contracts (1:1 mapping makes this easy)
+# For entity-authority contracts → open 11_entity_authority.rs
+# For messaging contracts → open 03_messaging.rs
+cargo test --package naia-test --test 11_entity_authority  # Run test file
 
 # Debugging failing tests (enable detailed tracing)
 cargo test --package naia-test --features e2e_debug <test_name> -- --nocapture
