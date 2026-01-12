@@ -177,7 +177,7 @@ Some values are **fixed invariants** that MUST NOT be configurable:
 | `GlobalEntity` rollover behavior | Panic | Correctness over availability | `7_entity_replication.md` |
 | Tick type | u16 | Wire protocol | `4_time_ticks_commands.md` |
 | Wrap-safe half-range | 32768 | Tick ordering math | `4_time_ticks_commands.md` |
-| Request ID uniqueness scope | Per-connection | RPC semantics | `16_request_response.md` |
+| Request ID uniqueness scope | Per-connection | RPC semantics | `3_messaging.md` |
 
 These values are part of the protocol identity and/or correctness requirements. Changing them would break compatibility or violate safety invariants.
 
@@ -196,7 +196,7 @@ Some values are **configurable defaults** that MAY be overridden via configurati
 | TickBuffered `tick_buffer_capacity` | Per-channel | ChannelConfig | `3_messaging.md` |
 | `MAX_FUTURE_TICKS` | Derived from `tick_buffer_capacity - 1` | Automatic | `3_messaging.md` |
 | Tick rate | Per-protocol | SharedConfig | `4_time_ticks_commands.md` |
-| `DEFAULT_REQUEST_TIMEOUT` | 30 seconds | SharedConfig | `16_request_response.md` |
+| `DEFAULT_REQUEST_TIMEOUT` | 30 seconds | SharedConfig | `3_messaging.md` |
 
 **Compatibility rule:** When configurable values differ between client and server (where applicable), the more restrictive value MUST be used for safety, or connection MUST fail if incompatible.
 

@@ -147,21 +147,18 @@ On first successful validation attempt, the server MUST mark the token as used (
 
 A successful connection handshake MUST include a tick synchronization step. A client MUST NOT be considered "Connected" until tick sync completes.
 
-### [connection-14a] — Protocol crate identity check during handshake
+### [connection-14a] — protocol_id check during handshake
 
-The connection handshake MUST verify **protocol crate identity** (see `15_protocol_compatibility.md`) BEFORE:
-1. `ConnectEvent` is emitted on either side
-2. Entity replication begins
-3. Any messages are delivered
+The connection handshake MUST verify **`protocol_id`** (see Protocol Identity section below) as the first protocol-level check.
 
-**Ordering within handshake:**
+**Handshake ordering:**
 1. Transport connection established
-2. Protocol crate identity exchange and verification
+2. **`protocol_id` exchange and comparison** ← HARD GATE (see `connection-31`)
 3. Auth validation (if `require_auth = true`)
 4. Tick synchronization
 5. `ConnectEvent` emitted (connection ready)
 
-If protocol crate identity does not match, the server MUST reject with a protocol mismatch indication before proceeding to later handshake steps.
+If `protocol_id` does not match, the server MUST reject with `ProtocolMismatch` before proceeding to any further handshake steps.
 
 ### [connection-15] —
 
@@ -281,6 +278,150 @@ When a client "reconnects" (disconnects and connects again):
 
 ---
 
+## Protocol Identity
+
+This section defines the **protocol identity** mechanism that gates all Naia connections.
+
+### Definitions
+
+- **Protocol crate**: the shared Rust crate that defines the message/component/channel registry via `Protocol::builder()`.
+- **`protocol_id`**: a deterministic 128-bit identifier for the compiled protocol crate's wire-relevant surface.
+- **Wire-relevant surface**: any aspect of the protocol that affects encoding, decoding, or message semantics on the wire.
+
+---
+
+### [connection-29] — protocol_id definition
+
+Every protocol crate MUST compute a single `protocol_id` value that uniquely identifies its wire-relevant surface.
+
+**`protocol_id` MUST be derived from:**
+- Channel registry: channel kinds, modes, directions, and registration order
+- Message type registry: type IDs, field schemas, field order, registration order
+- Request/Response type registry: type IDs, field schemas, registration order
+- Component type registry: type IDs, field schemas, replicated field order, registration order
+- Naia wire protocol version
+
+**Stability guarantee:**
+- `protocol_id` MUST be **deterministic**: identical protocol crate source with identical dependencies MUST produce the same `protocol_id` across rebuilds.
+- `protocol_id` MUST **change** if any wire-relevant surface changes.
+- `protocol_id` MAY remain the same if only non-wire-relevant changes occur (e.g., documentation, non-replicated fields, internal refactoring).
+
+**Observable signals:**
+- `protocol_id` is queryable at runtime via protocol API
+
+**Test obligations:**
+- `connection-29.t1`: Different channel registrations produce different `protocol_id`
+- `connection-29.t2`: Different component schemas produce different `protocol_id`
+- `connection-29.t3`: Same protocol crate produces same `protocol_id` across builds
+- `connection-29.t4`: Non-wire-relevant changes do not change `protocol_id`
+
+---
+
+### [connection-30] — protocol_id wire encoding
+
+**Fixed-width encoding:**
+- `protocol_id` MUST be encoded as a **16-byte (128-bit) unsigned integer** (`u128`).
+- Wire encoding MUST use **little-endian** byte order.
+
+**Handshake exchange:**
+- Both client and server MUST send their `protocol_id` during the handshake.
+- The exchange occurs before any other protocol-level data.
+
+**Test obligations:**
+- `connection-30.t1`: `protocol_id` is encoded as 16 bytes little-endian on wire
+
+---
+
+### [connection-31] — protocol_id handshake gate
+
+**Timing:**
+Protocol identity comparison MUST occur during the handshake, BEFORE:
+1. `ConnectEvent` is emitted on either side
+2. Entity replication begins
+3. Any messages are delivered
+4. Auth validation (if `require_auth = true`)
+
+**Handshake ordering (updated from connection-14a):**
+1. Transport connection established
+2. **`protocol_id` exchange and comparison** ← HARD GATE
+3. Auth validation (if `require_auth = true`)
+4. Tick synchronization
+5. `ConnectEvent` emitted (connection ready)
+
+**Mismatch behavior:**
+If `protocol_id` values do not match:
+- Server MUST reject the connection immediately
+- Client MUST receive a **`ProtocolMismatch`** error/event (distinct from other rejection reasons)
+- Client MUST NOT emit `ConnectEvent`
+- Client MUST NOT emit `DisconnectEvent` (connection was never established)
+- The rejection MUST occur before any further handshake steps
+
+**Error classification (per `0_common.md`):**
+- Protocol mismatch is a **deployment configuration error**, not a runtime error
+- No panic occurs; connection fails with clear `ProtocolMismatch` indication
+
+**Observable signals:**
+- `RejectEvent` on client with `ProtocolMismatch` reason
+- No `ConnectEvent` on either side
+
+**Test obligations:**
+- `connection-31.t1`: Mismatched `protocol_id` causes `ProtocolMismatch` rejection
+- `connection-31.t2`: Matched `protocol_id` allows connection to proceed
+- `connection-31.t3`: `ProtocolMismatch` is distinguishable from other rejection reasons
+
+---
+
+### [connection-32] — What affects protocol_id
+
+The following aspects are **wire-relevant** and MUST affect `protocol_id`:
+
+| Aspect | Affects `protocol_id` |
+|--------|----------------------|
+| Channel count | Yes |
+| Channel kinds (type IDs) | Yes |
+| Channel modes | Yes |
+| Channel directions | Yes |
+| Channel registration order | Yes |
+| Message type count | Yes |
+| Message type IDs | Yes |
+| Message field schemas | Yes |
+| Message registration order | Yes |
+| Request/Response type count | Yes |
+| Request/Response type IDs | Yes |
+| Request/Response field schemas | Yes |
+| Component type count | Yes |
+| Component type IDs | Yes |
+| Component field schemas | Yes |
+| Replicated field order | Yes |
+| Component registration order | Yes |
+| Naia wire protocol version | Yes |
+
+**Consequence:** Any change to the above requires a new `protocol_id` and will cause existing clients to fail connection.
+
+**Test obligations:**
+- `connection-32.t1`: Each wire-relevant change produces different `protocol_id`
+
+---
+
+### [connection-33] — No partial compatibility
+
+**Strict matching:**
+- There is NO extension negotiation
+- There is NO partial compatibility mode
+- There is NO version range acceptance
+- Either `protocol_id` matches exactly, or connection is rejected
+
+**Upgrade path:**
+When protocol changes require breaking compatibility:
+- Old clients MUST be rejected by new servers
+- Old servers MUST reject new clients
+- Application layer MUST handle gradual rollout (parallel servers, feature flags, etc.)
+
+**Test obligations:**
+- `connection-33.t1`: Breaking protocol change causes `ProtocolMismatch`
+
+---
+
 ## Non-goals / Out of scope
 
 - The exact HTTP route(s), headers, or body format of the auth request.
@@ -288,7 +429,44 @@ When a client "reconnects" (disconnects and connects again):
 - Engine adapter (bevy/hecs) implementation details.
 - Retry/backoff policies for repeated connection attempts (may be defined in a future spec if needed).
 - Session resumption / state persistence across reconnects.
+- Wire format details for protocol identity exchange.
 
 ## Test obligations
 
-TODO: Define test obligations for this specification.
+Summary of test obligations from contracts above:
+
+**Authentication & Identity:**
+- `connection-06.t1`: Auth request required before transport when `require_auth = true`
+- `connection-10.t1`: Token is one-time use
+- `connection-10.t2`: Token expires after TTL
+
+**Handshake & Events:**
+- `connection-14.t1`: Tick sync completes before ConnectEvent
+- `connection-14a.t1`: `protocol_id` verified before ConnectEvent
+- `connection-15.t1`: Client emits ConnectEvent only after handshake complete
+- `connection-16.t1`: Server emits ConnectEvent only after handshake complete
+
+**Rejection:**
+- `connection-18.t1`: Missing token causes rejection when required
+- `connection-19.t1`: Rejected client emits RejectEvent, not ConnectEvent
+
+**Disconnect:**
+- `connection-21.t1`: Client DisconnectEvent only after ConnectEvent
+- `connection-22.t1`: Server DisconnectEvent only after ConnectEvent
+- `connection-23.t1`: Client-owned entities despawned on disconnect
+
+**Reconnect:**
+- `connection-28.t1`: Reconnecting client receives fresh entity spawns
+- `connection-28.t2`: Previous session authority does not carry over
+
+**Protocol Identity:**
+- `connection-29.t1`: Different channel registrations produce different `protocol_id`
+- `connection-29.t2`: Different component schemas produce different `protocol_id`
+- `connection-29.t3`: Same protocol crate produces same `protocol_id` across builds
+- `connection-29.t4`: Non-wire-relevant changes do not change `protocol_id`
+- `connection-30.t1`: `protocol_id` is encoded as 16 bytes little-endian on wire
+- `connection-31.t1`: Mismatched `protocol_id` causes `ProtocolMismatch` rejection
+- `connection-31.t2`: Matched `protocol_id` allows connection to proceed
+- `connection-31.t3`: `ProtocolMismatch` is distinguishable from other rejection reasons
+- `connection-32.t1`: Each wire-relevant change produces different `protocol_id`
+- `connection-33.t1`: Breaking protocol change causes `ProtocolMismatch`

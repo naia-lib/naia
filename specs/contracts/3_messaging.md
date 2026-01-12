@@ -54,25 +54,30 @@ If Naia violates its own declared invariants (e.g. delivers older state after ne
 
 ## Channel configuration
 
-### [messaging-04] — Protocol crate identity determines channel compatibility
+### [messaging-04] — Channel compatibility is gated by protocol_id
 
-Server and client MUST be built against the **same compiled version of the shared protocol crate** that defines the channel registry.
+Channel registry compatibility is **guaranteed** by the `protocol_id` handshake gate (see `1_connection_lifecycle.md`, Protocol Identity section).
 
-**Protocol crate identity requirement:**
-- The connection handshake MUST include a protocol crate identity value (see `15_protocol_compatibility.md`)
-- If the protocol crate identity differs between client and server, the connection MUST be rejected
+**Hard gate:**
+- If `protocol_id` does not match, the connection is rejected with `ProtocolMismatch` **before any message exchange occurs**
+- No runtime channel compatibility checks are required after `protocol_id` is verified
 
-**Consequence of identity match:**
-- Since the protocol crate identity MUST match, ChannelKind mapping MAY be derived from registration order in that crate
-- Same ChannelKind refers to the same logical channel (guaranteed by identical protocol crate)
-- ChannelMode and ChannelDirection are guaranteed compatible (same compiled protocol)
+**Consequence of protocol_id match:**
+- Since `protocol_id` MUST match, ChannelKind mapping is guaranteed valid (derived from identical registration order)
+- Same ChannelKind refers to the same logical channel
+- ChannelMode and ChannelDirection are guaranteed identical (part of `protocol_id` derivation)
+
+**No runtime compatibility checks:**
+- There is NO runtime comparison of channel configurations
+- There is NO negotiation of channel modes or directions
+- All channel compatibility is enforced at connection time via `protocol_id`
 
 **Observable signals:**
-- Connection rejected with protocol mismatch error if identities differ
+- Connection rejected with `ProtocolMismatch` if `protocol_id` differs (before any messaging)
 
 **Test obligations:**
-- `messaging-04.t1`: Mismatched protocol crate identity causes connection rejection
-- `messaging-04.t2`: Matched protocol crate allows successful connection
+- `messaging-04.t1`: Mismatched `protocol_id` rejects before any message exchange
+- `messaging-04.t2`: Matched `protocol_id` guarantees channel compatibility
 
 ### [messaging-05] — ChannelDirection is enforced at send-time
 If local code attempts to send a message on a channel that is not configured for that direction, Naia MUST return `Result::Err`. (user-initiated)
@@ -309,15 +314,228 @@ If the cap would be exceeded:
 
 ---
 
-## Test obligations (TODO)
+## Request/Response (RPC) Semantics
 
-- messaging-06: UnorderedUnreliable can reorder/drop/duplicate; receiver does not assume otherwise.
-- messaging-07: SequencedUnreliable never rolls back after newer state is observed.
-- messaging-08: UnorderedReliable dedupes and eventually delivers while connected.
-- messaging-09: OrderedReliable delivers in send order despite network reorder.
-- messaging-10: SequencedReliable exposes only latest; never rolls back.
-- messaging-11..14: TickBuffered grouping, order, capacity eviction, very-late tick discard.
-- messaging-15: Unreliable oversize send returns Err (no fragmenting).
-- messaging-16: Reliable fragmentation works up to 2^16 fragments; oversize returns Err.
-- messaging-18..20: EntityProperty buffering obeys TTL + cap; never leaks across lifetimes.
-- messaging-17: Wrap-around does not break any above guarantees.
+This section defines the semantics for Naia's request/response messaging pattern, commonly used for RPC-style communication.
+
+### RPC Definitions
+
+- **Request**: a message sent with the expectation of a matching Response.
+- **Response**: a message sent in reply to a specific Request.
+- **Request ID**: a unique identifier pairing a Request with its Response.
+- **Pending request**: a Request that has been sent but not yet matched with a Response or canceled.
+- **RPC channel**: a channel configured to support request/response semantics.
+
+---
+
+### [messaging-21] — Request ID uniqueness
+
+Each Request MUST have a unique Request ID within the scope of:
+- The sending endpoint (client or server)
+- The lifetime of the connection
+
+Request IDs MUST NOT be reused for different logical requests within the same connection. Implementation MAY use monotonic counters, UUIDs, or other unique identifiers.
+
+**Observable signals:**
+- Request ID is available on Request and Response messages
+
+**Test obligations:**
+- `messaging-21.t1`: Multiple requests have distinct IDs
+- `messaging-21.t2`: Response correctly matches Request by ID
+
+---
+
+### [messaging-22] — Response matching
+
+A Response MUST be matched to its Request by Request ID:
+- The receiver MUST pair the Response with the pending Request having the same ID
+- If no pending Request exists for the ID, the Response MUST be ignored (per `0_common.md` remote input rule)
+- Each Request MUST receive at most one Response (first valid Response wins)
+
+**Observable signals:**
+- Response handler invoked with matching Request context
+
+**Test obligations:**
+- `messaging-22.t1`: Response is delivered to correct Request handler
+- `messaging-22.t2`: Orphan Response (no matching Request) is dropped silently
+
+---
+
+### [messaging-23] — Per-type timeout semantics
+
+Each Request type defined in the shared protocol crate MAY specify a timeout duration:
+- Timeout MAY be specified as compile-time metadata or static configuration per Request type
+- If a Request type does not specify a timeout, a **default timeout** applies
+
+**Default timeout:**
+`DEFAULT_REQUEST_TIMEOUT = 30 seconds` (configurable default in SharedConfig)
+
+**Timeout behavior:**
+- If a Response is not received within the applicable timeout, the Request MUST be canceled locally
+- Timeout is measured using Naia's monotonic time source (see `0_common.md`)
+- On timeout, the requester MUST receive a **timeout result/error** distinguishable from other errors
+- Late Responses for timed-out Requests MUST be ignored
+
+**Override hierarchy:**
+1. Per-Request-type timeout (if specified in protocol crate)
+2. Default timeout (if no per-type timeout specified)
+3. Infinite wait (only if explicitly configured; not recommended)
+
+**Observable signals:**
+- Timeout handler/result invoked after timeout elapses
+- Timeout error is distinguishable from disconnect error and other errors
+
+**Test obligations:**
+- `messaging-23.t1`: Request times out if no Response within timeout
+- `messaging-23.t2`: Late Response after timeout is ignored
+- `messaging-23.t3`: Per-type timeout overrides default timeout
+
+---
+
+### [messaging-24] — Disconnect cancels pending requests
+
+When a connection disconnects:
+- All pending Requests on that connection MUST be canceled
+- Pending Request handlers MUST be invoked with a disconnect/error indication
+- No Responses from disconnected sessions may be delivered
+
+This ensures cleanup and prevents resource leaks.
+
+**Observable signals:**
+- All pending Request handlers invoked with error on disconnect
+
+**Test obligations:**
+- `messaging-24.t1`: Pending requests canceled on disconnect
+- `messaging-24.t2`: Request handlers receive error indication
+
+---
+
+### [messaging-25] — Request/Response transport and deduplication
+
+**Transport channel:**
+Requests and Responses are transported over a **reliable, ordered channel** (OrderedReliable mode per messaging-09).
+
+**Deduplication semantics:**
+Naia MUST deduplicate Requests by `(connection, request_id)`:
+- The server handler MUST be invoked **at most once** per `(connection, request_id)` tuple
+- Duplicate Request deliveries (due to retransmit) MUST be ignored after the first is processed
+- Duplicate Request deliveries MUST NOT cause duplicate handler invocations
+
+**Response handling for duplicates:**
+- If Naia receives a duplicate Request after the original was already processed:
+  - The duplicate MUST be ignored (no handler invocation)
+  - Naia does NOT cache and resend the original response (stateless deduplication)
+- If the original Response was lost, the requester will timeout (messaging-23)
+
+**Rationale:** Stateless deduplication (ignore duplicates, don't cache responses) is simpler and sufficient because:
+1. Reliable channel ensures Response delivery once processed
+2. Timeout handles genuinely lost responses
+3. Avoids unbounded response caching
+
+**Observable signals:**
+- Request handler invoked exactly once per logical Request
+- Response handler invoked exactly once per logical Response
+- E2E: Duplicate Request injection does not trigger multiple handler events
+
+**Test obligations:**
+- `messaging-25.t1`: Duplicate Request delivery does not duplicate processing
+- `messaging-25.t2`: Duplicate Response delivery does not duplicate handling
+
+---
+
+### [messaging-26] — RPC ordering relative to other messages
+
+Request/Response ordering follows the underlying channel's ordering guarantees:
+- On OrderedReliable: Requests and Responses maintain send order
+- On UnorderedReliable: Requests and Responses may arrive out of order relative to each other and to other messages
+- On SequencedReliable: Latest-wins semantics apply
+
+Request/Response ordering is independent of:
+- Entity replication (no guaranteed ordering between RPC and replication)
+- Other channel traffic (independent channels have independent ordering)
+
+**Observable signals:**
+- Message delivery order per channel semantics
+
+**Test obligations:**
+- `messaging-26.t1`: Ordered channel maintains Request/Response order
+- `messaging-26.t2`: RPC and replication are independently ordered
+
+---
+
+### [messaging-27] — Request without Response (fire-and-forget)
+
+If a Request is sent without registering a Response handler:
+- The Response (if any) MUST be dropped
+- This is valid usage for "fire-and-forget" patterns
+- No timeout applies (request is not tracked as pending)
+
+This is distinct from a Message (non-RPC); Requests always carry an ID even if unused.
+
+**Observable signals:**
+- Response is dropped (not an error)
+
+**Test obligations:**
+- `messaging-27.t1`: Fire-and-forget Request without Response handler works
+
+---
+
+### RPC Error Handling
+
+Per `0_common.md`:
+- Invalid Request ID from remote: drop silently (remote input)
+- Timeout: invoke handler with error (expected condition)
+- Disconnect: invoke handler with error (expected condition)
+- Internal invariant violation (e.g., duplicate pending ID): panic (framework bug)
+
+---
+
+## Test obligations
+
+Summary of test obligations from contracts above:
+
+**Channel Modes:**
+- `messaging-06.t1`: UnorderedUnreliable can reorder/drop/duplicate; receiver tolerates
+- `messaging-07.t1`: SequencedUnreliable never rolls back after newer state observed
+- `messaging-08.t1`: UnorderedReliable dedupes and eventually delivers while connected
+- `messaging-09.t1`: OrderedReliable delivers in send order despite network reorder
+- `messaging-10.t1`: SequencedReliable exposes only latest; never rolls back
+
+**TickBuffered:**
+- `messaging-11.t1`: TickBuffered is Client→Server only
+- `messaging-12.t1`: TickBuffered groups messages by tick and exposes in order
+- `messaging-13.t1`: TickBuffered capacity eviction drops oldest ticks
+- `messaging-14.t1`: Very-late tick message is not delivered
+- `messaging-15-a.t1`: Too-far-ahead tick message is dropped silently
+- `messaging-15-a.t2`: Message at `current_tick + MAX_FUTURE_TICKS` is accepted
+- `messaging-15-a.t3`: Message at `current_tick + MAX_FUTURE_TICKS + 1` is dropped
+
+**Fragmentation:**
+- `messaging-15.t1`: Unreliable oversize send returns Err (no fragmenting)
+- `messaging-16.t1`: Reliable fragmentation works up to 2^16 fragments
+- `messaging-16.t2`: Reliable oversize beyond bound returns Err
+
+**Wrap-around:**
+- `messaging-17.t1`: Wrap-around does not break ordering or sequencing contracts
+
+**EntityProperty:**
+- `messaging-18.t1`: EntityProperty received before spawn is applied after spawn
+- `messaging-18.t2`: EntityProperty for despawned entity is never applied
+- `messaging-19.t1`: Buffered EntityProperty dropped after TTL expires
+- `messaging-20.t1`: Buffer cap enforced with oldest-first eviction
+
+**Request/Response (RPC):**
+- `messaging-21.t1`: Multiple requests have distinct IDs
+- `messaging-21.t2`: Response correctly matches Request by ID
+- `messaging-22.t1`: Response is delivered to correct Request handler
+- `messaging-22.t2`: Orphan Response is dropped silently
+- `messaging-23.t1`: Request times out if no Response within timeout
+- `messaging-23.t2`: Late Response after timeout is ignored
+- `messaging-23.t3`: Per-type timeout overrides default timeout
+- `messaging-24.t1`: Pending requests canceled on disconnect
+- `messaging-24.t2`: Request handlers receive error indication
+- `messaging-25.t1`: Duplicate Request delivery does not duplicate processing
+- `messaging-25.t2`: Duplicate Response delivery does not duplicate handling
+- `messaging-26.t1`: Ordered channel maintains Request/Response order
+- `messaging-26.t2`: RPC and replication are independently ordered
+- `messaging-27.t1`: Fire-and-forget Request without Response handler works
