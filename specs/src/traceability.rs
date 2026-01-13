@@ -5,7 +5,7 @@ use chrono::Utc;
 use regex::Regex;
 use crate::util::{print_header, print_success, basename};
 
-pub fn run_traceability(root: &Path, output: Option<String>, silent: bool) -> anyhow::Result<()> {
+pub fn run_traceability(root: &Path, output: Option<String>, silent: bool, deterministic: bool) -> anyhow::Result<()> {
     let output_file = output.unwrap_or_else(|| {
         root.join("specs/generated/TRACEABILITY.md")
             .to_string_lossy()
@@ -23,7 +23,7 @@ pub fn run_traceability(root: &Path, output: Option<String>, silent: bool) -> an
     let mut all_contracts = Vec::new();
     if registry_file.exists() {
         let content = fs::read_to_string(&registry_file)?;
-        let id_re = Regex::new(r"`([a-z-]+-[0-9]+[a-z]*)`").unwrap();
+        let id_re = Regex::new(r"`([a-z-]+-[0-9]+[a-z-]*)`").unwrap();
         for cap in id_re.captures_iter(&content) {
             all_contracts.push(cap[1].to_string());
         }
@@ -110,7 +110,11 @@ pub fn run_traceability(root: &Path, output: Option<String>, silent: bool) -> an
     }
 
     let mut out = String::new();
-    let now = Utc::now().format("%Y-%m-%d %H:%M UTC");
+    let now = if deterministic {
+        "1970-01-01 00:00 UTC".to_string()
+    } else {
+        Utc::now().format("%Y-%m-%d %H:%M UTC").to_string()
+    };
 
     out.push_str("# Contract Traceability Matrix\n\n");
     out.push_str(&format!("**Generated:** {}\n\n", now));

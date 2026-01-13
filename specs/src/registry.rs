@@ -18,7 +18,7 @@ fn get_title(path: &PathBuf) -> String {
     basename(path)
 }
 
-pub fn run_registry(root: &PathBuf, output: Option<String>) -> anyhow::Result<()> {
+pub fn run_registry(root: &PathBuf, output: Option<String>, deterministic: bool) -> anyhow::Result<()> {
     let output_file = output.unwrap_or_else(|| {
         root.join("specs/generated/CONTRACT_REGISTRY.md")
             .to_string_lossy()
@@ -63,12 +63,12 @@ pub fn run_registry(root: &PathBuf, output: Option<String>) -> anyhow::Result<()
     let mut total_contracts = 0;
     let mut contracts_by_spec: Vec<(String, Vec<String>)> = Vec::new();
 
-    let re_p1 = Regex::new(r"### \[[a-z-]+-[0-9]+[a-z]*\]").unwrap();
-    let re_id_p1 = Regex::new(r"\[([a-z-]+-[0-9]+[a-z]*)\]").unwrap();
+    let re_p1 = Regex::new(r"### \[[a-z-]+-[0-9]+[a-z-]*\]").unwrap();
+    let re_id_p1 = Regex::new(r"\[([a-z-]+-[0-9]+[a-z-]*)\]").unwrap();
 
-    let re_p2 = Regex::new(r"^### [a-z-]+-[0-9]+[a-z]*").unwrap();
-    let re_p3 = Regex::new(r"> [a-z-]+-[0-9]+[a-z]* \(MUST").unwrap();
-    let re_p4 = Regex::new(r"^\*\*([a-z-]+-[0-9]+[a-z]*)\*\*:").unwrap();
+    let re_p2 = Regex::new(r"^### [a-z-]+-[0-9]+[a-z-]*").unwrap();
+    let re_p3 = Regex::new(r"> [a-z-]+-[0-9]+[a-z-]* \(MUST").unwrap();
+    let re_p4 = Regex::new(r"^\*\*([a-z-]+-[0-9]+[a-z-]*)\*\*:").unwrap();
 
     for file in &spec_files {
         let fname = basename(file);
@@ -116,7 +116,11 @@ pub fn run_registry(root: &PathBuf, output: Option<String>) -> anyhow::Result<()
     }
 
     let mut out = String::new();
-    let now = Utc::now().format("%Y-%m-%d %H:%M UTC");
+    let now = if deterministic {
+        "1970-01-01 00:00 UTC".to_string()
+    } else {
+        Utc::now().format("%Y-%m-%d %H:%M UTC").to_string()
+    };
     
     out.push_str("# Contract ID Registry\n\n");
     out.push_str(&format!("**Generated:** {}\n", now));

@@ -19,6 +19,9 @@ fn find_workspace_root() -> std::path::PathBuf {
 #[command(disable_help_flag = true)] // We handle help manually
 #[command(disable_help_subcommand = true)]
 struct Cli {
+    #[arg(long, global = true)]
+    deterministic: bool,
+
     #[command(subcommand)]
     command: Option<Commands>, // Option to handle no-args case
 }
@@ -221,11 +224,11 @@ fn main() {
         Some(Commands::Packet { contract_id, full_tests, out }) => {
              let root = find_workspace_root();
              let index = Index::build(root).expect("Failed to build index");
-             packet::generate_packet(&index, contract_id, *full_tests, out.clone()).expect("Failed to generate packet");
+             packet::generate_packet(&index, contract_id, *full_tests, out.clone(), cli.deterministic).expect("Failed to generate packet");
         }
         Some(Commands::Registry { output }) => {
              let root = find_workspace_root();
-             naia_specs::registry::run_registry(&root, output.clone()).expect("Failed to run registry");
+             naia_specs::registry::run_registry(&root, output.clone(), cli.deterministic).expect("Failed to run registry");
         }
         Some(Commands::Coverage) => {
              let root = find_workspace_root();
@@ -274,11 +277,11 @@ fn main() {
         }
         Some(Commands::Traceability { output }) => {
              let root = find_workspace_root();
-             naia_specs::traceability::run_traceability(&root, output.clone(), false).expect("Failed to run traceability");
+             naia_specs::traceability::run_traceability(&root, output.clone(), false, cli.deterministic).expect("Failed to run traceability");
         }
         Some(Commands::Verify { contract, strict_orphans, strict_coverage, full_report, write_report }) => {
              let root = find_workspace_root();
-             match naia_specs::verify::run_verify(&root, contract.clone(), *strict_orphans, *strict_coverage, *full_report, write_report.clone()) {
+             match naia_specs::verify::run_verify(&root, contract.clone(), *strict_orphans, *strict_coverage, *full_report, write_report.clone(), cli.deterministic) {
                  Ok(errors) if errors > 0 => std::process::exit(errors as i32),
                  Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); },
                  _ => {}
@@ -286,7 +289,7 @@ fn main() {
         }
         Some(Commands::Bundle { output, .. }) => {
              let root = find_workspace_root();
-             naia_specs::bundle::run_bundle(&root, output.clone()).expect("Failed to run bundle");
+             naia_specs::bundle::run_bundle(&root, output.clone(), cli.deterministic).expect("Failed to run bundle");
         }
         Some(Commands::GenTest { contract_id }) => {
              let root = find_workspace_root();

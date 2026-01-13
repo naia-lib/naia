@@ -3,7 +3,7 @@ use std::fs;
 use chrono::Utc;
 use crate::util::{print_header, print_info, print_success, basename};
 
-pub fn run_bundle(root: &Path, output: Option<String>) -> anyhow::Result<()> {
+pub fn run_bundle(root: &Path, output: Option<String>, deterministic: bool) -> anyhow::Result<()> {
     let output_path = output.unwrap_or_else(|| "specs/generated/NAIA_SPECS.md".to_string());
     let output_file = root.join(&output_path);
 
@@ -42,9 +42,15 @@ pub fn run_bundle(root: &Path, output: Option<String>) -> anyhow::Result<()> {
     let mut content = String::new();
 
     // Header
+    let timestamp = if deterministic {
+        "1970-01-01 00:00 UTC".to_string()
+    } else {
+        Utc::now().format("%Y-%m-%d %H:%M UTC").to_string()
+    };
+
     content.push_str("# Naia Specifications Bundle\n\n");
     content.push_str("This document contains all normative specifications for the Naia networking engine, concatenated into a single reference.\n\n");
-    content.push_str(&format!("**Generated:** {}\n", Utc::now().format("%Y-%m-%d %H:%M UTC")));
+    content.push_str(&format!("**Generated:** {}\n", timestamp));
     content.push_str(&format!("**Spec Count:** {}\n\n", spec_files.len()));
     content.push_str("---\n\n");
     content.push_str("## Table of Contents\n\n");

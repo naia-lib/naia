@@ -16,16 +16,16 @@ This directory contains **normative specifications** that define the expected be
   - `GAP_ANALYSIS.md` - Coverage gaps
 
 - **`spec_template.md`** - Template for new specifications
-- **`spec_tool.sh`** - Tooling for spec management
+- **`spec_tool` CLI** - Tooling for spec management (Rust binary, run with `cargo run -p naia-specs -- <cmd>`)
 
 ## Common Commands
 
 ```bash
-./specs/spec_tool.sh coverage      # Check test coverage
-./specs/spec_tool.sh lint          # Validate spec format
-./specs/spec_tool.sh bundle        # Regenerate NAIA_SPECS.md
-./specs/spec_tool.sh registry      # Regenerate CONTRACT_REGISTRY.md
-./specs/spec_tool.sh traceability  # Regenerate test mapping
+cargo run -p naia-specs -- coverage      # Check test coverage
+cargo run -p naia-specs -- lint          # Validate spec format
+cargo run -p naia-specs -- bundle        # Regenerate NAIA_SPECS.md
+cargo run -p naia-specs -- registry      # Regenerate CONTRACT_REGISTRY.md
+cargo run -p naia-specs -- traceability  # Regenerate test mapping
 ```
 
 ## Downstream Chain

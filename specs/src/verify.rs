@@ -11,7 +11,8 @@ pub fn run_verify(
     strict_orphans: bool, 
     strict_coverage: bool,
     _full_report: bool,
-    write_report: Option<String>
+    write_report: Option<String>,
+    deterministic: bool
 ) -> anyhow::Result<usize> {
     print_header("Naia Verification Pipeline");
 
@@ -104,7 +105,7 @@ pub fn run_verify(
     // Step 5: Traceability
     println!("");
     print_info("Running: traceability (regenerating matrix)");
-    traceability::run_traceability(root, None, true)?;
+    traceability::run_traceability(root, None, true, deterministic)?;
 
     // Step 6: Final summary
     println!("");
@@ -157,8 +158,13 @@ pub fn run_verify(
         use chrono::Utc;
         let overall = if total_errors == 0 { "PASS" } else { "FAIL" };
         let mut report = String::new();
+        let timestamp = if deterministic {
+            "1970-01-01 00:00 UTC".to_string()
+        } else {
+             Utc::now().format("%Y-%m-%d %H:%M UTC").to_string()
+        };
         report.push_str("# Naia Verification Report\n\n");
-        report.push_str(&format!("**Generated:** {}\n\n", Utc::now().format("%Y-%m-%d %H:%M UTC")));
+        report.push_str(&format!("**Generated:** {}\n\n", timestamp));
         report.push_str("## Summary\n\n");
         report.push_str(&format!("- **Overall:** {}\n", overall));
         report.push_str(&format!("- **Tests:** {}\n", test_status));

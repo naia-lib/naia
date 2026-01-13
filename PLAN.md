@@ -155,8 +155,8 @@ These are likely real implementation bugs in the delegation/authority state mach
 
 ```bash
 # Start of session - pick one approach:
-./specs/spec_tool.sh verify                              # Full health check (5-10 min)
-./specs/spec_tool.sh verify --contract <id>              # Fast: target specific contract
+`cargo run -p naia-specs -- verify`                              # Full health check (5-10 min)
+`cargo run -p naia-specs -- verify --contract <id>`              # Fast: target specific contract
 cargo test --package naia-test 2>&1 | grep FAILED       # Quick: see only failures
 
 # Fix approach
@@ -166,17 +166,17 @@ cargo test --package naia-test 2>&1 | grep FAILED       # Quick: see only failur
 4. For assertion failures → logic bug
 
 # Verify fix (fast iteration)
-./specs/spec_tool.sh verify --contract <id>              # Fast: targeted verification
+`cargo run -p naia-specs -- verify --contract <id>`              # Fast: targeted verification
 cargo test --package naia-test --test <file>             # Alternative: single file
-./specs/spec_tool.sh verify                              # Full: check no regressions
+`cargo run -p naia-specs -- verify`                              # Full: check no regressions
 
 # Phase 3: Adequacy Review (optional - for contract verification)
-./specs/spec_tool.sh verify --contract <id>              # Run tests
-./specs/spec_tool.sh packet <id>                         # Generate review packet
+`cargo run -p naia-specs -- verify --contract <id>`              # Run tests
+`cargo run -p naia-specs -- packet <id>`                         # Generate review packet
 # Paste packet into LLM for adequacy review
 # Map spec guarantee/preconditions/postconditions to test assertion indices
 # Add expect_msg labels for deterministic review as needed
-./specs/spec_tool.sh verify --contract <id>              # Verify again after fixes
+`cargo run -p naia-specs -- verify --contract <id>`              # Verify again after fixes
 
 # Update docs
 # Update PLAN.md current state numbers
@@ -210,7 +210,7 @@ Many "failures" are test structure problems, not implementation bugs. Fix test s
 [x] Write tests for original 185 contracts
 [x] Eliminate ALL todo!() macros
 [x] Write tests for 51 new spec contracts (236/236)
-[x] Verify: spec_tool.sh coverage shows 236/236
+[x] Verify: `cargo run -p naia-specs -- coverage` shows 236/236
 [x] Verify: grep -r "todo!" returns nothing
 [x] Verify: cargo test --package naia-test --no-run succeeds
 [x] **PHASE A COMPLETE** ✅
@@ -237,7 +237,7 @@ Many "failures" are test structure problems, not implementation bugs. Fix test s
 
 ```bash
 # Start of session
-./specs/spec_tool.sh coverage          # Check contracts with tests (target: 236/236)
+`cargo run -p naia-specs -- coverage`          # Check contracts with tests (target: 236/236)
 grep -r "todo!" test/tests/*.rs        # Find incomplete tests (target: 0)
 
 # Phase A work: Write compiling tests for uncovered contracts
@@ -246,13 +246,13 @@ vim test/tests/04_time_ticks_commands.rs
 cargo test --package naia-test --test 04_time_ticks_commands --no-run  # Must compile
 
 # Verify coverage improved
-./specs/spec_tool.sh coverage
+`cargo run -p naia-specs -- coverage`
 
 # Debugging (if needed)
 cargo test --package naia-test --features e2e_debug <test_name> -- --nocapture
 
 # End of session
-./specs/spec_tool.sh coverage          # Verify annotation coverage
+`cargo run -p naia-specs -- coverage`          # Verify annotation coverage
 grep -r "todo!" test/tests/*.rs        # Verify no incomplete tests
 ```
 
@@ -294,7 +294,7 @@ grep -r "todo!" test/tests/*.rs        # Verify no incomplete tests
   - Command sequence with `MAX_COMMANDS_PER_TICK_PER_CONNECTION = 64`
   - Error taxonomy with `ProtocolMismatch` error type
   - Metrics testability with inequality-style assertions
-- **Tool fix:** Updated `spec_tool.sh` to support alphanumeric contract suffixes
+- **Tool fix:** Updated Rust CLI to support alphanumeric contract suffixes
 - **Status:** Completed Phase A (236/236 contracts covered, 0 todos)
 
 ### Previous Sessions

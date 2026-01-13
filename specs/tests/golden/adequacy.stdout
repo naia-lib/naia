@@ -1,47 +1,21 @@
 
 [0;34m═══════════════════════════════════════════════════════════════[0m
-[0;34m  Contract Adequacy Analysis[0m
+  Contract Adequacy Analysis
 [0;34m═══════════════════════════════════════════════════════════════[0m
-
-[0;34mℹ[0m Analyzing contracts and tests...
   Found 236 contracts in specs
 
-
 [0;34m═══════════════════════════════════════════════════════════════[0m
-[0;34m  Adequacy To-Do Queue (Ranked)[0m
+  Adequacy To-Do Queue (Ranked)
 [0;34m═══════════════════════════════════════════════════════════════[0m
-
-[0;31m━━━ Priority 1: Missing Tests (4 contracts) ━━━[0m
-
-  ❌ connection-09
-     Spec: 1_connection_lifecycle.md
-     Status: No test functions annotated
-     Next: Write test with /// Contract: [connection-09] annotation
-
-  ❌ connection-11
-     Spec: 1_connection_lifecycle.md
-     Status: No test functions annotated
-     Next: Write test with /// Contract: [connection-11] annotation
-
-  ❌ entity-authority-01
-     Spec: 11_entity_authority.md
-     Status: No test functions annotated
-     Next: Write test with /// Contract: [entity-authority-01] annotation
-
-  ❌ entity-authority-13
-     Spec: 11_entity_authority.md
-     Status: No test functions annotated
-     Next: Write test with /// Contract: [entity-authority-13] annotation
-
 [1;33m━━━ Priority 2: Missing Obligation Mappings (1 contracts) ━━━[0m
 
   ⚠️  messaging-04
      Spec: 3_messaging.md
      Tests: 01_connection_lifecycle.rs, 03_messaging.rs
-     Missing obligations: t1
+     Missing obligations: t1, t2
      Next: ./spec_tool.sh packet messaging-04
 
-[1;33m━━━ Priority 3: Missing Labels (223 contracts) ━━━[0m
+[1;33m━━━ Priority 3: Missing Labels (227 contracts) ━━━[0m
 
   ⚠️  client-events-00
      Spec: 13_client_events_api.md
@@ -325,11 +299,23 @@
      Status: Tests exist but no labeled assertions
      Next: Add spec_expect("connection-08: ...") to tests
 
+  ⚠️  connection-09
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-09: ...") to tests
+
   ⚠️  connection-10
      Spec: 1_connection_lifecycle.md
      Tests: 01_connection_lifecycle.rs
      Status: Tests exist but no labeled assertions
      Next: Add spec_expect("connection-10: ...") to tests
+
+  ⚠️  connection-11
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-11: ...") to tests
 
   ⚠️  connection-12
      Spec: 1_connection_lifecycle.md
@@ -469,6 +455,12 @@
      Status: Tests exist but no labeled assertions
      Next: Add spec_expect("connection-33: ...") to tests
 
+  ⚠️  entity-authority-01
+     Spec: 11_entity_authority.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-01: ...") to tests
+
   ⚠️  entity-authority-02
      Spec: 11_entity_authority.md
      Tests: 11_entity_authority.rs
@@ -534,6 +526,12 @@
      Tests: 11_entity_authority.rs
      Status: Tests exist but no labeled assertions
      Next: Add spec_expect("entity-authority-12: ...") to tests
+
+  ⚠️  entity-authority-13
+     Spec: 11_entity_authority.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-13: ...") to tests
 
   ⚠️  entity-authority-14
      Spec: 11_entity_authority.md
@@ -1389,9 +1387,9 @@
 
 Summary:
   Total contracts:             236
-  Missing tests:               4
+  Missing tests:               0
   Missing obligation mappings: 1
-  Missing labels:              223
+  Missing labels:              227
   Adequacy met:                8
 
 [1;33m⚠[0m Adequacy issues found (use --strict to fail on issues)

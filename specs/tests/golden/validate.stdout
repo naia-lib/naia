@@ -1,0 +1,34 @@
+
+[0;34m═══════════════════════════════════════════════════════════════[0m
+[0;34m  Full Specification Validation[0m
+[0;34m═══════════════════════════════════════════════════════════════[0m
+
+Running lint...
+
+[0;34m═══════════════════════════════════════════════════════════════[0m
+[0;34m  Linting Specifications[0m
+[0;34m═══════════════════════════════════════════════════════════════[0m
+
+Checking title format...
+Checking contract ID formats...
+Checking cross-reference formats...
+Checking terminology consistency...
+Checking for test obligations sections...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[0;32m✓[0m All checks passed!
+
+Running check-refs...
+
+[0;34m═══════════════════════════════════════════════════════════════[0m
+[0;34m  Checking Cross-References[0m
+[0;34m═══════════════════════════════════════════════════════════════[0m
+
+Validating cross-references in 15 files...
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[0;32m✓[0m All cross-references valid!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[0;32m✓[0m All validation checks passed!

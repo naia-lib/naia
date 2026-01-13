@@ -3,7 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 use crate::index::Index;
 
-pub fn generate_packet(index: &Index, contract_id: &str, full_tests: bool, output: Option<String>) -> Result<()> {
+pub fn generate_packet(index: &Index, contract_id: &str, full_tests: bool, output: Option<String>, deterministic: bool) -> Result<()> {
     // 1. Find contract
     let contract = index.contracts.get(contract_id)
         .context(format!("Contract [{}] not found", contract_id))?;
@@ -56,7 +56,11 @@ pub fn generate_packet(index: &Index, contract_id: &str, full_tests: bool, outpu
     println!("Writing packet to: {:?}", output_path);
 
     // 5. Generate Content
-    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M UTC");
+    let timestamp = if deterministic {
+        "1970-01-01 00:00 UTC".to_string()
+    } else {
+        chrono::Utc::now().format("%Y-%m-%d %H:%M UTC").to_string()
+    };
     let mut md = String::new();
     
     md.push_str(&format!("# Contract Review Packet: {}\n\n", contract_id));
