@@ -136,9 +136,7 @@ fn basic_connect_disconnect_lifecycle() {
 }
 
 /// Invalid credentials are rejected
-/// Contract: [connection-02]
-/// Contract: [connection-09]
-/// Contract: [connection-11]
+/// Contract: [connection-02], [connection-09], [connection-11]
 ///
 /// Given `require_auth = true` and an auth handler rejecting bad credentials;
 /// when A connects with invalid auth; then server emits an auth event but no connect event,

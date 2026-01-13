@@ -40,6 +40,9 @@ Non-normative note:
 ## 2) Core Model
 
 ### [entity-delegation-01] — Delegation applies only to server-owned delegated entities
+
+**Obligations:**
+- **t1**: Delegation applies only to server-owned delegated entities works correctly
 Authority delegation semantics apply only when:
 - the entity is server-owned, and
 - `replication_config(E) == Some(Delegated)`.
@@ -47,6 +50,9 @@ Authority delegation semantics apply only when:
 If an entity is not delegated, this spec’s authority arbitration does not apply.
 
 ### [entity-delegation-02] — Single-writer invariant
+
+**Obligations:**
+- **t1**: Single-writer invariant works correctly
 For any delegated entity `E`, at any time:
 - at most one client MAY be the authority holder for `E`.
 - the server MAY reset/revoke authority at any time (see `11_entity_authority.spec.md`).
@@ -57,6 +63,9 @@ Client-visible implication:
 - exactly one client can have `EntityAuthStatus::Granted` at a time for a given delegated entity.
 
 ### [entity-delegation-03] — Authority is scoped: only in-scope clients participate
+
+**Obligations:**
+- **t1**: Authority is scoped: only in-scope clients participate works correctly
 Only clients for which `InScope(U,E)` holds MAY request authority for `E`.
 
 If a client is out-of-scope for `E`, it MUST NOT request authority for `E` and MUST NOT be granted authority for `E`.
@@ -66,12 +75,18 @@ If a client is out-of-scope for `E`, it MUST NOT request authority for `E` and M
 ## 3) Entering Delegation (Migration)
 
 ### [entity-delegation-04] — Client-owned → server-owned delegated migration requires Published
+
+**Obligations:**
+- **t1**: Client-owned → server-owned delegated migration requires Published works correctly
 A client-owned entity MUST be Published/`Public` before it may migrate into a server-owned delegated entity.
 
 (Ownership/publication constraints are defined in `08_entity_ownership.spec.md` and `09_entity_publication.spec.md`;
 this rule is restated here as a delegation precondition.)
 
 ### [entity-delegation-05] — Migration grants authority to previous owner
+
+**Obligations:**
+- **t1**: Migration grants authority to previous owner works correctly
 When a client-owned, Published entity `E` migrates into a server-owned delegated entity:
 - ownership transfers to the server (per `08_entity_ownership.spec.md`).
 - the previous owner client MUST immediately become the authority holder.
@@ -87,6 +102,9 @@ Rationale:
 ## 4) Authority Arbitration (Request/Grant/Deny/Release)
 
 ### [entity-delegation-06] — First request wins
+
+**Obligations:**
+- **t1**: First request wins works correctly
 If `E` is delegated and currently has no client authority holder (i.e., authority is `Available`):
 - the first in-scope client to request authority MUST be granted authority.
 - while a client holds authority, no other client may be granted authority until it is released or reset.
@@ -102,6 +120,9 @@ Normative:
   - A client MUST call `request_authority()` again while `Available` to obtain authority.
 
 ### [entity-delegation-07] — Meaning of Denied
+
+**Obligations:**
+- **t1**: Meaning of Denied works correctly
 For a client `C` and delegated entity `E`:
 - `EntityAuthStatus(C,E) == Denied` MUST mean: authority is currently held by another client OR by the server.
 - A client in `Denied` status MUST remain denied until authority is released or reset by the holder or the server,
@@ -110,11 +131,17 @@ For a client `C` and delegated entity `E`:
 This is not a “request rejection” outcome; it is a “currently unavailable” outcome.
 
 ### [entity-delegation-08] — Requested means pending; no writes allowed
+
+**Obligations:**
+- **t1**: Requested means pending; no writes allowed works correctly
 When a client requests authority and is in `Requested`:
 - the client MAY mutate locally (prediction/local prep) but MUST NOT write replicated updates.
 - if Naia would attempt to write while in `Requested`, it MUST panic.
 
 ### [entity-delegation-09] — Granted means writes allowed; single writer enforced
+
+**Obligations:**
+- **t1**: Granted means writes allowed; single writer enforced works correctly
 When a client is in `Granted` for delegated entity `E`:
   - that client MAY write replicated updates for `E`.
   - all other clients MUST be in `Denied` for `E` (or `Available` only if not tracking the entity’s status explicitly).
@@ -123,12 +150,18 @@ When a client is in `Granted` for delegated entity `E`:
   - If the server needs to override, it MUST first reset/revoke authority (`entity-authority-10`), optionally become the holder (`entity-authority-09`), and then replicate its authoritative state.
 
 ### [entity-delegation-10] — Releasing means writes may still occur until release finalizes
+
+**Obligations:**
+- **t1**: Releasing means writes may still occur until release finalizes works correctly
 When a client enters `Releasing`:
 - the client MAY continue to write replicated updates until the release is finalized,
   after which it MUST become `Available`.
 - other clients MUST remain `Denied` until the release finalizes and authority becomes `Available`.
 
 ### [entity-delegation-11] — Release transitions authority back to Available
+
+**Obligations:**
+- **t1**: Release transitions authority back to Available works correctly
 If the authority holder releases authority (or the server releases/resets it):
 - the authority state MUST become `Available`.
 - all clients that were `Denied` due to another holder MUST transition to `Available`.
@@ -138,6 +171,9 @@ If the authority holder releases authority (or the server releases/resets it):
 ## 5) Client Safety (Panic Contracts)
 
 ### [entity-delegation-12] — Client must never write without permission
+
+**Obligations:**
+- **t1**: Client must never write without permission
 If Naia would enqueue/serialize/send a replication write for a delegated entity `E` from a client that is not permitted
 to write (`EntityAuthStatus != Granted/Releasing`):
 - Naia MUST panic.
@@ -149,6 +185,9 @@ This is a hard invariant: Naia framework controls writing and must enforce this 
 ## 6) Scope/Disconnect Interactions
 
 ### [entity-delegation-13] — Losing scope ends client authority
+
+**Obligations:**
+- **t1**: Losing scope ends client authority works correctly
 If a client that holds authority for `E` becomes out-of-scope for `E`:
 - authority MUST be released/reset by the server.
 - other in-scope clients MUST transition to `Available` (subject to first-request wins on new requests).
@@ -157,6 +196,9 @@ Cross-link:
 - Scope transitions and despawn semantics are defined in `06_entity_scopes.spec.md`.
 
 ### [entity-delegation-14] — Disconnect releases authority
+
+**Obligations:**
+- **t1**: Disconnect releases authority works correctly
 If the authority-holding client disconnects:
 - the server MUST release/reset authority for `E`.
 - other in-scope clients MUST transition to `Available`.
@@ -169,6 +211,9 @@ This rule concerns only delegated server-owned entities.
 ## 7) Observability (Events & Queryability)
 
 ### [entity-delegation-17] — Delegation observability
+
+**Obligations:**
+- **t1**: Delegation observability works correctly
 
 Delegation MUST be observable through:
 - `replication_config(E) == Some(Delegated)` (server + client observable)
@@ -184,11 +229,17 @@ This spec defines the required semantics; the concrete event types and delivery 
 ## 8) Illegal / Misuse Cases
 
 ### [entity-delegation-15] — Requesting authority while out-of-scope is ignored (warn in Debug mode)
+
+**Obligations:**
+- **t1**: Requesting authority while out-of-scope is ignored (warn in Debug mode) works correctly
 If a client requests authority for `E` while out-of-scope:
 - server MUST ignore the request silently in production.
 - server MAY emit a warning when Debug mode are enabled.
 
 ### [entity-delegation-16] — Conflicting reconfiguration is resolved by server final state
+
+**Obligations:**
+- **t1**: Conflicting reconfiguration is resolved by server final state works correctly
 If configuration changes (e.g., toggling Delegated on/off) would produce conflicting intermediate states within a tick:
 - the server MUST collapse to the final resolved state per tick, consistent with `07_entity_replication.spec.md` and
   `06_entity_scopes.spec.md`.

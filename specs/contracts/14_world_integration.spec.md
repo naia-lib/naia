@@ -45,6 +45,9 @@ Related specs:
 
 ### [world-integration-01] — World mirrors Naia view
 
+**Obligations:**
+- **t1**: World mirrors Naia view works correctly
+
 For any participant `P` (server or client), if an External World is integrated, it MUST converge to exactly the Naia World View for `P` as mutations are drained and applied.
 
 - Entities present in Naia view MUST exist in External World after applying all mutations through that tick.
@@ -60,6 +63,9 @@ Test obligations:
 ---
 
 ### [world-integration-02] — Mutation ordering is deterministic per tick
+
+**Obligations:**
+- **t1**: Mutation ordering is deterministic per tick works correctly
 
 Within a single tick and for a single entity `E`, the integration adapter MUST apply mutations in a deterministic, valid order:
 
@@ -85,6 +91,9 @@ Test obligations:
 
 ### [world-integration-03] — Exactly-once delivery per drain
 
+**Obligations:**
+- **t1**: Exactly-once delivery per drain works correctly
+
 For a given participant `P`, each discrete world mutation produced by Naia MUST be consumable exactly once by the integration adapter.
 
 - If the adapter drains mutations/events for a tick, and then drains again without advancing tick, the second drain MUST be empty for that mutation set.
@@ -101,6 +110,9 @@ Test obligations:
 
 ### [world-integration-04] — Scope changes map to spawn/despawn in External World
 
+**Obligations:**
+- **t1**: Scope changes map to spawn/despawn in External World works correctly
+
 On clients, scope governs presence. The integration adapter MUST reflect scope transitions as:
 
 - When an entity `E` transitions OutOfScope → InScope for client `C`, the External World for `C` MUST receive a Spawn(E) (or equivalent "create entity") and initial component inserts sufficient to form a coherent snapshot. (Snapshot semantics are defined in `06_entity_scopes.spec.md` and `07_entity_replication.spec.md`.)
@@ -113,6 +125,9 @@ Test obligations:
 ---
 
 ### [world-integration-05] — Join-in-progress and reconnect yield coherent External World
+
+**Obligations:**
+- **t1**: Join-in-progress and reconnect yield coherent External World works correctly
 
 If a client joins late or reconnects, the External World MUST be reconstructed purely from current server state and current scope, not from stale client-local leftovers.
 
@@ -137,6 +152,9 @@ Test obligations:
 
 ### [world-integration-06] — Stable identity mapping at the integration boundary
 
+**Obligations:**
+- **t1**: Stable identity mapping at the integration boundary works correctly
+
 The integration adapter MUST treat Naia’s entity identity as stable for the lifetime the entity is present in the Naia World View.
 
 - If Naia indicates the “same entity” across ticks (same logical identity), the External World MUST keep the same external handle for that entity (or maintain an injective mapping).
@@ -152,6 +170,9 @@ Test obligations:
 
 ### [world-integration-07] — Component type correctness
 
+**Obligations:**
+- **t1**: Component type correctness works correctly
+
 For every component mutation surfaced to the adapter, the component type MUST be correct and match the protocol/schema.
 
 - The adapter MUST NOT be asked to apply a component mutation of a different type than declared.
@@ -164,6 +185,9 @@ Test obligations:
 ---
 
 ### [world-integration-08] — Misuse safety: no panics, defined failures
+
+**Obligations:**
+- **t1**: Misuse safety: no panics, defined failures works correctly
 
 The integration boundary MUST be robust to reasonable misuse:
 
@@ -181,6 +205,9 @@ Test obligations:
 ---
 
 ### [world-integration-09] — Zero-leak lifecycle cleanup
+
+**Obligations:**
+- **t1**: Zero-leak lifecycle cleanup works correctly
 
 Across repeated connect/disconnect cycles and scope churn, the integration adapter MUST allow External World to reach a clean empty state when Naia’s view is empty.
 

@@ -2,14 +2,14 @@ use std::path::PathBuf;
 use std::fs;
 // use colored::*; // Not needed directly if using util
 use regex::Regex;
-use crate::util::{print_header, print_warning, print_success, basename};
+use crate::util::{print_header, print_warning, print_success, print_error, basename};
 
 // Removed local implementations of print_*, basename
 
 pub fn run_lint(root: &PathBuf) -> anyhow::Result<usize> {
     print_header("Linting Specifications");
 
-    let issues: usize = 0;
+    let mut issues: usize = 0;
     let mut warnings: usize = 0;
 
     let contracts_dir = root.join("specs/contracts");
@@ -166,6 +166,61 @@ pub fn run_lint(root: &PathBuf) -> anyhow::Result<usize> {
         if !found {
             print_warning(&format!("{}: Missing '## Test obligations' section", basename(file)));
             warnings += 1;
+        }
+    }
+
+    // Check 6: Policy B - Every contract must have Obligations with at least t1
+    println!("Checking Policy B (every contract needs Obligations with t1)...");
+    let contract_heading_re = Regex::new(r"^###\s+\[([a-z][a-z0-9-]*-[0-9]+(?:-[a-z]+|[a-z]*))\]\s+—").unwrap();
+    let obligations_heading_re = Regex::new(r"^\*\*Obligations:\*\*").unwrap();
+    let obligation_t1_re = Regex::new(r"^-\s+\*\*t1\*\*:").unwrap();
+
+    for file in &spec_files {
+        let content = fs::read_to_string(file)?;
+        let lines: Vec<&str> = content.lines().collect();
+
+        let mut i = 0;
+        while i < lines.len() {
+            // Look for contract heading
+            if let Some(caps) = contract_heading_re.captures(lines[i]) {
+                let contract_id = caps.get(1).unwrap().as_str();
+
+                // Search forward for Obligations section in this contract
+                let mut found_obligations = false;
+                let mut found_t1 = false;
+                let mut j = i + 1;
+
+                while j < lines.len() {
+                    let line = lines[j];
+
+                    // Stop if we hit the next contract or major section
+                    if line.starts_with("###") || line.starts_with("## ") {
+                        break;
+                    }
+
+                    // Check for Obligations heading
+                    if obligations_heading_re.is_match(line) {
+                        found_obligations = true;
+                    }
+
+                    // Check for t1 obligation
+                    if found_obligations && obligation_t1_re.is_match(line) {
+                        found_t1 = true;
+                        break;
+                    }
+
+                    j += 1;
+                }
+
+                if !found_obligations {
+                    print_error(&format!("{}: Contract [{}] missing **Obligations:** section", basename(file), contract_id));
+                    issues += 1;
+                } else if !found_t1 {
+                    print_error(&format!("{}: Contract [{}] missing **t1** obligation", basename(file), contract_id));
+                    issues += 1;
+                }
+            }
+            i += 1;
         }
     }
 

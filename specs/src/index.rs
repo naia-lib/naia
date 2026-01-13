@@ -47,8 +47,8 @@ impl Index {
     }
 
     fn scan_specs(&mut self) -> Result<()> {
-        let _contract_id_re = Regex::new(r"[a-z][a-z0-9-]*-[0-9]+[a-z]*").unwrap();
-        let contract_def_re = Regex::new(r"^###\s+\[([a-z][a-z0-9-]*-[0-9]+[a-z]*)\]").unwrap();
+        let _contract_id_re = Regex::new(r"[a-z][a-z0-9-]*-[0-9]+(?:-[a-z]+|[a-z]*)").unwrap();
+        let contract_def_re = Regex::new(r"^###\s+\[([a-z][a-z0-9-]*-[0-9]+(?:-[a-z]+|[a-z]*))\]").unwrap();
         let obligations_header_re = Regex::new(r"^\*\*Obligations:\*\*").unwrap();
         let obligation_item_re = Regex::new(r"^\-\s+\*\*(t[0-9]+)\*\*:").unwrap();
 
@@ -161,7 +161,7 @@ impl Index {
     }
 
     fn scan_tests(&mut self) -> Result<()> {
-        let bracketed_re = Regex::new(r"\[([a-z][a-z0-9-]*-[0-9]+[a-z]*)\]").unwrap();
+        let bracketed_re = Regex::new(r"\[([a-z][a-z0-9-]*-[0-9]+(?:-[a-z]+|[a-z]*))\]").unwrap();
         let annotation_re = Regex::new(r"///\s*Contract:\s*(.+)").unwrap();
         let label_re = Regex::new(r#"(?:spec_expect|expect_msg)\(\s*"([^"]+)"#).unwrap();
         let fn_re = Regex::new(r"^\s*(?:(?:pub|async|unsafe|extern)\s+)*fn\s+([a-z_][a-z0-9_]*)\s*").unwrap();

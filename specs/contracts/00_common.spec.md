@@ -30,6 +30,9 @@ This section defines the **canonical error handling rules** for all Naia specifi
 
 ### [common-01] — User-initiated misuse returns Result::Err
 
+**Obligations:**
+- **t1**: User-initiated misuse returns Result::Err works correctly
+
 When an error is caused by **local application code** or **local configuration** at the Naia API layer, Naia MUST return `Result::Err` from the initiating API.
 
 Examples:
@@ -48,6 +51,9 @@ This applies when the **caller can reasonably check preconditions** before calli
 ---
 
 ### [common-02] — Remote/untrusted input MUST NOT panic
+
+**Obligations:**
+- **t1**: Remote/untrusted input MUST NOT panic
 
 When an error is caused by **remote input** or **network behavior** (malformed payload, reordering, duplicates, stale ticks, unresolved entity references, late arrivals, spam), Naia MUST NOT panic.
 
@@ -74,6 +80,9 @@ Examples:
 
 ### [common-02a] — Protocol mismatch is a deployment error
 
+**Obligations:**
+- **t1**: Protocol mismatch is a deployment error works correctly
+
 When `protocol_id` does not match between client and server (see `01_connection_lifecycle.spec.md`):
 - Connection MUST be rejected with `ProtocolMismatch` error/event
 - Client MUST receive distinguishable `ProtocolMismatch` indication
@@ -84,6 +93,9 @@ When `protocol_id` does not match between client and server (see `01_connection_
 ---
 
 ### [common-03] — Framework invariant violations MUST panic
+
+**Obligations:**
+- **t1**: Framework invariant violations MUST panic
 
 If Naia violates an invariant stated in its specifications (a condition that should be unreachable in correct implementations), Naia MUST panic.
 
@@ -102,6 +114,9 @@ Examples:
 
 ### [common-04] — Warnings are debug-only and non-normative
 
+**Obligations:**
+- **t1**: Warnings are debug-only and non-normative works correctly
+
 In Debug mode (when `debug_assertions` are enabled or equivalent feature flag), Naia MAY emit warnings for unusual but handled conditions.
 
 **Rules:**
@@ -115,6 +130,9 @@ In Debug mode (when `debug_assertions` are enabled or equivalent feature flag), 
 ## 2) Determinism Requirements
 
 ### [common-05] — Determinism under deterministic inputs
+
+**Obligations:**
+- **t1**: Determinism under deterministic inputs works correctly
 
 If all of the following are deterministic:
 - Time Provider (test clock)
@@ -132,6 +150,9 @@ This enables reproducible testing.
 ---
 
 ### [common-06] — Per-tick determinism rule
+
+**Obligations:**
+- **t1**: Per-tick determinism rule works correctly
 
 Within a single server tick, if multiple operations could occur in any order, Naia MUST define a deterministic resolution:
 
@@ -152,6 +173,9 @@ Within a single server tick, if multiple operations could occur in any order, Na
 
 ### [common-07] — Tests MUST NOT assert on logs
 
+**Obligations:**
+- **t1**: Tests MUST NOT assert on logs
+
 Tests MUST NOT assert on:
 - Log message content
 - Log message presence
@@ -163,6 +187,9 @@ If a spec requires observable behavior, it MUST define an event, API return valu
 ---
 
 ### [common-08] — Test obligation template
+
+**Obligations:**
+- **t1**: Test obligation template works correctly
 
 Every contract SHOULD have test obligations in this format:
 
@@ -177,6 +204,9 @@ Test names SHOULD follow the pattern `<contract-id>.t<N>` for traceability.
 ---
 
 ### [common-09] — Observable signals subsection
+
+**Obligations:**
+- **t1**: Observable signals subsection works correctly
 
 Every contract that defines testable behavior SHOULD include:
 
@@ -200,6 +230,9 @@ If behavior is intentionally not externally observable (internal optimization, s
 
 ### [common-10] — Fixed invariants are locked
 
+**Obligations:**
+- **t1**: Fixed invariants are locked works correctly
+
 Some values are **fixed invariants** that MUST NOT be configurable:
 
 | Invariant | Value | Rationale | Spec |
@@ -218,6 +251,9 @@ These values are part of the protocol identity and/or correctness requirements. 
 ---
 
 ### [common-11] — Configurable defaults
+
+**Obligations:**
+- **t1**: Configurable defaults works correctly
 
 Some values are **configurable defaults** that MAY be overridden via configuration:
 
@@ -238,6 +274,9 @@ Some values are **configurable defaults** that MAY be overridden via configurati
 
 ### [common-11a] — New constants start as invariants
 
+**Obligations:**
+- **t1**: New constants start as invariants works correctly
+
 Any **new constant** introduced by this spec suite MUST be written as an **invariant initially** (with exact value documented).
 
 **Policy:**
@@ -253,6 +292,9 @@ Any **new constant** introduced by this spec suite MUST be written as an **invar
 ---
 
 ### [common-12a] — Test tolerance constants
+
+**Obligations:**
+- **t1**: Test tolerance constants works correctly
 
 These constants define acceptable tolerances for E2E test assertions:
 
@@ -274,6 +316,9 @@ These are test-only values and do not affect runtime behavior.
 
 ### [common-12] — Internal measurements vs exposed metrics
 
+**Obligations:**
+- **t1**: Internal measurements vs exposed metrics works correctly
+
 Naia uses internal measurements (RTT, jitter, bandwidth) for:
 - Client tick lead targeting
 - Pacing decisions
@@ -286,6 +331,9 @@ Naia uses internal measurements (RTT, jitter, bandwidth) for:
 ---
 
 ### [common-13] — Metrics are non-normative for gameplay
+
+**Obligations:**
+- **t1**: Metrics are non-normative for gameplay works correctly
 
 Observability metrics (RTT, throughput, etc.) MUST NOT affect:
 - Replicated state correctness
@@ -300,6 +348,9 @@ Tests SHOULD NOT depend on exact metric values for correctness testing. Metric t
 ## 6) Connection Semantics
 
 ### [common-14] — Reconnect is fresh session
+
+**Obligations:**
+- **t1**: Reconnect is fresh session works correctly
 
 When a client "reconnects" (disconnects and connects again):
 - This is a **fresh connection** that builds world state from a new snapshot

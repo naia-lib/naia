@@ -38,14 +38,23 @@ Normative keywords: MUST, MUST NOT, MAY, SHOULD.
 ## Global error-handling policy
 
 ### [messaging-01] — User-initiated errors are Results
+
+**Obligations:**
+- **t1**: User-initiated errors are Results works correctly
 When an error is caused by local application code or local configuration (e.g. invalid channel configuration, oversize payload send), Naia MUST return `Result::Err` from the initiating API rather than panicking.
 
 ### [messaging-02] — Remote/untrusted input MUST NOT panic
+
+**Obligations:**
+- **t1**: Remote/untrusted input MUST NOT panic
 When an error is caused by remote input or the network (malformed payload, reorder, duplicates, stale ticks, unresolved entity references, spam), Naia MUST NOT panic.
 - In Prod: drop silently
 - In Debug: drop and emit a warning (exact text not specified)
 
 ### [messaging-03] — Framework invariant violations MUST panic
+
+**Obligations:**
+- **t1**: Framework invariant violations MUST panic
 If Naia violates its own declared invariants (e.g. delivers older state after newer on a sequenced channel, attempts internal send exceeding declared bounds), Naia MUST panic.
 
 (These conditions are considered Naia bugs and are expected to be unreachable in correct implementations.)
@@ -80,6 +89,9 @@ Channel registry compatibility is **guaranteed** by the `protocol_id` handshake 
 - **t2**: Matched `protocol_id` guarantees channel compatibility (no runtime checks needed)
 
 ### [messaging-05] — ChannelDirection is enforced at send-time
+
+**Obligations:**
+- **t1**: ChannelDirection is enforced at send-time works correctly
 If local code attempts to send a message on a channel that is not configured for that direction, Naia MUST return `Result::Err`. (user-initiated)
 
 ---
@@ -102,6 +114,9 @@ This table defines the observable application-level contract.
 ## UnorderedUnreliable
 
 ### [messaging-06] — Best-effort, no ordering, duplicates allowed
+
+**Obligations:**
+- **t1**: Best-effort, no ordering, duplicates allowed works correctly
 UnorderedUnreliable:
 - MAY drop messages
 - MAY deliver messages out of send order
@@ -112,6 +127,9 @@ UnorderedUnreliable:
 ## SequencedUnreliable
 
 ### [messaging-07] — Best-effort, “latest wins”, no rollback
+
+**Obligations:**
+- **t1**: Best-effort, “latest wins”, no rollback works correctly
 SequencedUnreliable:
 - MAY drop messages
 - MAY deliver out of send order
@@ -126,6 +144,9 @@ Duplicates MAY occur (unreliable), and MUST NOT cause rollback.
 ## UnorderedReliable
 
 ### [messaging-08] — Reliable delivery, deduped, unordered
+
+**Obligations:**
+- **t1**: Reliable delivery, deduped, unordered works correctly
 UnorderedReliable:
 - MUST ensure eventual delivery while the connection remains active
 - MUST dedupe so each message is observed at most once
@@ -136,6 +157,9 @@ UnorderedReliable:
 ## OrderedReliable
 
 ### [messaging-09] — Reliable + strict send-order delivery
+
+**Obligations:**
+- **t1**: Reliable + strict send-order delivery works correctly
 OrderedReliable:
 - MUST ensure eventual delivery while connected
 - MUST dedupe so each message is observed at most once
@@ -147,6 +171,9 @@ OrderedReliable:
 ## SequencedReliable
 
 ### [messaging-10] — Reliable + “latest wins” + no rollback
+
+**Obligations:**
+- **t1**: Reliable + “latest wins” + no rollback works correctly
 SequencedReliable is intended for “current-state streams”.
 
 SequencedReliable:
@@ -164,10 +191,16 @@ SequencedReliable:
 TickBuffered is a standalone ChannelMode with TickBufferSettings.
 
 ### [messaging-11] — TickBuffered is Client→Server only
+
+**Obligations:**
+- **t1**: TickBuffered is Client→Server only works correctly
 TickBuffered channels MUST be configurable only for Client→Server direction.
 If configured for any other direction, Naia MUST return `Result::Err`. (user-initiated)
 
 ### [messaging-12] — TickBuffered groups messages by tick and exposes ticks in order
+
+**Obligations:**
+- **t1**: TickBuffered groups messages by tick and exposes ticks in order works correctly
 TickBuffered:
 - Each message is associated with a Tick.
 - The receiver MUST buffer messages grouped by Tick.
@@ -175,6 +208,9 @@ TickBuffered:
 - A tick MAY have zero, one, or many messages.
 
 ### [messaging-13] — TickBuffered capacity and eviction
+
+**Obligations:**
+- **t1**: TickBuffered capacity and eviction works correctly
 TickBuffered has a configurable `tick_buffer_capacity` (number of ticks that can be buffered).
 - The receiver MUST NOT retain messages for more than `tick_buffer_capacity` distinct ticks.
 - If adding a message for a new tick would exceed capacity, the receiver MUST evict the **oldest buffered tick groups first** (oldest ticks, in wrap-safe order) until within capacity.
@@ -183,6 +219,9 @@ TickBuffered has a configurable `tick_buffer_capacity` (number of ticks that can
 **Eviction policy:** Always evict oldest tick first (FIFO by tick order).
 
 ### [messaging-14] — TickBuffered discards very-late ticks
+
+**Obligations:**
+- **t1**: TickBuffered discards very-late ticks works correctly
 If a message arrives for a tick that is older than the oldest tick currently retained (i.e., it would fall behind the retained window), the receiver MUST discard it.
 - Prod: discard silently
 - Debug: discard with warning (non-normative; tests MUST NOT assert on warning)
@@ -197,6 +236,11 @@ If a message arrives for a tick that is older than the oldest tick currently ret
 ---
 
 ### [messaging-15-a] — TickBuffered discards too-far-ahead ticks
+
+**Obligations:**
+- **t1**: TickBuffered discards too-far-ahead ticks works correctly
+- **t2**: Message at boundary (current_tick + MAX_FUTURE_TICKS) is accepted
+- **t3**: Message beyond boundary (current_tick + MAX_FUTURE_TICKS + 1) is dropped
 
 If a TickBuffered message arrives with tick > `current_server_tick + MAX_FUTURE_TICKS`, it MUST be dropped (no processing, no panic).
 
@@ -230,10 +274,16 @@ If a TickBuffered message arrives with tick > `current_server_tick + MAX_FUTURE_
 Naia defines a maximum packet payload size `MTU_SIZE_BYTES` at the transport boundary.
 
 ### [messaging-15] — Unreliable channels MUST NOT fragment
+
+**Obligations:**
+- **t1**: Unreliable channels MUST NOT fragment
 For UnorderedUnreliable and SequencedUnreliable:
 - If a message payload would require fragmentation, Naia MUST return `Result::Err` from the send call. (user-initiated)
 
 ### [messaging-16] — Reliable channels MAY fragment up to a hard bound
+
+**Obligations:**
+- **t1**: Reliable channels MAY fragment up to a hard bound works correctly
 For UnorderedReliable / OrderedReliable / SequencedReliable:
 - Naia MAY fragment a message across multiple packets.
 - Maximum fragments per message is a fixed bound:
@@ -250,6 +300,9 @@ For UnorderedReliable / OrderedReliable / SequencedReliable:
 Tick and (where applicable) channel indices/sequence numbers wrap and must be compared using wrap-safe logic. Naia provides explicit wrapping helpers in shared code.
 
 ### [messaging-17] — Wrap-around MUST NOT break ordering or sequencing contracts
+
+**Obligations:**
+- **t1**: Wrap-around MUST NOT break ordering or sequencing contracts
 All ordering/sequence comparisons (OrderedReliable ordering, Sequenced* “newer than” checks, TickBuffered tick ordering) MUST be correct across wrap-around.
 
 ---
@@ -259,6 +312,9 @@ All ordering/sequence comparisons (OrderedReliable ordering, Sequenced* “newer
 Messages may contain EntityProperty values which refer to entities that may or may not currently exist in the receiver's active entity lifetime.
 
 ### [messaging-18] — EntityProperty resolution policy: buffer until mapped
+
+**Obligations:**
+- **t1**: EntityProperty resolution policy: buffer until mapped works correctly
 
 A message that contains an EntityProperty MUST NOT be applied to an entity outside its current active lifetime.
 
@@ -279,6 +335,9 @@ If the entity mapping is not yet known on receipt, the client MUST buffer the En
 - `messaging-18.t2`: EntityProperty for despawned entity is never applied
 
 ### [messaging-19] — EntityProperty resolution TTL (bounded buffering by time)
+
+**Obligations:**
+- **t1**: EntityProperty resolution TTL (bounded buffering by time) works correctly
 Naia MUST enforce a TTL on buffered EntityProperty messages:
 
 `ENTITY_PROPERTY_RESOLUTION_TTL = 60 seconds` (configurable default)
@@ -296,6 +355,9 @@ Naia MUST enforce a TTL on buffered EntityProperty messages:
 - `messaging-19.t1`: Buffered EntityProperty dropped after TTL expires
 
 ### [messaging-20] — EntityProperty buffering hard cap
+
+**Obligations:**
+- **t1**: EntityProperty buffering hard cap works correctly
 In addition to TTL, Naia MUST enforce a hard cap to prevent unbounded memory growth:
 
 - `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_CONNECTION = 4096`
@@ -330,6 +392,9 @@ This section defines the semantics for Naia's request/response messaging pattern
 
 ### [messaging-21] — Request ID uniqueness
 
+**Obligations:**
+- **t1**: Request ID uniqueness works correctly
+
 Each Request MUST have a unique Request ID within the scope of:
 - The sending endpoint (client or server)
 - The lifetime of the connection
@@ -347,6 +412,9 @@ Request IDs MUST NOT be reused for different logical requests within the same co
 
 ### [messaging-22] — Response matching
 
+**Obligations:**
+- **t1**: Response matching works correctly
+
 A Response MUST be matched to its Request by Request ID:
 - The receiver MUST pair the Response with the pending Request having the same ID
 - If no pending Request exists for the ID, the Response MUST be ignored (per `00_common.spec.md` remote input rule)
@@ -362,6 +430,9 @@ A Response MUST be matched to its Request by Request ID:
 ---
 
 ### [messaging-23] — Per-type timeout semantics
+
+**Obligations:**
+- **t1**: Per-type timeout semantics works correctly
 
 Each Request type defined in the shared protocol crate MAY specify a timeout duration:
 - Timeout MAY be specified as compile-time metadata or static configuration per Request type
@@ -394,6 +465,9 @@ Each Request type defined in the shared protocol crate MAY specify a timeout dur
 
 ### [messaging-24] — Disconnect cancels pending requests
 
+**Obligations:**
+- **t1**: Disconnect cancels pending requests works correctly
+
 When a connection disconnects:
 - All pending Requests on that connection MUST be canceled
 - Pending Request handlers MUST be invoked with a disconnect/error indication
@@ -411,6 +485,9 @@ This ensures cleanup and prevents resource leaks.
 ---
 
 ### [messaging-25] — Request/Response transport and deduplication
+
+**Obligations:**
+- **t1**: Request/Response transport and deduplication works correctly
 
 **Transport channel:**
 Requests and Responses are transported over a **reliable, ordered channel** (OrderedReliable mode per messaging-09).
@@ -445,6 +522,9 @@ Naia MUST deduplicate Requests by `(connection, request_id)`:
 
 ### [messaging-26] — RPC ordering relative to other messages
 
+**Obligations:**
+- **t1**: RPC ordering relative to other messages works correctly
+
 Request/Response ordering follows the underlying channel's ordering guarantees:
 - On OrderedReliable: Requests and Responses maintain send order
 - On UnorderedReliable: Requests and Responses may arrive out of order relative to each other and to other messages
@@ -464,6 +544,9 @@ Request/Response ordering is independent of:
 ---
 
 ### [messaging-27] — Request without Response (fire-and-forget)
+
+**Obligations:**
+- **t1**: Request without Response (fire-and-forget) works correctly
 
 If a Request is sent without registering a Response handler:
 - The Response (if any) MUST be dropped

@@ -37,14 +37,23 @@ This spec standardizes the server loop boundary as:
 The *names* above reflect the current API. The **semantics** below are the contract.
 
 ### [server-events-00] — Receive step is ingestion only
+
+**Obligations:**
+- **t1**: Receive step is ingestion only works correctly
 - The Receive step MUST only ingest packets into an internal buffer.
 - The Receive step MUST NOT advance tick, mutate the world, or produce observable events directly.
 
 ### [server-events-01] — Process step is the only event-production boundary
+
+**Obligations:**
+- **t1**: Process step is the only event-production boundary works correctly
 - New events MUST become pending/observable only as a result of the Process step.
 - If no Process step occurs, drains MUST NOT “discover” new events.
 
 ### [server-events-02] — Drains are pure read+remove
+
+**Obligations:**
+- **t1**: Drains are pure read+remove works correctly
 - `take_world_events()` and `take_tick_events()` MUST be pure drains:
   - MUST NOT receive packets
   - MUST NOT process packets
@@ -56,6 +65,9 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ## Contracts
 
 ### [server-events-03] — Drain operations are destructive and idempotent (no replay without new Process step)
+
+**Obligations:**
+- **t1**: Drain operations are destructive and idempotent (no replay without new Process step) works correctly
 **Rule**
 - Each drain call MUST remove the returned events from the pending buffer.
 - Repeating the same drain call again **without any intervening Process step that produced new pending events** MUST return empty.
@@ -71,6 +83,9 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ---
 
 ### [server-events-04] — Event types are partitioned; no cross-contamination
+
+**Obligations:**
+- **t1**: Event types are partitioned; no cross-contamination works correctly
 **Rule**
 - World mutation events MUST NOT appear in message/request streams.
 - Message/request streams MUST NOT appear in world mutation streams.
@@ -82,6 +97,9 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ---
 
 ### [server-events-05] — Auth/connect/disconnect ordering is stable and exactly-once per session transition
+
+**Obligations:**
+- **t1**: Auth/connect/disconnect ordering is stable and exactly-once per session transition works correctly
 **Rule**
 - For each connection attempt when auth is enabled:
   - exactly one auth decision event MUST be exposed
@@ -99,6 +117,9 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ---
 
 ### [server-events-06] — Disconnect cleanup is consistent with scope + ownership contracts
+
+**Obligations:**
+- **t1**: Disconnect cleanup is consistent with scope + ownership contracts works correctly
 **Rule**
 - After a disconnect is observed, the server MUST have cleaned up all per-connection scoped state attributable solely to that session (no “ghost” scoped entities for that user).
 - Additionally, ownership cleanup MUST follow `08_entity_ownership.spec.md` (client-owned entities despawn when owner disconnects).
@@ -110,6 +131,9 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ---
 
 ### [server-events-07] — Entity spawn/enter events: per user, in-scope only, exactly-once
+
+**Obligations:**
+- **t1**: Entity spawn/enter events: per user, in-scope only, exactly-once works correctly
 **Rule**
 - When an entity `E` enters scope for user `U` (including initial join snapshot), the World events stream MUST expose exactly one spawn/enter event for `(U, E)`.
 - Spawn/enter events MUST be emitted only for users for which `InScope(U, E)` becomes true.
@@ -122,6 +146,9 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ---
 
 ### [server-events-08] — Component insert/update/remove: per user and per component, no duplicates
+
+**Obligations:**
+- **t1**: Component insert/update/remove: per user and per component, no duplicates works correctly
 **Rule**
 - For each user `U` with `InScope(U, E)` at the time the change becomes observable:
   - inserting component `C` on `E` MUST produce exactly one insert event for `(U, E, C)`
@@ -136,6 +163,9 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ---
 
 ### [server-events-09] — Despawn/leave-scope events are exactly-once and end that user’s lifecycle
+
+**Obligations:**
+- **t1**: Despawn/leave-scope events are exactly-once and end that user’s lifecycle works correctly
 **Rule**
 - When `E` leaves scope for `U` (scope change or true despawn), the World events stream MUST expose exactly one despawn/exit event for `(U, E)`.
 - After `(U, E)` has exited, the server MUST NOT surface further insert/update/remove events for `(U, E, *)` unless `E` re-enters scope for `U` as a new lifecycle (per `06_entity_scopes.spec.md` + `07_entity_replication.spec.md`).
@@ -147,6 +177,9 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ---
 
 ### [server-events-10] — No “component events before spawn/enter” for any user
+
+**Obligations:**
+- **t1**: No “component events before spawn/enter” for any user works correctly
 **Rule**
 - For any user `U`, the World events stream MUST NOT surface insert/update/remove events for entity `E` before `U` has observed spawn/enter for `E`.
 - Under reordering/duplication, internal buffering is allowed, but the API-visible ordering MUST respect this invariant.
@@ -157,6 +190,9 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ---
 
 ### [server-events-11] — Message events: grouped by channel and message type; each yields sender + payload; drain once
+
+**Obligations:**
+- **t1**: Message events: grouped by channel and message type; each yields sender + payload; drain once works correctly
 **Rule**
 - Inbound messages MUST be exposed via typed message events grouped by:
   - **channel type** and
@@ -176,6 +212,9 @@ Additional requirements:
 ---
 
 ### [server-events-12] — Request/response events: exactly-once surfacing, correct matching, drain once
+
+**Obligations:**
+- **t1**: Request/response events: exactly-once surfacing, correct matching, drain once works correctly
 **Rule**
 - For each incoming request accepted by the protocol layer, the server MUST surface exactly one corresponding request event/handle to the application.
 - Any response matching MUST be correct per `03_messaging.spec.md` and MUST NOT surface duplicates under retransmit/duplication.
@@ -188,6 +227,9 @@ Additional requirements:
 ---
 
 ### [server-events-13] — API misuse safety: drains MUST NOT panic
+
+**Obligations:**
+- **t1**: API misuse safety: drains MUST NOT panic
 **Rule**
 - Calling any drain method at any time (including when empty) MUST NOT panic.
 - Empty drains MUST return empty.

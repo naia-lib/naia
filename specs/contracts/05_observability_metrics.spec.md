@@ -28,6 +28,9 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 ## Contracts
 
 ### [observability-01] — Metric scope and non-normative gameplay impact
+
+**Obligations:**
+- **t1**: Metric scope and non-normative gameplay impact works correctly
 **Rule:** Observability metrics MUST NOT affect replicated state correctness, authority, scope, message delivery semantics, or any other gameplay-visible contract. Metrics are observational only.
 
 **Clarifications:**
@@ -44,6 +47,9 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 ---
 
 ### [observability-01a] — Internal measurements vs exposed metrics
+
+**Obligations:**
+- **t1**: Internal measurements vs exposed metrics works correctly
 
 Naia uses internal RTT/jitter estimates for:
 - Client tick lead targeting (see `04_time_ticks_commands.spec.md`)
@@ -73,6 +79,9 @@ Naia uses internal RTT/jitter estimates for:
 ---
 
 ### [observability-02] — Metric query safety and availability
+
+**Obligations:**
+- **t1**: Metric query safety and availability works correctly
 **Rule:** Metrics APIs MUST be safe to query at any time after client/server object construction and MUST NOT panic. If a metric cannot be computed yet (insufficient data), it MUST return a well-defined default.
 
 **Required defaults:**
@@ -86,6 +95,9 @@ Naia uses internal RTT/jitter estimates for:
 ---
 
 ### [observability-03] — RTT must be non-negative and bounded
+
+**Obligations:**
+- **t1**: RTT must be non-negative and bounded
 **Rule:** RTT estimates MUST be non-negative. RTT MUST NOT overflow or become NaN/Infinity. Under stable link conditions, RTT SHOULD converge within a reasonable tolerance of the configured/true RTT.
 
 **Interpretation:**
@@ -98,6 +110,9 @@ Naia uses internal RTT/jitter estimates for:
 ---
 
 ### [observability-04] — RTT behavior under jitter, loss, and reordering
+
+**Obligations:**
+- **t1**: RTT behavior under jitter, loss, and reordering works correctly
 **Rule:** Under the transport fault model, RTT estimates MAY fluctuate but MUST remain stable in the sense that:
 - It MUST NOT become negative.
 - It MUST NOT oscillate wildly due to duplicate packets alone.
@@ -110,6 +125,9 @@ Naia uses internal RTT/jitter estimates for:
 ---
 
 ### [observability-05] — Throughput must be non-negative and monotonic per window semantics
+
+**Obligations:**
+- **t1**: Throughput must be non-negative and monotonic per window semantics
 **Rule:** Throughput (bytes/sec) MUST be non-negative and MUST NOT overflow or become NaN/Infinity. Throughput computations MUST be consistent with the documented windowing method.
 
 **Clarifications:**
@@ -124,6 +142,9 @@ Naia uses internal RTT/jitter estimates for:
 ---
 
 ### [observability-06] — Bandwidth accounting includes retries/overhead if documented
+
+**Obligations:**
+- **t1**: Bandwidth accounting includes retries/overhead if documented works correctly
 **Rule:** If Naia exposes both “payload bytes” and “wire bytes” (or equivalent), then:
 - Payload bytes MUST count only application payload (messages/components).
 - Wire bytes MUST include protocol overhead and retransmissions.
@@ -136,6 +157,9 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 ---
 
 ### [observability-07] — Metrics reset/cleanup on connection lifecycle
+
+**Obligations:**
+- **t1**: Metrics reset/cleanup on connection lifecycle works correctly
 **Rule:** On disconnect, Naia MUST clean up connection-scoped metric state so that:
 - New connections do not inherit stale samples from prior connections.
 - Metrics for a disconnected session MUST not continue accumulating samples.
@@ -150,6 +174,9 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 ---
 
 ### [observability-08] — Time source assumptions
+
+**Obligations:**
+- **t1**: Time source assumptions works correctly
 **Rule:** Metrics computations MUST rely on the same monotonic time source used by Naia’s tick/time system. Metrics MUST NOT assume wall-clock correctness. If the time source is paused (per deterministic test clock), metrics MUST behave consistently:
 - No negative durations.
 - No division by zero.
@@ -162,6 +189,9 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 ---
 
 ### [observability-09] — Per-direction and per-transport consistency (if applicable)
+
+**Obligations:**
+- **t1**: Per-direction and per-transport consistency (if applicable) works correctly
 **Rule:** If Naia exposes separate send/receive metrics, they MUST reflect direction correctly (send counts bytes sent, receive counts bytes received). If multiple transports exist, semantics MUST be consistent across transports (modulo known transport overhead differences).
 
 **Test obligations:**
@@ -171,6 +201,9 @@ If only one throughput metric exists, the spec MUST declare which accounting mod
 ---
 
 ### [observability-10] — Metrics are testable; logs are not
+
+**Obligations:**
+- **t1**: Metrics are testable; logs are not works correctly
 
 **Metrics are normative and testable:**
 - The following metrics are **guaranteed stable** and E2E tests MAY assert on them:

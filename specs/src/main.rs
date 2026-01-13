@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use naia_spec_tool::{index::Index, packet, coverage, adequacy, stats, lint, check_orphans, check_refs, validate};
+use naia_spec_tool::{index::Index, packet, coverage, adequacy, stats, lint, check_orphans, check_refs, validate, fix_obligations};
 
 fn find_workspace_root() -> std::path::PathBuf {
     let mut root = std::env::current_dir().expect("Failed to get current directory");
@@ -42,6 +42,8 @@ enum Commands {
     Lint,
     /// Run all validation checks (lint + check-refs + check-orphans)
     Validate,
+    /// Add Obligations section to contracts missing them (Policy B)
+    FixObligations,
     /// Extract all contract IDs to registry file
     Registry {
         /// Output file (optional)
@@ -294,6 +296,13 @@ fn main() {
         Some(Commands::GenTest { contract_id }) => {
              let root = find_workspace_root();
              naia_spec_tool::gen_test::run_gen_test(&root, contract_id).expect("Failed to run gen-test");
+        }
+        Some(Commands::FixObligations) => {
+             let root = find_workspace_root();
+             match fix_obligations::run_fix_obligations(&root) {
+                 Ok(_) => {},
+                 Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); },
+             }
         }
         _ => {
             // Should be handled by error checking above, or explicit variants

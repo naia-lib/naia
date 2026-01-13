@@ -65,9 +65,15 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 
 ### [connection-01] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 Client behavior MUST be describable by the above conceptual states, even if the implementation uses different internal states.
 
 ### [connection-02] —
+
+**Obligations:**
+- **t1**: Contract behavior is correct
 
 The client MUST NOT expose a public “Rejected” connection state. Rejection is an event (RejectEvent), not a persistent state.
 
@@ -79,6 +85,9 @@ The client MUST NOT expose a public “Rejected” connection state. Rejection i
 
 ### [connection-03] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 The server MUST NOT treat a client as “Connected” (for purposes of entity replication, message delivery, tick semantics, etc.) until the handshake is finalized including tick sync.
 
 ---
@@ -89,9 +98,15 @@ The server MUST NOT treat a client as “Connected” (for purposes of entity re
 
 ### [connection-04] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 If `require_auth = false`, the server MUST allow clients to attempt connection without any pre-auth step.
 
 ### [connection-05] —
+
+**Obligations:**
+- **t1**: Contract behavior is correct
 
 Implementations MAY still support optional application-level auth, but it must not be required by Naia for connection establishment when `require_auth = false`.
 
@@ -103,9 +118,15 @@ This mode uses an out-of-band HTTP auth step and a one-time identity token.
 
 ### [connection-06] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 When `require_auth = true`, a client MUST obtain a server-issued identity token via an out-of-band auth request (HTTP) BEFORE initializing the transport connection attempt.
 
 ### [connection-07] —
+
+**Obligations:**
+- **t1**: Contract behavior is correct
 
 The server MUST evaluate the auth request and return either:
 - `200 OK` (accepted) with an identity token, or
@@ -113,9 +134,15 @@ The server MUST evaluate the auth request and return either:
 
 ### [connection-08] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 When the server receives an auth request in this mode, it MUST emit exactly one `AuthEvent` for that request.
 
 ### [connection-09] —
+
+**Obligations:**
+- **t1**: Contract behavior is correct
 
 There is no Naia-level “auth timeout” during the transport handshake, because auth is completed before the transport session begins.
 
@@ -123,19 +150,31 @@ There is no Naia-level “auth timeout” during the transport handshake, becaus
 
 ### [connection-10] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 An identity token MUST be:
 - **One-time use** (cannot be used successfully more than once), and
 - **Time-limited** with TTL = **1 hour** from issuance.
 
 ### [connection-11] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 If a token is expired, already-used, or invalid, the server MUST explicitly reject the connection attempt (see “Explicit rejection”).
 
 ### [connection-12] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 Identity tokens MUST be required for **all transports** when `require_auth = true` (not only WebRTC).
 
 ### [connection-13] —
+
+**Obligations:**
+- **t1**: Contract behavior is correct
 
 On first successful validation attempt, the server MUST mark the token as used (consumed). Replays MUST fail.
 
@@ -145,9 +184,15 @@ On first successful validation attempt, the server MUST mark the token as used (
 
 ### [connection-14] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 A successful connection handshake MUST include a tick synchronization step. A client MUST NOT be considered "Connected" until tick sync completes.
 
 ### [connection-14a] — protocol_id check during handshake
+
+**Obligations:**
+- **t1**: protocol_id check during handshake works correctly
 
 The connection handshake MUST verify **`protocol_id`** (see Protocol Identity section below) as the first protocol-level check.
 
@@ -162,13 +207,22 @@ If `protocol_id` does not match, the server MUST reject with `ProtocolMismatch` 
 
 ### [connection-15] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 The client MUST emit `ConnectEvent` only at the moment the handshake is finalized (including protocol identity verification and tick sync).
 
 ### [connection-16] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 The server MUST emit `ConnectEvent` only at the moment the handshake is finalized (including protocol identity verification and tick sync).
 
 ### [connection-17] —
+
+**Obligations:**
+- **t1**: Contract behavior is correct
 
 Naia MUST NOT deliver any entity replication "writes" as part of an established session until after `ConnectEvent` is emitted for that session (server-side), and the client MUST NOT apply any such writes until after it has emitted `ConnectEvent`.
 
@@ -180,6 +234,9 @@ Naia MUST NOT deliver any entity replication "writes" as part of an established 
 
 ### [connection-18] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 The server MUST explicitly reject a connection attempt when:
 - `require_auth = true` and the client presents no identity token,
 - the presented token is invalid/expired/already-used,
@@ -187,12 +244,18 @@ The server MUST explicitly reject a connection attempt when:
 
 ### [connection-19] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 When the server explicitly rejects:
 - The client MUST emit `RejectEvent`.
 - The client MUST NOT emit `ConnectEvent`.
 - The client MUST NOT emit `DisconnectEvent` (because it was never connected).
 
 ### [connection-20] —
+
+**Obligations:**
+- **t1**: Contract behavior is correct
 
 After a `RejectEvent`, the client’s public `ConnectionStatus` MUST be (or return to) a non-connected state (e.g. Disconnected), with no special “Rejected” status.
 
@@ -202,13 +265,22 @@ After a `RejectEvent`, the client’s public `ConnectionStatus` MUST be (or retu
 
 ### [connection-21] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 `DisconnectEvent` (client-side) MUST only be emitted if the client previously emitted `ConnectEvent` for the session.
 
 ### [connection-22] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 `DisconnectEvent` (server-side) MUST only be emitted if the server previously emitted `ConnectEvent` for the session.
 
 ### [connection-23] —
+
+**Obligations:**
+- **t1**: Contract behavior is correct
 
 When a client disconnects (or is disconnected) after session establishment:
 - It is treated as immediately out-of-scope for all entities, and
@@ -223,6 +295,9 @@ When a client disconnects (or is disconnected) after session establishment:
 
 ### [connection-24] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 For a single successful connection where `require_auth = true`, the server MUST observe events in this order:
 1. `AuthEvent`
 2. `ConnectEvent`
@@ -232,6 +307,9 @@ For a single successful connection where `require_auth = true`, the server MUST 
 
 ### [connection-25] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 For a single successful connection where `require_auth = false`, the server MUST observe:
 1. `ConnectEvent`
 2. `DisconnectEvent` (eventually)
@@ -240,11 +318,17 @@ For a single successful connection where `require_auth = false`, the server MUST
 
 ### [connection-26] —
 
+**Obligations:**
+- **t1**: Contract behavior is correct
+
 For a single successful session, the client MUST observe:
 1. `ConnectEvent`
 2. `DisconnectEvent` (eventually)
 
 ### [connection-27] —
+
+**Obligations:**
+- **t1**: Contract behavior is correct
 
 For a rejected attempt, the client MUST observe:
 1. `RejectEvent`
@@ -255,6 +339,9 @@ For a rejected attempt, the client MUST observe:
 ## Reconnect semantics
 
 ### [connection-28] — Reconnect is a fresh session
+
+**Obligations:**
+- **t1**: Reconnect is a fresh session works correctly
 
 When a client "reconnects" (disconnects and connects again):
 - This is a **fresh connection** that builds world state from a new snapshot
@@ -292,6 +379,9 @@ This section defines the **protocol identity** mechanism that gates all Naia con
 
 ### [connection-29] — protocol_id definition
 
+**Obligations:**
+- **t1**: protocol_id definition works correctly
+
 Every protocol crate MUST compute a single `protocol_id` value that uniquely identifies its wire-relevant surface.
 
 **`protocol_id` MUST be derived from:**
@@ -319,6 +409,9 @@ Every protocol crate MUST compute a single `protocol_id` value that uniquely ide
 
 ### [connection-30] — protocol_id wire encoding
 
+**Obligations:**
+- **t1**: protocol_id wire encoding works correctly
+
 **Fixed-width encoding:**
 - `protocol_id` MUST be encoded as a **16-byte (128-bit) unsigned integer** (`u128`).
 - Wire encoding MUST use **little-endian** byte order.
@@ -333,6 +426,9 @@ Every protocol crate MUST compute a single `protocol_id` value that uniquely ide
 ---
 
 ### [connection-31] — protocol_id handshake gate
+
+**Obligations:**
+- **t1**: protocol_id handshake gate works correctly
 
 **Timing:**
 Protocol identity comparison MUST occur during the handshake, BEFORE:
@@ -373,6 +469,9 @@ If `protocol_id` values do not match:
 
 ### [connection-32] — What affects protocol_id
 
+**Obligations:**
+- **t1**: What affects protocol_id works correctly
+
 The following aspects are **wire-relevant** and MUST affect `protocol_id`:
 
 | Aspect | Affects `protocol_id` |
@@ -404,6 +503,9 @@ The following aspects are **wire-relevant** and MUST affect `protocol_id`:
 ---
 
 ### [connection-33] — No partial compatibility
+
+**Obligations:**
+- **t1**: No partial compatibility works correctly
 
 **Strict matching:**
 - There is NO extension negotiation
