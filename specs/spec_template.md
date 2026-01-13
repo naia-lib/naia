@@ -1,83 +1,73 @@
-# Spec: <Human-Readable Name>
-<One sentence: what this spec guarantees.>
+# Spec: <Domain Name>
 
-**Status:** Draft | Active | Deprecated  
-**Version:** v1  
-**Related specs:** <links>  
-**Applies to:** <server | client | both | adapter> (pick one or more)
+**Status:** Draft | Active | Deprecated
+**Version:** v1
+**Applies to:** server | client | both | adapter
+
+One-sentence overview of what this spec covers.
 
 ---
 
-## 1) Scope & Vocabulary
+## Scope & Vocabulary
 
-**In scope:**  
-- <what this spec covers, concretely>
+**In scope:**
+- <what this spec covers>
 
-**Out of scope:**  
-- <explicit exclusions + link to the spec that owns them>
+**Out of scope:**
+- <what this spec does not cover, with links to other specs if relevant>
 
-**Vocabulary (only terms used normatively below):**  
-- **<Term>**: <definition>  
+**Vocabulary:**
 - **<Term>**: <definition>
 
 ---
 
-## 2) Contract (Rules)
+## Contracts
 
-Write the contract as **numbered rules**. Each rule MUST be testable.
+Write each contract as a distinct, testable requirement. Use the structure below for each contract.
 
-**R1. <Short title>**  
-MUST/MUST NOT/MAY/SHOULD: <precise behavior>  
-Clarifies: <only if needed to avoid misread>  
+### [contract-id-01] — Short Title
 
-**R2. <Short title>**  
-MUST/MUST NOT/MAY/SHOULD: <precise behavior>
+<Normative text describing the behavior. Use RFC 2119 keywords: MUST, MUST NOT, MAY, SHOULD, SHALL.>
 
-(keep going)
+**Observables:**
+- Server observes: <what the server can see>
+- Client observes: <what clients can see>
 
----
+**Obligations:**
+- **t1**: <first testable behavior claim>
+- **t2**: <second testable behavior claim (if contract has multiple distinct behaviors)>
 
-## 3) Contract IDs (Obligations)
-
-Contract IDs are the stable “handles” for enforcement + audits.
-
-**Contract ID format:** `<spec-slug>-<nn>`  
-Examples: `entities-identity-01`, `client-owned-publication-06`  
-Rules: IDs MUST be stable, MUST NOT be reused, MUST NOT be renumbered.
-
-For each obligation:
-
-### <spec-slug>-<nn> — <short title>
-**Guarantee:** <one sentence, no ambiguity>  
-**Covered by tests:**  
-- `test/tests/<file>.rs::<test_fn>` (or `TODO` if not implemented yet)  
-**Notes:** <only if needed>
+**Notes (non-normative):**
+- <clarifications, edge cases, or rationale - optional>
 
 ---
 
-## 4) Interfaces & Observability
+### [contract-id-02] — Another Contract
 
-Everything here is about what callers/observers can rely on.
+<Normative text>
 
-**Operations / Inputs:**  
-- `<op or message>` → <what it means, at the contract level>
-
-**Visible outcomes:**  
-- What the server can observe: <facts>  
-- What a client can observe: <facts>  
-
-**Errors / illegal use:**  
-- If <bad call / impossible case>: MUST <return error | ignore | disconnect | etc>, MUST NOT panic (unless explicitly stated)
-
-**Events / statuses (if any):**  
-- `<event/status>` emitted/visible when <condition> (exactly-once rules if relevant)
+**Obligations:**
+- **t1**: <testable behavior>
 
 ---
 
-## 5) Invariants & Non-Goals
+## Test Obligations
 
-**Always true:**  
-- <invariant that must hold across all operations>
+List all test functions that verify the contracts in this spec:
 
-**Non-goals:**  
-- <what this spec intentionally does not guarantee>
+- `contract-id-01.t1`: <test file/function reference or TODO>
+- `contract-id-01.t2`: <test file/function reference or TODO>
+- `contract-id-02.t1`: <test file/function reference or TODO>
+
+---
+
+## Policy B Reminder
+
+**Every contract MUST have at least one obligation labeled `t1`.**
+
+This ensures:
+- Uniform structure across all specs
+- Clear mapping to labeled test assertions
+- Scalable adequacy review
+
+See `README.md` → "Policy B: Obligations Are Mandatory" for details.

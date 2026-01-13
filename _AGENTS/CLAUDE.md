@@ -2,6 +2,24 @@
 
 Naia is a cross-platform Rust networking engine for multiplayer games. Architecture follows the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf).
 
+---
+
+## Authority
+
+**This document is authoritative for:**
+- Agent/executor contract: read PLAN.md, write OUTPUT.md every session
+- Session startup protocol and health check commands
+- Token optimization strategies and tool usage patterns
+- Quick reference for commands, test structure, and debugging
+
+**Defer to:**
+- `DEV_PROCESS.md` for complete SDD methodology and human workflow
+- `specs/README.md` for authoritative tool commands and spec authoring rules
+- `PLAN.md` (read this first every session) for current goals and constraints
+- `SPEC_CERTIFICATION_PLAN.md` for one-time certification process details
+
+---
+
 ## Current State (2026-01-12 - Phase B Active)
 
 | Metric | Value |
@@ -33,20 +51,23 @@ specs/contracts/N_domain.md  →  test/tests/0N_domain.rs
 
 **To find tests for a contract:** Open the matching numbered test file
 
-## Session Startup Protocol
+## Session Startup Protocol (PLAN/OUTPUT Convention)
 
-**Execute this sequence at session start:**
+**CRITICAL: Every session follows the PLAN → EXECUTE → OUTPUT cycle.**
 
-```bash
-# 1. Quick health check (optional, shows test status + coverage)
-cargo run -p naia-specs -- verify --contract <working-on> || cargo run -p naia-specs -- coverage
+**At session start:**
+1. **Read `_AGENTS/PLAN.md` first** (REQUIRED - contains current goal, constraints, exact commands)
+2. Optional health check: `cargo run -p naia-specs -- verify --contract <id>` or `coverage`
+3. Begin work following the plan
 
-# 2. Sanity check for incomplete tests
-grep -r "todo!" test/tests/*.rs
+**At session end (or when stopping for user review):**
+1. **Write `_AGENTS/OUTPUT.md`** (REQUIRED - commands run, results, diffs, next steps)
+2. Include: git diff --stat, file changes, key excerpts, open questions
+3. The OUTPUT becomes the handoff artifact for next session or human review
 
-# 3. Read PLAN.md for next actions
-# 4. Begin work following SDD loop
-```
+**Structure:**
+- `PLAN.md` = Input (what to do, how to do it, when to stop)
+- `OUTPUT.md` = Output (what was done, what changed, what's next)
 
 **Phase B tip:** Use `verify --contract <id>` for fast feedback on the contract you're fixing.
 
@@ -216,8 +237,10 @@ let tick = scenario.mutate(|ctx| {
 
 | Document | Purpose | When to Read |
 |----------|---------|--------------|
+| `PLAN.md` | **Current goal, constraints, exact commands** | **Every session (READ FIRST)** |
+| `OUTPUT.md` | **Session results, diffs, next steps** | **Every session (WRITE AT END)** |
 | `DEV_PROCESS.md` | Full SDD process, tooling, patterns | Complex tasks |
-| `PLAN.md` | Current phase, next actions, blockers | Every session |
+| `specs/README.md` | Tool commands, spec authoring rules | When using naia-specs tool |
 | `specs/generated/CONTRACT_REGISTRY.md` | All contract IDs indexed | Finding contracts |
 | `specs/generated/TRACEABILITY.md` | Contract↔test mapping | Checking coverage |
 | `specs/generated/GAP_ANALYSIS.md` | Prioritized uncovered contracts | Planning work |
@@ -301,6 +324,13 @@ cargo test --package naia-test --features e2e_debug <test_name> -- --nocapture
 
 ## Constraints
 
+**Session protocol (MUST follow):**
+- MUST read `PLAN.md` at session start
+- MUST write `OUTPUT.md` at session end (or when stopping)
+- MUST NOT commit, branch, rebase, or push to git (human does this)
+- Stop on uncertainty and report in OUTPUT.md
+
+**Technical constraints:**
 - Demos excluded from workspace (feature conflicts)
 - Wasm: use `wbindgen` OR `mquad`, not both
 - All tick math must be wrap-safe (u16 wraps at 65535)

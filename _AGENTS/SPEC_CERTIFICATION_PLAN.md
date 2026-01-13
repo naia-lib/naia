@@ -1,10 +1,27 @@
 # One-Time Semantic Adequacy Certification (Spec → E2E Assertions)
 
-**Owner:** Connor (source of truth for spec intent)  
-**Reviewer:** Chad (process + rigor)  
-**Executor(s):** Claude Code / Cursor agents (mechanical inspection + suggested edits)  
-**Scope:** One-time certification pass to confirm every spec contract is meaningfully asserted by E2E tests.  
+**Owner:** Connor (source of truth for spec intent)
+**Reviewer:** Chad (process + rigor)
+**Executor(s):** Claude Code / Cursor agents (mechanical inspection + suggested edits)
+**Scope:** One-time certification pass to confirm every spec contract is meaningfully asserted by E2E tests.
 **Non-goal:** Making tests pass. Failing tests are allowed and expected.
+
+---
+
+## Authority
+
+**This document is authoritative for:**
+- One-time semantic adequacy certification process and completion criteria
+- Policy B enforcement (every contract has at least `t1` obligation)
+- Certification artifact requirements and review procedures
+
+**Defer to:**
+- `specs/README.md` for `naia-specs` tool commands (adequacy, packet, verify)
+- `DEV_PROCESS.md` for ongoing SDD workflow after certification is complete
+- `CLAUDE.md` for agent execution protocol (PLAN/OUTPUT convention)
+- Individual specs in `specs/contracts/` for normative behavior definitions
+
+**Note:** This is a **one-time certification plan**. After completion, this process is not added to CI. The `adequacy` tool remains available as a local dev gate.
 
 ---
 
@@ -81,80 +98,88 @@ We produce:
 
 ## 4) Policy for Obligations (Uniformity)
 
-We want maximum uniformity, to make agentic review scalable and reduce ambiguity.
+**This certification enforces Policy B across all contracts.**
 
-### Policy B (Max Uniformity)
-- Every contract MUST define at least:
-  - `**Obligations:**`
-  - `- **t1**: ...`
+### Policy B Summary
 
-If a contract is “single-behavior”, it still gets a `t1`.
-If a contract has multiple distinct behaviors, it gets `t1`, `t2`, ...
+**Every contract MUST have at least one obligation labeled `t1`.**
 
-**No optional obligations. No “either/or.”**
+- Single-behavior contracts get `t1` (not optional)
+- Multi-behavior contracts get `t1`, `t2`, `t3`, etc.
+- No optional obligations; no "either/or"
 
-This makes the spec tool’s adequacy queue maximally meaningful:
-- No “NEEDS LABELS” ambiguity where a contract has tests but no obligations.
-- No “contract-level only” loophole that can hide unasserted sub-claims.
+**For complete Policy B documentation, see `specs/README.md` → "Policy B: Obligations Are Mandatory".**
+
+This policy ensures:
+- Maximum uniformity for scalable agentic review
+- Clear mechanical adequacy verification (no ambiguous "NEEDS LABELS" states)
+- No loopholes where unasserted sub-claims can hide
 
 ---
 
 ## 5) Required Spec + Test Conventions
 
-### 5.1 Spec format requirement (every contract)
-Each contract section must contain:
+**For complete conventions, see:**
+- `specs/README.md` → "Policy B: Obligations Are Mandatory"
+- `specs/README.md` → "Labeling Rules (Hard Constraints)"
+- `specs/spec_template.md` for contract structure template
 
+### 5.1 Spec format requirement (every contract)
+
+Every contract MUST use this structure:
 ```md
 ### [contract-id] — Title
-
-<contract text>
-
+<normative text>
 **Obligations:**
-- **t1**: ...
-- **t2**: ... (if needed)
+- **t1**: <testable behavior>
+- **t2**: <additional behavior, if needed>
 ```
 
 ### 5.2 Test annotation requirement
-Every test function contributing coverage MUST include:
 
+Every test function MUST include contract annotation:
 ```rust
-/// Contract: [contract-id], [other-contract-id]
+/// Contract: [contract-id], [other-id]
 ```
 
 ### 5.3 Obligation label requirement
-Every obligation `contract-id.tN` MUST be asserted by at least one extracted label:
 
+Every obligation MUST have at least one labeled assertion:
 ```rust
-scenario.spec_expect("contract-id.tN: human description", |ctx| { ... })
+scenario.spec_expect("contract-id.tN: description", || { /* assertion */ })
 ```
 
-### 5.4 No lying labels
-Labels must be truthful:
-- No “logical inverse” labels.
-- No labels on empty tests or TODO stubs.
-- No labels that assert “rejection happens” on a test that only checks success.
+**CRITICAL:** Label string must be on same line as function call (parser requirement).
 
-Failing tests are fine; lying labels are not.
+### 5.4 No lying labels
+
+Labels must be truthful assertions:
+- No "logical inverse" labels (test checks A, label claims "not A")
+- No labels on empty tests or TODO stubs
+- No labels that misrepresent what the test actually verifies
+
+Failing tests are acceptable; lying labels are not.
 
 ---
 
 ## 6) Execution Plan
 
+**For complete tool command reference, see `specs/README.md` → "Key Commands".**
+
 This certification proceeds in 3 phases:
 
 ### Phase A0 — Tool health + determinism gate
-Run:
 
+Verify tooling is operational:
 ```bash
 cargo run -p naia-specs -- verify --strict
 cargo run -p naia-specs -- adequacy --strict
 ```
 
-If `verify --strict` fails due to test failures, we still proceed as long as tests compile.
-We only care that:
-- tooling works
-- registry and indexing works
-- test compilation is green (`cargo test -p naia-test --no-run`)
+**Note:** If `verify --strict` fails due to test failures, proceed anyway (failing tests are allowed). We only require:
+- Tooling works (commands run successfully)
+- Registry and indexing work
+- Test compilation is green (`cargo test -p naia-test --no-run`)
 
 ### Phase A1 — Force Policy B across all specs
 Goal: every contract has obligations.

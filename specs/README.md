@@ -2,6 +2,23 @@
 
 This directory contains **normative specifications** that define the expected behavior of the Naia networking engine. Specs are the source of truth for what the system MUST, MUST NOT, MAY, SHALL, and SHOULD do.
 
+---
+
+## Authority
+
+**This document is authoritative for:**
+- `naia-specs` tool usage and commands
+- Spec authoring conventions and formatting rules
+- Contract structure and obligation labeling requirements
+- Spec validation and quality gates
+
+**Defer to:**
+- `_AGENTS/DEV_PROCESS.md` for human development workflow and SDD phases
+- `_AGENTS/CLAUDE.md` for agent execution protocol (PLAN/OUTPUT convention)
+- Individual contract specs in `contracts/` for normative behavior definitions
+
+---
+
 ## Directory Structure
 
 - **`contracts/`** - Sacred behavior contracts (source of truth)
@@ -18,14 +35,50 @@ This directory contains **normative specifications** that define the expected be
 - **`spec_template.md`** - Template for new specifications
 - **`spec_tool` CLI** - Tooling for spec management (Rust binary, run with `cargo run -p naia-specs -- <cmd>`)
 
-## Common Commands
+## Quickstart: Daily Gate
+
+Run this command to verify specs, tests, and coverage in one pass:
 
 ```bash
-cargo run -p naia-specs -- coverage      # Check test coverage
-cargo run -p naia-specs -- lint          # Validate spec format
-cargo run -p naia-specs -- bundle        # Regenerate NAIA_SPECS.md
-cargo run -p naia-specs -- registry      # Regenerate CONTRACT_REGISTRY.md
-cargo run -p naia-specs -- traceability  # Regenerate test mapping
+cargo run -p naia-specs -- verify
+```
+
+For faster iteration on a specific contract:
+
+```bash
+cargo run -p naia-specs -- verify --contract <contract-id>
+```
+
+## Key Commands
+
+**Validation & Quality:**
+```bash
+cargo run -p naia-specs -- lint          # Check specs for formatting issues
+cargo run -p naia-specs -- validate      # Full validation (lint + check-refs + check-orphans)
+cargo run -p naia-specs -- check-refs    # Verify cross-reference links resolve
+cargo run -p naia-specs -- check-orphans # Find MUST/MUST NOT without contract IDs
+cargo run -p naia-specs -- verify        # CI-grade: validate + lint + tests + coverage
+```
+
+**Coverage & Adequacy:**
+```bash
+cargo run -p naia-specs -- coverage      # Show contract test coverage
+cargo run -p naia-specs -- adequacy      # Check obligation-to-label mapping
+cargo run -p naia-specs -- adequacy --strict  # Fail if inadequate (local gate)
+```
+
+**Artifact Generation:**
+```bash
+cargo run -p naia-specs -- registry [output]      # Generate CONTRACT_REGISTRY.md
+cargo run -p naia-specs -- traceability [output]  # Generate TRACEABILITY.md
+cargo run -p naia-specs -- bundle [output]        # Generate NAIA_SPECS.md
+cargo run -p naia-specs -- packet <id>            # Generate review packet for contract
+```
+
+**Development:**
+```bash
+cargo run -p naia-specs -- gen-test <id>   # Generate test skeleton
+cargo run -p naia-specs -- stats           # Show spec statistics
 ```
 
 ## Downstream Chain
@@ -43,6 +96,117 @@ Implementation (production code)
 ```
 
 **Specs are authoritative**: If a test or implementation contradicts a spec, the spec is correct and the test/implementation must be fixed.
+
+---
+
+## Developer Operations
+
+### Tool Usage
+
+All spec operations are performed via the `spec_tool` binary in the `naia-specs` crate. Run commands using:
+
+```bash
+cargo run -p naia-specs -- <command> [options]
+```
+
+See the tool's `--help` output (shown above in Common Commands) for the complete list of available commands.
+
+### Determinism & Golden Files
+
+The `naia-specs` tool tests rely on **golden files** stored in `specs/tests/golden/`. These ensure CLI output remains consistent byte-for-byte across runs.
+
+**When to update goldens:**
+- After intentionally changing tool output format
+- When valid tests fail due to output formatting changes
+
+**How to update goldens:**
+
+1. **Verify your changes are correct** (review the new output)
+2. Run the command with `--deterministic` flag (enforces stable timestamps and sorting):
+
+```bash
+# Example: Update registry golden
+cargo run -p naia-specs -- registry specs/tests/golden/registry.md --deterministic
+
+# Example: Update help golden (stdout commands)
+cargo run -p naia-specs -- help > specs/tests/golden/help.stdout
+```
+
+**Deterministic mode:**
+- Enforces `1970-01-01 00:00 UTC` timestamps in all generated files
+- Ensures stable file processing order
+- Required for golden file regeneration to ensure reproducibility
+
+---
+
+## Policy B: Obligations Are Mandatory
+
+**Every contract MUST have at least one obligation labeled `t1`.**
+
+This policy ensures:
+- Maximum uniformity across all spec contracts
+- Scalable adequacy review (mechanical + semantic)
+- No ambiguity about whether a contract needs test assertions
+- Clear mapping from contract behavior to labeled test expectations
+
+**Structure:**
+```markdown
+**Obligations:**
+- **t1**: <description of first testable behavior>
+- **t2**: <description of second testable behavior> (if contract has multiple behaviors)
+```
+
+**Single-behavior contracts** still get `t1` (not optional).
+**Multi-behavior contracts** get `t1`, `t2`, `t3`, etc.
+
+## Labeling Rules (Hard Constraints)
+
+Test assertions MUST use labeled expectations to enable mechanical adequacy checking.
+
+### Label Formats
+
+**Contract-level label:**
+```rust
+scenario.spec_expect("contract-id: description", || { /* assertion */ });
+```
+
+**Obligation-level label:**
+```rust
+scenario.spec_expect("contract-id.t1: description", || { /* assertion */ });
+```
+
+### Parser Requirements
+
+**CRITICAL:** The label string MUST be machine-extractable. This means:
+
+1. **Keep the label string on the same line as the function call:**
+   ```rust
+   // ✅ CORRECT
+   scenario.spec_expect("connection-01.t1: auth required before transport", || {
+       // test body
+   });
+
+   // ❌ WRONG - parser cannot extract
+   scenario.spec_expect(
+       "connection-01.t1: auth required before transport",
+       || { /* ... */ }
+   );
+   ```
+
+2. **Use `spec_expect` or `expect_msg` for labeled assertions:**
+   - `spec_expect("label", closure)` - assertion with automatic retry/polling
+   - `expect_msg("label", message)` - direct message assertion (channels)
+
+3. **Label format must match:**
+   - `contract-id: description` (contract-level)
+   - `contract-id.tN: description` (obligation-level, where N is the obligation number)
+
+### Adequacy Checking
+
+The `adequacy` command verifies:
+- Every contract has test functions (via `/// Contract: [id]` annotations)
+- Every obligation (`t1`, `t2`, etc.) maps to at least one labeled assertion
+- Labels are correctly formatted and machine-extractable
 
 ---
 
@@ -90,6 +254,30 @@ All specifications in `contracts/` MUST follow these rules:
 ## Test Obligations
 
 Each spec MUST include a "Test Obligations" section that lists the E2E test names that verify the spec. This creates traceability from spec -> test.
+
+---
+
+## Terminology Lock
+
+These terms have specific meanings in Naia specs and tooling. Use them consistently:
+
+**Spec terminology:**
+- **Contract**: A numbered normative behavior requirement (e.g., `connection-01`)
+- **Obligation**: A testable sub-behavior within a contract (labeled `t1`, `t2`, etc.)
+- **Packet**: A generated review document (spec excerpt + test code + adequacy analysis)
+
+**Adequacy terminology:**
+- **Mechanical adequacy**: Tool-verifiable mapping (contract IDs, obligation labels exist)
+- **Semantic adequacy**: Human/LLM-reviewed correctness (tests actually assert the spec claims)
+- **Contract-level label**: Test assertion labeled `contract-id: description`
+- **Obligation-level label**: Test assertion labeled `contract-id.tN: description`
+
+**Workflow terminology:**
+- **Phase A**: Write all E2E tests (100% coverage, zero `todo!()`, tests allowed to fail)
+- **Phase B**: Fix implementation to make tests pass
+- **SDD (Spec-Driven Development)**: The two-phase development process
+
+See `_AGENTS/DEV_PROCESS.md` for complete workflow details.
 
 ---
 

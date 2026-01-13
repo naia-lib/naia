@@ -6,6 +6,22 @@
 
 ---
 
+## Authority
+
+**This document is authoritative for:**
+- Human development workflow and phase progression (Phase A/B)
+- Spec-Driven Development (SDD) loop and methodology
+- Test harness patterns and test writing conventions
+- Troubleshooting and quality gate procedures
+
+**Defer to:**
+- `specs/README.md` for `naia-specs` tool commands and spec authoring rules
+- `CLAUDE.md` for agent-specific execution protocol (PLAN/OUTPUT convention)
+- `SPEC_CERTIFICATION_PLAN.md` for one-time semantic adequacy certification process
+- Individual specs in `specs/contracts/` for normative behavior definitions
+
+---
+
 ## Table of Contents
 
 1. [Philosophy](#1-philosophy)
@@ -486,6 +502,10 @@ scenario.expect(|_| Some(()));
 
 ## 4. Tooling Reference
 
+**For authoritative tool documentation and complete command reference, see `specs/README.md`.**
+
+This section provides quick reference for common commands used in the SDD workflow.
+
 ### 4.1 CLI Commands
 
 | Command | Purpose | When to Use |
@@ -854,13 +874,13 @@ use test_helpers::{test_client_config, client_connect};
 
 ### Appendix D: Session Checklist
 
-**Start of session:**
+**Start of session (PLAN/OUTPUT Convention):**
 ```
-[ ] Read CLAUDE.md (if unfamiliar)
-[ ] Read PLAN.md (always)
+[ ] Read PLAN.md (REQUIRED - contains goal, constraints, exact commands)
+[ ] Read CLAUDE.md (if unfamiliar with harness/patterns)
 [ ] Run `cargo run -p naia-specs -- verify` (optional health check)
 [ ] Determine current phase (A or B)
-[ ] Identify next action
+[ ] Identify next action from PLAN.md
 ```
 
 **Phase A work (Complete Test Coverage):**
@@ -883,12 +903,21 @@ use test_helpers::{test_client_config, client_connect};
 [ ] Run `cargo run -p naia-specs -- verify`                  # Check no regressions
 ```
 
-**End of session:**
+**End of session (PLAN/OUTPUT Convention):**
 ```
-[ ] Run `cargo run -p naia-specs -- verify` (optional: final health check)
-[ ] Update PLAN.md if state changed
+[ ] Run `git diff --stat` and `git diff` (see what changed)
+[ ] Write OUTPUT.md (REQUIRED - commands run, results, diffs, next steps)
+[ ] Include in OUTPUT.md: file changes, key excerpts, open questions
 [ ] Run `cargo run -p naia-specs -- traceability` if tests added
+[ ] NEVER commit/branch/push (human does this)
 ```
+
+**OUTPUT.md structure:**
+- Commands run + outputs (concise)
+- Files changed (list)
+- `git diff --stat` output
+- Key excerpts (authority blocks, new templates, etc.)
+- Any open questions / potential follow-ups
 
 ### Appendix E: Known Issues
 
