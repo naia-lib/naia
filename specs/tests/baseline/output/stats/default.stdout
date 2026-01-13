@@ -1,0 +1,32 @@
+
+[0;34m═══════════════════════════════════════════════════════════════[0m
+[0;34m  Specification Statistics[0m
+[0;34m═══════════════════════════════════════════════════════════════[0m
+
+Per-file statistics:
+
+File                                   Lines    Words  Contracts
+----                                   -----    -----  ---------
+0_common.md                              344     1803         17
+1_connection_lifecycle.md                472     2404         34
+2_transport.md                            85      488          5
+3_messaging.md                           541     3223         27
+4_time_ticks_commands.md                 294     1865         21
+5_observability_metrics.md               286     1894         11
+6_entity_scopes.md                       205     1511         21
+7_entity_replication.md                  214     1567         12
+8_entity_ownership.md                    312     1823         14
+9_entity_publication.md                  170     1215         17
+10_entity_delegation.md                  219     1487         17
+11_entity_authority.md                   251     1740         16
+12_server_events_api.md                  212     1503         14
+13_client_events_api.md                  199     1310         13
+14_world_integration.md                  204     1421          9
+
+----                                   -----    -----  ---------
+TOTAL                                   4008    25254        248
+
+Additional metrics:
+  - Spec files: 15
+  - Average lines per spec: 267
+  - Average contracts per spec: 16

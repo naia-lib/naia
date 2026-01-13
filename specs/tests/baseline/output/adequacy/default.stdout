@@ -1,0 +1,1397 @@
+
+[0;34m═══════════════════════════════════════════════════════════════[0m
+[0;34m  Contract Adequacy Analysis[0m
+[0;34m═══════════════════════════════════════════════════════════════[0m
+
+[0;34mℹ[0m Analyzing contracts and tests...
+  Found 236 contracts in specs
+
+
+[0;34m═══════════════════════════════════════════════════════════════[0m
+[0;34m  Adequacy To-Do Queue (Ranked)[0m
+[0;34m═══════════════════════════════════════════════════════════════[0m
+
+[0;31m━━━ Priority 1: Missing Tests (4 contracts) ━━━[0m
+
+  ❌ connection-09
+     Spec: 1_connection_lifecycle.md
+     Status: No test functions annotated
+     Next: Write test with /// Contract: [connection-09] annotation
+
+  ❌ connection-11
+     Spec: 1_connection_lifecycle.md
+     Status: No test functions annotated
+     Next: Write test with /// Contract: [connection-11] annotation
+
+  ❌ entity-authority-01
+     Spec: 11_entity_authority.md
+     Status: No test functions annotated
+     Next: Write test with /// Contract: [entity-authority-01] annotation
+
+  ❌ entity-authority-13
+     Spec: 11_entity_authority.md
+     Status: No test functions annotated
+     Next: Write test with /// Contract: [entity-authority-13] annotation
+
+[1;33m━━━ Priority 2: Missing Obligation Mappings (1 contracts) ━━━[0m
+
+  ⚠️  messaging-04
+     Spec: 3_messaging.md
+     Tests: 01_connection_lifecycle.rs, 03_messaging.rs
+     Missing obligations: t1
+     Next: ./spec_tool.sh packet messaging-04
+
+[1;33m━━━ Priority 3: Missing Labels (223 contracts) ━━━[0m
+
+  ⚠️  client-events-00
+     Spec: 13_client_events_api.md
+     Tests: 12_server_events_api.rs, 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-00: ...") to tests
+
+  ⚠️  client-events-01
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-01: ...") to tests
+
+  ⚠️  client-events-02
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-02: ...") to tests
+
+  ⚠️  client-events-03
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-03: ...") to tests
+
+  ⚠️  client-events-04
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-04: ...") to tests
+
+  ⚠️  client-events-05
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-05: ...") to tests
+
+  ⚠️  client-events-06
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-06: ...") to tests
+
+  ⚠️  client-events-07
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-07: ...") to tests
+
+  ⚠️  client-events-08
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-08: ...") to tests
+
+  ⚠️  client-events-09
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-09: ...") to tests
+
+  ⚠️  client-events-10
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-10: ...") to tests
+
+  ⚠️  client-events-11
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-11: ...") to tests
+
+  ⚠️  client-events-12
+     Spec: 13_client_events_api.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("client-events-12: ...") to tests
+
+  ⚠️  commands-01
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("commands-01: ...") to tests
+
+  ⚠️  commands-02
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("commands-02: ...") to tests
+
+  ⚠️  commands-03
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("commands-03: ...") to tests
+
+  ⚠️  commands-03a
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("commands-03a: ...") to tests
+
+  ⚠️  commands-03b
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("commands-03b: ...") to tests
+
+  ⚠️  commands-03c
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("commands-03c: ...") to tests
+
+  ⚠️  commands-03d
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("commands-03d: ...") to tests
+
+  ⚠️  commands-04
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("commands-04: ...") to tests
+
+  ⚠️  commands-05
+     Spec: 4_time_ticks_commands.md
+     Tests: 02_transport.rs, 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("commands-05: ...") to tests
+
+  ⚠️  common-01
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-01: ...") to tests
+
+  ⚠️  common-02
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-02: ...") to tests
+
+  ⚠️  common-02a
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-02a: ...") to tests
+
+  ⚠️  common-03
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-03: ...") to tests
+
+  ⚠️  common-04
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-04: ...") to tests
+
+  ⚠️  common-05
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-05: ...") to tests
+
+  ⚠️  common-06
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-06: ...") to tests
+
+  ⚠️  common-07
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-07: ...") to tests
+
+  ⚠️  common-08
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-08: ...") to tests
+
+  ⚠️  common-09
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-09: ...") to tests
+
+  ⚠️  common-10
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-10: ...") to tests
+
+  ⚠️  common-11
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-11: ...") to tests
+
+  ⚠️  common-11a
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-11a: ...") to tests
+
+  ⚠️  common-12
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-12: ...") to tests
+
+  ⚠️  common-12a
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-12a: ...") to tests
+
+  ⚠️  common-13
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-13: ...") to tests
+
+  ⚠️  common-14
+     Spec: 0_common.md
+     Tests: 00_common.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("common-14: ...") to tests
+
+  ⚠️  connection-01
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-01: ...") to tests
+
+  ⚠️  connection-02
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-02: ...") to tests
+
+  ⚠️  connection-03
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-03: ...") to tests
+
+  ⚠️  connection-04
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-04: ...") to tests
+
+  ⚠️  connection-05
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-05: ...") to tests
+
+  ⚠️  connection-06
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-06: ...") to tests
+
+  ⚠️  connection-07
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-07: ...") to tests
+
+  ⚠️  connection-08
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-08: ...") to tests
+
+  ⚠️  connection-10
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-10: ...") to tests
+
+  ⚠️  connection-12
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-12: ...") to tests
+
+  ⚠️  connection-13
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-13: ...") to tests
+
+  ⚠️  connection-14
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-14: ...") to tests
+
+  ⚠️  connection-14a
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-14a: ...") to tests
+
+  ⚠️  connection-15
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-15: ...") to tests
+
+  ⚠️  connection-16
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-16: ...") to tests
+
+  ⚠️  connection-17
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-17: ...") to tests
+
+  ⚠️  connection-18
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-18: ...") to tests
+
+  ⚠️  connection-19
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-19: ...") to tests
+
+  ⚠️  connection-20
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-20: ...") to tests
+
+  ⚠️  connection-21
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-21: ...") to tests
+
+  ⚠️  connection-22
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-22: ...") to tests
+
+  ⚠️  connection-23
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-23: ...") to tests
+
+  ⚠️  connection-24
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-24: ...") to tests
+
+  ⚠️  connection-25
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-25: ...") to tests
+
+  ⚠️  connection-26
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-26: ...") to tests
+
+  ⚠️  connection-27
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-27: ...") to tests
+
+  ⚠️  connection-28
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-28: ...") to tests
+
+  ⚠️  connection-29
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-29: ...") to tests
+
+  ⚠️  connection-30
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-30: ...") to tests
+
+  ⚠️  connection-31
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-31: ...") to tests
+
+  ⚠️  connection-32
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-32: ...") to tests
+
+  ⚠️  connection-33
+     Spec: 1_connection_lifecycle.md
+     Tests: 01_connection_lifecycle.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("connection-33: ...") to tests
+
+  ⚠️  entity-authority-02
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-02: ...") to tests
+
+  ⚠️  entity-authority-03
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-03: ...") to tests
+
+  ⚠️  entity-authority-04
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-04: ...") to tests
+
+  ⚠️  entity-authority-05
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-05: ...") to tests
+
+  ⚠️  entity-authority-06
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-06: ...") to tests
+
+  ⚠️  entity-authority-07
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-07: ...") to tests
+
+  ⚠️  entity-authority-08
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-08: ...") to tests
+
+  ⚠️  entity-authority-09
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-09: ...") to tests
+
+  ⚠️  entity-authority-10
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-10: ...") to tests
+
+  ⚠️  entity-authority-11
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-11: ...") to tests
+
+  ⚠️  entity-authority-12
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-12: ...") to tests
+
+  ⚠️  entity-authority-14
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-14: ...") to tests
+
+  ⚠️  entity-authority-15
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-15: ...") to tests
+
+  ⚠️  entity-authority-16
+     Spec: 11_entity_authority.md
+     Tests: 11_entity_authority.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-authority-16: ...") to tests
+
+  ⚠️  entity-delegation-01
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-01: ...") to tests
+
+  ⚠️  entity-delegation-02
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-02: ...") to tests
+
+  ⚠️  entity-delegation-03
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-03: ...") to tests
+
+  ⚠️  entity-delegation-04
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-04: ...") to tests
+
+  ⚠️  entity-delegation-05
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-05: ...") to tests
+
+  ⚠️  entity-delegation-06
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-06: ...") to tests
+
+  ⚠️  entity-delegation-07
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-07: ...") to tests
+
+  ⚠️  entity-delegation-08
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-08: ...") to tests
+
+  ⚠️  entity-delegation-09
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-09: ...") to tests
+
+  ⚠️  entity-delegation-10
+     Spec: 10_entity_delegation.md
+     Tests: 06_entity_scopes.rs, 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-10: ...") to tests
+
+  ⚠️  entity-delegation-11
+     Spec: 10_entity_delegation.md
+     Tests: 06_entity_scopes.rs, 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-11: ...") to tests
+
+  ⚠️  entity-delegation-12
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-12: ...") to tests
+
+  ⚠️  entity-delegation-13
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-13: ...") to tests
+
+  ⚠️  entity-delegation-14
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-14: ...") to tests
+
+  ⚠️  entity-delegation-15
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-15: ...") to tests
+
+  ⚠️  entity-delegation-16
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-16: ...") to tests
+
+  ⚠️  entity-delegation-17
+     Spec: 10_entity_delegation.md
+     Tests: 10_entity_delegation.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-delegation-17: ...") to tests
+
+  ⚠️  entity-ownership-01
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-01: ...") to tests
+
+  ⚠️  entity-ownership-02
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-02: ...") to tests
+
+  ⚠️  entity-ownership-03
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-03: ...") to tests
+
+  ⚠️  entity-ownership-04
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-04: ...") to tests
+
+  ⚠️  entity-ownership-05
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-05: ...") to tests
+
+  ⚠️  entity-ownership-06
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-06: ...") to tests
+
+  ⚠️  entity-ownership-07
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-07: ...") to tests
+
+  ⚠️  entity-ownership-08
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-08: ...") to tests
+
+  ⚠️  entity-ownership-09
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-09: ...") to tests
+
+  ⚠️  entity-ownership-10
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-10: ...") to tests
+
+  ⚠️  entity-ownership-11
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-11: ...") to tests
+
+  ⚠️  entity-ownership-12
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-12: ...") to tests
+
+  ⚠️  entity-ownership-13
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-13: ...") to tests
+
+  ⚠️  entity-ownership-14
+     Spec: 8_entity_ownership.md
+     Tests: 08_entity_ownership.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-ownership-14: ...") to tests
+
+  ⚠️  entity-publication-01
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-01: ...") to tests
+
+  ⚠️  entity-publication-02
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-02: ...") to tests
+
+  ⚠️  entity-publication-03
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-03: ...") to tests
+
+  ⚠️  entity-publication-04
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-04: ...") to tests
+
+  ⚠️  entity-publication-05
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-05: ...") to tests
+
+  ⚠️  entity-publication-06
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-06: ...") to tests
+
+  ⚠️  entity-publication-07
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-07: ...") to tests
+
+  ⚠️  entity-publication-08
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-08: ...") to tests
+
+  ⚠️  entity-publication-09
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-09: ...") to tests
+
+  ⚠️  entity-publication-10
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-10: ...") to tests
+
+  ⚠️  entity-publication-11
+     Spec: 9_entity_publication.md
+     Tests: 09_entity_publication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-publication-11: ...") to tests
+
+  ⚠️  entity-replication-01
+     Spec: 7_entity_replication.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-01: ...") to tests
+
+  ⚠️  entity-replication-02
+     Spec: 7_entity_replication.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-02: ...") to tests
+
+  ⚠️  entity-replication-03
+     Spec: 7_entity_replication.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-03: ...") to tests
+
+  ⚠️  entity-replication-04
+     Spec: 7_entity_replication.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-04: ...") to tests
+
+  ⚠️  entity-replication-05
+     Spec: 7_entity_replication.md
+     Tests: 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-05: ...") to tests
+
+  ⚠️  entity-replication-06
+     Spec: 7_entity_replication.md
+     Tests: 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-06: ...") to tests
+
+  ⚠️  entity-replication-07
+     Spec: 7_entity_replication.md
+     Tests: 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-07: ...") to tests
+
+  ⚠️  entity-replication-08
+     Spec: 7_entity_replication.md
+     Tests: 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-08: ...") to tests
+
+  ⚠️  entity-replication-09
+     Spec: 7_entity_replication.md
+     Tests: 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-09: ...") to tests
+
+  ⚠️  entity-replication-10
+     Spec: 7_entity_replication.md
+     Tests: 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-10: ...") to tests
+
+  ⚠️  entity-replication-11
+     Spec: 7_entity_replication.md
+     Tests: 06_entity_scopes.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-11: ...") to tests
+
+  ⚠️  entity-replication-12
+     Spec: 7_entity_replication.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-replication-12: ...") to tests
+
+  ⚠️  entity-scopes-01
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs, 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-01: ...") to tests
+
+  ⚠️  entity-scopes-02
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs, 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-02: ...") to tests
+
+  ⚠️  entity-scopes-03
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs, 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-03: ...") to tests
+
+  ⚠️  entity-scopes-04
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs, 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-04: ...") to tests
+
+  ⚠️  entity-scopes-05
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs, 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-05: ...") to tests
+
+  ⚠️  entity-scopes-06
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-06: ...") to tests
+
+  ⚠️  entity-scopes-07
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-07: ...") to tests
+
+  ⚠️  entity-scopes-08
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-08: ...") to tests
+
+  ⚠️  entity-scopes-09
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-09: ...") to tests
+
+  ⚠️  entity-scopes-10
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs, 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-10: ...") to tests
+
+  ⚠️  entity-scopes-11
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-11: ...") to tests
+
+  ⚠️  entity-scopes-12
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-12: ...") to tests
+
+  ⚠️  entity-scopes-13
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs, 07_entity_replication.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-13: ...") to tests
+
+  ⚠️  entity-scopes-14
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-14: ...") to tests
+
+  ⚠️  entity-scopes-15
+     Spec: 6_entity_scopes.md
+     Tests: 06_entity_scopes.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("entity-scopes-15: ...") to tests
+
+  ⚠️  messaging-01
+     Spec: 3_messaging.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-01: ...") to tests
+
+  ⚠️  messaging-02
+     Spec: 3_messaging.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-02: ...") to tests
+
+  ⚠️  messaging-03
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-03: ...") to tests
+
+  ⚠️  messaging-05
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs, 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-05: ...") to tests
+
+  ⚠️  messaging-11
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-11: ...") to tests
+
+  ⚠️  messaging-13
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-13: ...") to tests
+
+  ⚠️  messaging-14
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-14: ...") to tests
+
+  ⚠️  messaging-15
+     Spec: 3_messaging.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-15: ...") to tests
+
+  ⚠️  messaging-16
+     Spec: 3_messaging.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-16: ...") to tests
+
+  ⚠️  messaging-17
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs, 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-17: ...") to tests
+
+  ⚠️  messaging-18
+     Spec: 3_messaging.md
+     Tests: 13_client_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-18: ...") to tests
+
+  ⚠️  messaging-19
+     Spec: 3_messaging.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-19: ...") to tests
+
+  ⚠️  messaging-20
+     Spec: 3_messaging.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-20: ...") to tests
+
+  ⚠️  messaging-23
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-23: ...") to tests
+
+  ⚠️  messaging-24
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-24: ...") to tests
+
+  ⚠️  messaging-25
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-25: ...") to tests
+
+  ⚠️  messaging-26
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-26: ...") to tests
+
+  ⚠️  messaging-27
+     Spec: 3_messaging.md
+     Tests: 03_messaging.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("messaging-27: ...") to tests
+
+  ⚠️  observability-01
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-01: ...") to tests
+
+  ⚠️  observability-01a
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-01a: ...") to tests
+
+  ⚠️  observability-02
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-02: ...") to tests
+
+  ⚠️  observability-03
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-03: ...") to tests
+
+  ⚠️  observability-04
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-04: ...") to tests
+
+  ⚠️  observability-05
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-05: ...") to tests
+
+  ⚠️  observability-06
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-06: ...") to tests
+
+  ⚠️  observability-07
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-07: ...") to tests
+
+  ⚠️  observability-08
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-08: ...") to tests
+
+  ⚠️  observability-09
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-09: ...") to tests
+
+  ⚠️  observability-10
+     Spec: 5_observability_metrics.md
+     Tests: 05_observability_metrics.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("observability-10: ...") to tests
+
+  ⚠️  server-events-00
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-00: ...") to tests
+
+  ⚠️  server-events-01
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-01: ...") to tests
+
+  ⚠️  server-events-02
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-02: ...") to tests
+
+  ⚠️  server-events-03
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-03: ...") to tests
+
+  ⚠️  server-events-04
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-04: ...") to tests
+
+  ⚠️  server-events-05
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-05: ...") to tests
+
+  ⚠️  server-events-06
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-06: ...") to tests
+
+  ⚠️  server-events-07
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-07: ...") to tests
+
+  ⚠️  server-events-08
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-08: ...") to tests
+
+  ⚠️  server-events-09
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-09: ...") to tests
+
+  ⚠️  server-events-10
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-10: ...") to tests
+
+  ⚠️  server-events-11
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-11: ...") to tests
+
+  ⚠️  server-events-12
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-12: ...") to tests
+
+  ⚠️  server-events-13
+     Spec: 12_server_events_api.md
+     Tests: 12_server_events_api.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("server-events-13: ...") to tests
+
+  ⚠️  time-01
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-01: ...") to tests
+
+  ⚠️  time-02
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-02: ...") to tests
+
+  ⚠️  time-03
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-03: ...") to tests
+
+  ⚠️  time-04
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-04: ...") to tests
+
+  ⚠️  time-05
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-05: ...") to tests
+
+  ⚠️  time-06
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-06: ...") to tests
+
+  ⚠️  time-07
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-07: ...") to tests
+
+  ⚠️  time-08
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-08: ...") to tests
+
+  ⚠️  time-09
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-09: ...") to tests
+
+  ⚠️  time-10
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-10: ...") to tests
+
+  ⚠️  time-11
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-11: ...") to tests
+
+  ⚠️  time-12
+     Spec: 4_time_ticks_commands.md
+     Tests: 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("time-12: ...") to tests
+
+  ⚠️  transport-01
+     Spec: 2_transport.md
+     Tests: 02_transport.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("transport-01: ...") to tests
+
+  ⚠️  transport-02
+     Spec: 2_transport.md
+     Tests: 02_transport.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("transport-02: ...") to tests
+
+  ⚠️  transport-03
+     Spec: 2_transport.md
+     Tests: 02_transport.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("transport-03: ...") to tests
+
+  ⚠️  transport-04
+     Spec: 2_transport.md
+     Tests: 02_transport.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("transport-04: ...") to tests
+
+  ⚠️  transport-05
+     Spec: 2_transport.md
+     Tests: 02_transport.rs, 04_time_ticks_commands.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("transport-05: ...") to tests
+
+  ⚠️  world-integration-01
+     Spec: 14_world_integration.md
+     Tests: 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("world-integration-01: ...") to tests
+
+  ⚠️  world-integration-02
+     Spec: 14_world_integration.md
+     Tests: 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("world-integration-02: ...") to tests
+
+  ⚠️  world-integration-03
+     Spec: 14_world_integration.md
+     Tests: 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("world-integration-03: ...") to tests
+
+  ⚠️  world-integration-04
+     Spec: 14_world_integration.md
+     Tests: 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("world-integration-04: ...") to tests
+
+  ⚠️  world-integration-05
+     Spec: 14_world_integration.md
+     Tests: 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("world-integration-05: ...") to tests
+
+  ⚠️  world-integration-06
+     Spec: 14_world_integration.md
+     Tests: 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("world-integration-06: ...") to tests
+
+  ⚠️  world-integration-07
+     Spec: 14_world_integration.md
+     Tests: 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("world-integration-07: ...") to tests
+
+  ⚠️  world-integration-08
+     Spec: 14_world_integration.md
+     Tests: 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("world-integration-08: ...") to tests
+
+  ⚠️  world-integration-09
+     Spec: 14_world_integration.md
+     Tests: 14_world_integration.rs
+     Status: Tests exist but no labeled assertions
+     Next: Add spec_expect("world-integration-09: ...") to tests
+
+[0;32m━━━ OK: Adequacy Met (8 contracts) ━━━[0m
+
+  All obligations mapped to labeled assertions (or no obligations with contract-level label).
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Summary:
+  Total contracts:             236
+  Missing tests:               4
+  Missing obligation mappings: 1
+  Missing labels:              223
+  Adequacy met:                8
+
+[1;33m⚠[0m Adequacy issues found (use --strict to fail on issues)

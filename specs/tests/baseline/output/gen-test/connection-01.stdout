@@ -1,0 +1,47 @@
+[0;34mℹ[0m Found contract in: 1_connection_lifecycle.md
+
+/// Contract: [connection-01]
+/// Source: 1_connection_lifecycle.md
+///
+/// Guarantee: TODO - Copy from spec
+///
+/// Scenario: TODO - Describe Given/When/Then
+/// Given:
+///   - TODO: Initial conditions
+/// When:
+///   - TODO: Trigger action
+/// Then:
+///   - TODO: Expected outcome
+#[test]
+fn connection_01_scenario_1() {
+    use naia_server::ServerConfig;
+    use naia_test::{protocol, Auth, Scenario};
+
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| {
+        ctx.server(|server| server.make_room().key())
+    });
+
+    // TODO: Connect clients as needed
+    // let client_key = client_connect(&mut scenario, &room_key, "Client", Auth::new("user", "pass"), test_client_config(), test_protocol);
+
+    // TODO: Setup preconditions (Given)
+    scenario.mutate(|ctx| {
+        // Setup
+    });
+
+    // TODO: Trigger action (When)
+    scenario.mutate(|ctx| {
+        // Action
+    });
+
+    // TODO: Verify postconditions (Then)
+    scenario.expect(|ctx| {
+        // Assertion
+        todo!("Implement assertion for [connection-01]")
+    });
+}
