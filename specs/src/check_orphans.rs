@@ -3,7 +3,7 @@ use std::fs;
 use regex::Regex;
 use crate::util::{print_header, print_warning, print_success, basename};
 
-pub fn run_check_orphans(root: &PathBuf) -> anyhow::Result<()> {
+pub fn run_check_orphans(root: &PathBuf) -> anyhow::Result<usize> {
     print_header("Checking for Orphan MUST/MUST NOT Statements");
 
     let mut orphans = 0;
@@ -134,6 +134,5 @@ pub fn run_check_orphans(root: &PathBuf) -> anyhow::Result<()> {
         println!("\x1b[1;33m⚠\x1b[0m {} potential orphan statements found (review manually)", orphans);
     }
     
-    // Return 0 always as per bash script
-    Ok(())
+    Ok(orphans)
 }

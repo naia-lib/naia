@@ -66,7 +66,10 @@ enum Commands {
         contract_id: String,
     },
     /// Generate contract-to-test matrix
-    Traceability,
+    Traceability {
+        #[arg(index = 1)]
+        output: Option<String>,
+    },
     /// Generate contract review packet
     Packet {
         /// Contract ID
@@ -86,6 +89,22 @@ enum Commands {
         /// Test only one contract
         #[arg(long)]
         contract: Option<String>,
+
+        /// Fail if orphan MUSTs exist
+        #[arg(long)]
+        strict_orphans: bool,
+
+        /// Fail if any contracts uncovered
+        #[arg(long)]
+        strict_coverage: bool,
+
+        /// Include full reports with --contract
+        #[arg(long)]
+        full_report: bool,
+
+        /// Write summary to file
+        #[arg(long)]
+        write_report: Option<String>,
     },
     /// Show help message
     Help,
@@ -204,6 +223,10 @@ fn main() {
              let index = Index::build(root).expect("Failed to build index");
              packet::generate_packet(&index, contract_id, *full_tests, out.clone()).expect("Failed to generate packet");
         }
+        Some(Commands::Registry { output }) => {
+             let root = find_workspace_root();
+             naia_specs::registry::run_registry(&root, output.clone()).expect("Failed to run registry");
+        }
         Some(Commands::Coverage) => {
              let root = find_workspace_root();
              let index = Index::build(root).expect("Failed to build index");
@@ -220,7 +243,7 @@ fn main() {
              let root = find_workspace_root();
              // Lint scans the directory directly, doesn't need Index parsing
              match lint::run_lint(&root) {
-                 Ok(issues) if issues > 0 => std::process::exit(issues),
+                 Ok(issues) if issues > 0 => std::process::exit(issues as i32),
                  Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); },
                  _ => {}
              }
@@ -228,25 +251,46 @@ fn main() {
         Some(Commands::Validate) => {
              let root = find_workspace_root();
              match validate::run_validate(&root) {
-                 Ok(errors) if errors > 0 => std::process::exit(errors),
+                 Ok(errors) if errors > 0 => std::process::exit(errors as i32),
                  Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); },
                  _ => {}
              }
         }
         Some(Commands::CheckOrphans) => {
              let root = find_workspace_root();
-             check_orphans::run_check_orphans(&root).expect("Failed to run check-orphans");
-        }
-        Some(Commands::CheckRefs) => {
-             let root = find_workspace_root();
-             match check_refs::run_check_refs(&root) {
-                 Ok(errors) if errors > 0 => std::process::exit(errors),
+             match check_orphans::run_check_orphans(&root) {
+                 Ok(count) if count > 0 => std::process::exit(count as i32),
                  Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); },
                  _ => {}
              }
         }
-        Some(Commands::Bundle { output, no_template }) => {
-             println!("Bundle command not implemented yet. Output: {:?}, No template: {}", output, no_template);
+        Some(Commands::CheckRefs) => {
+             let root = find_workspace_root();
+             match check_refs::run_check_refs(&root) {
+                 Ok(errors) if errors > 0 => std::process::exit(errors as i32),
+                 Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); },
+                 _ => {}
+             }
+        }
+        Some(Commands::Traceability { output }) => {
+             let root = find_workspace_root();
+             naia_specs::traceability::run_traceability(&root, output.clone(), false).expect("Failed to run traceability");
+        }
+        Some(Commands::Verify { contract, strict_orphans, strict_coverage, full_report, write_report }) => {
+             let root = find_workspace_root();
+             match naia_specs::verify::run_verify(&root, contract.clone(), *strict_orphans, *strict_coverage, *full_report, write_report.clone()) {
+                 Ok(errors) if errors > 0 => std::process::exit(errors as i32),
+                 Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); },
+                 _ => {}
+             }
+        }
+        Some(Commands::Bundle { output, .. }) => {
+             let root = find_workspace_root();
+             naia_specs::bundle::run_bundle(&root, output.clone()).expect("Failed to run bundle");
+        }
+        Some(Commands::GenTest { contract_id }) => {
+             let root = find_workspace_root();
+             naia_specs::gen_test::run_gen_test(&root, contract_id).expect("Failed to run gen-test");
         }
         _ => {
             // Should be handled by error checking above, or explicit variants

@@ -73,7 +73,7 @@ impl Index {
             
             let mut current_contract: Option<String> = None;
             let mut in_obligations = false;
-            let mut start_line = 0;
+            let mut start_line;
 
             for (idx, line) in content.lines().enumerate() {
                 let line_num = idx + 1;

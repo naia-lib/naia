@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 pub fn print_header(title: &str) {
     let blue = "\x1b[0;34m";
@@ -26,7 +26,13 @@ pub fn print_error(msg: &str) {
     println!("{}✗{} {}", red, nc, msg);
 }
 
-pub fn basename(path: &PathBuf) -> String {
+pub fn print_info(msg: &str) {
+    let blue = "\x1b[0;34m";
+    let nc = "\x1b[0m";
+    println!("{}ℹ{} {}", blue, nc, msg);
+}
+
+pub fn basename(path: &Path) -> String {
     path.file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("")

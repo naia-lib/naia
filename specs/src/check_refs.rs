@@ -4,10 +4,10 @@ use regex::Regex;
 use std::collections::HashSet;
 use crate::util::{print_header, print_warning, print_error, print_success, basename};
 
-pub fn run_check_refs(root: &PathBuf) -> anyhow::Result<i32> {
+pub fn run_check_refs(root: &PathBuf) -> anyhow::Result<usize> {
     print_header("Checking Cross-References");
 
-    let mut errors = 0;
+    let mut errors: usize = 0;
 
     let contracts_dir = root.join("specs/contracts");
     

@@ -1,15 +1,9 @@
 use anyhow::Result;
 use crate::index::Index;
+use crate::util::{print_header, print_success, print_warning};
 
-const RED: &str = "\x1b[0;31m";
-const GREEN: &str = "\x1b[0;32m";
-const YELLOW: &str = "\x1b[1;33m";
-const BLUE: &str = "\x1b[0;34m";
-const NC: &str = "\x1b[0m";
-
-pub fn run_coverage(index: &Index) -> Result<()> {
-    println!("\n{}═══════════════════════════════════════════════════════════════{}\n{}  Contract Coverage Analysis{}\n{}═══════════════════════════════════════════════════════════════{}\n", 
-        BLUE, NC, BLUE, NC, BLUE, NC);
+pub fn run_coverage(index: &Index) -> Result<(usize, usize)> {
+    print_header("Contract Coverage Analysis");
 
     let mut all_contracts: Vec<_> = index.contracts.keys().collect();
     all_contracts.sort();
@@ -19,8 +13,7 @@ pub fn run_coverage(index: &Index) -> Result<()> {
     let covered_count = covered_contracts.len();
     
     if total_count == 0 {
-        println!("{}✗{} No contracts found. Run ./spec_tool.sh registry first.", RED, NC);
-        return Err(anyhow::anyhow!("No contracts found"));
+        return Err(anyhow::anyhow!("No contracts found. Run ./spec_tool.sh registry first."));
     }
 
     let coverage_pct = if total_count > 0 {
@@ -50,15 +43,15 @@ pub fn run_coverage(index: &Index) -> Result<()> {
             println!("  - {}", id);
         }
     } else {
-        println!("{}✓{} All contracts have test annotations!", GREEN, NC);
+        print_success("All contracts have test annotations!");
     }
 
     println!("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     if coverage_pct >= 80 {
-        println!("{}✓{} Coverage target met (≥80%)", GREEN, NC);
+        print_success("Coverage target met (≥80%)");
     } else {
-        println!("{}⚠{} Coverage below target (<80%)", YELLOW, NC);
+        print_warning("Coverage below target (<80%)");
     }
 
-    Ok(())
+    Ok((covered_count, total_count))
 }

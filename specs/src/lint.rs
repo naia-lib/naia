@@ -6,11 +6,11 @@ use crate::util::{print_header, print_warning, print_success, basename};
 
 // Removed local implementations of print_*, basename
 
-pub fn run_lint(root: &PathBuf) -> anyhow::Result<i32> {
+pub fn run_lint(root: &PathBuf) -> anyhow::Result<usize> {
     print_header("Linting Specifications");
 
-    let issues = 0;
-    let mut warnings = 0;
+    let issues: usize = 0;
+    let mut warnings: usize = 0;
 
     let contracts_dir = root.join("specs/contracts");
     
