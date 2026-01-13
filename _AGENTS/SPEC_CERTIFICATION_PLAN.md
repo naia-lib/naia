@@ -20,6 +20,7 @@
 - `DEV_PROCESS.md` for ongoing SDD workflow after certification is complete
 - `CLAUDE.md` for agent execution protocol (PLAN/OUTPUT convention)
 - Individual specs in `specs/contracts/` for normative behavior definitions
+- `_AGENTS/PLAN.md` + `_AGENTS/OUTPUT.md` for current status, priorities, and Definition-of-Done
 
 **Note:** This is a **one-time certification plan**. After completion, this process is not added to CI. The `adequacy` tool remains available as a local dev gate.
 
@@ -149,7 +150,13 @@ Every obligation MUST have at least one labeled assertion:
 scenario.spec_expect("contract-id.tN: description", || { /* assertion */ })
 ```
 
-**CRITICAL:** Label string must be on same line as function call (parser requirement).
+**CRITICAL (tooling requirement):**
+- Labels must be **string literals** (no `format!`, no variables).
+- Newlines/multi-line calls are fine (AST-based extraction).
+- Labels must match:
+  - `contract-id: description` (contract-level)
+  - `contract-id.tN: description` (obligation-level)
+- If the tool enforces a specific argument position (recommended: **first arg is the label**), follow that convention consistently.
 
 ### 5.4 No lying labels
 

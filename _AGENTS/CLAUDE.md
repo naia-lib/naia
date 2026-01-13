@@ -20,18 +20,19 @@ Naia is a cross-platform Rust networking engine for multiplayer games. Architect
 
 ---
 
-## Current State (2026-01-12 - Phase B Active)
+## Current Status (NOT CANONICAL — READ PLAN/OUTPUT)
 
-| Metric | Value |
-|--------|-------|
-| Phase A | **COMPLETE ✓** (236/236 contracts, 0 todos) |
-| Phase B | **IN PROGRESS** (195/215 tests passing, 91%) |
-| Critical bugs fixed | **6** (overflow, bandwidth, replication, 2x framework violations, delegation) |
-| Major wins today | **+37 tests passing!** (13 structure fixes in entity_ownership) |
+**Do not trust this file for "what phase we're in."** Status lives in:
+- `_AGENTS/PLAN.md` (current marching orders + DoD)
+- `_AGENTS/OUTPUT.md` (what actually happened + evidence)
 
-**Goal:** Phase B - fix all implementation gaps and test structure issues.
+As of 2026-01-13, the top priority is **certification-readiness (Phase A2 mechanics)**:
+- Keep `cargo run -p naia_spec_tool -- validate` GREEN
+- Drive `cargo run -p naia_spec_tool -- adequacy --strict` to GREEN
+- Dry-run packets for sanity
+- Only then do semantic fan-out
 
-**Progress:** 🎉 **Major breakthrough!** Fixed all 13 test structure violations in entity_ownership. Next: investigate 5 timeout failures, then tackle 14 delegation/authority bugs.
+Runtime pass rate is secondary until certification gates are complete.
 
 ## Test File Organization (1:1 Mapping)
 
@@ -79,19 +80,15 @@ specs/contracts/0N_domain.spec.md  →  test/tests/0N_domain.rs
 specs/contracts/*.md (contracts) → test/tests/*.rs (E2E tests) → Implementation
 ```
 
-### Two-Phase Development Process
+### Development Phases (certification-first)
 
-**Phase A: Complete Test Coverage (COMPLETE ✓)**
-- Write compiling E2E tests for ALL spec contracts
-- Tests MUST compile with NO `todo!()` macros
-- Tests are allowed to FAIL - that indicates implementation gaps
-- **Status:** 100% coverage achieved (236/236 contracts, 0 todos)
+**Phase A (Certification):**
+- A1: Policy B obligations exist for every contract (at least `t1`)
+- A2: Mechanical adequacy: `validate` GREEN and `adequacy --strict` GREEN
+- A3: Semantic certification via packets (expensive; do last)
 
-**Phase B: Fix Implementation (CURRENT)**
-- Run all tests, observe failures
-- Systematically fix implementation to make tests pass
-- Failing tests are the bug tracker
-- **Status:** 195/215 tests passing (91%)
+**Phase B (Implementation hardening):**
+- After certification is complete, fix implementation until tests pass.
 
 **Key insight:** A `todo!()` in a test is a **specification gap**, not an implementation bug. Write what you *expect* to happen, and let the test fail if the implementation is wrong.
 
@@ -245,18 +242,18 @@ let tick = scenario.mutate(|ctx| {
 | `specs/generated/TRACEABILITY.md` | Contract↔test mapping | Checking coverage |
 | `specs/generated/GAP_ANALYSIS.md` | Prioritized uncovered contracts | Planning work |
 
-## Known Issues (Phase B)
+## Historical Notes (may be stale — defer to PLAN/OUTPUT)
 
-**Test Structure Issues (13 tests):**
+**Example past issues (do not assume still true):**
 - File: `08_entity_ownership.rs`
 - Problem: Sequential `mutate()` calls without `expect()` between them
 - Fix: Merge operations or add proper `expect()` with real condition
 
-**Timeout Failures (8 tests):**
+**Example past timeouts:**
 - Files: `03_messaging.rs` (4), `06_entity_scopes.rs` (4)
 - Debug with: `cargo test --features e2e_debug <test> -- --nocapture`
 
-**Delegation/Authority Bugs (15 tests):**
+**Example past delegation/authority bugs:**
 - Files: `10_entity_delegation.rs` (10), `11_entity_authority.rs` (5)
 - Likely real state machine bugs - investigate after structure fixes
 
