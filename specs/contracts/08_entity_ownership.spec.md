@@ -76,7 +76,7 @@ The server MAY ignore unauthorized writes silently and/or record a metric/log, b
 
 For any server-owned entity `E` that is NOT delegated (`replication_config(E) != Some(Delegated)`), the server MUST NOT accept replicated writes from any client for `E`. Such writes MUST be ignored/dropped.
 
-For delegated entities, client writes are governed by `10_entity_delegation.md` / `11_entity_authority.md` (authority holder may write; others must not).
+For delegated entities, client writes are governed by `10_entity_delegation.spec.md` / `11_entity_authority.spec.md` (authority holder may write; others must not).
 
 The server MAY ignore unauthorized writes silently and/or record a metric/log, but MUST NOT apply them.
 
@@ -116,7 +116,7 @@ A client is a permitted writer for entity `E` iff:
 - If Naia's internal replication path would enqueue/serialize/send a replication write from a client that is not a permitted writer (framework invariant violation), Naia MUST panic.
 
 Cross-link:
-- Delegated authority write permission is defined in `10_entity_delegation.md` / `11_entity_authority.md`.
+- Delegated authority write permission is defined in `10_entity_delegation.spec.md` / `11_entity_authority.spec.md`.
 
 **Observable signals:**
 - API returns `Err` for unauthorized write attempts
@@ -304,9 +304,9 @@ Each contract above includes inline test obligations. Summary:
 
 ## Cross-references
 
-- Scopes: `6_entity_scopes.md`
-- Publication: `9_entity_publication.md`
-- Delegation: `10_entity_delegation.md`
-- Authority: `11_entity_authority.md`
-- Events: `12_server_events_api.md`, `13_client_events_api.md`
-- Error taxonomy: `0_common.md`
+- Scopes: `06_entity_scopes.spec.md`
+- Publication: `09_entity_publication.spec.md`
+- Delegation: `10_entity_delegation.spec.md`
+- Authority: `11_entity_authority.spec.md`
+- Events: `12_server_events_api.spec.md`, `13_client_events_api.spec.md`
+- Error taxonomy: `00_common.spec.md`

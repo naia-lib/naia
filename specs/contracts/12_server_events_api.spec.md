@@ -5,11 +5,11 @@ This spec defines the **only** valid semantics for the server-side Events API su
 Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 
 Related specs:
-- `7_entity_replication.md` (spawn/update/remove/despawn semantics)
-- `6_entity_scopes.md` (in-scope vs out-of-scope and snapshot behavior)
-- `3_messaging.md` (message ordering, reliability, request/response semantics)
-- `4_time_ticks_commands.md` (tick definition, wrap ordering, command timing model)
-- `1_connection_lifecycle.md` (connect/disconnect/auth ordering + cleanup)
+- `07_entity_replication.spec.md` (spawn/update/remove/despawn semantics)
+- `06_entity_scopes.spec.md` (in-scope vs out-of-scope and snapshot behavior)
+- `03_messaging.spec.md` (message ordering, reliability, request/response semantics)
+- `04_time_ticks_commands.spec.md` (tick definition, wrap ordering, command timing model)
+- `01_connection_lifecycle.spec.md` (connect/disconnect/auth ordering + cleanup)
 
 ---
 
@@ -22,7 +22,7 @@ Related specs:
 - **Process step**: The act of processing all buffered packets, applying protocol semantics, and producing new pending events.
 - **Drain**: Reading events from the API such that they are removed from the pending queue (pure read+remove).
 - **In scope**: A user is considered a recipient for an entity only if `InScope(user, entity)` per `entity_scopes`.
-- **Tick**: Server simulation tick as defined in `4_time_ticks_commands.md`. (Wrap-safe ordering applies.)
+- **Tick**: Server simulation tick as defined in `04_time_ticks_commands.spec.md`. (Wrap-safe ordering applies.)
 
 ---
 
@@ -101,7 +101,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ### [server-events-06] — Disconnect cleanup is consistent with scope + ownership contracts
 **Rule**
 - After a disconnect is observed, the server MUST have cleaned up all per-connection scoped state attributable solely to that session (no “ghost” scoped entities for that user).
-- Additionally, ownership cleanup MUST follow `8_entity_ownership.md` (client-owned entities despawn when owner disconnects).
+- Additionally, ownership cleanup MUST follow `08_entity_ownership.spec.md` (client-owned entities despawn when owner disconnects).
 
 **Test obligations**
 - `server-events-06.t1` (TODO) Disconnect while scoped → scope membership removed.
@@ -138,7 +138,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ### [server-events-09] — Despawn/leave-scope events are exactly-once and end that user’s lifecycle
 **Rule**
 - When `E` leaves scope for `U` (scope change or true despawn), the World events stream MUST expose exactly one despawn/exit event for `(U, E)`.
-- After `(U, E)` has exited, the server MUST NOT surface further insert/update/remove events for `(U, E, *)` unless `E` re-enters scope for `U` as a new lifecycle (per `6_entity_scopes.md` + `7_entity_replication.md`).
+- After `(U, E)` has exited, the server MUST NOT surface further insert/update/remove events for `(U, E, *)` unless `E` re-enters scope for `U` as a new lifecycle (per `06_entity_scopes.spec.md` + `07_entity_replication.spec.md`).
 
 **Test obligations**
 - `server-events-09.t1` (TODO) Despawn while in scope → exit once; no further component events for that lifecycle.
@@ -178,7 +178,7 @@ Additional requirements:
 ### [server-events-12] — Request/response events: exactly-once surfacing, correct matching, drain once
 **Rule**
 - For each incoming request accepted by the protocol layer, the server MUST surface exactly one corresponding request event/handle to the application.
-- Any response matching MUST be correct per `3_messaging.md` and MUST NOT surface duplicates under retransmit/duplication.
+- Any response matching MUST be correct per `03_messaging.spec.md` and MUST NOT surface duplicates under retransmit/duplication.
 - Draining request/response events MUST be destructive and MUST NOT replay already-drained items.
 
 **Test obligations**

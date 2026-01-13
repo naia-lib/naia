@@ -8,6 +8,8 @@ pub mod verify;
 pub mod lint;
 pub mod check_orphans;
 pub mod check_refs;
+pub mod check_pairing;
+pub mod check_isolation;
 pub mod validate;
 pub mod util;
 pub mod adequacy;

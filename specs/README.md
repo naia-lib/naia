@@ -15,7 +15,7 @@ This directory contains **normative specifications** that define the expected be
 **Defer to:**
 - `_AGENTS/DEV_PROCESS.md` for human development workflow and SDD phases
 - `_AGENTS/CLAUDE.md` for agent execution protocol (PLAN/OUTPUT convention)
-- Individual contract specs in `contracts/` for normative behavior definitions
+- Individual contract specs in `specs/contracts/` for normative behavior definitions
 
 ---
 

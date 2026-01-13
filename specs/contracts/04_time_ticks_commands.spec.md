@@ -24,10 +24,10 @@ This spec owns:
 - command acceptance semantics
 
 This spec does NOT own:
-- transport drop/dup/reorder assumptions (see `2_transport.md`)
-- message channel ordering/reliability (see `3_messaging.md`)
+- transport drop/dup/reorder assumptions (see `02_transport.spec.md`)
+- message channel ordering/reliability (see `03_messaging.spec.md`)
 - entity replication/lifetime (see entity suite)
-- connection admission/auth steps (see `1_connection_lifecycle.md`)
+- connection admission/auth steps (see `01_connection_lifecycle.spec.md`)
 
 ---
 
@@ -110,7 +110,7 @@ Tie-break rule (half-range ambiguity):
 ## Tick synchronization
 
 ### [time-10] — ConnectEvent implies tick sync complete
-A successful connection handshake MUST include tick synchronization, and the client MUST NOT emit `ConnectEvent` until tick sync is complete. (See `1_connection_lifecycle.md`.)
+A successful connection handshake MUST include tick synchronization, and the client MUST NOT emit `ConnectEvent` until tick sync is complete. (See `01_connection_lifecycle.spec.md`.)
 
 Tick sync guarantees:
 - The client knows the server’s current tick at connection time (or a tick sufficiently recent to compute lead targeting).
@@ -154,7 +154,7 @@ A command tagged for tick `T` is considered on-time iff it is received by the se
 - If received on-time, the server MUST apply it when processing tick `T`.
 - If received late (server has already begun or completed processing tick `T`), the server MUST ignore it.
 
-Ignored late commands are remote/untrusted input outcomes (per `0_common.md`):
+Ignored late commands are remote/untrusted input outcomes (per `00_common.spec.md`):
 - Prod: ignore silently
 - Debug: ignore with warning (non-normative)
 - MUST NOT panic
@@ -220,11 +220,11 @@ A sender MUST NOT send more than 64 commands for the same tick on the same conne
 
 **Local API enforcement:**
 - Attempting to enqueue the 65th command for the same tick MUST return `Result::Err`
-- This is user-initiated misuse (per `0_common.md`)
+- This is user-initiated misuse (per `00_common.spec.md`)
 
 **Remote enforcement:**
 - If a receiver observes `sequence >= 64`, it MUST treat it as invalid remote input
-- The command MUST be dropped (no panic, per `0_common.md`)
+- The command MUST be dropped (no panic, per `00_common.spec.md`)
 - Valid commands with `sequence < 64` for the same tick MUST still be processed normally
 
 **Observable signals:**
@@ -244,7 +244,7 @@ A sender MUST NOT send more than 64 commands for the same tick on the same conne
 If two commands arrive with the same `(tick, sequence)` for a connection:
 - The first received command is applied
 - The later duplicate(s) MUST be dropped (treated as retransmit duplicates)
-- MUST NOT panic (remote/untrusted input, per `0_common.md`)
+- MUST NOT panic (remote/untrusted input, per `00_common.spec.md`)
 - MUST NOT re-apply the command
 
 **Observable signals:**

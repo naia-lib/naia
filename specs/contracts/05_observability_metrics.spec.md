@@ -19,9 +19,9 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 
 ## References
 
-- `2_transport.md` (fault model, heartbeats/acks, ordering/duplication behavior)
-- `1_connection_lifecycle.md` (connect/disconnect lifecycle, timeouts, cleanup)
-- `4_time_ticks_commands.md` (time source expectations, tick/time monotonicity)
+- `02_transport.spec.md` (fault model, heartbeats/acks, ordering/duplication behavior)
+- `01_connection_lifecycle.spec.md` (connect/disconnect lifecycle, timeouts, cleanup)
+- `04_time_ticks_commands.spec.md` (time source expectations, tick/time monotonicity)
 
 ---
 
@@ -46,7 +46,7 @@ Normative keywords: **MUST**, **MUST NOT**, **SHOULD**, **MAY**.
 ### [observability-01a] — Internal measurements vs exposed metrics
 
 Naia uses internal RTT/jitter estimates for:
-- Client tick lead targeting (see `4_time_ticks_commands.md`)
+- Client tick lead targeting (see `04_time_ticks_commands.spec.md`)
 - Pacing decisions
 - Internal timeouts
 

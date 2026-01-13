@@ -14,19 +14,19 @@ Normative keywords: **MUST**, **MUST NOT**, **MAY**, **SHOULD**.
 - **Receive step**: Ingesting packets from the transport into Naia’s internal packet buffer.
 - **Process step**: Processing all buffered packets, applying protocol semantics, and producing new pending events / applying replicated state changes.
 - **Drain**: Reading events such that they are removed from the pending queue (pure read+remove).
-- **Tick**: Client tick as defined in `4_time_ticks_commands.md`. (Wrap-safe ordering applies.)
-- **InScope(C,E)** / **OutOfScope(C,E)**: Whether entity `E` exists in client `C`’s local world (see `6_entity_scopes.md`).
+- **Tick**: Client tick as defined in `04_time_ticks_commands.spec.md`. (Wrap-safe ordering applies.)
+- **InScope(C,E)** / **OutOfScope(C,E)**: Whether entity `E` exists in client `C`’s local world (see `06_entity_scopes.spec.md`).
 - **Entity lifetime**: scope enter → scope leave, with the ≥1 tick out-of-scope rule (see entity suite).
 
 ---
 
 ## Cross-References
 
-- Tick + time model: `4_time_ticks_commands.md`
-- Identity, replication legality, and "no updates before spawn / none after despawn": `7_entity_replication.md`
-- Scope transitions, join snapshots, and scope leave/re-enter semantics: `6_entity_scopes.md`
-- Messaging ordering/reliability: `3_messaging.md`
-- Ownership/delegation/authority semantics (not defined here): `8_entity_ownership.md`, `10_entity_delegation.md`, `11_entity_authority.md`
+- Tick + time model: `04_time_ticks_commands.spec.md`
+- Identity, replication legality, and "no updates before spawn / none after despawn": `07_entity_replication.spec.md`
+- Scope transitions, join snapshots, and scope leave/re-enter semantics: `06_entity_scopes.spec.md`
+- Messaging ordering/reliability: `03_messaging.spec.md`
+- Ownership/delegation/authority semantics (not defined here): `08_entity_ownership.spec.md`, `10_entity_delegation.spec.md`, `11_entity_authority.spec.md`
 
 ---
 
@@ -97,7 +97,7 @@ This includes entities created and destroyed entirely while `C` is out of scope.
 ### [client-events-06] — Despawn ends the entity lifetime; no further events for that lifetime
 **Rule:** After `Despawn(E)` is emitted for client `C`, the Events API MUST NOT emit any further entity-related events for that lifetime of `E` on `C`.
 
-- Late packets referencing the despawned lifetime MUST be ignored safely (see `7_entity_replication.md`).
+- Late packets referencing the despawned lifetime MUST be ignored safely (see `07_entity_replication.spec.md`).
 - If `E` later re-enters scope as a new lifetime under the scope model, that is a new Spawn and a new lifetime.
 
 **Test obligations:**
@@ -133,7 +133,7 @@ This is an observability constraint: internal buffering/reordering is allowed, b
 ---
 
 ### [client-events-09] — Scope transitions are reflected as spawn/despawn (with the defined model)
-**Rule:** When an entity `E` transitions between OutOfScope and InScope on client `C`, the client Events API MUST reflect that transition using spawn/despawn semantics consistent with `6_entity_scopes.md`.
+**Rule:** When an entity `E` transitions between OutOfScope and InScope on client `C`, the client Events API MUST reflect that transition using spawn/despawn semantics consistent with `06_entity_scopes.spec.md`.
 
 - Leaving scope MUST cause Despawn(E) (entity removed from client world).
 - Re-entering scope MUST cause Spawn(E) with a coherent snapshot, consistent with the identity/lifetime model.
@@ -155,7 +155,7 @@ This is an observability constraint: internal buffering/reordering is allowed, b
 Additional requirements:
 - MUST be drained exactly once (no duplicates on repeated drains).
 - MUST NOT be emitted for messages not actually delivered (e.g., dropped unreliable traffic).
-- Ordering/reliability constraints are defined in `3_messaging.md`; this contract covers API surfacing correctness + drain semantics.
+- Ordering/reliability constraints are defined in `03_messaging.spec.md`; this contract covers API surfacing correctness + drain semantics.
 
 **Test obligations:**
 - `TODO: client_events_api::message_events_are_typed_routed_and_one_shot`
@@ -166,7 +166,7 @@ Additional requirements:
 **Rule:** If the client exposes request/response events via its Events API:
 - Each delivered request/response MUST be surfaced exactly once and drain cleanly.
 - Responses MUST be matchable to the originating request handle/ID per the public API.
-- On disconnect with in-flight requests, the client MUST follow the defined failure behavior and MUST NOT leak request tracking state (see `3_messaging.md`).
+- On disconnect with in-flight requests, the client MUST follow the defined failure behavior and MUST NOT leak request tracking state (see `03_messaging.spec.md`).
 
 **Test obligations:**
 - `TODO: client_events_api::request_response_events_are_one_shot_and_matched`
@@ -175,7 +175,7 @@ Additional requirements:
 ---
 
 ### [client-events-12] — Authority events are out of scope for this spec
-**Rule:** Authority-related events MUST follow `11_entity_authority.md`. This spec does not define them, except:
+**Rule:** Authority-related events MUST follow `11_entity_authority.spec.md`. This spec does not define them, except:
 
 - If authority events are surfaced through the same drain mechanism, they MUST obey drain semantics (no duplicates) as per this spec.
 

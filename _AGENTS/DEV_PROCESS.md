@@ -841,22 +841,22 @@ Test files now map 1:1 to spec files for instant traceability:
 
 | Spec File | Test File |
 |-----------|-----------|
-| `1_connection_lifecycle.md` | `01_connection_lifecycle.rs` |
-| `2_transport.md` | `02_transport.rs` |
-| `3_messaging.md` | `03_messaging.rs` |
-| `4_time_ticks_commands.md` | `04_time_ticks_commands.rs` |
-| `5_observability_metrics.md` | `05_observability_metrics.rs` |
-| `6_entity_scopes.md` | `06_entity_scopes.rs` |
-| `7_entity_replication.md` | `07_entity_replication.rs` |
-| `8_entity_ownership.md` | `08_entity_ownership.rs` |
-| `9_entity_publication.md` | `09_entity_publication.rs` |
-| `10_entity_delegation.md` | `10_entity_delegation.rs` |
-| `11_entity_authority.md` | `11_entity_authority.rs` |
-| `12_server_events_api.md` | `12_server_events_api.rs` |
-| `13_client_events_api.md` | `13_client_events_api.rs` |
-| `14_world_integration.md` | `14_world_integration.rs` |
+| `01_connection_lifecycle.spec.md` | `01_connection_lifecycle.rs` |
+| `02_transport.spec.md` | `02_transport.rs` |
+| `03_messaging.spec.md` | `03_messaging.rs` |
+| `04_time_ticks_commands.spec.md` | `04_time_ticks_commands.rs` |
+| `05_observability_metrics.spec.md` | `05_observability_metrics.rs` |
+| `06_entity_scopes.spec.md` | `06_entity_scopes.rs` |
+| `07_entity_replication.spec.md` | `07_entity_replication.rs` |
+| `08_entity_ownership.spec.md` | `08_entity_ownership.rs` |
+| `09_entity_publication.spec.md` | `09_entity_publication.rs` |
+| `10_entity_delegation.spec.md` | `10_entity_delegation.rs` |
+| `11_entity_authority.spec.md` | `11_entity_authority.rs` |
+| `12_server_events_api.spec.md` | `12_server_events_api.rs` |
+| `13_client_events_api.spec.md` | `13_client_events_api.rs` |
+| `14_world_integration.spec.md` | `14_world_integration.rs` |
 
-**Finding tests:** To find tests for spec `N_domain.md`, open `NN_domain.rs`
+**Finding tests:** To find tests for spec `0N_domain.spec.md`, open `0N_domain.rs`
 
 ### Appendix C: Imports Reference
 

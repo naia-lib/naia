@@ -12,9 +12,9 @@ It owns:
 - Buffering bounds & TTLs required for determinism + memory safety
 
 It does NOT own:
-- Transport adapter behavior (see `2_transport.md`)
+- Transport adapter behavior (see `02_transport.spec.md`)
 - Entity replication semantics (see entity suite specs)
-- Connection/auth handshake rules (see `1_connection_lifecycle.md`)
+- Connection/auth handshake rules (see `01_connection_lifecycle.spec.md`)
 
 ---
 
@@ -29,7 +29,7 @@ It does NOT own:
 - **Sequenced**: Messages represent “current state”; older state MUST NOT be observed after newer state has been observed (no rollback). Intermediate states MAY be skipped.
 - **TickBuffered**: Messages are grouped by tick and exposed per tick in tick order.
 - **Tick**: A shared tick value used by Naia; `Tick` is `u16` and wraps.
-- **Entity lifetime** (client-side): scope enter → scope leave, with the “≥ 1 tick out-of-scope” rule (see `6_entity_scopes.md` / `7_entity_replication.md`).
+- **Entity lifetime** (client-side): scope enter → scope leave, with the “≥ 1 tick out-of-scope” rule (see `06_entity_scopes.spec.md` / `07_entity_replication.spec.md`).
 
 Normative keywords: MUST, MUST NOT, MAY, SHOULD.
 
@@ -56,7 +56,7 @@ If Naia violates its own declared invariants (e.g. delivers older state after ne
 
 ### [messaging-04] — Channel compatibility is gated by protocol_id
 
-Channel registry compatibility is **guaranteed** by the `protocol_id` handshake gate (see `1_connection_lifecycle.md`, Protocol Identity section).
+Channel registry compatibility is **guaranteed** by the `protocol_id` handshake gate (see `01_connection_lifecycle.spec.md`, Protocol Identity section).
 
 **Hard gate:**
 - If `protocol_id` does not match, the connection is rejected with `ProtocolMismatch` **before any message exchange occurs**
@@ -209,7 +209,7 @@ If a TickBuffered message arrives with tick > `current_server_tick + MAX_FUTURE_
 2. This prevents clients from sending messages tagged with arbitrarily far-future ticks
 3. The bound ensures the buffer window is predictable and memory-bounded
 
-**Error handling (per `0_common.md`):**
+**Error handling (per `00_common.spec.md`):**
 - Prod: drop silently
 - Debug: drop with warning (non-normative)
 - MUST NOT panic (remote/untrusted input)
@@ -349,7 +349,7 @@ Request IDs MUST NOT be reused for different logical requests within the same co
 
 A Response MUST be matched to its Request by Request ID:
 - The receiver MUST pair the Response with the pending Request having the same ID
-- If no pending Request exists for the ID, the Response MUST be ignored (per `0_common.md` remote input rule)
+- If no pending Request exists for the ID, the Response MUST be ignored (per `00_common.spec.md` remote input rule)
 - Each Request MUST receive at most one Response (first valid Response wins)
 
 **Observable signals:**
@@ -372,7 +372,7 @@ Each Request type defined in the shared protocol crate MAY specify a timeout dur
 
 **Timeout behavior:**
 - If a Response is not received within the applicable timeout, the Request MUST be canceled locally
-- Timeout is measured using Naia's monotonic time source (see `0_common.md`)
+- Timeout is measured using Naia's monotonic time source (see `00_common.spec.md`)
 - On timeout, the requester MUST receive a **timeout result/error** distinguishable from other errors
 - Late Responses for timed-out Requests MUST be ignored
 
@@ -482,7 +482,7 @@ This is distinct from a Message (non-RPC); Requests always carry an ID even if u
 
 ### RPC Error Handling
 
-Per `0_common.md`:
+Per `00_common.spec.md`:
 - Invalid Request ID from remote: drop silently (remote input)
 - Timeout: invoke handler with error (expected condition)
 - Disconnect: invoke handler with error (expected condition)

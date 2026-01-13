@@ -74,7 +74,7 @@ Examples:
 
 ### [common-02a] — Protocol mismatch is a deployment error
 
-When `protocol_id` does not match between client and server (see `1_connection_lifecycle.md`):
+When `protocol_id` does not match between client and server (see `01_connection_lifecycle.spec.md`):
 - Connection MUST be rejected with `ProtocolMismatch` error/event
 - Client MUST receive distinguishable `ProtocolMismatch` indication
 - MUST NOT panic (this is a deployment configuration error, not a runtime error)
@@ -144,7 +144,7 @@ Within a single server tick, if multiple operations could occur in any order, Na
 - If received in same packet, process in serialization order
 
 **Multiple authority requests for same entity:**
-- First request received wins (see `10_entity_delegation.md`)
+- First request received wins (see `10_entity_delegation.spec.md`)
 
 ---
 
@@ -204,14 +204,14 @@ Some values are **fixed invariants** that MUST NOT be configurable:
 
 | Invariant | Value | Rationale | Spec |
 |-----------|-------|-----------|------|
-| `MAX_RELIABLE_MESSAGE_FRAGMENTS` | 2^16 | Protocol limit | `3_messaging.md` |
-| `GlobalEntity` rollover behavior | Panic | Correctness over availability | `7_entity_replication.md` |
-| Tick type | u16 | Wire protocol | `4_time_ticks_commands.md` |
-| Wrap-safe half-range | 32768 | Tick ordering math | `4_time_ticks_commands.md` |
-| Request ID uniqueness scope | Per-connection | RPC semantics | `3_messaging.md` |
-| `MAX_COMMANDS_PER_TICK_PER_CONNECTION` | 64 | Command cap per tick | `4_time_ticks_commands.md` |
-| `protocol_id` wire encoding | u128 little-endian | Protocol identity | `1_connection_lifecycle.md` |
-| Command `sequence` encoding | varint | Wire protocol | `4_time_ticks_commands.md` |
+| `MAX_RELIABLE_MESSAGE_FRAGMENTS` | 2^16 | Protocol limit | `03_messaging.spec.md` |
+| `GlobalEntity` rollover behavior | Panic | Correctness over availability | `07_entity_replication.spec.md` |
+| Tick type | u16 | Wire protocol | `04_time_ticks_commands.spec.md` |
+| Wrap-safe half-range | 32768 | Tick ordering math | `04_time_ticks_commands.spec.md` |
+| Request ID uniqueness scope | Per-connection | RPC semantics | `03_messaging.spec.md` |
+| `MAX_COMMANDS_PER_TICK_PER_CONNECTION` | 64 | Command cap per tick | `04_time_ticks_commands.spec.md` |
+| `protocol_id` wire encoding | u128 little-endian | Protocol identity | `01_connection_lifecycle.spec.md` |
+| Command `sequence` encoding | varint | Wire protocol | `04_time_ticks_commands.spec.md` |
 
 These values are part of the protocol identity and/or correctness requirements. Changing them would break compatibility or violate safety invariants.
 
@@ -223,14 +223,14 @@ Some values are **configurable defaults** that MAY be overridden via configurati
 
 | Default | Value | Config Location | Spec |
 |---------|-------|-----------------|------|
-| Identity token TTL | 1 hour | ServerConfig | `1_connection_lifecycle.md` |
-| `ENTITY_PROPERTY_RESOLUTION_TTL` | 60 seconds | SharedConfig | `3_messaging.md` |
-| `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_CONNECTION` | 4096 | SharedConfig | `3_messaging.md` |
-| `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_ENTITY` | 128 | SharedConfig | `3_messaging.md` |
-| TickBuffered `tick_buffer_capacity` | Per-channel | ChannelConfig | `3_messaging.md` |
-| `MAX_FUTURE_TICKS` | Derived from `tick_buffer_capacity - 1` | Automatic | `3_messaging.md` |
-| Tick rate | Per-protocol | SharedConfig | `4_time_ticks_commands.md` |
-| `DEFAULT_REQUEST_TIMEOUT` | 30 seconds | SharedConfig | `3_messaging.md` |
+| Identity token TTL | 1 hour | ServerConfig | `01_connection_lifecycle.spec.md` |
+| `ENTITY_PROPERTY_RESOLUTION_TTL` | 60 seconds | SharedConfig | `03_messaging.spec.md` |
+| `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_CONNECTION` | 4096 | SharedConfig | `03_messaging.spec.md` |
+| `MAX_PENDING_ENTITY_PROPERTY_MESSAGES_PER_ENTITY` | 128 | SharedConfig | `03_messaging.spec.md` |
+| TickBuffered `tick_buffer_capacity` | Per-channel | ChannelConfig | `03_messaging.spec.md` |
+| `MAX_FUTURE_TICKS` | Derived from `tick_buffer_capacity - 1` | Automatic | `03_messaging.spec.md` |
+| Tick rate | Per-protocol | SharedConfig | `04_time_ticks_commands.spec.md` |
+| `DEFAULT_REQUEST_TIMEOUT` | 30 seconds | SharedConfig | `03_messaging.spec.md` |
 
 **Compatibility rule:** When configurable values differ between client and server (where applicable), the more restrictive value MUST be used for safety, or connection MUST fail if incompatible.
 

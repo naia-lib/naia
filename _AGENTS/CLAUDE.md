@@ -38,16 +38,16 @@ Naia is a cross-platform Rust networking engine for multiplayer games. Architect
 Test files map directly to spec files for instant traceability:
 
 ```
-specs/contracts/N_domain.md  →  test/tests/0N_domain.rs
+specs/contracts/0N_domain.spec.md  →  test/tests/0N_domain.rs
 ```
 
 | Spec | Test File |
 |------|-----------|
-| `1_connection_lifecycle.md` | `01_connection_lifecycle.rs` |
-| `2_transport.md` | `02_transport.rs` |
-| `3_messaging.md` | `03_messaging.rs` |
+| `01_connection_lifecycle.spec.md` | `01_connection_lifecycle.rs` |
+| `02_transport.spec.md` | `02_transport.rs` |
+| `03_messaging.spec.md` | `03_messaging.rs` |
 | ... | ... |
-| `14_world_integration.md` | `14_world_integration.rs` |
+| `14_world_integration.spec.md` | `14_world_integration.rs` |
 
 **To find tests for a contract:** Open the matching numbered test file
 

@@ -4,10 +4,10 @@ Entity Authority defines how a client can acquire and release the right to **wri
 **server-owned delegated** entity, and what each side can observe about that right.
 
 Authority is distinct from:
-- **Ownership** (see `8_entity_ownership.md`): who ultimately owns the entity
-- **Delegation** (see `10_entity_delegation.md`): how delegated entities arbitrate authority (first-request wins)
-- **Scope** (see `6_entity_scopes.md`): whether the entity exists on the client
-- **Replication** (see `7_entity_replication.md`): ordering/lifetime/reordering semantics
+- **Ownership** (see `08_entity_ownership.spec.md`): who ultimately owns the entity
+- **Delegation** (see `10_entity_delegation.spec.md`): how delegated entities arbitrate authority (first-request wins)
+- **Scope** (see `06_entity_scopes.spec.md`): whether the entity exists on the client
+- **Replication** (see `07_entity_replication.spec.md`): ordering/lifetime/reordering semantics
 
 This spec defines:
 - the authority state machine (`EntityAuthStatus`)
@@ -21,7 +21,7 @@ This spec defines:
 
 ### Authority applies only to delegated entities
 Authority exists only for entities where:
-- `replication_config(E) == Some(Delegated)` (see `10_entity_delegation.md` / `9_entity_publication.md`)
+- `replication_config(E) == Some(Delegated)` (see `10_entity_delegation.spec.md` / `09_entity_publication.spec.md`)
 
 ### EntityAuthStatus (client-visible)
 
@@ -49,7 +49,7 @@ Normative safety:
 - If Naia attempts to write while `can_write = false`, it MUST panic.
 
 ### Debug mode
-In Debug mode (`debug_assertions` enabled), Naia MAY emit warnings on unusual but handled conditions; in production it MUST remain silent. Per `0_common.md`, tests MUST NOT assert on warning content.
+In Debug mode (`debug_assertions` enabled), Naia MAY emit warnings on unusual but handled conditions; in production it MUST remain silent. Per `00_common.spec.md`, tests MUST NOT assert on warning content.
 
 ---
 
@@ -130,7 +130,7 @@ Non-normative note:
 ## 4) Server Semantics (Grant / Reset / Server as Holder)
 
 ### [entity-authority-08] — First-request wins arbitration (delegation law)
-Authority arbitration MUST follow the rules defined in `10_entity_delegation.md`:
+Authority arbitration MUST follow the rules defined in `10_entity_delegation.spec.md`:
 - first eligible request wins
 - others remain denied until release/reset
 
@@ -161,7 +161,7 @@ This is the server’s “break glass” control.
 If a client becomes out-of-scope for delegated entity `E` (or the entity despawns due to publication/scope):
 - the client MUST treat the entity’s lifetime as ended
 - any authority status for that entity MUST be cleared (entity no longer exists locally)
-- any pending buffered actions for that entity MUST be discarded (see `7_entity_replication.md`)
+- any pending buffered actions for that entity MUST be discarded (see `07_entity_replication.spec.md`)
 
 ### [entity-authority-12] — Authority holder losing scope forces global release/reset
 If the authority-holding client loses scope for `E` (or disconnects):
@@ -193,7 +193,7 @@ Authority grant/reset signals may be duplicated or reordered.
 Clients MUST:
 - not emit duplicate observable “grant” effects for the same lifetime
 - converge to the server’s final resolved authority state
-- ignore authority signals for entities not in the active lifetime (see `7_entity_replication.md`)
+- ignore authority signals for entities not in the active lifetime (see `07_entity_replication.spec.md`)
 
 ---
 
@@ -203,7 +203,7 @@ Clients MUST:
 
 Authority changes MUST be observable via:
 - `authority()` (status) while the entity is delegated and in the client’s lifetime
-- client/server events as defined in `13_client_events_api.md` and `12_server_events_api.md`
+- client/server events as defined in `13_client_events_api.spec.md` and `12_server_events_api.spec.md`
 
 This spec defines semantics, not exact event names. At minimum, the event layer MUST be able to represent:
 - "authority granted to this client for entity E"
@@ -245,8 +245,8 @@ This spec defines semantics, not exact event names. At minimum, the event layer 
 
 ## 9) Cross-references
 
-- Delegation: `10_entity_delegation.md`
-- Ownership: `8_entity_ownership.md`
-- Scopes & lifetimes: `6_entity_scopes.md`
-- Replication ordering/lifetime gating: `7_entity_replication.md`
-- Events: `12_server_events_api.md`, `13_client_events_api.md`, `14_world_integration.md`
+- Delegation: `10_entity_delegation.spec.md`
+- Ownership: `08_entity_ownership.spec.md`
+- Scopes & lifetimes: `06_entity_scopes.spec.md`
+- Replication ordering/lifetime gating: `07_entity_replication.spec.md`
+- Events: `12_server_events_api.spec.md`, `13_client_events_api.spec.md`, `14_world_integration.spec.md`

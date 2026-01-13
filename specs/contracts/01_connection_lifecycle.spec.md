@@ -14,7 +14,7 @@ It is intentionally written at the Naia core API level. Engine adapters (hecs/be
 
 - **Client**: a Naia client instance attempting to establish and maintain a session with a Server.
 - **Server**: a Naia server instance accepting client sessions.
-- **Transport**: the underlying network mechanism (e.g. UDP, WebRTC). Transport-specific mechanics are defined in `2_transport.md`, but lifecycle semantics are defined here.
+- **Transport**: the underlying network mechanism (e.g. UDP, WebRTC). Transport-specific mechanics are defined in `02_transport.spec.md`, but lifecycle semantics are defined here.
 - **Session**: the period from “connected” until “disconnected”.
 - **Explicit reject**: the server deliberately refuses a connection attempt in a way the client can observe as a rejection (as opposed to generic network failure).
 - **Auth request**: the application-defined credential payload sent Client → Server **out-of-band** (HTTP) before the transport session is initialized.
@@ -172,7 +172,7 @@ The server MUST emit `ConnectEvent` only at the moment the handshake is finalize
 
 Naia MUST NOT deliver any entity replication "writes" as part of an established session until after `ConnectEvent` is emitted for that session (server-side), and the client MUST NOT apply any such writes until after it has emitted `ConnectEvent`.
 
-(See `4_time_ticks_commands.md` for tick semantics and how tick sync interacts with command history.)
+(See `04_time_ticks_commands.spec.md` for tick semantics and how tick sync interacts with command history.)
 
 ---
 
@@ -213,7 +213,7 @@ After a `RejectEvent`, the client’s public `ConnectionStatus` MUST be (or retu
 When a client disconnects (or is disconnected) after session establishment:
 - It is treated as immediately out-of-scope for all entities, and
 - Any client-owned entities owned by that client MUST be despawned by the server.
-(See `8_entity_ownership.md` and `6_entity_scopes.md`.)
+(See `08_entity_ownership.spec.md` and `06_entity_scopes.spec.md`.)
 
 ---
 
@@ -263,7 +263,7 @@ When a client "reconnects" (disconnects and connects again):
 - Any prior entity state, authority, buffered data from the previous session is discarded on the server
 
 **Implications:**
-- Client-owned entities from the previous session were despawned on disconnect (per `8_entity_ownership.md`)
+- Client-owned entities from the previous session were despawned on disconnect (per `08_entity_ownership.spec.md`)
 - The client receives fresh entity spawns for all in-scope entities
 - Authority state starts fresh (no carryover from previous session)
 - Pending requests/responses from previous session are not resumed
@@ -356,7 +356,7 @@ If `protocol_id` values do not match:
 - Client MUST NOT emit `DisconnectEvent` (connection was never established)
 - The rejection MUST occur before any further handshake steps
 
-**Error classification (per `0_common.md`):**
+**Error classification (per `00_common.spec.md`):**
 - Protocol mismatch is a **deployment configuration error**, not a runtime error
 - No panic occurs; connection fails with clear `ProtocolMismatch` indication
 
