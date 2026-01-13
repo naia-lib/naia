@@ -41,6 +41,145 @@ fn misusing_channel_types_yields_defined_failure() {
     // This may require creating very large messages or using unsupported channel types
 }
 
+/// Protocol type-order mismatch fails fast at handshake
+/// Contract: [messaging-04]
+///
+/// Given server/client with intentionally mismatched protocol definitions (type ID ordering differs);
+/// when client connects; then handshake fails early with clear mismatch outcome,
+/// no gameplay events are generated, and both sides clean up.
+#[test]
+fn protocol_type_order_mismatch_fails_fast_at_handshake() {
+    use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
+
+    let mut scenario = Scenario::new();
+
+    // Create the standard protocol for the server
+    let server_protocol = protocol();
+
+    // Create a mismatched protocol for the client by omitting one channel
+    // This will produce a different protocol_id due to different channel count
+    let client_protocol = Protocol::builder()
+        .add_component::<Position>()
+        .add_message::<Auth>()
+        .add_message::<TestMessage>()
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>()
+        // Intentionally omit ReliableChannel to create protocol_id mismatch
+        .add_channel::<UnreliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedUnreliable,
+        )
+        .add_channel::<OrderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::OrderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<UnorderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<SequencedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::SequencedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<TickBufferedChannel>(
+            ChannelDirection::ClientToServer,
+            ChannelMode::TickBuffered(naia_shared::TickBufferSettings::default()),
+        )
+        .add_channel::<RequestResponseChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .enable_client_authoritative_entities()
+        .build();
+
+    // Start server with standard protocol
+    scenario.server_start(ServerConfig::default(), server_protocol);
+
+    // Start client with mismatched protocol
+    let client_key = scenario.client_start(
+        "Client",
+        Auth::new("user", "pass"),
+        test_client_config(),
+        client_protocol,
+    );
+
+    // Wait for client to receive rejection event
+    let mut reject_event_received = false;
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            if client.read_event::<ClientRejectEvent>().is_some() {
+                reject_event_received = true;
+            }
+            reject_event_received.then_some(())
+        })
+    });
+
+    assert!(reject_event_received, "Client should receive rejection event");
+
+    // Verify connection is rejected before any message exchange
+    scenario.spec_expect("messaging-04.t1: mismatched protocol_id rejects connection before message exchange", |ctx| {
+        // Check that client is in rejected state and NOT connected
+        let is_rejected = ctx.client(client_key, |client| {
+            client.is_rejected()
+        });
+
+        let client_not_connected = !ctx.client(client_key, |client| {
+            client.connection_status().is_connected()
+        });
+
+        // Check that server did NOT emit ConnectEvent (user doesn't exist)
+        let server_no_user = !ctx.server(|server| {
+            server.user_exists(&client_key)
+        });
+
+        // All three conditions must be true
+        (is_rejected && client_not_connected && server_no_user).then_some(())
+    });
+}
+
+/// Matched protocol_id enables successful messaging
+/// Contract: [messaging-04]
+///
+/// Given client and server with matching protocol_id;
+/// when client connects and sends messages; then messages are delivered successfully,
+/// demonstrating that channel compatibility is guaranteed by protocol_id match.
+#[test]
+fn matched_protocol_id_enables_successful_messaging() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // Send a message from client to server to verify channel compatibility
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client| {
+            client
+                .send_message::<UnreliableChannel, _>(&TestMessage::new("test"))
+                .expect("Failed to send message - channel incompatibility");
+        });
+    });
+
+    // Verify message received by server, proving channel compatibility
+    scenario.spec_expect("messaging-04.t2: matched protocol_id guarantees channel compatibility", |ctx| {
+        ctx.server(|server| {
+            server
+                .read_message::<UnreliableChannel, TestMessage>()
+                .is_some()
+                .then_some(())
+        })
+    });
+}
+
 /// Request timeouts are surfaced and cleaned up
 /// Contract: [messaging-05]
 ///

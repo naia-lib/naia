@@ -224,6 +224,32 @@ pub fn run_lint(root: &PathBuf) -> anyhow::Result<usize> {
         }
     }
 
+    // Check 7: No Placeholder t1 - t1 cannot contain generic text or TODOs
+    println!("Checking for placeholder t1 obligations...");
+    let forbidden_re = Regex::new(r"(?i)(works correctly|behavior is correct|is correct|functions properly|todo|tbd)").unwrap();
+
+    for file in &spec_files {
+        let content = fs::read_to_string(file)?;
+        let lines: Vec<&str> = content.lines().collect();
+        let mut current_contract_id: Option<String> = None;
+
+        for line in lines {
+            // Keep track of which contract we are in
+            if let Some(caps) = contract_heading_re.captures(line) {
+                current_contract_id = Some(caps.get(1).unwrap().as_str().to_string());
+            }
+
+            // Check t1 lines
+            if obligation_t1_re.is_match(line) {
+                if forbidden_re.is_match(line) {
+                    let contract_display = current_contract_id.as_deref().unwrap_or("UNKNOWN");
+                    print_error(&format!("{}: Contract [{}] t1 contains placeholder text: '{}'", basename(file), contract_display, line.trim()));
+                    issues += 1;
+                }
+            }
+        }
+    }
+
     println!();
     println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     if issues == 0 && warnings == 0 {

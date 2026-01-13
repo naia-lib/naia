@@ -48,7 +48,7 @@ Ownership is per-entity and exclusive. It is queryable via `entity(...).owner()`
 ### [entity-ownership-01] — Ownership is per-entity, exclusive, and not per-component
 
 **Obligations:**
-- **t1**: Ownership is per-entity, exclusive, and not per-component works correctly
+- **t1**: Ownership is per-entity, exclusive, and not per-component.
 
 Ownership MUST be defined per-Entity and MUST NOT be defined per-Component. An Entity MUST have exactly one owner at any moment (exclusive ownership).
 
@@ -63,7 +63,7 @@ Ownership MUST be defined per-Entity and MUST NOT be defined per-Component. An E
 ### [entity-ownership-02] — Server accepts writes only from owning client (client-owned entities)
 
 **Obligations:**
-- **t1**: Server accepts writes only from owning client (client-owned entities) works correctly
+- **t1**: Server accepts writes only from owning client (client-owned entities).
 
 For a **client-owned Entity E**, the server MUST accept **writes** for E only from the owning client and MUST NOT apply writes from any other client.
 
@@ -81,7 +81,7 @@ The server MAY ignore unauthorized writes silently and/or record a metric/log, b
 ### [entity-ownership-03] — Server rejects writes for non-delegated server-owned entities
 
 **Obligations:**
-- **t1**: Server rejects writes for non-delegated server-owned entities works correctly
+- **t1**: Server rejects writes for non-delegated server-owned entities.
 
 For any server-owned entity `E` that is NOT delegated (`replication_config(E) != Some(Delegated)`), the server MUST NOT accept replicated writes from any client for `E`. Such writes MUST be ignored/dropped.
 
@@ -101,7 +101,7 @@ The server MAY ignore unauthorized writes silently and/or record a metric/log, b
 ### [entity-ownership-04] — Ownership alone does not emit authority events
 
 **Obligations:**
-- **t1**: Ownership alone does not emit authority events works correctly
+- **t1**: Ownership alone does not emit authority events.
 
 Ownership alone MUST NOT emit Authority events for client-owned entities. Authority events are part of Delegation/Authority, not Ownership.
 
@@ -118,7 +118,7 @@ Ownership alone MUST NOT emit Authority events for client-owned entities. Author
 ### [entity-ownership-05] — Client write permission rules
 
 **Obligations:**
-- **t1**: Client write permission rules works correctly
+- **t1**: Client write permission rules.
 
 A client MUST NOT write/replicate entity updates unless it is a permitted writer for that entity.
 
@@ -146,7 +146,7 @@ Cross-link:
 ### [entity-ownership-06] — Ownership visibility on client is coarse
 
 **Obligations:**
-- **t1**: Ownership visibility on client is coarse works correctly
+- **t1**: Ownership visibility on client is coarse.
 
 On the client, `entity(...).owner()` MUST return an `EntityOwner` enum:
 - For the client, any entity not owned by that client MUST be reported as `EntityOwner::Server` (i.e., the client MUST NOT observe "owned by another client").
@@ -185,7 +185,7 @@ Any replicated updates received from the server for that entity MUST overwrite t
 ### [entity-ownership-08] — Local-only components persist until despawn or server replication
 
 **Obligations:**
-- **t1**: Local-only components persist until despawn or server replication works correctly
+- **t1**: Local-only components persist until despawn or server replication.
 
 If a client inserts a component (replicated or non-replicated type) onto an entity it does not own, and the server never replicates that component for that entity, the component MUST persist locally until:
 - removed locally (allowed), or
@@ -205,7 +205,7 @@ If the server later begins replicating that component for that entity, the newly
 ### [entity-ownership-09] — Removing replicated components from unowned entities
 
 **Obligations:**
-- **t1**: Removing replicated components from unowned entities works correctly
+- **t1**: Removing replicated components from unowned entities.
 
 A client MAY remove a component from an unowned entity only if that component instance is local-only on that client.
 
@@ -228,7 +228,7 @@ Rationale: removing a server-replicated component locally creates a misleading "
 ### [entity-ownership-10] — Server-owned entities never migrate to client-owned
 
 **Obligations:**
-- **t1**: Server-owned entities never migrate to client-owned works correctly
+- **t1**: Server-owned entities never migrate to client-owned.
 
 An entity that is server-owned MUST NOT transition to client-owned at any time.
 
@@ -243,7 +243,7 @@ An entity that is server-owned MUST NOT transition to client-owned at any time.
 ### [entity-ownership-11] — Client-owned entities may migrate to server-owned delegated
 
 **Obligations:**
-- **t1**: Client-owned entities may migrate to server-owned delegated works correctly
+- **t1**: Client-owned entities may migrate to server-owned delegated.
 
 A client-owned entity MAY transition to server-owned (delegated) only when delegation is enabled for that entity by:
 - the owning client, or
@@ -267,7 +267,7 @@ Note: "delegated" here describes the downstream Authority/permission model; owne
 ### [entity-ownership-12] — Owning client always in-scope for its entities
 
 **Obligations:**
-- **t1**: Owning client always in-scope for its entities works correctly
+- **t1**: Owning client always in-scope for its entities.
 
 A client MUST always see its own client-owned entities as in-scope (they MUST NOT be despawned due to scope changes on that owning client).
 
@@ -288,7 +288,7 @@ For non-owner clients, when an entity leaves scope (unpublish/room divergence/ex
 ### [entity-ownership-13] — Owner disconnect despawns all client-owned entities
 
 **Obligations:**
-- **t1**: Owner disconnect despawns all client-owned entities works correctly
+- **t1**: Owner disconnect despawns all client-owned entities.
 
 When a client disconnects, the server MUST despawn all entities owned by that client. There are no exceptions (delegation/authority do not change this ownership rule).
 
@@ -307,7 +307,7 @@ When a client disconnects, the server MUST despawn all entities owned by that cl
 ### [entity-ownership-14] — No writes for out-of-scope entities
 
 **Obligations:**
-- **t1**: No writes for out-of-scope entities works correctly
+- **t1**: No writes for out-of-scope entities.
 
 A client MUST NOT write/replicate updates for any entity that it is not a permitted writer for (see `entity-ownership-05`).
 

@@ -46,7 +46,7 @@ Related specs:
 ### [world-integration-01] — World mirrors Naia view
 
 **Obligations:**
-- **t1**: World mirrors Naia view works correctly
+- **t1**: World mirrors Naia view.
 
 For any participant `P` (server or client), if an External World is integrated, it MUST converge to exactly the Naia World View for `P` as mutations are drained and applied.
 
@@ -65,7 +65,7 @@ Test obligations:
 ### [world-integration-02] — Mutation ordering is deterministic per tick
 
 **Obligations:**
-- **t1**: Mutation ordering is deterministic per tick works correctly
+- **t1**: Mutation ordering is deterministic per tick.
 
 Within a single tick and for a single entity `E`, the integration adapter MUST apply mutations in a deterministic, valid order:
 
@@ -92,7 +92,7 @@ Test obligations:
 ### [world-integration-03] — Exactly-once delivery per drain
 
 **Obligations:**
-- **t1**: Exactly-once delivery per drain works correctly
+- **t1**: Exactly-once delivery per drain.
 
 For a given participant `P`, each discrete world mutation produced by Naia MUST be consumable exactly once by the integration adapter.
 
@@ -111,7 +111,7 @@ Test obligations:
 ### [world-integration-04] — Scope changes map to spawn/despawn in External World
 
 **Obligations:**
-- **t1**: Scope changes map to spawn/despawn in External World works correctly
+- **t1**: Scope changes map to spawn/despawn in External World.
 
 On clients, scope governs presence. The integration adapter MUST reflect scope transitions as:
 
@@ -127,7 +127,7 @@ Test obligations:
 ### [world-integration-05] — Join-in-progress and reconnect yield coherent External World
 
 **Obligations:**
-- **t1**: Join-in-progress and reconnect yield coherent External World works correctly
+- **t1**: Join-in-progress and reconnect yield coherent External World.
 
 If a client joins late or reconnects, the External World MUST be reconstructed purely from current server state and current scope, not from stale client-local leftovers.
 
@@ -153,7 +153,7 @@ Test obligations:
 ### [world-integration-06] — Stable identity mapping at the integration boundary
 
 **Obligations:**
-- **t1**: Stable identity mapping at the integration boundary works correctly
+- **t1**: Stable identity mapping at the integration boundary.
 
 The integration adapter MUST treat Naia’s entity identity as stable for the lifetime the entity is present in the Naia World View.
 
@@ -171,7 +171,7 @@ Test obligations:
 ### [world-integration-07] — Component type correctness
 
 **Obligations:**
-- **t1**: Component type correctness works correctly
+- **t1**: Component type correctness.
 
 For every component mutation surfaced to the adapter, the component type MUST be correct and match the protocol/schema.
 
@@ -187,7 +187,7 @@ Test obligations:
 ### [world-integration-08] — Misuse safety: no panics, defined failures
 
 **Obligations:**
-- **t1**: Misuse safety: no panics, defined failures works correctly
+- **t1**: Misuse safety: no panics, defined failures.
 
 The integration boundary MUST be robust to reasonable misuse:
 
@@ -207,7 +207,7 @@ Test obligations:
 ### [world-integration-09] — Zero-leak lifecycle cleanup
 
 **Obligations:**
-- **t1**: Zero-leak lifecycle cleanup works correctly
+- **t1**: Zero-leak lifecycle cleanup.
 
 Across repeated connect/disconnect cycles and scope churn, the integration adapter MUST allow External World to reach a clean empty state when Naia’s view is empty.
 

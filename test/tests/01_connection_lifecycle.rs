@@ -1184,7 +1184,7 @@ fn valid_identity_token_roundtrips() {
 // ============================================================================
 
 /// protocol_id is verified before ConnectEvent
-/// Contract: [connection-14a], [messaging-04]
+/// Contract: [connection-14a]
 ///
 /// Given client and server with matching protocol;
 /// when handshake completes; then protocol_id is verified before any ConnectEvent.
@@ -1211,13 +1211,6 @@ fn protocol_id_verified_before_connect_event() {
         let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
         let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
         connected.then_some(())
-    });
-
-    // Label for messaging-04.t2
-    scenario.spec_expect("messaging-04.t2: matched protocol_id guarantees channel compatibility", |ctx| {
-        let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
-        let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
-        (connected && user_exists).then_some(())
     });
 }
 

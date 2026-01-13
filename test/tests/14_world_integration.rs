@@ -207,7 +207,7 @@ fn world_integration_cleans_up_completely_on_disconnect_and_reconnect() {
 }
 
 /// Integrated "everything at once" scenario stays consistent and error-free
-/// Contract: [world-integration-09], [entity-scopes-01], [entity-scopes-03], [entity-scopes-04], [world-integration-01], [world-integration-02], [world-integration-03]
+/// Contract: [world-integration-09], [world-integration-01], [world-integration-02], [world-integration-03]
 ///
 /// Given a complex scenario exercising all major features simultaneously (multiple clients, rooms, scoping,
 /// entity replication with ownership/delegation, messages on multiple channels, requests/responses, tick-buffered commands);

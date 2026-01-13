@@ -31,7 +31,7 @@ This section defines the **canonical error handling rules** for all Naia specifi
 ### [common-01] — User-initiated misuse returns Result::Err
 
 **Obligations:**
-- **t1**: User-initiated misuse returns Result::Err works correctly
+- **t1**: User-initiated misuse returns Result::Err.
 
 When an error is caused by **local application code** or **local configuration** at the Naia API layer, Naia MUST return `Result::Err` from the initiating API.
 
@@ -81,7 +81,7 @@ Examples:
 ### [common-02a] — Protocol mismatch is a deployment error
 
 **Obligations:**
-- **t1**: Protocol mismatch is a deployment error works correctly
+- **t1**: Protocol mismatch is a deployment error.
 
 When `protocol_id` does not match between client and server (see `01_connection_lifecycle.spec.md`):
 - Connection MUST be rejected with `ProtocolMismatch` error/event
@@ -115,7 +115,7 @@ Examples:
 ### [common-04] — Warnings are debug-only and non-normative
 
 **Obligations:**
-- **t1**: Warnings are debug-only and non-normative works correctly
+- **t1**: Warnings are debug-only and non-normative.
 
 In Debug mode (when `debug_assertions` are enabled or equivalent feature flag), Naia MAY emit warnings for unusual but handled conditions.
 
@@ -132,7 +132,7 @@ In Debug mode (when `debug_assertions` are enabled or equivalent feature flag), 
 ### [common-05] — Determinism under deterministic inputs
 
 **Obligations:**
-- **t1**: Determinism under deterministic inputs works correctly
+- **t1**: Determinism under deterministic inputs.
 
 If all of the following are deterministic:
 - Time Provider (test clock)
@@ -152,7 +152,7 @@ This enables reproducible testing.
 ### [common-06] — Per-tick determinism rule
 
 **Obligations:**
-- **t1**: Per-tick determinism rule works correctly
+- **t1**: Per-tick determinism rule.
 
 Within a single server tick, if multiple operations could occur in any order, Naia MUST define a deterministic resolution:
 
@@ -189,7 +189,7 @@ If a spec requires observable behavior, it MUST define an event, API return valu
 ### [common-08] — Test obligation template
 
 **Obligations:**
-- **t1**: Test obligation template works correctly
+- **t1**: Test obligation template.
 
 Every contract SHOULD have test obligations in this format:
 
@@ -206,7 +206,7 @@ Test names SHOULD follow the pattern `<contract-id>.t<N>` for traceability.
 ### [common-09] — Observable signals subsection
 
 **Obligations:**
-- **t1**: Observable signals subsection works correctly
+- **t1**: Observable signals subsection.
 
 Every contract that defines testable behavior SHOULD include:
 
@@ -231,7 +231,7 @@ If behavior is intentionally not externally observable (internal optimization, s
 ### [common-10] — Fixed invariants are locked
 
 **Obligations:**
-- **t1**: Fixed invariants are locked works correctly
+- **t1**: Fixed invariants are locked.
 
 Some values are **fixed invariants** that MUST NOT be configurable:
 
@@ -253,7 +253,7 @@ These values are part of the protocol identity and/or correctness requirements. 
 ### [common-11] — Configurable defaults
 
 **Obligations:**
-- **t1**: Configurable defaults works correctly
+- **t1**: Configurable defaults.
 
 Some values are **configurable defaults** that MAY be overridden via configuration:
 
@@ -275,7 +275,7 @@ Some values are **configurable defaults** that MAY be overridden via configurati
 ### [common-11a] — New constants start as invariants
 
 **Obligations:**
-- **t1**: New constants start as invariants works correctly
+- **t1**: New constants start as invariants.
 
 Any **new constant** introduced by this spec suite MUST be written as an **invariant initially** (with exact value documented).
 
@@ -294,7 +294,7 @@ Any **new constant** introduced by this spec suite MUST be written as an **invar
 ### [common-12a] — Test tolerance constants
 
 **Obligations:**
-- **t1**: Test tolerance constants works correctly
+- **t1**: Test tolerance constants.
 
 These constants define acceptable tolerances for E2E test assertions:
 
@@ -317,7 +317,7 @@ These are test-only values and do not affect runtime behavior.
 ### [common-12] — Internal measurements vs exposed metrics
 
 **Obligations:**
-- **t1**: Internal measurements vs exposed metrics works correctly
+- **t1**: Internal measurements vs exposed metrics.
 
 Naia uses internal measurements (RTT, jitter, bandwidth) for:
 - Client tick lead targeting
@@ -333,7 +333,7 @@ Naia uses internal measurements (RTT, jitter, bandwidth) for:
 ### [common-13] — Metrics are non-normative for gameplay
 
 **Obligations:**
-- **t1**: Metrics are non-normative for gameplay works correctly
+- **t1**: Metrics are non-normative for gameplay.
 
 Observability metrics (RTT, throughput, etc.) MUST NOT affect:
 - Replicated state correctness
@@ -350,7 +350,7 @@ Tests SHOULD NOT depend on exact metric values for correctness testing. Metric t
 ### [common-14] — Reconnect is fresh session
 
 **Obligations:**
-- **t1**: Reconnect is fresh session works correctly
+- **t1**: Reconnect is fresh session.
 
 When a client "reconnects" (disconnects and connects again):
 - This is a **fresh connection** that builds world state from a new snapshot

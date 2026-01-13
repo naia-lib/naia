@@ -47,7 +47,7 @@ fn core_replication_scenario_behaves_identically_over_udp_and_webrtc() {
 }
 
 /// Extreme jitter and reordering preserve channel contracts
-/// Contract: [transport-01], [transport-02], [commands-05]
+/// Contract: [transport-01], [transport-02]
 ///
 /// Given link conditioner with high jitter and reordering; when sending messages and replication updates over ordered/unordered/sequenced/tick-buffered channels;
 /// then each channel still satisfies its documented ordering/reliability/latest-only semantics.
@@ -138,102 +138,6 @@ fn extreme_jitter_and_reordering_preserve_channel_contracts() {
     );
 }
 
-/// Protocol type-order mismatch fails fast at handshake
-///
-/// Given server/client with intentionally mismatched protocol definitions (type ID ordering differs);
-/// when client connects; then handshake fails early with clear mismatch outcome,
-/// no gameplay events are generated, and both sides clean up.
-/// Contract: [messaging-04], [connection-14a]
-#[test]
-fn protocol_type_order_mismatch_fails_fast_at_handshake() {
-    use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
-
-    let mut scenario = Scenario::new();
-
-    // Create the standard protocol for the server
-    let server_protocol = protocol();
-
-    // Create a mismatched protocol for the client by omitting one channel
-    // This will produce a different protocol_id due to different channel count
-    let client_protocol = Protocol::builder()
-        .add_component::<Position>()
-        .add_message::<Auth>()
-        .add_message::<TestMessage>()
-        .add_message::<TestRequest>()
-        .add_message::<TestResponse>()
-        // Intentionally omit ReliableChannel to create protocol_id mismatch
-        .add_channel::<UnreliableChannel>(
-            ChannelDirection::Bidirectional,
-            ChannelMode::UnorderedUnreliable,
-        )
-        .add_channel::<OrderedChannel>(
-            ChannelDirection::Bidirectional,
-            ChannelMode::OrderedReliable(ReliableSettings::default()),
-        )
-        .add_channel::<UnorderedChannel>(
-            ChannelDirection::Bidirectional,
-            ChannelMode::UnorderedReliable(ReliableSettings::default()),
-        )
-        .add_channel::<SequencedChannel>(
-            ChannelDirection::Bidirectional,
-            ChannelMode::SequencedReliable(ReliableSettings::default()),
-        )
-        .add_channel::<TickBufferedChannel>(
-            ChannelDirection::ClientToServer,
-            ChannelMode::TickBuffered(naia_shared::TickBufferSettings::default()),
-        )
-        .add_channel::<RequestResponseChannel>(
-            ChannelDirection::Bidirectional,
-            ChannelMode::UnorderedReliable(ReliableSettings::default()),
-        )
-        .enable_client_authoritative_entities()
-        .build();
-
-    // Start server with standard protocol
-    scenario.server_start(ServerConfig::default(), server_protocol);
-
-    // Start client with mismatched protocol
-    let client_key = scenario.client_start(
-        "Client",
-        Auth::new("user", "pass"),
-        test_client_config(),
-        client_protocol,
-    );
-
-    // Wait for client to receive rejection event
-    let mut reject_event_received = false;
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |client| {
-            if client.read_event::<ClientRejectEvent>().is_some() {
-                reject_event_received = true;
-            }
-            reject_event_received.then_some(())
-        })
-    });
-
-    assert!(reject_event_received, "Client should receive rejection event");
-
-    // Verify connection is rejected before any message exchange
-    scenario.mutate(|_ctx| {});
-    scenario.spec_expect("messaging-04.t1: mismatched protocol_id rejects connection before message exchange", |ctx| {
-        // Check that client is in rejected state and NOT connected
-        let is_rejected = ctx.client(client_key, |client| {
-            client.is_rejected()
-        });
-
-        let client_not_connected = !ctx.client(client_key, |client| {
-            client.connection_status().is_connected()
-        });
-
-        // Check that server did NOT emit ConnectEvent (user doesn't exist)
-        let server_no_user = !ctx.server(|server| {
-            server.user_exists(&client_key)
-        });
-
-        // All three conditions must be true
-        (is_rejected && client_not_connected && server_no_user).then_some(())
-    });
-}
 
 /// Robustness under simulated packet loss
 /// Contract: [transport-01], [transport-02]

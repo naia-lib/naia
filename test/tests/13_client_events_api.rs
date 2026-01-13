@@ -102,7 +102,7 @@ fn client_spawn_insert_update_remove_events_occur_once_per_change_and_drain_clea
 }
 
 /// Client never sees update or remove events for entities that were never in scope
-/// Contract: [client-events-03], [client-events-04], [entity-scopes-02]
+/// Contract: [client-events-03], [client-events-04]
 ///
 /// Given entities created/destroyed entirely while A is out of scope;
 /// when A drains events; then A sees no events for those entities.
@@ -209,7 +209,7 @@ fn client_never_sees_update_or_insert_events_before_seeing_a_spawn_event() {
 }
 
 /// Client never sees events after despawn for a given entity
-/// Contract: [client-events-08], [client-events-09], [entity-scopes-05]
+/// Contract: [client-events-08], [client-events-09]
 ///
 /// Given E is spawned, updated, then despawned while in A's scope;
 /// when A processes events after despawn, including under packet reordering;
@@ -281,7 +281,7 @@ fn client_never_sees_events_after_despawn_for_a_given_entity() {
 }
 
 /// Client message events are grouped and typed correctly per channel
-/// Contract: [client-events-10], [messaging-05], [messaging-06]
+/// Contract: [client-events-10]
 ///
 /// Given A receives multiple message types over multiple channels in one tick;
 /// when A drains message events; then each message appears once with correct type and bound to correct channel.
@@ -338,7 +338,7 @@ fn client_message_events_are_grouped_and_typed_correctly_per_channel() {
 }
 
 /// Client request/response events are drained once and matched correctly
-/// Contract: [client-events-11], [client-events-12], [messaging-17], [messaging-18]
+/// Contract: [client-events-11], [client-events-12]
 ///
 /// Given multiple server-to-client requests and client responses across ticks;
 /// when client processes its request/response events; then each incoming request and outgoing response appears once,

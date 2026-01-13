@@ -66,7 +66,7 @@ fn harness_single_client_spawn_replicates_to_server() {
 }
 
 /// Test: two clients see the same logical entity
-/// Contract: [entity-replication-01], [entity-scopes-01]
+/// Contract: [entity-replication-01]
 #[test]
 fn harness_two_clients_entity_mapping() {
     let mut scenario = Scenario::new();
@@ -273,7 +273,7 @@ fn late_joining_client_gets_consistent_identity_mapping() {
 }
 
 /// Long-running connect/disconnect and spawn/despawn cycles do not leak
-/// Contract: [entity-replication-01], [entity-replication-02], [entity-scopes-07]
+/// Contract: [entity-replication-01], [entity-replication-02]
 ///
 /// Given a test that repeatedly connects/disconnects clients and spawns/despawns entities over many cycles;
 /// when it completes; then server and clients report zero users/entities, and internal counts remain bounded (no leaks).
@@ -603,7 +603,7 @@ fn stable_logical_identity_across_clients_in_steady_state() {
 }
 
 /// Despawn semantics
-/// Contract: [entity-replication-02], [entity-scopes-07], [entity-scopes-09]
+/// Contract: [entity-replication-02]
 ///
 /// Given E visible to A and B; when server despawns E;
 /// then A and B despawn E, no further updates for E are processed client-side, and late packets referencing E are ignored safely.
@@ -885,7 +885,7 @@ fn component_removal() {
 }
 
 /// Server-spawned public entity replicates to all scoped clients
-/// Contract: [entity-replication-03], [entity-scopes-01], [entity-scopes-02], [entity-scopes-10]
+/// Contract: [entity-replication-03]
 ///
 /// Given A and B in same room; when server spawns public E with Position;
 /// then A and B both see E with same Position.
@@ -1193,7 +1193,7 @@ fn snapshot_on_join_in_progress() {
 }
 
 /// Clean reconnect
-/// Contract: [entity-replication-07], [entity-scopes-13]
+/// Contract: [entity-replication-07]
 ///
 /// Given A and B connected and seeing same entities; when A disconnects (graceful or simulated loss)
 /// and later reconnects as same or new logical player per chosen model; then after rejoin A's world

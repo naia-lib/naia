@@ -43,21 +43,21 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ### [client-events-00] — Receive step is ingestion only
 
 **Obligations:**
-- **t1**: Receive step is ingestion only works correctly
+- **t1**: Receive step is ingestion only.
 - The Receive step MUST only ingest packets into an internal buffer.
 - The Receive step MUST NOT directly mutate the client world or produce observable events.
 
 ### [client-events-01] — Process step is the only event-production / world-application boundary
 
 **Obligations:**
-- **t1**: Process step is the only event-production / world-application boundary works correctly
+- **t1**: Process step is the only event-production / world-application boundary.
 - Replicated state application and new pending events MUST occur only as a result of the Process step.
 - Drains MUST NOT “discover” new events unless a prior Process step produced them.
 
 ### [client-events-02] — Drains are pure read+remove
 
 **Obligations:**
-- **t1**: Drains are pure read+remove works correctly
+- **t1**: Drains are pure read+remove.
 - `take_world_events()` and `take_tick_events()` MUST be pure drains:
   - MUST NOT receive packets
   - MUST NOT process packets
@@ -71,7 +71,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ### [client-events-03] — Drain is destructive and idempotent (no replay without new Process step)
 
 **Obligations:**
-- **t1**: Drain is destructive and idempotent (no replay without new Process step) works correctly
+- **t1**: Drain is destructive and idempotent (no replay without new Process step).
 **Rule:** Draining a given event stream MUST remove those events from the pending queue, and subsequent drains without an intervening Process step producing new pending events MUST return empty.
 
 - Draining twice “back-to-back” MUST NOT return the same event twice.
@@ -85,7 +85,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ### [client-events-04] — Spawn is the first event for an entity lifetime on that client
 
 **Obligations:**
-- **t1**: Spawn is the first event for an entity lifetime on that client works correctly
+- **t1**: Spawn is the first event for an entity lifetime on that client.
 **Rule:** For any entity `E` that becomes present on client `C`, the first observable entity-lifetime event for that lifetime MUST be `Spawn(E)` (or an equivalent spawn event). The client MUST NOT observe component Update/Remove events for `E` before Spawn for that lifetime.
 
 - Initial component presence delivered with the spawn snapshot MAY be represented as:
@@ -102,7 +102,7 @@ The *names* above reflect the current API. The **semantics** below are the contr
 ### [client-events-05] — No events for entities that were never in scope
 
 **Obligations:**
-- **t1**: No events for entities that were never in scope works correctly
+- **t1**: No events for entities that were never in scope.
 **Rule:** If `E` is never `InScope(C,E)` for client `C` during a connection lifetime, the client Events API MUST not emit any entity events for `E` (no spawn/insert/update/remove/despawn).
 
 This includes entities created and destroyed entirely while `C` is out of scope.
@@ -115,7 +115,7 @@ This includes entities created and destroyed entirely while `C` is out of scope.
 ### [client-events-06] — Despawn ends the entity lifetime; no further events for that lifetime
 
 **Obligations:**
-- **t1**: Despawn ends the entity lifetime; no further events for that lifetime works correctly
+- **t1**: Despawn ends the entity lifetime; no further events for that lifetime.
 **Rule:** After `Despawn(E)` is emitted for client `C`, the Events API MUST NOT emit any further entity-related events for that lifetime of `E` on `C`.
 
 - Late packets referencing the despawned lifetime MUST be ignored safely (see `07_entity_replication.spec.md`).
@@ -129,7 +129,7 @@ This includes entities created and destroyed entirely while `C` is out of scope.
 ### [client-events-07] — Component insert/update/remove are one-shot per applied change
 
 **Obligations:**
-- **t1**: Component insert/update/remove are one-shot per applied change works correctly
+- **t1**: Component insert/update/remove are one-shot per applied change.
 **Rule:** When a component change is applied to an entity `E` on client `C`, the Events API MUST surface exactly one corresponding event for that applied change.
 
 - Insert: exactly once when a component becomes present on `E`
@@ -147,7 +147,7 @@ Duplicate packets or retries MUST NOT cause duplicate events if they do not caus
 ### [client-events-08] — Per-entity ordering: spawn → (inserts/updates/removes)* → despawn
 
 **Obligations:**
-- **t1**: Per-entity ordering: spawn → (inserts/updates/removes)* → despawn works correctly
+- **t1**: Per-entity ordering: spawn → (inserts/updates/removes)* → despawn.
 **Rule:** For a given entity lifetime on client `C`, the API-visible ordering MUST respect:
 
 `Spawn(E)` happens before any component events for that lifetime, and `Despawn(E)` happens after all component events for that lifetime.
@@ -162,7 +162,7 @@ This is an observability constraint: internal buffering/reordering is allowed, b
 ### [client-events-09] — Scope transitions are reflected as spawn/despawn (with the defined model)
 
 **Obligations:**
-- **t1**: Scope transitions are reflected as spawn/despawn (with the defined model) works correctly
+- **t1**: Scope transitions are reflected as spawn/despawn (with the defined model).
 **Rule:** When an entity `E` transitions between OutOfScope and InScope on client `C`, the client Events API MUST reflect that transition using spawn/despawn semantics consistent with `06_entity_scopes.spec.md`.
 
 - Leaving scope MUST cause Despawn(E) (entity removed from client world).
@@ -176,7 +176,7 @@ This is an observability constraint: internal buffering/reordering is allowed, b
 ### [client-events-10] — Message events are typed, correctly routed, and drain once
 
 **Obligations:**
-- **t1**: Message events are typed, correctly routed, and drain once works correctly
+- **t1**: Message events are typed, correctly routed, and drain once.
 **Rule:** Client message events:
 - MUST be exposed via typed message events grouped by:
   - channel type, and
@@ -198,7 +198,7 @@ Additional requirements:
 ### [client-events-11] — Request/response events are matched, one-shot, and cleaned up on disconnect
 
 **Obligations:**
-- **t1**: Request/response events are matched, one-shot, and cleaned up on disconnect works correctly
+- **t1**: Request/response events are matched, one-shot, and cleaned up on disconnect.
 **Rule:** If the client exposes request/response events via its Events API:
 - Each delivered request/response MUST be surfaced exactly once and drain cleanly.
 - Responses MUST be matchable to the originating request handle/ID per the public API.
@@ -213,7 +213,7 @@ Additional requirements:
 ### [client-events-12] — Authority events are out of scope for this spec
 
 **Obligations:**
-- **t1**: Authority events are out of scope for this spec works correctly
+- **t1**: Authority events are out of scope for this spec.
 **Rule:** Authority-related events MUST follow `11_entity_authority.spec.md`. This spec does not define them, except:
 
 - If authority events are surfaced through the same drain mechanism, they MUST obey drain semantics (no duplicates) as per this spec.

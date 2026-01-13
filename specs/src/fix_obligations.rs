@@ -15,6 +15,7 @@ pub fn run_fix_obligations(root: &PathBuf) -> Result<usize> {
     let contract_heading_re = Regex::new(r"^(###\s+\[([a-z][a-z0-9-]*-[0-9]+(?:-[a-z]+|[a-z]*))\]\s+—\s*(.*))$").unwrap();
     let obligations_heading_re = Regex::new(r"^\*\*Obligations:\*\*").unwrap();
     let obligation_t1_re = Regex::new(r"^-\s+\*\*t1\*\*:").unwrap();
+    let forbidden_re = Regex::new(r"(?i)(works correctly|behavior is correct|is correct|functions properly|todo|tbd)").unwrap();
 
     for entry in WalkDir::new(&specs_dir).into_iter().filter_map(|e| e.ok()) {
         if !entry.file_type().is_file() || !entry.path().extension().map_or(false, |e| e == "md") {
@@ -28,6 +29,7 @@ pub fn run_fix_obligations(root: &PathBuf) -> Result<usize> {
         let mut new_lines: Vec<String> = Vec::new();
         let mut i = 0;
         let mut file_modified = false;
+        let mut current_contract_id: String = "UNKNOWN".to_string();
 
         while i < lines.len() {
             let line = lines[i];
@@ -35,7 +37,8 @@ pub fn run_fix_obligations(root: &PathBuf) -> Result<usize> {
             // Check for contract heading
             if let Some(caps) = contract_heading_re.captures(line) {
                 let contract_id = caps.get(2).unwrap().as_str();
-                let contract_title = caps.get(3).unwrap().as_str();
+                current_contract_id = contract_id.to_string();
+                let _contract_title = caps.get(3).unwrap().as_str();
 
                 // Add the contract heading
                 new_lines.push(line.to_string());
@@ -78,7 +81,8 @@ pub fn run_fix_obligations(root: &PathBuf) -> Result<usize> {
                     new_lines.push("**Obligations:**".to_string());
 
                     // Generate t1 from contract title
-                    let t1_desc = generate_t1_from_title(contract_title);
+                    // let t1_desc = generate_t1_from_title(contract_title);
+                    let t1_desc = format!("TODO(spec): define a testable obligation for {}", contract_id);
                     new_lines.push(format!("- **t1**: {}", t1_desc));
 
                     file_modified = true;
@@ -101,6 +105,13 @@ pub fn run_fix_obligations(root: &PathBuf) -> Result<usize> {
                 } else {
                     // Contract already has obligations, just continue normally
                 }
+            } else if obligation_t1_re.is_match(line) && forbidden_re.is_match(line) {
+                 // Replace placeholder
+                 println!("Fixing placeholder for [{}]", current_contract_id);
+                 let new_line = format!("- **t1**: TODO(spec): define a testable obligation for {}", current_contract_id);
+                 new_lines.push(new_line);
+                 file_modified = true;
+                 fixed_count += 1;
             } else {
                 // Not a contract heading, just copy the line
                 new_lines.push(line.to_string());

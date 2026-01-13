@@ -408,7 +408,7 @@ fn tick_index_wraparound_does_not_break_progression_or_ordering() {
 }
 
 /// Sequence number wraparound for channels preserves ordering semantics
-/// Contract: [time-09], [transport-05]
+/// Contract: [time-09]
 ///
 /// Given ordered channel with wrapping sequence numbers; when enough messages force wrap;
 /// then ordered semantics still hold across wrap and later messages are still treated as newer.

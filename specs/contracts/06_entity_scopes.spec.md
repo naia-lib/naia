@@ -37,7 +37,7 @@ This spec does not define:
 ### [entity-scopes-01] — Rooms are a required coarse gate for non-owners
 
 **Obligations:**
-- **t1**: Rooms are a required coarse gate for non-owners works correctly
+- **t1**: Rooms are a required coarse gate for non-owners.
 For any user `U` and entity `E`, `SharesRoom(U,E)` MUST be a necessary precondition for `InScope(U,E)`, except where
 other specs explicitly override (e.g. owning client always in-scope for its client-owned entities; see below).
 
@@ -46,7 +46,7 @@ If `SharesRoom(U,E) == false`, then `OutOfScope(U,E)` MUST hold.
 ### [entity-scopes-02] — Per-user include/exclude is an additional filter (additive after Rooms)
 
 **Obligations:**
-- **t1**: Per-user include/exclude is an additional filter (additive after Rooms) works correctly
+- **t1**: Per-user include/exclude is an additional filter (additive after Rooms).
 Assuming `SharesRoom(U,E) == true`, the server MUST apply the per-user filter as follows:
 
 - If `Exclude(U,E)` is active, then `OutOfScope(U,E)` MUST hold.
@@ -56,7 +56,7 @@ Assuming `SharesRoom(U,E) == true`, the server MUST apply the per-user filter as
 ### [entity-scopes-03] — Include/Exclude ordering: last call wins
 
 **Obligations:**
-- **t1**: Include/Exclude ordering: last call wins works correctly
+- **t1**: Include/Exclude ordering: last call wins.
 If both `Include(U,E)` and `Exclude(U,E)` are applied over time, the effective filter state MUST be determined by
 the most recently applied call for that `(U,E)` pair (last call wins).
 
@@ -66,7 +66,7 @@ finalized application order for that tick).
 ### [entity-scopes-04] — Roomless entities are out-of-scope for all non-owners
 
 **Obligations:**
-- **t1**: Roomless entities are out-of-scope for all non-owners works correctly
+- **t1**: Roomless entities are out-of-scope for all non-owners.
 If `E` is in zero rooms, then for all users `U` that are not explicitly forced in-scope by other specs,
 `OutOfScope(U,E)` MUST hold, regardless of `Include(U,E)`.
 
@@ -79,7 +79,7 @@ If `E` is in zero rooms, then for all users `U` that are not explicitly forced i
 ### [entity-scopes-05] — Owning client is always in-scope for its client-owned entities
 
 **Obligations:**
-- **t1**: Owning client is always in-scope for its client-owned entities works correctly
+- **t1**: Owning client is always in-scope for its client-owned entities.
 
 For a client-owned entity `E` with owning client `A`:
 - `InScope(A,E)` MUST always hold while `A` is connected.
@@ -101,7 +101,7 @@ For a client-owned entity `E` with owning client `A`:
 ### [entity-scopes-06] — Publication can force non-owners out-of-scope
 
 **Obligations:**
-- **t1**: Publication can force non-owners out-of-scope works correctly
+- **t1**: Publication can force non-owners out-of-scope.
 For client-owned entities, publication state MUST be treated as an additional gate for non-owners:
 - If client-owned `E` is Unpublished/Private, then for all `U != Owner(E)`, `OutOfScope(U,E)` MUST hold.
 
@@ -118,14 +118,14 @@ For each pair `(U,E)` from the server’s perspective, the scope state is exactl
 ### [entity-scopes-07] — OutOfScope ⇒ despawn on that client
 
 **Obligations:**
-- **t1**: OutOfScope ⇒ despawn on that client works correctly
+- **t1**: OutOfScope ⇒ despawn on that client.
 When a client corresponding to user `U` becomes `OutOfScope(U,E)`:
 - `E` MUST be despawned on that client (removed from the client’s networked entity pool).
 
 ### [entity-scopes-08] — Despawn destroys all components, including local-only components
 
 **Obligations:**
-- **t1**: Despawn destroys all components, including local-only components works correctly
+- **t1**: Despawn destroys all components, including local-only components.
 When `E` despawns on a client due to leaving scope:
 - all components associated with `E` in that client’s networked entity pool MUST be destroyed,
   including any local-only components the client may have attached.
@@ -133,7 +133,7 @@ When `E` despawns on a client due to leaving scope:
 ### [entity-scopes-09] — OutOfScope ⇒ ignore late replication updates for that entity
 
 **Obligations:**
-- **t1**: OutOfScope ⇒ ignore late replication updates for that entity works correctly
+- **t1**: OutOfScope ⇒ ignore late replication updates for that entity.
 If a client receives replication updates for an entity `E` that is currently `OutOfScope` on that client:
 - the client MUST ignore them silently in production.
 - when Debug mode is enabled, the client MAY emit a warning.
@@ -143,7 +143,7 @@ This rule exists to make the protocol tolerant to packet reordering and racey de
 ### [entity-scopes-10] — InScope ⇒ entity exists in networked entity pool
 
 **Obligations:**
-- **t1**: InScope ⇒ entity exists in networked entity pool works correctly
+- **t1**: InScope ⇒ entity exists in networked entity pool.
 If a client is `InScope(U,E)`, then `E` MUST exist in that client’s networked entity pool (i.e. be present as a
 replicated/spawned entity), subject to normal replication delivery and eventual consistency.
 
@@ -154,7 +154,7 @@ replicated/spawned entity), subject to normal replication delivery and eventual 
 ### [entity-scopes-11] — Scope is resolved per server tick; intermediate states are not observable
 
 **Obligations:**
-- **t1**: Scope is resolved per server tick; intermediate states are not observable works correctly
+- **t1**: Scope is resolved per server tick; intermediate states are not observable.
 The server MUST resolve the final scope state for each `(U,E)` once per server tick and emit only the delta from
 the prior tick’s resolved state.
 
@@ -165,7 +165,7 @@ spawn/despawn transitions.
 ### [entity-scopes-12] — Leaving scope for ≥1 tick creates a new lifetime on re-entry
 
 **Obligations:**
-- **t1**: Leaving scope for ≥1 tick creates a new lifetime on re-entry works correctly
+- **t1**: Leaving scope for ≥1 tick creates a new lifetime on re-entry.
 If a client transitions `InScope(U,E) → OutOfScope(U,E)` and remains OutOfScope for at least one full server tick,
 then the next transition `OutOfScope(U,E) → InScope(U,E)` MUST be treated by the client as a **fresh spawn lifetime**:
 - the entity MUST spawn as if new,
@@ -182,7 +182,7 @@ boundary occurs (no observable spawn/despawn).
 ### [entity-scopes-13] — Disconnect implies OutOfScope for that user for all entities
 
 **Obligations:**
-- **t1**: Disconnect implies OutOfScope for that user for all entities works correctly
+- **t1**: Disconnect implies OutOfScope for that user for all entities.
 When a client disconnects (user `U` removed from the server connection set):
 - `OutOfScope(U,E)` MUST be treated as holding for all entities `E` immediately.
 - The server MUST cease replicating entities to that client.
@@ -199,7 +199,7 @@ These cases SHOULD NOT occur in correct usage, but behavior is defined for deter
 ### [entity-scopes-14] — Include/exclude without shared room cannot force scope
 
 **Obligations:**
-- **t1**: Include/exclude without shared room cannot force scope works correctly
+- **t1**: Include/exclude without shared room cannot force scope.
 If `Include(U,E)` is active but `SharesRoom(U,E) == false`, then `OutOfScope(U,E)` MUST hold.
 
 When Debug mode is enabled, the server MAY emit a warning indicating the include is ineffective due to room gating.
@@ -207,7 +207,7 @@ When Debug mode is enabled, the server MAY emit a warning indicating the include
 ### [entity-scopes-15] — Unknown entity/user references
 
 **Obligations:**
-- **t1**: Unknown entity/user references works correctly
+- **t1**: Unknown entity/user references.
 If the server receives (or internally attempts) a scope operation referencing an unknown entity or unknown user:
 - in production, it MUST ignore the operation silently.
 - when Debug mode is enabled, it MAY emit a warning.

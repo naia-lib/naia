@@ -38,7 +38,7 @@ Normative:
 ### [entity-replication-01] — Global identity stability
 
 **Obligations:**
-- **t1**: Global identity stability works correctly
+- **t1**: Global identity stability.
 While an entity exists on the server:
 - The entity MUST have a stable **GlobalEntity**.
 - The server MUST NOT change an entity’s GlobalEntity during its existence.
@@ -51,7 +51,7 @@ When the server despawns the entity:
 ### [entity-replication-02] — Client-visible lifetime boundaries
 
 **Obligations:**
-- **t1**: Client-visible lifetime boundaries works correctly
+- **t1**: Client-visible lifetime boundaries.
 For any given client `C` and entity `E`, Naia MUST model a client-visible **lifetime**:
 
 - Lifetime **begins** when `E` enters `C`’s scope and Naia emits a **Spawn** to `C`.
@@ -66,7 +66,7 @@ Cross-link:
 ### [entity-replication-03] — Spawn snapshot semantics (baseline state)
 
 **Obligations:**
-- **t1**: Spawn snapshot semantics (baseline state) works correctly
+- **t1**: Spawn snapshot semantics (baseline state).
 When `E` enters scope for client `C`, the Spawn sent to `C` MUST include:
 
 - The set of replicated components present on `E` **at the time the Spawn is sent**
@@ -83,7 +83,7 @@ Non-normative note:
 ### [entity-replication-04] — No observable replication before Spawn
 
 **Obligations:**
-- **t1**: No observable replication before Spawn works correctly
+- **t1**: No observable replication before Spawn.
 For a given client-visible lifetime of `(C, E)`:
 
 - The client MUST NOT observe any replicated component Insert/Update/Remove for `E` **before** it observes the Spawn for that lifetime.
@@ -96,7 +96,7 @@ This is a hard invariant: **no update-before-spawn** observability.
 ### [entity-replication-05] — Actions outside lifetime are ignored
 
 **Obligations:**
-- **t1**: Actions outside lifetime are ignored works correctly
+- **t1**: Actions outside lifetime are ignored.
 If the client receives any entity/component replication action referencing an entity lifetime that is not currently active (i.e. before Spawn for that lifetime, or after Despawn for that lifetime):
 
 - Naia MUST ignore the action (it MUST NOT mutate world state).
@@ -113,7 +113,7 @@ This applies to:
 ### [entity-replication-06] — Update-before-Insert buffering (within lifetime)
 
 **Obligations:**
-- **t1**: Update-before-Insert buffering (within lifetime) works correctly
+- **t1**: Update-before-Insert buffering (within lifetime).
 Within an active lifetime:
 
 - If a replicated component **Update** is received before the corresponding replicated component **Insert** has been applied, Naia MUST buffer the Update and apply it after Insert arrives.
@@ -127,7 +127,7 @@ The same rule applies symmetrically for any component action that requires the c
 ### [entity-replication-07] — Local-only component overwrite by server replication
 
 **Obligations:**
-- **t1**: Local-only component overwrite by server replication works correctly
+- **t1**: Local-only component overwrite by server replication.
 If, at the time a replicated component Insert (or Spawn snapshot) is applied, the client already has a **local-only** component instance of the same component type on that entity:
 
 - This overwrite MUST be surfaced as an Insert (replicated-backed component becomes present), even though a local-only instance existed.
@@ -146,7 +146,7 @@ Cross-link:
 ### [entity-replication-08] — Collapse to final state per tick (no intermediate transitions)
 
 **Obligations:**
-- **t1**: Collapse to final state per tick (no intermediate transitions) works correctly
+- **t1**: Collapse to final state per tick (no intermediate transitions).
 Within a single server tick, if an entity/component undergoes multiple changes that would otherwise create intermediate states (insert+remove, multiple updates, etc.):
 
 - The server MUST collapse replication to the **final state** for that tick.
@@ -159,7 +159,7 @@ This mirrors the “final state only” principle used in scope transitions.
 ### [entity-replication-09] — Duplicate delivery is idempotent
 
 **Obligations:**
-- **t1**: Duplicate delivery is idempotent works correctly
+- **t1**: Duplicate delivery is idempotent.
 If the client receives duplicate replication actions (e.g. due to retransmission):
 
 - Applying the same logical action more than once MUST NOT create additional observable effects.
@@ -176,7 +176,7 @@ Examples (normative intent):
 ### [entity-replication-10] — Identity reuse safety (LocalEntity wrap/reuse)
 
 **Obligations:**
-- **t1**: Identity reuse safety (LocalEntity wrap/reuse) works correctly
+- **t1**: Identity reuse safety (LocalEntity wrap/reuse).
 Local entity identifiers (HostEntity/RemoteEntity) may wrap/reuse over time.
 
 Naia MUST ensure:
@@ -191,7 +191,7 @@ Non-normative note:
 ### [entity-replication-11] — GlobalEntity rollover is a terminal error
 
 **Obligations:**
-- **t1**: GlobalEntity rollover is a terminal error works correctly
+- **t1**: GlobalEntity rollover is a terminal error.
 GlobalEntity is treated as effectively unique.
 
 If the server’s monotonic GlobalEntity counter would roll over:
@@ -205,7 +205,7 @@ This is intentionally strict: rollover is astronomically unlikely and correctnes
 ### [entity-replication-12] — Conflict resolution: server wins for replicated state
 
 **Obligations:**
-- **t1**: Conflict resolution: server wins for replicated state works correctly
+- **t1**: Conflict resolution: server wins for replicated state.
 If a conflict occurs between client-local state and server-replicated state for any replicated component:
 
 - The server’s replicated state MUST overwrite the client’s local state (convergence requirement).

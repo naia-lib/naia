@@ -31,7 +31,7 @@ use _helpers::{client_connect, server_and_client_connected, server_and_client_di
 // ============================================================================
 
 /// Entities only replicate when room & scope match
-/// Contract: [entity-scopes-01], [entity-replication-01]
+/// Contract: [entity-scopes-01]
 ///
 /// Given Room1 with A and Room2 with B; when server spawns public E in Room1 and public F in Room2;
 /// then A sees only E, B sees only F, and server room state is E∈Room1, F∈Room2.
@@ -318,7 +318,7 @@ fn moving_entity_between_rooms_updates_scope() {
 }
 
 /// Custom viewport scoping function (position-based scope)
-/// Contract: [entity-scopes-04], [entity-replication-02]
+/// Contract: [entity-scopes-04]
 ///
 /// Given A and B in same room, entity E with Position, and per-client viewports;
 /// when E's Position moves from A's viewport region into B's; then A initially sees E then despawns it on exit,
@@ -399,7 +399,7 @@ fn custom_viewport_scoping_function() {
 }
 
 /// Entity belonging to multiple rooms projects correctly to different users
-/// Contract: [entity-scopes-05], [entity-replication-03]
+/// Contract: [entity-scopes-05]
 ///
 /// Given E in both RoomA and RoomB; when U1 is only in RoomA, U2 only in RoomB, U3 in both;
 /// then U1 sees E once, U2 sees E once, U3 sees E once, and removing E from one room only affects
@@ -581,7 +581,7 @@ fn private_replication_only_owner_sees_it() {
 }
 
 /// Authority releases when holder goes OutOfScope
-/// Contract: [entity-scopes-06], [entity-scopes-07], [entity-delegation-10]
+/// Contract: [entity-scopes-06], [entity-scopes-07]
 ///
 /// Given delegated E where A holds authority and B observes Denied; when server removes E from A's scope (so A despawns E); then authority MUST release to None, and B MUST observe Denied→Available.
 #[test]
@@ -822,7 +822,7 @@ fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
 }
 
 /// Authority releases when holder disconnects
-/// Contract: [entity-scopes-08], [entity-scopes-09], [entity-delegation-11]
+/// Contract: [entity-scopes-08], [entity-scopes-09]
 ///
 /// Given delegated E where A holds authority and B is in scope; when A disconnects; then authority MUST release to None, and B MUST observe Available (or Denied→Available if previously denied), with E still alive and replicated per server policy.
 #[test]
@@ -904,7 +904,7 @@ fn authority_releases_when_holder_disconnects() {
 }
 
 /// Publish/unpublish vs spawn/despawn semantics are distinct
-/// Contract: [entity-scopes-08], [entity-replication-04]
+/// Contract: [entity-scopes-08]
 ///
 /// Given E exists on server; when server publishes E to a room, later unpublishes it, then finally despawns it;
 /// then clients see E appear on publish, disappear on unpublish, and never see E again after despawn
@@ -1178,7 +1178,7 @@ fn scope_leave_and_re_enter_semantics() {
 }
 
 /// Entering scope mid-lifetime yields consistent snapshot without historical diffs
-/// Contract: [entity-scopes-14], [entity-replication-11]
+/// Contract: [entity-scopes-14]
 ///
 /// Given E existed and changed while A was out of scope; when A's scope changes so that E becomes in-scope;
 /// then A first sees E as a coherent snapshot of its current state, without replaying older intermediate diffs.
@@ -1271,7 +1271,7 @@ fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
 }
 
 /// Leaving scope vs despawn are distinguishable and behave consistently
-/// Contract: [entity-scopes-15], [entity-replication-12]
+/// Contract: [entity-scopes-15]
 ///
 /// Given A sees E; when E leaves A's scope but is not despawned; then A sees E disappear without a "despawn"
 /// lifetime event, and later re-entering scope shows E again with fresh snapshot; when E is truly despawned,

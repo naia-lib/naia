@@ -50,28 +50,28 @@ This spec defines how `ReplicationConfig::{Private,Public,Delegated}` maps onto 
 ### [entity-publication-01] — Publication gates only client-owned visibility to non-owners
 
 **Obligations:**
-- **t1**: Publication gates only client-owned visibility to non-owners works correctly
+- **t1**: Publication gates only client-owned visibility to non-owners.
 Publication semantics apply only to **client-owned** entities as a gate for **non-owner** visibility.
 This spec does not impose additional constraints on server-owned entities beyond what `06_entity_scopes.spec.md` / `07_entity_replication.spec.md` specify.
 
 ### [entity-publication-02] — Unpublished client-owned entities are never in-scope for non-owners
 
 **Obligations:**
-- **t1**: Unpublished client-owned entities are never in-scope for non-owners works correctly
+- **t1**: Unpublished client-owned entities are never in-scope for non-owners.
 If `E` is client-owned and **Unpublished** with owner `A`:
 - for all clients `C != A`, `OutOfScope(C,E)` MUST hold.
 
 ### [entity-publication-03] — Published client-owned entities may be in-scope for non-owners
 
 **Obligations:**
-- **t1**: Published client-owned entities may be in-scope for non-owners works correctly
+- **t1**: Published client-owned entities may be in-scope for non-owners.
 If `E` is client-owned and **Published** with owner `A`:
 - the server MAY place `E` into scope of clients `C != A` per normal scope policy.
 
 ### [entity-publication-04] — Only the server or owning client may change publication; server wins conflicts
 
 **Obligations:**
-- **t1**: Only the server or owning client may change publication; server wins conflicts works correctly
+- **t1**: Only the server or owning client may change publication; server wins conflicts.
 Only the server OR the owning client MAY cause `E` to transition:
 - Unpublished ↔ Published
 
@@ -85,14 +85,14 @@ Notes:
 ### [entity-publication-05] — Unpublish forces immediate OutOfScope for all non-owners
 
 **Obligations:**
-- **t1**: Unpublish forces immediate OutOfScope for all non-owners works correctly
+- **t1**: Unpublish forces immediate OutOfScope for all non-owners.
 When client-owned `E` transitions **Published → Unpublished**:
 - all non-owner clients MUST become `OutOfScope(C,E)` for `C != Owner(E)` as part of the next resolved scope update.
 
 ### [entity-publication-06] — Publish enables later scoping; does not guarantee scoping
 
 **Obligations:**
-- **t1**: Publish enables later scoping; does not guarantee scoping works correctly
+- **t1**: Publish enables later scoping; does not guarantee scoping.
 When client-owned `E` transitions **Unpublished → Published**:
 - the server MAY later scope `E` to non-owners per policy;
 - publication does not itself guarantee that any particular non-owner becomes in-scope.
@@ -100,7 +100,7 @@ When client-owned `E` transitions **Unpublished → Published**:
 ### [entity-publication-07] — Owning client is always in-scope for its owned entities
 
 **Obligations:**
-- **t1**: Owning client is always in-scope for its owned entities works correctly
+- **t1**: Owning client is always in-scope for its owned entities.
 
 For any client-owned entity `E` with owner `A`:
 - `InScope(A,E)` MUST always hold while `A` is connected.
@@ -120,7 +120,7 @@ For any client-owned entity `E` with owner `A`:
 ### [entity-publication-08] — Non-owner unpublish/out-of-scope implies despawn and destroys local-only components
 
 **Obligations:**
-- **t1**: Non-owner unpublish/out-of-scope implies despawn and destroys local-only components works correctly
+- **t1**: Non-owner unpublish/out-of-scope implies despawn and destroys local-only components.
 If a non-owner client `C != Owner(E)` transitions to `OutOfScope(C,E)` due to publication becoming Unpublished:
 - `E` MUST despawn on that client (be removed from the client’s networked entity pool).
 - All components attached to `E` in that client’s pool (including any “local-only” components) MUST be destroyed.
@@ -143,7 +143,7 @@ For a non-owner client `C != Owner(E)`:
 ### [entity-publication-10] — Delegation migration ends “client-owned publication” semantics
 
 **Obligations:**
-- **t1**: Delegation migration ends “client-owned publication” semantics works correctly
+- **t1**: Delegation migration ends “client-owned publication” semantics.
 If a client-owned entity `E` migrates into a **delegated server-owned entity** (see `10_entity_delegation.spec.md`):
 - `E` is no longer client-owned, and publication semantics in this spec no longer apply.
 - Non-owners are no longer gated by “Published/Unpublished client-owned rules”; the entity is now governed by

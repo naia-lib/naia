@@ -199,7 +199,7 @@ fn component_update_events_reflect_correct_multiplicity_per_user() {
 }
 
 /// Message events grouped correctly by channel and type
-/// Contract: [server-events-04], [messaging-01], [messaging-02]
+/// Contract: [server-events-04]
 ///
 /// Given multiple message types from multiple users across multiple channels in one tick;
 /// when Events API drains messages; then grouping matches documented structure (by channel/type/user),
@@ -282,7 +282,7 @@ fn message_events_grouped_correctly_by_channel_and_type() {
 }
 
 /// Request/response events via Events API are drained and do not reappear
-/// Contract: [server-events-05], [server-events-06], [messaging-15], [messaging-16]
+/// Contract: [server-events-05], [server-events-06]
 ///
 /// Given multiple client requests and server responses in a tick;
 /// when Events API drains request/response events; then each appears exactly once
@@ -452,7 +452,7 @@ fn accessing_non_existent_entity_yields_safe_failure_not_panic() {
 }
 
 /// Accessing an entity after despawn is safely rejected
-/// Contract: [server-events-09], [server-events-10], [client-events-00]
+/// Contract: [server-events-09], [server-events-10]
 ///
 /// Given E was spawned then despawned; when code attempts to read/mutate E after despawn;
 /// then calls fail gracefully and do not recreate E or panic.
@@ -523,7 +523,7 @@ fn accessing_an_entity_after_despawn_is_safely_rejected() {
 }
 
 /// Mutating out-of-scope entity for a given user is ignored or errors predictably
-/// Contract: [server-events-11], [server-events-12], [entity-scopes-10]
+/// Contract: [server-events-11], [server-events-12]
 ///
 /// Given E not in A's scope; when A tries to mutate E via client APIs or server applies per-user operation assuming A sees E;
 /// then Naia either ignores the operation or returns a defined error, without corrupting scoped state.
@@ -569,7 +569,7 @@ fn mutating_out_of_scope_entity_for_a_given_user_is_ignored_or_errors_predictabl
 }
 
 /// Sending messages or requests on a disconnected or rejected connection is safe
-/// Contract: [server-events-13], [messaging-19], [messaging-20]
+/// Contract: [server-events-13]
 ///
 /// Given a connection that is disconnected or rejected; when code sends a message/request on it;
 /// then attempt is ignored or returns clear error, and does not resurrect connection or panic.
