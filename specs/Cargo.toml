@@ -1,5 +1,5 @@
 [package]
-name = "naia-specs"
+name = "naia_spec_tool"
 version = "0.1.0"
 edition = "2021"
 publish = false

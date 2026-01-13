@@ -16,7 +16,7 @@
 - Certification artifact requirements and review procedures
 
 **Defer to:**
-- `specs/README.md` for `naia-specs` tool commands (adequacy, packet, verify)
+- `specs/README.md` for `naia_spec_tool` tool commands (adequacy, packet, verify)
 - `DEV_PROCESS.md` for ongoing SDD workflow after certification is complete
 - `CLAUDE.md` for agent execution protocol (PLAN/OUTPUT convention)
 - Individual specs in `specs/contracts/` for normative behavior definitions
@@ -50,13 +50,13 @@ This plan certifies **semantic adequacy** — but uses mechanical adequacy as th
 
 ### 1.3 We will NOT add this to CI
 This is explicitly a one-time certification pass. After completion:
-- `naia-specs adequacy --strict` remains useful as a **local dev gate**, but is not enforced in CI.
+- `naia_spec_tool adequacy --strict` remains useful as a **local dev gate**, but is not enforced in CI.
 
 ---
 
 ## 2) What We Already Have (Capabilities)
 
-From the current `naia-specs` tool:
+From the current `naia_spec_tool` tool:
 
 - `registry`: enumerates all contract IDs (registry is complete)
 - `coverage`: confirms every contract has at least one annotated test function
@@ -65,7 +65,7 @@ From the current `naia-specs` tool:
 - `adequacy --strict`: reports missing tests / missing labels / missing obligation mappings
 
 From the E2E harness:
-- `Scenario::spec_expect("label", ...)` and `Scenario::expect_msg("label", ...)` provide labels that `naia-specs` can extract.
+- `Scenario::spec_expect("label", ...)` and `Scenario::expect_msg("label", ...)` provide labels that `naia_spec_tool` can extract.
 - Labels must have the form:
   - `contract-id: description` (contract-level)
   - `contract-id.tN: description` (obligation-level)
@@ -77,7 +77,7 @@ From the E2E harness:
 Certification is complete when ALL of the following are true:
 
 ### 3.1 Mechanical Adequacy is fully green
-- `cargo run -p naia-specs -- adequacy --strict` reports:
+- `cargo run -p naia_spec_tool -- adequacy --strict` reports:
   - Missing tests: 0
   - Missing labels: 0
   - Missing obligation mappings: 0
@@ -172,8 +172,8 @@ This certification proceeds in 3 phases:
 
 Verify tooling is operational:
 ```bash
-cargo run -p naia-specs -- verify --strict
-cargo run -p naia-specs -- adequacy --strict
+cargo run -p naia_spec_tool -- verify --strict
+cargo run -p naia_spec_tool -- adequacy --strict
 ```
 
 **Note:** If `verify --strict` fails due to test failures, proceed anyway (failing tests are allowed). We only require:
@@ -198,13 +198,13 @@ Goal: the adequacy tool is green.
 Work loop:
 1) Run:
    ```bash
-   cargo run -p naia-specs -- adequacy --strict
+   cargo run -p naia_spec_tool -- adequacy --strict
    ```
 2) Take the queue top-to-bottom.
 3) For each contract:
    - Generate packet:
      ```bash
-     cargo run -p naia-specs -- packet <contract-id>
+     cargo run -p naia_spec_tool -- packet <contract-id>
      ```
    - Add missing `spec_expect("contract-id.tN: ...")` labels to the correct tests.
 4) Repeat until adequacy is green.
@@ -271,7 +271,7 @@ Fixes needed:
 ## 8) Outputs (End State Artifacts)
 
 ### 8.1 Mechanical adequacy proof
-- `cargo run -p naia-specs -- adequacy --strict` is green.
+- `cargo run -p naia_spec_tool -- adequacy --strict` is green.
 
 ### 8.2 Certification report
 Generated file:
@@ -293,20 +293,20 @@ Generated file:
 
 ```bash
 # CI-grade verification (may fail due to failing tests; compilation is the key)
-cargo run -p naia-specs -- verify --strict
+cargo run -p naia_spec_tool -- verify --strict
 
 # Mechanical adequacy (the Phase A2 gate)
-cargo run -p naia-specs -- adequacy --strict
+cargo run -p naia_spec_tool -- adequacy --strict
 
 # Contract packet (the semantic review work order)
-cargo run -p naia-specs -- packet <contract-id>
+cargo run -p naia_spec_tool -- packet <contract-id>
 
 # Traceability matrix
-cargo run -p naia-specs -- traceability
+cargo run -p naia_spec_tool -- traceability
 
 # Registry + coverage checks
-cargo run -p naia-specs -- registry
-cargo run -p naia-specs -- coverage
+cargo run -p naia_spec_tool -- registry
+cargo run -p naia_spec_tool -- coverage
 
 # Compile E2E tests only (no run)
 cargo test -p naia-test --no-run

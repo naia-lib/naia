@@ -15,7 +15,7 @@
 - Troubleshooting and quality gate procedures
 
 **Defer to:**
-- `specs/README.md` for `naia-specs` tool commands and spec authoring rules
+- `specs/README.md` for `naia_spec_tool` tool commands and spec authoring rules
 - `CLAUDE.md` for agent-specific execution protocol (PLAN/OUTPUT convention)
 - `SPEC_CERTIFICATION_PLAN.md` for one-time semantic adequacy certification process
 - Individual specs in `specs/contracts/` for normative behavior definitions
@@ -135,7 +135,7 @@ Development proceeds in two distinct phases:
    **Postconditions:**
    - Effect X MUST occur
    ```
-4. Validate: `cargo run -p naia-specs -- lint`
+4. Validate: `cargo run -p naia_spec_tool -- lint`
 
 ### 2.3 Phase A, Step 2: TEST (Write Compiling Test)
 
@@ -177,7 +177,7 @@ Development proceeds in two distinct phases:
 **Steps:**
 1. Run coverage check:
    ```bash
-   cargo run -p naia-specs -- coverage
+   cargo run -p naia_spec_tool -- coverage
    ```
 2. Verify the contract ID appears in "covered" output
 3. Check for remaining todos:
@@ -242,8 +242,8 @@ Development proceeds in two distinct phases:
 **Steps:**
 1. Generate review packet:
    ```bash
-   cargo run -p naia-specs -- packet <contract-id>              # Concise mode
-   cargo run -p naia-specs -- packet <contract-id> --full-tests # Include full test code
+   cargo run -p naia_spec_tool -- packet <contract-id>              # Concise mode
+   cargo run -p naia_spec_tool -- packet <contract-id> --full-tests # Include full test code
    ```
 2. Review packet contents:
    - Contract guarantee, preconditions, postconditions
@@ -261,7 +261,7 @@ Development proceeds in two distinct phases:
    ```
 5. Re-verify after improvements:
    ```bash
-   cargo run -p naia-specs -- verify --contract <id>
+   cargo run -p naia_spec_tool -- verify --contract <id>
    ```
 
 **Purpose:** Ensures tests are comprehensive and maintainable, not just passing.
@@ -510,16 +510,16 @@ This section provides quick reference for common commands used in the SDD workfl
 
 | Command | Purpose | When to Use |
 |---------|---------|-------------|
-| `cargo run -p naia-specs -- verify` | Full verification pipeline (specs + tests + coverage) | Phase B: Check overall health |
-| `cargo run -p naia-specs -- verify --contract <id>` | Run tests for one contract only | Phase B: Fast iteration loop |
-| `cargo run -p naia-specs -- coverage` | Show covered/uncovered contracts | Phase A: Track coverage progress |
-| `cargo run -p naia-specs -- packet <id>` | Generate adequacy review packet | Phase 3: Contract verification |
-| `cargo run -p naia-specs -- traceability` | Generate contract↔test matrix | After adding tests |
-| `cargo run -p naia-specs -- lint` | Validate spec format | After editing specs |
-| `cargo run -p naia-specs -- gen-test <id>` | Generate test skeleton | Starting new test |
-| `cargo run -p naia-specs -- bundle` | Generate NAIA_SPECS.md | After spec changes |
-| `cargo run -p naia-specs -- registry` | Generate CONTRACT_REGISTRY.md | After adding contracts |
-| `cargo run -p naia-specs -- check-orphans` | Find untracked MUSTs | Spec cleanup |
+| `cargo run -p naia_spec_tool -- verify` | Full verification pipeline (specs + tests + coverage) | Phase B: Check overall health |
+| `cargo run -p naia_spec_tool -- verify --contract <id>` | Run tests for one contract only | Phase B: Fast iteration loop |
+| `cargo run -p naia_spec_tool -- coverage` | Show covered/uncovered contracts | Phase A: Track coverage progress |
+| `cargo run -p naia_spec_tool -- packet <id>` | Generate adequacy review packet | Phase 3: Contract verification |
+| `cargo run -p naia_spec_tool -- traceability` | Generate contract↔test matrix | After adding tests |
+| `cargo run -p naia_spec_tool -- lint` | Validate spec format | After editing specs |
+| `cargo run -p naia_spec_tool -- gen-test <id>` | Generate test skeleton | Starting new test |
+| `cargo run -p naia_spec_tool -- bundle` | Generate NAIA_SPECS.md | After spec changes |
+| `cargo run -p naia_spec_tool -- registry` | Generate CONTRACT_REGISTRY.md | After adding contracts |
+| `cargo run -p naia_spec_tool -- check-orphans` | Find untracked MUSTs | Spec cleanup |
 
 **Verify Command Options:**
 - `--contract <id>`: Run tests only for specific contract (fast iteration)
@@ -678,14 +678,14 @@ cargo test --package naia-test test_3
 ### 6.1 Phase A: Add Test Coverage for Contract
 
 ```
-1. `cargo run -p naia-specs -- coverage`
+1. `cargo run -p naia_spec_tool -- coverage`
 2. Pick uncovered contract from output
 3. grep -l "<domain>" test/tests/*.rs
 4. Read similar test (targeted)
 5. Write COMPILING test with annotation (no todo!())
 6. cargo test --package naia-test --test <file> --no-run  # Must compile
 7. cargo test --package naia-test <test_name>              # May fail - OK!
-8. `cargo run -p naia-specs -- coverage` (verify annotation)
+8. `cargo run -p naia_spec_tool -- coverage` (verify annotation)
 ```
 
 ### 6.2 Phase A: Eliminate todo!() Macro
@@ -704,15 +704,15 @@ cargo test --package naia-test test_3
 **Prerequisites:** Phase A complete (100% coverage, zero `todo!()`)
 
 ```
-1. `cargo run -p naia-specs -- verify --contract <id>`  # Fast: see targeted failures
+1. `cargo run -p naia_spec_tool -- verify --contract <id>`  # Fast: see targeted failures
    OR cargo test --package naia-test            # Full: see all failures
 2. Pick a failing test/contract
 3. Read the test to understand expected behavior
 4. Read the spec contract for context
 5. Fix implementation (minimal changes)
-6. `cargo run -p naia-specs -- verify --contract <id>`  # Fast: verify fix
+6. `cargo run -p naia_spec_tool -- verify --contract <id>`  # Fast: verify fix
 7. Run 3x for flakiness
-8. `cargo run -p naia-specs -- verify`                  # Full: check no regressions
+8. `cargo run -p naia_spec_tool -- verify`                  # Full: check no regressions
 ```
 
 **Tip:** Use `verify --contract <id>` for fast iteration (~5-10 sec vs ~5-10 min)
@@ -721,10 +721,10 @@ cargo test --package naia-test test_3
 
 ```
 1. Draft contracts in spec file
-2. `cargo run -p naia-specs -- lint`
-3. `cargo run -p naia-specs -- gen-test <contract-id>`
+2. `cargo run -p naia_spec_tool -- lint`
+3. `cargo run -p naia_spec_tool -- gen-test <contract-id>`
 4. Write FULL test (no todo!()) - test will fail
-5. `cargo run -p naia-specs -- coverage`  # Verify annotation
+5. `cargo run -p naia_spec_tool -- coverage`  # Verify annotation
 --- Phase A complete for this feature ---
 6. Implement feature code
 7. Verify test passes
@@ -748,7 +748,7 @@ Every test MUST:
 ### 7.2 Spec Quality
 
 Every spec change MUST:
-- [ ] Pass `cargo run -p naia-specs -- lint`
+- [ ] Pass `cargo run -p naia_spec_tool -- lint`
 - [ ] Have valid cross-references
 - [ ] Use RFC 2119 keywords correctly
 
@@ -787,7 +787,7 @@ Every code change MUST:
 
 **Check:**
 1. Did you add the annotation correctly?
-2. Run `cargo run -p naia-specs -- coverage` (not cached)
+2. Run `cargo run -p naia_spec_tool -- coverage` (not cached)
 3. Is the contract ID spelled correctly?
 
 ### 8.4 Implementation Panic
@@ -878,7 +878,7 @@ use test_helpers::{test_client_config, client_connect};
 ```
 [ ] Read PLAN.md (REQUIRED - contains goal, constraints, exact commands)
 [ ] Read CLAUDE.md (if unfamiliar with harness/patterns)
-[ ] Run `cargo run -p naia-specs -- verify` (optional health check)
+[ ] Run `cargo run -p naia_spec_tool -- verify` (optional health check)
 [ ] Determine current phase (A or B)
 [ ] Identify next action from PLAN.md
 ```
@@ -889,18 +889,18 @@ use test_helpers::{test_client_config, client_connect};
 [ ] Write COMPILING test (no todo!())
 [ ] Verify test compiles: cargo test --package naia-test --test <file> --no-run
 [ ] Test may FAIL - that's acceptable
-[ ] Verify coverage: `cargo run -p naia-specs -- coverage`
+[ ] Verify coverage: `cargo run -p naia_spec_tool -- coverage`
 ```
 
 **Phase B work (Fix Implementation):**
 ```
 [ ] Prerequisites: 236/236 coverage, zero todo!()
-[ ] Run `cargo run -p naia-specs -- verify --contract <id>`  # Fast iteration
+[ ] Run `cargo run -p naia_spec_tool -- verify --contract <id>`  # Fast iteration
 [ ] Pick failing test/contract
 [ ] Fix implementation (minimal changes)
-[ ] Run `cargo run -p naia-specs -- verify --contract <id>`  # Verify fix
+[ ] Run `cargo run -p naia_spec_tool -- verify --contract <id>`  # Verify fix
 [ ] Run 3x for flakiness
-[ ] Run `cargo run -p naia-specs -- verify`                  # Check no regressions
+[ ] Run `cargo run -p naia_spec_tool -- verify`                  # Check no regressions
 ```
 
 **End of session (PLAN/OUTPUT Convention):**
@@ -908,7 +908,7 @@ use test_helpers::{test_client_config, client_connect};
 [ ] Run `git diff --stat` and `git diff` (see what changed)
 [ ] Write OUTPUT.md (REQUIRED - commands run, results, diffs, next steps)
 [ ] Include in OUTPUT.md: file changes, key excerpts, open questions
-[ ] Run `cargo run -p naia-specs -- traceability` if tests added
+[ ] Run `cargo run -p naia_spec_tool -- traceability` if tests added
 [ ] NEVER commit/branch/push (human does this)
 ```
 

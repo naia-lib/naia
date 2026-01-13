@@ -4,8 +4,8 @@ use crate::util::{print_info, print_error, basename};
 
 pub fn run_gen_test(root: &Path, contract_id: &str) -> anyhow::Result<()> {
     if contract_id.is_empty() {
-        print_error("Usage: cargo run -p naia-specs -- gen-test <contract-id>");
-        println!("Example: cargo run -p naia-specs -- gen-test entity-scopes-07");
+        print_error("Usage: cargo run -p naia_spec_tool -- gen-test <contract-id>");
+        println!("Example: cargo run -p naia_spec_tool -- gen-test entity-scopes-07");
         return Ok(());
     }
 

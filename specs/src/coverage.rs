@@ -13,7 +13,7 @@ pub fn run_coverage(index: &Index) -> Result<(usize, usize)> {
     let covered_count = covered_contracts.len();
     
     if total_count == 0 {
-        return Err(anyhow::anyhow!("No contracts found. Run 'cargo run -p naia-specs -- registry' first."));
+        return Err(anyhow::anyhow!("No contracts found. Run 'cargo run -p naia_spec_tool -- registry' first."));
     }
 
     let coverage_pct = if total_count > 0 {

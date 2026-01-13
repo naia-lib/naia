@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use naia_specs::{index::Index, packet, coverage, adequacy, stats, lint, check_orphans, check_refs, validate};
+use naia_spec_tool::{index::Index, packet, coverage, adequacy, stats, lint, check_orphans, check_refs, validate};
 
 fn find_workspace_root() -> std::path::PathBuf {
     let mut root = std::env::current_dir().expect("Failed to get current directory");
@@ -116,7 +116,7 @@ enum Commands {
 const HELP_TEXT: &str = r#"spec_tool - Comprehensive CLI for Naia specifications management
 
 USAGE:
-    cargo run -p naia-specs -- <command> [options]
+    cargo run -p naia_spec_tool -- <command> [options]
 
 COMMANDS:
     bundle [output]     Generate NAIA_SPECS.md bundle
@@ -151,7 +151,7 @@ COMMANDS:
                           - Obligation IDs map to labeled assertions
 
     gen-test <id>       Generate test skeleton for a contract
-                        Example: cargo run -p naia-specs -- gen-test entity-scopes-07
+                        Example: cargo run -p naia_spec_tool -- gen-test entity-scopes-07
 
     traceability [out]  Generate contract-to-test traceability matrix
                         Default output: TRACEABILITY.md
@@ -160,7 +160,7 @@ COMMANDS:
                         Options:
                           --out <path>      Output path (default: packets/<id>.md)
                           --full-tests      Include full test bodies (default: assertions only)
-                        Example: cargo run -p naia-specs -- packet connection-01
+                        Example: cargo run -p naia_spec_tool -- packet connection-01
 
     verify [options]    CI-grade verification: validate + lint + tests + coverage
                         Options:
@@ -173,11 +173,11 @@ COMMANDS:
     help                Show this help message
 
 EXAMPLES:
-    cargo run -p naia-specs -- bundle                    # Generate NAIA_SPECS.md
-    cargo run -p naia-specs -- lint                      # Check for issues
-    cargo run -p naia-specs -- validate                  # Full validation
-    cargo run -p naia-specs -- registry                  # Generate contract registry
-    cargo run -p naia-specs -- stats                     # Show spec statistics"#;
+    cargo run -p naia_spec_tool -- bundle                    # Generate NAIA_SPECS.md
+    cargo run -p naia_spec_tool -- lint                      # Check for issues
+    cargo run -p naia_spec_tool -- validate                  # Full validation
+    cargo run -p naia_spec_tool -- registry                  # Generate contract registry
+    cargo run -p naia_spec_tool -- stats                     # Show spec statistics"#;
 
 fn main() {
     // Force colored output to match legacy bash script
@@ -228,7 +228,7 @@ fn main() {
         }
         Some(Commands::Registry { output }) => {
              let root = find_workspace_root();
-             naia_specs::registry::run_registry(&root, output.clone(), cli.deterministic).expect("Failed to run registry");
+             naia_spec_tool::registry::run_registry(&root, output.clone(), cli.deterministic).expect("Failed to run registry");
         }
         Some(Commands::Coverage) => {
              let root = find_workspace_root();
@@ -277,11 +277,11 @@ fn main() {
         }
         Some(Commands::Traceability { output }) => {
              let root = find_workspace_root();
-             naia_specs::traceability::run_traceability(&root, output.clone(), false, cli.deterministic).expect("Failed to run traceability");
+             naia_spec_tool::traceability::run_traceability(&root, output.clone(), false, cli.deterministic).expect("Failed to run traceability");
         }
         Some(Commands::Verify { contract, strict_orphans, strict_coverage, full_report, write_report }) => {
              let root = find_workspace_root();
-             match naia_specs::verify::run_verify(&root, contract.clone(), *strict_orphans, *strict_coverage, *full_report, write_report.clone(), cli.deterministic) {
+             match naia_spec_tool::verify::run_verify(&root, contract.clone(), *strict_orphans, *strict_coverage, *full_report, write_report.clone(), cli.deterministic) {
                  Ok(errors) if errors > 0 => std::process::exit(errors as i32),
                  Err(e) => { eprintln!("Error: {}", e); std::process::exit(1); },
                  _ => {}
@@ -289,11 +289,11 @@ fn main() {
         }
         Some(Commands::Bundle { output, .. }) => {
              let root = find_workspace_root();
-             naia_specs::bundle::run_bundle(&root, output.clone(), cli.deterministic).expect("Failed to run bundle");
+             naia_spec_tool::bundle::run_bundle(&root, output.clone(), cli.deterministic).expect("Failed to run bundle");
         }
         Some(Commands::GenTest { contract_id }) => {
              let root = find_workspace_root();
-             naia_specs::gen_test::run_gen_test(&root, contract_id).expect("Failed to run gen-test");
+             naia_spec_tool::gen_test::run_gen_test(&root, contract_id).expect("Failed to run gen-test");
         }
         _ => {
             // Should be handled by error checking above, or explicit variants

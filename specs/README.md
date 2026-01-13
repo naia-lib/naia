@@ -7,7 +7,7 @@ This directory contains **normative specifications** that define the expected be
 ## Authority
 
 **This document is authoritative for:**
-- `naia-specs` tool usage and commands
+- `naia_spec_tool` tool usage and commands
 - Spec authoring conventions and formatting rules
 - Contract structure and obligation labeling requirements
 - Spec validation and quality gates
@@ -33,52 +33,52 @@ This directory contains **normative specifications** that define the expected be
   - `GAP_ANALYSIS.md` - Coverage gaps
 
 - **`spec_template.md`** - Template for new specifications
-- **`spec_tool` CLI** - Tooling for spec management (Rust binary, run with `cargo run -p naia-specs -- <cmd>`)
+- **`spec_tool` CLI** - Tooling for spec management (Rust binary, run with `cargo run -p naia_spec_tool -- <cmd>`)
 
 ## Quickstart: Daily Gate
 
 Run this command to verify specs, tests, and coverage in one pass:
 
 ```bash
-cargo run -p naia-specs -- verify
+cargo run -p naia_spec_tool -- verify
 ```
 
 For faster iteration on a specific contract:
 
 ```bash
-cargo run -p naia-specs -- verify --contract <contract-id>
+cargo run -p naia_spec_tool -- verify --contract <contract-id>
 ```
 
 ## Key Commands
 
 **Validation & Quality:**
 ```bash
-cargo run -p naia-specs -- lint          # Check specs for formatting issues
-cargo run -p naia-specs -- validate      # Full validation (lint + check-refs + check-orphans)
-cargo run -p naia-specs -- check-refs    # Verify cross-reference links resolve
-cargo run -p naia-specs -- check-orphans # Find MUST/MUST NOT without contract IDs
-cargo run -p naia-specs -- verify        # CI-grade: validate + lint + tests + coverage
+cargo run -p naia_spec_tool -- lint          # Check specs for formatting issues
+cargo run -p naia_spec_tool -- validate      # Full validation (lint + check-refs + check-orphans)
+cargo run -p naia_spec_tool -- check-refs    # Verify cross-reference links resolve
+cargo run -p naia_spec_tool -- check-orphans # Find MUST/MUST NOT without contract IDs
+cargo run -p naia_spec_tool -- verify        # CI-grade: validate + lint + tests + coverage
 ```
 
 **Coverage & Adequacy:**
 ```bash
-cargo run -p naia-specs -- coverage      # Show contract test coverage
-cargo run -p naia-specs -- adequacy      # Check obligation-to-label mapping
-cargo run -p naia-specs -- adequacy --strict  # Fail if inadequate (local gate)
+cargo run -p naia_spec_tool -- coverage      # Show contract test coverage
+cargo run -p naia_spec_tool -- adequacy      # Check obligation-to-label mapping
+cargo run -p naia_spec_tool -- adequacy --strict  # Fail if inadequate (local gate)
 ```
 
 **Artifact Generation:**
 ```bash
-cargo run -p naia-specs -- registry [output]      # Generate CONTRACT_REGISTRY.md
-cargo run -p naia-specs -- traceability [output]  # Generate TRACEABILITY.md
-cargo run -p naia-specs -- bundle [output]        # Generate NAIA_SPECS.md
-cargo run -p naia-specs -- packet <id>            # Generate review packet for contract
+cargo run -p naia_spec_tool -- registry [output]      # Generate CONTRACT_REGISTRY.md
+cargo run -p naia_spec_tool -- traceability [output]  # Generate TRACEABILITY.md
+cargo run -p naia_spec_tool -- bundle [output]        # Generate NAIA_SPECS.md
+cargo run -p naia_spec_tool -- packet <id>            # Generate review packet for contract
 ```
 
 **Development:**
 ```bash
-cargo run -p naia-specs -- gen-test <id>   # Generate test skeleton
-cargo run -p naia-specs -- stats           # Show spec statistics
+cargo run -p naia_spec_tool -- gen-test <id>   # Generate test skeleton
+cargo run -p naia_spec_tool -- stats           # Show spec statistics
 ```
 
 ## Downstream Chain
@@ -103,17 +103,17 @@ Implementation (production code)
 
 ### Tool Usage
 
-All spec operations are performed via the `spec_tool` binary in the `naia-specs` crate. Run commands using:
+All spec operations are performed via the `spec_tool` binary in the `naia_spec_tool` crate. Run commands using:
 
 ```bash
-cargo run -p naia-specs -- <command> [options]
+cargo run -p naia_spec_tool -- <command> [options]
 ```
 
 See the tool's `--help` output (shown above in Common Commands) for the complete list of available commands.
 
 ### Determinism & Golden Files
 
-The `naia-specs` tool tests rely on **golden files** stored in `specs/tests/golden/`. These ensure CLI output remains consistent byte-for-byte across runs.
+The `naia_spec_tool` tool tests rely on **golden files** stored in `specs/tests/golden/`. These ensure CLI output remains consistent byte-for-byte across runs.
 
 **When to update goldens:**
 - After intentionally changing tool output format
@@ -126,10 +126,10 @@ The `naia-specs` tool tests rely on **golden files** stored in `specs/tests/gold
 
 ```bash
 # Example: Update registry golden
-cargo run -p naia-specs -- registry specs/tests/golden/registry.md --deterministic
+cargo run -p naia_spec_tool -- registry specs/tests/golden/registry.md --deterministic
 
 # Example: Update help golden (stdout commands)
-cargo run -p naia-specs -- help > specs/tests/golden/help.stdout
+cargo run -p naia_spec_tool -- help > specs/tests/golden/help.stdout
 ```
 
 **Deterministic mode:**

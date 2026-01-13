@@ -57,7 +57,7 @@ specs/contracts/N_domain.md  →  test/tests/0N_domain.rs
 
 **At session start:**
 1. **Read `_AGENTS/PLAN.md` first** (REQUIRED - contains current goal, constraints, exact commands)
-2. Optional health check: `cargo run -p naia-specs -- verify --contract <id>` or `coverage`
+2. Optional health check: `cargo run -p naia_spec_tool -- verify --contract <id>` or `coverage`
 3. Begin work following the plan
 
 **At session end (or when stopping for user review):**
@@ -108,12 +108,12 @@ specs/contracts/*.md (contracts) → test/tests/*.rs (E2E tests) → Implementat
 
 ```bash
 # Spec operations (run from project root)
-cargo run -p naia-specs -- verify                      # Full verification pipeline (specs + tests + coverage)
-cargo run -p naia-specs -- verify --contract <id>      # Fast: test only one contract
-cargo run -p naia-specs -- coverage                    # Check contract test coverage
-cargo run -p naia-specs -- packet <id>                 # Generate adequacy review packet
-cargo run -p naia-specs -- packet <id> --full-tests    # Generate packet with full test code
-cargo run -p naia-specs -- lint                        # Validate specs only
+cargo run -p naia_spec_tool -- verify                      # Full verification pipeline (specs + tests + coverage)
+cargo run -p naia_spec_tool -- verify --contract <id>      # Fast: test only one contract
+cargo run -p naia_spec_tool -- coverage                    # Check contract test coverage
+cargo run -p naia_spec_tool -- packet <id>                 # Generate adequacy review packet
+cargo run -p naia_spec_tool -- packet <id> --full-tests    # Generate packet with full test code
+cargo run -p naia_spec_tool -- lint                        # Validate specs only
 
 # Testing
 cargo test --package naia-test                        # All E2E tests
@@ -128,7 +128,7 @@ cargo test --package naia-test --features e2e_debug <test_name> -- --nocapture
 cargo clippy --no-deps && cargo fmt -- --check
 
 # Tool development
-cargo test -p naia-specs                      # Run naia-specs self-tests
+cargo test -p naia_spec_tool                 # Run naia_spec_tool self-tests
 ```
 
 ## Crate Map
@@ -240,7 +240,7 @@ let tick = scenario.mutate(|ctx| {
 | `PLAN.md` | **Current goal, constraints, exact commands** | **Every session (READ FIRST)** |
 | `OUTPUT.md` | **Session results, diffs, next steps** | **Every session (WRITE AT END)** |
 | `DEV_PROCESS.md` | Full SDD process, tooling, patterns | Complex tasks |
-| `specs/README.md` | Tool commands, spec authoring rules | When using naia-specs tool |
+| `specs/README.md` | Tool commands, spec authoring rules | When using naia_spec_tool |
 | `specs/generated/CONTRACT_REGISTRY.md` | All contract IDs indexed | Finding contracts |
 | `specs/generated/TRACEABILITY.md` | Contract↔test mapping | Checking coverage |
 | `specs/generated/GAP_ANALYSIS.md` | Prioritized uncovered contracts | Planning work |
@@ -284,11 +284,11 @@ let tick = scenario.mutate(|ctx| {
 6. Run 3x for flakiness
 
 **Phase 3: Adequacy review (optional)**
-1. Run `cargo run -p naia-specs -- packet <contract-id>`
+1. Run `cargo run -p naia_spec_tool -- packet <contract-id>`
 2. Paste packet into LLM for adequacy review
 3. Map spec guarantees/preconditions/postconditions to test assertions
 4. Add `expect_msg` labels for deterministic review
-5. Verify with `cargo run -p naia-specs -- verify --contract <id>`
+5. Verify with `cargo run -p naia_spec_tool -- verify --contract <id>`
 
 ## Debugging Tests
 
