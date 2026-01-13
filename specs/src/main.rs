@@ -113,10 +113,10 @@ enum Commands {
     Help,
 }
 
-const HELP_TEXT: &str = r#"spec_tool.sh - Comprehensive CLI for Naia specifications management
+const HELP_TEXT: &str = r#"spec_tool - Comprehensive CLI for Naia specifications management
 
 USAGE:
-    ./spec_tool.sh <command> [options]
+    cargo run -p naia-specs -- <command> [options]
 
 COMMANDS:
     bundle [output]     Generate NAIA_SPECS.md bundle
@@ -151,7 +151,7 @@ COMMANDS:
                           - Obligation IDs map to labeled assertions
 
     gen-test <id>       Generate test skeleton for a contract
-                        Example: ./spec_tool.sh gen-test entity-scopes-07
+                        Example: cargo run -p naia-specs -- gen-test entity-scopes-07
 
     traceability [out]  Generate contract-to-test traceability matrix
                         Default output: TRACEABILITY.md
@@ -160,7 +160,7 @@ COMMANDS:
                         Options:
                           --out <path>      Output path (default: packets/<id>.md)
                           --full-tests      Include full test bodies (default: assertions only)
-                        Example: ./spec_tool.sh packet connection-01
+                        Example: cargo run -p naia-specs -- packet connection-01
 
     verify [options]    CI-grade verification: validate + lint + tests + coverage
                         Options:
@@ -173,11 +173,11 @@ COMMANDS:
     help                Show this help message
 
 EXAMPLES:
-    ./spec_tool.sh bundle                    # Generate NAIA_SPECS.md
-    ./spec_tool.sh lint                      # Check for issues
-    ./spec_tool.sh validate                  # Full validation
-    ./spec_tool.sh registry                  # Generate contract registry
-    ./spec_tool.sh stats                     # Show spec statistics"#;
+    cargo run -p naia-specs -- bundle                    # Generate NAIA_SPECS.md
+    cargo run -p naia-specs -- lint                      # Check for issues
+    cargo run -p naia-specs -- validate                  # Full validation
+    cargo run -p naia-specs -- registry                  # Generate contract registry
+    cargo run -p naia-specs -- stats                     # Show spec statistics"#;
 
 fn main() {
     // Force colored output to match legacy bash script

@@ -60,6 +60,48 @@ fn traceability_determinism() {
 }
 
 #[test]
+fn determinism_only_affects_metadata() {
+    let temp = tempdir().unwrap();
+    let out_normal = temp.path().join("normal.md");
+    let out_det = temp.path().join("det.md");
+
+    Command::cargo_bin("spec_tool").unwrap()
+        .arg("registry")
+        .arg(out_normal.to_str().unwrap())
+        .assert()
+        .success();
+
+    Command::cargo_bin("spec_tool").unwrap()
+        .arg("registry")
+        .arg(out_det.to_str().unwrap())
+        .arg("--deterministic")
+        .assert()
+        .success();
+
+    let content_normal = fs::read_to_string(&out_normal).unwrap();
+    let content_det = fs::read_to_string(&out_det).unwrap();
+
+    let lines_normal: Vec<&str> = content_normal.lines().collect();
+    let lines_det: Vec<&str> = content_det.lines().collect();
+    
+    // We expect line count equality
+    assert_eq!(lines_normal.len(), lines_det.len(), "Line count mismatch");
+    
+    let mut diffs = 0;
+    for (l_n, l_d) in lines_normal.into_iter().zip(lines_det.into_iter()) {
+        if l_n != l_d {
+            diffs += 1;
+            if !l_n.contains("**Generated:**") {
+                 panic!("Unexpected difference: \nN: {}\nD: {}", l_n, l_d);
+            }
+        }
+    }
+    
+    assert!(diffs <= 1, "Expected only timestamp difference");
+}
+
+
+#[test]
 fn bundle_determinism() {
     let temp = tempdir().unwrap();
     let out1 = temp.path().join("NAIA_SPECS1.md");

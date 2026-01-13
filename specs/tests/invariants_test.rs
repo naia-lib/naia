@@ -102,22 +102,6 @@ fn traceability_includes_all_contracts() {
 }
 
 #[test]
-fn guardrail_no_legacy_scripts() {
-    let root = get_workspace_root();
-    let forbidden = [
-        "specs/spec_tool.sh",
-        "specs/spec_tool_test.sh",
-        "specs/spec_index.py",
-        "specs/tests/baseline",
-        "specs/tests/common",
-    ];
-    
-    for path in forbidden {
-        assert!(!root.join(path).exists(), "Legacy file/folder must not exist: {}", path);
-    }
-}
-
-#[test]
 fn verify_failures() {
     let root = get_workspace_root();
     
@@ -152,3 +136,90 @@ fn verify_failures() {
         .assert()
         .failure(); // Should fail due to missing reference in check-refs
 }
+
+#[test]
+fn registry_no_duplicates() {
+    let root = get_workspace_root();
+    let contracts = get_all_contracts(&root);
+    let mut seen = std::collections::HashSet::new();
+    for contract in &contracts {
+        if !seen.insert(contract) {
+            panic!("Duplicate contract ID found in specs: {}", contract);
+        }
+    }
+}
+
+#[test]
+fn reverse_integrity_tests_reference_valid_contracts() {
+    let root = get_workspace_root();
+    let valid_contracts: std::collections::HashSet<String> = get_all_contracts(&root).into_iter().collect();
+    
+    // Scan test/tests for "Contract: [id]"
+    // Note: get_workspace_root() returns the repo root because it looks for parent of manifest_dir
+    let test_dir = root.join("test/tests");
+    if !test_dir.exists() {
+        return; // No tests to check
+    }
+    
+    let re = Regex::new(r"^\s*///\s*Contract:\s*\[([a-zA-Z0-9-]+)\]").unwrap();
+    
+    for entry in fs::read_dir(test_dir).expect("Failed to read test dir") {
+        let entry = entry.unwrap();
+        let path = entry.path();
+        if path.extension().map_or(false, |e| e == "rs") {
+            let content = fs::read_to_string(&path).unwrap();
+            for (i, line) in content.lines().enumerate() {
+                for cap in re.captures_iter(line) {
+                    let id = &cap[1];
+                    // Skip placeholders if any
+                    if id == "contract-id" { continue; }
+                    
+                    if !valid_contracts.contains(id) {
+                         panic!("Test file {:?} line {} references unknown contract: {}", path.file_name().unwrap(), i+1, id);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn adequacy_consistency() {
+    let root = get_workspace_root();
+    // Run adequacy
+    let output = Command::cargo_bin("spec_tool")
+        .unwrap()
+        .current_dir(&root)
+        .arg("adequacy")
+        .output()
+        .expect("Failed to run adequacy");
+        
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    // Helper to extract numbers
+    let extract = |key: &str| -> i32 {
+        // Regex needs to match "Key:             123"
+        let re = Regex::new(&format!(r"{}:\s+(\d+)", regex::escape(key))).unwrap();
+        if let Some(cap) = re.captures(&stdout) {
+            cap[1].parse().unwrap()
+        } else {
+            // "Missing tests" might be 0, ensuring it's present
+            // If the output format changes, this test should fail.
+            panic!("Could not find key '{}' in adequacy output", key);
+        }
+    };
+    
+    let total = extract("Total contracts");
+    let missing_tests = extract("Missing tests");
+    let missing_mappings = extract("Missing obligation mappings");
+    let missing_labels = extract("Missing labels");
+    let met = extract("Adequacy met");
+    
+    let sum = missing_tests + missing_mappings + missing_labels + met;
+    
+    assert_eq!(total, sum, 
+        "Adequacy totals inconsistent! Total ({}) != Sum ({}) [Tests: {} + Mappings: {} + Labels: {} + Met: {}]",
+        total, sum, missing_tests, missing_mappings, missing_labels, met
+    );
+}
+

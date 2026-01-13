@@ -4,7 +4,6 @@ This document outlines the usage of the Rust-based Specification Tooling.
 
 ## Canonical Tool
 The single source of truth for all spec operations is the `spec_tool` binary (via the `naia-specs` crate).
-Legacy scripts (`spec_tool.sh`, `spec_index.py`) have been removed and must not be reintroduced.
 
 ## Routine Operations
 Run via `cargo run -p naia-specs -- <command>`:

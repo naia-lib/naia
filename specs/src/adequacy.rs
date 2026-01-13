@@ -104,7 +104,7 @@ pub fn run_adequacy(index: &Index, strict: bool) -> Result<()> {
              println!("     Spec: {}", spec_file);
              println!("     Tests: {}", tfiles_str);
              println!("     Missing obligations: {}", missing_str);
-             println!("     Next: ./spec_tool.sh packet {}", cid);
+             println!("     Next: cargo run -p naia-specs -- packet {}", cid);
              println!();
         }
     }

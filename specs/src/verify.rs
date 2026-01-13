@@ -46,7 +46,7 @@ pub fn run_verify(
         let test_files = find_test_files_for_contract(root, target_contract);
         if test_files.is_empty() {
              print_error(&format!("No test files found for contract [{}]", target_contract));
-             print_info("Contract may be uncovered. Run './spec_tool.sh coverage' to check.");
+             print_info("Contract may be uncovered. Run 'spec_tool coverage' to check.");
              return Ok(1);
         }
 

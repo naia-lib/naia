@@ -122,8 +122,7 @@ pub fn generate_packet(index: &Index, contract_id: &str, full_tests: bool, outpu
              let mut missing_obligations = Vec::new();
              for obl in obls {
                  let pattern1 = format!("{}.{}:", contract_id, obl);
-                 // spec_tool.sh uses "$pattern" where pattern="${contract_id}.${obl}:"
-                 // grep -F checks literal match.
+                 // checks literal match in labels
                  
                  let covered = all_labels.iter().find(|l| l.contains(&pattern1));
                  

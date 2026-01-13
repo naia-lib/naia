@@ -39,7 +39,7 @@ specs/contracts/N_domain.md  →  test/tests/0N_domain.rs
 
 ```bash
 # 1. Quick health check (optional, shows test status + coverage)
-./specs/spec_tool.sh verify --contract <working-on> || ./specs/spec_tool.sh coverage
+cargo run -p naia-specs -- verify --contract <working-on> || cargo run -p naia-specs -- coverage
 
 # 2. Sanity check for incomplete tests
 grep -r "todo!" test/tests/*.rs
@@ -87,12 +87,12 @@ specs/contracts/*.md (contracts) → test/tests/*.rs (E2E tests) → Implementat
 
 ```bash
 # Spec operations (run from project root)
-./specs/spec_tool.sh verify                      # Full verification pipeline (specs + tests + coverage)
-./specs/spec_tool.sh verify --contract <id>      # Fast: test only one contract
-./specs/spec_tool.sh coverage                    # Check contract test coverage
-./specs/spec_tool.sh packet <id>                 # Generate adequacy review packet
-./specs/spec_tool.sh packet <id> --full-tests    # Generate packet with full test code
-./specs/spec_tool.sh lint                        # Validate specs only
+cargo run -p naia-specs -- verify                      # Full verification pipeline (specs + tests + coverage)
+cargo run -p naia-specs -- verify --contract <id>      # Fast: test only one contract
+cargo run -p naia-specs -- coverage                    # Check contract test coverage
+cargo run -p naia-specs -- packet <id>                 # Generate adequacy review packet
+cargo run -p naia-specs -- packet <id> --full-tests    # Generate packet with full test code
+cargo run -p naia-specs -- lint                        # Validate specs only
 
 # Testing
 cargo test --package naia-test                        # All E2E tests
@@ -106,8 +106,8 @@ cargo test --package naia-test --features e2e_debug <test_name> -- --nocapture
 # Quality gates
 cargo clippy --no-deps && cargo fmt -- --check
 
-# Tool development (when editing spec_tool.sh)
-./specs/spec_tool_test.sh                     # Run spec_tool.sh self-tests
+# Tool development
+cargo test -p naia-specs                      # Run naia-specs self-tests
 ```
 
 ## Crate Map
@@ -261,11 +261,11 @@ let tick = scenario.mutate(|ctx| {
 6. Run 3x for flakiness
 
 **Phase 3: Adequacy review (optional)**
-1. Run `./specs/spec_tool.sh packet <contract-id>`
+1. Run `cargo run -p naia-specs -- packet <contract-id>`
 2. Paste packet into LLM for adequacy review
 3. Map spec guarantees/preconditions/postconditions to test assertions
 4. Add `expect_msg` labels for deterministic review
-5. Verify with `./specs/spec_tool.sh verify --contract <id>`
+5. Verify with `cargo run -p naia-specs -- verify --contract <id>`
 
 ## Debugging Tests
 
