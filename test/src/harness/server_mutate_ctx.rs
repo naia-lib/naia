@@ -305,6 +305,15 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
 
     // Message Operations
 
+    /// Set EntityProperty to reference an entity
+    pub fn set_entity_property(&mut self, entity_property: &mut naia_shared::EntityProperty, entity_key: &EntityKey) {
+        let scenario = self.ctx.scenario_mut();
+        if let Some(entity) = scenario.entity_registry().server_entity(entity_key) {
+            let (server, _, _, _) = scenario.split_for_server_mut();
+            entity_property.set(server, &entity);
+        }
+    }
+
     /// Send message to user
     pub fn send_message<C: Channel, M: Message>(&mut self, client_key: &ClientKey, message: &M) {
         let scenario = self.ctx.scenario_mut();
@@ -374,5 +383,14 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// where you want to test with malformed, expired, or reused tokens.
     pub fn generate_identity_token(&self) -> IdentityToken {
         generate_identity_token()
+    }
+
+    /// Set the GlobalEntity counter for testing rollover behavior
+    ///
+    /// Used to test entity-replication-11 contract.
+    pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
+        let scenario = self.ctx.scenario_mut();
+        let (server, _, _, _) = scenario.split_for_server_mut();
+        server.set_global_entity_counter_for_test(value);
     }
 }

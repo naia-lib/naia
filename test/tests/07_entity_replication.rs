@@ -32,22 +32,41 @@ use _helpers::{client_connect, server_and_client_connected, server_and_client_di
 
 /// Contract: [entity-replication-11]
 ///
-/// GlobalEntity rollover is a terminal error (unit-level assertion).
+/// GlobalEntity rollover is a terminal error.
 ///
-/// NOTE: This contract requires a unit test of the GlobalEntity counter allocation logic
-/// to verify it panics/aborts on rollover. Cannot be tested at E2E level due to the
-/// astronomically high spawn count required.
+/// Uses test-only hook to set the counter near max and verify panic on overflow.
 #[test]
 fn global_entity_rollover_terminal_error() {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol);
 
-    // This test exists to satisfy contract coverage but defers to unit-level testing.
-    // The rollover condition cannot be practically triggered in an E2E scenario.
-    scenario.spec_expect("entity-replication-11: unit-level rollover panic required (E2E gap)", |_| {
-        Some(())
+    // Set the GlobalEntity counter to u64::MAX and attempt to spawn an entity
+    // which should panic due to counter overflow
+    let panic_result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                // Set counter to max
+                server.set_global_entity_counter_for_test(u64::MAX);
+
+                // Attempt spawn (should panic)
+                server.spawn(|_spawned_entity| {
+                    // Entity spawn configuration (doesn't matter, will panic before this)
+                });
+            })
+        });
+    }));
+
+    // Verify that the panic occurred
+    scenario.spec_expect("entity-replication-11.t1: GlobalEntity rollover panics", |_| {
+        if panic_result.is_err() {
+            Some(())
+        } else {
+            None
+        }
     });
 }
 

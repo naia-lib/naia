@@ -696,6 +696,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .resume_entity_replication(&global_entity);
     }
 
+    #[cfg(feature = "test_utils")]
+    pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
+        self.global_entity_map.set_global_entity_counter_for_test(value);
+    }
+
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub fn entity_replication_config(&self, world_entity: &E) -> Option<ReplicationConfig> {
         let global_entity = self

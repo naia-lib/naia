@@ -29,6 +29,7 @@ transport_local = [ "http", "tokio", "once_cell" ]
 advanced_handshake = []
 interior_visibility = []
 e2e_debug = []
+test_utils = []
 
 [dependencies]
 naia-socket-shared = { version = "0.24", path = "../socket/shared" }

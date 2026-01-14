@@ -13,11 +13,12 @@ e2e_debug = [
   "naia-server/e2e_debug",
   "naia-shared/e2e_debug"
 ]
+test_utils = []
 
 [dependencies]
-naia-server = { path = "../server", features = ["transport_local", "interior_visibility", "test_time", "bevy_support"] }
+naia-server = { path = "../server", features = ["transport_local", "interior_visibility", "test_time", "bevy_support", "test_utils"] }
 naia-client = { path = "../client", features = ["transport_local", "interior_visibility", "test_time", "bevy_support"] }
-naia-shared = { path = "../shared", features = ["transport_local", "interior_visibility", "test_time", "bevy_support"] }
+naia-shared = { path = "../shared", features = ["transport_local", "interior_visibility", "test_time", "bevy_support", "test_utils"] }
 
 naia-demo-world = { path = "../demos/demo_utils/demo_world" }
 

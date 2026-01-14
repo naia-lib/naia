@@ -37,6 +37,14 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     }
 
     pub fn insert(&mut self, value: V) -> K {
+        // [entity-replication-11] GlobalEntity rollover is a terminal error
+        if self.current_index == u64::MAX {
+            panic!(
+                "BigMap counter overflow: cannot allocate new key (current_index = u64::MAX). \
+                 This is a terminal error per entity-replication-11 spec."
+            );
+        }
+
         let old_index = self.current_index;
         self.current_index = self.current_index.wrapping_add(1);
 
@@ -77,5 +85,10 @@ impl<K: BigMapKey, V> BigMap<K, V> {
 
     pub fn is_empty(&self) -> bool {
         self.inner.is_empty()
+    }
+
+    #[cfg(feature = "test_utils")]
+    pub fn set_current_index_for_test(&mut self, index: u64) {
+        self.current_index = index;
     }
 }

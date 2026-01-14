@@ -18,6 +18,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntityMap<E> {
             reserved_global_entities: HashMap::new(),
         }
     }
+
+    #[cfg(feature = "test_utils")]
+    pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
+        self.global_to_entity_map.set_current_index_for_test(value);
+    }
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for GlobalEntityMap<E> {

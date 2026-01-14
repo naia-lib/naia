@@ -2,8 +2,8 @@
 use bevy_ecs::prelude::Component;
 
 use naia_shared::{
-    Channel, ChannelDirection, ChannelMode, Message, Property, Protocol, ReliableSettings,
-    Replicate, TickBufferSettings,
+    Channel, ChannelDirection, ChannelMode, EntityProperty, Message, Property, Protocol, 
+    ReliableSettings, Replicate, TickBufferSettings,
 };
 
 #[derive(Message, PartialEq, Eq, Hash)]
@@ -29,6 +29,36 @@ pub struct TestMessage {
 impl TestMessage {
     pub fn new(value: u32) -> Self {
         Self { value }
+    }
+}
+
+// Large message for fragmentation testing (messaging-15, messaging-16)
+#[derive(Message)]
+pub struct LargeTestMessage {
+    pub payload: Vec<u8>,
+}
+
+impl LargeTestMessage {
+    pub fn new(size: usize) -> Self {
+        Self {
+            payload: vec![0u8; size],
+        }
+    }
+}
+
+// Message with EntityProperty for buffering tests (messaging-18, messaging-19, messaging-20)
+#[derive(Message)]
+pub struct EntityCommandMessage {
+    pub target: EntityProperty,
+    pub command: String,
+}
+
+impl EntityCommandMessage {
+    pub fn new(command: &str) -> Self {
+        Self {
+            target: EntityProperty::new_for_message(),
+            command: command.to_string(),
+        }
     }
 }
 
@@ -103,6 +133,8 @@ pub fn protocol() -> Protocol {
         .add_component::<Position>()
         .add_message::<Auth>()
         .add_message::<TestMessage>()
+        .add_message::<LargeTestMessage>()
+        .add_message::<EntityCommandMessage>()
         .add_message::<TestRequest>()
         .add_message::<TestResponse>()
         .add_channel::<ReliableChannel>(

@@ -516,3 +516,10 @@ cfg_if! {
         }
     }
 }
+
+#[cfg(feature = "test_utils")]
+impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
+    pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
+        self.world_server.set_global_entity_counter_for_test(value);
+    }
+}
