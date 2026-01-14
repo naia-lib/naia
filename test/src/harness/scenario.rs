@@ -197,6 +197,14 @@ impl Scenario {
         self.expect_with_ticks_internal_msg(DEFAULT_MAX_EXPECT_TICKS, msg, f)
     }
 
+    /// Inject a raw packet from a client to the server (for testing malformed data)
+    pub fn inject_client_packet(&mut self, client_key: &ClientKey, data: Vec<u8>) -> bool {
+        if let Some(addr) = self.client_to_addr_map.get(client_key) {
+            return self.hub.inject_client_packet(addr, data);
+        }
+        false
+    }
+
     /// Register a labeled expectation for spec obligation tracing.
     ///
     /// This is the primary API for assertions that verify spec contract obligations.

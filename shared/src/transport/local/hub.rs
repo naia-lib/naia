@@ -22,6 +22,9 @@ struct ClientConnection {
     server_data_rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
     // Data channels (server -> client) - server sends
     server_data_tx: mpsc::UnboundedSender<Vec<u8>>,
+    // Data channels (client -> server) - server "receives" via this sender (injection)
+    #[allow(dead_code)]
+    client_data_tx_injection: mpsc::UnboundedSender<Vec<u8>>,
 
     // Link conditioner configuration (bidirectional)
     // None means no conditioning (perfect connection)
@@ -89,6 +92,7 @@ impl LocalTransportHub {
             auth_resp_tx: auth_resp_tx.clone(),
             server_data_rx: Arc::new(Mutex::new(server_data_rx)),
             server_data_tx: server_data_tx.clone(),
+            client_data_tx_injection: client_data_tx.clone(),
             client_to_server_conditioner: None,
             server_to_client_conditioner: None,
             client_to_server_queue: Arc::new(Mutex::new(TimeQueue::new())),
@@ -117,6 +121,16 @@ impl LocalTransportHub {
     /// Get the server address
     pub fn server_addr(&self) -> SocketAddr {
         self.server_addr
+    }
+
+    /// Inject a packet from a client (used for testing/fuzzing)
+    pub fn inject_client_packet(&self, client_addr: &SocketAddr, data: Vec<u8>) -> bool {
+        let connections = self.connections.lock().unwrap();
+        if let Some(conn) = connections.get(client_addr) {
+            let _ = conn.client_data_tx_injection.send(data);
+            return true;
+        }
+        false
     }
 
     /// Try to receive an auth request from any client (returns (client_addr, bytes))

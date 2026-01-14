@@ -36,4 +36,9 @@ impl<'a> MutateCtx<'a> {
         let mut ctx = ClientMutateCtx::new(self, client_key);
         f(&mut ctx)
     }
+
+    /// Inject a raw packet from a client to the server
+    pub fn inject_client_packet(&mut self, client_key: &ClientKey, data: Vec<u8>) -> bool {
+        self.scenario.inject_client_packet(client_key, data)
+    }
 }

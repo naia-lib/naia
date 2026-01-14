@@ -64,19 +64,23 @@ fn messaging_01_user_errors_return_result() {
     });
     let request_returns_result = request_result.is_ok() || request_result.is_err();
 
+    // Intermediate step to satisfy alternating mutate/expect requirement
+    scenario.expect(|_| Some(()));
+
     // Test 2: Verify oversized message on unreliable channel doesn't panic
-    // (The harness wraps the API, so we test for no panic instead of Result)
-    let oversized_no_panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+    let oversized_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         scenario.mutate(|ctx| {
             ctx.server(|server| {
-                server.send_message::<UnreliableChannel, _>(&client_a_key, &LargeTestMessage::new(1000));
+                server.send_message::<UnreliableChannel, _>(&client_a_key, &LargeTestMessage::new(1000))
             })
         })
-    })).is_ok();
+    }));
+
+    let oversized_handled = oversized_result.is_ok();
 
     scenario.spec_expect("messaging-01.t1: user-initiated errors handled gracefully", |_ctx| {
         // send_request returns Result, oversized messages don't panic
-        (request_returns_result && oversized_no_panic).then_some(())
+        (request_returns_result && oversized_handled).then_some(())
     });
 }
 
@@ -120,6 +124,17 @@ fn messaging_02_remote_input_no_panic() {
         })
     });
 
+    // Test: Malformed packet injection (should not panic)
+    // We inject random garbage that mimics a packet but is invalid (e.g. invalid header)
+    let malformed_no_panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| {
+            let garbage = vec![123, 234, 0, 0, 1, 1]; 
+            let _ = ctx.inject_client_packet(&client_a_key, garbage);
+        });
+        // Tick to process the packet
+        scenario.expect_msg("process malformed packet", |_| Some(()));
+    })).is_ok();
+
     // Disconnect client (simulates network failure)
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
@@ -149,8 +164,8 @@ fn messaging_02_remote_input_no_panic() {
     });
 
     scenario.spec_expect("messaging-02.t1: remote/network errors handled without panic", |_ctx| {
-        // System remained stable through unexpected state transitions
-        Some(())
+        // System remained stable through unexpected state transitions and malformed injection
+        malformed_no_panic.then_some(())
     });
 }
 
