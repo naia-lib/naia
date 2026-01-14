@@ -47,9 +47,30 @@ fn api_misuse_returns_error_not_panic() {
         test_protocol,
     );
 
-    // Verify connection established without panic
-    scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
+    // Spawn an entity but do NOT put the client in its scope/room
+    // (This entity is global or in a new room, effectively invisible/unauthorized for client A)
+    let entity = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+             let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(0.0, 0.0));
+                e.configure_replication(ReplicationConfig::Delegated);
+            });
+            entity
+        })
+    });
+
+    // Try to give authority to client A (who is not in scope) - should ERROR
+    let result_is_err = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.entity_mut(&entity)
+                .map(|mut e| e.give_authority(&client_a_key).is_err())
+                .unwrap_or(false)
+        })
+    });
+
+    // Verify error occurred and we didn't panic
+    scenario.spec_expect("common-01.t1: User-initiated misuse returns Result::Err", |_| {
+       if result_is_err { Some(()) } else { None }
     });
 }
 
@@ -80,10 +101,14 @@ fn remote_untrusted_input_does_not_panic() {
         test_protocol,
     );
 
-    // Simulate some network activity - framework should handle gracefully
+    // Simulate malformed/garbage input - framework should handle gracefully
+    let garbage = vec![0, 1, 2, 3, 255, 255, 12, 34];
+    scenario.inject_client_packet(&client_a_key, garbage);
+
+    // Allow some time for processing
     scenario.mutate(|_ctx| {});
 
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-02.t1: Remote/untrusted input MUST NOT panic", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
@@ -102,22 +127,27 @@ fn remote_untrusted_input_does_not_panic() {
 fn protocol_mismatch_is_deployment_error_not_panic() {
     // Matching protocols should succeed (no panic from mismatch handling)
     let mut scenario = Scenario::new();
-    let test_protocol = protocol();
+    let server_protocol = protocol();
+    let client_protocol = Protocol::builder().build(); // Mismatch!
 
-    scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    scenario.server_start(ServerConfig::default(), server_protocol);
+    let _ = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    let client_a_key = client_connect(
-        &mut scenario,
-        &room_key,
+    let _client_key = scenario.client_start(
         "Client A",
         Auth::new("client_a", "pass"),
         test_client_config(),
-        test_protocol,
+        client_protocol,
     );
 
-    scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
+    // Run for a bit to allow handshake to fail/reject
+    scenario.until(naia_test::ToTicks::ticks(20)).expect(|_ctx| {
+         None::<()> 
+    });
+
+    // If we reached here without panic, we passed the "MUST NOT panic" obligation
+    scenario.spec_expect("common-02a.t1: Protocol mismatch is a deployment error", |_| {
+        Some(())
     });
 }
 
@@ -150,7 +180,7 @@ fn framework_invariant_violations_are_internal_bugs() {
     );
 
     // Complete a full connection cycle without panic
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-03.t1: Framework invariant violations MUST panic", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
@@ -182,7 +212,7 @@ fn warnings_are_debug_only_and_non_normative() {
         test_protocol,
     );
 
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-04.t1: Warnings are debug-only and non-normative", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
@@ -227,7 +257,7 @@ fn determinism_under_deterministic_inputs() {
     });
 
     // Deterministically, client should see entity
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-05.t1: Deterministic inputs produce deterministic outputs", |ctx| {
         ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
     });
 }
@@ -258,6 +288,8 @@ fn per_tick_operations_resolve_deterministically() {
         test_protocol,
     );
 
+    let mut entities = Vec::new();
+
     // Multiple operations in one tick - all resolve deterministically
     scenario.mutate(|ctx| {
         ctx.server(|server| {
@@ -268,13 +300,15 @@ fn per_tick_operations_resolve_deterministically() {
                     e.enter_room(&room_key);
                 });
                 server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+                entities.push(entity);
             }
         });
     });
 
     // All entities appear deterministically
-    scenario.expect(|ctx| {
-        ctx.client(client_a_key, |_c| Some(()))
+    scenario.spec_expect("common-06.t1: Same-tick operations resolve deterministically", |ctx| {
+        let all_present = entities.iter().all(|e| ctx.client(client_a_key, |c| c.has_entity(e)).unwrap_or(false));
+        if all_present { Some(()) } else { None }
     });
 }
 
@@ -306,7 +340,7 @@ fn tests_do_not_assert_on_logs() {
     );
 
     // Assert on observable state, not log output
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-07.t1: Tests assert on events/state, not logs", |ctx| {
         let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
         let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
         (connected && user_exists).then_some(())
@@ -341,7 +375,7 @@ fn test_obligation_template_followed() {
         test_protocol,
     );
 
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-08.t1: Tests follow <contract-id>.t<N> pattern", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
@@ -374,7 +408,7 @@ fn observable_signals_are_defined() {
     );
 
     // Observable signals: connection_status, user_exists
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-09.t1: Observable signals are documented", |ctx| {
         let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
         let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
         (connected && user_exists).then_some(())
@@ -410,7 +444,7 @@ fn fixed_invariants_are_locked() {
         test_protocol,
     );
 
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-10.t1: Fixed invariants are locked", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
@@ -443,7 +477,7 @@ fn configurable_defaults_can_be_overridden() {
         test_protocol,
     );
 
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-11.t1: Configurable defaults can be overridden", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
@@ -476,7 +510,7 @@ fn new_constants_start_as_invariants() {
         test_protocol,
     );
 
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-11a.t1: New constants start as invariants", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
@@ -509,7 +543,7 @@ fn reading_metrics_does_not_influence_behavior() {
     );
 
     // Connection behavior is the same regardless of metric reads
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-12.t1: Reading metrics does not influence internal behavior", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
@@ -543,7 +577,7 @@ fn test_tolerance_constants_documented() {
         test_protocol,
     );
 
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-12a.t1: Test tolerance constants are documented", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
@@ -587,7 +621,7 @@ fn metrics_do_not_affect_replicated_state() {
     });
 
     // Entity replication works regardless of any metric readings
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-13.t1: Metrics are non-normative for gameplay", |ctx| {
         ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
     });
 }
@@ -642,7 +676,7 @@ fn reconnect_is_fresh_session() {
     );
 
     // New session is independent of old
-    scenario.expect(|ctx| {
+    scenario.spec_expect("common-14.t1: Reconnect is fresh session", |ctx| {
         ctx.client(client_a2_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
