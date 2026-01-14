@@ -30,6 +30,126 @@ use _helpers::{client_connect, server_and_client_connected, server_and_client_di
 // Tests organized by contract ID to match specs/contracts/11_entity_authority.md
 // ============================================================================
 
+/// Contract: [entity-authority-01]
+///
+/// Authority is None for non-delegated entities; request/release fails.
+#[test]
+fn authority_undefined_for_non_delegated() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_key = client_connect(&mut scenario, &room_key, "Client",
+        Auth::new("user", "pass"), test_client_config(), test_protocol);
+
+    // Spawn a Public (non-delegated) entity
+    let entity = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| c.has_entity(&entity)).then_some(())
+    });
+
+    scenario.mutate(|_ctx| {});
+
+    // Verify authority is None for non-delegated entity
+    scenario.spec_expect("entity-authority-01.t1: authority None for non-delegated", |ctx| {
+        ctx.client(client_key, |c| {
+            c.entity(&entity).and_then(|e| e.authority()).is_none().then_some(())
+        })
+    });
+
+    // Verify request_authority fails on non-delegated entity
+    let result = scenario.mutate(|ctx| {
+        ctx.client(client_key, |client| {
+            client.entity_mut(&entity)
+                .and_then(|mut e| e.request_authority().err())
+        })
+    });
+
+    scenario.spec_expect("entity-authority-01.t1: request_authority fails on non-delegated", |_ctx| {
+        if result == Some(AuthorityError::NotDelegated) {
+            Some(())
+        } else {
+            None
+        }
+    });
+}
+
+/// Contract: [entity-authority-13]
+///
+/// Disabling delegation clears authority on all clients.
+#[test]
+fn delegation_disable_clears_authority() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+
+    let client_key = client_connect(&mut scenario, &room_key, "Client",
+        Auth::new("user", "pass"), test_client_config(), test_protocol);
+
+    // Spawn a delegated entity and grant authority
+    let entity = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.configure_replication(ReplicationConfig::Delegated);
+                e.enter_room(&room_key);
+            });
+            server.user_scope_mut(&client_key).unwrap().include(&entity);
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| {
+            c.entity(&entity).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        }).then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity) {
+                e.give_authority(&client_key).unwrap();
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| {
+            c.entity(&entity).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted)
+        }).then_some(())
+    });
+
+    // Disable delegation (change to Public)
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity) {
+                e.configure_replication(ReplicationConfig::Public);
+            }
+        });
+    });
+
+    // Verify authority becomes None
+    scenario.spec_expect("entity-authority-13.t1: authority cleared when delegation disabled", |ctx| {
+        ctx.client(client_key, |c| {
+            c.entity(&entity).and_then(|e| e.authority()).is_none().then_some(())
+        })
+    });
+}
+
 /// Holder can mutate delegated entity
 /// Contract: [entity-authority-02]
 ///
