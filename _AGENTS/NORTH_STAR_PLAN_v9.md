@@ -113,6 +113,10 @@ CI never "generates" certification to check itself (tautology).
 *   **Mechanism:** **Hash-based integrity evidence** with semantic separation.
 *   **Artifacts:** `resolved_plan.json`, `run_report.json`, `certification.json`.
 
+### Non-Goals (v9)
+*   v9 certifies drift-free spec→resolution→plan→faithful declared execution under a conformant adapter.
+*   v9 does not attempt to measure “assertion meaningfulness” or deep semantic coverage.
+
 ---
 
 ## Part 4: System Architecture
@@ -180,14 +184,18 @@ Engine and adapters MUST use a shared reference implementation for canonical enc
 ### 5.1 The Resolved Execution Plan
 The engine produces the **Resolved Execution Plan** (`resolved_plan.json`) before execution. This file must be fully self-contained and hashable.
 
-**Header Fields (Required):**
+**Header fields required in the plan object:**
+- `npap_version`
 - `hash_contract_version`
-- `engine_version`
-- `gherkin_parser_version`
-- `cucumber_expressions_version`
 - `resolution_config`: canonical object describing resolution settings (e.g., ambiguity policy, match mode). Included in hash.
 - `feature_ast_hash` (The AST hash of the source feature)
 - `step_registry_hash` (The hash of the Semantic Step Registry used for resolution)
+- `resolved_plan_hash`
+
+**Header fields MAY appear as metadata (not required for identity):**
+- `engine_version`
+- `gherkin_parser_version`
+- `cucumber_expressions_version`
 
 **Per Scenario:**
 1.  **Scenario Key:** `feature::Rule::Scenario` (e.g., `connection::R01::S01`).
@@ -198,7 +206,7 @@ The engine produces the **Resolved Execution Plan** (`resolved_plan.json`) befor
     - `captures`: Array of **strings** extracted from the step text.
     - `docstring`: Normalized content (line endings normalized to `\n`), if present.
     - `datatable`: Normalized content, if present.
-    -   `payload_hash`: Hash of the **execution payload** (canonical map of `effective_kind`, `binding_id`, `captures`, `docstring`, `datatable`, `step_text`) per Hash Contract.
+    -   `payload_hash`: Computed from canonical encoding of the Execution Payload (as defined by the Execution Payload Contract).
 
 ### 5.2 Resolved Plan Hash
 `resolved_plan_hash = blake3_256( canonical_encode( ResolvedPlanWithoutHashFields ) )`
@@ -337,13 +345,18 @@ The adapter returns two registries. Only the **Semantic** registry is used for h
         -   `captures_arity`: u32
         -   `accepts_docstring`: bool
         -   `accepts_datatable`: bool
-    -   `impl_hash`: **Drift Signal.** `blake3_256( canonical_encode( ImplHashInputBundle ) )`.
-        -   `ImplHashInputBundle` MUST include:
-            1.  `expanded_binding_source` (macro-expanded or fully elaborated implementation).
-            2.  `toolchain_fingerprint` (e.g., `rustc -Vv`).
-            3.  `dependency_fingerprint` (e.g., hash of `Cargo.lock`).
-        -   **Policy:** `impl_hash` MUST change when the effective implementation changes. Toolchain or dependency changes MAY invalidate certification (this is acceptable).
--   **Parameter Types:** `{ name, regex }`.
+    -   `impl_hash`: **Drift Signal (Normative).**
+        -   `impl_hash` MUST change when the effective binding implementation changes.
+        -   `impl_hash = blake3_256( canonical_encode( ImplHashInput ) )`
+        -   `ImplHashInput` MUST include:
+            1.  `binding_id`
+            2.  `normalized_source_fingerprint`
+        -   **normalized_source_fingerprint:** Computed from the binding's source text after normalizations (Option A):
+            -   Normalize to UTF-8 and Unicode NFC.
+            -   Normalize newlines to `\n`.
+            -   Remove absolute paths and workspace-specific prefixes.
+            -   Exclude comments.
+-   **Parameter Types:** `{ name, regex }` (Included in registry hash if used for resolution).
 
 **2. Debug Step Registry (Unhashed):**
 -   `source_loc`, documentation, human notes.
@@ -356,7 +369,10 @@ The adapter returns two registries. Only the **Semantic** registry is used for h
     *   Adapter MUST execute steps **by Binding ID only** using a direct lookup.
     *   Adapter MUST NOT consult the semantic registry to resolve steps during `run` (registry is only used for freshness + binding existence/signature checks).
     *   Adapter MUST treat `step_text` as non-executable metadata.
-    *   Adapter MUST compute `executed_payload_hash` from the actual runtime values passed to the binding.
+    *   Adapter MUST invoke the binding using the raw values from the **Execution Payload** (or values equivalent under normalization).
+    *   Adapter MUST compute `executed_payload_hash` from canonical encoding of the raw **Execution Payload** fields (same field set and encoding rules as `payload_hash` in the plan).
+    *   Adapter MUST record `executed_impl_hash` for the binding implementation actually invoked.
+    *   Adapter MUST source `executed_impl_hash` from the Semantic Step Registry entry corresponding to the invoked binding implementation.
 *   **Freshness Check:** The Adapter **MUST refuse** to execute a plan unless:
     -   `step_registry_hash` in plan matches the current semantic manifest hash.
     -   All `binding_id`s in the plan exist.
@@ -414,6 +430,7 @@ The adapter returns two registries. Only the **Semantic** registry is used for h
         {
           "planned_binding_id": "conn-001",
           "executed_binding_id": "conn-001",
+          "executed_impl_hash": "...",
           "planned_payload_hash": "...",
           "executed_payload_hash": "...",
           "status": "Passed"
@@ -423,6 +440,27 @@ The adapter returns two registries. Only the **Semantic** registry is used for h
   ]
 }
 ```
+
+### 9.5 Execution Payload Contract (Normative)
+The Engine defines the **Execution Payload** for each step as the raw fields from the resolved plan:
+- `effective_kind`
+- `binding_id`
+- `captures` (array of strings)
+- `docstring` (normalized string or null)
+- `datatable` (normalized cells or null)
+- `step_text` (exact AST string)
+
+**Normalization Rules:**
+- DocStrings MUST have line endings normalized to `\n`.
+- DataTables MUST preserve exact cell strings from the AST / plan.
+- Strings MUST be Unicode normalized to NFC.
+- Optional fields MUST be consistently represented for hashing (omitted when absent).
+
+**Runtime Obligations:**
+- The Adapter MUST invoke the binding using these raw values (or values equivalent under normalization).
+- Typed conversions (e.g., `"50"` → `i32`) MAY occur inside the binding implementation but MUST NOT affect payload hashing.
+- The Adapter MUST compute `executed_payload_hash` from canonical encoding of the **raw Execution Payload fields** (same field set and encoding rules as `payload_hash` in the plan).
+- The Engine MUST compute `planned_payload_hash` from the same canonical encoding rules and field set.
 
 ---
 
@@ -438,6 +476,7 @@ The adapter returns two registries. Only the **Semantic** registry is used for h
     *   Adapter writes `run_report.json`.
 3.  **Verification:** Engine reads `run_report.json`.
     *   Verifies `planned_binding_id` == `executed_binding_id` for every step.
+    *   Verifies `executed_impl_hash` matches the registry’s `impl_hash` for the planned binding.
     *   Verifies `planned_payload_hash` == `executed_payload_hash` for every step.
     *   Verifies report header's `feature_ast_hash`, `step_registry_hash`, `resolved_plan_hash`, `hash_contract_version`, `npap_version` match the plan header exactly.
     *   Computes `bindings_used_hash`.
@@ -448,27 +487,39 @@ The adapter returns two registries. Only the **Semantic** registry is used for h
 ## Part 11: Certification & Integrity Workflow
 
 ### 11.1 The Tuple
-The **Integrity Identity Tuple** (`certification.json`) is the heart of the system.
-*   `hash_contract_version`
-*   `engine_version` (Namako)
-*   `gherkin_parser_version`
-*   `cucumber_expressions_version`
-*   `feature_ast_hash` (From AST-normal-form)
-*   `step_registry_hash` (Semantic only)
-*   `resolved_plan_hash` (The proof of resolution stability)
-*   `bindings_used_hash` (Optional but recommended for diffs)
-*   **Optional Recommended Fields** (if present, computed via canonical encoding + blake3-256):
-    *   `adapter_build_hash`
-    *   `cargo_lock_hash`
-    *   `rustc_version`
+The **Integrity Identity Tuple** (`certification.json`) is composed of `{ identity, metadata }`.
+
+**Identity (strictly compared by `verify`):**
+- `hash_contract_version`
+- `resolution_semantics_id`
+- `feature_ast_hash`
+- `step_registry_hash`
+- `resolved_plan_hash`
+- `bindings_used_hash` (optional but recommended; if present it is part of identity)
+
+**Metadata (recorded, not compared for pass/fail):**
+- `engine_version`
+- `gherkin_parser_version`
+- `cucumber_expressions_version`
+- `adapter_build_hash` (optional)
+- `cargo_lock_hash` (optional)
+- `rustc_version` (optional)
+
+**Comparison Rule (Normative):**
+- `namako verify` MUST compare `certification.identity` only.
+- `namako verify` MUST NOT fail solely due to metadata differences.
+- `namako status` SHOULD report metadata diffs as informational.
+
+### 11.1.1 Resolution Semantics ID
+`resolution_semantics_id` is a stable string identifying the semantics of parsing + matching + kind inference + signature enforcement. It MUST change only when resolution semantics change in a way that could change `resolved_plan_hash` for the same inputs. Recommended initial value: `"namako-resolution-v9"`.
 
 ### 11.2 Verification Logic
 `namako verify` performs a deep comparison:
-1.  **Candidate Generation:** Computes `resolved_plan_hash` from the candidate `resolved_plan.json` produced by the Engine.
-2.  **Comparison:** `Candidate.Tuple === Baseline.Tuple`.
-3.  **Result:** Any mismatch in ANY field is a hard failure.
+1.  **Candidate Generation:** Engine produces `candidate.identity` and `candidate.metadata`.
+2.  **Comparison:** `candidate.identity` MUST equal `baseline.identity` byte-for-byte / field-for-field strict equality. Metadata MUST NOT gate CI pass/fail, but SHOULD be diffed in `namako status`.
+3.  **Result:** Any mismatch in Identity is a hard failure.
 
-Verification validates the run report against the plan. This constitutes integrity evidence under the assumption that the adapter truthfully emits runtime events per NPAP.
+Verification validates the run report against the plan. Verification includes checking that each executed step reports `executed_impl_hash` consistent with the semantic registry entry for the planned binding. This constitutes integrity evidence under the assumption that the adapter truthfully emits runtime events per NPAP.
 
 ### 11.3 Canonical Encoding & Hashing Contract (Normative)
 1.  **Typed Canonicalization:** Hashed artifacts MUST be encoded from typed structures that match strict schemas.
@@ -510,11 +561,11 @@ Verification validates the run report against the plan. This constitutes integri
 *   `namako stub --binding <id>`: Generates a minimal scenario for an orphan in a Rule-compliant way.
 
 ### Integrity Management
-*   `namako verify`: **CI Gate.** Fails if current state != baseline.
-*   `namako update-cert`: **Manual Action.** Overwrites baseline with current candidate. **MUST refuse** to write baseline unless:
+*   `namako verify`: **CI Gate.** Fails if current candidate Identity != baseline Identity. Distinguishes Identity drift (hard fail) from Metadata drift (reported).
+*   `namako update-cert`: **Manual Action.** Overwrites baseline **identity + metadata** with the current candidate. **MUST refuse** to write baseline unless:
     *   `namako lint` passes with zero errors.
     *   `namako run` completes and all scenarios are `Passed`.
-*   `namako status`: detailed diff of what has drifted.
+*   `namako status`: detailed diff of what has drifted (Identity diff section is blocking; Metadata diff section is non-blocking).
 
 ### QA Tools
 *   `namako review`: Generate semantic challenge packets.
@@ -562,7 +613,7 @@ Must be updated to accept `--plan`.
 ## Part 15: Definition of Done
 
 The system is live when:
-1.  **Certification is Precise:** `certification.json` includes `resolved_plan_hash` and `feature_ast_hash` (derived solely from AST-normal-form).
+1.  **Certification is Precise:** **Identity** includes hashes (specifically `resolved_plan_hash`, `feature_ast_hash`, etc.), and `verify` compares identity strictly.
 2.  **Registry is Split:** Semantic registry is hashed; debug registry is not. Each binding includes `signature` and `impl_hash`.
 3.  **Signatures are Enforced:** Adapter enforces arity and payload expectations at runtime.
 4.  **Stale Plans are Rejected:** Adapter checks header hashes before running.
