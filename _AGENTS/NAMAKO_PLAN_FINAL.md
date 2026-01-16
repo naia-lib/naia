@@ -16,6 +16,10 @@
 8. [Where v1 is Intentionally NOT Publish-Grade](#part-8-where-v1-is-intentionally-not-publish-grade)
 9. [The AI-Assisted Spec-Driven Development Loop (v1)](#part-9-the-ai-assisted-spec-driven-development-loop-v1)
 10. [Namako v2+ — Armor Plating (Deferred Publish-Grade Features)](#part-10-namako-v2--armor-plating-deferred-publish-grade-features)
+    - [10.11 Multi-Language Support](#1011-multi-language-support-language-neutral-engine-language-specific-adapters)
+    - [10.12 Adapter SDKs](#1012-adapter-sdks-v2)
+    - [10.13 Cross-Language Hashing & Conformance](#1013-cross-language-hashing--conformance-v2)
+    - [10.14 Adapter Certification Tooling](#1014-adapter-certification-tooling-v2)
 11. [Definition of Done (v1)](#part-11-definition-of-done-v1)
 12. [Appendix: No-drop Checklist (v9 Concept Trace)](#appendix-no-drop-checklist-v9-concept-trace)
 
@@ -45,6 +49,10 @@ Drift occurs when the linter thinks a step matches Binding A, but the runtime ma
 
 The **Namako Engine** is the sole source of matching logic. It resolves every step into a **Resolved Execution Plan**. The project adapter is **structurally forbidden** from performing text matching; it simply executes the Binding IDs dictated by the Engine.
 
+### Language-Neutral by Design
+
+Namako is **language-agnostic**: the engine/CLI is a Rust tool, but adapters MAY be implemented in **any programming language** (Rust, JS/TS, Python, Go, C++, etc.). The adapter protocol (NPAP) is the only cross-language integration boundary. v1 ships with Rust adapter support for Naia; v2+ expands to official SDKs and conformance tooling for other ecosystems.
+
 ---
 
 ## Part 2: Thesis: v1 is KISS MVP, v2+ is Armor Plating
@@ -61,6 +69,7 @@ This document explicitly separates:
 | Feature hashing | Feature fingerprint (simpler) | Full FeatureAstNorm |
 | Orphan policy | Warning only | Hard error + mitigation tools |
 | Encoding | Canonical JSON | CBOR profiles, conformance fixtures |
+| Language support | Rust adapter (Naia) | Multi-language SDKs + conformance |
 
 ### 2.2 Design Principle: No Dead Ends
 
@@ -186,6 +195,8 @@ binding_id_scheme = "kind+expr_norm|namako-binding-id-v1|blake3-256-lowerhex"
 
 `binding_id_scheme` MUST be included in the `step_registry_hash` computation.
 
+> **v2+ Note:** The binding-id scheme is chosen specifically because it is **portable across languages and tooling**. Any adapter in any language can compute the same `binding_id` from the same `(kind, expression_string)` pair using the documented algorithm and BLAKE3.
+
 #### 4.2.2 Collision Rule (Normative)
 
 If two bindings in a single project produce the same `(kind, expr_norm)`:
@@ -232,7 +243,7 @@ v1 MUST NOT require:
 | Orphan binding hard errors | v1 MAY warn; v2+ makes it a hard error |
 | Challenge packets / `namako review` | Deferred to v2+ |
 | CBOR canonical encoding profiles | v1 uses canonical JSON; v2+ may migrate |
-| Malicious adapter defense | Out of scope (trusted adapter assumption) |
+| Malicious adapter defense | Out of scope (trusted adapter assumption; v2+ adds conformance tooling) |
 | Conformance fixtures with canonical bytes | Deferred to v2+ |
 | `resolution_semantics_id` | Deferred to v2+; v1 uses simpler versioning |
 
@@ -298,6 +309,15 @@ v1 MUST NOT require:
 ---
 
 ## Part 6: NPAP v1: Adapter Protocol
+
+### 6.0 Language Neutrality (Normative)
+
+NPAP is **language-neutral**. Adapters MAY be implemented in any programming language as long as they:
+- Implement the `manifest` and `run` commands per this specification
+- Obey all schema and invariant requirements
+- Dispatch by `binding_id` only (no runtime text matching)
+
+The Namako Engine/CLI MUST treat the adapter as an **external executable** invoked via the configured `adapter_cmd`. The engine MUST NOT depend on project language runtimes.
 
 ### 6.1 Versioning
 
@@ -838,6 +858,239 @@ This section captures all hardening features not required in v1 but designed int
 - Quick signal that binding set changed
 - Enables fast-path verification
 
+### 10.11 Multi-Language Support (Language-Neutral Engine, Language-Specific Adapters)
+
+This section defines how Namako supports projects in **any programming language** (JS/TS, Python, Go, C++, JVM, .NET, etc.).
+
+#### 10.11.1 Core Principle (Normative)
+
+- The Namako Engine/CLI MUST remain a Rust tool.
+- Any project integrates via an **external adapter executable** that implements NPAP.
+- The adapter protocol is the **only cross-language integration boundary**.
+
+**Engine Constraints:**
+- The engine MUST NOT depend on project language runtimes.
+- The engine MUST invoke adapters via `adapter_cmd` (configured in `namako.toml`).
+- The engine MUST validate adapter outputs against strict JSON schemas.
+
+**Adapter Constraints:**
+- The adapter MUST implement `manifest` and `run` commands.
+- The adapter MUST dispatch by `binding_id` only (no runtime text matching).
+- The adapter MUST emit artifacts conforming to NPAP schemas.
+
+#### 10.11.2 Universal "3-Piece" Project Pattern
+
+Any language ecosystem SHOULD follow this pattern (equivalent to Naia's Rust structure):
+
+| Component | Purpose | Naia Equivalent |
+|-----------|---------|----------------|
+| `<project>_test_harness` | World type + test helpers | `naia_test_harness` |
+| `<project>_tests` | Step definitions (one keyword + one string per step) | `naia_tests` |
+| `<project>_namako` | Adapter executable (`manifest` + `run`) | `naia_namako` |
+
+**Language-Specific Examples:**
+
+**JavaScript/TypeScript (Node.js):**
+```
+myproject-test-harness/   # npm package: World class, test utilities
+myproject-tests/          # npm package: step definitions using decorators
+myproject-namako/         # Node CLI: dist/myproject_namako.js
+```
+
+**Python:**
+```
+myproject_test_harness/   # Python package: World class, fixtures
+myproject_tests/          # Python package: step definitions using decorators
+myproject_namako/         # Python module: python -m myproject_namako
+```
+
+**Go:**
+```
+pkg/testharness/          # Go package: World struct, test helpers
+pkg/tests/                # Go package: step definitions using struct tags or registration
+cmd/myproject-namako/     # Go binary: ./bin/myproject-namako
+```
+
+**C++:**
+```
+src/test_harness/         # C++ library: World class, test utilities
+src/tests/                # C++ library: step definitions via registration macros
+src/myproject_namako/     # C++ binary: ./build/myproject_namako
+```
+
+#### 10.11.3 Adapter Command Configuration Examples
+
+The `namako.toml` file configures the adapter command for each project:
+
+```toml
+# Rust (current Naia setup)
+adapter_cmd = ["cargo", "run", "-q", "-p", "naia_namako", "--"]
+
+# JavaScript/TypeScript (Node.js)
+adapter_cmd = ["node", "dist/myproject_namako.js"]
+
+# Python
+adapter_cmd = ["python", "-m", "myproject_namako"]
+
+# Go (compiled binary)
+adapter_cmd = ["./bin/myproject-namako"]
+
+# C++ (compiled binary)
+adapter_cmd = ["./build/myproject_namako"]
+```
+
+> **Note:** These examples are v2+ guidance. v1 ships with Rust adapter support only.
+
+### 10.12 Adapter SDKs (v2+)
+
+**What it adds:**
+- Official Namako SDKs for major ecosystems: JS/TS, Python, Go, JVM, .NET, C++
+
+**Why it matters:**
+- Without SDKs, each adapter author re-invents the protocol and risks subtle incompatibilities.
+- SDKs ensure consistent UX and correct implementation across ecosystems.
+
+**SDK Responsibilities (Normative):**
+
+Each SDK MUST provide:
+
+1. **Ergonomic Step Registration**
+   - Functions/decorators/annotations consistent with: one keyword (Given/When/Then) + one string expression
+   - Example (Python): `@given("a user named {string}")` 
+   - Example (JS/TS): `Given("a user named {string}", async (world, name) => { ... })`
+
+2. **Deterministic Binding ID Generation**
+   - Compute `binding_id` from `(kind, expression_string)` using the documented `binding_id_scheme`
+   - MUST produce identical IDs to the Rust implementation for the same inputs
+
+3. **Semantic Registry Export**
+   - Emit JSON manifest matching NPAP schema
+   - Include `binding_id`, `kind`, `expression`, `signature`, `impl_hash`
+
+4. **Plan Execution Harness**
+   - Load `resolved_plan.json`
+   - Dispatch steps by `binding_id` only (no text matching)
+   - Invoke bindings with correct captures, docstrings, datatables
+
+5. **Run Report Emission**
+   - Emit `run_report.json` with canonical ordering
+   - Include all required fields per NPAP schema
+
+**Migration:**
+- SDK adoption is optional but recommended
+- Projects MAY implement NPAP directly without SDK
+
+### 10.13 Cross-Language Hashing & Conformance (v2+)
+
+Cross-language hash reproducibility is critical. This section defines two strategies.
+
+#### Strategy 1: Reference Hash Helper ("Hash Oracle") — Recommended First
+
+**What it adds:**
+- A portable helper tool: `namako_hash_cli` (or `namako_hashd` daemon)
+- Built from Rust, distributed as a standalone binary
+- Adapters call it to compute hashes
+
+**Contract (Normative):**
+- The helper MUST implement the current `hash_contract_version` exactly.
+- The helper MUST be distributed with version alignment to the Namako CLI.
+- Adapters MUST declare in their manifest whether they use the helper (`hash_mode: "oracle"`) or native hashing (`hash_mode: "native"`).
+
+**Helper Commands:**
+```bash
+# Compute binding_id
+namako_hash_cli binding-id --kind Given --expression "a user named {string}"
+# Output: {"binding_id": "abc123..."}
+
+# Compute step_registry_hash
+namako_hash_cli registry-hash --input registry.json
+# Output: {"step_registry_hash": "def456..."}
+
+# Compute payload_hash
+namako_hash_cli payload-hash --input payload.json
+# Output: {"payload_hash": "ghi789..."}
+```
+
+**Why it matters:**
+- Ensures identical hashes across ecosystems without re-implementing canonical encoding.
+- Reduces SDK implementation burden.
+- Single source of truth for hash computation.
+
+#### Strategy 2: Native Hashing in SDKs — Later (Publish Polish)
+
+**What it adds:**
+- SDKs implement canonical encoding + hashing natively in each language.
+- No external helper dependency.
+
+**Requirements:**
+- SDKs MUST pass all conformance fixtures.
+- SDKs MUST document their canonical encoding implementation.
+
+#### Conformance Fixtures (Normative)
+
+The Namako repo MUST ship conformance fixtures for:
+
+| Fixture Category | Purpose |
+|-----------------|--------|
+| `binding_id_scheme` | Verify `(kind, expression)` → `binding_id` |
+| `registry_hash` | Verify semantic registry → `step_registry_hash` |
+| `payload_hash` | Verify execution payload → `payload_hash` |
+| `plan_hash` | Verify resolved plan → `resolved_plan_hash` |
+
+**Fixture Format (Normative):**
+```json
+{
+  "fixture_version": "1",
+  "hash_contract_version": "namako-v1-json+blake3-256",
+  "cases": [
+    {
+      "name": "simple_given_step",
+      "input": { "kind": "Given", "expression": "a user named {string}" },
+      "expected_binding_id": "abc123..."
+    }
+  ]
+}
+```
+
+**Validation:**
+- Adapters/SDKs MUST be able to run the conformance suite.
+- Any mismatch MUST cause the conformance check to fail.
+- CI MUST validate fixtures on all supported platforms.
+
+### 10.14 Adapter Certification Tooling (v2+)
+
+**What it adds:**
+- A CLI command: `namako adapter-verify` (or `namako conformance`)
+- Validates third-party adapters before they are trusted in CI.
+
+**Checks Performed (Normative):**
+
+| Check | Description |
+|-------|-------------|
+| **Schema Validation** | Manifest and run_report match NPAP JSON schemas exactly |
+| **Binding ID Correctness** | All `binding_id` values match expected computation from `(kind, expression)` |
+| **Canonical Ordering** | Run report scenarios and steps are correctly ordered |
+| **Hash Implementation** | All hashes match conformance fixture expectations |
+| **Freshness Check** | Adapter correctly rejects stale plans |
+
+**Output:**
+- Clear pass/fail diagnostics per check.
+- Detailed error messages for failures.
+
+**Why it matters:**
+- Ensures third-party adapters behave correctly.
+- Catches protocol violations before they cause CI failures.
+- Builds trust in the multi-language ecosystem.
+
+**Usage:**
+```bash
+# Run adapter conformance suite
+namako adapter-verify --adapter-cmd "node dist/myproject_namako.js"
+
+# Run with specific fixtures
+namako adapter-verify --adapter-cmd "./bin/myproject-namako" --fixtures path/to/fixtures/
+```
+
 ---
 
 ## Part 11: Definition of Done (v1)
@@ -973,11 +1226,24 @@ This appendix traces every major concept from `NORTH_STAR_PLAN_v9.md` and labels
 | Binding faithfulness loop | **IN v1** | Step 4 |
 | Implement system | **IN v1** | Step 5 |
 
+### Multi-Language Support (New)
+
+| Concept | Status | Notes |
+|---------|--------|-------|
+| Language-neutral adapter protocol | **IN v1** (conceptual) | NPAP is language-neutral by design; v1 ships Rust adapter only |
+| Any-language adapter support | **DEFERRED** to v2+ | §10.11 |
+| Universal 3-piece project pattern | **DEFERRED** to v2+ | §10.11.2 |
+| Adapter SDKs (JS/TS, Python, Go, etc.) | **DEFERRED** to v2+ | §10.12 |
+| Cross-language hashing (hash oracle) | **DEFERRED** to v2+ | §10.13 Strategy 1 |
+| Cross-language hashing (native SDK) | **DEFERRED** to v2+ | §10.13 Strategy 2 |
+| Conformance fixtures for adapters | **DEFERRED** to v2+ | §10.13 |
+| Adapter certification tooling | **DEFERRED** to v2+ | §10.14 |
+
 ### Dropped Concepts
 
 | Concept | Status | Reason |
 |---------|--------|--------|
-| Malicious adapter defense | **DROPPED** | Out of scope; trusted adapter assumption |
+| Malicious adapter defense | **DROPPED** | Out of scope; trusted adapter assumption (v2+ adds conformance as mitigation) |
 | Deep semantic coverage measurement | **DROPPED** | Non-goal; review-driven process only |
 | Assertion meaningfulness measurement | **DROPPED** | Non-goal; out of scope |
 
