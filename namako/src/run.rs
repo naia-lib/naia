@@ -14,7 +14,7 @@ use namako::npap::{
 use namako::codegen::{StepConstructor, WorldInventory, inventory};
 use namako::step::{Step, Context as StepContext};
 
-use naia_tests::SmokeWorld;
+use naia_tests::TestWorld;
 
 /// Arguments for the run command.
 #[derive(Args, Debug)]
@@ -133,7 +133,7 @@ pub fn run(args: RunArgs) -> Result<()> {
         .context("Failed to parse resolved plan JSON")?;
 
     // Step 2: Validate step_registry_hash matches current manifest
-    let current_bindings = collect_bindings::<SmokeWorld>();
+    let current_bindings = collect_bindings::<TestWorld>();
     let current_registry = namako::npap::SemanticStepRegistry::new(current_bindings);
 
     if plan.header.step_registry_hash != current_registry.step_registry_hash {
@@ -146,7 +146,7 @@ pub fn run(args: RunArgs) -> Result<()> {
     }
 
     // Step 3: Build dispatch table
-    let dispatch_table = build_dispatch_table::<SmokeWorld>();
+    let dispatch_table = build_dispatch_table::<TestWorld>();
 
     // Step 4: Execute each scenario with real dispatch
     let mut scenario_results = Vec::with_capacity(plan.scenarios.len());
@@ -159,7 +159,7 @@ pub fn run(args: RunArgs) -> Result<()> {
         let mut scenario_status = ScenarioStatus::Passed;
 
         // Create a fresh World for each scenario
-        let mut world = SmokeWorld::default();
+        let mut world = TestWorld::default();
 
         for step in &scenario.steps {
             // Look up binding by binding_id

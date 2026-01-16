@@ -6,7 +6,7 @@ use anyhow::Result;
 use namako::npap::{SemanticStepRegistry, SemanticBinding, BindingSignature};
 use namako::codegen::{StepConstructor, WorldInventory, inventory};
 
-use naia_tests::SmokeWorld;
+use naia_tests::TestWorld;
 
 /// Collect bindings from inventory for the given World type.
 fn collect_bindings_from_inventory<W: WorldInventory>() -> Vec<SemanticBinding> {
@@ -66,7 +66,7 @@ fn collect_bindings_from_inventory<W: WorldInventory>() -> Vec<SemanticBinding> 
 /// Run the manifest command.
 pub fn run() -> Result<()> {
     // Collect all bindings from inventory (macro-generated at compile time)
-    let bindings = collect_bindings_from_inventory::<SmokeWorld>();
+    let bindings = collect_bindings_from_inventory::<TestWorld>();
 
     // Create the registry (computes step_registry_hash internally)
     let registry = SemanticStepRegistry::new(bindings);

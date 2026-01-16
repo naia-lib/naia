@@ -29,7 +29,7 @@ pub use client_events::{
 pub use client_entity::{ClientEntityMut, ClientEntityRef};
 pub use expect_ctx::ExpectCtx;
 pub use keys::{ClientKey, EntityKey};
-pub use scenario::Scenario;
+pub use scenario::{Scenario, TrackedClientEvent, TrackedServerEvent};
 pub use server_events::{
     ServerAuthEvent, ServerConnectEvent, ServerDelegateEntityEvent, ServerDespawnEntityEvent,
     ServerDisconnectEvent, ServerEntityAuthGrantEvent, ServerEntityAuthResetEvent,

@@ -12,7 +12,7 @@ use naia_shared::{
 };
 use naia_server::{
     transport::local::{LocalServerSocket, Socket as ServerSocket},
-    Server as NaiaServer, ServerConfig, UserKey,
+    Server as NaiaServer, ServerConfig, UserKey, RoomKey,
 };
 use naia_client::{
     transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket},
@@ -45,6 +45,30 @@ enum LastOperation {
     Expect,
 }
 
+/// Tracked server-side events for ordering assertions in BDD tests.
+/// These represent observable events at the Naia protocol level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackedServerEvent {
+    /// Server received an auth request
+    Auth,
+    /// Server established a connection (handshake complete)
+    Connect,
+    /// Server session ended
+    Disconnect,
+}
+
+/// Tracked client-side events for ordering assertions in BDD tests.
+/// These represent observable events at the Naia protocol level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TrackedClientEvent {
+    /// Client connected successfully
+    Connect,
+    /// Client disconnected after being connected
+    Disconnect,
+    /// Client was rejected (never connected)
+    Reject,
+}
+
 pub struct Scenario {
     hub: LocalTransportHub,
     server: Option<Server>,
@@ -63,6 +87,14 @@ pub struct Scenario {
     last_operation: LastOperation,
     /// Current tick count (incremented on each tick)
     global_tick: usize,
+    /// Tracked server events in order of occurrence (for BDD ordering assertions)
+    server_event_history: Vec<TrackedServerEvent>,
+    /// Tracked client events per client in order of occurrence (for BDD ordering assertions)
+    client_event_history: HashMap<ClientKey, Vec<TrackedClientEvent>>,
+    /// Last client key started (convenience for single-client BDD tests)
+    last_client_key: Option<ClientKey>,
+    /// Last room key created (convenience for BDD tests)
+    last_room_key: Option<RoomKey>,
 }
 
 impl Scenario {
@@ -85,6 +117,10 @@ impl Scenario {
             client_to_addr_map: HashMap::new(),
             last_operation: LastOperation::None,
             global_tick: 0,
+            server_event_history: Vec::new(),
+            client_event_history: HashMap::new(),
+            last_client_key: None,
+            last_room_key: None,
         }
     }
 
@@ -136,6 +172,9 @@ impl Scenario {
             client_key,
             ClientState::new(client, world, identity_token, rejection_code),
         );
+
+        // Store as last client for convenience in single-client BDD tests
+        self.last_client_key = Some(client_key);
 
         client_key
     }
@@ -423,10 +462,10 @@ impl Scenario {
         client_keys: &[ClientKey],
     ) {
         use crate::test_protocol::Position;
-        
+
         eprintln!("=== Identity State Dump: {} ===", label);
         eprintln!("EntityKey: {:?}", entity_key);
-        
+
         // Server state
         if let Some(server_entity) = self.entity_registry.server_entity(entity_key) {
             eprintln!("Server: has entity={:?}", server_entity);
@@ -447,7 +486,7 @@ impl Scenario {
         } else {
             eprintln!("Server: entity not registered");
         }
-        
+
         // Per-client state
         for client_key in client_keys {
             let client_state = match self.clients.get(client_key) {
@@ -457,13 +496,13 @@ impl Scenario {
                     continue;
                 }
             };
-            
+
             let world_ref = client_state.world().proxy();
             let client_entity = self.entity_registry.client_entity(entity_key, client_key);
-            
+
             eprintln!("Client {:?}:", client_key);
             eprintln!("  Registered client entity: {:?}", client_entity);
-            
+
             if let Some(ce) = client_entity {
                 if world_ref.has_entity(&ce) {
                     eprintln!("  Has entity in world: true");
@@ -822,5 +861,110 @@ impl Scenario {
         server.receive_all_packets();
         server.process_all_packets(server_world.proxy_mut(), now);
         server.send_all_packets(server_world.proxy());
+    }
+
+    // ========================================================================
+    // Event History Tracking API (for BDD ordering assertions)
+    // ========================================================================
+
+    /// Track a server-side event for ordering assertions.
+    pub fn track_server_event(&mut self, event: TrackedServerEvent) {
+        self.server_event_history.push(event);
+    }
+
+    /// Track a client-side event for ordering assertions.
+    pub fn track_client_event(&mut self, client_key: ClientKey, event: TrackedClientEvent) {
+        self.client_event_history
+            .entry(client_key)
+            .or_default()
+            .push(event);
+    }
+
+    /// Get the server event history (immutable).
+    pub fn server_event_history(&self) -> &[TrackedServerEvent] {
+        &self.server_event_history
+    }
+
+    /// Get a specific client's event history (immutable).
+    pub fn client_event_history(&self, client_key: ClientKey) -> &[TrackedClientEvent] {
+        self.client_event_history
+            .get(&client_key)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+    }
+
+    /// Check if server observed events in the expected order.
+    /// Returns true if `earlier` appears before `later` in server event history.
+    pub fn server_event_before(&self, earlier: TrackedServerEvent, later: TrackedServerEvent) -> bool {
+        let earlier_idx = self.server_event_history.iter().position(|e| *e == earlier);
+        let later_idx = self.server_event_history.iter().position(|e| *e == later);
+        match (earlier_idx, later_idx) {
+            (Some(e), Some(l)) => e < l,
+            _ => false,
+        }
+    }
+
+    /// Check if client observed events in the expected order.
+    /// Returns true if `earlier` appears before `later` in client event history.
+    pub fn client_event_before(
+        &self,
+        client_key: ClientKey,
+        earlier: TrackedClientEvent,
+        later: TrackedClientEvent
+    ) -> bool {
+        let history = self.client_event_history(client_key);
+        let earlier_idx = history.iter().position(|e| *e == earlier);
+        let later_idx = history.iter().position(|e| *e == later);
+        match (earlier_idx, later_idx) {
+            (Some(e), Some(l)) => e < l,
+            _ => false,
+        }
+    }
+
+    /// Check if client observed a specific event.
+    pub fn client_observed(&self, client_key: ClientKey, event: TrackedClientEvent) -> bool {
+        self.client_event_history(client_key).contains(&event)
+    }
+
+    /// Check if server observed a specific event.
+    pub fn server_observed(&self, event: TrackedServerEvent) -> bool {
+        self.server_event_history.contains(&event)
+    }
+
+    /// Clear event history (useful when testing multiple connection attempts).
+    pub fn clear_event_history(&mut self) {
+        self.server_event_history.clear();
+        self.client_event_history.clear();
+    }
+
+    // ========================================================================
+    // Convenience Getters for BDD Tests
+    // ========================================================================
+
+    /// Get the last client key that was started.
+    /// Panics if no client has been started.
+    pub fn last_client(&self) -> ClientKey {
+        self.last_client_key.expect("No client has been started")
+    }
+
+    /// Get the last client key if one exists.
+    pub fn last_client_opt(&self) -> Option<ClientKey> {
+        self.last_client_key
+    }
+
+    /// Get the last room key that was created.
+    /// Panics if no room has been created.
+    pub fn last_room(&self) -> RoomKey {
+        self.last_room_key.expect("No room has been created")
+    }
+
+    /// Set the last room key (call this after creating a room).
+    pub fn set_last_room(&mut self, room_key: RoomKey) {
+        self.last_room_key = Some(room_key);
+    }
+
+    /// Get all client keys in the scenario.
+    pub fn client_keys(&self) -> impl Iterator<Item = ClientKey> + '_ {
+        self.clients.keys().copied()
     }
 }
