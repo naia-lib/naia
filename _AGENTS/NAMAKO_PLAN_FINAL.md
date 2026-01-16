@@ -12,7 +12,9 @@
 4. [Step Macro UX and Binding Identity](#part-4-step-macro-ux-and-binding-identity)
 5. [Namako v1: The Future-Proof KISS MVP](#part-5-namako-v1-the-future-proof-kiss-mvp)
 6. [NPAP v1: Adapter Protocol](#part-6-npap-v1-adapter-protocol)
+    - [6.4.3 Scenario Key Derivation](#643-scenario-key-derivation-v1-normative)
 7. [Hashing & Identity: v1 Contract](#part-7-hashing--identity-v1-contract)
+    - [7.0 Hash & Encoding Contract — Single Source of Truth](#70-hash--encoding-contract-v1--single-source-of-truth)
 8. [Where v1 is Intentionally NOT Publish-Grade](#part-8-where-v1-is-intentionally-not-publish-grade)
 9. [The AI-Assisted Spec-Driven Development Loop (v1)](#part-9-the-ai-assisted-spec-driven-development-loop-v1)
 10. [Namako v2+ — Armor Plating (Deferred Publish-Grade Features)](#part-10-namako-v2--armor-plating-deferred-publish-grade-features)
@@ -266,7 +268,24 @@ v1 MUST NOT require:
 **Strict Errors:**
 - Missing step (0 matches)
 - Ambiguous step (>1 match)
-- Signature mismatch
+- Signature mismatch (see below)
+
+**Signature Mismatch Definition (v1, Normative):**
+
+A signature mismatch occurs when the step's requirements do not match the binding's declared capabilities:
+
+| Check | Rule |
+|-------|------|
+| **Captures arity** | The number of captures produced by matching the expression to the step text MUST equal `signature.captures_arity` |
+| **DocString requirement** | If the step includes a DocString, the binding MUST declare `accepts_docstring = true` |
+| **DataTable requirement** | If the step includes a DataTable, the binding MUST declare `accepts_datatable = true` |
+
+**Handling absent DocString/DataTable:**
+- If a step does NOT include a DocString, the binding MAY declare `accepts_docstring = true` or `false` (binding receives `null`)
+- If a step does NOT include a DataTable, the binding MAY declare `accepts_datatable = true` or `false` (binding receives `null`)
+- The adapter MUST pass `null` for absent DocString/DataTable regardless of binding declaration
+
+> **v1 KISS:** Captures are always strings in v1. Typed capture conversion is deferred to v2+.
 
 #### `namako run`
 **Purpose:** Lint + execute plan via adapter + produce run report + validate integrity.
@@ -278,13 +297,18 @@ v1 MUST NOT require:
 4. Exit 0 on success, non-zero on any failure
 
 #### `namako verify`
-**Purpose:** CI gate. Candidate identity MUST equal baseline identity.
+**Purpose:** CI gate. Candidate identity MUST equal baseline identity. Verify is the **authority** — it recomputes hashes from current sources.
 
 **Behavior:**
-1. Ensure a `run_report.json` exists and corresponds to current `resolved_plan.json`
-2. Validate run report integrity (see §7.4)
-3. Compare candidate identity to baseline identity with strict equality
-4. Exit 0 if match, non-zero if any mismatch
+1. Ensure a `run_report.json` exists
+2. **Recompute** all authority hashes from current sources (see §7.4.1):
+   - `feature_fingerprint_hash` from current `.feature` files
+   - `step_registry_hash` from current adapter manifest
+   - `resolved_plan_hash` from current `resolved_plan.json`
+3. Validate that run report header hashes match recomputed values; fail with `STALE OR DRIFTED ARTIFACT` if any mismatch (see §7.4.3)
+4. Validate per-step integrity (binding IDs, payload hashes, impl hashes per §7.4.2)
+5. Compare candidate identity to baseline identity with strict equality
+6. Exit 0 if all checks pass, non-zero on any mismatch
 
 **Prerequisite:** A successful `namako run` MUST have completed.
 
@@ -355,23 +379,60 @@ Returns the **semantic step registry** as JSON.
 | `npap_version` | u32 | Protocol version |
 | `hash_contract_version` | string | Encoding + hashing rules |
 | `binding_id_scheme` | string | Per §4.2.1 |
+| `impl_hash_scheme` | string | Per §6.2.2 |
 | `step_registry_hash` | string | Hash of the semantic registry |
+
+**Registry Ordering and Hashing (Normative):**
+
+The `step_registry_hash` MUST be computed as follows:
+1. Construct a registry object containing:
+   - `npap_version`
+   - `hash_contract_version`
+   - `binding_id_scheme`
+   - `impl_hash_scheme`
+   - `bindings`: an array of all binding entries
+2. The `bindings` array MUST be sorted by `binding_id` (lexicographic ascending) before hashing
+3. Apply `canonical_json_encode()` per §7.0.3
+4. Compute: `step_registry_hash = blake3_256_lowerhex( canonical_json_encode( registry_without_step_registry_hash ) )`
+
+The manifest JSON emission MUST use the same sorted order for bindings.
+
+> **Rationale:** Sorting by `binding_id` ensures that discovery order (e.g., from proc macros) does not affect the hash. This makes registry identity deterministic across builds.
 
 #### 6.2.2 `impl_hash` (v1 Requirements)
 
-`impl_hash` MUST change when the binding implementation changes.
+`impl_hash` MUST change when the binding implementation changes. It serves as a drift signal to detect when implementation code has been modified.
 
-**v1 Approach (Pragmatic):**
-- Compute from a normalized source fingerprint of the binding function
-- Normalization:
-  - UTF-8 + Unicode NFC
-  - Newlines normalized to `\n`
-  - MAY exclude comments (implementation choice)
-  - MAY exclude absolute paths (implementation choice)
+**v1 Scheme (Normative):**
 
-`impl_hash = blake3_256_lowerhex( normalized_source_fingerprint )`
+The manifest header MUST include:
+```
+impl_hash_scheme = "token-fingerprint-v1|blake3-256-lowerhex"
+```
 
-> **Note:** v2+ may strengthen this (see §10).
+**Computation (Normative):**
+
+The proc macro MUST compute `impl_hash` as follows:
+1. Extract the token stream of the binding function body (excluding the function signature and attributes)
+2. Normalize the token stream:
+   - UTF-8 encoding
+   - Unicode NFC normalization
+   - Newlines normalized to `\n`
+   - Whitespace collapsed to single spaces between tokens
+   - Comments MUST be excluded
+   - Absolute file paths MUST NOT appear in the fingerprint (use relative or omit)
+3. Compute: `impl_hash = blake3_256_lowerhex( normalized_token_fingerprint )`
+
+**Determinism Guarantee:**
+
+The `impl_hash` MUST be deterministic across builds on the same codebase:
+- Same source code → same `impl_hash`
+- Different build directory paths MUST NOT affect the hash
+- Reformatting (whitespace/newlines) MAY affect the hash in v1 (acceptable; v2+ may strengthen)
+
+> **Rationale:** Token-based fingerprinting avoids the pitfalls of raw source hashing (path sensitivity, comment drift) while remaining implementable in a proc macro.
+
+> **v2+ Note:** Stronger schemes may capture dependency signals or use AST-based normalization (see §10.9).
 
 ### 6.3 Command: `adapter run`
 
@@ -430,7 +491,9 @@ If any check fails, the adapter MUST refuse to execute and exit non-zero.
 }
 ```
 
-**Scenario Key:** For v1, use a deterministic key derived from file path + scenario name. v2+ may adopt explicit IDs.
+> **Note (Normative):** For hashed objects (including resolved plan steps), optional fields such as `docstring` and `datatable` MUST be explicitly present. Absence MUST be encoded as `null`, not omitted.
+
+**Scenario Key:** For v1, use a deterministic key derived from file path + scenario name (see §6.4.3). v2+ may adopt explicit IDs.
 
 #### 6.4.2 Run Report (`run_report.json`)
 
@@ -469,7 +532,57 @@ If any check fails, the adapter MUST refuse to execute and exit non-zero.
 
 **Header Echo:** The run report MUST echo the plan header fields exactly.
 
+#### 6.4.3 Scenario Key Derivation (v1, Normative)
+
+The `scenario_key` MUST be globally unique within a project and MUST be derived deterministically to avoid collisions and platform variance.
+
+**v1 Derivation Rule:**
+
+```
+scenario_key = normalized_relpath + ":L" + line_number
+```
+
+Where:
+- `normalized_relpath` is the relative path from the repository root to the `.feature` file, with:
+  - Forward slashes (`/`) as separators (never backslashes)
+  - Unicode NFC normalization applied
+  - No leading `./` or trailing `/`
+- `line_number` is the 1-based line number where the `Scenario:` or `Scenario Outline:` keyword appears
+
+**Example:**
+```
+specs/features/connection/handshake.feature:L42
+```
+
+**Scenario Outline Extension:**
+
+For Scenario Outlines with Examples tables, each example row generates a distinct scenario. The key MUST be extended:
+
+```
+scenario_key = normalized_relpath + ":L" + scenario_line + ":E" + examples_block_index + ":R" + row_index
+```
+
+Where:
+- `examples_block_index` is the 0-based index of the Examples block within the Scenario Outline
+- `row_index` is the 0-based index of the data row within that Examples block (excluding the header row)
+
+**Example:**
+```
+specs/features/auth/login.feature:L15:E0:R2
+```
+(Scenario Outline at line 15, first Examples block, third data row)
+
+**Collision Detection (Normative):**
+
+If two scenarios in a project compute the same `scenario_key`:
+- Lint MUST emit a **hard error**: `SCENARIO KEY COLLISION: <key>`
+- This indicates duplicate scenarios at the same location (should not happen) or a bug in key derivation
+
+> **v2+ Note:** Explicit identity tags (`@Snn`) may replace line-based keys for refactor stability.
+
 ### 6.5 Execution Payload Contract (Normative)
+
+> **See §7.0 for authoritative encoding and hashing rules.**
 
 The **Execution Payload** for each step consists of:
 - `effective_kind`
@@ -479,13 +592,13 @@ The **Execution Payload** for each step consists of:
 - `datatable` (normalized cells or null)
 - `step_text` (exact AST string)
 
-**Normalization Rules:**
+**Normalization Rules (per §7.0.2):**
 - DocStrings: line endings normalized to `\n`
-- DataTables: exact cell strings from AST
+- DataTables: exact cell strings from AST, Unicode NFC
 - Strings: Unicode normalized to NFC
-- Optional fields: omitted when absent (consistent rule)
+- **Optional fields in hashed objects:** MUST be explicitly present; absence MUST be encoded as `null` (not omitted)
 
-**Payload Hash:**
+**Payload Hash (per §7.0.3 and §7.0.6):**
 ```
 payload_hash = blake3_256_lowerhex( canonical_json_encode( ExecutionPayload ) )
 ```
@@ -494,7 +607,89 @@ payload_hash = blake3_256_lowerhex( canonical_json_encode( ExecutionPayload ) )
 
 ## Part 7: Hashing & Identity: v1 Contract
 
+### 7.0 Hash & Encoding Contract (v1) — Single Source of Truth
+
+This section is the **authoritative reference** for all hashing and encoding rules in v1. All other sections MUST defer to these rules. Implementers MUST follow this section exactly to achieve deterministic, reproducible hashes.
+
+#### 7.0.1 Hash Domain Constraints (Normative)
+
+Hashed objects in v1 MUST contain **only** the following types:
+- **Strings** (UTF-8)
+- **Booleans** (`true` / `false`)
+- **Integers** (signed or unsigned; represented without decimal points)
+- **Arrays** (ordered lists)
+- **Objects** (with string keys only)
+- **Null** (for explicitly absent optional fields)
+
+**Forbidden in hashed objects:**
+- **Floats are forbidden.** All numeric values in hashed objects MUST be integers.
+- Timestamps, durations, file paths, and platform-specific information MUST be placed in metadata sections only (not hashed), unless explicitly normalized to strings per this specification.
+
+#### 7.0.2 String Normalization (Normative)
+
+Before hashing (and before canonical JSON encoding), all strings MUST be normalized as follows:
+1. **Encoding:** UTF-8
+2. **Unicode normalization:** NFC (Canonical Decomposition, followed by Canonical Composition)
+3. **Newline normalization:** All newline sequences (`\r\n`, `\r`) MUST be converted to `\n`
+
+This applies to:
+- Expression strings in bindings
+- Step text
+- DocStrings
+- DataTable cell values
+- Any other string content in hashed objects
+
+#### 7.0.3 Canonical JSON Rules (v1, Normative)
+
+All hashed objects MUST be encoded using the following canonical JSON rules:
+
+| Rule | Specification |
+|------|---------------|
+| **Object key ordering** | Keys MUST be sorted lexicographically (by Unicode code point) |
+| **Array ordering** | Arrays MUST preserve their semantic order (unless a specific sort is defined) |
+| **No comments** | JSON MUST NOT contain comments |
+| **No trailing commas** | JSON MUST NOT contain trailing commas |
+| **Encoding** | UTF-8 |
+| **Minimal escaping** | Only required JSON escapes (`\"`, `\\`, control characters) |
+| **Integers only** | All numbers MUST be integers (floats are forbidden per §7.0.1) |
+| **No leading zeros** | Integer representation MUST NOT have leading zeros (except `0` itself) |
+| **Null for absent optionals** | Optional fields in hashed objects MUST be present; absence MUST be encoded as `null` |
+
+**Definition:** `canonical_json_encode(object)` means: apply string normalization (§7.0.2), then encode the object under these rules.
+
+#### 7.0.4 Sorting Rules for Hashed Collections (Normative)
+
+When hashing collections, the following sort orders MUST be applied:
+
+| Collection | Sort Key | Order |
+|------------|----------|-------|
+| Semantic registry bindings | `binding_id` | Lexicographic ascending |
+| Run report scenarios | `scenario_key` | Lexicographic ascending |
+| Steps within a scenario | Plan order | Preserve plan sequence |
+| Feature fingerprint files | Relative path | Lexicographic ascending |
+
+Any other sets or maps in hashed objects MUST specify their sort key in their schema definition.
+
+#### 7.0.5 Self-Hash Exclusion Rule (Normative)
+
+When computing an object's own hash:
+- **Omit only** the field that will store that object's own hash
+- **Do NOT omit** other hash fields that are inputs to the object's identity
+
+**Example:**
+- When computing `resolved_plan_hash`, omit only `header.resolved_plan_hash`
+- Do NOT omit `header.step_registry_hash` or `header.feature_fingerprint_hash` (these are inputs)
+
+#### 7.0.6 Hash Algorithm (Normative)
+
+v1 uses **BLAKE3-256** for all hash computations:
+- Output: 256-bit hash
+- Encoding: lowercase hexadecimal string (64 characters)
+- Notation: `blake3_256_lowerhex(...)`
+
 ### 7.1 Hash Contract Versioning (Normative)
+
+> **See §7.0 for the complete hash and encoding contract.**
 
 v1 MUST define:
 ```
@@ -502,12 +697,14 @@ hash_contract_version = "namako-v1-json+blake3-256"
 ```
 
 This identifies:
-- Canonical JSON encoding (sorted keys, deterministic omission, UTF-8)
-- BLAKE3-256 hash algorithm (lowerhex output)
+- Canonical JSON encoding (per §7.0.3)
+- BLAKE3-256 hash algorithm (per §7.0.6)
 
 This version string MUST be included in every hashed artifact header.
 
 ### 7.2 Self-Hash Exclusion Rule (Normative)
+
+> **See §7.0.5 for the authoritative definition of the self-hash exclusion rule.**
 
 When hashing an object:
 - Omit **only** the field that stores that object's own hash
@@ -541,6 +738,8 @@ The certification artifact (`certification.json`) contains `{ identity, metadata
 
 #### 7.3.1 Feature Fingerprint Hash (v1)
 
+> **Normalization and encoding rules per §7.0.**
+
 For v1, compute a simpler feature fingerprint:
 ```
 feature_fingerprint_hash = blake3_256_lowerhex(
@@ -549,36 +748,67 @@ feature_fingerprint_hash = blake3_256_lowerhex(
 ```
 
 Where `FeatureFingerprint` includes:
-- All feature file paths (sorted)
+- All feature file paths (sorted lexicographically per §7.0.4)
 - For each file: hash of UTF-8 content after:
-  - Unicode normalization to NFC
-  - Newline normalization to `\n`
+  - Unicode normalization to NFC (per §7.0.2)
+  - Newline normalization to `\n` (per §7.0.2)
 
 > **Note:** v2+ adopts full FeatureAstNorm for stability under cosmetic edits.
 
 ### 7.4 v1 Verification Rules (Normative)
 
-`namako verify` MUST:
+`namako verify` MUST perform the following checks. The verify command is the **authority**; it does not trust echoed header values but recomputes them from current sources.
 
-1. **Ensure run report exists** and corresponds to current resolved plan
-2. **Validate run report integrity:**
+#### 7.4.1 Recompute Authority Inputs (Normative)
+
+During `namako verify`, the CLI MUST recompute:
+1. `feature_fingerprint_hash` — from the current `.feature` files on disk
+2. `step_registry_hash` — from the current adapter manifest (per §6.2.1 and §7.0)
+3. `resolved_plan_hash` — from the current `resolved_plan.json` (per §7.0)
+4. For each step in the plan: `planned_payload_hash` — from the ExecutionPayload definition (per §6.5 and §7.0)
+
+#### 7.4.2 Validate Run Report Integrity (Normative)
+
+`namako verify` MUST assert:
+1. **Header hashes match recomputed values:**
+   - Run report `feature_fingerprint_hash` == recomputed from current `.feature` files
+   - Run report `step_registry_hash` == recomputed from current adapter manifest
+   - Run report `resolved_plan_hash` == recomputed from current `resolved_plan.json`
+2. **Per-step integrity:**
    - For every step: `planned_binding_id == executed_binding_id`
    - For every step: `planned_payload_hash == executed_payload_hash`
-   - For every step: `executed_impl_hash` matches registry `impl_hash` for the binding
-   - Report header echoes match plan header (`feature_fingerprint_hash`, `step_registry_hash`, `resolved_plan_hash`, `hash_contract_version`, `npap_version`)
-3. **Compare candidate identity to baseline identity:**
-   - Strict field-by-field equality on identity fields
-   - Any mismatch → hard failure
+   - For every step: `executed_impl_hash` == current manifest's `impl_hash` for that `binding_id`
+3. **Protocol version match:**
+   - `hash_contract_version` and `npap_version` match expected values
+
+#### 7.4.3 Stale Artifact Detection (Normative)
+
+If any recomputed value differs from the run report header value, `namako verify` MUST:
+- **Fail immediately** with exit code non-zero
+- **Emit a clear diagnostic:** `STALE OR DRIFTED ARTIFACT: <field_name> does not match current source`
+- Identify which artifact is stale (features, registry, or plan)
+
+This ensures that old run reports cannot pass verification if the underlying sources have changed.
+
+#### 7.4.4 Compare Candidate to Baseline Identity (Normative)
+
+After integrity validation passes, `namako verify` MUST:
+1. Compare candidate identity to baseline identity (`certification.json`)
+2. Perform strict field-by-field equality on all identity fields
+3. Any mismatch → hard failure with exit code non-zero
 
 ### 7.5 Canonical JSON Encoding (v1, Normative)
+
+> **See §7.0.3 for the authoritative canonical JSON encoding rules.**
 
 For v1, use canonical JSON:
 - Object keys: sorted lexicographically
 - No trailing commas
 - No comments
 - UTF-8 encoding
-- Omit optional fields when absent (do not use `null`)
-- Numbers: no leading zeros, no trailing decimal zeros
+- **For hashed objects:** Optional fields MUST be present; absence MUST be encoded as `null`
+- **For non-hashed metadata only:** Optional fields MAY be omitted when absent
+- Numbers: integers only in hashed objects (no floats); no leading zeros
 - Strings: minimal escaping (only required escapes)
 
 ---
@@ -1131,7 +1361,8 @@ This appendix traces every major concept from `NORTH_STAR_PLAN_v9.md` and labels
 | Engine resolves, Adapter obeys | **IN v1** | Core principle |
 | Trust boundary | **IN v1** | Trusted adapter assumption |
 | Baseline vs Candidate | **IN v1** | Core certification model |
-| Shared hashing infrastructure | **IN v1** | Canonical JSON for v1 |
+| Shared hashing infrastructure | **IN v1** | Canonical JSON for v1; §7.0 is single source of truth |
+| Hash & Encoding Contract | **IN v1** | §7.0 — authoritative reference for all hashing/encoding |
 | `namako_hash` crate | **DEFERRED** to v2+ | v1 uses inline hashing; v2+ may extract crate |
 
 ### Resolution & Plan
@@ -1140,8 +1371,9 @@ This appendix traces every major concept from `NORTH_STAR_PLAN_v9.md` and labels
 |---------|--------|-------|
 | Resolved Execution Plan | **IN v1** | Core artifact |
 | `resolved_plan_hash` | **IN v1** | Core identity field |
+| `scenario_key` derivation | **IN v1** | §6.4.3 — deterministic path + line format |
 | Kind inference (And/But → effective) | **IN v1** | Standard Gherkin semantics |
-| Signature enforcement | **IN v1** | Hard error on mismatch |
+| Signature enforcement | **IN v1** | Hard error on mismatch; fully defined in §5.3 |
 | Strict ambiguity policy | **IN v1** | >1 match → hard error |
 | Orphan → hard error | **DEFERRED** to v2+ | v1 may warn only (§10.3) |
 | Missing step → hard error | **IN v1** | 0 matches → hard error |
@@ -1186,7 +1418,8 @@ This appendix traces every major concept from `NORTH_STAR_PLAN_v9.md` and labels
 | `adapter manifest` | **IN v1** | Semantic registry |
 | `adapter run --plan` | **IN v1** | Plan-driven execution |
 | Semantic vs Debug registry split | **IN v1** (simplified) | v1 has semantic only; debug is optional |
-| `impl_hash` | **IN v1** | Pragmatic approach |
+| `impl_hash` | **IN v1** | Token-fingerprint scheme (§6.2.2) |
+| `impl_hash_scheme` | **IN v1** | Explicit scheme versioning (§6.2.2) |
 | Freshness check | **IN v1** | Refuse stale plans |
 | `executed_payload_hash` | **IN v1** | Integrity evidence |
 | `executed_impl_hash` | **IN v1** | Drift signal |
@@ -1197,6 +1430,8 @@ This appendix traces every major concept from `NORTH_STAR_PLAN_v9.md` and labels
 |---------|--------|-------|
 | Identity vs Metadata split | **IN v1** | Core design |
 | `hash_contract_version` | **IN v1** | Versioned encoding |
+| Verify recomputes authority hashes | **IN v1** | §7.4.1 — verify is the authority, not echoed values |
+| Stale artifact detection | **IN v1** | §7.4.3 — clear diagnostic on drift |
 | `resolution_semantics_id` | **DEFERRED** to v2+ | §10.7 |
 | `bindings_used_hash` | **DEFERRED** to v2+ | §10.10 |
 | Conformance fixtures | **DEFERRED** to v2+ | §10.6 |
