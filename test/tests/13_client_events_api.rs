@@ -6,7 +6,7 @@ use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientRep
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
-use naia_test::{
+use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
     ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
@@ -14,7 +14,7 @@ use naia_test::{
 };
 
 // Test protocol types (channels and messages)
-use naia_test::test_protocol::{
+use naia_test_harness::test_protocol::{
     OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel,
     TestMessage, TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel,
     UnreliableChannel,
@@ -365,15 +365,15 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
     let (response_key_1, response_key_2) = scenario.mutate(|ctx| {
         ctx.server(|server| {
             let key_1 = server
-                .send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(
+                .send_request::<ReliableChannel, naia_test_harness::test_protocol::TestRequest>(
                     &client_a_key,
-                    &naia_test::test_protocol::TestRequest::new("query1"),
+                    &naia_test_harness::test_protocol::TestRequest::new("query1"),
                 )
                 .expect("Failed to send request");
             let key_2 = server
-                .send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(
+                .send_request::<ReliableChannel, naia_test_harness::test_protocol::TestRequest>(
                     &client_a_key,
-                    &naia_test::test_protocol::TestRequest::new("query2"),
+                    &naia_test_harness::test_protocol::TestRequest::new("query2"),
                 )
                 .expect("Failed to send request");
             (key_1, key_2)
@@ -385,7 +385,7 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
         ctx.client(client_a_key, |c| {
             let mut ids = Vec::new();
             for (response_id, request) in
-                c.read_request::<ReliableChannel, naia_test::test_protocol::TestRequest>()
+                c.read_request::<ReliableChannel, naia_test_harness::test_protocol::TestRequest>()
             {
                 ids.push((response_id, request.query));
             }
@@ -405,7 +405,7 @@ fn client_request_response_events_are_drained_once_and_matched_correctly() {
                 let result = format!("result_{}", query);
                 c.send_response(
                     &response_send_key,
-                    &naia_test::test_protocol::TestResponse::new(&result),
+                    &naia_test_harness::test_protocol::TestResponse::new(&result),
                 );
             }
         });

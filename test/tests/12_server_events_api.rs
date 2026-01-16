@@ -6,7 +6,7 @@ use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientRep
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
-use naia_test::{
+use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
     ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
@@ -14,7 +14,7 @@ use naia_test::{
 };
 
 // Test protocol types (channels and messages)
-use naia_test::test_protocol::{
+use naia_test_harness::test_protocol::{
     OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel,
     TestMessage, TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel,
     UnreliableChannel,
@@ -316,14 +316,14 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
     // Both clients send requests
     let (response_key_a, response_key_b) = scenario.mutate(|ctx| {
         let key_a = ctx.client(client_a_key, |c| {
-            c.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(
-                &naia_test::test_protocol::TestRequest::new("query_a"),
+            c.send_request::<ReliableChannel, naia_test_harness::test_protocol::TestRequest>(
+                &naia_test_harness::test_protocol::TestRequest::new("query_a"),
             )
             .expect("Failed to send request")
         });
         let key_b = ctx.client(client_b_key, |c| {
-            c.send_request::<ReliableChannel, naia_test::test_protocol::TestRequest>(
-                &naia_test::test_protocol::TestRequest::new("query_b"),
+            c.send_request::<ReliableChannel, naia_test_harness::test_protocol::TestRequest>(
+                &naia_test_harness::test_protocol::TestRequest::new("query_b"),
             )
             .expect("Failed to send request")
         });
@@ -335,7 +335,7 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
         ctx.server(|server| {
             let mut ids = Vec::new();
             for (client_key, response_id, _request) in
-                server.read_request::<ReliableChannel, naia_test::test_protocol::TestRequest>()
+                server.read_request::<ReliableChannel, naia_test_harness::test_protocol::TestRequest>()
             {
                 if client_key == client_a_key || client_key == client_b_key {
                     ids.push((client_key, response_id));
@@ -357,12 +357,12 @@ fn request_response_events_via_events_api_are_drained_and_do_not_reappear() {
                 if *client_key == client_a_key {
                     server.send_response(
                         &response_send_key,
-                        &naia_test::test_protocol::TestResponse::new("result_a"),
+                        &naia_test_harness::test_protocol::TestResponse::new("result_a"),
                     );
                 } else if *client_key == client_b_key {
                     server.send_response(
                         &response_send_key,
-                        &naia_test::test_protocol::TestResponse::new("result_b"),
+                        &naia_test_harness::test_protocol::TestResponse::new("result_b"),
                     );
                 }
             }

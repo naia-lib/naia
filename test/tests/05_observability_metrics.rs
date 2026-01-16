@@ -8,7 +8,7 @@ mod _helpers;
 
 use naia_client::ConnectionStatus;
 use naia_server::ServerConfig;
-use naia_test::{protocol, Auth, Scenario};
+use naia_test_harness::{protocol, Auth, Scenario};
 use _helpers::{client_connect, test_client_config};
 
 // ============================================================================

@@ -9,10 +9,9 @@ use clap::{Parser, Subcommand};
 
 mod manifest;
 mod run;
-mod bindings;
-mod world;
 
-pub use world::SmokeWorld;
+// Re-export SmokeWorld from naia_tests (step bindings library)
+pub use naia_tests::SmokeWorld;
 
 /// NPAP Adapter for Naia
 #[derive(Parser, Debug)]

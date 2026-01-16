@@ -6,7 +6,7 @@ use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientRep
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
-use naia_test::{
+use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
     ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
@@ -14,7 +14,7 @@ use naia_test::{
 };
 
 // Test protocol types (channels and messages)
-use naia_test::test_protocol::{
+use naia_test_harness::test_protocol::{
     OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel,
     TestMessage, TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel,
     UnreliableChannel,
@@ -139,9 +139,9 @@ fn reliable_retry_timeout_settings_produce_defined_failure_behaviour() {
     // Send reliable message
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(
+            server.send_message::<naia_test_harness::test_protocol::ReliableChannel, _>(
                 &client_a_key,
-                &naia_test::test_protocol::TestMessage::new(42),
+                &naia_test_harness::test_protocol::TestMessage::new(42),
             );
         });
     });
@@ -153,7 +153,7 @@ fn reliable_retry_timeout_settings_produce_defined_failure_behaviour() {
     let mut message_count = 0;
     scenario.until(100usize.ticks()).expect(|ctx| {
         ctx.client(client_a_key, |c| {
-            for _ in c.read_message::<naia_test::test_protocol::ReliableChannel, naia_test::test_protocol::TestMessage>() {
+            for _ in c.read_message::<naia_test_harness::test_protocol::ReliableChannel, naia_test_harness::test_protocol::TestMessage>() {
                 message_count += 1;
             }
             // Just verify we can still access the client (system stability check)
@@ -212,9 +212,9 @@ fn minimal_retry_reliable_settings_produce_clear_delivery_failure_semantics() {
     // Send reliable message
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.send_message::<naia_test::test_protocol::ReliableChannel, _>(
+            server.send_message::<naia_test_harness::test_protocol::ReliableChannel, _>(
                 &client_a_key,
-                &naia_test::test_protocol::TestMessage::new(99),
+                &naia_test_harness::test_protocol::TestMessage::new(99),
             );
         });
     });
@@ -224,7 +224,7 @@ fn minimal_retry_reliable_settings_produce_clear_delivery_failure_semantics() {
     let mut message_count = 0;
     scenario.until(100usize.ticks()).expect(|ctx| {
         ctx.client(client_a_key, |c| {
-            for _ in c.read_message::<naia_test::test_protocol::ReliableChannel, naia_test::test_protocol::TestMessage>() {
+            for _ in c.read_message::<naia_test_harness::test_protocol::ReliableChannel, naia_test_harness::test_protocol::TestMessage>() {
                 message_count += 1;
             }
         });
@@ -284,7 +284,7 @@ fn server_and_client_tick_indices_advance_monotonically() {
         // Check server tick
         let mut server_tick_events: Vec<Tick> = Vec::new();
         ctx.server(|server| {
-            if let Some(tick) = server.read_event::<naia_test::ServerTickEvent>() {
+            if let Some(tick) = server.read_event::<naia_test_harness::ServerTickEvent>() {
                 server_tick_events.push(tick);
             }
         });
@@ -292,7 +292,7 @@ fn server_and_client_tick_indices_advance_monotonically() {
         // Check client tick
         let mut client_tick_events: Vec<Tick> = Vec::new();
         ctx.client(client_a_key, |c| {
-            if let Some(tick) = c.read_event::<naia_test::ClientServerTickEvent>() {
+            if let Some(tick) = c.read_event::<naia_test_harness::ClientServerTickEvent>() {
                 client_tick_events.push(tick);
             }
         });
@@ -624,7 +624,7 @@ fn very_aggressive_heartbeat_timeout_still_leads_to_clean_disconnect() {
     let mut disconnect_events = 0;
     scenario.expect(|ctx| {
         ctx.client(client_a_key, |c| {
-            for _ in c.read_event::<naia_test::ClientDisconnectEvent>() {
+            for _ in c.read_event::<naia_test_harness::ClientDisconnectEvent>() {
                 disconnect_events += 1;
             }
         });

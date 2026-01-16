@@ -1,11 +1,12 @@
 [package]
-name = "naia-test"
+name = "naia-test-harness"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = ".."
 license = "MIT OR Apache-2.0"
 edition = "2021"
 publish = false
+description = "Test harness for Naia - Scenario-based testing with local transport"
 
 [features]
 e2e_debug = [
@@ -25,4 +26,3 @@ naia-demo-world = { path = "../demos/demo_utils/demo_world" }
 bevy_ecs = { version = "0.17", default-features = false }
 
 log = "0.4"
-

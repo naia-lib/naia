@@ -1,7 +1,7 @@
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::RoomKey;
 use naia_shared::Protocol;
-use naia_test::{Auth, ClientKey, ExpectCtx, Scenario, ServerAuthEvent, ServerConnectEvent};
+use naia_test_harness::{Auth, ClientKey, ExpectCtx, Scenario, ServerAuthEvent, ServerConnectEvent};
 use std::time::Duration;
 
 // ============================================================================

@@ -14,7 +14,7 @@ use namako::npap::{
 use namako::codegen::{StepConstructor, WorldInventory, inventory};
 use namako::step::{Step, Context as StepContext};
 
-use crate::world::SmokeWorld;
+use naia_tests::SmokeWorld;
 
 /// Arguments for the run command.
 #[derive(Args, Debug)]
@@ -151,11 +151,8 @@ pub fn run(args: RunArgs) -> Result<()> {
     // Step 4: Execute each scenario with real dispatch
     let mut scenario_results = Vec::with_capacity(plan.scenarios.len());
 
-    // We need a tokio runtime for async step execution
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .context("Failed to create tokio runtime")?;
+    // NOTE: We execute steps synchronously. naia_test::Scenario manages its own
+    // internal runtime for network simulation, so we don't create a tokio runtime here.
 
     for scenario in &plan.scenarios {
         let mut step_results = Vec::with_capacity(scenario.steps.len());
@@ -211,12 +208,10 @@ pub fn run(args: RunArgs) -> Result<()> {
                         matches,
                     };
 
-                    // Execute the step function
-                    let exec_result = rt.block_on(async {
-                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            futures::executor::block_on((e.func)(&mut world, context))
-                        }))
-                    });
+                    // Execute the step function synchronously
+                    let exec_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        futures::executor::block_on((e.func)(&mut world, context))
+                    }));
 
                     match exec_result {
                         Ok(()) => StepResult {
@@ -288,9 +283,21 @@ pub fn run(args: RunArgs) -> Result<()> {
         scenario_results,
     );
 
+    // Check for any failed scenarios
+    let has_failures = run_report.scenarios.iter().any(|s| s.status == ScenarioStatus::Failed);
+
     let json = serde_json::to_string_pretty(&run_report)?;
     std::fs::write(&args.output, &json)
         .with_context(|| format!("Failed to write {}", args.output.display()))?;
+
+    if has_failures {
+        let failed_count = run_report.scenarios.iter()
+            .filter(|s| s.status == ScenarioStatus::Failed)
+            .count();
+        eprintln!("✗ Run complete with {} failed scenario(s). Output: {}",
+                  failed_count, args.output.display());
+        bail!("Run failed: {} scenario(s) did not pass", failed_count);
+    }
 
     eprintln!("✓ Run complete. Output: {}", args.output.display());
     Ok(())

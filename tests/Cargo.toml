@@ -1,0 +1,24 @@
+[package]
+name = "naia-tests"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = ".."
+license = "MIT OR Apache-2.0"
+edition = "2021"
+publish = false
+description = "Step bindings for Naia BDD tests using Namako macros"
+
+[lib]
+name = "naia_tests"
+path = "src/lib.rs"
+
+[dependencies]
+# Namako for step macros and World trait
+namako = { path = "../../namako", features = ["npap", "macros"] }
+
+# Naia test harness for Scenario
+naia-test-harness = { path = "../test" }
+
+# Naia core crates for types
+naia-server = { path = "../server", default-features = false }
+naia-client = { path = "../client", default-features = false }

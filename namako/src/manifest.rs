@@ -6,7 +6,7 @@ use anyhow::Result;
 use namako::npap::{SemanticStepRegistry, SemanticBinding, BindingSignature};
 use namako::codegen::{StepConstructor, WorldInventory, inventory};
 
-use crate::world::SmokeWorld;
+use naia_tests::SmokeWorld;
 
 /// Collect bindings from inventory for the given World type.
 fn collect_bindings_from_inventory<W: WorldInventory>() -> Vec<SemanticBinding> {

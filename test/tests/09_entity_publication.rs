@@ -6,7 +6,7 @@ use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientRep
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
-use naia_test::{
+use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
     ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
@@ -14,7 +14,7 @@ use naia_test::{
 };
 
 // Test protocol types (channels and messages)
-use naia_test::test_protocol::{
+use naia_test_harness::test_protocol::{
     OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel,
     TestMessage, TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel,
     UnreliableChannel,
@@ -36,7 +36,7 @@ use _helpers::{client_connect, server_and_client_connected, server_and_client_di
 /// Given client-owned E (Published or Unpublished); when any replication and mutations occur; then clients MUST observe **no** AuthGranted/AuthDenied/AuthLost events for E.
 #[test]
 fn client_owned_entities_emit_no_authority_events() {
-    use naia_test::{
+    use naia_test_harness::{
         ClientEntityAuthDeniedEvent, ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent,
     };
 

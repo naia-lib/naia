@@ -10,7 +10,7 @@ use naia_client::{ClientConfig, ReplicationConfig as ClientReplicationConfig};
 use naia_server::{ReplicationConfig, ServerConfig};
 use naia_shared::{EntityAuthStatus, Protocol};
 
-use naia_test::{
+use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientKey, ExpectCtx, Position, Scenario, ServerAuthEvent,
     ServerConnectEvent, ServerDisconnectEvent, EntityOwner,

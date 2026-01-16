@@ -10,7 +10,7 @@ use naia_client::{ClientConfig, ReplicationConfig as ClientReplicationConfig};
 use naia_server::{ReplicationConfig, ServerConfig};
 use naia_shared::{EntityAuthStatus, Protocol};
 
-use naia_test::{
+use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientKey, EntityOwner,
     ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
 };
@@ -141,7 +141,7 @@ fn protocol_mismatch_is_deployment_error_not_panic() {
     );
 
     // Run for a bit to allow handshake to fail/reject
-    scenario.until(naia_test::ToTicks::ticks(20)).expect(|_ctx| {
+    scenario.until(naia_test_harness::ToTicks::ticks(20)).expect(|_ctx| {
          None::<()> 
     });
 
