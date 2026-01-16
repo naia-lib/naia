@@ -10,6 +10,7 @@
 2. [Thesis: v1 is KISS MVP, v2+ is Armor Plating](#part-2-thesis-v1-is-kiss-mvp-v2-is-armor-plating)
 3. [Canonical Repo & Crate Architecture](#part-3-canonical-repo--crate-architecture)
 4. [Step Macro UX and Binding Identity](#part-4-step-macro-ux-and-binding-identity)
+    - [4.4 v1 Binding ABI](#44-v1-binding-abi-normative)
 5. [Namako v1: The Future-Proof KISS MVP](#part-5-namako-v1-the-future-proof-kiss-mvp)
 6. [NPAP v1: Adapter Protocol](#part-6-npap-v1-adapter-protocol)
     - [6.4.3 Scenario Key Derivation](#643-scenario-key-derivation-v1-normative)
@@ -171,6 +172,30 @@ Each macro takes **exactly one string argument**.
 - No embedded IDs in strings
 - No optional parameters
 
+**Step Function Signatures (v1 ABI):**
+
+While the macro takes exactly one string, the function signature MAY include additional parameters after `&mut World` to receive captures, DocStrings, and DataTables per the v1 Binding ABI (see §4.4):
+
+```rust
+// Captures only (two {string} placeholders → two String parameters)
+#[given("a user named {string} with role {string}")]
+fn user_with_role(world: &mut World, username: String, role: String) { ... }
+
+// Captures + DocString
+#[when("the server receives config")]
+fn server_config(world: &mut World, config_doc: Option<String>) { ... }
+
+// Captures + DataTable
+#[then("the following users exist")]
+fn users_exist(world: &mut World, users_table: Option<Vec<Vec<String>>>) { ... }
+
+// Captures + DocString + DataTable (docstring before datatable by convention)
+#[given("setup with data")]
+fn setup_data(world: &mut World, doc: Option<String>, table: Option<Vec<Vec<String>>>) { ... }
+```
+
+The function signature determines `signature.captures_arity`, `signature.accepts_docstring`, and `signature.accepts_datatable` in the manifest (see §4.4 for the normative ABI definition).
+
 ### 4.2 Generated Binding ID (Normative)
 
 User code MUST NOT contain explicit binding IDs. The system MUST ALWAYS generate `binding_id` deterministically from:
@@ -211,6 +236,57 @@ The adapter MUST:
 - Execute steps **only by binding_id** using a direct lookup/dispatch table
 - NOT perform text matching or regex at runtime
 - Treat `step_text` as metadata only
+
+### 4.4 v1 Binding ABI (Normative)
+
+This section defines how `namako_codegen` derives signature metadata from the step function signature. This is the authoritative definition for signature enforcement in §5.3.
+
+#### 4.4.1 Required First Parameter
+
+Every step function MUST have `&mut World` as its first parameter.
+
+#### 4.4.2 Captures Mapping
+
+- **`signature.captures_arity`** equals the number of capture parameters after `&mut World`, **excluding** any optional DocString/DataTable parameters.
+- All captures are passed as `String` in v1 (typed capture conversion is deferred to v2+).
+- Captures appear in the function signature in the same order as their corresponding `{...}` placeholders in the expression string.
+
+**Example:**
+```rust
+#[given("a {string} named {string}")]
+fn example(world: &mut World, type_name: String, entity_name: String) { ... }
+// captures_arity = 2
+```
+
+#### 4.4.3 DocString Support
+
+- If the binding accepts a DocString, it MUST include an `Option<String>` parameter (or a `DocString` wrapper type) after all capture parameters.
+- `signature.accepts_docstring = true` if this parameter is present; `false` otherwise.
+- If a step does NOT include a DocString at runtime, the adapter passes `None` / `null`.
+
+#### 4.4.4 DataTable Support
+
+- If the binding accepts a DataTable, it MUST include an `Option<Vec<Vec<String>>>` parameter (or a `DataTable` wrapper type) after all capture parameters and after any DocString parameter.
+- `signature.accepts_datatable = true` if this parameter is present; `false` otherwise.
+- If a step does NOT include a DataTable at runtime, the adapter passes `None` / `null`.
+
+#### 4.4.5 Parameter Order (Normative)
+
+When both DocString and DataTable are supported, the parameter order MUST be:
+1. `&mut World`
+2. Capture parameters (in expression order)
+3. DocString parameter (if present)
+4. DataTable parameter (if present)
+
+This fixed order ensures deterministic signature reflection by `namako_codegen`.
+
+#### 4.4.6 Signature Constraints
+
+- Exactly **zero or one** DocString parameter allowed per binding.
+- Exactly **zero or one** DataTable parameter allowed per binding.
+- Ambiguous signatures (e.g., multiple `Option<String>` parameters that could be DocString or captures) MUST be rejected by `namako_codegen` at compile time.
+
+> **Note:** The v1 Binding ABI is what `namako_codegen` uses to compute the `signature.*` fields in the adapter manifest.
 
 ---
 
@@ -272,13 +348,13 @@ v1 MUST NOT require:
 
 **Signature Mismatch Definition (v1, Normative):**
 
-A signature mismatch occurs when the step's requirements do not match the binding's declared capabilities:
+A signature mismatch occurs when the step's requirements do not match the binding's declared capabilities. The binding's signature metadata is derived from the function signature per the v1 Binding ABI (§4.4):
 
 | Check | Rule |
 |-------|------|
-| **Captures arity** | The number of captures produced by matching the expression to the step text MUST equal `signature.captures_arity` |
-| **DocString requirement** | If the step includes a DocString, the binding MUST declare `accepts_docstring = true` |
-| **DataTable requirement** | If the step includes a DataTable, the binding MUST declare `accepts_datatable = true` |
+| **Captures arity** | The number of captures produced by matching the expression to the step text MUST equal `signature.captures_arity` (per §4.4.2) |
+| **DocString requirement** | If the step includes a DocString, the binding MUST declare `accepts_docstring = true` (per §4.4.3) |
+| **DataTable requirement** | If the step includes a DataTable, the binding MUST declare `accepts_datatable = true` (per §4.4.4) |
 
 **Handling absent DocString/DataTable:**
 - If a step does NOT include a DocString, the binding MAY declare `accepts_docstring = true` or `false` (binding receives `null`)
@@ -296,6 +372,8 @@ A signature mismatch occurs when the step's requirements do not match the bindin
 3. Validate run report integrity (see §7.4)
 4. Exit 0 on success, non-zero on any failure
 
+> **Note:** `namako run` MUST execute the plan produced by the current `namako lint` resolution step (i.e., current engine semantics). Subsequently, `namako verify` will independently recompute and confirm that the resolved plan matches current sources.
+
 #### `namako verify`
 **Purpose:** CI gate. Candidate identity MUST equal baseline identity. Verify is the **authority** — it recomputes hashes from current sources.
 
@@ -304,7 +382,7 @@ A signature mismatch occurs when the step's requirements do not match the bindin
 2. **Recompute** all authority hashes from current sources (see §7.4.1):
    - `feature_fingerprint_hash` from current `.feature` files
    - `step_registry_hash` from current adapter manifest
-   - `resolved_plan_hash` from current `resolved_plan.json`
+   - `resolved_plan_hash` from freshly recomputed resolved plan (not on-disk file)
 3. Validate that run report header hashes match recomputed values; fail with `STALE OR DRIFTED ARTIFACT` if any mismatch (see §7.4.3)
 4. Validate per-step integrity (binding IDs, payload hashes, impl hashes per §7.4.2)
 5. Compare candidate identity to baseline identity with strict equality
@@ -761,11 +839,13 @@ Where `FeatureFingerprint` includes:
 
 #### 7.4.1 Recompute Authority Inputs (Normative)
 
-During `namako verify`, the CLI MUST recompute:
+During `namako verify`, the CLI MUST recompute all authority values from current sources:
 1. `feature_fingerprint_hash` — from the current `.feature` files on disk
 2. `step_registry_hash` — from the current adapter manifest (per §6.2.1 and §7.0)
-3. `resolved_plan_hash` — from the current `resolved_plan.json` (per §7.0)
+3. `resolved_plan_hash` — from a **freshly recomputed resolved plan** produced by resolving current `.feature` files against the current adapter manifest using current engine semantics (per §7.0)
 4. For each step in the plan: `planned_payload_hash` — from the ExecutionPayload definition (per §6.5 and §7.0)
+
+> **Critical:** Verify MUST NOT treat the on-disk `resolved_plan.json` as authoritative. It MAY compare the recomputed plan to the on-disk plan to detect stale artifacts, but the recomputed plan is the source of truth.
 
 #### 7.4.2 Validate Run Report Integrity (Normative)
 
@@ -773,7 +853,7 @@ During `namako verify`, the CLI MUST recompute:
 1. **Header hashes match recomputed values:**
    - Run report `feature_fingerprint_hash` == recomputed from current `.feature` files
    - Run report `step_registry_hash` == recomputed from current adapter manifest
-   - Run report `resolved_plan_hash` == recomputed from current `resolved_plan.json`
+   - Run report `resolved_plan_hash` == recomputed from freshly resolved plan (per §7.4.1)
 2. **Per-step integrity:**
    - For every step: `planned_binding_id == executed_binding_id`
    - For every step: `planned_payload_hash == executed_payload_hash`
@@ -787,6 +867,11 @@ If any recomputed value differs from the run report header value, `namako verify
 - **Fail immediately** with exit code non-zero
 - **Emit a clear diagnostic:** `STALE OR DRIFTED ARTIFACT: <field_name> does not match current source`
 - Identify which artifact is stale (features, registry, or plan)
+
+**Specific stale cases:**
+- `STALE OR DRIFTED ARTIFACT: feature_fingerprint_hash does not match current .feature files`
+- `STALE OR DRIFTED ARTIFACT: step_registry_hash does not match current adapter manifest`
+- `STALE OR DRIFTED ARTIFACT: resolved_plan does not match current resolution` — emitted when the on-disk `resolved_plan.json` (or its header hash) does not match the freshly recomputed plan hash
 
 This ensures that old run reports cannot pass verification if the underlying sources have changed.
 
@@ -835,7 +920,7 @@ v1 uses feature fingerprint (content hash) rather than FeatureAstNorm.
 ### 8.3 No Explicit Structural IDs
 
 v1 does not require `@FID`, `@Rnn`, `@Snn`, `EID` tags.
-- Scenario identity derived from file path + name
+- Scenario identity derived from normalized relative path + line number (and Outline examples extensions) per §6.4.3
 - This is acceptable for v1 (self-development)
 - v2+ may enforce explicit IDs for refactor stability
 
