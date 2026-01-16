@@ -1,7 +1,7 @@
 //! TestWorld - A newtype wrapper around Scenario for BDD tests.
 //!
 //! # Architecture Rule (LOCKED)
-//! 
+//!
 //! `TestWorld` MUST be a newtype wrapper around `Option<Scenario>` ONLY.
 //! All test state lives in `Scenario`. Do NOT add fields to `TestWorld`.
 //! Step bindings delegate to `Scenario` APIs for all operations.
@@ -10,16 +10,23 @@ use namako::World;
 use naia_test_harness::Scenario;
 
 /// The World type for Naia BDD tests.
-/// 
+///
 /// This is a newtype wrapper around `Option<Scenario>`.
 /// All test state lives in `Scenario` - do NOT add fields here.
 #[derive(World, Default)]
 pub struct TestWorld(Option<Scenario>);
 
 impl TestWorld {
-    /// Get the scenario, panicking if not initialized.
-    pub fn scenario(&mut self) -> &mut Scenario {
+    /// Get the scenario as mutable, panicking if not initialized.
+    /// Use this in Given/When steps.
+    pub fn scenario_mut(&mut self) -> &mut Scenario {
         self.0.as_mut().expect("Scenario not initialized - call a Given step first")
+    }
+
+    /// Get the scenario as immutable, panicking if not initialized.
+    /// Use this in Then steps.
+    pub fn scenario(&self) -> &Scenario {
+        self.0.as_ref().expect("Scenario not initialized - call a Given step first")
     }
 
     /// Initialize with a new scenario.

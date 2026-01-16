@@ -124,6 +124,11 @@ impl Scenario {
         }
     }
 
+    /// Access the server immutably.
+    pub fn server(&self) -> Option<&Server> {
+        self.server.as_ref()
+    }
+
     pub fn server_start(&mut self, server_config: ServerConfig, protocol: Protocol) {
         if self.server.is_some() {
             panic!("server_start() called multiple times");

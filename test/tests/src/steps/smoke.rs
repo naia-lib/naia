@@ -52,7 +52,7 @@ fn given_client_connects(world: &mut TestWorld) {
 
 /// Internal implementation for client connection.
 fn connect_client_impl(world: &mut TestWorld) {
-    let scenario = world.scenario();
+    let scenario = world.scenario_mut();
     let test_protocol = protocol();
     let room_key = scenario.last_room();
 
@@ -118,7 +118,7 @@ fn connect_client_impl(world: &mut TestWorld) {
 /// Step: When the server disconnects the client
 #[when("the server disconnects the client")]
 fn when_server_disconnects(world: &mut TestWorld) {
-    let scenario = world.scenario();
+    let scenario = world.scenario_mut();
     let client_key = scenario.last_client();
 
     // Queue the disconnect (server will send disconnect packet on next tick)
@@ -162,15 +162,10 @@ fn when_server_disconnects(world: &mut TestWorld) {
 
 /// Step: Then the server has {int} connected client(s)
 #[then("the server has {int} connected client(s)")]
-fn then_server_has_clients(world: &mut TestWorld, expected: usize) {
+fn then_server_has_clients(world: &TestWorld, expected: usize) {
     let scenario = world.scenario();
-
-    scenario.allow_flexible_next();
-    scenario.mutate(|_| {});
-    scenario.expect(|ctx| {
-        let count = ctx.server(|s| s.users_count());
-        (count == expected).then_some(())
-    });
+    let count = scenario.server().expect("server").users_count();
+    assert_eq!(count, expected, "server should have {} connected clients", expected);
 }
 
 // ============================================================================
@@ -179,6 +174,6 @@ fn then_server_has_clients(world: &mut TestWorld, expected: usize) {
 
 /// Step: Then the system intentionally fails
 #[then("the system intentionally fails")]
-fn then_system_intentionally_fails(_world: &mut TestWorld) {
+fn then_system_intentionally_fails(_world: &TestWorld) {
     panic!("INTENTIONAL FAILURE: This step is designed to fail for demo purposes");
 }
