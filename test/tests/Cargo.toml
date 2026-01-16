@@ -2,7 +2,7 @@
 name = "naia-tests"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = ".."
+workspace = "../.."
 license = "MIT OR Apache-2.0"
 edition = "2021"
 publish = false
@@ -14,11 +14,11 @@ path = "src/lib.rs"
 
 [dependencies]
 # Namako for step macros and World trait
-namako = { path = "../../namako", features = ["npap", "macros"] }
+namako = { path = "../../../namako", features = ["npap", "macros"] }
 
 # Naia test harness for Scenario
-naia-test-harness = { path = "../test" }
+naia-test-harness = { path = "../harness" }
 
 # Naia core crates for types
-naia-server = { path = "../server", default-features = false }
-naia-client = { path = "../client", default-features = false }
+naia-server = { path = "../../server", default-features = false }
+naia-client = { path = "../../client", default-features = false }

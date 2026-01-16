@@ -23,7 +23,7 @@ echo ""
 
 # Step 1: Lint
 echo "[1/3] Running lint..."
-if ! cargo run -p namako-cli --manifest-path ../../namako/Cargo.toml -- \
+if ! cargo run -p namako-cli --manifest-path ../../../namako/Cargo.toml -- \
     lint -s . -a "$ADAPTER" -o resolved_plan.json 2>/dev/null; then
     echo "❌ Lint failed"
     exit 1
@@ -48,7 +48,7 @@ echo ""
 
 # Step 3: Verify
 echo "[3/3] Running verify..."
-if ! cargo run -p namako-cli --manifest-path ../../namako/Cargo.toml -- \
+if ! cargo run -p namako-cli --manifest-path ../../../namako/Cargo.toml -- \
     verify -s . -a "$ADAPTER" 2>/dev/null; then
     echo "❌ Verify failed (baseline mismatch)"
     exit 3

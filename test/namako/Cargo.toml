@@ -11,7 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Core namako library with NPAP types
-namako = { path = "../../namako", features = ["npap", "macros"] }
+namako = { path = "../../../namako", features = ["npap", "macros"] }
 
 # CLI argument parsing
 clap = { version = "4.5", features = ["derive"] }
@@ -29,4 +29,4 @@ futures = "0.3"
 regex = "1.0"
 
 # Step bindings library (World + step functions)
-naia-tests = { path = "../naia_tests" }
+naia-tests = { path = "../tests" }

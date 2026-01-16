@@ -226,7 +226,7 @@ fn then_client_is_connected(world: &mut TestWorld) {
     let client_key = scenario.last_client();
 
     // Ensure we don't double-expect if previous step ended with expect
-    scenario.mutate(|_| {}); 
+    scenario.mutate(|_| {});
 
     scenario.expect(|ctx| {
         let connected = ctx.client(client_key, |c| c.connection_status().is_connected());
@@ -256,7 +256,7 @@ fn then_client_is_not_connected(world: &mut TestWorld) {
     let client_key = scenario.last_client();
 
     // Ensure we don't double-expect if previous step ended with expect
-    scenario.mutate(|_| {}); 
+    scenario.mutate(|_| {});
 
     scenario.expect(|ctx| {
         let connected = ctx.client(client_key, |c| c.connection_status().is_connected());
