@@ -1,3 +1,14 @@
+# ============================================================================
+# LEGACY / FROZEN — Pre-Namako Markdown Spec Workflow
+# ============================================================================
+# This tool predates the Namako v1 BDD pipeline. It is kept only for:
+# - Migration/archaeology of existing Markdown contract specs
+# - Extraction of any reusable utilities
+#
+# DO NOT EXTEND. Scheduled for deletion after contract conversion complete.
+# See SUNSET.md for details.
+# ============================================================================
+
 [package]
 name = "naia_spec_tool"
 version = "0.1.0"

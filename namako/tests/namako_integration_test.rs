@@ -4,33 +4,39 @@
 //! - DEMO_RUNTIME_FAILURE.md (Demo A)
 //! - DEMO_IMPL_DRIFT.md (Demo B)
 //!
-//! Run with: `cargo test -p naia-specs --test namako_integration_test`
+//! Run with: `cargo test -p naia_namako --test namako_integration_test`
 
 use std::process::{Command, Output};
 use std::path::PathBuf;
 use std::fs;
 
+/// Get the naia_namako crate directory (CARGO_MANIFEST_DIR = naia/namako/)
+fn crate_dir() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+}
+
 /// Get the naia/specs directory path
 fn specs_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    crate_dir()
+        .parent().unwrap()  // naia/
+        .join("specs")
 }
 
 /// Get the namako CLI manifest path
 fn namako_cli_manifest() -> PathBuf {
-    specs_dir()
+    crate_dir()
         .parent().unwrap()  // naia/
         .parent().unwrap()  // specops/
         .join("namako/Cargo.toml")
 }
 
-/// Get the naia_namako adapter manifest path
+/// Get the naia_namako adapter manifest path (this crate)
 fn adapter_manifest() -> PathBuf {
-    specs_dir()
-        .parent().unwrap()  // naia/
-        .join("namako/Cargo.toml")
+    crate_dir().join("Cargo.toml")
 }
 
 /// Helper: Run a cargo command and capture output
+#[allow(dead_code)]
 fn run_cargo(args: &[&str], cwd: &PathBuf) -> Output {
     Command::new("cargo")
         .args(args)
@@ -260,16 +266,6 @@ fn demo_b_adapter_refuses_stale_plan() {
     assert_success(&lint_output, "lint for stale plan test");
 
     // Modify the step_registry_hash to make it stale
-    let plan_content = fs::read_to_string(&plan_path).expect("read plan");
-    let modified = plan_content.replace(
-        r#""step_registry_hash":"#,
-        r#""step_registry_hash":"0000000000000000"#
-    ).replace(
-        r#"0000000000000000""#,  // Fix: close the mangled string
-        r#"deadbeef00000000000000000000000000000000000000000000000000000000""#
-    );
-
-    // Actually, let's do a cleaner replacement
     let plan_content = fs::read_to_string(&plan_path).expect("read plan");
     let mut plan: serde_json::Value = serde_json::from_str(&plan_content).expect("parse plan");
     if let Some(header) = plan.get_mut("header") {

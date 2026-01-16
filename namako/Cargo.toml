@@ -29,4 +29,4 @@ futures = "0.3"
 regex = "1.0"
 
 # Step bindings library (World + step functions)
-naia-tests = { path = "../tests" }
+naia-tests = { path = "../naia_tests" }
