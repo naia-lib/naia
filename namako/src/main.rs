@@ -10,6 +10,9 @@ use clap::{Parser, Subcommand};
 mod manifest;
 mod run;
 mod bindings;
+mod world;
+
+pub use world::SmokeWorld;
 
 /// NPAP Adapter for Naia
 #[derive(Parser, Debug)]
