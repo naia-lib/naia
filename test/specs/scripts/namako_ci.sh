@@ -18,6 +18,8 @@ SPECS_DIR="$(dirname "$SCRIPT_DIR")"
 NAIA_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 NAMAKO_ROOT="$(cd "$NAIA_ROOT/../namako" && pwd)"
 NAIA_NPAP_ROOT="$NAIA_ROOT/test/npap"
+ARTIFACTS_DIR="$NAIA_ROOT/target/namako_artifacts"
+mkdir -p "$ARTIFACTS_DIR"
 
 # Validate paths exist
 if [[ ! -f "$NAMAKO_ROOT/Cargo.toml" ]]; then
@@ -43,7 +45,7 @@ echo ""
 
 # Step 1: Lint
 echo "[1/3] Running lint..."
-if ! $NAMAKO_CLI lint -s . -a "$ADAPTER" -o resolved_plan.json 2>/dev/null; then
+if ! $NAMAKO_CLI lint -s . -a "$ADAPTER" -o "$ARTIFACTS_DIR/resolved_plan.json" 2>/dev/null; then
     echo "❌ Lint failed"
     exit 1
 fi
@@ -52,13 +54,13 @@ echo ""
 
 # Step 2: Run
 echo "[2/3] Running adapter execution..."
-if ! $ADAPTER run -p resolved_plan.json -o run_report.json 2>/dev/null; then
+if ! $ADAPTER run -p "$ARTIFACTS_DIR/resolved_plan.json" -o "$ARTIFACTS_DIR/run_report.json" 2>/dev/null; then
     echo "❌ Run failed (adapter execution error)"
     exit 2
 fi
 
 # Check for failed scenarios in run_report
-if grep -q '"status": "failed"' run_report.json; then
+if grep -q '"status": "failed"' "$ARTIFACTS_DIR/run_report.json"; then
     echo "❌ Run completed with failed scenarios"
     exit 2
 fi
@@ -67,7 +69,7 @@ echo ""
 
 # Step 3: Verify
 echo "[3/3] Running verify..."
-if ! $NAMAKO_CLI verify -s . -a "$ADAPTER" 2>/dev/null; then
+if ! $NAMAKO_CLI verify -s . -a "$ADAPTER" -r "$ARTIFACTS_DIR/run_report.json" 2>/dev/null; then
     echo "❌ Verify failed (baseline mismatch)"
     exit 3
 fi
