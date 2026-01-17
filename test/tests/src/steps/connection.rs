@@ -21,7 +21,7 @@ use naia_test_harness::{
 use naia_server::ServerConfig;
 use naia_client::{ClientConfig, JitterBufferType};
 
-use crate::TestWorld;
+use crate::{TestWorldMut, TestWorldRef};
 
 // ============================================================================
 // Given Steps - Server Setup
@@ -30,8 +30,8 @@ use crate::TestWorld;
 /// Step: Given a server is running with auth required
 /// Sets up a server that requires authentication before accepting connections.
 #[given("a server is running with auth required")]
-fn given_server_running_with_auth(world: &mut TestWorld) {
-    let scenario = world.init();
+fn given_server_running_with_auth(mut ctx: TestWorldMut) {
+    let scenario = ctx.init();
     let test_protocol = protocol();
 
     // Default config requires auth
@@ -56,8 +56,8 @@ fn given_server_running_with_auth(world: &mut TestWorld) {
 /// Client goes through full auth flow and connects successfully.
 /// Tracks server-side AuthEvent and ConnectEvent, plus client-side ConnectEvent.
 #[when("a client authenticates and connects")]
-fn when_client_authenticates_and_connects(world: &mut TestWorld) {
-    let scenario = world.scenario_mut();
+fn when_client_authenticates_and_connects(mut ctx: TestWorldMut) {
+    let scenario = ctx.scenario_mut();
     let test_protocol = protocol();
     let room_key = scenario.last_room();
 
@@ -129,8 +129,8 @@ fn when_client_authenticates_and_connects(world: &mut TestWorld) {
 /// Step: When a client attempts to connect but is rejected
 /// Client attempts to connect but server rejects the connection.
 #[when("a client attempts to connect but is rejected")]
-fn when_client_attempts_connection_rejected(world: &mut TestWorld) {
-    let scenario = world.scenario_mut();
+fn when_client_attempts_connection_rejected(mut ctx: TestWorldMut) {
+    let scenario = ctx.scenario_mut();
     let test_protocol = protocol();
 
     // Configure client for immediate handshake
@@ -181,8 +181,8 @@ fn when_client_attempts_connection_rejected(world: &mut TestWorld) {
 /// Step: Then the server observes AuthEvent before ConnectEvent
 /// Verifies the correct ordering of server-side events per connection-24.
 #[then("the server observes AuthEvent before ConnectEvent")]
-fn then_server_auth_before_connect(world: &TestWorld) {
-    let scenario = world.scenario();
+fn then_server_auth_before_connect(ctx: TestWorldRef) {
+    let scenario = ctx.scenario();
 
     assert!(
         scenario.server_event_before(TrackedServerEvent::Auth, TrackedServerEvent::Connect),
@@ -194,8 +194,8 @@ fn then_server_auth_before_connect(world: &TestWorld) {
 /// Step: Then the server observes DisconnectEvent after ConnectEvent
 /// Verifies connection-22: Server DisconnectEvent only after ConnectEvent.
 #[then("the server observes DisconnectEvent after ConnectEvent")]
-fn then_server_disconnect_after_connect(world: &TestWorld) {
-    let scenario = world.scenario();
+fn then_server_disconnect_after_connect(ctx: TestWorldRef) {
+    let scenario = ctx.scenario();
 
     assert!(
         scenario.server_event_before(TrackedServerEvent::Connect, TrackedServerEvent::Disconnect),
@@ -207,8 +207,8 @@ fn then_server_disconnect_after_connect(world: &TestWorld) {
 /// Step: Then the client observes ConnectEvent
 /// Verifies client received ConnectEvent.
 #[then("the client observes ConnectEvent")]
-fn then_client_observes_connect(world: &TestWorld) {
-    let scenario = world.scenario();
+fn then_client_observes_connect(ctx: TestWorldRef) {
+    let scenario = ctx.scenario();
     let client_key = scenario.last_client();
 
     assert!(
@@ -221,8 +221,8 @@ fn then_client_observes_connect(world: &TestWorld) {
 /// Step: Then the client is connected
 /// Verifies client connection status is connected.
 #[then("the client is connected")]
-fn then_client_is_connected(world: &TestWorld) {
-    let scenario = world.scenario();
+fn then_client_is_connected(ctx: TestWorldRef) {
+    let scenario = ctx.scenario();
     let client_key = scenario.last_client();
 
     assert!(
@@ -234,8 +234,8 @@ fn then_client_is_connected(world: &TestWorld) {
 /// Step: Then the client observes DisconnectEvent after ConnectEvent
 /// Verifies connection-21: Client DisconnectEvent only after ConnectEvent.
 #[then("the client observes DisconnectEvent after ConnectEvent")]
-fn then_client_disconnect_after_connect(world: &TestWorld) {
-    let scenario = world.scenario();
+fn then_client_disconnect_after_connect(ctx: TestWorldRef) {
+    let scenario = ctx.scenario();
     let client_key = scenario.last_client();
 
     assert!(
@@ -248,8 +248,8 @@ fn then_client_disconnect_after_connect(world: &TestWorld) {
 /// Step: Then the client is not connected
 /// Verifies client connection status is not connected.
 #[then("the client is not connected")]
-fn then_client_is_not_connected(world: &TestWorld) {
-    let scenario = world.scenario();
+fn then_client_is_not_connected(ctx: TestWorldRef) {
+    let scenario = ctx.scenario();
     let client_key = scenario.last_client();
 
     assert!(
@@ -261,8 +261,8 @@ fn then_client_is_not_connected(world: &TestWorld) {
 /// Step: Then the client observes RejectEvent
 /// Verifies client received RejectEvent per connection-19.
 #[then("the client observes RejectEvent")]
-fn then_client_observes_reject(world: &TestWorld) {
-    let scenario = world.scenario();
+fn then_client_observes_reject(ctx: TestWorldRef) {
+    let scenario = ctx.scenario();
     let client_key = scenario.last_client();
 
     assert!(
@@ -275,8 +275,8 @@ fn then_client_observes_reject(world: &TestWorld) {
 /// Step: Then the client does not observe ConnectEvent
 /// Verifies client did NOT receive ConnectEvent (for rejection scenarios).
 #[then("the client does not observe ConnectEvent")]
-fn then_client_no_connect(world: &TestWorld) {
-    let scenario = world.scenario();
+fn then_client_no_connect(ctx: TestWorldRef) {
+    let scenario = ctx.scenario();
     let client_key = scenario.last_client();
 
     assert!(
@@ -289,8 +289,8 @@ fn then_client_no_connect(world: &TestWorld) {
 /// Step: Then the client does not observe DisconnectEvent
 /// Verifies client did NOT receive DisconnectEvent (for rejection scenarios).
 #[then("the client does not observe DisconnectEvent")]
-fn then_client_no_disconnect(world: &TestWorld) {
-    let scenario = world.scenario();
+fn then_client_no_disconnect(ctx: TestWorldRef) {
+    let scenario = ctx.scenario();
     let client_key = scenario.last_client();
 
     assert!(

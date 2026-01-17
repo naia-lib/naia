@@ -13,7 +13,7 @@ use naia_test_harness::{
 use naia_server::ServerConfig;
 use naia_client::{ClientConfig, JitterBufferType};
 
-use crate::TestWorld;
+use crate::{TestWorldMut, TestWorldRef};
 
 // ============================================================================
 // Given Steps - Server Setup
@@ -21,8 +21,8 @@ use crate::TestWorld;
 
 /// Step: Given a server is running
 #[given("a server is running")]
-fn given_server_running(world: &mut TestWorld) {
-    let scenario = world.init();
+fn given_server_running(mut ctx: TestWorldMut) {
+    let scenario = ctx.init();
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol);
@@ -40,19 +40,19 @@ fn given_server_running(world: &mut TestWorld) {
 
 /// Step: When a client connects
 #[when("a client connects")]
-fn when_client_connects(world: &mut TestWorld) {
-    connect_client_impl(world);
+fn when_client_connects(mut ctx: TestWorldMut) {
+    connect_client_impl(&mut ctx);
 }
 
 /// Step: Given a client connects (for And/But after Given)
 #[given("a client connects")]
-fn given_client_connects(world: &mut TestWorld) {
-    connect_client_impl(world);
+fn given_client_connects(mut ctx: TestWorldMut) {
+    connect_client_impl(&mut ctx);
 }
 
 /// Internal implementation for client connection.
-fn connect_client_impl(world: &mut TestWorld) {
-    let scenario = world.scenario_mut();
+fn connect_client_impl(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
     let test_protocol = protocol();
     let room_key = scenario.last_room();
 
@@ -117,8 +117,8 @@ fn connect_client_impl(world: &mut TestWorld) {
 
 /// Step: When the server disconnects the client
 #[when("the server disconnects the client")]
-fn when_server_disconnects(world: &mut TestWorld) {
-    let scenario = world.scenario_mut();
+fn when_server_disconnects(mut ctx: TestWorldMut) {
+    let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
 
     // Queue the disconnect (server will send disconnect packet on next tick)
@@ -162,8 +162,8 @@ fn when_server_disconnects(world: &mut TestWorld) {
 
 /// Step: Then the server has {int} connected client(s)
 #[then("the server has {int} connected client(s)")]
-fn then_server_has_clients(world: &TestWorld, expected: usize) {
-    let scenario = world.scenario();
+fn then_server_has_clients(ctx: TestWorldRef, expected: usize) {
+    let scenario = ctx.scenario();
     let count = scenario.server().expect("server").users_count();
     assert_eq!(count, expected, "server should have {} connected clients", expected);
 }
@@ -174,6 +174,6 @@ fn then_server_has_clients(world: &TestWorld, expected: usize) {
 
 /// Step: Then the system intentionally fails
 #[then("the system intentionally fails")]
-fn then_system_intentionally_fails(_world: &TestWorld) {
+fn then_system_intentionally_fails(_ctx: TestWorldRef) {
     panic!("INTENTIONAL FAILURE: This step is designed to fail for demo purposes");
 }
