@@ -36,7 +36,7 @@ mod proof_1_then_with_mut_ctx {
     use crate::TestWorldMut;
 
     #[then("the proof fails because Then uses TestWorldMut")]
-    fn then_with_mut_ctx(_ctx: TestWorldMut) {
+    fn then_with_mut_ctx(_ctx: &mut TestWorldMut) {
         // This should fail to compile because:
         // - #[then] attribute causes the macro to call World::ctx_ref()
         // - ctx_ref() returns TestWorldRef, not TestWorldMut
@@ -68,7 +68,7 @@ mod proof_2_given_with_ref_ctx {
     use crate::TestWorldRef;
 
     #[given("the proof fails because Given uses TestWorldRef")]
-    fn given_with_ref_ctx(_ctx: TestWorldRef) {
+    fn given_with_ref_ctx(_ctx: &TestWorldRef) {
         // This should fail to compile because:
         // - #[given] attribute causes the macro to call World::ctx_mut()
         // - ctx_mut() returns TestWorldMut, not TestWorldRef
@@ -95,7 +95,7 @@ mod proof_3_explicit_lifetime {
     use crate::TestWorldMut;
 
     #[given("the proof fails because of explicit lifetime")]
-    fn given_with_explicit_lifetime<'a>(_ctx: TestWorldMut<'a>) {
+    fn given_with_explicit_lifetime<'a>(_ctx: &mut TestWorldMut<'a>) {
         // This should fail to compile because:
         // - parse_context_type_from_args() rejects types with generics
         // - Error: "context type must not have explicit lifetimes or generics"
@@ -116,13 +116,13 @@ mod reference_correct_patterns {
 
     // Given with TestWorldMut - CORRECT
     #[given("a correct given step")]
-    fn correct_given(mut _ctx: TestWorldMut) {}
+    fn correct_given(_ctx: &mut TestWorldMut) {}
 
     // When with TestWorldMut - CORRECT
     #[when("a correct when step")]
-    fn correct_when(mut _ctx: TestWorldMut) {}
+    fn correct_when(_ctx: &mut TestWorldMut) {}
 
     // Then with TestWorldRef - CORRECT
     #[then("a correct then step")]
-    fn correct_then(_ctx: TestWorldRef) {}
+    fn correct_then(_ctx: &mut TestWorldRef) {}
 }

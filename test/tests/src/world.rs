@@ -13,7 +13,7 @@
 //! - Then steps: `TestWorldRef` (read/assertion operations only, wraps ExpectCtx)
 
 use namako::World;
-use namako::codegen::StepContext;
+use namako::codegen::{Assertable, AssertOutcome, StepContext};
 use naia_test_harness::{ClientKey, ExpectCtx, Scenario, TrackedClientEvent, TrackedServerEvent};
 
 /// The World type for Naia BDD tests.
@@ -48,6 +48,30 @@ impl TestWorld {
     /// Check if scenario is initialized.
     pub fn is_initialized(&self) -> bool {
         self.0.is_some()
+    }
+}
+
+impl Assertable for TestWorld {
+    type Ctx<'a> = TestWorldRef<'a>;
+
+    fn assert_then<T, F>(&mut self, mut f: F) -> T
+    where
+        F: FnMut(&Self::Ctx<'_>) -> AssertOutcome<T>,
+    {
+        use naia_test_harness::ToTicks;
+        let scenario = self.scenario_mut();
+        // Default timeout of 500 ticks for polling assertions
+        scenario.until(500.ticks()).expect_msg("BDD Step Assertion", |ctx| {
+            let ref_ctx = TestWorldRef::new(ctx);
+            match f(&ref_ctx) {
+                AssertOutcome::Passed(val) => Some(val),
+                AssertOutcome::Pending => None,
+                AssertOutcome::Failed(msg) => {
+                    // Hard failure - panic immediately, do not retry
+                    panic!("Assertion failed: {}", msg);
+                },
+            }
+        })
     }
 }
 

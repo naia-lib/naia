@@ -25,6 +25,7 @@ fn specs_dir() -> PathBuf {
 /// Get the namako CLI manifest path
 fn namako_cli_manifest() -> PathBuf {
     crate_dir()
+        .parent().unwrap()  // naia/test/
         .parent().unwrap()  // naia/
         .parent().unwrap()  // specops/
         .join("namako/Cargo.toml")
@@ -280,7 +281,8 @@ fn demo_b_adapter_refuses_stale_plan() {
     ]);
 
     assert_failure(&run_output, "adapter should refuse stale plan");
-    assert_output_contains(&run_output, "STALE PLAN", "stale plan error message");
+    assert_output_contains(&run_output, "Plan step_registry_hash", "stale plan error message");
+    assert_output_contains(&run_output, "does not match current manifest", "stale plan error message");
 
     // Cleanup
     let _ = fs::remove_file(specs_dir().join("test_stale_plan.json"));

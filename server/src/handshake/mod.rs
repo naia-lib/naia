@@ -30,6 +30,9 @@ pub trait Handshaker: Send + Sync {
     ) -> Result<HandshakeAction, SerdeErr>;
 
     fn reset(&mut self);
+
+    /// Write a disconnect packet to send to a client
+    fn write_disconnect(&self) -> OutgoingPacket;
 }
 
 pub enum HandshakeAction {

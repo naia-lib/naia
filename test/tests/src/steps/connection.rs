@@ -12,6 +12,7 @@
 use std::time::Duration;
 
 use namako::{given, when, then};
+use namako::codegen::AssertOutcome;
 use naia_test_harness::{
     protocol, Auth,
     ServerAuthEvent, ServerConnectEvent,
@@ -202,72 +203,81 @@ fn then_server_disconnect_after_connect(ctx: &TestWorldRef) {
 
 /// Step: Then the client observes ConnectEvent
 /// Verifies client received ConnectEvent.
+/// This is a POLLING assertion - waits for event to be observed.
 #[then("the client observes ConnectEvent")]
-fn then_client_observes_connect(ctx: &TestWorldRef) {
+fn then_client_observes_connect(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
 
-    assert!(
-        ctx.client_observed(client_key, TrackedClientEvent::Connect),
-        "Client did not observe ConnectEvent. History: {:?}",
-        ctx.client_event_history(client_key)
-    );
+    if ctx.client_observed(client_key, TrackedClientEvent::Connect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
 }
 
 /// Step: Then the client is connected
 /// Verifies client connection status is connected.
+/// This is a POLLING assertion - waits for client to become connected.
 #[then("the client is connected")]
-fn then_client_is_connected(ctx: &TestWorldRef) {
+fn then_client_is_connected(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
 
-    assert!(
-        ctx.client_is_connected(client_key),
-        "Client should be connected"
-    );
+    if ctx.client_is_connected(client_key) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
 }
 
 /// Step: Then the client observes DisconnectEvent after ConnectEvent
 /// Verifies connection-21: Client DisconnectEvent only after ConnectEvent.
+/// This is a POLLING assertion - waits for DisconnectEvent, then verifies order.
 #[then("the client observes DisconnectEvent after ConnectEvent")]
-fn then_client_disconnect_after_connect(ctx: &TestWorldRef) {
+fn then_client_disconnect_after_connect(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
 
     // First: wait until Disconnect is observed (polling condition)
-    assert!(
-        ctx.client_observed(client_key, TrackedClientEvent::Disconnect),
-        "Waiting for DisconnectEvent"
-    );
+    if !ctx.client_observed(client_key, TrackedClientEvent::Disconnect) {
+        return AssertOutcome::Pending;
+    }
 
-    // Then: verify Connect came first (permanent assertion)
-    assert!(
-        ctx.client_event_before(client_key, TrackedClientEvent::Connect, TrackedClientEvent::Disconnect),
-        "Client events out of order: expected ConnectEvent before DisconnectEvent. History: {:?}",
-        ctx.client_event_history(client_key)
-    );
+    // Then: verify Connect came first (hard assertion)
+    if ctx.client_event_before(client_key, TrackedClientEvent::Connect, TrackedClientEvent::Disconnect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Failed(format!(
+            "Client events out of order: expected ConnectEvent before DisconnectEvent. History: {:?}",
+            ctx.client_event_history(client_key)
+        ))
+    }
 }
 
 /// Step: Then the client is not connected
 /// Verifies client connection status is not connected.
+/// This is a POLLING assertion - waits for client to become disconnected.
 #[then("the client is not connected")]
-fn then_client_is_not_connected(ctx: &TestWorldRef) {
+fn then_client_is_not_connected(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
 
-    assert!(
-        !ctx.client_is_connected(client_key),
-        "Client should not be connected"
-    );
+    if !ctx.client_is_connected(client_key) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
 }
 
 /// Step: Then the client observes RejectEvent
 /// Verifies client received RejectEvent per connection-19.
+/// This is a POLLING assertion - waits for event to be observed.
 #[then("the client observes RejectEvent")]
-fn then_client_observes_reject(ctx: &TestWorldRef) {
+fn then_client_observes_reject(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
 
-    assert!(
-        ctx.client_observed(client_key, TrackedClientEvent::Reject),
-        "Client did not observe RejectEvent. History: {:?}",
-        ctx.client_event_history(client_key)
-    );
+    if ctx.client_observed(client_key, TrackedClientEvent::Reject) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
 }
 
 /// Step: Then the client does not observe ConnectEvent

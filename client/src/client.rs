@@ -9,7 +9,7 @@ use naia_shared::{
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OwnedLocalEntity,
     PacketType, Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
     ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick,
-    WorldMutType, WorldRefType,
+    WorldMutType, WorldRefType, handshake::HandshakeHeader,
 };
 
 use super::{
@@ -41,6 +41,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     server_connection: Option<Connection>,
     handshake_manager: Box<dyn Handshaker>,
     manual_disconnect: bool,
+    server_disconnect: bool,
     waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
     global_world_manager: GlobalWorldManager,
@@ -80,6 +81,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             server_connection: None,
             handshake_manager: Box::new(handshake_manager),
             manual_disconnect: false,
+            server_disconnect: false,
             waitlist_messages: VecDeque::new(),
             // World
             global_world_manager: GlobalWorldManager::new(),
@@ -175,7 +177,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Returns whether or not the client is disconnecting
     fn is_disconnecting(&self) -> bool {
         if let Some(connection) = &self.server_connection {
-            connection.should_drop() || self.manual_disconnect
+            connection.should_drop() || self.manual_disconnect || self.server_disconnect
         } else {
             false
         }
@@ -934,7 +936,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(entity) {
             let owner = self.global_world_manager.entity_owner(&global_entity);
             let is_delegated = self.global_world_manager.entity_is_delegated(&global_entity);
-            
+
             let can_mutate = if is_delegated {
                 // For delegated entities, check authority status
                 self.global_world_manager
@@ -947,7 +949,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // No owner info - cannot mutate
                 false
             };
-            
+
             if !can_mutate {
                 // Client doesn't have permission - silently ignore the mutation
                 return;
@@ -1499,9 +1501,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             // continue, these packet types are allowed when
                             // connection is established
                         }
-                        _ => {
-                            // short-circuit, do not need to handle other packet types at this
-                            // point
+                        PacketType::Handshake => {
+                            // Server sent a handshake packet while connected -
+                            // this should only be a Disconnect message
+                            let Ok(handshake_header) = HandshakeHeader::de(&mut reader) else {
+                                warn!("unable to parse handshake header from server");
+                                continue;
+                            };
+                            if matches!(handshake_header, HandshakeHeader::Disconnect) {
+                                info!("Received disconnect from server");
+                                self.server_disconnect = true;
+                            }
                             continue;
                         }
                     }

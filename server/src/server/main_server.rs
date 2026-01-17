@@ -223,6 +223,18 @@ impl MainServer {
     }
 
     pub fn disconnect_user(&mut self, user_key: &UserKey) {
+        // Send disconnect packets to the client before removing them
+        // This mirrors the client-initiated disconnect flow
+        if let Some(address) = self.user_address(user_key) {
+            // Send multiple times for reliability (like client does)
+            for _ in 0..10 {
+                let disconnect_packet = self.handshake_manager.write_disconnect();
+                if self.io.send_packet(&address, disconnect_packet).is_err() {
+                    log::warn!("Server Error: Cannot send disconnect packet to {}", address);
+                    break;
+                }
+            }
+        }
         self.user_delete(user_key);
     }
 

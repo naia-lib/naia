@@ -1,9 +1,10 @@
 use hecs::{Entity, World};
 
 use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
-    LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
+    EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    SerdeErr, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -276,7 +277,9 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
 
     fn entity_publish(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _component_kinds: &ComponentKinds,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
     ) {
         todo!()
@@ -284,7 +287,9 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
 
     fn component_publish(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _component_kinds: &ComponentKinds,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
         _component_kind: &ComponentKind,
     ) {
@@ -301,7 +306,9 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
 
     fn entity_enable_delegation(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _component_kinds: &ComponentKinds,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
     ) {
         todo!()
@@ -309,7 +316,9 @@ impl<'w, 'd> WorldMutType<Entity> for WorldMut<'w, 'd> {
 
     fn component_enable_delegation(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _component_kinds: &ComponentKinds,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
         _component_kind: &ComponentKind,
     ) {

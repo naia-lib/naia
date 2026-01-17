@@ -154,6 +154,13 @@ impl Handshaker for HandshakeManager {
         self.address_to_timestamp_map.clear();
         self.timestamp_digest_map.clear();
     }
+
+    fn write_disconnect(&self) -> OutgoingPacket {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::Disconnect.ser(&mut writer);
+        writer.to_packet()
+    }
 }
 
 impl HandshakeManager {

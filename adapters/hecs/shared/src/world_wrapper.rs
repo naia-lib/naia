@@ -6,9 +6,10 @@ use std::{
 use hecs::{Entity, World};
 
 use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentUpdate, GlobalWorldManagerType,
-    LocalEntityAndGlobalEntityConverter, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
-    ReplicaMutWrapper, ReplicaRefWrapper, Replicate, SerdeErr, WorldMutType, WorldRefType,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
+    EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    SerdeErr, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -261,7 +262,9 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
 
     fn entity_publish(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _component_kinds: &ComponentKinds,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
     ) {
         todo!()
@@ -269,7 +272,9 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
 
     fn component_publish(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _component_kinds: &ComponentKinds,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
         _component_kind: &ComponentKind,
     ) {
@@ -286,7 +291,9 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
 
     fn entity_enable_delegation(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _component_kinds: &ComponentKinds,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
     ) {
         todo!()
@@ -294,7 +301,9 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
 
     fn component_enable_delegation(
         &mut self,
-        _global_world_manager: &dyn GlobalWorldManagerType<Entity>,
+        _component_kinds: &ComponentKinds,
+        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        _global_world_manager: &dyn GlobalWorldManagerType,
         _entity: &Entity,
         _component_kind: &ComponentKind,
     ) {

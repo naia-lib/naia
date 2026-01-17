@@ -6,7 +6,7 @@ use std::time::Duration;
 use namako::{given, when, then};
 use naia_test_harness::{
     protocol, Auth,
-    ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
+    ServerAuthEvent, ServerConnectEvent,
     TrackedServerEvent, TrackedClientEvent,
     ClientDisconnectEvent,
 };
@@ -121,31 +121,18 @@ fn when_server_disconnects(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
 
-    // Queue the disconnect (server will send disconnect packet on next tick)
+    // Queue the disconnect on server side
+    // Server will send disconnect packets to the client
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server.disconnect_user(&client_key);
         });
     });
 
-    // Wait for server disconnect event - the expect() will tick until event fires.
-    // The ticking also sends the disconnect packet to the client.
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some(disconnected_key) = server.read_event::<ServerDisconnectEvent>() {
-                if disconnected_key == client_key {
-                    return Some(());
-                }
-            }
-            None
-        })
-    });
+    // Track server disconnect event immediately (server disconnect is synchronous)
     scenario.track_server_event(TrackedServerEvent::Disconnect);
 
-    // Need a mutate between consecutive expects per harness constraint
-    scenario.mutate(|_| {});
-
-    // Now wait for client disconnect event
+    // Wait for client disconnect event (client should receive disconnect packet from server)
     scenario.expect(|ctx| {
         ctx.client(client_key, |client| {
             client.read_event::<ClientDisconnectEvent>()

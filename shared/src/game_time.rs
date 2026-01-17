@@ -86,6 +86,7 @@ impl GameInstant {
     }
 
     pub fn sub_millis(&self, millis: u32) -> Self {
+        let millis = millis % GAME_TIME_LIMIT;
         if self.millis >= millis {
             Self {
                 millis: self.millis - millis,

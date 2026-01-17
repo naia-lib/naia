@@ -9,12 +9,14 @@ use naia_shared::{
 /// Receive updates from the client and store them in a buffer along with the corresponding
 /// client tick.
 pub struct TickBufferReceiverChannel {
+    settings: TickBufferSettings,
     incoming_messages: IncomingMessages,
 }
 
 impl TickBufferReceiverChannel {
-    pub fn new(_settings: TickBufferSettings) -> Self {
+    pub fn new(settings: TickBufferSettings) -> Self {
         Self {
+            settings,
             incoming_messages: IncomingMessages::new(),
         }
     }
@@ -82,9 +84,11 @@ impl TickBufferReceiverChannel {
             // read payload
             let new_message = message_kinds.read(reader, entity_converter)?;
 
+            let message_capacity = self.settings.message_capacity as u16;
+
             if !self
                 .incoming_messages
-                .insert(host_tick, &remote_tick, message_index, new_message)
+                .insert(host_tick, &remote_tick, message_index, new_message, message_capacity)
             {
                 // Failed to Insert Command
             }
@@ -119,12 +123,19 @@ impl IncomingMessages {
         message_tick: &Tick,
         message_index: ShortMessageIndex, // this is used to de-dupe messages
         new_message: MessageContainer,
+        message_capacity: u16,
     ) -> bool {
         // TODO:
         //  * add unit test?
         //  * should there be a maximum buffer size?
 
         if sequence_greater_than(*message_tick, *host_tick) {
+            let buffer_limit_tick = host_tick.wrapping_add(message_capacity);
+            if !sequence_greater_than(buffer_limit_tick, *message_tick) {
+                // message is too far in the future
+                return false;
+            }
+
             let mut index = self.buffer.len();
 
             //in the case of empty vec

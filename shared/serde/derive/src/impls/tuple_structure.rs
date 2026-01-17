@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::DataStruct;
+use syn::{DataStruct, Index};
 
 #[allow(clippy::format_push_string)]
 pub fn derive_serde_tuple_struct(
@@ -13,7 +13,7 @@ pub fn derive_serde_tuple_struct(
     let mut bit_length_body = quote! {};
 
     for (i, _) in struct_.fields.iter().enumerate() {
-        let field_index = i;
+        let field_index = Index::from(i);
         ser_body = quote! {
             #ser_body
             self.#field_index.ser(writer);

@@ -106,6 +106,13 @@ impl Handshaker for HandshakeManager {
         self.authenticated_unidentified_users.clear();
         self.identity_token_map.clear();
     }
+
+    fn write_disconnect(&self) -> naia_shared::OutgoingPacket {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::Disconnect.ser(&mut writer);
+        writer.to_packet()
+    }
 }
 
 impl HandshakeManager {
