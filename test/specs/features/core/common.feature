@@ -1,0 +1,290 @@
+# ============================================================================
+# Common Definitions and Policies — Canonical Contract
+# ============================================================================
+# Source: contracts/00_common.spec.md
+# Last converted: 2026-01-17
+#
+# Summary:
+#   This specification defines cross-cutting concerns that apply to ALL Naia
+#   specifications: error handling taxonomy, determinism requirements, test
+#   conventions, configuration defaults vs invariants, and observability
+#   policies. All other specs MUST reference this document and MUST NOT
+#   contradict its policies.
+#
+# Terminology note:
+#   This file is normative; scenarios are executable assertions; comments
+#   labeled NORMATIVE are part of the contract.
+# ============================================================================
+
+# ============================================================================
+# NORMATIVE CONTRACT MIRROR
+# ============================================================================
+#
+# PURPOSE:
+#   Define the canonical error handling, determinism, and test policies that
+#   govern all Naia specifications.
+#
+# GLOSSARY:
+#   - User-initiated misuse: Error caused by local application code or config
+#   - Remote/untrusted input: Data from network or remote endpoints
+#   - Framework invariant violation: Internal Naia bug (unreachable condition)
+#   - Debug mode: When debug_assertions are enabled
+#   - Prod mode: When debug_assertions are disabled
+#
+# ERROR HANDLING TAXONOMY:
+#   | Condition                      | Response                    | Panic? |
+#   |--------------------------------|-----------------------------|--------|
+#   | Public API misuse              | Return Result::Err          | No     |
+#   | Remote/untrusted input         | Drop (optionally warn)      | No     |
+#   | Protocol mismatch              | Reject with ProtocolMismatch| No     |
+#   | Framework invariant violation  | Panic                       | Yes    |
+#
+#   Key principle: Panic is reserved for internal invariant violations only.
+#   No user action via public API can trigger a panic.
+#
+# NORMATIVE ERROR RULES:
+#   [common-01] User-initiated misuse MUST return Result::Err
+#     - Invalid channel configuration
+#     - Sending on wrong-direction channel
+#     - Oversize message payload
+#     - Authority request on non-delegated entity
+#     - Write attempt without permission
+#     - Enqueueing more than MAX_COMMANDS_PER_TICK_PER_CONNECTION commands
+#
+#   [common-02] Remote/untrusted input MUST NOT panic
+#     - Malformed or oversize inbound packet
+#     - Duplicate replication messages
+#     - Authority request for out-of-scope entity
+#     - Late command for already-processed tick
+#     - TickBuffered message for evicted/old tick
+#     - EntityProperty referencing unknown entity
+#     - In Prod: ignore/drop silently
+#     - In Debug: ignore/drop with warning (non-normative text)
+#
+#   [common-02a] Protocol mismatch is a deployment error
+#     - Connection MUST be rejected with ProtocolMismatch
+#     - Client MUST receive distinguishable indication
+#     - MUST NOT panic
+#
+#   [common-03] Framework invariant violations MUST panic
+#     - Tick goes backwards in public API
+#     - Older state delivered after newer on sequenced channel
+#     - Internal send exceeding declared bounds
+#     - GlobalEntity counter rollover
+#
+#   [common-04] Warnings are debug-only and non-normative
+#     - Warning text/format not part of contract
+#     - Tests MUST NOT assert on warning content
+#     - Warnings MUST NOT affect observable behavior
+#
+# DETERMINISM REQUIREMENTS:
+#   [common-05] Determinism under deterministic inputs
+#     If Time Provider, Network input, and API call sequence are deterministic,
+#     then Naia's observable outputs MUST be deterministic:
+#     - Event emission order
+#     - Entity spawn/despawn order
+#     - Component insert/update/remove order
+#     - Authority state transitions
+#
+#   [common-06] Per-tick determinism rule
+#     - Scope operations: last API call wins in server-thread call order
+#     - Multiple commands same tick: process in receipt order
+#     - Multiple authority requests: first request received wins
+#
+# TEST CONVENTIONS:
+#   [common-07] Tests MUST NOT assert on logs
+#     - No assertions on log message content, presence, or format
+#     - Observable behavior MUST be via events, API returns, or world state
+#
+#   [common-08] Test obligation template format:
+#     **Test obligations:**
+#     - `<contract-id>.t1`: <What the test verifies>
+#
+#   [common-09] Observable signals subsection
+#     Every contract SHOULD include observable signals section
+#
+# CONFIGURATION: DEFAULTS VS INVARIANTS:
+#   [common-10] Fixed invariants (MUST NOT be configurable):
+#     | Invariant                          | Value    |
+#     |------------------------------------|----------|
+#     | MAX_RELIABLE_MESSAGE_FRAGMENTS     | 2^16     |
+#     | GlobalEntity rollover behavior     | Panic    |
+#     | Tick type                          | u16      |
+#     | Wrap-safe half-range               | 32768    |
+#     | Request ID uniqueness scope        | Per-conn |
+#     | MAX_COMMANDS_PER_TICK_PER_CONNECTION| 64      |
+#     | protocol_id wire encoding          | u128 LE  |
+#     | Command sequence encoding          | varint   |
+#
+#   [common-11] Configurable defaults:
+#     | Default                            | Value    |
+#     |------------------------------------|----------|
+#     | Identity token TTL                 | 1 hour   |
+#     | ENTITY_PROPERTY_RESOLUTION_TTL     | 60 sec   |
+#     | MAX_PENDING_ENTITY_PROPERTY_*      | 4096/128 |
+#     | TickBuffered tick_buffer_capacity  | Per-chan |
+#     | DEFAULT_REQUEST_TIMEOUT            | 30 sec   |
+#
+#   [common-11a] New constants start as invariants
+#
+#   [common-12a] Test tolerance constants (non-normative, test-only):
+#     | Constant                   | Value |
+#     |----------------------------|-------|
+#     | RTT_TOLERANCE_PERCENT      | 20    |
+#     | RTT_MIN_SAMPLES            | 10    |
+#     | RTT_MAX_VALUE_MS           | 10000 |
+#     | THROUGHPUT_TOLERANCE_*     | 15/5  |
+#     | LEAD_CONVERGENCE_TICKS     | 60    |
+#     | METRIC_WINDOW_DURATION_MS  | 1000  |
+#
+# OBSERVABILITY POLICIES:
+#   [common-12] Internal measurements vs exposed metrics
+#     - Reading metrics MUST NOT influence internal behavior
+#     - Internal measurements MAY differ from exposed metrics
+#
+#   [common-13] Metrics are non-normative for gameplay
+#     - Metrics MUST NOT affect replicated state, authority, scope, or delivery
+#
+# CONNECTION SEMANTICS:
+#   [common-14] Reconnect is fresh session
+#     - No session resumption
+#     - Server treats reconnecting client as new session
+#     - Prior entity state, authority, buffered data discarded
+#
+# ============================================================================
+
+Feature: Common Definitions and Policies
+
+  Background:
+    Given a Naia test environment is initialized
+
+  # --------------------------------------------------------------------------
+  # Rule: User-initiated misuse returns Result::Err
+  # --------------------------------------------------------------------------
+  # NORMATIVE: When an error is caused by local application code or
+  # configuration at the Naia API layer, Naia MUST return Result::Err.
+  # If user code can trigger a condition via public API, that condition
+  # MUST NOT panic.
+  # --------------------------------------------------------------------------
+  Rule: User-initiated misuse returns Result::Err
+
+    Scenario: API misuse returns Err not panic
+      Given a connected client and server
+      When the client attempts an invalid API operation
+      Then the operation returns an Err result
+      And no panic occurs
+
+  # --------------------------------------------------------------------------
+  # Rule: Remote or untrusted input must never panic
+  # --------------------------------------------------------------------------
+  # NORMATIVE: When an error is caused by remote input or network behavior,
+  # Naia MUST NOT panic. In Prod: ignore/drop silently. In Debug: warn.
+  # --------------------------------------------------------------------------
+  Rule: Remote or untrusted input must never panic
+
+    Scenario: Malformed inbound packet is dropped without panic
+      Given a connected client and server
+      When the server receives a malformed packet
+      Then the packet is dropped
+      And no panic occurs
+
+    Scenario: Duplicate replication messages do not panic
+      Given a connected client and server with replicated entities
+      When duplicate replication messages arrive
+      Then they are handled idempotently
+      And no panic occurs
+
+  # --------------------------------------------------------------------------
+  # Rule: Protocol mismatch is a deployment error not a panic
+  # --------------------------------------------------------------------------
+  # NORMATIVE: When protocol_id does not match, connection MUST be rejected
+  # with ProtocolMismatch, not a panic.
+  # --------------------------------------------------------------------------
+  Rule: Protocol mismatch is a deployment error not a panic
+
+    Scenario: Protocol mismatch produces ProtocolMismatch rejection
+      Given a server with protocol version A
+      And a client with protocol version B
+      When the client attempts to connect
+      Then the connection is rejected with ProtocolMismatch
+      And no panic occurs
+
+  # --------------------------------------------------------------------------
+  # Rule: Framework invariant violations must panic
+  # --------------------------------------------------------------------------
+  # NORMATIVE: If Naia violates an invariant stated in specifications,
+  # Naia MUST panic. These are Naia bugs expected to be unreachable.
+  # --------------------------------------------------------------------------
+  Rule: Framework invariant violations must panic
+
+    # Note: This rule cannot be directly tested via normal scenarios since
+    # it requires triggering internal invariant violations. Test coverage
+    # for this rule is via internal framework tests, not E2E scenarios.
+
+    @internal-only
+    Scenario: Internal invariant violation triggers panic
+      Given a Naia internal test context
+      When an internal invariant is violated
+      Then Naia panics with a descriptive message
+
+  # --------------------------------------------------------------------------
+  # Rule: Determinism under deterministic inputs
+  # --------------------------------------------------------------------------
+  # NORMATIVE: If Time Provider, Network input, and API call sequence are
+  # deterministic, then observable outputs MUST be deterministic.
+  # --------------------------------------------------------------------------
+  Rule: Determinism under deterministic inputs
+
+    Scenario: Identical inputs produce identical outputs
+      Given a deterministic time provider
+      And a deterministic network input sequence
+      When the same API call sequence is executed twice
+      Then the event emission order is identical both times
+      And the entity spawn order is identical both times
+
+  # --------------------------------------------------------------------------
+  # Rule: Per-tick determinism for concurrent operations
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Within a single server tick, if multiple operations could
+  # occur in any order, Naia MUST define a deterministic resolution.
+  # --------------------------------------------------------------------------
+  Rule: Per-tick determinism for concurrent operations
+
+    Scenario: Same-tick scope operations resolve deterministically
+      Given a server with multiple scope operations queued for the same tick
+      When the tick is processed
+      Then the final scope state reflects the last API call order
+      And no intermediate spawn or despawn is observed
+
+    Scenario: Multiple commands for same tick apply in receipt order
+      Given a server receiving multiple commands for the same tick
+      When the tick is processed
+      Then commands are applied in receipt order
+
+  # --------------------------------------------------------------------------
+  # Rule: Metrics do not affect gameplay
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Observability metrics MUST NOT affect replicated state,
+  # authority, scope, or message delivery semantics.
+  # --------------------------------------------------------------------------
+  Rule: Metrics do not affect gameplay
+
+    Scenario: Reading metrics does not influence internal behavior
+      Given a connected client and server
+      When metrics are queried every tick
+      Then replication behavior is identical to when metrics are not queried
+
+  # --------------------------------------------------------------------------
+  # Rule: Reconnect is a fresh session
+  # --------------------------------------------------------------------------
+  # NORMATIVE: When a client reconnects, it is a fresh connection that
+  # builds world state from a new snapshot. No session resumption.
+  # --------------------------------------------------------------------------
+  Rule: Reconnect is a fresh session
+
+    Scenario: Reconnecting client receives fresh entity spawns
+      Given a client that was previously connected
+      And the client disconnected
+      When the client reconnects
+      Then it receives fresh entity spawns for all in-scope entities
+      And no prior session state is retained

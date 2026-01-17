@@ -1,0 +1,244 @@
+# ============================================================================
+# Entity Replication — Canonical Contract
+# ============================================================================
+# Source: contracts/07_entity_replication.spec.md
+# Last converted: 2026-01-17
+#
+# Summary:
+#   This specification defines the client-observable behavior of Naia's
+#   entity/component replication: spawn/despawn, component insert/update/remove
+#   ordering, tolerance to packet reordering/duplication/late arrival, and
+#   entity identity across lifetimes.
+#
+# Terminology note:
+#   This file is normative; scenarios are executable assertions; comments
+#   labeled NORMATIVE are part of the contract.
+# ============================================================================
+
+# ============================================================================
+# NORMATIVE CONTRACT MIRROR
+# ============================================================================
+#
+# PURPOSE:
+#   Define client-observable replication behavior and invariants.
+#
+# GLOSSARY:
+#   - Replicated component: Component type registered for wire replication
+#   - Local-only component: Component present only locally, not replicated
+#   - Entity lifetime (client): scope enter → scope leave (≥1 tick rule)
+#   - GlobalEntity: Global identity (monotonic u64, practical uniqueness)
+#   - LocalEntity: Per-connection handle that may wrap/reuse
+#
+# ENTITY LIFETIME:
+#   For a given client, an entity lifetime is:
+#   scope enter → scope leave, with re-entry after ≥1 tick being fresh lifetime.
+#
+#   - Entity-specific writes MUST be ignored outside current lifetime
+#   - Update before Insert MUST be buffered until Insert arrives
+#
+# NORMATIVE REPLICATION RULES:
+#   [entity-replication-01] Global identity stability
+#     - Entity MUST have stable GlobalEntity while it exists
+#     - Server MUST NOT change GlobalEntity during entity's existence
+#
+#   [entity-replication-02] Client-visible lifetime boundaries
+#     - Lifetime begins on Spawn (scope enter)
+#     - Lifetime ends on Despawn (scope leave)
+#     - Re-entry after ≥1 tick is new lifetime with fresh spawn snapshot
+#
+#   [entity-replication-03] Spawn snapshot semantics
+#     - Spawn MUST include set of replicated components at send time
+#     - Client MUST materialize baseline solely from Spawn snapshot
+#
+#   [entity-replication-04] No observable replication before Spawn
+#     - Client MUST NOT observe Insert/Update/Remove before Spawn
+#     - If delivery causes early receipt, actions are not observable early
+#     - HARD INVARIANT: no update-before-spawn observability
+#
+#   [entity-replication-05] Actions outside lifetime are ignored
+#     - Late packets from prior lifetime: ignored
+#     - Packets for out-of-scope entities: ignored
+#     - In Debug: MAY warn
+#
+#   [entity-replication-06] Update-before-Insert buffering
+#     - Within active lifetime, buffer Update until Insert arrives
+#     - Drop buffered on Despawn if not applied
+#
+#   [entity-replication-07] Local-only component overwrite by replication
+#     - Server replication overwrites local-only component
+#     - MUST emit Insert event (not Update)
+#
+#   [entity-replication-08] Collapse to final state per tick
+#     - No intermediate transitions within a tick
+#     - Only final state is observable
+#
+#   [entity-replication-09] Duplicate delivery is idempotent
+#     - Same action twice MUST NOT create additional observable effects
+#     - Naia MUST remain convergent
+#
+#   [entity-replication-10] Identity reuse safety (LocalEntity wrap)
+#     - Late/reordered actions from old lifetime MUST NOT corrupt new lifetime
+#     - Lifetime-disambiguating info MUST gate applicability
+#
+#   [entity-replication-11] GlobalEntity rollover is terminal error
+#     - MUST NOT silently wrap/reuse GlobalEntity values
+#     - MUST enter terminal error mode (panic/abort)
+#
+#   [entity-replication-12] Conflict resolution: server wins
+#     - Server replicated state MUST overwrite client local state
+#
+# ============================================================================
+
+Feature: Entity Replication
+
+  Background:
+    Given a Naia test environment is initialized
+
+  # --------------------------------------------------------------------------
+  # Rule: Global entity identity is stable
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Entity MUST have stable GlobalEntity while it exists.
+  # --------------------------------------------------------------------------
+  Rule: Global entity identity is stable
+
+    Scenario: Entity GlobalEntity does not change during existence
+      Given a server with a replicated entity
+      When the entity is modified over multiple ticks
+      Then the GlobalEntity remains stable
+
+  # --------------------------------------------------------------------------
+  # Rule: No observable replication before Spawn
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Client MUST NOT observe Insert/Update/Remove before Spawn.
+  # This is a hard invariant.
+  # --------------------------------------------------------------------------
+  Rule: No observable replication before Spawn
+
+    Scenario: No insert or update before spawn under reordering
+      Given a connected client and server
+      And a transport conditioner that reorders packets
+      When an entity is spawned with components
+      Then the client observes Spawn before any component updates
+
+  # --------------------------------------------------------------------------
+  # Rule: Re-entry after one tick is fresh lifetime
+  # --------------------------------------------------------------------------
+  # NORMATIVE: If entity re-enters scope after ≥1 tick out, it is fresh spawn.
+  # --------------------------------------------------------------------------
+  Rule: Re-entry after one tick is fresh lifetime
+
+    Scenario: Entity re-entering scope gets fresh spawn
+      Given an entity that was in-scope for a client
+      When the entity leaves scope
+      And at least one tick passes
+      And the entity re-enters scope
+      Then the client observes a fresh Spawn event
+
+  # --------------------------------------------------------------------------
+  # Rule: Actions outside lifetime are ignored
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Late packets from prior lifetime, or for out-of-scope entities,
+  # MUST be ignored.
+  # --------------------------------------------------------------------------
+  Rule: Actions outside lifetime are ignored
+
+    Scenario: Late updates from prior lifetime are ignored
+      Given an entity that completed a lifetime and despawned
+      When late replication packets arrive for that lifetime
+      Then they are ignored
+
+    Scenario: Updates for out-of-scope entities are ignored
+      Given an entity out-of-scope for a client
+      When replication updates arrive for that entity
+      Then they are ignored
+
+  # --------------------------------------------------------------------------
+  # Rule: Update-before-Insert is buffered within lifetime
+  # --------------------------------------------------------------------------
+  # NORMATIVE: If Update arrives before Insert within active lifetime,
+  # buffer until Insert arrives. Drop on Despawn.
+  # --------------------------------------------------------------------------
+  Rule: Update-before-Insert is buffered within lifetime
+
+    Scenario: Update received before Insert is applied after Insert
+      Given a connected client and server
+      And packet reordering causes Update to arrive before Insert
+      When Insert arrives
+      Then the Update is applied after Insert
+
+  # --------------------------------------------------------------------------
+  # Rule: Local-only component overwritten by server replication
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Server replication overwrites local-only component with
+  # Insert event (not Update).
+  # --------------------------------------------------------------------------
+  Rule: Local-only component overwritten by server replication
+
+    Scenario: Server replication overwrites local-only component
+      Given a client with a local-only component on an entity
+      When the server sends a replicated component of the same type
+      Then the client observes an Insert event
+      And the local-only component is overwritten
+
+  # --------------------------------------------------------------------------
+  # Rule: Duplicate delivery is idempotent
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Same action delivered twice MUST NOT create additional effects.
+  # --------------------------------------------------------------------------
+  Rule: Duplicate delivery is idempotent
+
+    Scenario: Duplicate spawn does not create second entity
+      Given a connected client and server
+      And a transport conditioner that duplicates packets
+      When an entity spawn is delivered
+      Then only one entity exists on the client
+
+    Scenario: Duplicate update is idempotent
+      Given a connected client and server with a replicated entity
+      And a transport conditioner that duplicates packets
+      When an update is delivered
+      Then the update is applied exactly once
+
+  # --------------------------------------------------------------------------
+  # Rule: Collapse to final state per tick
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Within a single tick, only final state is observable.
+  # No intermediate transitions.
+  # --------------------------------------------------------------------------
+  Rule: Collapse to final state per tick
+
+    Scenario: Multiple updates within tick collapse to final state
+      Given a connected client and server
+      When the server updates a component multiple times within one tick
+      Then the client observes only the final state
+
+  # --------------------------------------------------------------------------
+  # Rule: LocalEntity reuse cannot corrupt new lifetime
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Late/reordered actions from old lifetime MUST NOT corrupt new.
+  # --------------------------------------------------------------------------
+  Rule: LocalEntity reuse cannot corrupt new lifetime
+
+    Scenario: Old lifetime actions do not affect new lifetime
+      Given an entity that completed a lifetime
+      And the entity respawned in a new lifetime
+      When late actions from the old lifetime arrive
+      Then they do not affect the new lifetime
+
+  # --------------------------------------------------------------------------
+  # Rule: Server wins conflict resolution
+  # --------------------------------------------------------------------------
+  # NORMATIVE: Server replicated state overwrites client local state.
+  # --------------------------------------------------------------------------
+  Rule: Server wins conflict resolution
+
+    Scenario: Server state overwrites client local mutation
+      Given a client with a local mutation on a replicated component
+      When the server sends an update for that component
+      Then the server state overwrites the client state
+
+# ============================================================================
+# AMBIGUITIES + PROPOSED CLARIFICATIONS
+# ============================================================================
+# None identified. The entity replication spec is comprehensive.
+# ============================================================================
