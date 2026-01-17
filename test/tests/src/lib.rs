@@ -4,7 +4,7 @@
 //! - `TestWorld` — A newtype wrapper around `Option<Scenario>` for BDD tests
 //! - Step bindings registered via `#[given]`, `#[when]`, `#[then]` macros
 //!
-//! The `naia_namako` adapter depends on this crate for dispatch.
+//! The `naia_npap` adapter depends on this crate for dispatch.
 //!
 //! # Architecture
 //!

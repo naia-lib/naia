@@ -639,7 +639,7 @@ pub(crate) fn register_spawn_entity(
     let client_key = scenario.user_to_client_key(&user_key)?;
 
     let server_local_entity = {
-        let server = scenario.server().as_ref()?;
+        let server = scenario.server()?;
         let world_ref = scenario.server_world_ref();
         if !world_ref.has_entity(&server_entity) {
             return None;

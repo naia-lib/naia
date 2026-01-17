@@ -1,12 +1,12 @@
 [package]
-name = "naia_namako"
+name = "naia_npap"
 version = "0.1.0"
 edition = "2021"
 publish = false
 description = "NPAP adapter for Naia BDD tests"
 
 [[bin]]
-name = "naia_namako"
+name = "naia_npap"
 path = "src/main.rs"
 
 [dependencies]

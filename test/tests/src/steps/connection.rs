@@ -57,7 +57,7 @@ fn given_server_running_with_auth(world: &mut TestWorld) {
 /// Tracks server-side AuthEvent and ConnectEvent, plus client-side ConnectEvent.
 #[when("a client authenticates and connects")]
 fn when_client_authenticates_and_connects(world: &mut TestWorld) {
-    let scenario = world.scenario();
+    let scenario = world.scenario_mut();
     let test_protocol = protocol();
     let room_key = scenario.last_room();
 
@@ -130,7 +130,7 @@ fn when_client_authenticates_and_connects(world: &mut TestWorld) {
 /// Client attempts to connect but server rejects the connection.
 #[when("a client attempts to connect but is rejected")]
 fn when_client_attempts_connection_rejected(world: &mut TestWorld) {
-    let scenario = world.scenario();
+    let scenario = world.scenario_mut();
     let test_protocol = protocol();
 
     // Configure client for immediate handshake
@@ -181,7 +181,7 @@ fn when_client_attempts_connection_rejected(world: &mut TestWorld) {
 /// Step: Then the server observes AuthEvent before ConnectEvent
 /// Verifies the correct ordering of server-side events per connection-24.
 #[then("the server observes AuthEvent before ConnectEvent")]
-fn then_server_auth_before_connect(world: &mut TestWorld) {
+fn then_server_auth_before_connect(world: &TestWorld) {
     let scenario = world.scenario();
 
     assert!(
@@ -194,7 +194,7 @@ fn then_server_auth_before_connect(world: &mut TestWorld) {
 /// Step: Then the server observes DisconnectEvent after ConnectEvent
 /// Verifies connection-22: Server DisconnectEvent only after ConnectEvent.
 #[then("the server observes DisconnectEvent after ConnectEvent")]
-fn then_server_disconnect_after_connect(world: &mut TestWorld) {
+fn then_server_disconnect_after_connect(world: &TestWorld) {
     let scenario = world.scenario();
 
     assert!(
@@ -207,7 +207,7 @@ fn then_server_disconnect_after_connect(world: &mut TestWorld) {
 /// Step: Then the client observes ConnectEvent
 /// Verifies client received ConnectEvent.
 #[then("the client observes ConnectEvent")]
-fn then_client_observes_connect(world: &mut TestWorld) {
+fn then_client_observes_connect(world: &TestWorld) {
     let scenario = world.scenario();
     let client_key = scenario.last_client();
 
@@ -221,23 +221,20 @@ fn then_client_observes_connect(world: &mut TestWorld) {
 /// Step: Then the client is connected
 /// Verifies client connection status is connected.
 #[then("the client is connected")]
-fn then_client_is_connected(world: &mut TestWorld) {
+fn then_client_is_connected(world: &TestWorld) {
     let scenario = world.scenario();
     let client_key = scenario.last_client();
 
-    // Ensure we don't double-expect if previous step ended with expect
-    scenario.mutate(|_| {});
-
-    scenario.expect(|ctx| {
-        let connected = ctx.client(client_key, |c| c.connection_status().is_connected());
-        connected.then_some(())
-    });
+    assert!(
+        scenario.client_is_connected(client_key),
+        "Client should be connected"
+    );
 }
 
 /// Step: Then the client observes DisconnectEvent after ConnectEvent
 /// Verifies connection-21: Client DisconnectEvent only after ConnectEvent.
 #[then("the client observes DisconnectEvent after ConnectEvent")]
-fn then_client_disconnect_after_connect(world: &mut TestWorld) {
+fn then_client_disconnect_after_connect(world: &TestWorld) {
     let scenario = world.scenario();
     let client_key = scenario.last_client();
 
@@ -251,23 +248,20 @@ fn then_client_disconnect_after_connect(world: &mut TestWorld) {
 /// Step: Then the client is not connected
 /// Verifies client connection status is not connected.
 #[then("the client is not connected")]
-fn then_client_is_not_connected(world: &mut TestWorld) {
+fn then_client_is_not_connected(world: &TestWorld) {
     let scenario = world.scenario();
     let client_key = scenario.last_client();
 
-    // Ensure we don't double-expect if previous step ended with expect
-    scenario.mutate(|_| {});
-
-    scenario.expect(|ctx| {
-        let connected = ctx.client(client_key, |c| c.connection_status().is_connected());
-        (!connected).then_some(())
-    });
+    assert!(
+        !scenario.client_is_connected(client_key),
+        "Client should not be connected"
+    );
 }
 
 /// Step: Then the client observes RejectEvent
 /// Verifies client received RejectEvent per connection-19.
 #[then("the client observes RejectEvent")]
-fn then_client_observes_reject(world: &mut TestWorld) {
+fn then_client_observes_reject(world: &TestWorld) {
     let scenario = world.scenario();
     let client_key = scenario.last_client();
 
@@ -281,7 +275,7 @@ fn then_client_observes_reject(world: &mut TestWorld) {
 /// Step: Then the client does not observe ConnectEvent
 /// Verifies client did NOT receive ConnectEvent (for rejection scenarios).
 #[then("the client does not observe ConnectEvent")]
-fn then_client_no_connect(world: &mut TestWorld) {
+fn then_client_no_connect(world: &TestWorld) {
     let scenario = world.scenario();
     let client_key = scenario.last_client();
 
@@ -295,7 +289,7 @@ fn then_client_no_connect(world: &mut TestWorld) {
 /// Step: Then the client does not observe DisconnectEvent
 /// Verifies client did NOT receive DisconnectEvent (for rejection scenarios).
 #[then("the client does not observe DisconnectEvent")]
-fn then_client_no_disconnect(world: &mut TestWorld) {
+fn then_client_no_disconnect(world: &TestWorld) {
     let scenario = world.scenario();
     let client_key = scenario.last_client();
 

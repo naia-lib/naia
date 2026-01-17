@@ -15,7 +15,7 @@ pub use naia_tests::TestWorld;
 
 /// NPAP Adapter for Naia
 #[derive(Parser, Debug)]
-#[command(name = "naia_namako")]
+#[command(name = "naia_npap")]
 #[command(version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]

@@ -412,10 +412,6 @@ impl Scenario {
         &mut self.entity_registry
     }
 
-    pub(crate) fn server(&self) -> &Option<Server> {
-        &self.server
-    }
-
     pub(crate) fn clients_mut(&mut self) -> &mut HashMap<ClientKey, ClientState> {
         &mut self.clients
     }
@@ -434,6 +430,14 @@ impl Scenario {
 
     pub(crate) fn clients(&self) -> &HashMap<ClientKey, ClientState> {
         &self.clients
+    }
+
+    /// Check if a client is connected.
+    pub fn client_is_connected(&self, client_key: ClientKey) -> bool {
+        self.clients
+            .get(&client_key)
+            .map(|state| state.client().connection_status().is_connected())
+            .unwrap_or(false)
     }
 
     /// Get immutable access to server and registry for expect operations

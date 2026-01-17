@@ -11,7 +11,7 @@ members = [
     "socket/server",
     "socket/shared",
     "test/harness",
-    "test/namako",
+    "test/npap",
     "test/tests",
     "tools/legacy_spec_tool",
     "adapters/hecs/client",

@@ -497,7 +497,7 @@ pub(crate) fn register_client_entity_event(
             let mut matched_key = None;
 
             if let Some(user_key) = scenario.client_to_user_key(client_key) {
-                let server = scenario.server().as_ref()?;
+                let server = scenario.server()?;
                 let server_entities: Vec<_> =
                     scenario.entity_registry().server_entities_iter().collect();
 
@@ -657,7 +657,7 @@ fn register_client_spawns(
             let mut matched_key = None;
 
             if let Some(user_key) = scenario.client_to_user_key(&client_key) {
-                let server = scenario.server().as_ref().expect("server not started");
+                let server = scenario.server().expect("server not started");
 
                 for (ek, server_entity) in &server_entities {
                     let world_ref = scenario.server_world_ref();
