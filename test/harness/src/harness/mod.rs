@@ -4,6 +4,7 @@ mod client_mutate_ctx;
 mod client_state;
 mod entity_registry;
 mod expect_ctx;
+mod expect_result;
 mod keys;
 mod mutate_ctx;
 mod room;
@@ -28,6 +29,7 @@ pub use client_events::{
 };
 pub use client_entity::{ClientEntityMut, ClientEntityRef};
 pub use expect_ctx::ExpectCtx;
+pub use expect_result::ExpectResult;
 pub use keys::{ClientKey, EntityKey};
 pub use scenario::{Scenario, TrackedClientEvent, TrackedServerEvent};
 pub use server_events::{

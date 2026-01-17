@@ -13,7 +13,27 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SPECS_DIR="$(dirname "$SCRIPT_DIR")"
-ADAPTER="cargo run --manifest-path $SPECS_DIR/../namako/Cargo.toml --"
+
+# Compute absolute paths from SCRIPT_DIR (robust against cwd)
+NAIA_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+NAMAKO_ROOT="$(cd "$NAIA_ROOT/../namako" && pwd)"
+NAIA_NPAP_ROOT="$NAIA_ROOT/test/npap"
+
+# Validate paths exist
+if [[ ! -f "$NAMAKO_ROOT/Cargo.toml" ]]; then
+    echo "❌ Cannot find namako at: $NAMAKO_ROOT"
+    echo "   Expected sibling repo structure: .../specops/{naia,namako}"
+    exit 1
+fi
+
+if [[ ! -f "$NAIA_NPAP_ROOT/Cargo.toml" ]]; then
+    echo "❌ Cannot find naia_npap adapter at: $NAIA_NPAP_ROOT"
+    echo "   Expected location: naia/test/npap/"
+    exit 1
+fi
+
+NAMAKO_CLI="cargo run -p namako-cli --manifest-path $NAMAKO_ROOT/Cargo.toml --"
+ADAPTER="cargo run --manifest-path $NAIA_NPAP_ROOT/Cargo.toml --"
 
 cd "$SPECS_DIR"
 
@@ -23,8 +43,7 @@ echo ""
 
 # Step 1: Lint
 echo "[1/3] Running lint..."
-if ! cargo run -p namako-cli --manifest-path ../../../namako/Cargo.toml -- \
-    lint -s . -a "$ADAPTER" -o resolved_plan.json 2>/dev/null; then
+if ! $NAMAKO_CLI lint -s . -a "$ADAPTER" -o resolved_plan.json 2>/dev/null; then
     echo "❌ Lint failed"
     exit 1
 fi
@@ -48,8 +67,7 @@ echo ""
 
 # Step 3: Verify
 echo "[3/3] Running verify..."
-if ! cargo run -p namako-cli --manifest-path ../../../namako/Cargo.toml -- \
-    verify -s . -a "$ADAPTER" 2>/dev/null; then
+if ! $NAMAKO_CLI verify -s . -a "$ADAPTER" 2>/dev/null; then
     echo "❌ Verify failed (baseline mismatch)"
     exit 3
 fi

@@ -8,7 +8,7 @@ use naia_test_harness::{
     protocol, Auth,
     ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
     TrackedServerEvent, TrackedClientEvent,
-    ClientConnectEvent, ClientDisconnectEvent,
+    ClientDisconnectEvent,
 };
 use naia_server::ServerConfig;
 use naia_client::{ClientConfig, JitterBufferType};
@@ -21,7 +21,7 @@ use crate::{TestWorldMut, TestWorldRef};
 
 /// Step: Given a server is running
 #[given("a server is running")]
-fn given_server_running(mut ctx: TestWorldMut) {
+fn given_server_running(ctx: &mut TestWorldMut) {
     let scenario = ctx.init();
     let test_protocol = protocol();
 
@@ -40,14 +40,14 @@ fn given_server_running(mut ctx: TestWorldMut) {
 
 /// Step: When a client connects
 #[when("a client connects")]
-fn when_client_connects(mut ctx: TestWorldMut) {
-    connect_client_impl(&mut ctx);
+fn when_client_connects(ctx: &mut TestWorldMut) {
+    connect_client_impl(ctx);
 }
 
 /// Step: Given a client connects (for And/But after Given)
 #[given("a client connects")]
-fn given_client_connects(mut ctx: TestWorldMut) {
-    connect_client_impl(&mut ctx);
+fn given_client_connects(ctx: &mut TestWorldMut) {
+    connect_client_impl(ctx);
 }
 
 /// Internal implementation for client connection.
@@ -117,7 +117,7 @@ fn connect_client_impl(ctx: &mut TestWorldMut) {
 
 /// Step: When the server disconnects the client
 #[when("the server disconnects the client")]
-fn when_server_disconnects(mut ctx: TestWorldMut) {
+fn when_server_disconnects(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
 
@@ -162,7 +162,7 @@ fn when_server_disconnects(mut ctx: TestWorldMut) {
 
 /// Step: Then the server has {int} connected client(s)
 #[then("the server has {int} connected client(s)")]
-fn then_server_has_clients(ctx: TestWorldRef, expected: usize) {
+fn then_server_has_clients(ctx: &TestWorldRef, expected: usize) {
     let scenario = ctx.scenario();
     let count = scenario.server().expect("server").users_count();
     assert_eq!(count, expected, "server should have {} connected clients", expected);
@@ -174,6 +174,6 @@ fn then_server_has_clients(ctx: TestWorldRef, expected: usize) {
 
 /// Step: Then the system intentionally fails
 #[then("the system intentionally fails")]
-fn then_system_intentionally_fails(_ctx: TestWorldRef) {
+fn then_system_intentionally_fails(_ctx: &TestWorldRef) {
     panic!("INTENTIONAL FAILURE: This step is designed to fail for demo purposes");
 }

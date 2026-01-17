@@ -14,9 +14,9 @@ use std::time::Duration;
 use namako::{given, when, then};
 use naia_test_harness::{
     protocol, Auth,
-    ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
+    ServerAuthEvent, ServerConnectEvent,
     TrackedServerEvent, TrackedClientEvent,
-    ClientConnectEvent, ClientDisconnectEvent, ClientRejectEvent,
+    ClientConnectEvent, ClientRejectEvent,
 };
 use naia_server::ServerConfig;
 use naia_client::{ClientConfig, JitterBufferType};
@@ -30,7 +30,7 @@ use crate::{TestWorldMut, TestWorldRef};
 /// Step: Given a server is running with auth required
 /// Sets up a server that requires authentication before accepting connections.
 #[given("a server is running with auth required")]
-fn given_server_running_with_auth(mut ctx: TestWorldMut) {
+fn given_server_running_with_auth(ctx: &mut TestWorldMut) {
     let scenario = ctx.init();
     let test_protocol = protocol();
 
@@ -56,7 +56,7 @@ fn given_server_running_with_auth(mut ctx: TestWorldMut) {
 /// Client goes through full auth flow and connects successfully.
 /// Tracks server-side AuthEvent and ConnectEvent, plus client-side ConnectEvent.
 #[when("a client authenticates and connects")]
-fn when_client_authenticates_and_connects(mut ctx: TestWorldMut) {
+fn when_client_authenticates_and_connects(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     let test_protocol = protocol();
     let room_key = scenario.last_room();
@@ -129,7 +129,7 @@ fn when_client_authenticates_and_connects(mut ctx: TestWorldMut) {
 /// Step: When a client attempts to connect but is rejected
 /// Client attempts to connect but server rejects the connection.
 #[when("a client attempts to connect but is rejected")]
-fn when_client_attempts_connection_rejected(mut ctx: TestWorldMut) {
+fn when_client_attempts_connection_rejected(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     let test_protocol = protocol();
 
@@ -181,52 +181,46 @@ fn when_client_attempts_connection_rejected(mut ctx: TestWorldMut) {
 /// Step: Then the server observes AuthEvent before ConnectEvent
 /// Verifies the correct ordering of server-side events per connection-24.
 #[then("the server observes AuthEvent before ConnectEvent")]
-fn then_server_auth_before_connect(ctx: TestWorldRef) {
-    let scenario = ctx.scenario();
-
+fn then_server_auth_before_connect(ctx: &TestWorldRef) {
     assert!(
-        scenario.server_event_before(TrackedServerEvent::Auth, TrackedServerEvent::Connect),
+        ctx.server_event_before(TrackedServerEvent::Auth, TrackedServerEvent::Connect),
         "Server events out of order: expected AuthEvent before ConnectEvent. History: {:?}",
-        scenario.server_event_history()
+        ctx.server_event_history()
     );
 }
 
 /// Step: Then the server observes DisconnectEvent after ConnectEvent
 /// Verifies connection-22: Server DisconnectEvent only after ConnectEvent.
 #[then("the server observes DisconnectEvent after ConnectEvent")]
-fn then_server_disconnect_after_connect(ctx: TestWorldRef) {
-    let scenario = ctx.scenario();
-
+fn then_server_disconnect_after_connect(ctx: &TestWorldRef) {
     assert!(
-        scenario.server_event_before(TrackedServerEvent::Connect, TrackedServerEvent::Disconnect),
+        ctx.server_event_before(TrackedServerEvent::Connect, TrackedServerEvent::Disconnect),
         "Server events out of order: expected ConnectEvent before DisconnectEvent. History: {:?}",
-        scenario.server_event_history()
+        ctx.server_event_history()
     );
 }
 
 /// Step: Then the client observes ConnectEvent
 /// Verifies client received ConnectEvent.
 #[then("the client observes ConnectEvent")]
-fn then_client_observes_connect(ctx: TestWorldRef) {
-    let scenario = ctx.scenario();
-    let client_key = scenario.last_client();
+fn then_client_observes_connect(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
 
     assert!(
-        scenario.client_observed(client_key, TrackedClientEvent::Connect),
+        ctx.client_observed(client_key, TrackedClientEvent::Connect),
         "Client did not observe ConnectEvent. History: {:?}",
-        scenario.client_event_history(client_key)
+        ctx.client_event_history(client_key)
     );
 }
 
 /// Step: Then the client is connected
 /// Verifies client connection status is connected.
 #[then("the client is connected")]
-fn then_client_is_connected(ctx: TestWorldRef) {
-    let scenario = ctx.scenario();
-    let client_key = scenario.last_client();
+fn then_client_is_connected(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
 
     assert!(
-        scenario.client_is_connected(client_key),
+        ctx.client_is_connected(client_key),
         "Client should be connected"
     );
 }
@@ -234,26 +228,31 @@ fn then_client_is_connected(ctx: TestWorldRef) {
 /// Step: Then the client observes DisconnectEvent after ConnectEvent
 /// Verifies connection-21: Client DisconnectEvent only after ConnectEvent.
 #[then("the client observes DisconnectEvent after ConnectEvent")]
-fn then_client_disconnect_after_connect(ctx: TestWorldRef) {
-    let scenario = ctx.scenario();
-    let client_key = scenario.last_client();
+fn then_client_disconnect_after_connect(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
 
+    // First: wait until Disconnect is observed (polling condition)
     assert!(
-        scenario.client_event_before(client_key, TrackedClientEvent::Connect, TrackedClientEvent::Disconnect),
+        ctx.client_observed(client_key, TrackedClientEvent::Disconnect),
+        "Waiting for DisconnectEvent"
+    );
+
+    // Then: verify Connect came first (permanent assertion)
+    assert!(
+        ctx.client_event_before(client_key, TrackedClientEvent::Connect, TrackedClientEvent::Disconnect),
         "Client events out of order: expected ConnectEvent before DisconnectEvent. History: {:?}",
-        scenario.client_event_history(client_key)
+        ctx.client_event_history(client_key)
     );
 }
 
 /// Step: Then the client is not connected
 /// Verifies client connection status is not connected.
 #[then("the client is not connected")]
-fn then_client_is_not_connected(ctx: TestWorldRef) {
-    let scenario = ctx.scenario();
-    let client_key = scenario.last_client();
+fn then_client_is_not_connected(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
 
     assert!(
-        !scenario.client_is_connected(client_key),
+        !ctx.client_is_connected(client_key),
         "Client should not be connected"
     );
 }
@@ -261,41 +260,38 @@ fn then_client_is_not_connected(ctx: TestWorldRef) {
 /// Step: Then the client observes RejectEvent
 /// Verifies client received RejectEvent per connection-19.
 #[then("the client observes RejectEvent")]
-fn then_client_observes_reject(ctx: TestWorldRef) {
-    let scenario = ctx.scenario();
-    let client_key = scenario.last_client();
+fn then_client_observes_reject(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
 
     assert!(
-        scenario.client_observed(client_key, TrackedClientEvent::Reject),
+        ctx.client_observed(client_key, TrackedClientEvent::Reject),
         "Client did not observe RejectEvent. History: {:?}",
-        scenario.client_event_history(client_key)
+        ctx.client_event_history(client_key)
     );
 }
 
 /// Step: Then the client does not observe ConnectEvent
 /// Verifies client did NOT receive ConnectEvent (for rejection scenarios).
 #[then("the client does not observe ConnectEvent")]
-fn then_client_no_connect(ctx: TestWorldRef) {
-    let scenario = ctx.scenario();
-    let client_key = scenario.last_client();
+fn then_client_no_connect(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
 
     assert!(
-        !scenario.client_observed(client_key, TrackedClientEvent::Connect),
+        !ctx.client_observed(client_key, TrackedClientEvent::Connect),
         "Client should NOT have observed ConnectEvent but did. History: {:?}",
-        scenario.client_event_history(client_key)
+        ctx.client_event_history(client_key)
     );
 }
 
 /// Step: Then the client does not observe DisconnectEvent
 /// Verifies client did NOT receive DisconnectEvent (for rejection scenarios).
 #[then("the client does not observe DisconnectEvent")]
-fn then_client_no_disconnect(ctx: TestWorldRef) {
-    let scenario = ctx.scenario();
-    let client_key = scenario.last_client();
+fn then_client_no_disconnect(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
 
     assert!(
-        !scenario.client_observed(client_key, TrackedClientEvent::Disconnect),
+        !ctx.client_observed(client_key, TrackedClientEvent::Disconnect),
         "Client should NOT have observed DisconnectEvent but did. History: {:?}",
-        scenario.client_event_history(client_key)
+        ctx.client_event_history(client_key)
     );
 }

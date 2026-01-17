@@ -10,18 +10,21 @@
 //!
 //! Steps use capability-separated context types:
 //! - Given/When steps: `TestWorldMut` (mutation operations only)
-//! - Then steps: `TestWorldRef` (read/assertion operations only)
+//! - Then steps: `TestWorldRef` (read/assertion operations only, wraps ExpectCtx)
 
 use namako::World;
 use namako::codegen::StepContext;
-use naia_test_harness::Scenario;
+use naia_test_harness::{ClientKey, ExpectCtx, Scenario, TrackedClientEvent, TrackedServerEvent};
 
 /// The World type for Naia BDD tests.
 ///
 /// This is a newtype wrapper around `Option<Scenario>`.
 /// All test state lives in `Scenario` - do NOT add fields here.
+///
+/// Note: `ref_ctx` is not specified because Then steps use a custom path
+/// that creates `TestWorldRef` from `ExpectCtx` inside the polling loop.
 #[derive(World, Default)]
-#[world(mut_ctx = TestWorldMut<'a>, ref_ctx = TestWorldRef<'a>)]
+#[world(mut_ctx = TestWorldMut<'a>)]
 pub struct TestWorld(Option<Scenario>);
 
 impl TestWorld {
@@ -95,28 +98,78 @@ impl StepContext for TestWorldMut<'_> {
 
 /// Read-only context for Then steps.
 ///
-/// This context provides ONLY read/assertion operations. Mutation operations
-/// are not available through this context.
+/// This context wraps an `ExpectCtx` and provides ONLY read/assertion operations.
+/// Mutation operations are not available through this context.
 ///
-/// Note: Takes `&'a mut TestWorld` internally because expect operations may
-/// need to tick simulation, but the public API only exposes read operations.
-pub struct TestWorldRef<'a>(&'a mut TestWorld);
+/// Uses a raw pointer for interior mutability to allow `&self` methods to
+/// call ExpectCtx methods that need `&mut self`.
+pub struct TestWorldRef<'a> {
+    // Raw pointer to ExpectCtx - valid for the lifetime of the closure
+    ctx: *mut ExpectCtx<'a>,
+}
 
 impl<'a> TestWorldRef<'a> {
-    /// Create a new read-only context from a TestWorld.
-    pub fn new(world: &'a mut TestWorld) -> Self {
-        Self(world)
+    /// Create a new read-only context from an ExpectCtx.
+    /// Called by the generated macro wrapper inside the polling loop.
+    pub fn new(ctx: &mut ExpectCtx<'a>) -> Self {
+        Self { ctx: ctx as *mut ExpectCtx<'a> }
     }
 
-    /// Get immutable access to the scenario.
-    /// Use this for assertions in Then steps.
+    /// Get access to the underlying ExpectCtx.
+    /// Safety: We ensure single-threaded access and the pointer remains valid.
+    fn ctx(&self) -> &mut ExpectCtx<'a> {
+        // Safety: Tests are single-threaded, pointer is valid for 'a
+        unsafe { &mut *self.ctx }
+    }
+
+    /// Get the scenario (for delegation).
+    fn scenario_ref(&self) -> &Scenario {
+        self.ctx().scenario()
+    }
+
+    /// Get the current tick count.
+    pub fn global_tick(&self) -> usize {
+        self.ctx().global_tick()
+    }
+
+    /// Get the last client key started.
+    pub fn last_client(&self) -> ClientKey {
+        self.scenario_ref().last_client()
+    }
+
+    /// Check server event ordering.
+    pub fn server_event_before(&self, a: TrackedServerEvent, b: TrackedServerEvent) -> bool {
+        self.scenario_ref().server_event_before(a, b)
+    }
+
+    /// Check if client observed an event.
+    pub fn client_observed(&self, client_key: ClientKey, event: TrackedClientEvent) -> bool {
+        self.scenario_ref().client_observed(client_key, event)
+    }
+
+    /// Check client event ordering.
+    pub fn client_event_before(&self, client_key: ClientKey, a: TrackedClientEvent, b: TrackedClientEvent) -> bool {
+        self.scenario_ref().client_event_before(client_key, a, b)
+    }
+
+    /// Check if client is connected.
+    pub fn client_is_connected(&self, client_key: ClientKey) -> bool {
+        self.scenario_ref().client_is_connected(client_key)
+    }
+
+    /// Get client event history (cloned).
+    pub fn client_event_history(&self, client_key: ClientKey) -> Vec<TrackedClientEvent> {
+        self.scenario_ref().client_event_history(client_key).to_vec()
+    }
+
+    /// Get server event history (cloned).
+    pub fn server_event_history(&self) -> Vec<TrackedServerEvent> {
+        self.scenario_ref().server_event_history().to_vec()
+    }
+
+    /// Get access to scenario for custom queries (if needed).
     pub fn scenario(&self) -> &Scenario {
-        self.0.scenario()
-    }
-
-    /// Check if scenario is initialized.
-    pub fn is_initialized(&self) -> bool {
-        self.0.is_initialized()
+        self.scenario_ref()
     }
 }
 

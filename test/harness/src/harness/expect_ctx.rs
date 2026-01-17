@@ -53,8 +53,10 @@ impl<'a> ExpectCtx<'a> {
         f(&mut client_expect)
     }
 
-    #[cfg(feature = "e2e_debug")]
-    /// Get access to scenario for debugging (feature-gated)
+    /// Get access to scenario for read-only queries.
+    ///
+    /// This provides access to scenario-level state and history,
+    /// such as event ordering assertions and client lookups.
     pub fn scenario(&self) -> &Scenario {
         self.scenario
     }

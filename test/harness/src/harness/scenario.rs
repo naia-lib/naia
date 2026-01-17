@@ -241,6 +241,61 @@ impl Scenario {
         self.expect_with_ticks_internal_msg(DEFAULT_MAX_EXPECT_TICKS, msg, f)
     }
 
+    /// Single-tick expectation check. Does NOT loop.
+    ///
+    /// Ticks once, collects events, creates ExpectCtx, calls closure.
+    /// Returns the closure's result for the runner to handle (pass/retry/fail).
+    ///
+    /// This is the primitive used by Then step wrappers in the runner.
+    /// Unlike `expect()`, this method does NOT loop - it performs exactly one tick
+    /// and one evaluation, returning control to the caller.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use naia_test_harness::ExpectResult;
+    ///
+    /// for _tick in 0..100 {
+    ///     let result = scenario.expect_once(|ctx| {
+    ///         if ctx.server(|s| s.has_event::<SomeEvent>()) {
+    ///             ExpectResult::Passed(())
+    ///         } else {
+    ///             ExpectResult::NotYet
+    ///         }
+    ///     });
+    ///     match result {
+    ///         ExpectResult::Passed(()) => break,
+    ///         ExpectResult::NotYet => continue,
+    ///         ExpectResult::Failed(msg) => panic!("{}", msg),
+    ///     }
+    /// }
+    /// ```
+    pub fn expect_once<T>(
+        &mut self,
+        f: impl FnOnce(&mut ExpectCtx<'_>) -> crate::harness::ExpectResult<T>,
+    ) -> crate::harness::ExpectResult<T> {
+        // Tick to advance simulation
+        self.tick();
+
+        // Collect per-tick events (EXACTLY once per tick)
+        let mut server_events = self.take_server_events();
+        let mut client_events_map = self.take_client_events();
+
+        // Process spawn events to match client-spawned entities with server entities
+        process_spawn_events(self, &mut server_events, &mut client_events_map);
+
+        // Process despawn events to unregister entities from the registry
+        crate::harness::client_events::process_despawn_events(
+            self,
+            &mut server_events,
+            &mut client_events_map,
+        );
+
+        // Create ExpectCtx for this tick and call closure
+        let mut ctx = ExpectCtx::new(self, server_events, client_events_map);
+        f(&mut ctx)
+    }
+
     /// TODO: THIS IS ABSOLUTELY HORRIBLE. FIX THIS! This should ONLY happen within a mutate block!
     /// Inject a raw packet from a client to the server (for testing malformed data)
     pub fn inject_client_packet(&mut self, client_key: &ClientKey, data: Vec<u8>) -> bool {
