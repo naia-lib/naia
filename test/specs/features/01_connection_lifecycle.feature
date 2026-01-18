@@ -269,6 +269,31 @@ Feature: Connection Lifecycle
       When the server disconnects the client
       Then the client is not connected
 
+  # --------------------------------------------------------------------------
+  # Rule: Auth-required event ordering
+  # --------------------------------------------------------------------------
+  # require_auth=true: AuthEvent → ConnectEvent → DisconnectEvent
+  # --------------------------------------------------------------------------
+  Rule: Auth-required event ordering
+
+    Scenario: Server observes AuthEvent before ConnectEvent
+      Given a server is running with auth required
+      When a client authenticates and connects
+      Then the server observes AuthEvent before ConnectEvent
+
+    Scenario: Rejected client observes RejectEvent not ConnectEvent
+      Given a server is running with auth required
+      When a client attempts to connect but is rejected
+      Then the client observes RejectEvent
+      And the client does not observe ConnectEvent
+      And the client does not observe DisconnectEvent
+
+    Scenario: Server full event ordering with disconnect
+      Given a server is running with auth required
+      When a client authenticates and connects
+      When the server disconnects the client
+      Then the server observes DisconnectEvent after ConnectEvent
+
 
 # ============================================================================
 # DEFERRED TESTS
