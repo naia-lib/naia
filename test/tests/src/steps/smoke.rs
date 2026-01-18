@@ -86,7 +86,7 @@ fn connect_client_impl(ctx: &mut TestWorldMut) {
         });
     });
 
-    // Wait for connect event
+    // Wait for server connect event and track it
     scenario.expect(|ctx| {
         ctx.server(|server| {
             if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
@@ -97,6 +97,7 @@ fn connect_client_impl(ctx: &mut TestWorldMut) {
             None
         })
     });
+    scenario.track_server_event(TrackedServerEvent::Connect);
 
     // Add client to room
     scenario.mutate(|ctx| {
@@ -105,12 +106,13 @@ fn connect_client_impl(ctx: &mut TestWorldMut) {
         });
     });
 
-    // Verify connection established
+    // Wait for client connect event and track it
     scenario.expect(|ctx| {
-        let client_connected = ctx.client(client_key, |c| c.connection_status().is_connected());
-        let user_exists = ctx.server(|s| s.user_exists(&client_key));
-        (client_connected && user_exists).then_some(())
+        ctx.client(client_key, |client| {
+            client.read_event::<naia_test_harness::ClientConnectEvent>()
+        })
     });
+    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
 
     scenario.allow_flexible_next();
 }

@@ -298,6 +298,11 @@ impl<'a> TestWorldRef<'a> {
         self.scenario_ref().server_event_before(a, b)
     }
 
+    /// Check if server observed an event.
+    pub fn server_observed(&self, event: TrackedServerEvent) -> bool {
+        self.scenario_ref().server_event_history().contains(&event)
+    }
+
     /// Check if client observed an event.
     pub fn client_observed(&self, client_key: ClientKey, event: TrackedClientEvent) -> bool {
         self.scenario_ref().client_observed(client_key, event)

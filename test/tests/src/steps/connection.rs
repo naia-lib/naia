@@ -305,3 +305,99 @@ fn then_client_no_disconnect(ctx: &TestWorldRef) {
         ctx.client_event_history(client_key)
     );
 }
+
+// ============================================================================
+// Batch 1: Simple event observation assertions
+// ============================================================================
+
+/// Step: Then the server has observed ConnectEvent
+/// Verifies server received ConnectEvent for any client.
+/// This is a POLLING assertion - waits for event to be observed.
+#[then("the server has observed ConnectEvent")]
+fn then_server_has_observed_connect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    if ctx.server_observed(TrackedServerEvent::Connect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Step: Then the client has observed ConnectEvent
+/// Verifies client received ConnectEvent.
+/// This is a POLLING assertion - waits for event to be observed.
+#[then("the client has observed ConnectEvent")]
+fn then_client_has_observed_connect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+
+    if ctx.client_observed(client_key, TrackedClientEvent::Connect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Step: Then the server has observed DisconnectEvent
+/// Verifies server received DisconnectEvent for any client.
+/// This is a POLLING assertion - waits for event to be observed.
+#[then("the server has observed DisconnectEvent")]
+fn then_server_has_observed_disconnect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    if ctx.server_observed(TrackedServerEvent::Disconnect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Step: Then the client has observed DisconnectEvent
+/// Verifies client received DisconnectEvent.
+/// This is a POLLING assertion - waits for event to be observed.
+#[then("the client has observed DisconnectEvent")]
+fn then_client_has_observed_disconnect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+
+    if ctx.client_observed(client_key, TrackedClientEvent::Disconnect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Step: Then the server observed ConnectEvent before DisconnectEvent
+/// Verifies event ordering on server.
+#[then("the server observed ConnectEvent before DisconnectEvent")]
+fn then_server_connect_before_disconnect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    // Wait for Disconnect to be observed first
+    if !ctx.server_observed(TrackedServerEvent::Disconnect) {
+        return AssertOutcome::Pending;
+    }
+
+    if ctx.server_event_before(TrackedServerEvent::Connect, TrackedServerEvent::Disconnect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Failed(format!(
+            "Server events out of order: expected ConnectEvent before DisconnectEvent. History: {:?}",
+            ctx.server_event_history()
+        ))
+    }
+}
+
+/// Step: Then the client observed ConnectEvent before DisconnectEvent
+/// Verifies event ordering on client.
+#[then("the client observed ConnectEvent before DisconnectEvent")]
+fn then_client_connect_before_disconnect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+
+    // Wait for Disconnect to be observed first
+    if !ctx.client_observed(client_key, TrackedClientEvent::Disconnect) {
+        return AssertOutcome::Pending;
+    }
+
+    if ctx.client_event_before(client_key, TrackedClientEvent::Connect, TrackedClientEvent::Disconnect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Failed(format!(
+            "Client events out of order: expected ConnectEvent before DisconnectEvent. History: {:?}",
+            ctx.client_event_history(client_key)
+        ))
+    }
+}

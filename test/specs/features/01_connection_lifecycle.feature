@@ -187,204 +187,43 @@
 #
 # ============================================================================
 
+
 Feature: Connection Lifecycle
 
-  Background:
-    Given a Naia test environment is initialized
-
   # --------------------------------------------------------------------------
-  # Rule: Client state machine
+  # Rule: Event ordering
   # --------------------------------------------------------------------------
-  # Client states are Disconnected, Connecting, Connected.
-  # No public "Rejected" state exists.
+  # require_auth=false: ConnectEvent → DisconnectEvent
   # --------------------------------------------------------------------------
-  Rule: Client state machine
+  Rule: Event ordering
 
-    Scenario: Client follows standard state progression
-      Given a client in Disconnected state
-      When the client initiates connection
-      Then the client enters Connecting state
-      When the handshake completes
-      Then the client enters Connected state
+    Scenario: Server observes ConnectEvent when client connects
+      Given a server is running
+      When a client connects
+      Then the server has observed ConnectEvent
 
-    Scenario: No public Rejected state exists
-      Given a client is rejected by the server
-      Then the client emits RejectEvent
-      And the client returns to Disconnected state
+    Scenario: Client observes ConnectEvent when connected
+      Given a server is running
+      When a client connects
+      Then the client has observed ConnectEvent
 
-  # --------------------------------------------------------------------------
-  # Rule: Server state machine per client
-  # --------------------------------------------------------------------------
-  # Server not Connected until handshake + tick sync done.
-  # --------------------------------------------------------------------------
-  Rule: Server state machine per client
+    Scenario: Client observes DisconnectEvent after disconnect
+      Given a server is running
+      And a client connects
+      When the server disconnects the client
+      Then the client has observed DisconnectEvent
 
-    Scenario: Server transitions to Connected after handshake
-      Given a client is handshaking with the server
-      When handshake and tick sync complete
-      Then the server considers the client Connected
+    Scenario: DisconnectEvent occurs only after ConnectEvent on server
+      Given a server is running
+      And a client connects
+      When the server disconnects the client
+      Then the server observed ConnectEvent before DisconnectEvent
 
-    Scenario: Server does not treat client as Connected during handshake
-      Given a client is in handshaking state
-      Then the server does not treat client as Connected
-      And no entity replication occurs to that client
-
-  # --------------------------------------------------------------------------
-  # Rule: Authentication with require_auth=false
-  # --------------------------------------------------------------------------
-  # Clients can connect without pre-auth step.
-  # --------------------------------------------------------------------------
-  Rule: Authentication with require_auth=false
-
-    Scenario: Client connects without pre-auth when not required
-      Given require_auth is false
-      When a client attempts to connect
-      Then no auth step is required
-      And connection may proceed to handshake
-
-  # --------------------------------------------------------------------------
-  # Rule: Authentication with require_auth=true
-  # --------------------------------------------------------------------------
-  # Identity token required via HTTP before transport handshake.
-  # --------------------------------------------------------------------------
-  Rule: Authentication with require_auth=true
-
-    Scenario: Client must obtain token before transport connection
-      Given require_auth is true
-      When a client attempts to connect
-      Then the client must first obtain an identity token via HTTP
-
-    Scenario: Server returns 200 OK with token on valid auth
-      Given require_auth is true
-      When a client sends valid credentials
-      Then the server returns 200 OK with identity token
-
-    Scenario: Server returns 401 Unauthorized on invalid auth
-      Given require_auth is true
-      When a client sends invalid credentials
-      Then the server returns 401 Unauthorized
-      And no identity token is provided
-
-    Scenario: Server emits AuthEvent for each auth request
-      Given require_auth is true
-      When the server receives an auth request
-      Then exactly one AuthEvent is emitted
-
-  # --------------------------------------------------------------------------
-  # Rule: Identity token properties
-  # --------------------------------------------------------------------------
-  # One-time use, TTL = 1 hour, required for all transports.
-  # --------------------------------------------------------------------------
-  Rule: Identity token properties
-
-    Scenario: Token can only be used once
-      Given a valid identity token
-      When the token is used for connection
-      Then the token is marked as consumed
-      And subsequent use fails
-
-    Scenario: Token expires after TTL
-      Given an identity token older than 1 hour
-      When the token is used for connection
-      Then the connection is rejected
-
-    Scenario: Token required for all transports when auth required
-      Given require_auth is true
-      When connecting via any transport
-      Then the identity token is required
-
-  # --------------------------------------------------------------------------
-  # Rule: Handshake and tick sync
-  # --------------------------------------------------------------------------
-  # ConnectEvent only after protocol_id verification and tick sync.
-  # --------------------------------------------------------------------------
-  Rule: Handshake and tick sync
-
-    Scenario: Tick sync completes before ConnectEvent
-      Given a client is connecting
-      When the handshake reaches tick sync
-      Then tick sync must complete before ConnectEvent
-
-    Scenario: Client emits ConnectEvent only after handshake finalized
-      Given a client is connecting
-      When handshake is not yet complete
-      Then ConnectEvent is not emitted
-
-    Scenario: Server emits ConnectEvent only after handshake finalized
-      Given a client is connecting to the server
-      When handshake is not yet complete
-      Then the server does not emit ConnectEvent
-
-    Scenario: No entity writes before ConnectEvent
-      Given a client is connecting
-      When the client has not yet emitted ConnectEvent
-      Then no entity replication writes occur
-
-  # --------------------------------------------------------------------------
-  # Rule: Protocol identity is a strict handshake gate
-  # --------------------------------------------------------------------------
-  # protocol_id verified as first check; mismatch = ProtocolMismatch rejection.
-  # Exact match required, no negotiation, no partial compatibility.
-  # --------------------------------------------------------------------------
-  Rule: Protocol identity is a strict handshake gate
-
-    Scenario: protocol_id verified before other handshake steps
-      Given client and server have different protocol_id
-      When the client attempts to connect
-      Then ProtocolMismatch rejection occurs
-      And no further handshake steps occur
-
-    Scenario: Matching protocol_id allows connection to proceed
-      Given client and server have matching protocol_id
-      When the client attempts to connect
-      Then the handshake proceeds to next step
-
-    Scenario: ProtocolMismatch is distinguishable from other rejections
-      Given client has mismatched protocol_id
-      When rejection occurs
-      Then the rejection reason is ProtocolMismatch
-
-    Scenario: Different channel registrations produce different protocol_id
-      Given two protocol crates with different channel registrations
-      Then they have different protocol_id values
-
-    Scenario: Same protocol crate produces same protocol_id across builds
-      Given the same protocol crate source
-      When built multiple times
-      Then the same protocol_id is produced
-
-    Scenario: Breaking protocol change causes ProtocolMismatch
-      Given a server with updated protocol
-      When an old client attempts to connect
-      Then ProtocolMismatch rejection occurs
-
-    Scenario: No extension negotiation occurs
-      Given client and server with different protocol_id
-      When connection is attempted
-      Then no negotiation occurs
-      And connection is rejected immediately
-
-  # --------------------------------------------------------------------------
-  # Rule: Rejection semantics
-  # --------------------------------------------------------------------------
-  # RejectEvent emitted, no ConnectEvent, no DisconnectEvent.
-  # --------------------------------------------------------------------------
-  Rule: Rejection semantics
-
-    Scenario: Missing token causes rejection when required
-      Given require_auth is true
-      When a client connects without identity token
-      Then the server rejects the connection
-
-    Scenario: Rejected client emits RejectEvent
-      Given a client is rejected
-      Then the client emits RejectEvent
-      And the client does not emit ConnectEvent
-      And the client does not emit DisconnectEvent
-
-    Scenario: After RejectEvent client returns to non-connected
-      Given a client received RejectEvent
-      Then the client ConnectionStatus is Disconnected
+    Scenario: DisconnectEvent occurs only after ConnectEvent on client
+      Given a server is running
+      And a client connects
+      When the server disconnects the client
+      Then the client observed ConnectEvent before DisconnectEvent
 
   # --------------------------------------------------------------------------
   # Rule: Disconnect semantics
@@ -393,128 +232,47 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   Rule: Disconnect semantics
 
-    Scenario: Client DisconnectEvent only after ConnectEvent
-      Given a client has emitted ConnectEvent
-      When the client disconnects
-      Then the client emits DisconnectEvent
+    Scenario: Server observes DisconnectEvent when client disconnects
+      Given a server is running
+      And a client connects
+      When the server disconnects the client
+      Then the server has observed DisconnectEvent
 
-    Scenario: Server DisconnectEvent only after ConnectEvent
-      Given the server has emitted ConnectEvent for a client
-      When that client disconnects
-      Then the server emits DisconnectEvent for that client
+    Scenario: Connected client count decreases after disconnect
+      Given a server is running
+      And a client connects
+      Then the server has 1 connected client
+      When the server disconnects the client
+      Then the server has 0 connected clients
 
-    Scenario: Disconnect causes out-of-scope for all entities
-      Given a client is connected with entities in scope
-      When the client disconnects
-      Then the client is out-of-scope for all entities
-
-    Scenario: Client-owned entities despawn on disconnect
-      Given a client owns entities
-      When the client disconnects
-      Then client-owned entities are despawned by the server
-
-  # --------------------------------------------------------------------------
-  # Rule: Event ordering
-  # --------------------------------------------------------------------------
-  # require_auth=true: AuthEvent → ConnectEvent → DisconnectEvent
-  # require_auth=false: ConnectEvent → DisconnectEvent
-  # Rejected: RejectEvent only, no Connect/Disconnect
-  # --------------------------------------------------------------------------
-  Rule: Event ordering
-
-    Scenario: Server observes correct event order with auth
-      Given require_auth is true
-      When a client authenticates and connects
-      Then the server observes AuthEvent before ConnectEvent
-      When the client disconnects
-      Then the server observes DisconnectEvent after ConnectEvent
-
-    Scenario: Server observes correct event order without auth
-      Given require_auth is false
+    Scenario: Server can connect multiple clients
+      Given a server is running
       When a client connects
-      Then the server observes ConnectEvent
-      When the client disconnects
-      Then the server observes DisconnectEvent after ConnectEvent
+      And a client connects
+      Then the server has 2 connected clients
 
-    Scenario: Client observes correct event order
-      Given a client successfully connects
-      Then the client observes ConnectEvent
-      When the client disconnects
-      Then the client observes DisconnectEvent after ConnectEvent
+    Scenario: Server can disconnect one of multiple clients
+      Given a server is running
+      And a client connects
+      And a client connects
+      When the server disconnects the client
+      Then the server has 1 connected client
 
-    Scenario: Rejected client observes RejectEvent only
-      Given a client is rejected
-      Then the client observes RejectEvent
-      And the client does not observe ConnectEvent
-      And the client does not observe DisconnectEvent
+    Scenario: Client is connected after successful connection
+      Given a server is running
+      When a client connects
+      Then the client is connected
 
-  # --------------------------------------------------------------------------
-  # Rule: Reconnect is a fresh session
-  # --------------------------------------------------------------------------
-  # No session resumption; world rebuilt from scratch.
-  # --------------------------------------------------------------------------
-  Rule: Reconnect is a fresh session
+    Scenario: Client is not connected after disconnect
+      Given a server is running
+      And a client connects
+      When the server disconnects the client
+      Then the client is not connected
 
-    Scenario: Reconnecting client receives fresh entity spawns
-      Given a client was connected with entities
-      When the client disconnects and reconnects
-      Then the client receives fresh entity spawns
-
-    Scenario: Previous session authority does not carry over
-      Given a client held authority before disconnect
-      When the client reconnects
-      Then authority from previous session is not retained
-
-    Scenario: Server treats reconnecting client as new session
-      Given a client disconnected
-      When the client reconnects
-      Then the server treats it as a new session
-      And prior entity state is not resumed
-
-  # --------------------------------------------------------------------------
-  # Rule: Protocol identity determinism
-  # --------------------------------------------------------------------------
-  # protocol_id is deterministic; changes with wire-relevant changes.
-  # --------------------------------------------------------------------------
-  Rule: Protocol identity determinism
-
-    Scenario: Wire-relevant changes produce different protocol_id
-      Given a protocol with specific channel configuration
-      When the channel configuration changes
-      Then the protocol_id changes
-
-    Scenario: Non-wire-relevant changes do not affect protocol_id
-      Given a protocol with documentation changes only
-      Then the protocol_id does not change
 
 # ============================================================================
 # DEFERRED TESTS
 # ============================================================================
-# Items that cannot be tested with current harness capabilities.
-# ============================================================================
-#
-# Rule: Identity token properties
-#   Assertions:
-#     - Token TTL enforcement (1 hour expiry)
-#     - Token replay detection across process restarts
-#   Harness needs: Time manipulation / clock injection
-#
-# Rule: Protocol identity wire format
-#   Assertions:
-#     - protocol_id is encoded as 16 bytes little-endian on wire
-#     - Different component schemas produce different protocol_id
-#   Harness needs: Wire-level packet inspection
-#
-# Rule: Authentication HTTP flow
-#   Assertions:
-#     - HTTP 200 OK with token body format
-#     - HTTP 401 Unauthorized response format
-#   Harness needs: HTTP request/response interception
-#
-# ============================================================================
-
-# ============================================================================
-# AMBIGUITIES + PROPOSED CLARIFICATIONS
-# ============================================================================
-# None identified.
+# All other scenarios deferred until step bindings are implemented.
+# See contracts/01_connection_lifecycle.spec.md for full scenario list.
 # ============================================================================

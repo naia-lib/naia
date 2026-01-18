@@ -168,151 +168,94 @@
 
 Feature: Common Definitions and Policies
 
-  Background:
-    Given a Naia test environment is initialized
+  # --------------------------------------------------------------------------
+  # All executable scenarios are deferred until step bindings are implemented.
+  # The NORMATIVE CONTRACT MIRROR above remains authoritative.
+  # --------------------------------------------------------------------------
 
-  # --------------------------------------------------------------------------
-  # Rule: User-initiated misuse returns Result::Err
-  # --------------------------------------------------------------------------
-  # NORMATIVE: When an error is caused by local application code or
-  # configuration at the Naia API layer, Naia MUST return Result::Err.
-  # If user code can trigger a condition via public API, that condition
-  # MUST NOT panic.
-  # --------------------------------------------------------------------------
-  Rule: User-initiated misuse returns Result::Err
-
-    Scenario: API misuse returns Err not panic
-      Given a connected client and server
-      When the client attempts an invalid API operation
-      Then the operation returns an Err result
-      And no panic occurs
-
-  # --------------------------------------------------------------------------
-  # Rule: Remote or untrusted input must never panic
-  # --------------------------------------------------------------------------
-  # NORMATIVE: When an error is caused by remote input or network behavior,
-  # Naia MUST NOT panic. In Prod: ignore/drop silently. In Debug: warn.
-  # --------------------------------------------------------------------------
-  Rule: Remote or untrusted input must never panic
-
-    Scenario: Malformed inbound packet is dropped without panic
-      Given a connected client and server
-      When the server receives a malformed packet
-      Then the packet is dropped
-      And no panic occurs
-
-    Scenario: Duplicate replication messages do not panic
-      Given a connected client and server with replicated entities
-      When duplicate replication messages arrive
-      Then they are handled idempotently
-      And no panic occurs
-
-  # --------------------------------------------------------------------------
-  # Rule: Protocol mismatch is a deployment error not a panic
-  # --------------------------------------------------------------------------
-  # NORMATIVE: When protocol_id does not match, connection MUST be rejected
-  # with ProtocolMismatch, not a panic.
-  # --------------------------------------------------------------------------
-  Rule: Protocol mismatch is a deployment error not a panic
-
-    Scenario: Protocol mismatch produces ProtocolMismatch rejection
-      Given a server with protocol version A
-      And a client with protocol version B
-      When the client attempts to connect
-      Then the connection is rejected with ProtocolMismatch
-      And no panic occurs
-
-  # --------------------------------------------------------------------------
-  # Rule: Framework invariant violations must panic
-  # --------------------------------------------------------------------------
-  # NORMATIVE: If Naia violates an invariant stated in specifications,
-  # Naia MUST panic. These are Naia bugs expected to be unreachable.
-  # --------------------------------------------------------------------------
-  Rule: Framework invariant violations must panic
-
-    # Note: This rule cannot be directly tested via normal scenarios since
-    # it requires triggering internal invariant violations. Test coverage
-    # for this rule is via internal framework tests, not E2E scenarios.
-
-    @internal-only
-    Scenario: Internal invariant violation triggers panic
-      Given a Naia internal test context
-      When an internal invariant is violated
-      Then Naia panics with a descriptive message
-
-  # --------------------------------------------------------------------------
-  # Rule: Determinism under deterministic inputs
-  # --------------------------------------------------------------------------
-  # NORMATIVE: If Time Provider, Network input, and API call sequence are
-  # deterministic, then observable outputs MUST be deterministic.
-  # --------------------------------------------------------------------------
-  Rule: Determinism under deterministic inputs
-
-    Scenario: Identical inputs produce identical outputs
-      Given a deterministic time provider
-      And a deterministic network input sequence
-      When the same API call sequence is executed twice
-      Then the event emission order is identical both times
-      And the entity spawn order is identical both times
-
-  # --------------------------------------------------------------------------
-  # Rule: Per-tick determinism for concurrent operations
-  # --------------------------------------------------------------------------
-  # NORMATIVE: Within a single server tick, if multiple operations could
-  # occur in any order, Naia MUST define a deterministic resolution.
-  # --------------------------------------------------------------------------
-  Rule: Per-tick determinism for concurrent operations
-
-    Scenario: Same-tick scope operations resolve deterministically
-      Given a server with multiple scope operations queued for the same tick
-      When the tick is processed
-      Then the final scope state reflects the last API call order
-      And no intermediate spawn or despawn is observed
-
-    Scenario: Multiple commands for same tick apply in receipt order
-      Given a server receiving multiple commands for the same tick
-      When the tick is processed
-      Then commands are applied in receipt order
-
-  # --------------------------------------------------------------------------
-  # Rule: Metrics do not affect gameplay
-  # --------------------------------------------------------------------------
-  # NORMATIVE: Observability metrics MUST NOT affect replicated state,
-  # authority, scope, or message delivery semantics.
-  # --------------------------------------------------------------------------
-  Rule: Metrics do not affect gameplay
-
-    Scenario: Reading metrics does not influence internal behavior
-      Given a connected client and server
-      When metrics are queried every tick
-      Then replication behavior is identical to when metrics are not queried
-
-  # --------------------------------------------------------------------------
-  # Rule: Reconnect is a fresh session
-  # --------------------------------------------------------------------------
-  # NORMATIVE: When a client reconnects, it is a fresh connection that
-  # builds world state from a new snapshot. No session resumption.
-  # --------------------------------------------------------------------------
-  Rule: Reconnect is a fresh session
-
-    Scenario: Reconnecting client receives fresh entity spawns
-      Given a client that was previously connected
-      And the client disconnected
-      When the client reconnects
-      Then it receives fresh entity spawns for all in-scope entities
-      And no prior session state is retained
 # ============================================================================
 # DEFERRED TESTS
 # ============================================================================
-# Items that cannot be tested with current harness capabilities.
+# All scenarios moved here until step bindings are implemented.
 # ============================================================================
 #
+# Rule: User-initiated misuse returns Result::Err
+#   Scenario: API misuse returns Err not panic
+#     Given a Naia test environment is initialized
+#     Given a connected client and server
+#     When the client attempts an invalid API operation
+#     Then the operation returns an Err result
+#     And no panic occurs
+#
+# Rule: Remote or untrusted input must never panic
+#   Scenario: Malformed inbound packet is dropped without panic
+#     Given a Naia test environment is initialized
+#     Given a connected client and server
+#     When the server receives a malformed packet
+#     Then the packet is dropped
+#     And no panic occurs
+#
+#   Scenario: Duplicate replication messages do not panic
+#     Given a Naia test environment is initialized
+#     Given a connected client and server with replicated entities
+#     When duplicate replication messages arrive
+#     Then they are handled idempotently
+#     And no panic occurs
+#
+# Rule: Protocol mismatch is a deployment error not a panic
+#   Scenario: Protocol mismatch produces ProtocolMismatch rejection
+#     Given a Naia test environment is initialized
+#     Given a server with protocol version A
+#     And a client with protocol version B
+#     When the client attempts to connect
+#     Then the connection is rejected with ProtocolMismatch
+#     And no panic occurs
+#
 # Rule: Framework invariant violations must panic
-#   Assertions:
-#     - Tick goes backwards triggers panic
-#     - Older state after newer on sequenced channel triggers panic
-#     - GlobalEntity counter rollover triggers panic
+#   Scenario: Internal invariant violation triggers panic
+#     Given a Naia internal test context
+#     When an internal invariant is violated
+#     Then Naia panics with a descriptive message
 #   Harness needs: Ability to inject internal invariant violations (internal test only)
+#
+# Rule: Determinism under deterministic inputs
+#   Scenario: Identical inputs produce identical outputs
+#     Given a Naia test environment is initialized
+#     Given a deterministic time provider
+#     And a deterministic network input sequence
+#     When the same API call sequence is executed twice
+#     Then the event emission order is identical both times
+#     And the entity spawn order is identical both times
+#
+# Rule: Per-tick determinism for concurrent operations
+#   Scenario: Same-tick scope operations resolve deterministically
+#     Given a Naia test environment is initialized
+#     Given a server with multiple scope operations queued for the same tick
+#     When the tick is processed
+#     Then the final scope state reflects the last API call order
+#     And no intermediate spawn or despawn is observed
+#
+#   Scenario: Multiple commands for same tick apply in receipt order
+#     Given a Naia test environment is initialized
+#     Given a server receiving multiple commands for the same tick
+#     When the tick is processed
+#     Then commands are applied in receipt order
+#
+# Rule: Metrics do not affect gameplay
+#   Scenario: Reading metrics does not influence internal behavior
+#     Given a Naia test environment is initialized
+#     Given a connected client and server
+#     When metrics are queried every tick
+#     Then replication behavior is identical to when metrics are not queried
+#
+# Rule: Reconnect is a fresh session
+#   Scenario: Reconnecting client receives fresh entity spawns
+#     Given a Naia test environment is initialized
+#     Given a client that was previously connected
+#     And the client disconnected
+#     When the client reconnects
+#     Then it receives fresh entity spawns for all in-scope entities
+#     And no prior session state is retained
 #
 # Rule: Test tolerance constants validation
 #   Assertions:
