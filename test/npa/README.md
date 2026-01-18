@@ -1,17 +1,17 @@
-# naia_npap
+# naia_npa
 
-NPAP (Namako Project Adapter Protocol) adapter for Naia BDD tests.
+NPA (Namako Plan Adapter) for Naia BDD tests.
 
-This binary implements the adapter protocol that allows the Namako engine to execute Naia's step bindings.
+This binary implements the adapter interface that allows the Namako engine to execute Naia's step bindings.
 
 ## Usage
 
 ```bash
 # Print the semantic step registry (for namako lint)
-cargo run -p naia_npap -- manifest
+cargo run -p naia_npa -- manifest
 
 # Execute a resolved plan (for namako run)
-cargo run -p naia_npap -- run -p resolved_plan.json -o run_report.json
+cargo run -p naia_npa -- run -p resolved_plan.json -o run_report.json
 ```
 
 ## Architecture
@@ -19,13 +19,13 @@ cargo run -p naia_npap -- run -p resolved_plan.json -o run_report.json
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │  Namako Engine (namako-cli)                                 │
-│    ├── lint → calls `naia_npap manifest`                    │
-│    └── run  → calls `naia_npap run --plan ... --out ...`    │
+│    ├── lint → calls `naia_npa manifest`                     │
+│    └── run  → calls `naia_npa run --plan ... --out ...`     │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  naia_npap (this crate)                                     │
+│  naia_npa (this crate)                                      │
 │    ├── manifest.rs  → Emits step registry JSON              │
 │    └── run.rs       → Executes plan by binding_id dispatch  │
 └─────────────────────────────────────────────────────────────┘

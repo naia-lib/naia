@@ -1,16 +1,16 @@
 [package]
-name = "naia_npap"
+name = "naia_npa"
 version = "0.1.0"
 edition = "2021"
 publish = false
-description = "NPAP adapter for Naia BDD tests"
+description = "NPA (Namako Plan Adapter) for Naia BDD tests"
 
 [[bin]]
-name = "naia_npap"
+name = "naia_npa"
 path = "src/main.rs"
 
 [dependencies]
-# Core namako library with NPAP types
+# Core namako library with NPA types
 namako = { path = "../../../namako", features = ["npap", "macros"] }
 
 # CLI argument parsing

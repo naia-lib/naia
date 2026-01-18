@@ -169,101 +169,85 @@
 Feature: Common Definitions and Policies
 
   # --------------------------------------------------------------------------
-  # All executable scenarios are deferred until step bindings are implemented.
-  # The NORMATIVE CONTRACT MIRROR above remains authoritative.
+  # Deferred scenarios tagged with @Deferred are excluded from the executable
+  # plan but are tracked as promotion candidates by `namako review`.
   # --------------------------------------------------------------------------
 
-# ============================================================================
-# DEFERRED TESTS
-# ============================================================================
-# All scenarios moved here until step bindings are implemented.
-# ============================================================================
-#
-# Rule: User-initiated misuse returns Result::Err
-#   Scenario: API misuse returns Err not panic
-#     Given a Naia test environment is initialized
-#     Given a connected client and server
-#     When the client attempts an invalid API operation
-#     Then the operation returns an Err result
-#     And no panic occurs
-#
-# Rule: Remote or untrusted input must never panic
-#   Scenario: Malformed inbound packet is dropped without panic
-#     Given a Naia test environment is initialized
-#     Given a connected client and server
-#     When the server receives a malformed packet
-#     Then the packet is dropped
-#     And no panic occurs
-#
-#   Scenario: Duplicate replication messages do not panic
-#     Given a Naia test environment is initialized
-#     Given a connected client and server with replicated entities
-#     When duplicate replication messages arrive
-#     Then they are handled idempotently
-#     And no panic occurs
-#
-# Rule: Protocol mismatch is a deployment error not a panic
-#   Scenario: Protocol mismatch produces ProtocolMismatch rejection
-#     Given a Naia test environment is initialized
-#     Given a server with protocol version A
-#     And a client with protocol version B
-#     When the client attempts to connect
-#     Then the connection is rejected with ProtocolMismatch
-#     And no panic occurs
-#
-# Rule: Framework invariant violations must panic
-#   Scenario: Internal invariant violation triggers panic
-#     Given a Naia internal test context
-#     When an internal invariant is violated
-#     Then Naia panics with a descriptive message
-#   Harness needs: Ability to inject internal invariant violations (internal test only)
-#
-# Rule: Determinism under deterministic inputs
-#   Scenario: Identical inputs produce identical outputs
-#     Given a Naia test environment is initialized
-#     Given a deterministic time provider
-#     And a deterministic network input sequence
-#     When the same API call sequence is executed twice
-#     Then the event emission order is identical both times
-#     And the entity spawn order is identical both times
-#
-# Rule: Per-tick determinism for concurrent operations
-#   Scenario: Same-tick scope operations resolve deterministically
-#     Given a Naia test environment is initialized
-#     Given a server with multiple scope operations queued for the same tick
-#     When the tick is processed
-#     Then the final scope state reflects the last API call order
-#     And no intermediate spawn or despawn is observed
-#
-#   Scenario: Multiple commands for same tick apply in receipt order
-#     Given a Naia test environment is initialized
-#     Given a server receiving multiple commands for the same tick
-#     When the tick is processed
-#     Then commands are applied in receipt order
-#
-# Rule: Metrics do not affect gameplay
-#   Scenario: Reading metrics does not influence internal behavior
-#     Given a Naia test environment is initialized
-#     Given a connected client and server
-#     When metrics are queried every tick
-#     Then replication behavior is identical to when metrics are not queried
-#
-# Rule: Reconnect is a fresh session
-#   Scenario: Reconnecting client receives fresh entity spawns
-#     Given a Naia test environment is initialized
-#     Given a client that was previously connected
-#     And the client disconnected
-#     When the client reconnects
-#     Then it receives fresh entity spawns for all in-scope entities
-#     And no prior session state is retained
-#
-# Rule: Test tolerance constants validation
-#   Assertions:
-#     - RTT convergence within tolerance bounds
-#     - Throughput measurements within tolerance
-#   Harness needs: Network conditioner with precise latency control + metrics API
-#
-# ============================================================================
+  Rule: User-initiated misuse returns Result::Err
+
+    @Deferred
+    Scenario: API misuse returns Err not panic
+      Given a test scenario
+      And a connected client
+      When the client attempts an invalid API operation
+      Then the operation returns an Err result
+      And no panic occurs
+
+  Rule: Remote or untrusted input must never panic
+
+    @Deferred
+    Scenario: Malformed inbound packet is dropped without panic
+      Given a test scenario
+      And a connected client
+      When the server receives a malformed packet
+      Then the packet is dropped
+      And no panic occurs
+
+    @Deferred
+    Scenario: Duplicate replication messages do not panic
+      Given a test scenario
+      And a connected client with replicated entities
+      When duplicate replication messages arrive
+      Then they are handled idempotently
+      And no panic occurs
+
+  Rule: Protocol mismatch is a deployment error not a panic
+
+    @Deferred
+    Scenario: Protocol mismatch produces ProtocolMismatch rejection
+      Given a test scenario
+      And a server with protocol version A
+      And a client with protocol version B
+      When the client attempts to connect
+      Then the connection is rejected with ProtocolMismatch
+      And no panic occurs
+
+  Rule: Determinism under deterministic inputs
+
+    @Deferred
+    Scenario: Identical inputs produce identical outputs
+      Given a test scenario with deterministic time
+      And a deterministic network input sequence
+      When the same API call sequence is executed twice
+      Then the event emission order is identical both times
+      And the entity spawn order is identical both times
+
+  Rule: Per-tick determinism for concurrent operations
+
+    @Deferred
+    Scenario: Same-tick scope operations resolve deterministically
+      Given a test scenario
+      And multiple scope operations queued for the same tick
+      When the tick is processed
+      Then the final scope state reflects the last API call order
+
+    @Deferred
+    Scenario: Multiple commands for same tick apply in receipt order
+      Given a test scenario
+      And a server receiving multiple commands for the same tick
+      When the tick is processed
+      Then commands are applied in receipt order
+
+  Rule: Reconnect is a fresh session
+
+    @Deferred
+    Scenario: Reconnecting client receives fresh entity spawns
+      Given a test scenario
+      And a client that was previously connected
+      And the client disconnected
+      When the client reconnects
+      Then it receives fresh entity spawns for all in-scope entities
+      And no prior session state is retained
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS
