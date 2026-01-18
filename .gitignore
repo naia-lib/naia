@@ -25,3 +25,6 @@ node_modules
 /demos/socket/client/wasm_bindgen/target
 /demos/socket/client/wasm_bindgen/target/
 /demos/socket/client/wasm_bindgen/target/*
+# Namako test artifacts
+test/specs/target/
+**/namako_artifacts/
