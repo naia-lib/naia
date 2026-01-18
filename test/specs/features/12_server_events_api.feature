@@ -36,40 +36,72 @@
 #   2) process_all_packets() — Process step
 #   3) take_tick_events() and/or take_world_events() — Drain steps
 #
-# CORE CONTRACTS:
-#   [server-events-00] Receive step is ingestion only
-#     - MUST NOT advance tick, mutate world, or produce events
-#   [server-events-01] Process step is the only event-production boundary
-#     - New events MUST become pending only via Process step
-#   [server-events-02] Drains are pure read+remove
-#     - MUST NOT receive/process packets, advance tick, or have side effects
-#   [server-events-03] Drains are destructive and idempotent
-#     - Subsequent drains without Process step MUST return empty
-#   [server-events-04] Event types are partitioned
-#     - World mutations NOT in message/request streams
-#     - Messages NOT in world mutation streams
-#     - Tick/session events NOT in world mutation streams
-#   [server-events-05] Auth/connect/disconnect ordering
-#     - Exactly one auth decision per attempt
-#     - Exactly one connect after accepted auth
-#     - Exactly one disconnect per session termination
-#   [server-events-06] Disconnect cleanup consistent with contracts
-#     - Per-connection scoped state cleaned up
-#     - Ownership cleanup per 08_entity_ownership.spec.md
-#   [server-events-07] Spawn/enter events: per user, in-scope only, once
-#     - Exactly one spawn/enter for (U, E) when InScope becomes true
-#   [server-events-08] Component insert/update/remove: per user, no dupes
-#     - Exactly one event per applied transition
-#   [server-events-09] Despawn/leave-scope events: exactly-once
-#     - No further events for (U, E, *) after exit unless re-enters
-#   [server-events-10] No component events before spawn/enter
-#     - API-visible ordering MUST respect this invariant
-#   [server-events-11] Message events: grouped by channel/type, drain once
-#     - Each inbound message appears exactly once
-#   [server-events-12] Request/response events: exactly-once, correct match
-#     - No duplicates under retransmit
-#   [server-events-13] Drains MUST NOT panic
-#     - Empty drains return empty, no panic
+# ----------------------------------------------------------------------------
+# CORE EVENT PIPELINE RULES
+# ----------------------------------------------------------------------------
+#
+# Receive step is ingestion only:
+#   - MUST NOT advance tick, mutate world, or produce events
+#
+# Process step is the only event-production boundary:
+#   - New events MUST become pending only via Process step
+#
+# Drains are pure read+remove:
+#   - MUST NOT receive/process packets, advance tick, or have side effects
+#
+# Drains are destructive and idempotent:
+#   - Subsequent drains without Process step MUST return empty
+#
+# Event types are partitioned:
+#   - World mutations NOT in message/request streams
+#   - Messages NOT in world mutation streams
+#   - Tick/session events NOT in world mutation streams
+#
+# ----------------------------------------------------------------------------
+# CONNECTION EVENTS
+# ----------------------------------------------------------------------------
+#
+# Auth/connect/disconnect ordering:
+#   - Exactly one auth decision per attempt
+#   - Exactly one connect after accepted auth
+#   - Exactly one disconnect per session termination
+#
+# Disconnect cleanup consistent with contracts:
+#   - Per-connection scoped state cleaned up
+#   - Ownership cleanup per 08_entity_ownership.spec.md
+#
+# ----------------------------------------------------------------------------
+# ENTITY EVENTS
+# ----------------------------------------------------------------------------
+#
+# Spawn/enter events: per user, in-scope only, once:
+#   - Exactly one spawn/enter for (U, E) when InScope becomes true
+#
+# Component insert/update/remove: per user, no dupes:
+#   - Exactly one event per applied transition
+#
+# Despawn/leave-scope events: exactly-once:
+#   - No further events for (U, E, *) after exit unless re-enters
+#
+# No component events before spawn/enter:
+#   - API-visible ordering MUST respect this invariant
+#
+# ----------------------------------------------------------------------------
+# MESSAGE/RPC EVENTS
+# ----------------------------------------------------------------------------
+#
+# Message events: grouped by channel/type, drain once:
+#   - Each inbound message appears exactly once
+#
+# Request/response events: exactly-once, correct match:
+#   - No duplicates under retransmit
+#
+# ----------------------------------------------------------------------------
+# SAFETY
+# ----------------------------------------------------------------------------
+#
+# Drains MUST NOT panic:
+#   - Empty drains return empty, no panic
 #
 # FORBIDDEN BEHAVIORS:
 #   - Producing events during drains
@@ -339,6 +371,24 @@ Feature: Server Events API
       Given no pending events
       When draining events multiple times
       Then no panic occurs
+
+# ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Event ordering under high-throughput conditions
+#   Assertions:
+#     - Event ordering preserved under sustained high message rates
+#   Harness needs: High-throughput test framework with ordering verification
+#
+# Rule: Memory behavior during event accumulation
+#   Assertions:
+#     - Memory bounded when events accumulate between drains
+#   Harness needs: Memory profiling instrumentation
+#
+# ============================================================================
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS

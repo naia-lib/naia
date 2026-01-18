@@ -29,59 +29,78 @@
 #   - Throughput: Bytes-per-second estimate (send and/or receive)
 #   - Steady link: Stable latency/loss/jitter parameters over multiple windows
 #
-# NORMATIVE METRIC RULES:
-#   [observability-01] Metrics MUST NOT affect gameplay
-#     - MUST NOT affect replicated state, authority, scope, or delivery
-#     - Reading metrics via API MUST NOT influence internal behavior
+# ----------------------------------------------------------------------------
+# CORE METRIC RULES
+# ----------------------------------------------------------------------------
 #
-#   [observability-01a] Internal measurements vs exposed metrics
-#     - Internal RTT/jitter used for tick lead targeting (internal behavior)
-#     - Exposed metrics are read-only snapshots for monitoring
-#     - Internal measurements MAY differ from exposed metrics
+# Metrics MUST NOT affect gameplay:
+#   - MUST NOT affect replicated state, authority, scope, or delivery
+#   - Reading metrics via API MUST NOT influence internal behavior
 #
-#   [observability-02] Metrics are safe to query at any time
-#     - MUST NOT panic
-#     - If insufficient data: return well-defined default
-#       * RTT: None or 0 until enough samples
-#       * Throughput: 0 until enough samples
+# Internal measurements vs exposed metrics:
+#   - Internal RTT/jitter used for tick lead targeting (internal behavior)
+#   - Exposed metrics are read-only snapshots for monitoring
+#   - Internal measurements MAY differ from exposed metrics
 #
-#   [observability-03] RTT must be non-negative and bounded
-#     - RTT MUST be >= 0
-#     - RTT MUST NOT overflow, become NaN, or Infinity
-#     - Under stable conditions, RTT SHOULD converge within tolerance
+# Metrics are safe to query at any time:
+#   - MUST NOT panic
+#   - If insufficient data: return well-defined default
+#     * RTT: None or 0 until enough samples
+#     * Throughput: 0 until enough samples
 #
-#   [observability-04] RTT behavior under jitter, loss, reordering
-#     - RTT MUST remain stable (no negative values)
-#     - Duplicates MUST NOT cause unbounded spikes
-#     - Reordering MUST NOT cause impossible values
+# ----------------------------------------------------------------------------
+# RTT SEMANTICS
+# ----------------------------------------------------------------------------
 #
-#   [observability-05] Throughput must be non-negative
-#     - MUST NOT overflow or become NaN/Infinity
-#     - Sustained higher traffic SHOULD increase throughput
-#     - Sustained idle SHOULD decrease toward 0
+# RTT must be non-negative and bounded:
+#   - RTT MUST be >= 0
+#   - RTT MUST NOT overflow, become NaN, or Infinity
+#   - Under stable conditions, RTT SHOULD converge within tolerance
 #
-#   [observability-06] Bandwidth accounting consistency
-#     - If both payload and wire bytes exposed, they MUST be distinct
-#     - Single metric MUST match documented accounting model
+# RTT behavior under jitter, loss, reordering:
+#   - RTT MUST remain stable (no negative values)
+#   - Duplicates MUST NOT cause unbounded spikes
+#   - Reordering MUST NOT cause impossible values
 #
-#   [observability-07] Metrics reset/cleanup on lifecycle
-#     - On disconnect, clean up connection-scoped state
-#     - New connections MUST NOT inherit stale samples
+# ----------------------------------------------------------------------------
+# THROUGHPUT SEMANTICS
+# ----------------------------------------------------------------------------
 #
-#   [observability-08] Time source assumptions
-#     - Metrics MUST use same monotonic time source as tick/time system
-#     - MUST NOT assume wall-clock correctness
-#     - Paused time: no negative durations, no division by zero
+# Throughput must be non-negative:
+#   - MUST NOT overflow or become NaN/Infinity
+#   - Sustained higher traffic SHOULD increase throughput
+#   - Sustained idle SHOULD decrease toward 0
 #
-#   [observability-09] Per-direction consistency
-#     - Separate send/receive metrics MUST reflect direction correctly
+# Bandwidth accounting consistency:
+#   - If both payload and wire bytes exposed, they MUST be distinct
+#   - Single metric MUST match documented accounting model
 #
-#   [observability-10] Metrics are testable; logs are not
-#     - RTT, jitter, throughput are guaranteed stable for testing
-#     - Tests MUST use inequality-style assertions only:
-#       * rtt_ms >= 0
-#       * rtt_ms < RTT_MAX_VALUE_MS
-#     - Logs are non-normative; tests MUST NOT assert on logs
+# ----------------------------------------------------------------------------
+# LIFECYCLE AND TIME SOURCE
+# ----------------------------------------------------------------------------
+#
+# Metrics reset/cleanup on lifecycle:
+#   - On disconnect, clean up connection-scoped state
+#   - New connections MUST NOT inherit stale samples
+#
+# Time source assumptions:
+#   - Metrics MUST use same monotonic time source as tick/time system
+#   - MUST NOT assume wall-clock correctness
+#   - Paused time: no negative durations, no division by zero
+#
+# Per-direction consistency:
+#   - Separate send/receive metrics MUST reflect direction correctly
+#
+# ----------------------------------------------------------------------------
+# TESTABILITY
+# ----------------------------------------------------------------------------
+#
+# Metrics are testable; logs are not:
+#   - RTT, jitter, throughput are guaranteed stable for testing
+#   - Tests MUST use inequality-style assertions only:
+#     * rtt_ms >= 0
+#     * rtt_ms < RTT_MAX_VALUE_MS
+#   - Logs are non-normative; tests MUST NOT assert on logs
 #
 # TEST TOLERANCE CONSTANTS (non-normative, test-only):
 #   | Constant                   | Value |
@@ -227,7 +246,27 @@ Feature: Observability Metrics
       And no invalid values are produced
 
 # ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: RTT convergence under stable conditions
+#   Assertions:
+#     - RTT converges within RTT_TOLERANCE_PERCENT of expected value
+#     - Convergence occurs within RTT_MIN_SAMPLES
+#   Harness needs: Network conditioner with precise latency control + metrics API
+#
+# Rule: Throughput measurement accuracy
+#   Assertions:
+#     - Throughput increases with sustained traffic
+#     - Throughput decreases toward 0 when idle
+#   Harness needs: Traffic generation + metrics API with time control
+#
+# ============================================================================
+
+# ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS
 # ============================================================================
-# None identified. The observability metrics spec is well-defined.
+# None identified.
 # ============================================================================

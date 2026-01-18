@@ -31,38 +31,61 @@
 #   - Drain: Single pass consuming available Naia events/mutations
 #   - In Scope: Entity present in client's Naia World View
 #
-# CORE CONTRACTS:
-#   [world-integration-01] World mirrors Naia view
-#     - External World MUST converge to Naia World View
-#     - Entities present/absent MUST match after mutations applied
-#     - Component sets and values MUST match
-#   [world-integration-02] Mutation ordering is deterministic per tick
-#     - Order: Spawn → Inserts → Updates → Removes → Despawn
-#     - Insert/Update/Remove MUST NOT apply to absent entity
-#     - Despawn MUST occur after all other mutations for that entity
-#   [world-integration-03] Exactly-once delivery per drain
-#     - Each mutation consumable exactly once
-#     - Second drain without tick advance MUST be empty
-#   [world-integration-04] Scope changes map to spawn/despawn
-#     - OutOfScope → InScope = Spawn + initial components
-#     - InScope → OutOfScope = Despawn
-#   [world-integration-05] Join-in-progress and reconnect yield coherent world
-#     - Reconstructed from current server state, not stale client leftovers
-#     - Reconnect is always fresh session (no resumption)
-#     - MUST NOT retain entities from prior disconnected session
-#   [world-integration-06] Stable identity mapping
-#     - Same logical identity = same external handle
-#     - MUST NOT alias different entities as same external entity
-#   [world-integration-07] Component type correctness
-#     - Component type MUST match protocol/schema
-#     - Decode failure MUST NOT panic
-#   [world-integration-08] Misuse safety: no panics, defined failures
-#     - Mutation for absent entity = no-op or error, not panic
-#     - Update for missing component = no-op or error, not panic
-#     - Re-apply same mutation = deterministic rejection/no-op
-#   [world-integration-09] Zero-leak lifecycle cleanup
-#     - Disconnect cleans External World fully
-#     - Long-running cycles do not leak external entities
+# ----------------------------------------------------------------------------
+# CORE INTEGRATION RULES
+# ----------------------------------------------------------------------------
+#
+# World mirrors Naia view:
+#   - External World MUST converge to Naia World View
+#   - Entities present/absent MUST match after mutations applied
+#   - Component sets and values MUST match
+#
+# Mutation ordering is deterministic per tick:
+#   - Order: Spawn → Inserts → Updates → Removes → Despawn
+#   - Insert/Update/Remove MUST NOT apply to absent entity
+#   - Despawn MUST occur after all other mutations for that entity
+#
+# Exactly-once delivery per drain:
+#   - Each mutation consumable exactly once
+#   - Second drain without tick advance MUST be empty
+#
+# ----------------------------------------------------------------------------
+# SCOPE SEMANTICS
+# ----------------------------------------------------------------------------
+#
+# Scope changes map to spawn/despawn:
+#   - OutOfScope → InScope = Spawn + initial components
+#   - InScope → OutOfScope = Despawn
+#
+# Join-in-progress and reconnect yield coherent world:
+#   - Reconstructed from current server state, not stale client leftovers
+#   - Reconnect is always fresh session (no resumption)
+#   - MUST NOT retain entities from prior disconnected session
+#
+# ----------------------------------------------------------------------------
+# IDENTITY AND TYPE CORRECTNESS
+# ----------------------------------------------------------------------------
+#
+# Stable identity mapping:
+#   - Same logical identity = same external handle
+#   - MUST NOT alias different entities as same external entity
+#
+# Component type correctness:
+#   - Component type MUST match protocol/schema
+#   - Decode failure MUST NOT panic
+#
+# ----------------------------------------------------------------------------
+# ROBUSTNESS AND SAFETY
+# ----------------------------------------------------------------------------
+#
+# Misuse safety: no panics, defined failures:
+#   - Mutation for absent entity = no-op or error, not panic
+#   - Update for missing component = no-op or error, not panic
+#   - Re-apply same mutation = deterministic rejection/no-op
+#
+# Zero-leak lifecycle cleanup:
+#   - Disconnect cleans External World fully
+#   - Long-running cycles do not leak external entities
 #
 # ============================================================================
 
@@ -257,6 +280,24 @@ Feature: World Integration
       Given many connect/disconnect cycles occur
       When External World is inspected
       Then no leaked entities exist
+
+# ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: External World adapter performance under load
+#   Assertions:
+#     - Mutation application rate scales with entity count
+#   Harness needs: Performance benchmarking infrastructure
+#
+# Rule: External World consistency after crash recovery
+#   Assertions:
+#     - External World can be reconstructed from Naia state
+#   Harness needs: Crash injection and state recovery testing
+#
+# ============================================================================
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS

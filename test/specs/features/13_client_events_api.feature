@@ -38,36 +38,67 @@
 #   2) process_all_packets() — Process step
 #   3) take_tick_events() and/or take_world_events() — Drain steps
 #
-# CORE CONTRACTS:
-#   [client-events-00] Receive step is ingestion only
-#     - MUST NOT mutate client world or produce events
-#   [client-events-01] Process step is the only event-production boundary
-#     - Replicated state application and pending events via Process only
-#   [client-events-02] Drains are pure read+remove
-#     - MUST NOT receive/process packets, advance tick
-#   [client-events-03] Drain is destructive and idempotent
-#     - Subsequent drains without Process step MUST return empty
-#   [client-events-04] Spawn is first event for entity lifetime
-#     - No Update/Remove before Spawn for that lifetime
-#   [client-events-05] No events for entities never in scope
-#     - No spawn/insert/update/remove/despawn if never InScope
-#   [client-events-06] Despawn ends entity lifetime
-#     - No further events for that lifetime after Despawn
-#     - Re-enter scope = new lifetime, new Spawn
-#   [client-events-07] Component insert/update/remove are one-shot
-#     - Exactly one event per applied change
-#     - Duplicate packets do not cause duplicate events
-#   [client-events-08] Per-entity ordering: spawn→(components)*→despawn
-#     - API-visible ordering MUST respect this
-#   [client-events-09] Scope transitions reflected as spawn/despawn
-#     - Leave scope = Despawn, re-enter = Spawn with snapshot
-#   [client-events-10] Message events typed, correctly routed, drain once
-#     - Grouped by channel/type, includes sender, no duplicates
-#   [client-events-11] Request/response events matched, one-shot, cleaned up
-#     - Each delivered exactly once, responses matchable to request
-#     - Disconnect cleans up in-flight requests
-#   [client-events-12] Authority events out of scope (see 11_entity_authority)
-#     - If surfaced via drain, MUST obey drain semantics
+# ----------------------------------------------------------------------------
+# CORE EVENT PIPELINE RULES
+# ----------------------------------------------------------------------------
+#
+# Receive step is ingestion only:
+#   - MUST NOT mutate client world or produce events
+#
+# Process step is the only event-production boundary:
+#   - Replicated state application and pending events via Process only
+#
+# Drains are pure read+remove:
+#   - MUST NOT receive/process packets, advance tick
+#
+# Drain is destructive and idempotent:
+#   - Subsequent drains without Process step MUST return empty
+#
+# ----------------------------------------------------------------------------
+# ENTITY EVENT ORDERING
+# ----------------------------------------------------------------------------
+#
+# Spawn is first event for entity lifetime:
+#   - No Update/Remove before Spawn for that lifetime
+#
+# No events for entities never in scope:
+#   - No spawn/insert/update/remove/despawn if never InScope
+#
+# Despawn ends entity lifetime:
+#   - No further events for that lifetime after Despawn
+#   - Re-enter scope = new lifetime, new Spawn
+#
+# Component insert/update/remove are one-shot:
+#   - Exactly one event per applied change
+#   - Duplicate packets do not cause duplicate events
+#
+# Per-entity ordering: spawn→(components)*→despawn:
+#   - API-visible ordering MUST respect this
+#
+# Scope transitions reflected as spawn/despawn:
+#   - Leave scope = Despawn, re-enter = Spawn with snapshot
+#
+# ----------------------------------------------------------------------------
+# MESSAGE/RPC EVENTS
+# ----------------------------------------------------------------------------
+#
+# Message events typed, correctly routed, drain once:
+#   - Grouped by channel/type, includes sender, no duplicates
+#
+# Request/response events matched, one-shot, cleaned up:
+#   - Each delivered exactly once, responses matchable to request
+#   - Disconnect cleans up in-flight requests
+#
+# ----------------------------------------------------------------------------
+# AUTHORITY EVENTS
+# ----------------------------------------------------------------------------
+#
+# Authority events out of scope (see 11_entity_authority):
+#   - If surfaced via drain, MUST obey drain semantics
+#
+# ----------------------------------------------------------------------------
+# FORBIDDEN BEHAVIORS
+# ----------------------------------------------------------------------------
 #
 # FORBIDDEN BEHAVIORS:
 #   - Producing events during drains
@@ -316,6 +347,24 @@ Feature: Client Events API
       Given no pending events
       When draining events multiple times
       Then no panic occurs
+
+# ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Event ordering under packet reordering
+#   Assertions:
+#     - Entity events maintain correct order despite packet reordering
+#   Harness needs: Packet reordering injection at transport layer
+#
+# Rule: Memory behavior during event accumulation
+#   Assertions:
+#     - Memory bounded when events accumulate between drains
+#   Harness needs: Memory profiling instrumentation
+#
+# ============================================================================
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS

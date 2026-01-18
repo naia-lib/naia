@@ -32,55 +32,70 @@
 #   - Exclude(U,E): Per-user scope exclusion filter
 #   - Debug mode: debug_assertions enabled
 #
-# CORE SCOPE PREDICATE:
-#   [entity-scopes-01] Rooms are required coarse gate for non-owners
-#     - SharesRoom(U,E) MUST be necessary precondition for InScope(U,E)
-#     - Exception: owning client always in-scope for client-owned entities
+# ----------------------------------------------------------------------------
+# CORE SCOPE PREDICATE
+# ----------------------------------------------------------------------------
 #
-#   [entity-scopes-02] Per-user include/exclude is additive filter after Rooms
-#     - If SharesRoom(U,E) == true:
-#       * Exclude(U,E) active → OutOfScope(U,E)
-#       * Include(U,E) active → InScope(U,E) (subject to publication)
-#       * Neither active → InScope(U,E) default (subject to publication)
+# Rooms are required coarse gate for non-owners:
+#   - SharesRoom(U,E) MUST be necessary precondition for InScope(U,E)
+#   - Exception: owning client always in-scope for client-owned entities
 #
-#   [entity-scopes-03] Include/Exclude ordering: last call wins
-#     - Most recently applied call for (U,E) determines effective state
+# Per-user include/exclude is additive filter after Rooms:
+#   - If SharesRoom(U,E) == true:
+#     * Exclude(U,E) active → OutOfScope(U,E)
+#     * Include(U,E) active → InScope(U,E) (subject to publication)
+#     * Neither active → InScope(U,E) default (subject to publication)
 #
-#   [entity-scopes-04] Roomless entities are out-of-scope for all non-owners
-#     - Entity in zero rooms → OutOfScope for all non-owners
-#     - Include does not bypass Rooms gate
+# Include/Exclude ordering: last call wins:
+#   - Most recently applied call for (U,E) determines effective state
 #
-# REQUIRED COUPLING TO OWNERSHIP & PUBLICATION:
-#   [entity-scopes-05] Owning client is always in-scope for client-owned entities
-#     - InScope(A,E) MUST always hold while owner A is connected
-#     - Publication and scope filters MUST NOT remove from owner's scope
-#     - Exclude(owner, owned_entity) MUST be ignored or return error
+# Roomless entities are out-of-scope for all non-owners:
+#   - Entity in zero rooms → OutOfScope for all non-owners
+#   - Include does not bypass Rooms gate
 #
-#   [entity-scopes-06] Publication can force non-owners out-of-scope
-#     - Unpublished/Private client-owned → OutOfScope for all non-owners
+# ----------------------------------------------------------------------------
+# COUPLING TO OWNERSHIP AND PUBLICATION
+# ----------------------------------------------------------------------------
 #
-# SCOPE STATE MACHINE & CLIENT-VISIBLE EFFECTS:
-#   [entity-scopes-07] OutOfScope → despawn on that client
-#   [entity-scopes-08] Despawn destroys all components including local-only
-#   [entity-scopes-09] OutOfScope → ignore late replication updates
-#   [entity-scopes-10] InScope → entity exists in networked entity pool
+# Owning client is always in-scope for client-owned entities:
+#   - InScope(A,E) MUST always hold while owner A is connected
+#   - Publication and scope filters MUST NOT remove from owner's scope
+#   - Exclude(owner, owned_entity) MUST be ignored or return error
 #
-# TICK SEMANTICS & COLLAPSE:
-#   [entity-scopes-11] Scope resolved per server tick; no intermediate states
-#     - Server collapses to final resolved state
-#     - MUST NOT emit intermediate spawn/despawn
+# Publication can force non-owners out-of-scope:
+#   - Unpublished/Private client-owned → OutOfScope for all non-owners
 #
-#   [entity-scopes-12] Leaving scope for ≥1 tick creates new lifetime on re-entry
-#     - Fresh spawn semantics
-#     - Client MUST NOT rely on prior lifetime state
+# ----------------------------------------------------------------------------
+# SCOPE STATE MACHINE AND CLIENT-VISIBLE EFFECTS
+# ----------------------------------------------------------------------------
 #
-# DISCONNECT HANDLING:
-#   [entity-scopes-13] Disconnect implies OutOfScope for all entities
-#     - Server ceases replicating to disconnected client
+#   - OutOfScope → despawn on that client
+#   - Despawn destroys all components including local-only
+#   - OutOfScope → ignore late replication updates
+#   - InScope → entity exists in networked entity pool
 #
-# ILLEGAL/MISUSE CASES:
-#   [entity-scopes-14] Include without shared room cannot force scope
-#   [entity-scopes-15] Unknown entity/user references are ignored
+# ----------------------------------------------------------------------------
+# TICK SEMANTICS AND COLLAPSE
+# ----------------------------------------------------------------------------
+#
+# Scope resolved per server tick; no intermediate states:
+#   - Server collapses to final resolved state
+#   - MUST NOT emit intermediate spawn/despawn
+#
+# Leaving scope for ≥1 tick creates new lifetime on re-entry:
+#   - Fresh spawn semantics
+#   - Client MUST NOT rely on prior lifetime state
+#
+# ----------------------------------------------------------------------------
+# DISCONNECT AND ERROR HANDLING
+# ----------------------------------------------------------------------------
+#
+# Disconnect implies OutOfScope for all entities:
+#   - Server ceases replicating to disconnected client
+#
+# Illegal/misuse cases:
+#   - Include without shared room cannot force scope
+#   - Unknown entity/user references are ignored
 #
 # ============================================================================
 
@@ -213,7 +228,21 @@ Feature: Entity Scopes
       And replication to that user ceases
 
 # ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Late replication updates ignored for out-of-scope entities
+#   Assertions:
+#     - Updates for out-of-scope entities are dropped
+#     - No partial state applied
+#   Harness needs: Packet injection after scope change
+#
+# ============================================================================
+
+# ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS
 # ============================================================================
-# None identified. The entity scopes spec is comprehensive.
+# None identified.
 # ============================================================================

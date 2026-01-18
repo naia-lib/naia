@@ -31,59 +31,73 @@
 #   - EntityOwner::Client(UserKey): Client-owned entity
 #   - EntityOwner::Local: Local-only entity (never networked)
 #
-# CORE CONTRACTS:
-#   [entity-ownership-01] Ownership is per-entity, exclusive, not per-component
-#     - Entity MUST have exactly one owner at any moment
+# ----------------------------------------------------------------------------
+# CORE OWNERSHIP RULES
+# ----------------------------------------------------------------------------
 #
-#   [entity-ownership-02] Server accepts writes only from owning client
-#     - For client-owned entity, server MUST accept writes only from owner
-#     - Server MAY ignore unauthorized writes silently
+# Ownership is per-entity, exclusive, not per-component:
+#   - Entity MUST have exactly one owner at any moment
 #
-#   [entity-ownership-03] Server rejects writes for non-delegated server-owned
-#     - For non-delegated server-owned entity, no client writes accepted
+# Server accepts writes only from owning client:
+#   - For client-owned entity, server MUST accept writes only from owner
+#   - Server MAY ignore unauthorized writes silently
 #
-#   [entity-ownership-04] Ownership alone does not emit authority events
-#     - Authority events are part of Delegation/Authority, not Ownership
+# Server rejects writes for non-delegated server-owned:
+#   - For non-delegated server-owned entity, no client writes accepted
 #
-# CLIENT-SIDE WRITE PERMISSION:
-#   [entity-ownership-05] Client write permission rules
-#     - Client MUST NOT write unless:
-#       * owner(E) == Client(this_client), OR
-#       * replication_config(E) == Delegated AND authority ∈ {Granted, Releasing}
-#     - API returns Err for unauthorized write attempts
-#     - Internal invariant violation → panic
+# Ownership alone does not emit authority events:
+#   - Authority events are part of Delegation/Authority, not Ownership
 #
-#   [entity-ownership-06] Ownership visibility on client is coarse
-#     - Entities not owned by this client → reported as EntityOwner::Server
-#     - Client-owned by this client → EntityOwner::Client
-#     - Local-only → EntityOwner::Local
+# ----------------------------------------------------------------------------
+# CLIENT-SIDE WRITE PERMISSION
+# ----------------------------------------------------------------------------
 #
-# MUTATE VS WRITE BEHAVIOR:
-#   [entity-ownership-07] Non-owners may mutate locally but must never write
-#     - Local mutations persist until server overwrites
-#     - No outbound replication for non-owned entities
+# Client write permission rules:
+#   - Client MUST NOT write unless:
+#     * owner(E) == Client(this_client), OR
+#     * replication_config(E) == Delegated AND authority ∈ {Granted, Releasing}
+#   - API returns Err for unauthorized write attempts
+#   - Internal invariant violation → panic
 #
-#   [entity-ownership-08] Local-only components persist until despawn or overwrite
-#     - Server replication overwrites with Insert event
+# Ownership visibility on client is coarse:
+#   - Entities not owned by this client → reported as EntityOwner::Server
+#   - Client-owned by this client → EntityOwner::Client
+#   - Local-only → EntityOwner::Local
 #
-#   [entity-ownership-09] Removing server-replicated components from unowned
-#     - Client MAY remove local-only component
-#     - Removing server-replicated component → Err
+# ----------------------------------------------------------------------------
+# MUTATE VS WRITE BEHAVIOR
+# ----------------------------------------------------------------------------
 #
-# OWNERSHIP TRANSITIONS:
-#   [entity-ownership-10] Server-owned entities never migrate to client-owned
-#   [entity-ownership-11] Client-owned entities may migrate to server-owned delegated
-#     - Requires delegation enabled, transfers ownership to server
-#     - Cannot revert back to client ownership
+# Non-owners may mutate locally but must never write:
+#   - Local mutations persist until server overwrites
+#   - No outbound replication for non-owned entities
 #
-#   [entity-ownership-12] Owning client always in-scope for its entities
+# Local-only components persist until despawn or overwrite:
+#   - Server replication overwrites with Insert event
 #
-# DISCONNECT HANDLING:
-#   [entity-ownership-13] Owner disconnect despawns all client-owned entities
+# Removing server-replicated components from unowned:
+#   - Client MAY remove local-only component
+#   - Removing server-replicated component → Err
 #
-# OUT-OF-SCOPE WRITE ATTEMPTS:
-#   [entity-ownership-14] No writes for out-of-scope entities
-#     - Internal attempt → panic (framework invariant)
+# ----------------------------------------------------------------------------
+# OWNERSHIP TRANSITIONS
+# ----------------------------------------------------------------------------
+#
+#   - Server-owned entities never migrate to client-owned
+#   - Client-owned entities may migrate to server-owned delegated
+#     (requires delegation enabled, transfers ownership to server)
+#   - Cannot revert back to client ownership
+#
+# Owning client always in-scope for its entities
+#
+# ----------------------------------------------------------------------------
+# DISCONNECT HANDLING
+# ----------------------------------------------------------------------------
+#
+# Owner disconnect despawns all client-owned entities
+#
+# Out-of-scope write attempts:
+#   - Internal attempt → panic (framework invariant)
 #
 # ============================================================================
 
@@ -229,6 +243,25 @@ Feature: Entity Ownership
       Given client A with owned entities visible to client B
       When client A disconnects
       Then client B observes despawn for those entities
+
+# ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Rollback of client writes on server rejection
+#   Assertions:
+#     - Client writes rolled back when server rejects authority
+#     - Rollback is atomic and consistent
+#   Harness needs: Server-side authority rejection injection + client state inspection
+#
+# Rule: Race condition resolution between ownership and scope changes
+#   Assertions:
+#     - Ownership cleanup correct when scope changes mid-transfer
+#   Harness needs: Precise timing control of concurrent operations
+#
+# ============================================================================
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS

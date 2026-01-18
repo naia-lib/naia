@@ -2,17 +2,14 @@
 # Connection Lifecycle — Canonical Contract
 # ============================================================================
 # Source: contracts/01_connection_lifecycle.spec.md
-# Last converted: 2026-01-17
+# Last updated: 2026-01-17
 #
 # Summary:
 #   This specification defines the connection state machine and observable
 #   events for Naia connections. Covers client/server states, authentication,
 #   identity tokens, handshake, tick sync, rejection, disconnect, reconnect,
-#   and protocol identity.
-#
-# Terminology note:
-#   This file is normative; scenarios are executable assertions; comments
-#   labeled NORMATIVE are part of the contract.
+#   and protocol identity. Intentionally written at the Naia core API level;
+#   engine adapters (hecs/bevy) MUST preserve these semantics.
 # ============================================================================
 
 # ============================================================================
@@ -21,7 +18,8 @@
 #
 # PURPOSE:
 #   Define the connection state machine and observable events for Naia
-#   connections at the core API level.
+#   connections at the core API level. Engine adapters (hecs/bevy) MUST
+#   preserve these semantics; adapter-specific plumbing is out of scope.
 #
 # GLOSSARY:
 #   - Client: Naia client instance attempting to establish session with Server
@@ -31,58 +29,161 @@
 #   - Explicit reject: Server deliberately refuses connection observably
 #   - Auth request: Credential payload sent Client → Server out-of-band (HTTP)
 #   - Identity token: Opaque one-time token for transport handshake
+#   - Protocol crate: Shared Rust crate defining message/component/channel registry
 #   - protocol_id: Deterministic 128-bit identifier for wire-relevant surface
+#   - Wire-relevant surface: Any aspect affecting encoding/decoding/semantics on wire
 #
-# CLIENT-SIDE OBSERVABLE SIGNALS:
-#   - ConnectionStatus: No "Rejected" state; rejection is RejectEvent
-#   - ConnectEvent: Exactly once per successful session, after handshake
-#   - DisconnectEvent: Only if previously connected
+# ----------------------------------------------------------------------------
+# OBSERVABLE SIGNALS
+# ----------------------------------------------------------------------------
+#
+# Client-side:
+#   - ConnectionStatus: MUST have no "Rejected" state; rejection is RejectEvent
+#   - ConnectEvent: Exactly once per successful session, after handshake finalized
+#   - DisconnectEvent: Only if previously connected (emitted ConnectEvent)
 #   - RejectEvent: Only on explicit server rejection, not generic failures
 #
-# SERVER-SIDE OBSERVABLE SIGNALS:
-#   - AuthEvent: When require_auth=true and auth request received
-#   - ConnectEvent: When session fully established
+# Server-side:
+#   - AuthEvent: When require_auth=true and auth request received (exactly once per request)
+#   - ConnectEvent: When session fully established (handshake + tick sync complete)
 #   - DisconnectEvent: When established session ends
 #
-# STATE MACHINES:
-#   Client: Disconnected → Connecting → Connected
-#   Server (per-client): NoSession → Handshaking → Connected
+# ----------------------------------------------------------------------------
+# STATE MACHINES
+# ----------------------------------------------------------------------------
 #
-# CORE CONTRACTS:
-#   [connection-01] Client states are Disconnected/Connecting/Connected
-#   [connection-02] No public "Rejected" state; rejection is an event
-#   [connection-03] Server not "Connected" until handshake + tick sync done
-#   [connection-04] require_auth=false allows connection without pre-auth
-#   [connection-05] Optional app-level auth allowed when not required
-#   [connection-06] require_auth=true requires identity token via HTTP first
-#   [connection-07] Auth response: 200 OK + token or 401 Unauthorized
-#   [connection-08] Server emits exactly one AuthEvent per auth request
-#   [connection-09] No Naia-level auth timeout during handshake
-#   [connection-10] Token is one-time use, TTL = 1 hour
-#   [connection-11] Invalid/expired/used token causes explicit rejection
-#   [connection-12] Tokens required for all transports when require_auth=true
-#   [connection-13] Token marked consumed on first successful validation
-#   [connection-14] Handshake includes tick sync; not Connected until done
-#   [connection-14a] protocol_id verified as first check in handshake
-#   [connection-15] Client emits ConnectEvent only after handshake finalized
-#   [connection-16] Server emits ConnectEvent only after handshake finalized
-#   [connection-17] No entity writes until after ConnectEvent
-#   [connection-18] Server rejects: no token, invalid token, or server choice
-#   [connection-19] On reject: RejectEvent, no ConnectEvent, no DisconnectEvent
-#   [connection-20] After RejectEvent, status returns to non-connected
-#   [connection-21] Client DisconnectEvent only after ConnectEvent
-#   [connection-22] Server DisconnectEvent only after ConnectEvent
-#   [connection-23] Disconnect = out-of-scope + client-owned entities despawn
-#   [connection-24] require_auth=true: AuthEvent → ConnectEvent → DisconnectEvent
-#   [connection-25] require_auth=false: ConnectEvent → DisconnectEvent
-#   [connection-26] Client: ConnectEvent → DisconnectEvent
-#   [connection-27] Rejected: RejectEvent only, no Connect/Disconnect
-#   [connection-28] Reconnect is fresh session, no resumption
-#   [connection-29] protocol_id uniquely identifies wire-relevant surface
-#   [connection-30] protocol_id is 16-byte little-endian u128
-#   [connection-31] protocol_id mismatch = ProtocolMismatch rejection
-#   [connection-32] Wire-relevant changes affect protocol_id
-#   [connection-33] No partial compatibility, exact match required
+# Client states (conceptual):
+#   - Disconnected → Connecting → Connected
+#   - Client behavior MUST be describable by these states
+#   - No public "Rejected" state; rejection is an event only
+#
+# Server states (per-client-session conceptual):
+#   - NoSession → Handshaking → Connected
+#   - Server MUST NOT treat client as Connected until handshake finalized
+#
+# ----------------------------------------------------------------------------
+# AUTHENTICATION RULES
+# ----------------------------------------------------------------------------
+#
+# When require_auth=false:
+#   - Server MUST allow connection without pre-auth step
+#   - Optional app-level auth MAY be supported but not required by Naia
+#
+# When require_auth=true:
+#   - Client MUST obtain identity token via HTTP BEFORE transport connection
+#   - Server MUST return 200 OK + token on valid auth, or 401 Unauthorized
+#   - Server MUST emit exactly one AuthEvent per auth request
+#   - No Naia-level auth timeout during handshake (auth completed before transport)
+#
+# ----------------------------------------------------------------------------
+# IDENTITY TOKEN PROPERTIES
+# ----------------------------------------------------------------------------
+#
+#   - One-time use: MUST NOT be used successfully more than once
+#   - TTL = 1 hour from issuance
+#   - On first successful validation, server MUST mark token as consumed
+#   - Expired/used/invalid token MUST cause explicit rejection
+#   - Required for ALL transports when require_auth=true
+#
+# ----------------------------------------------------------------------------
+# HANDSHAKE AND TICK SYNC
+# ----------------------------------------------------------------------------
+#
+# Handshake ordering:
+#   1. Transport connection established
+#   2. protocol_id exchange and comparison (HARD GATE)
+#   3. Auth validation (if require_auth=true)
+#   4. Tick synchronization
+#   5. ConnectEvent emitted (connection ready)
+#
+# Timing rules:
+#   - Client MUST emit ConnectEvent only after handshake finalized
+#   - Server MUST emit ConnectEvent only after handshake finalized
+#   - MUST NOT deliver entity replication writes until after ConnectEvent
+#
+# ----------------------------------------------------------------------------
+# PROTOCOL IDENTITY
+# ----------------------------------------------------------------------------
+#
+# protocol_id derivation (MUST include):
+#   - Channel registry: kinds, modes, directions, registration order
+#   - Message type registry: type IDs, field schemas, field order, registration order
+#   - Request/Response type registry: type IDs, field schemas, registration order
+#   - Component type registry: type IDs, field schemas, replicated field order, registration order
+#   - Naia wire protocol version
+#
+# Stability guarantees:
+#   - MUST be deterministic: identical source → identical protocol_id
+#   - MUST change if any wire-relevant surface changes
+#   - MAY remain same for non-wire-relevant changes (docs, non-replicated fields)
+#
+# Wire encoding:
+#   - 16-byte (128-bit) unsigned integer, little-endian byte order
+#
+# Handshake gate:
+#   - protocol_id comparison MUST occur BEFORE:
+#     - ConnectEvent, entity replication, messages, auth validation
+#   - Mismatch MUST cause ProtocolMismatch rejection
+#   - No partial compatibility, no negotiation, exact match required
+#
+# ----------------------------------------------------------------------------
+# REJECTION SEMANTICS
+# ----------------------------------------------------------------------------
+#
+# Server MUST explicitly reject when:
+#   - require_auth=true and no identity token presented
+#   - Token is invalid/expired/already-used
+#   - protocol_id mismatch (ProtocolMismatch)
+#   - Server otherwise denies before session establishment
+#
+# On rejection:
+#   - Client MUST emit RejectEvent
+#   - Client MUST NOT emit ConnectEvent
+#   - Client MUST NOT emit DisconnectEvent
+#   - After RejectEvent, ConnectionStatus MUST return to non-connected state
+#
+# ----------------------------------------------------------------------------
+# DISCONNECT SEMANTICS
+# ----------------------------------------------------------------------------
+#
+#   - DisconnectEvent (client/server) MUST only emit if ConnectEvent was emitted
+#   - On disconnect: client is out-of-scope for all entities
+#   - Client-owned entities MUST be despawned by server
+#
+# ----------------------------------------------------------------------------
+# EVENT ORDERING GUARANTEES
+# ----------------------------------------------------------------------------
+#
+# With require_auth=true (server):
+#   AuthEvent → ConnectEvent → DisconnectEvent
+#
+# With require_auth=false (server):
+#   ConnectEvent → DisconnectEvent
+#
+# Client (all modes):
+#   ConnectEvent → DisconnectEvent (successful session)
+#   RejectEvent only (rejected attempt, no Connect/Disconnect)
+#
+# ----------------------------------------------------------------------------
+# RECONNECT SEMANTICS
+# ----------------------------------------------------------------------------
+#
+#   - Reconnect is a FRESH session, no resumption
+#   - Server treats reconnecting client as new session
+#   - Prior entity state, authority, buffered data discarded
+#   - Client receives fresh entity spawns (not updates)
+#   - Authority state starts fresh (no carryover)
+#
+# ----------------------------------------------------------------------------
+# NON-GOALS / OUT OF SCOPE
+# ----------------------------------------------------------------------------
+#
+#   - Exact HTTP route/headers/body format of auth request
+#   - Transport-specific wire details for token conveyance
+#   - Engine adapter (bevy/hecs) implementation details
+#   - Retry/backoff policies for connection attempts
+#   - Session resumption / state persistence across reconnects
+#   - Wire format details for protocol identity exchange
 #
 # ============================================================================
 
@@ -94,7 +195,7 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # Rule: Client state machine
   # --------------------------------------------------------------------------
-  # NORMATIVE: Client states are Disconnected, Connecting, Connected.
+  # Client states are Disconnected, Connecting, Connected.
   # No public "Rejected" state exists.
   # --------------------------------------------------------------------------
   Rule: Client state machine
@@ -114,7 +215,7 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # Rule: Server state machine per client
   # --------------------------------------------------------------------------
-  # NORMATIVE: Server not Connected until handshake + tick sync done.
+  # Server not Connected until handshake + tick sync done.
   # --------------------------------------------------------------------------
   Rule: Server state machine per client
 
@@ -131,7 +232,7 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # Rule: Authentication with require_auth=false
   # --------------------------------------------------------------------------
-  # NORMATIVE: Clients can connect without pre-auth step.
+  # Clients can connect without pre-auth step.
   # --------------------------------------------------------------------------
   Rule: Authentication with require_auth=false
 
@@ -144,7 +245,7 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # Rule: Authentication with require_auth=true
   # --------------------------------------------------------------------------
-  # NORMATIVE: Identity token required via HTTP before transport handshake.
+  # Identity token required via HTTP before transport handshake.
   # --------------------------------------------------------------------------
   Rule: Authentication with require_auth=true
 
@@ -172,7 +273,7 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # Rule: Identity token properties
   # --------------------------------------------------------------------------
-  # NORMATIVE: One-time use, TTL = 1 hour, required for all transports.
+  # One-time use, TTL = 1 hour, required for all transports.
   # --------------------------------------------------------------------------
   Rule: Identity token properties
 
@@ -193,11 +294,11 @@ Feature: Connection Lifecycle
       Then the identity token is required
 
   # --------------------------------------------------------------------------
-  # Rule: Transport handshake and tick sync
+  # Rule: Handshake and tick sync
   # --------------------------------------------------------------------------
-  # NORMATIVE: ConnectEvent only after protocol_id verification and tick sync.
+  # ConnectEvent only after protocol_id verification and tick sync.
   # --------------------------------------------------------------------------
-  Rule: Transport handshake and tick sync
+  Rule: Handshake and tick sync
 
     Scenario: Tick sync completes before ConnectEvent
       Given a client is connecting
@@ -220,11 +321,12 @@ Feature: Connection Lifecycle
       Then no entity replication writes occur
 
   # --------------------------------------------------------------------------
-  # Rule: Protocol identity verification
+  # Rule: Protocol identity is a strict handshake gate
   # --------------------------------------------------------------------------
-  # NORMATIVE: protocol_id verified as first check; mismatch = rejection.
+  # protocol_id verified as first check; mismatch = ProtocolMismatch rejection.
+  # Exact match required, no negotiation, no partial compatibility.
   # --------------------------------------------------------------------------
-  Rule: Protocol identity verification
+  Rule: Protocol identity is a strict handshake gate
 
     Scenario: protocol_id verified before other handshake steps
       Given client and server have different protocol_id
@@ -251,12 +353,23 @@ Feature: Connection Lifecycle
       When built multiple times
       Then the same protocol_id is produced
 
+    Scenario: Breaking protocol change causes ProtocolMismatch
+      Given a server with updated protocol
+      When an old client attempts to connect
+      Then ProtocolMismatch rejection occurs
+
+    Scenario: No extension negotiation occurs
+      Given client and server with different protocol_id
+      When connection is attempted
+      Then no negotiation occurs
+      And connection is rejected immediately
+
   # --------------------------------------------------------------------------
-  # Rule: Explicit rejection semantics
+  # Rule: Rejection semantics
   # --------------------------------------------------------------------------
-  # NORMATIVE: RejectEvent, no ConnectEvent, no DisconnectEvent.
+  # RejectEvent emitted, no ConnectEvent, no DisconnectEvent.
   # --------------------------------------------------------------------------
-  Rule: Explicit rejection semantics
+  Rule: Rejection semantics
 
     Scenario: Missing token causes rejection when required
       Given require_auth is true
@@ -276,7 +389,7 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # Rule: Disconnect semantics
   # --------------------------------------------------------------------------
-  # NORMATIVE: DisconnectEvent only after ConnectEvent.
+  # DisconnectEvent only after ConnectEvent.
   # --------------------------------------------------------------------------
   Rule: Disconnect semantics
 
@@ -301,11 +414,13 @@ Feature: Connection Lifecycle
       Then client-owned entities are despawned by the server
 
   # --------------------------------------------------------------------------
-  # Rule: Event ordering with auth required
+  # Rule: Event ordering
   # --------------------------------------------------------------------------
-  # NORMATIVE: AuthEvent → ConnectEvent → DisconnectEvent.
+  # require_auth=true: AuthEvent → ConnectEvent → DisconnectEvent
+  # require_auth=false: ConnectEvent → DisconnectEvent
+  # Rejected: RejectEvent only, no Connect/Disconnect
   # --------------------------------------------------------------------------
-  Rule: Event ordering with auth required
+  Rule: Event ordering
 
     Scenario: Server observes correct event order with auth
       Given require_auth is true
@@ -314,26 +429,12 @@ Feature: Connection Lifecycle
       When the client disconnects
       Then the server observes DisconnectEvent after ConnectEvent
 
-  # --------------------------------------------------------------------------
-  # Rule: Event ordering without auth required
-  # --------------------------------------------------------------------------
-  # NORMATIVE: ConnectEvent → DisconnectEvent.
-  # --------------------------------------------------------------------------
-  Rule: Event ordering without auth required
-
     Scenario: Server observes correct event order without auth
       Given require_auth is false
       When a client connects
       Then the server observes ConnectEvent
       When the client disconnects
       Then the server observes DisconnectEvent after ConnectEvent
-
-  # --------------------------------------------------------------------------
-  # Rule: Client event ordering
-  # --------------------------------------------------------------------------
-  # NORMATIVE: ConnectEvent → DisconnectEvent for successful sessions.
-  # --------------------------------------------------------------------------
-  Rule: Client event ordering
 
     Scenario: Client observes correct event order
       Given a client successfully connects
@@ -350,7 +451,7 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # Rule: Reconnect is a fresh session
   # --------------------------------------------------------------------------
-  # NORMATIVE: No session resumption; world rebuilt from scratch.
+  # No session resumption; world rebuilt from scratch.
   # --------------------------------------------------------------------------
   Rule: Reconnect is a fresh session
 
@@ -373,7 +474,7 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # Rule: Protocol identity determinism
   # --------------------------------------------------------------------------
-  # NORMATIVE: protocol_id is deterministic and changes with wire-relevant changes.
+  # protocol_id is deterministic; changes with wire-relevant changes.
   # --------------------------------------------------------------------------
   Rule: Protocol identity determinism
 
@@ -386,27 +487,34 @@ Feature: Connection Lifecycle
       Given a protocol with documentation changes only
       Then the protocol_id does not change
 
-  # --------------------------------------------------------------------------
-  # Rule: No partial compatibility
-  # --------------------------------------------------------------------------
-  # NORMATIVE: Exact protocol_id match required, no negotiation.
-  # --------------------------------------------------------------------------
-  Rule: No partial compatibility
-
-    Scenario: Breaking protocol change causes ProtocolMismatch
-      Given a server with updated protocol
-      When an old client attempts to connect
-      Then ProtocolMismatch rejection occurs
-
-    Scenario: No extension negotiation occurs
-      Given client and server with different protocol_id
-      When connection is attempted
-      Then no negotiation occurs
-      And connection is rejected immediately
+# ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Identity token properties
+#   Assertions:
+#     - Token TTL enforcement (1 hour expiry)
+#     - Token replay detection across process restarts
+#   Harness needs: Time manipulation / clock injection
+#
+# Rule: Protocol identity wire format
+#   Assertions:
+#     - protocol_id is encoded as 16 bytes little-endian on wire
+#     - Different component schemas produce different protocol_id
+#   Harness needs: Wire-level packet inspection
+#
+# Rule: Authentication HTTP flow
+#   Assertions:
+#     - HTTP 200 OK with token body format
+#     - HTTP 401 Unauthorized response format
+#   Harness needs: HTTP request/response interception
+#
+# ============================================================================
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS
 # ============================================================================
-# None identified. The connection lifecycle spec is comprehensive with clear
-# state machines, event ordering, and protocol identity semantics.
+# None identified.
 # ============================================================================

@@ -33,56 +33,84 @@
 #   - can_write: True iff endpoint owns entity OR is active authority holder
 #   - can_read: True iff endpoint is NOT the active authority holder
 #
-# CORE CONTRACTS:
-#   [entity-authority-01] Authority defined only for delegated entities
-#     - If replication_config(E) != Delegated, authority(E) MUST be None
-#     - Request/release on non-delegated MUST return error
-#   [entity-authority-02] Single-writer rule (client-side)
-#     - Client MAY write only when Granted or Releasing
-#     - Writing in other states MUST panic
-#   [entity-authority-03] Meaning of Denied
-#     - Authority held by another client OR server
-#     - Transitions to Available when holder releases or server resets
+# ----------------------------------------------------------------------------
+# CORE AUTHORITY RULES
+# ----------------------------------------------------------------------------
 #
-# CLIENT API SEMANTICS:
-#   [entity-authority-04] request_authority() is optimistic
-#     - Available → Requested immediately (no round-trip wait)
-#   [entity-authority-05] Request completion transitions
-#     - Requested → Granted (server grants)
-#     - Requested → Denied (another holds)
-#     - Requested → Available (server resets)
-#   [entity-authority-06] release_authority() transitions
-#     - Granted → Releasing → Available
-#     - Requested → Available (cancels request)
-#   [entity-authority-07] Client-side error returns
-#     - Not delegated → ErrNotDelegated
-#     - Out-of-scope → ErrNotInScope
-#     - Entity doesn't exist → ErrNoSuchEntity
+# Authority defined only for delegated entities:
+#   - If replication_config(E) != Delegated, authority(E) MUST be None
+#   - Request/release on non-delegated MUST return error
 #
-# SERVER SEMANTICS:
-#   [entity-authority-08] First-request wins arbitration
-#   [entity-authority-09] Server may hold authority and block clients
-#     - All clients in Denied while server holds
-#   [entity-authority-10] Server override/reset
-#     - Granted/Releasing/Denied → Available (revoked)
-#     - Requested → Available (cleared)
+# Single-writer rule (client-side):
+#   - Client MAY write only when Granted or Releasing
+#   - Writing in other states MUST panic
 #
-# SCOPE/LIFETIME/DISCONNECT:
-#   [entity-authority-11] Out-of-scope ends authority for that client
-#     - Entity lifetime ends, status cleared, buffered actions discarded
-#   [entity-authority-12] Authority holder losing scope forces global release
-#     - Other in-scope clients: Denied → Available
-#   [entity-authority-13] Delegation disable clears authority
-#     - Authority becomes None, pending cleared, grants revoked
+# Meaning of Denied:
+#   - Authority held by another client OR server
+#   - Transitions to Available when holder releases or server resets
 #
-# ROBUSTNESS:
-#   [entity-authority-14] Out-of-scope requests ignored server-side
-#     - Silent in production, MAY warn in Debug mode
-#   [entity-authority-15] Duplicate/late signals are idempotent
-#     - No duplicate effects, converge to final state
+# ----------------------------------------------------------------------------
+# CLIENT API SEMANTICS
+# ----------------------------------------------------------------------------
 #
-# OBSERVABILITY:
-#   [entity-authority-16] Authority observable via status and events
+# request_authority() is optimistic:
+#   - Available → Requested immediately (no round-trip wait)
+#
+# Request completion transitions:
+#   - Requested → Granted (server grants)
+#   - Requested → Denied (another holds)
+#   - Requested → Available (server resets)
+#
+# release_authority() transitions:
+#   - Granted → Releasing → Available
+#   - Requested → Available (cancels request)
+#
+# Client-side error returns:
+#   - Not delegated → ErrNotDelegated
+#   - Out-of-scope → ErrNotInScope
+#   - Entity doesn't exist → ErrNoSuchEntity
+#
+# ----------------------------------------------------------------------------
+# SERVER SEMANTICS
+# ----------------------------------------------------------------------------
+#
+# First-request wins arbitration
+#
+# Server may hold authority and block clients:
+#   - All clients in Denied while server holds
+#
+# Server override/reset:
+#   - Granted/Releasing/Denied → Available (revoked)
+#   - Requested → Available (cleared)
+#
+# ----------------------------------------------------------------------------
+# SCOPE/LIFETIME/DISCONNECT
+# ----------------------------------------------------------------------------
+#
+# Out-of-scope ends authority for that client:
+#   - Entity lifetime ends, status cleared, buffered actions discarded
+#
+# Authority holder losing scope forces global release:
+#   - Other in-scope clients: Denied → Available
+#
+# Delegation disable clears authority:
+#   - Authority becomes None, pending cleared, grants revoked
+#
+# ----------------------------------------------------------------------------
+# ROBUSTNESS
+# ----------------------------------------------------------------------------
+#
+# Out-of-scope requests ignored server-side:
+#   - Silent in production, MAY warn in Debug mode
+#
+# Duplicate/late signals are idempotent:
+#   - No duplicate effects, converge to final state
+#
+# ----------------------------------------------------------------------------
+# OBSERVABILITY
+# ----------------------------------------------------------------------------
+#
+# Authority observable via status and events
 #
 # STATE TRANSITION TABLE:
 #   Available + request_authority() → Requested (can_write=false, can_read=true)
@@ -330,6 +358,25 @@ Feature: Entity Authority
       Given an entity that has been despawned
       When a late authority signal arrives
       Then the signal is ignored
+
+# ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Authority state under network partition
+#   Assertions:
+#     - Authority converges correctly after partition heals
+#     - No split-brain authority grants
+#   Harness needs: Network partition injection with state inspection
+#
+# Rule: Authority request latency under load
+#   Assertions:
+#     - Request-to-grant latency within bounds under load
+#   Harness needs: Load generation + latency measurement infrastructure
+#
+# ============================================================================
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS

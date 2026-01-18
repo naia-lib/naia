@@ -42,114 +42,127 @@
 #   Key principle: Panic is reserved for internal invariant violations only.
 #   No user action via public API can trigger a panic.
 #
-# NORMATIVE ERROR RULES:
-#   [common-01] User-initiated misuse MUST return Result::Err
-#     - Invalid channel configuration
-#     - Sending on wrong-direction channel
-#     - Oversize message payload
-#     - Authority request on non-delegated entity
-#     - Write attempt without permission
-#     - Enqueueing more than MAX_COMMANDS_PER_TICK_PER_CONNECTION commands
+# ----------------------------------------------------------------------------
+# ERROR HANDLING RULES
+# ----------------------------------------------------------------------------
 #
-#   [common-02] Remote/untrusted input MUST NOT panic
-#     - Malformed or oversize inbound packet
-#     - Duplicate replication messages
-#     - Authority request for out-of-scope entity
-#     - Late command for already-processed tick
-#     - TickBuffered message for evicted/old tick
-#     - EntityProperty referencing unknown entity
-#     - In Prod: ignore/drop silently
-#     - In Debug: ignore/drop with warning (non-normative text)
+# User-initiated misuse MUST return Result::Err:
+#   - Invalid channel configuration
+#   - Sending on wrong-direction channel
+#   - Oversize message payload
+#   - Authority request on non-delegated entity
+#   - Write attempt without permission
+#   - Enqueueing more than MAX_COMMANDS_PER_TICK_PER_CONNECTION commands
 #
-#   [common-02a] Protocol mismatch is a deployment error
-#     - Connection MUST be rejected with ProtocolMismatch
-#     - Client MUST receive distinguishable indication
-#     - MUST NOT panic
+# Remote/untrusted input MUST NOT panic:
+#   - Malformed or oversize inbound packet
+#   - Duplicate replication messages
+#   - Authority request for out-of-scope entity
+#   - Late command for already-processed tick
+#   - TickBuffered message for evicted/old tick
+#   - EntityProperty referencing unknown entity
+#   - In Prod: ignore/drop silently
+#   - In Debug: ignore/drop with warning (non-normative text)
 #
-#   [common-03] Framework invariant violations MUST panic
-#     - Tick goes backwards in public API
-#     - Older state delivered after newer on sequenced channel
-#     - Internal send exceeding declared bounds
-#     - GlobalEntity counter rollover
+# Protocol mismatch is a deployment error:
+#   - Connection MUST be rejected with ProtocolMismatch
+#   - Client MUST receive distinguishable indication
+#   - MUST NOT panic
 #
-#   [common-04] Warnings are debug-only and non-normative
-#     - Warning text/format not part of contract
-#     - Tests MUST NOT assert on warning content
-#     - Warnings MUST NOT affect observable behavior
+# Framework invariant violations MUST panic:
+#   - Tick goes backwards in public API
+#   - Older state delivered after newer on sequenced channel
+#   - Internal send exceeding declared bounds
+#   - GlobalEntity counter rollover
 #
-# DETERMINISM REQUIREMENTS:
-#   [common-05] Determinism under deterministic inputs
-#     If Time Provider, Network input, and API call sequence are deterministic,
-#     then Naia's observable outputs MUST be deterministic:
+# Warnings are debug-only and non-normative:
+#   - Warning text/format not part of contract
+#   - Tests MUST NOT assert on warning content
+#   - Warnings MUST NOT affect observable behavior
+#
+# ----------------------------------------------------------------------------
+# DETERMINISM REQUIREMENTS
+# ----------------------------------------------------------------------------
+#
+# Determinism under deterministic inputs:
+#   If Time Provider, Network input, and API call sequence are deterministic,
+#   then Naia's observable outputs MUST be deterministic:
 #     - Event emission order
 #     - Entity spawn/despawn order
 #     - Component insert/update/remove order
 #     - Authority state transitions
 #
-#   [common-06] Per-tick determinism rule
-#     - Scope operations: last API call wins in server-thread call order
-#     - Multiple commands same tick: process in receipt order
-#     - Multiple authority requests: first request received wins
+# Per-tick determinism rule:
+#   - Scope operations: last API call wins in server-thread call order
+#   - Multiple commands same tick: process in receipt order
+#   - Multiple authority requests: first request received wins
 #
-# TEST CONVENTIONS:
-#   [common-07] Tests MUST NOT assert on logs
-#     - No assertions on log message content, presence, or format
-#     - Observable behavior MUST be via events, API returns, or world state
+# ----------------------------------------------------------------------------
+# TEST CONVENTIONS
+# ----------------------------------------------------------------------------
 #
-#   [common-08] Test obligation template format:
-#     **Test obligations:**
-#     - `<contract-id>.t1`: <What the test verifies>
+# Tests MUST NOT assert on logs:
+#   - No assertions on log message content, presence, or format
+#   - Observable behavior MUST be via events, API returns, or world state
 #
-#   [common-09] Observable signals subsection
-#     Every contract SHOULD include observable signals section
+# Every contract SHOULD include observable signals section
 #
-# CONFIGURATION: DEFAULTS VS INVARIANTS:
-#   [common-10] Fixed invariants (MUST NOT be configurable):
-#     | Invariant                          | Value    |
-#     |------------------------------------|----------|
-#     | MAX_RELIABLE_MESSAGE_FRAGMENTS     | 2^16     |
-#     | GlobalEntity rollover behavior     | Panic    |
-#     | Tick type                          | u16      |
-#     | Wrap-safe half-range               | 32768    |
-#     | Request ID uniqueness scope        | Per-conn |
-#     | MAX_COMMANDS_PER_TICK_PER_CONNECTION| 64      |
-#     | protocol_id wire encoding          | u128 LE  |
-#     | Command sequence encoding          | varint   |
+# ----------------------------------------------------------------------------
+# CONFIGURATION: DEFAULTS VS INVARIANTS
+# ----------------------------------------------------------------------------
 #
-#   [common-11] Configurable defaults:
-#     | Default                            | Value    |
-#     |------------------------------------|----------|
-#     | Identity token TTL                 | 1 hour   |
-#     | ENTITY_PROPERTY_RESOLUTION_TTL     | 60 sec   |
-#     | MAX_PENDING_ENTITY_PROPERTY_*      | 4096/128 |
-#     | TickBuffered tick_buffer_capacity  | Per-chan |
-#     | DEFAULT_REQUEST_TIMEOUT            | 30 sec   |
+# Fixed invariants (MUST NOT be configurable):
+#   | Invariant                          | Value    |
+#   |------------------------------------|----------|
+#   | MAX_RELIABLE_MESSAGE_FRAGMENTS     | 2^16     |
+#   | GlobalEntity rollover behavior     | Panic    |
+#   | Tick type                          | u16      |
+#   | Wrap-safe half-range               | 32768    |
+#   | Request ID uniqueness scope        | Per-conn |
+#   | MAX_COMMANDS_PER_TICK_PER_CONNECTION| 64      |
+#   | protocol_id wire encoding          | u128 LE  |
+#   | Command sequence encoding          | varint   |
 #
-#   [common-11a] New constants start as invariants
+# Configurable defaults:
+#   | Default                            | Value    |
+#   |------------------------------------|----------|
+#   | Identity token TTL                 | 1 hour   |
+#   | ENTITY_PROPERTY_RESOLUTION_TTL     | 60 sec   |
+#   | MAX_PENDING_ENTITY_PROPERTY_*      | 4096/128 |
+#   | TickBuffered tick_buffer_capacity  | Per-chan |
+#   | DEFAULT_REQUEST_TIMEOUT            | 30 sec   |
 #
-#   [common-12a] Test tolerance constants (non-normative, test-only):
-#     | Constant                   | Value |
-#     |----------------------------|-------|
-#     | RTT_TOLERANCE_PERCENT      | 20    |
-#     | RTT_MIN_SAMPLES            | 10    |
-#     | RTT_MAX_VALUE_MS           | 10000 |
-#     | THROUGHPUT_TOLERANCE_*     | 15/5  |
-#     | LEAD_CONVERGENCE_TICKS     | 60    |
-#     | METRIC_WINDOW_DURATION_MS  | 1000  |
+# New constants start as invariants (MAY be promoted to configurable later)
 #
-# OBSERVABILITY POLICIES:
-#   [common-12] Internal measurements vs exposed metrics
-#     - Reading metrics MUST NOT influence internal behavior
-#     - Internal measurements MAY differ from exposed metrics
+# Test tolerance constants (non-normative, test-only):
+#   | Constant                   | Value |
+#   |----------------------------|-------|
+#   | RTT_TOLERANCE_PERCENT      | 20    |
+#   | RTT_MIN_SAMPLES            | 10    |
+#   | RTT_MAX_VALUE_MS           | 10000 |
+#   | THROUGHPUT_TOLERANCE_*     | 15/5  |
+#   | LEAD_CONVERGENCE_TICKS     | 60    |
+#   | METRIC_WINDOW_DURATION_MS  | 1000  |
 #
-#   [common-13] Metrics are non-normative for gameplay
-#     - Metrics MUST NOT affect replicated state, authority, scope, or delivery
+# ----------------------------------------------------------------------------
+# OBSERVABILITY POLICIES
+# ----------------------------------------------------------------------------
 #
-# CONNECTION SEMANTICS:
-#   [common-14] Reconnect is fresh session
-#     - No session resumption
-#     - Server treats reconnecting client as new session
-#     - Prior entity state, authority, buffered data discarded
+# Internal measurements vs exposed metrics:
+#   - Reading metrics MUST NOT influence internal behavior
+#   - Internal measurements MAY differ from exposed metrics
+#
+# Metrics are non-normative for gameplay:
+#   - Metrics MUST NOT affect replicated state, authority, scope, or delivery
+#
+# ----------------------------------------------------------------------------
+# CONNECTION SEMANTICS
+# ----------------------------------------------------------------------------
+#
+# Reconnect is a fresh session:
+#   - No session resumption
+#   - Server treats reconnecting client as new session
+#   - Prior entity state, authority, buffered data discarded
 #
 # ============================================================================
 
@@ -288,3 +301,29 @@ Feature: Common Definitions and Policies
       When the client reconnects
       Then it receives fresh entity spawns for all in-scope entities
       And no prior session state is retained
+# ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Framework invariant violations must panic
+#   Assertions:
+#     - Tick goes backwards triggers panic
+#     - Older state after newer on sequenced channel triggers panic
+#     - GlobalEntity counter rollover triggers panic
+#   Harness needs: Ability to inject internal invariant violations (internal test only)
+#
+# Rule: Test tolerance constants validation
+#   Assertions:
+#     - RTT convergence within tolerance bounds
+#     - Throughput measurements within tolerance
+#   Harness needs: Network conditioner with precise latency control + metrics API
+#
+# ============================================================================
+
+# ============================================================================
+# AMBIGUITIES + PROPOSED CLARIFICATIONS
+# ============================================================================
+# None identified.
+# ============================================================================

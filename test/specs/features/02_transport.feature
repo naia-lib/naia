@@ -43,32 +43,47 @@
 #   - Entity replication semantics (see entity suite)
 #   - Auth semantics (see 01_connection_lifecycle)
 #
-# NORMATIVE TRANSPORT RULES:
-#   [transport-01] Naia assumes transport is unordered & unreliable
-#     - Naia MUST assume packets may be dropped, duplicated, and reordered
-#     - Naia MUST NOT rely on:
-#       * in-order delivery
-#       * exactly-once delivery
-#       * guaranteed delivery
+# ----------------------------------------------------------------------------
+# TRANSPORT ASSUMPTIONS
+# ----------------------------------------------------------------------------
 #
-#   [transport-02] MTU boundary is defined by naia_shared::MTU_SIZE_BYTES
-#     - Naia MUST treat MTU_SIZE_BYTES as max size of single packet payload
-#     - Naia MUST NOT ask transport to send payload larger than MTU_SIZE_BYTES
+# Naia assumes transport is unordered and unreliable:
+#   - Naia MUST assume packets may be dropped, duplicated, and reordered
+#   - Naia MUST NOT rely on:
+#     * in-order delivery
+#     * exactly-once delivery
+#     * guaranteed delivery
 #
-#   [transport-03] Oversize outbound packet attempt returns Err
-#     - If Naia is asked to send data requiring payload > MTU_SIZE_BYTES
-#     - Naia MUST return Result::Err from the initiating Naia-layer API
-#     - Naia must validate before calling the adapter
+# ----------------------------------------------------------------------------
+# MTU BOUNDARY
+# ----------------------------------------------------------------------------
 #
-#   [transport-04] Malformed or oversize inbound packets are dropped
-#     - If Naia receives packet > MTU_SIZE_BYTES or malformed:
-#       * In Prod: drop silently
-#       * In Debug: drop and emit warning (text not part of contract)
+# MTU boundary is defined by naia_shared::MTU_SIZE_BYTES:
+#   - Naia MUST treat MTU_SIZE_BYTES as max size of single packet payload
+#   - Naia MUST NOT ask transport to send payload larger than MTU_SIZE_BYTES
 #
-#   [transport-05] No transport-specific guarantees may leak upward
-#     - Higher layers (messaging/replication) MUST behave identically
-#       regardless of underlying transport quality
-#     - Any guarantee stronger than transport-01 MUST be in messaging spec
+# Oversize outbound packet attempt returns Err:
+#   - If Naia is asked to send data requiring payload > MTU_SIZE_BYTES
+#   - Naia MUST return Result::Err from the initiating Naia-layer API
+#   - Naia MUST validate before calling the adapter
+#
+# ----------------------------------------------------------------------------
+# INBOUND PACKET HANDLING
+# ----------------------------------------------------------------------------
+#
+# Malformed or oversize inbound packets are dropped:
+#   - If Naia receives packet > MTU_SIZE_BYTES or malformed:
+#     * In Prod: drop silently
+#     * In Debug: drop and emit warning (text not part of contract)
+#
+# ----------------------------------------------------------------------------
+# TRANSPORT ABSTRACTION GUARANTEE
+# ----------------------------------------------------------------------------
+#
+# No transport-specific guarantees may leak upward:
+#   - Higher layers (messaging/replication) MUST behave identically
+#     regardless of underlying transport quality
+#   - Any guarantee stronger than transport assumptions MUST be in messaging spec
 #
 # ============================================================================
 
@@ -156,7 +171,25 @@ Feature: Transport Layer Contract
       Then the observable behavior is identical
 
 # ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Transport guarantees do not leak upward
+#   Assertions:
+#     - Identical behavior across UDP, WebRTC, and local transports
+#   Harness needs: Multi-transport test execution framework
+#
+# Rule: MTU boundary wire-level validation
+#   Assertions:
+#     - Exact MTU_SIZE_BYTES enforcement at packet level
+#   Harness needs: Wire-level packet inspection
+#
+# ============================================================================
+
+# ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS
 # ============================================================================
-# None identified. The transport spec is clear and well-defined.
+# None identified.
 # ============================================================================

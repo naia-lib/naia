@@ -32,47 +32,74 @@
 #     * Releasing: Authority release in progress, may still write
 #     * Denied: Another holds authority
 #
-# CORE MODEL:
-#   [entity-delegation-01] Delegation applies only to server-owned delegated
-#   [entity-delegation-02] Single-writer invariant
-#     - At most one client may hold authority
-#     - Server MAY reset/revoke at any time
-#     - While client holds authority, server MUST NOT originate writes
-#   [entity-delegation-03] Authority is scoped: only in-scope clients participate
+# ----------------------------------------------------------------------------
+# CORE MODEL
+# ----------------------------------------------------------------------------
 #
-# ENTERING DELEGATION (MIGRATION):
-#   [entity-delegation-04] Client-owned → delegated requires Published
-#   [entity-delegation-05] Migration grants authority to previous owner
-#     - Previous owner immediately becomes authority holder
-#     - EntityAuthStatus == Granted
+# Delegation applies only to server-owned delegated entities
 #
-# AUTHORITY ARBITRATION:
-#   [entity-delegation-06] First request wins
-#     - If Available, first in-scope request is granted
-#     - Requests while held resolve as Denied (no queue)
-#   [entity-delegation-07] Meaning of Denied
-#     - Another holds authority; remains Denied until release/reset
-#   [entity-delegation-08] Requested means pending; no writes allowed
-#     - May mutate locally, MUST NOT write
-#     - Write attempt → panic
-#   [entity-delegation-09] Granted means writes allowed; single writer enforced
-#   [entity-delegation-10] Releasing means writes may continue until finalized
-#   [entity-delegation-11] Release transitions authority back to Available
+# Single-writer invariant:
+#   - At most one client may hold authority
+#   - Server MAY reset/revoke at any time
+#   - While client holds authority, server MUST NOT originate writes
 #
-# CLIENT SAFETY:
-#   [entity-delegation-12] Client must never write without permission
-#     - Write without Granted/Releasing → panic
+# Authority is scoped: only in-scope clients participate
 #
-# SCOPE/DISCONNECT INTERACTIONS:
-#   [entity-delegation-13] Losing scope ends client authority
-#   [entity-delegation-14] Disconnect releases authority
+# ----------------------------------------------------------------------------
+# ENTERING DELEGATION (MIGRATION)
+# ----------------------------------------------------------------------------
 #
-# ILLEGAL CASES:
-#   [entity-delegation-15] Out-of-scope requests are ignored
-#   [entity-delegation-16] Conflicting reconfiguration collapses to final
+# Client-owned → delegated requires Published
 #
-# OBSERVABILITY:
-#   [entity-delegation-17] Delegation observable via replication_config + events
+# Migration grants authority to previous owner:
+#   - Previous owner immediately becomes authority holder
+#   - EntityAuthStatus == Granted
+#
+# ----------------------------------------------------------------------------
+# AUTHORITY ARBITRATION
+# ----------------------------------------------------------------------------
+#
+# First request wins:
+#   - If Available, first in-scope request is granted
+#   - Requests while held resolve as Denied (no queue)
+#
+# Meaning of Denied:
+#   - Another holds authority; remains Denied until release/reset
+#
+# Requested means pending; no writes allowed:
+#   - May mutate locally, MUST NOT write
+#   - Write attempt → panic
+#
+# Granted means writes allowed; single writer enforced
+#
+# Releasing means writes may continue until finalized
+#
+# Release transitions authority back to Available
+#
+# ----------------------------------------------------------------------------
+# CLIENT SAFETY
+# ----------------------------------------------------------------------------
+#
+# Client must never write without permission:
+#   - Write without Granted/Releasing → panic
+#
+# ----------------------------------------------------------------------------
+# SCOPE/DISCONNECT INTERACTIONS
+# ----------------------------------------------------------------------------
+#
+# Losing scope ends client authority
+#
+# Disconnect releases authority
+#
+# ----------------------------------------------------------------------------
+# ILLEGAL CASES AND OBSERVABILITY
+# ----------------------------------------------------------------------------
+#
+# Out-of-scope requests are ignored
+#
+# Conflicting reconfiguration collapses to final
+#
+# Delegation observable via replication_config + events
 #
 # ============================================================================
 
@@ -216,6 +243,24 @@ Feature: Entity Delegation
       Given a client out-of-scope for a delegated entity
       When the client attempts to request authority
       Then the request is ignored
+
+# ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Delegation state recovery after server crash/restart
+#   Assertions:
+#     - Delegation state is consistent after server recovery
+#   Harness needs: Server crash/restart injection with state persistence
+#
+# Rule: Concurrent delegation requests from many clients
+#   Assertions:
+#     - First-request-wins semantics under high concurrency
+#   Harness needs: High-concurrency test framework with deterministic ordering
+#
+# ============================================================================
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS

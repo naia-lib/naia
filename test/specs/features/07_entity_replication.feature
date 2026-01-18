@@ -36,56 +36,79 @@
 #   - Entity-specific writes MUST be ignored outside current lifetime
 #   - Update before Insert MUST be buffered until Insert arrives
 #
-# NORMATIVE REPLICATION RULES:
-#   [entity-replication-01] Global identity stability
-#     - Entity MUST have stable GlobalEntity while it exists
-#     - Server MUST NOT change GlobalEntity during entity's existence
+# ----------------------------------------------------------------------------
+# IDENTITY AND LIFETIME
+# ----------------------------------------------------------------------------
 #
-#   [entity-replication-02] Client-visible lifetime boundaries
-#     - Lifetime begins on Spawn (scope enter)
-#     - Lifetime ends on Despawn (scope leave)
-#     - Re-entry after ≥1 tick is new lifetime with fresh spawn snapshot
+# Global identity stability:
+#   - Entity MUST have stable GlobalEntity while it exists
+#   - Server MUST NOT change GlobalEntity during entity's existence
 #
-#   [entity-replication-03] Spawn snapshot semantics
-#     - Spawn MUST include set of replicated components at send time
-#     - Client MUST materialize baseline solely from Spawn snapshot
+# Client-visible lifetime boundaries:
+#   - Lifetime begins on Spawn (scope enter)
+#   - Lifetime ends on Despawn (scope leave)
+#   - Re-entry after ≥1 tick is new lifetime with fresh spawn snapshot
 #
-#   [entity-replication-04] No observable replication before Spawn
-#     - Client MUST NOT observe Insert/Update/Remove before Spawn
-#     - If delivery causes early receipt, actions are not observable early
-#     - HARD INVARIANT: no update-before-spawn observability
+# ----------------------------------------------------------------------------
+# SPAWN AND INITIAL STATE
+# ----------------------------------------------------------------------------
 #
-#   [entity-replication-05] Actions outside lifetime are ignored
-#     - Late packets from prior lifetime: ignored
-#     - Packets for out-of-scope entities: ignored
-#     - In Debug: MAY warn
+# Spawn snapshot semantics:
+#   - Spawn MUST include set of replicated components at send time
+#   - Client MUST materialize baseline solely from Spawn snapshot
 #
-#   [entity-replication-06] Update-before-Insert buffering
-#     - Within active lifetime, buffer Update until Insert arrives
-#     - Drop buffered on Despawn if not applied
+# No observable replication before Spawn:
+#   - Client MUST NOT observe Insert/Update/Remove before Spawn
+#   - If delivery causes early receipt, actions are not observable early
+#   - HARD INVARIANT: no update-before-spawn observability
 #
-#   [entity-replication-07] Local-only component overwrite by replication
-#     - Server replication overwrites local-only component
-#     - MUST emit Insert event (not Update)
+# ----------------------------------------------------------------------------
+# REPLICATION ORDERING AND BUFFERING
+# ----------------------------------------------------------------------------
 #
-#   [entity-replication-08] Collapse to final state per tick
-#     - No intermediate transitions within a tick
-#     - Only final state is observable
+# Actions outside lifetime are ignored:
+#   - Late packets from prior lifetime: ignored
+#   - Packets for out-of-scope entities: ignored
+#   - In Debug: MAY warn
 #
-#   [entity-replication-09] Duplicate delivery is idempotent
-#     - Same action twice MUST NOT create additional observable effects
-#     - Naia MUST remain convergent
+# Update-before-Insert buffering:
+#   - Within active lifetime, buffer Update until Insert arrives
+#   - Drop buffered on Despawn if not applied
 #
-#   [entity-replication-10] Identity reuse safety (LocalEntity wrap)
-#     - Late/reordered actions from old lifetime MUST NOT corrupt new lifetime
-#     - Lifetime-disambiguating info MUST gate applicability
+# Local-only component overwrite by replication:
+#   - Server replication overwrites local-only component
+#   - MUST emit Insert event (not Update)
 #
-#   [entity-replication-11] GlobalEntity rollover is terminal error
-#     - MUST NOT silently wrap/reuse GlobalEntity values
-#     - MUST enter terminal error mode (panic/abort)
+# ----------------------------------------------------------------------------
+# TICK COLLAPSE AND IDEMPOTENCY
+# ----------------------------------------------------------------------------
 #
-#   [entity-replication-12] Conflict resolution: server wins
-#     - Server replicated state MUST overwrite client local state
+# Collapse to final state per tick:
+#   - No intermediate transitions within a tick
+#   - Only final state is observable
+#
+# Duplicate delivery is idempotent:
+#   - Same action twice MUST NOT create additional observable effects
+#   - Naia MUST remain convergent
+#
+# ----------------------------------------------------------------------------
+# IDENTITY SAFETY
+# ----------------------------------------------------------------------------
+#
+# Identity reuse safety (LocalEntity wrap):
+#   - Late/reordered actions from old lifetime MUST NOT corrupt new lifetime
+#   - Lifetime-disambiguating info MUST gate applicability
+#
+# GlobalEntity rollover is terminal error:
+#   - MUST NOT silently wrap/reuse GlobalEntity values
+#   - MUST enter terminal error mode (panic/abort)
+#
+# ----------------------------------------------------------------------------
+# CONFLICT RESOLUTION
+# ----------------------------------------------------------------------------
+#
+# Conflict resolution: server wins:
+#   - Server replicated state MUST overwrite client local state
 #
 # ============================================================================
 
@@ -238,7 +261,25 @@ Feature: Entity Replication
       Then the server state overwrites the client state
 
 # ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: GlobalEntity rollover is terminal error
+#   Assertions:
+#     - GlobalEntity counter rollover triggers panic/abort
+#   Harness needs: Ability to exhaust GlobalEntity counter space
+#
+# Rule: LocalEntity wrap safety
+#   Assertions:
+#     - Late packets from old lifetime rejected after LocalEntity wrap
+#   Harness needs: Injection of packets with old lifetime info
+#
+# ============================================================================
+
+# ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS
 # ============================================================================
-# None identified. The entity replication spec is comprehensive.
+# None identified.
 # ============================================================================

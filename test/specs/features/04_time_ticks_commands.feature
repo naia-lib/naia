@@ -31,85 +31,104 @@
 #   - Tick: u16 tick index that wraps around
 #   - Command: Client-authored input tagged to a tick
 #
-# ERROR HANDLING:
-#   [time-01] User-initiated misuse returns Result::Err
-#   [time-02] Remote/untrusted anomalies MUST NOT panic
-#   [time-03] Framework invariant violations MUST panic
+# ----------------------------------------------------------------------------
+# ERROR HANDLING
+# ----------------------------------------------------------------------------
 #
-# CANONICAL TIME SOURCE:
-#   [time-04] All durations use Naia's monotonic time provider
-#     - All duration-based behavior (tick advancement, TTL, lead targeting)
-#       MUST be derived from Naia's Time Provider, not wall-clock time
+#   - User-initiated misuse returns Result::Err
+#   - Remote/untrusted anomalies MUST NOT panic
+#   - Framework invariant violations MUST panic
 #
-#   [time-05] Determinism under deterministic time provider
-#     - If Time Provider is deterministic, tick advancement MUST be deterministic
+# ----------------------------------------------------------------------------
+# CANONICAL TIME SOURCE
+# ----------------------------------------------------------------------------
 #
-# TICK SEMANTICS:
-#   [time-06] TickRate is fixed and shared
-#     - TickRate MUST be shared between client and server
-#     - TickRate MUST NOT change during connection lifetime
+# All durations use Naia's monotonic time provider:
+#   - All duration-based behavior (tick advancement, TTL, lead targeting)
+#     MUST be derived from Naia's Time Provider, not wall-clock time
 #
-#   [time-07] Server Tick advances from elapsed time
-#     - Server MUST NOT "invent" ticks without elapsed time
-#     - Server MAY advance multiple ticks if enough time elapsed
-#     - Server MUST NOT skip ticks (no silent drop of progression)
+# Determinism under deterministic time provider:
+#   - If Time Provider is deterministic, tick advancement MUST be deterministic
 #
-#   [time-08] Client Tick is monotonic and wrap-safe
-#     - Client tick MUST be monotonic non-decreasing (wrap-safe)
-#     - MUST NOT move backwards
+# ----------------------------------------------------------------------------
+# TICK SEMANTICS
+# ----------------------------------------------------------------------------
 #
-#   [time-09] Wrap-safe tick ordering rule
-#     - Tick is u16 and wraps
-#     - Let diff = (a - b) mod 2^16:
-#       * a newer than b iff diff in 1..32767
-#       * a equal to b iff diff == 0
-#       * a older than b iff diff in 32769..65535
-#       * diff == 32768 is ambiguous (treat as "not newer")
+# TickRate is fixed and shared:
+#   - TickRate MUST be shared between client and server
+#   - TickRate MUST NOT change during connection lifetime
 #
-# TICK SYNCHRONIZATION:
-#   [time-10] ConnectEvent implies tick sync complete
-#     - Client MUST NOT emit ConnectEvent until tick sync complete
-#     - Client knows server's current tick at connection time
+# Server Tick advances from elapsed time:
+#   - Server MUST NOT "invent" ticks without elapsed time
+#   - Server MAY advance multiple ticks if enough time elapsed
+#   - Server MUST NOT skip ticks (no silent drop of progression)
 #
-# CLIENT TICK LEAD TARGETING (Overwatch-style):
-#   [time-11] Client tick targets a lead ahead of server tick
-#     - target_lead = RTT + (jitter_std_dev * 3) + TickRate
+# Client Tick is monotonic and wrap-safe:
+#   - Client tick MUST be monotonic non-decreasing (wrap-safe)
+#   - MUST NOT move backwards
 #
-#   [time-12] Client pacing may adjust to maintain lead
-#     - Client MAY speed up or slow down pacing
-#     - Client MUST remain monotonic
-#     - Client MUST converge toward target lead
+# Wrap-safe tick ordering rule:
+#   - Tick is u16 and wraps
+#   - Let diff = (a - b) mod 2^16:
+#     * a newer than b iff diff in 1..32767
+#     * a equal to b iff diff == 0
+#     * a older than b iff diff in 32769..65535
+#     * diff == 32768 is ambiguous (treat as "not newer")
 #
-# COMMAND RULES:
-#   [commands-01] Every command is tagged to a tick
-#   [commands-02] Server applies commands at most once
-#     - Duplicates MUST NOT cause double-application
+# ----------------------------------------------------------------------------
+# TICK SYNCHRONIZATION
+# ----------------------------------------------------------------------------
 #
-#   [commands-03] "Arrives in time" acceptance rule
-#     - Command for tick T is on-time iff received before server begins tick T
-#     - On-time: apply during tick T
-#     - Late: ignore (no panic, no error to client)
+# ConnectEvent implies tick sync complete:
+#   - Client MUST NOT emit ConnectEvent until tick sync complete
+#   - Client knows server's current tick at connection time
 #
-#   [commands-03a] Command sequence is required
-#     - Every command includes sequence number (per-connection, per-tick)
-#     - sequence starts at 0, increments by 1
-#     - Encoded as varint
+# ----------------------------------------------------------------------------
+# CLIENT TICK LEAD TARGETING (Overwatch-style)
+# ----------------------------------------------------------------------------
 #
-#   [commands-03b] Server applies commands in sequence order
-#     - Apply in ascending sequence order regardless of arrival order
-#     - Buffer out-of-order until earlier sequences arrive
+# Client tick targets a lead ahead of server tick:
+#   - target_lead = RTT + (jitter_std_dev * 3) + TickRate
 #
-#   [commands-03c] Command cap per tick
-#     - MAX_COMMANDS_PER_TICK_PER_CONNECTION = 64 (invariant)
-#     - Enqueueing 65th command returns Err
-#     - Received sequence >= 64 is dropped (no panic)
+# Client pacing may adjust to maintain lead:
+#   - Client MAY speed up or slow down pacing
+#   - Client MUST remain monotonic
+#   - Client MUST converge toward target lead
 #
-#   [commands-03d] Duplicate command handling
-#     - Same (tick, sequence) → first received wins, later dropped
+# ----------------------------------------------------------------------------
+# COMMAND RULES
+# ----------------------------------------------------------------------------
 #
-#   [commands-04] Client lead targeting avoids late commands
+# Every command is tagged to a tick
 #
-#   [commands-05] Disconnect cleans in-flight command state
+# Server applies commands at most once:
+#   - Duplicates MUST NOT cause double-application
+#
+# "Arrives in time" acceptance rule:
+#   - Command for tick T is on-time iff received before server begins tick T
+#   - On-time: apply during tick T
+#   - Late: ignore (no panic, no error to client)
+#
+# Command sequence is required:
+#   - Every command includes sequence number (per-connection, per-tick)
+#   - Sequence starts at 0, increments by 1
+#   - Encoded as varint
+#
+# Server applies commands in sequence order:
+#   - Apply in ascending sequence order regardless of arrival order
+#   - Buffer out-of-order until earlier sequences arrive
+#
+# Command cap per tick:
+#   - MAX_COMMANDS_PER_TICK_PER_CONNECTION = 64 (invariant)
+#   - Enqueueing 65th command returns Err
+#   - Received sequence >= 64 is dropped (no panic)
+#
+# Duplicate command handling:
+#   - Same (tick, sequence) → first received wins, later dropped
+#
+# Client lead targeting avoids late commands
+#
+# Disconnect cleans in-flight command state
 #
 # ============================================================================
 
@@ -266,7 +285,26 @@ Feature: Time Ticks and Commands
       Then no further commands from that session are applied
 
 # ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Client tick lead targeting
+#   Assertions:
+#     - Client lead converges to RTT + jitter*3 + TickRate
+#     - Lead convergence within LEAD_CONVERGENCE_TICKS
+#   Harness needs: Network conditioner with precise RTT control + metrics API
+#
+# Rule: Wrap-safe tick ordering at boundary
+#   Assertions:
+#     - Ordering correct when tick wraps from 65535 to 0
+#     - Commands processed correctly across wrap boundary
+#   Harness needs: Long-running test or tick injection near wrap boundary
+#
+# ============================================================================
+
+# ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS
 # ============================================================================
-# None identified. The time/ticks/commands spec is comprehensive.
-# ============================================================================
+# None identified.

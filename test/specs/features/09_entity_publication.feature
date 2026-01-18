@@ -36,43 +36,65 @@
 #   In scope: Publication states/transitions for client-owned entities
 #   Out of scope: Ownership, scopes, replication, delegation (defined elsewhere)
 #
-# NORMATIVE PUBLICATION RULES:
-#   [entity-publication-01] Publication gates only client-owned visibility
-#     - Applies only to client-owned entities as non-owner gate
+# ----------------------------------------------------------------------------
+# PUBLICATION GATING RULES
+# ----------------------------------------------------------------------------
 #
-#   [entity-publication-02] Unpublished entities are never in-scope for non-owners
-#     - If E is Unpublished, OutOfScope(C,E) MUST hold for all C != Owner
+# Publication gates only client-owned visibility:
+#   - Applies only to client-owned entities as non-owner gate
 #
-#   [entity-publication-03] Published entities may be in-scope for non-owners
-#     - Server MAY place E into non-owner scope per normal policy
+# Unpublished entities are never in-scope for non-owners:
+#   - If E is Unpublished, OutOfScope(C,E) MUST hold for all C != Owner
 #
-#   [entity-publication-04] Only server or owning client may change publication
-#     - Server wins conflicts within same tick
+# Published entities may be in-scope for non-owners:
+#   - Server MAY place E into non-owner scope per normal policy
 #
-#   [entity-publication-05] Unpublish forces immediate OutOfScope for non-owners
-#     - Published → Unpublished: all non-owners become OutOfScope
+# ----------------------------------------------------------------------------
+# PUBLICATION CONTROL
+# ----------------------------------------------------------------------------
 #
-#   [entity-publication-06] Publish enables later scoping, does not guarantee it
-#     - Unpublished → Published: server MAY later scope to non-owners
+# Only server or owning client may change publication:
+#   - Server wins conflicts within same tick
 #
-#   [entity-publication-07] Owning client is always in-scope for owned entities
-#     - InScope(owner, entity) MUST always hold while connected
-#     - Private setting MUST NOT remove from owner's scope
+# Unpublish forces immediate OutOfScope for non-owners:
+#   - Published → Unpublished: all non-owners become OutOfScope
 #
-#   [entity-publication-08] Non-owner out-of-scope implies despawn + destroy local
-#     - Despawn destroys all components including local-only
+# Publish enables later scoping, does not guarantee it:
+#   - Unpublished → Published: server MAY later scope to non-owners
 #
-#   [entity-publication-09] Publication observable via replication_config
-#     - Published → replication_config == Some(Public)
-#     - Unpublished → replication_config == Some(Private)
+# ----------------------------------------------------------------------------
+# OWNER VISIBILITY GUARANTEE
+# ----------------------------------------------------------------------------
 #
-#   [entity-publication-10] Delegation migration ends client-owned publication
-#     - E becomes server-owned, publication semantics no longer apply
-#     - Must be Published before migration
+# Owning client is always in-scope for owned entities:
+#   - InScope(owner, entity) MUST always hold while connected
+#   - Private setting MUST NOT remove from owner's scope
 #
-# ILLEGAL CASES:
-#   [entity-publication-11] Non-owner seeing Private must self-heal
-#     - Client MUST immediately despawn if it observes Private on non-owned
+# Non-owner out-of-scope implies despawn + destroy local:
+#   - Despawn destroys all components including local-only
+#
+# ----------------------------------------------------------------------------
+# OBSERVABILITY
+# ----------------------------------------------------------------------------
+#
+# Publication observable via replication_config:
+#   - Published → replication_config == Some(Public)
+#   - Unpublished → replication_config == Some(Private)
+#
+# ----------------------------------------------------------------------------
+# DELEGATION INTERACTION
+# ----------------------------------------------------------------------------
+#
+# Delegation migration ends client-owned publication:
+#   - E becomes server-owned, publication semantics no longer apply
+#   - Must be Published before migration
+#
+# ----------------------------------------------------------------------------
+# ILLEGAL CASES
+# ----------------------------------------------------------------------------
+#
+# Non-owner seeing Private must self-heal:
+#   - Client MUST immediately despawn if it observes Private on non-owned
 #
 # ============================================================================
 
@@ -172,6 +194,24 @@ Feature: Entity Publication
     Scenario: Non-owner observing Private self-heals by despawning
       Given a scenario where non-owner might observe Private
       Then the client despawns the entity immediately
+
+# ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: Race between publication state change and observer joining
+#   Assertions:
+#     - Publication state transitions are atomic with observer scope changes
+#   Harness needs: Precise timing control of concurrent join/publication events
+#
+# Rule: Network partition during publication state transition
+#   Assertions:
+#     - Publication state converges correctly after partition heals
+#   Harness needs: Network partition injection capability
+#
+# ============================================================================
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS

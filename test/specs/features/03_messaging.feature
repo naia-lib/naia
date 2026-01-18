@@ -43,57 +43,82 @@
 #   | SequencedReliable    | eventual      | YES   | none        | YES       |
 #   | TickBuffered         | per tick      | mode  | tick order  | n/a       |
 #
-# NORMATIVE CHANNEL RULES:
-#   [messaging-01] User-initiated errors are Results
-#     - Invalid channel config, oversize payload → Result::Err
+# ----------------------------------------------------------------------------
+# ERROR HANDLING
+# ----------------------------------------------------------------------------
 #
-#   [messaging-02] Remote/untrusted input MUST NOT panic
-#     - Malformed payload, reorder, duplicates, stale ticks → drop, no panic
+# User-initiated errors return Result::Err:
+#   - Invalid channel config, oversize payload → Result::Err
 #
-#   [messaging-03] Framework invariant violations MUST panic
-#     - Older state after newer on sequenced channel → panic
+# Remote/untrusted input MUST NOT panic:
+#   - Malformed payload, reorder, duplicates, stale ticks → drop, no panic
 #
-#   [messaging-04] Channel compatibility is gated by protocol_id
-#     - Mismatched protocol_id → reject before any message exchange
-#     - Matched protocol_id → guaranteed channel compatibility
+# Framework invariant violations MUST panic:
+#   - Older state after newer on sequenced channel → panic
 #
-#   [messaging-05] ChannelDirection is enforced at send-time
-#     - Wrong direction → Result::Err
+# ----------------------------------------------------------------------------
+# CHANNEL COMPATIBILITY
+# ----------------------------------------------------------------------------
 #
-# CHANNEL MODE SEMANTICS:
-#   [messaging-06] UnorderedUnreliable: best-effort, no ordering, duplicates ok
-#   [messaging-07] SequencedUnreliable: best-effort, no rollback after newer
-#   [messaging-08] UnorderedReliable: eventual delivery, deduped, unordered
-#   [messaging-09] OrderedReliable: eventual + strict send-order delivery
-#   [messaging-10] SequencedReliable: eventual + latest wins + no rollback
+# Channel compatibility is gated by protocol_id:
+#   - Mismatched protocol_id → reject before any message exchange
+#   - Matched protocol_id → guaranteed channel compatibility
 #
-# TICKBUFFERED RULES:
-#   [messaging-11] TickBuffered is Client→Server only
-#   [messaging-12] Groups messages by tick, exposes in tick order
-#   [messaging-13] Capacity and eviction: oldest tick first (FIFO)
-#   [messaging-14] Discards very-late ticks (behind retained window)
-#   [messaging-15-a] Discards too-far-ahead ticks (> current + MAX_FUTURE_TICKS)
+# ChannelDirection is enforced at send-time:
+#   - Wrong direction → Result::Err
 #
-# FRAGMENTATION:
-#   [messaging-15] Unreliable channels MUST NOT fragment
-#   [messaging-16] Reliable channels MAY fragment up to 2^16 fragments
+# ----------------------------------------------------------------------------
+# CHANNEL MODE SEMANTICS
+# ----------------------------------------------------------------------------
 #
-# WRAP-AROUND:
-#   [messaging-17] Wrap-around MUST NOT break ordering or sequencing
+#   - UnorderedUnreliable: best-effort, no ordering, duplicates ok
+#   - SequencedUnreliable: best-effort, no rollback after newer
+#   - UnorderedReliable: eventual delivery, deduped, unordered
+#   - OrderedReliable: eventual + strict send-order delivery
+#   - SequencedReliable: eventual + latest wins + no rollback
 #
-# ENTITYPROPERTY RESOLUTION:
-#   [messaging-18] Buffer until mapped, drop on despawn
-#   [messaging-19] TTL: 60 seconds (configurable), drop if unresolved
-#   [messaging-20] Hard cap: 4096 per connection, 128 per entity, oldest-first
+# ----------------------------------------------------------------------------
+# TICKBUFFERED RULES
+# ----------------------------------------------------------------------------
 #
-# REQUEST/RESPONSE (RPC):
-#   [messaging-21] Request ID uniqueness per connection
-#   [messaging-22] Response matching by Request ID
-#   [messaging-23] Per-type timeout semantics (default 30 seconds)
-#   [messaging-24] Disconnect cancels pending requests
-#   [messaging-25] Transport over reliable ordered channel, deduped
-#   [messaging-26] RPC ordering follows channel semantics
-#   [messaging-27] Fire-and-forget is valid (no handler registered)
+#   - TickBuffered is Client→Server only
+#   - Groups messages by tick, exposes in tick order
+#   - Capacity and eviction: oldest tick first (FIFO)
+#   - Discards very-late ticks (behind retained window)
+#   - Discards too-far-ahead ticks (> current + MAX_FUTURE_TICKS)
+#
+# ----------------------------------------------------------------------------
+# FRAGMENTATION
+# ----------------------------------------------------------------------------
+#
+#   - Unreliable channels MUST NOT fragment
+#   - Reliable channels MAY fragment up to 2^16 fragments
+#
+# ----------------------------------------------------------------------------
+# WRAP-AROUND
+# ----------------------------------------------------------------------------
+#
+#   - Wrap-around MUST NOT break ordering or sequencing
+#
+# ----------------------------------------------------------------------------
+# ENTITYPROPERTY RESOLUTION
+# ----------------------------------------------------------------------------
+#
+#   - Buffer until entity is mapped, drop on despawn
+#   - TTL: 60 seconds (configurable), drop if unresolved
+#   - Hard cap: 4096 per connection, 128 per entity, oldest-first eviction
+#
+# ----------------------------------------------------------------------------
+# REQUEST/RESPONSE (RPC)
+# ----------------------------------------------------------------------------
+#
+#   - Request ID uniqueness per connection
+#   - Response matching by Request ID
+#   - Per-type timeout semantics (default 30 seconds)
+#   - Disconnect cancels pending requests
+#   - Transport over reliable ordered channel, deduped
+#   - RPC ordering follows channel semantics
+#   - Fire-and-forget is valid (no handler registered)
 #
 # ============================================================================
 
@@ -316,7 +341,32 @@ Feature: Messaging Channel Semantics
       Then all pending request handlers receive error indication
 
 # ============================================================================
+# DEFERRED TESTS
+# ============================================================================
+# Items that cannot be tested with current harness capabilities.
+# ============================================================================
+#
+# Rule: EntityProperty resolution TTL
+#   Assertions:
+#     - EntityProperty messages dropped after 60 second TTL
+#     - Configurable TTL is respected
+#   Harness needs: Time manipulation / clock injection
+#
+# Rule: Reliable message fragmentation
+#   Assertions:
+#     - Messages fragment correctly up to 2^16 fragments
+#     - Reassembly works across packet loss
+#   Harness needs: Large message support + packet-level inspection
+#
+# Rule: Wrap-around correctness
+#   Assertions:
+#     - Sequence numbers wrap correctly at u16 boundary
+#     - Ordering maintained across wrap
+#   Harness needs: Long-running test or sequence injection
+#
+# ============================================================================
+
+# ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS
 # ============================================================================
-# None identified. The messaging spec is comprehensive and well-defined.
-# ============================================================================
+# None identified.
