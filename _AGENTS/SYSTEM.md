@@ -37,7 +37,7 @@ Located in `specs/src`, this tool manages the SDD lifecycle.
 **Agent Instruction**: NEVER modify behavior without first checking the relevant `specs/contracts/*.spec.md`. If the spec changes, update the contract text and the corresponding test before implementation.
 
 ## 3. Namako Integration Status
-*Context: The global workspace docs mention Namako (cucumber fork) and NPAP (adapter protocol).*
+*Context: The global workspace docs mention Namako (cucumber fork) and NPA (adapter protocol).*
 
 **Current State (2026-01-16):**
 - **No active Namako code found**: There are no `.feature` files, `#[given]/#[when]` macros, or `npap` adapter binaries currently visible in the file tree.

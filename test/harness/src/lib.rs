@@ -1,7 +1,7 @@
 mod harness;
 pub mod test_protocol;
 
-pub use harness::{ClientKey, EntityOwner, ExpectCtx, ExpectResult, OperationResult, Scenario, ToTicks, TrackedClientEvent, TrackedServerEvent};
+pub use harness::{ClientKey, EntityOwner, ExpectCtx, ExpectResult, OperationResult, Scenario, ToTicks, TraceEvent, TrackedClientEvent, TrackedServerEvent};
 // server events
 pub use harness::{
     ServerAuthEvent, ServerConnectEvent, ServerDelegateEntityEvent, ServerDespawnEntityEvent,

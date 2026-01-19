@@ -200,7 +200,7 @@ Feature: Common Definitions and Policies
 
   Rule: Protocol mismatch is a deployment error not a panic
 
-    @Deferred
+    @Deferred @Blocker(CORE)
     Scenario: Protocol mismatch produces ProtocolMismatch rejection
       Given a test scenario
       And a server with protocol version A
@@ -220,14 +220,12 @@ Feature: Common Definitions and Policies
 
   Rule: Per-tick determinism for concurrent operations
 
-    @Deferred
     Scenario: Same-tick scope operations resolve deterministically
       Given a test scenario
       And multiple scope operations queued for the same tick
       When the tick is processed
       Then the final scope state reflects the last API call order
 
-    @Deferred
     Scenario: Multiple commands for same tick apply in receipt order
       Given a test scenario
       And a server receiving multiple commands for the same tick

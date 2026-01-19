@@ -4,13 +4,13 @@
 //! - DEMO_RUNTIME_FAILURE.md (Demo A)
 //! - DEMO_IMPL_DRIFT.md (Demo B)
 //!
-//! Run with: `cargo test -p naia_npap --test namako_integration_test`
+//! Run with: `cargo test -p naia_npa --test namako_integration_test`
 
 use std::process::{Command, Output};
 use std::path::PathBuf;
 use std::fs;
 
-/// Get the naia_npap crate directory (CARGO_MANIFEST_DIR = naia/test/npap/)
+/// Get the naia_npa crate directory (CARGO_MANIFEST_DIR = naia/test/npa/)
 fn crate_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
@@ -31,7 +31,7 @@ fn namako_cli_manifest() -> PathBuf {
         .join("namako/Cargo.toml")
 }
 
-/// Get the naia_npap adapter manifest path (this crate)
+/// Get the naia_npa adapter manifest path (this crate)
 fn adapter_manifest() -> PathBuf {
     crate_dir().join("Cargo.toml")
 }
@@ -75,7 +75,7 @@ fn run_namako_cli(subcommand: &str, extra_args: &[&str]) -> Output {
         .expect("Failed to execute namako CLI")
 }
 
-/// Helper: Run naia_npap adapter directly
+/// Helper: Run naia_npa adapter directly
 fn run_adapter(subcommand: &str, extra_args: &[&str]) -> Output {
     let specs = specs_dir();
     let adapter_manifest = adapter_manifest();

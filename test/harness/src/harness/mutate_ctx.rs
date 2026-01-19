@@ -41,4 +41,23 @@ impl<'a> MutateCtx<'a> {
     pub fn inject_client_packet(&mut self, client_key: &ClientKey, data: Vec<u8>) -> bool {
         self.scenario.inject_client_packet(client_key, data)
     }
+
+    /// Push a labeled trace event for deterministic ordering assertions.
+    ///
+    /// Events are appended in order and can be queried in expect phases
+    /// to verify the order of operations.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// scenario.mutate(|ctx| {
+    ///     ctx.trace_push("operation_A");
+    ///     ctx.server(|server| { /* ... */ });
+    ///     ctx.trace_push("operation_B");
+    ///     ctx.server(|server| { /* ... */ });
+    /// });
+    /// ```
+    pub fn trace_push(&mut self, label: impl Into<String>) {
+        self.scenario.trace_push(label);
+    }
 }

@@ -45,6 +45,24 @@ enum LastOperation {
     Expect,
 }
 
+/// A labeled trace event for deterministic ordering assertions.
+///
+/// Trace events are used to verify the order of operations in tests.
+/// Unlike the typed `TrackedServerEvent` and `TrackedClientEvent`, these
+/// are general-purpose string labels that can represent any operation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TraceEvent {
+    /// A label describing the operation (e.g., "scope_op_A", "command_B")
+    pub label: String,
+}
+
+impl TraceEvent {
+    /// Create a new trace event with the given label.
+    pub fn new(label: impl Into<String>) -> Self {
+        Self { label: label.into() }
+    }
+}
+
 /// Tracked server-side events for ordering assertions in BDD tests.
 /// These represent observable events at the Naia protocol level.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -97,6 +115,9 @@ pub struct Scenario {
     last_room_key: Option<RoomKey>,
     /// Last operation outcome tracking (for common error/panic assertions)
     last_operation_result: Option<OperationResult>,
+    /// Ordered trace events for deterministic ordering assertions.
+    /// Used by same-tick scheduling tests to verify operation order.
+    trace_events: Vec<TraceEvent>,
 }
 
 /// Tracks the outcome of the last operation for BDD assertions.
@@ -136,6 +157,7 @@ impl Scenario {
             last_client_key: None,
             last_room_key: None,
             last_operation_result: None,
+            trace_events: Vec::new(),
         }
     }
 
@@ -1091,5 +1113,162 @@ impl Scenario {
             error_msg: None,
             panic_msg: Some(msg.into()),
         });
+    }
+
+    // ========================================================================
+    // Trace Sink API (for deterministic ordering assertions)
+    // ========================================================================
+
+    /// Push a labeled trace event.
+    ///
+    /// Events are appended in order and can be queried to verify
+    /// the order of operations during a tick or across ticks.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// scenario.mutate(|ctx| {
+    ///     ctx.scenario_mut().trace_push("scope_op_A");
+    ///     ctx.scenario_mut().trace_push("scope_op_B");
+    /// });
+    /// scenario.expect(|ctx| {
+    ///     let labels: Vec<_> = ctx.scenario().trace_labels().collect();
+    ///     assert_eq!(labels, vec!["scope_op_A", "scope_op_B"]);
+    ///     Some(())
+    /// });
+    /// ```
+    pub fn trace_push(&mut self, label: impl Into<String>) {
+        self.trace_events.push(TraceEvent::new(label));
+    }
+
+    /// Get all trace events in order.
+    pub fn trace_all(&self) -> &[TraceEvent] {
+        &self.trace_events
+    }
+
+    /// Get an iterator over trace event labels.
+    pub fn trace_labels(&self) -> impl Iterator<Item = &str> {
+        self.trace_events.iter().map(|e| e.label.as_str())
+    }
+
+    /// Clear all trace events.
+    ///
+    /// Useful when testing multiple phases or when resetting between scenarios.
+    pub fn trace_clear(&mut self) {
+        self.trace_events.clear();
+    }
+
+    /// Check if the trace contains a subsequence of labels in order.
+    ///
+    /// Returns true if all labels in `expected` appear in the trace
+    /// in the same relative order (not necessarily contiguous).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// scenario.trace_push("A");
+    /// scenario.trace_push("B");
+    /// scenario.trace_push("C");
+    ///
+    /// assert!(scenario.trace_contains_subsequence(&["A", "C"])); // true
+    /// assert!(scenario.trace_contains_subsequence(&["A", "B", "C"])); // true
+    /// assert!(!scenario.trace_contains_subsequence(&["C", "A"])); // false
+    /// ```
+    pub fn trace_contains_subsequence(&self, expected: &[&str]) -> bool {
+        if expected.is_empty() {
+            return true;
+        }
+        let mut expected_iter = expected.iter();
+        let mut looking_for = expected_iter.next();
+        for event in &self.trace_events {
+            if let Some(expected_label) = looking_for {
+                if event.label == *expected_label {
+                    looking_for = expected_iter.next();
+                    if looking_for.is_none() {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
+    /// Get the number of trace events.
+    pub fn trace_len(&self) -> usize {
+        self.trace_events.len()
+    }
+
+    /// Check if the trace is empty.
+    pub fn trace_is_empty(&self) -> bool {
+        self.trace_events.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Tests that trace events are appended in order.
+    #[test]
+    fn trace_appends_in_order() {
+        let mut scenario = Scenario::new();
+
+        scenario.trace_push("first");
+        scenario.trace_push("second");
+        scenario.trace_push("third");
+
+        let labels: Vec<_> = scenario.trace_labels().collect();
+        assert_eq!(labels, vec!["first", "second", "third"]);
+    }
+
+    /// Tests that trace_clear empties the trace.
+    #[test]
+    fn trace_clear_empties() {
+        let mut scenario = Scenario::new();
+
+        scenario.trace_push("A");
+        scenario.trace_push("B");
+        assert!(!scenario.trace_is_empty());
+        assert_eq!(scenario.trace_len(), 2);
+
+        scenario.trace_clear();
+
+        assert!(scenario.trace_is_empty());
+        assert_eq!(scenario.trace_len(), 0);
+        assert_eq!(scenario.trace_all().len(), 0);
+    }
+
+    /// Tests trace_contains_subsequence with various patterns.
+    #[test]
+    fn trace_contains_subsequence_patterns() {
+        let mut scenario = Scenario::new();
+
+        scenario.trace_push("A");
+        scenario.trace_push("B");
+        scenario.trace_push("C");
+        scenario.trace_push("D");
+
+        // Full sequence matches
+        assert!(scenario.trace_contains_subsequence(&["A", "B", "C", "D"]));
+
+        // Partial subsequence matches
+        assert!(scenario.trace_contains_subsequence(&["A", "C"]));
+        assert!(scenario.trace_contains_subsequence(&["A", "D"]));
+        assert!(scenario.trace_contains_subsequence(&["B", "D"]));
+
+        // Single element matches
+        assert!(scenario.trace_contains_subsequence(&["A"]));
+        assert!(scenario.trace_contains_subsequence(&["D"]));
+
+        // Empty subsequence matches
+        assert!(scenario.trace_contains_subsequence(&[]));
+
+        // Wrong order does not match
+        assert!(!scenario.trace_contains_subsequence(&["C", "A"]));
+        assert!(!scenario.trace_contains_subsequence(&["D", "B"]));
+
+        // Non-existent element does not match
+        assert!(!scenario.trace_contains_subsequence(&["X"]));
+        assert!(!scenario.trace_contains_subsequence(&["A", "X"]));
     }
 }

@@ -1,6 +1,6 @@
-//! NPAP Adapter for Naia BDD tests
+//! NPA Adapter for Naia BDD tests
 //!
-//! This binary implements the NPAP adapter protocol for Naia:
+//! This binary implements the NPA adapter protocol for Naia:
 //! - `manifest` — Emit the semantic step registry JSON
 //! - `run` — Execute a resolved plan and emit a run report
 
@@ -13,9 +13,9 @@ mod run;
 // Re-export TestWorld from naia_tests (step bindings library)
 pub use naia_tests::TestWorld;
 
-/// NPAP Adapter for Naia
+/// NPA Adapter for Naia
 #[derive(Parser, Debug)]
-#[command(name = "naia_npap")]
+#[command(name = "naia_npa")]
 #[command(version, about, long_about = None)]
 pub struct Cli {
     #[command(subcommand)]

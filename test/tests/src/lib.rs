@@ -6,7 +6,7 @@
 //! - `TestWorldRef` — Read-only context for Then steps (assertions only)
 //! - Step bindings registered via `#[given]`, `#[when]`, `#[then]` macros
 //!
-//! The `naia_npap` adapter depends on this crate for dispatch.
+//! The `naia_npa` adapter depends on this crate for dispatch.
 //!
 //! # Architecture
 //!
