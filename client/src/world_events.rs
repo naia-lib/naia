@@ -4,14 +4,14 @@ use std::{
 
 use naia_shared::{
     Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind,
-    Replicate, Request, ResponseSendKey, Tick,
+    Replicate, Request, ResponseSendKey, Tick, handshake::simple::RejectReason,
 };
 
 use crate::NaiaClientError;
 
 pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<SocketAddr>,
-    rejections: Vec<SocketAddr>,
+    rejections: Vec<(SocketAddr, RejectReason)>,
     disconnections: Vec<SocketAddr>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
@@ -133,8 +133,8 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_rejection(&mut self, socket_addr: &SocketAddr) {
-        self.rejections.push(*socket_addr);
+    pub(crate) fn push_rejection(&mut self, socket_addr: &SocketAddr, reason: RejectReason) {
+        self.rejections.push((*socket_addr, reason));
         self.empty = false;
     }
 
@@ -300,7 +300,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
 // RejectEvent
 pub struct RejectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for RejectEvent {
-    type Iter = IntoIter<SocketAddr>;
+    type Iter = IntoIter<(SocketAddr, RejectReason)>;
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.rejections);

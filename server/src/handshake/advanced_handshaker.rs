@@ -4,8 +4,8 @@ use log::warn;
 use ring::{hmac, rand};
 
 use naia_shared::{
-    handshake::HandshakeHeader, BitReader, BitWriter, OutgoingPacket, PacketType, Serde, SerdeErr,
-    StandardHeader,
+    handshake::{HandshakeHeader, RejectReason},
+    BitReader, BitWriter, OutgoingPacket, PacketType, ProtocolId, Serde, SerdeErr, StandardHeader,
 };
 
 use crate::{
@@ -17,6 +17,7 @@ type Timestamp = u64;
 type IdentityToken = String;
 
 pub struct HandshakeManager {
+    protocol_id: ProtocolId,
     authenticated_and_identified_users: HashMap<SocketAddr, UserKey>,
     authenticated_unidentified_users: HashMap<IdentityToken, UserKey>,
     identity_token_map: HashMap<UserKey, IdentityToken>,
@@ -58,7 +59,11 @@ impl Handshaker for HandshakeManager {
 
         // Handshake stuff
         match handshake_header {
-            HandshakeHeader::ClientChallengeRequest => {
+            HandshakeHeader::ClientChallengeRequest(protocol_id) => {
+                if protocol_id != self.protocol_id {
+                    let reject_response = Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
+                    return Ok(HandshakeAction::SendPacket(reject_response));
+                }
                 if let Ok((timestamp, id_token)) = self.recv_challenge_request(reader) {
                     if let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
                     {
@@ -164,11 +169,12 @@ impl Handshaker for HandshakeManager {
 }
 
 impl HandshakeManager {
-    pub fn new() -> Self {
+    pub fn new(protocol_id: ProtocolId) -> Self {
         let connection_hash_key =
             hmac::Key::generate(hmac::HMAC_SHA256, &rand::SystemRandom::new()).unwrap();
 
         Self {
+            protocol_id,
             authenticated_and_identified_users: HashMap::new(),
             authenticated_unidentified_users: HashMap::new(),
             identity_token_map: HashMap::new(),
@@ -257,11 +263,12 @@ impl HandshakeManager {
         false
     }
 
-    // fn write_reject_response(&self) -> BitWriter {
-    //     let mut writer = BitWriter::new();
-    //     StandardHeader::new(PacketType::ServerRejectResponse, 0, 0, 0).ser(&mut writer);
-    //     writer
-    // }
+    fn write_reject_response(reason: RejectReason) -> BitWriter {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ServerRejectResponse(reason).ser(&mut writer);
+        writer
+    }
 
     fn timestamp_validate(&self, reader: &mut BitReader) -> Option<Timestamp> {
         // Read timestamp

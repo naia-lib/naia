@@ -1,7 +1,12 @@
 mod harness;
 pub mod test_protocol;
 
-pub use harness::{ClientKey, EntityOwner, ExpectCtx, ExpectResult, OperationResult, Scenario, ToTicks, TraceEvent, TrackedClientEvent, TrackedServerEvent};
+pub use harness::{
+    ClientExpectCtx, ClientKey, EntityOwner, ExpectCtx, ExpectResult, OperationResult, Scenario,
+    ServerExpectCtx, ToTicks, TraceEvent, TrackedClientEvent, TrackedServerEvent,
+};
+pub use naia_shared::handshake::RejectReason;
+pub use naia_shared::ProtocolId;
 // server events
 pub use harness::{
     ServerAuthEvent, ServerConnectEvent, ServerDelegateEntityEvent, ServerDespawnEntityEvent,

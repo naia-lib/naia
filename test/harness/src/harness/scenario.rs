@@ -8,7 +8,7 @@ use std::{
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_shared::{
     transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
-    Instant, LinkConditionerConfig, LocalEntity, Protocol, TestClock, WorldRefType,
+    Instant, LinkConditionerConfig, LocalEntity, Protocol, ProtocolId, TestClock, WorldRefType,
 };
 use naia_server::{
     transport::local::{LocalServerSocket, Socket as ServerSocket},
@@ -178,6 +178,23 @@ impl Scenario {
         self.server = Some(server);
     }
 
+    pub fn server_start_with_protocol_id(
+        &mut self,
+        server_config: ServerConfig,
+        protocol: Protocol,
+        protocol_id: ProtocolId,
+    ) {
+        if self.server.is_some() {
+            panic!("server_start() called multiple times");
+        }
+
+        let mut server = Server::new_with_protocol_id(server_config, protocol, protocol_id);
+        let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
+        server.listen(server_socket);
+
+        self.server = Some(server);
+    }
+
     pub fn client_start(
         &mut self,
         _display_name: &str,
@@ -197,6 +214,50 @@ impl Scenario {
         self.next_client_key += 1;
 
         let mut client = Client::new(client_config, protocol);
+        let world = TestWorld::default();
+        let (socket, identity_token, rejection_code, client_addr) = self.create_client_socket();
+
+        // Store client address for link conditioner configuration
+        self.client_to_addr_map.insert(client_key, client_addr);
+
+        // Store auth in pending_auths for later matching with AuthEvent
+        self.pending_auths.insert(client_key, auth.clone());
+
+        client.auth(auth);
+        client.connect(socket);
+
+        // Insert client state without user_key (will be set when AuthEvent is processed)
+        self.clients.insert(
+            client_key,
+            ClientState::new(client, world, identity_token, rejection_code),
+        );
+
+        // Store as last client for convenience in single-client BDD tests
+        self.last_client_key = Some(client_key);
+
+        client_key
+    }
+
+    pub fn client_start_with_protocol_id(
+        &mut self,
+        _display_name: &str,
+        auth: Auth,
+        client_config: ClientConfig,
+        protocol: Protocol,
+        protocol_id: ProtocolId,
+    ) -> ClientKey {
+        // Allow this to be called after either mutate() or expect()
+        // This is a setup operation, not a mutate or expect, so it should be flexible
+        self.allow_flexible_next();
+
+        if self.server.is_none() {
+            panic!("server_start() must be called before client_start()");
+        }
+
+        let client_key = ClientKey::new(self.next_client_key);
+        self.next_client_key += 1;
+
+        let mut client = Client::new_with_protocol_id(client_config, protocol, protocol_id);
         let world = TestWorld::default();
         let (socket, identity_token, rejection_code, client_addr) = self.create_client_socket();
 

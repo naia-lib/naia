@@ -52,7 +52,7 @@ impl ConstBitLength for ComponentKind {
 /// A map to hold all component types
 pub struct ComponentKinds {
     current_net_id: NetId,
-    kind_map: HashMap<ComponentKind, (NetId, Box<dyn ReplicateBuilder>)>,
+    kind_map: HashMap<ComponentKind, (NetId, Box<dyn ReplicateBuilder>, String)>,
     net_id_map: HashMap<NetId, ComponentKind>,
 }
 
@@ -63,7 +63,7 @@ impl Clone for ComponentKinds {
 
         let mut kind_map = HashMap::new();
         for (key, value) in self.kind_map.iter() {
-            kind_map.insert(*key, (value.0, value.1.box_clone()));
+            kind_map.insert(*key, (value.0, value.1.box_clone(), value.2.clone()));
         }
 
         Self {
@@ -87,8 +87,14 @@ impl ComponentKinds {
         let component_kind = ComponentKind::of::<C>();
 
         let net_id = self.current_net_id;
-        self.kind_map
-            .insert(component_kind, (net_id, C::create_builder()));
+        self.kind_map.insert(
+            component_kind,
+            (
+                net_id,
+                C::create_builder(),
+                C::protocol_name().to_string(),
+            ),
+        );
         self.net_id_map.insert(net_id, component_kind);
         self.current_net_id += 1;
         //TODO: check for current_id overflow?
@@ -130,7 +136,14 @@ impl ComponentKinds {
     }
 
     pub fn kind_to_name(&self, component_kind: &ComponentKind) -> String {
-        return self.kind_to_builder(component_kind).name();
+        return self
+            .kind_map
+            .get(component_kind)
+            .expect(
+                "Must properly initialize Component with Protocol via `add_component()` function!",
+            )
+            .2
+            .clone();
     }
 
     fn net_id_to_kind(&self, net_id: &NetId) -> ComponentKind {
@@ -157,5 +170,14 @@ impl ComponentKinds {
                 "Must properly initialize Component with Protocol via `add_component()` function!",
             )
             .1;
+    }
+
+    pub fn all_names(&self) -> Vec<String> {
+        let mut output = Vec::new();
+        for (_, (_, _, name)) in &self.kind_map {
+            output.push(name.clone());
+        }
+        output.sort();
+        output
     }
 }

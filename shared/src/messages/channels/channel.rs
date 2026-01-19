@@ -1,5 +1,7 @@
+use crate::named::Named;
+
 // Channel Trait
-pub trait Channel: 'static {}
+pub trait Channel: Named + 'static {}
 
 // ChannelSettings
 #[derive(Clone)]

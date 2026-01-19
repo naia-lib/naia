@@ -4,7 +4,7 @@ use log::warn;
 
 use naia_shared::{
     handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, OutgoingPacket, PacketType,
-    Serde, StandardHeader, Timer, Timestamp as stamp_time,
+    ProtocolId, Serde, StandardHeader, Timer, Timestamp as stamp_time,
 };
 
 use crate::{
@@ -43,6 +43,7 @@ impl PartialEq for HandshakeState {
 }
 
 pub struct HandshakeManager {
+    protocol_id: ProtocolId,
     ping_interval: Duration,
     handshake_pings: u8,
     connection_state: HandshakeState,
@@ -127,7 +128,10 @@ impl Handshaker for HandshakeManager {
                     HandshakeHeader::ServerConnectResponse => {
                         return self.recv_connect_response();
                     }
-                    HandshakeHeader::ClientChallengeRequest
+                    HandshakeHeader::ServerRejectResponse(reason) => {
+                        return Some(HandshakeResult::Rejected(reason));
+                    }
+                    HandshakeHeader::ClientChallengeRequest(_)
                     | HandshakeHeader::ClientValidateRequest
                     | HandshakeHeader::ClientConnectRequest
                     | HandshakeHeader::Disconnect => {
@@ -174,13 +178,19 @@ impl Handshaker for HandshakeManager {
 }
 
 impl HandshakeManager {
-    pub fn new(send_interval: Duration, ping_interval: Duration, handshake_pings: u8) -> Self {
+    pub fn new(
+        protocol_id: ProtocolId,
+        send_interval: Duration,
+        ping_interval: Duration,
+        handshake_pings: u8,
+    ) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
         let pre_connection_timestamp = stamp_time::now();
 
         Self {
+            protocol_id,
             handshake_timer,
             identity_token: None,
             pre_connection_timestamp,
@@ -195,7 +205,7 @@ impl HandshakeManager {
     fn write_challenge_request(&self, identity_token: &IdentityToken) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
-        HandshakeHeader::ClientChallengeRequest.ser(&mut writer);
+        HandshakeHeader::ClientChallengeRequest(self.protocol_id).ser(&mut writer);
 
         self.pre_connection_timestamp.ser(&mut writer);
         identity_token.ser(&mut writer);

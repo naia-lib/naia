@@ -7,9 +7,9 @@ use naia_shared::{
     EntityAuthStatus, EntityDoesNotExistError, EntityEvent, FakeEntityConverter, GameInstant,
     GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OwnedLocalEntity,
-    PacketType, Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
+    PacketType, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
     ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick,
-    WorldMutType, WorldRefType, handshake::HandshakeHeader,
+    WorldMutType, WorldRefType, handshake::{HandshakeHeader, simple::RejectReason},
 };
 
 use super::{
@@ -34,6 +34,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     client_config: ClientConfig,
     protocol: Protocol,
+    protocol_id: ProtocolId,
     // Connection
     auth_message: Option<Vec<u8>>,
     auth_headers: Option<Vec<(String, String)>>,
@@ -56,8 +57,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn new<P: Into<Protocol>>(client_config: ClientConfig, protocol: P) -> Self {
         let mut protocol: Protocol = protocol.into();
         protocol.lock();
+        let protocol_id = protocol.protocol_id();
+        Self::new_with_protocol_id(client_config, protocol, protocol_id)
+    }
 
+    pub fn new_with_protocol_id(
+        client_config: ClientConfig,
+        protocol: Protocol,
+        protocol_id: ProtocolId,
+    ) -> Self {
         let handshake_manager = HandshakeManager::new(
+            protocol_id,
             client_config.send_handshake_interval,
             client_config.ping_interval,
             client_config.handshake_pings,
@@ -65,12 +75,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let compression_config = protocol.compression.clone();
 
-        // Print protocol ID for SetAuthority at startup
-
         Self {
             // Config
             client_config: client_config.clone(),
             protocol,
+            protocol_id,
             // Connection
             auth_message: None,
             auth_headers: None,
@@ -1398,7 +1407,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         // push out rejection
                         match old_socket_addr_result {
                             Ok(old_socket_addr) => {
-                                self.incoming_world_events.push_rejection(&old_socket_addr);
+                                self.incoming_world_events.push_rejection(&old_socket_addr, RejectReason::Auth);
                             }
                             Err(err) => {
                                 self.incoming_world_events.push_error(err);
@@ -1434,13 +1443,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             let server_addr = self.server_address_unwrapped();
                             self.incoming_world_events.push_connection(&server_addr);
                         }
-                        // Some(HandshakeResult::Rejected) => {
-                        //     let server_addr = self.server_address_unwrapped();
-                        //     self.incoming_events.clear();
-                        //     self.incoming_events.push_rejection(&server_addr);
-                        //     self.disconnect_reset_connection();
-                        //     return;
-                        // }
+                        Some(HandshakeResult::Rejected(reason)) => {
+                            info!("Client: Received HandshakeResult::Rejected({:?})", reason);
+                            let server_addr = self.server_address_unwrapped();
+                            self.incoming_world_events.push_rejection(&server_addr, reason);
+                            self.disconnect_reset_connection();
+                            break;
+                        }
                         None => {}
                     }
                 }
@@ -1661,6 +1670,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         );
 
         self.handshake_manager = Box::new(HandshakeManager::new(
+            self.protocol_id,
             self.client_config.send_handshake_interval,
             self.client_config.ping_interval,
             self.client_config.handshake_pings,

@@ -2,7 +2,7 @@ use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
     AuthorityError, Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate, Request,
+    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, ProtocolId, Replicate, Request,
     Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
 };
 
@@ -31,10 +31,23 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Create a new Server
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
-        let protocol: Protocol = protocol.into();
+        let mut protocol: Protocol = protocol.into();
+        protocol.lock();
+        let protocol_id = protocol.protocol_id();
+        Self::new_with_protocol_id(server_config, protocol, protocol_id)
+    }
 
+    pub fn new_with_protocol_id(
+        server_config: ServerConfig,
+        protocol: Protocol,
+        protocol_id: ProtocolId,
+    ) -> Self {
         Self {
-            main_server: MainServer::new(server_config.clone(), protocol.clone()),
+            main_server: MainServer::new_with_protocol_id(
+                server_config.clone(),
+                protocol.clone(),
+                protocol_id,
+            ),
             outstanding_main_events: MainEvents::default(),
             world_server: WorldServer::new(server_config, protocol),
             to_world_sender_opt: None,

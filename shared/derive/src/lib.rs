@@ -42,7 +42,15 @@ pub fn replicate_derive_hecs(input: proc_macro::TokenStream) -> proc_macro::Toke
 /// Derives the Channel trait for a given struct
 #[proc_macro_derive(Channel)]
 pub fn channel_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    channel_impl(input)
+    let shared_crate_name = quote! { naia_shared };
+    channel_impl(input, shared_crate_name)
+}
+
+/// Derives the Channel trait for a given struct, internal to naia-shared
+#[proc_macro_derive(ChannelInternal)]
+pub fn channel_derive_internal(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let shared_crate_name = quote! { crate };
+    channel_impl(input, shared_crate_name)
 }
 
 // Message

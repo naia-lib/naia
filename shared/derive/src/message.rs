@@ -92,7 +92,10 @@ pub fn message_impl(
             }
             impl #typed_generics Named for #struct_name #untyped_generics {
                 fn name(&self) -> String {
-                    return #struct_name_str.to_string();
+                    #struct_name_str.to_string()
+                }
+                fn protocol_name() -> &'static str {
+                    #struct_name_str
                 }
             }
             impl #typed_generics Clone for #struct_name #untyped_generics {

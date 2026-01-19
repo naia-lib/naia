@@ -3,7 +3,7 @@ use std::{collections::HashMap, net::SocketAddr, panic};
 use log::{info, warn};
 
 use naia_shared::{
-    BigMap, BitReader, FakeEntityConverter, MessageKinds, PacketType, Protocol, Serde,
+    BigMap, BitReader, FakeEntityConverter, MessageKinds, PacketType, Protocol, ProtocolId, Serde,
     SocketConfig, StandardHeader,
 };
 
@@ -36,8 +36,17 @@ pub struct MainServer {
 impl MainServer {
     /// Create a new MainServer
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
-        let protocol: Protocol = protocol.into();
+        let mut protocol: Protocol = protocol.into();
+        protocol.lock();
+        let protocol_id = protocol.protocol_id();
+        Self::new_with_protocol_id(server_config, protocol, protocol_id)
+    }
 
+    pub fn new_with_protocol_id(
+        server_config: ServerConfig,
+        protocol: Protocol,
+        protocol_id: ProtocolId,
+    ) -> Self {
         let Protocol {
             socket,
             message_kinds,
@@ -57,7 +66,7 @@ impl MainServer {
             // Connection
             io,
             auth_io: None,
-            handshake_manager: Box::new(HandshakeManager::new()),
+            handshake_manager: Box::new(HandshakeManager::new(protocol_id)),
             // Users
             users: BigMap::new(),
             user_connections: HashMap::new(),

@@ -2,20 +2,22 @@ use crate::{
     messages::channels::channel::{
         ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings,
     },
-    Channel, Protocol, ProtocolPlugin,
+    Protocol, ProtocolPlugin,
 };
 
-#[derive(Channel)]
+use naia_derive::ChannelInternal;
+
+#[derive(ChannelInternal)]
 pub struct UnorderedUnreliableChannel;
-#[derive(Channel)]
+#[derive(ChannelInternal)]
 pub struct SequencedUnreliableChannel;
-#[derive(Channel)]
+#[derive(ChannelInternal)]
 pub struct UnorderedReliableChannel;
-#[derive(Channel)]
+#[derive(ChannelInternal)]
 pub struct SequencedReliableChannel;
-#[derive(Channel)]
+#[derive(ChannelInternal)]
 pub struct OrderedReliableChannel;
-#[derive(Channel)]
+#[derive(ChannelInternal)]
 pub struct TickBufferedChannel;
 
 pub(crate) struct DefaultChannelsPlugin;

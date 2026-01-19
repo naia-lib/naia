@@ -14,6 +14,7 @@ use crate::{
         message::Message,
         message_kinds::MessageKinds,
     },
+    protocol_id::ProtocolId,
     world::component::{component_kinds::ComponentKinds, replicate::Replicate},
     Request, RequestOrResponse,
 };
@@ -37,6 +38,8 @@ pub struct Protocol {
     pub compression: Option<CompressionConfig>,
     /// Whether or not Client Authoritative Entities will be allowed
     pub client_authoritative_entities: bool,
+    /// Cached protocol ID, computed when lock() is called
+    cached_protocol_id: Option<ProtocolId>,
     locked: bool,
 }
 
@@ -56,6 +59,7 @@ impl Default for Protocol {
             tick_interval: Duration::from_millis(50),
             compression: None,
             client_authoritative_entities: false,
+            cached_protocol_id: None,
             locked: false,
         }
     }
@@ -146,6 +150,7 @@ impl Protocol {
 
     pub fn lock(&mut self) {
         self.check_lock();
+        self.cached_protocol_id = Some(self.compute_protocol_id());
         self.locked = true;
     }
 
@@ -157,5 +162,34 @@ impl Protocol {
 
     pub fn build(&mut self) -> Self {
         std::mem::take(self)
+    }
+
+    /// Returns the cached protocol ID. Panics if protocol is not locked.
+    pub fn protocol_id(&self) -> ProtocolId {
+        self.cached_protocol_id
+            .expect("Protocol must be locked before calling protocol_id()")
+    }
+
+    /// Compute the protocol ID from current state.
+    fn compute_protocol_id(&self) -> ProtocolId {
+        let mut hasher = blake3::Hasher::new();
+
+        // Channels
+        for name in self.channel_kinds.all_names() {
+            hasher.update(name.as_bytes());
+        }
+        // Messages
+        for name in self.message_kinds.all_names() {
+            hasher.update(name.as_bytes());
+        }
+        // Components
+        for name in self.component_kinds.all_names() {
+            hasher.update(name.as_bytes());
+        }
+
+        let hash = hasher.finalize();
+        let mut bytes = [0u8; 8];
+        bytes.copy_from_slice(&hash.as_bytes()[..8]);
+        ProtocolId::new(u64::from_le_bytes(bytes))
     }
 }

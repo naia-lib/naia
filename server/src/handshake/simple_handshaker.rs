@@ -3,8 +3,8 @@ use std::{collections::HashMap, net::SocketAddr};
 use log::warn;
 
 use naia_shared::{
-    handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, PacketType, Serde, SerdeErr,
-    StandardHeader,
+    handshake::{HandshakeHeader, RejectReason},
+    BitReader, BitWriter, IdentityToken, PacketType, ProtocolId, Serde, SerdeErr, StandardHeader,
 };
 
 use crate::{
@@ -13,6 +13,7 @@ use crate::{
 };
 
 pub struct HandshakeManager {
+    protocol_id: ProtocolId,
     authenticated_and_identified_users: HashMap<SocketAddr, UserKey>,
     authenticated_unidentified_users: HashMap<IdentityToken, UserKey>,
     identity_token_map: HashMap<UserKey, IdentityToken>,
@@ -47,7 +48,12 @@ impl Handshaker for HandshakeManager {
 
         // Handshake stuff
         match handshake_header {
-            HandshakeHeader::ClientIdentifyRequest => {
+            HandshakeHeader::ClientIdentifyRequest(protocol_id) => {
+                if protocol_id != self.protocol_id {
+                    warn!("Server: Protocol Mismatch! Client: {}, Server: {}", protocol_id, self.protocol_id);
+                    let reject_response = Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
+                    return Ok(HandshakeAction::SendPacket(reject_response));
+                }
                 if has_connection {
                     let identify_response = Self::write_identity_response().to_packet();
                     return Ok(HandshakeAction::SendPacket(identify_response));
@@ -116,8 +122,9 @@ impl Handshaker for HandshakeManager {
 }
 
 impl HandshakeManager {
-    pub fn new() -> Self {
+    pub fn new(protocol_id: ProtocolId) -> Self {
         Self {
+            protocol_id,
             authenticated_and_identified_users: HashMap::new(),
             authenticated_unidentified_users: HashMap::new(),
             identity_token_map: HashMap::new(),
@@ -166,9 +173,10 @@ impl HandshakeManager {
         *expected_token == disconnect_token
     }
 
-    // fn write_reject_response(&self) -> BitWriter {
-    //     let mut writer = BitWriter::new();
-    //     StandardHeader::new(PacketType::ServerRejectResponse, 0, 0, 0).ser(&mut writer);
-    //     writer
-    // }
+    fn write_reject_response(reason: RejectReason) -> BitWriter {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ServerRejectResponse(reason).ser(&mut writer);
+        writer
+    }
 }

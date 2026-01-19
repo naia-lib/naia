@@ -1,6 +1,6 @@
 mod handshake_time_manager;
 
-use naia_shared::{BitReader, BitWriter, IdentityToken, OutgoingPacket};
+use naia_shared::{handshake::simple::RejectReason, BitReader, BitWriter, IdentityToken, OutgoingPacket};
 
 use crate::connection::time_manager::TimeManager;
 
@@ -16,6 +16,7 @@ cfg_if! {
 
 pub enum HandshakeResult {
     Connected(TimeManager),
+    Rejected(RejectReason),
 }
 
 pub trait Handshaker: Send + Sync {

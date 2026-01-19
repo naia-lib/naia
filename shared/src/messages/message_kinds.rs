@@ -46,7 +46,7 @@ impl ConstBitLength for MessageKind {
 // MessageKinds
 pub struct MessageKinds {
     current_net_id: NetId,
-    kind_map: HashMap<MessageKind, (NetId, Box<dyn MessageBuilder>)>,
+    kind_map: HashMap<MessageKind, (NetId, Box<dyn MessageBuilder>, String)>,
     net_id_map: HashMap<NetId, MessageKind>,
 }
 
@@ -57,7 +57,7 @@ impl Clone for MessageKinds {
 
         let mut kind_map = HashMap::new();
         for (key, value) in self.kind_map.iter() {
-            kind_map.insert(*key, (value.0, value.1.box_clone()));
+            kind_map.insert(*key, (value.0, value.1.box_clone(), value.2.clone()));
         }
 
         Self {
@@ -81,8 +81,14 @@ impl MessageKinds {
         let message_kind = MessageKind::of::<M>();
 
         let net_id = self.current_net_id;
-        self.kind_map
-            .insert(message_kind, (net_id, M::create_builder()));
+        self.kind_map.insert(
+            message_kind,
+            (
+                net_id,
+                M::create_builder(),
+                M::protocol_name().to_string(),
+            ),
+        );
         self.net_id_map.insert(net_id, message_kind);
         self.current_net_id += 1;
         //TODO: check for current_id overflow?
@@ -117,5 +123,14 @@ impl MessageKinds {
             .get(&message_kind)
             .expect("Must properly initialize Message with Protocol via `add_message()` function!")
             .1;
+    }
+
+    pub fn all_names(&self) -> Vec<String> {
+        let mut output = Vec::new();
+        for (_, (_, _, name)) in &self.kind_map {
+            output.push(name.clone());
+        }
+        output.sort();
+        output
     }
 }

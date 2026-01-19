@@ -4,7 +4,7 @@ use log::warn;
 
 use naia_shared::{
     handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, OutgoingPacket, PacketType,
-    Serde, StandardHeader, Timer,
+    ProtocolId, Serde, StandardHeader, Timer,
 };
 
 use crate::{
@@ -39,6 +39,7 @@ impl PartialEq for HandshakeState {
 }
 
 pub struct HandshakeManager {
+    protocol_id: ProtocolId,
     connection_state: HandshakeState,
     handshake_timer: Timer,
     identity_token: Option<IdentityToken>,
@@ -113,7 +114,10 @@ impl Handshaker for HandshakeManager {
                         // info!("Received ServerConnectResponse");
                         return self.recv_connect_response();
                     }
-                    HandshakeHeader::ClientIdentifyRequest
+                    HandshakeHeader::ServerRejectResponse(reason) => {
+                        return Some(HandshakeResult::Rejected(reason));
+                    }
+                    HandshakeHeader::ClientIdentifyRequest(_)
                     | HandshakeHeader::ClientConnectRequest
                     | HandshakeHeader::Disconnect => {
                         return None;
@@ -162,11 +166,17 @@ impl Handshaker for HandshakeManager {
 }
 
 impl HandshakeManager {
-    pub fn new(send_interval: Duration, ping_interval: Duration, handshake_pings: u8) -> Self {
+    pub fn new(
+        protocol_id: ProtocolId,
+        send_interval: Duration,
+        ping_interval: Duration,
+        handshake_pings: u8,
+    ) -> Self {
         let mut handshake_timer = Timer::new(send_interval);
         handshake_timer.ring_manual();
 
         Self {
+            protocol_id,
             handshake_timer,
             identity_token: None,
             connection_state: HandshakeState::AwaitingIdentifyResponse,
@@ -179,7 +189,7 @@ impl HandshakeManager {
     fn write_identify_request(&self, identity_token: &IdentityToken) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
-        HandshakeHeader::ClientIdentifyRequest.ser(&mut writer);
+        HandshakeHeader::ClientIdentifyRequest(self.protocol_id).ser(&mut writer);
 
         identity_token.ser(&mut writer);
 

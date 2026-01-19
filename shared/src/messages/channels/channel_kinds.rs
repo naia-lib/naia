@@ -47,7 +47,7 @@ impl ConstBitLength for ChannelKind {
 #[derive(Clone)]
 pub struct ChannelKinds {
     current_net_id: NetId,
-    kind_map: HashMap<ChannelKind, (NetId, ChannelSettings)>,
+    kind_map: HashMap<ChannelKind, (NetId, ChannelSettings, String)>,
     net_id_map: HashMap<NetId, ChannelKind>,
 }
 
@@ -64,7 +64,14 @@ impl ChannelKinds {
         let channel_kind = ChannelKind::of::<C>();
         //info!("ChannelKinds adding channel: {:?}", channel_kind);
         let net_id = self.current_net_id;
-        self.kind_map.insert(channel_kind, (net_id, settings));
+        self.kind_map.insert(
+            channel_kind,
+            (
+                net_id,
+                settings,
+                C::protocol_name().to_string(),
+            ),
+        );
         self.net_id_map.insert(net_id, channel_kind);
         self.current_net_id += 1;
         //TODO: check for current_id overflow?
@@ -74,14 +81,14 @@ impl ChannelKinds {
         // TODO: is there a better way to do this without copying + cloning?
         // How to return a reference here (behind a Mutex ..)
         let mut output = Vec::new();
-        for (kind, (_, settings)) in &self.kind_map {
+        for (kind, (_, settings, _)) in &self.kind_map {
             output.push((*kind, settings.clone()));
         }
         output
     }
 
     pub fn channel(&self, kind: &ChannelKind) -> ChannelSettings {
-        let (_, settings) = self.kind_map.get(kind).expect("could not find ChannelKind for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!");
+        let (_, settings, _) = self.kind_map.get(kind).expect("could not find ChannelKind for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!");
         settings.clone()
     }
 
@@ -99,5 +106,14 @@ impl ChannelKinds {
                 "Must properly initialize Component with Protocol via `add_channel()` function!",
             )
             .0;
+    }
+
+    pub fn all_names(&self) -> Vec<String> {
+        let mut output = Vec::new();
+        for (_, (_, _, name)) in &self.kind_map {
+            output.push(name.clone());
+        }
+        output.sort();
+        output
     }
 }

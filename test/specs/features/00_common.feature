@@ -200,8 +200,7 @@ Feature: Common Definitions and Policies
 
   Rule: Protocol mismatch is a deployment error not a panic
 
-    @Deferred @Blocker(CORE)
-    Scenario: Protocol mismatch produces ProtocolMismatch rejection
+  Scenario: Protocol mismatch produces ProtocolMismatch rejection
       Given a test scenario
       And a server with protocol version A
       And a client with protocol version B

@@ -13,7 +13,10 @@
 //! - Then steps: `TestWorldRef` (read/assertion operations only, wraps ExpectCtx)
 
 use namako::codegen::{AssertOutcome, StepContext};
-use naia_test_harness::{ClientKey, ExpectCtx, Scenario, ToTicks, TrackedClientEvent, TrackedServerEvent};
+use naia_test_harness::{
+    ClientExpectCtx, ClientKey, ExpectCtx, Scenario, ServerExpectCtx, ToTicks, TrackedClientEvent,
+    TrackedServerEvent,
+};
 
 /// The World type for Naia BDD tests.
 ///
@@ -276,6 +279,20 @@ impl<'a> TestWorldRef<'a> {
     fn ctx(&self) -> &mut ExpectCtx<'a> {
         // Safety: Tests are single-threaded, pointer is valid for 'a
         unsafe { &mut *self.ctx }
+    }
+
+    /// Access server-side expectations with per-tick events
+    pub fn server<R>(&self, f: impl FnOnce(&mut ServerExpectCtx<'_>) -> R) -> R {
+        self.ctx().server(f)
+    }
+
+    /// Access client-side expectations with per-tick events
+    pub fn client<R>(
+        &self,
+        client_key: ClientKey,
+        f: impl FnOnce(&mut ClientExpectCtx<'_>) -> R,
+    ) -> R {
+        self.ctx().client(client_key, f)
     }
 
     /// Get the scenario (for delegation).

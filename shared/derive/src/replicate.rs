@@ -140,7 +140,10 @@ pub fn replicate_impl(
             }
             impl #typed_generics Named for #builder_name #untyped_generics {
                 fn name(&self) -> String {
-                    return #replica_name_str.to_string();
+                    #replica_name_str.to_string()
+                }
+                fn protocol_name() -> &'static str {
+                    #replica_name_str
                 }
             }
 
@@ -149,7 +152,10 @@ pub fn replicate_impl(
             }
             impl #typed_generics Named for #replica_name #untyped_generics {
                 fn name(&self) -> String {
-                    return #replica_name_str.to_string();
+                    #replica_name_str.to_string()
+                }
+                fn protocol_name() -> &'static str {
+                    #replica_name_str
                 }
             }
             impl #typed_generics Replicate for #replica_name #untyped_generics {

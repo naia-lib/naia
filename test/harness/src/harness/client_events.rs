@@ -5,7 +5,7 @@ use log::{debug, warn};
 use naia_client::{NaiaClientError, TickEvents, WorldEvents};
 use naia_shared::{
     ChannelKind, ComponentKind, GlobalResponseId, LocalEntity, MessageContainer, MessageKind,
-    OwnedLocalEntity, Replicate, Tick, WorldRefType,
+    OwnedLocalEntity, Replicate, Tick, WorldRefType, handshake::simple::RejectReason,
 };
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
 
 pub struct ClientEvents {
     connections: Vec<()>,
-    rejections: Vec<()>,
+    rejections: Vec<RejectReason>,
     disconnections: Vec<()>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
@@ -165,9 +165,9 @@ impl ClientEvents {
             .read::<naia_client::ConnectEvent>()
             .map(|_| ())
             .collect();
-        let rejections: Vec<()> = world_events
+        let rejections: Vec<RejectReason> = world_events
             .read::<naia_client::RejectEvent>()
-            .map(|_| ())
+            .map(|(_, reason)| reason)
             .collect();
         let disconnections: Vec<()> = world_events
             .read::<naia_client::DisconnectEvent>()
@@ -294,8 +294,8 @@ impl ClientEvent for ClientConnectEvent {
 // RejectEvent
 pub struct ClientRejectEvent;
 impl ClientEvent for ClientRejectEvent {
-    type Iter = std::vec::IntoIter<()>;
-    type Item = ();
+    type Iter = std::vec::IntoIter<RejectReason>;
+    type Item = RejectReason;
 
     fn iter(events: &mut ClientEvents) -> Self::Iter {
         std::mem::take(&mut events.rejections).into_iter()

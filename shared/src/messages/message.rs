@@ -3,10 +3,8 @@ use std::{any::Any, collections::HashSet};
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
 use crate::{
-    messages::{
-        message_kinds::{MessageKind, MessageKinds},
-        named::Named,
-    },
+    messages::message_kinds::{MessageKind, MessageKinds},
+    named::Named,
     world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     LocalEntityAndGlobalEntityConverter, MessageContainer, RemoteEntity,
 };
@@ -55,6 +53,14 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
 impl Named for Box<dyn Message> {
     fn name(&self) -> String {
         self.as_ref().name()
+    }
+
+    fn protocol_name() -> &'static str
+    where
+        Self: Sized,
+    {
+        // This is unreachable since Box<dyn Message> is not Sized
+        unimplemented!("protocol_name() is not available for Box<dyn Message>")
     }
 }
 

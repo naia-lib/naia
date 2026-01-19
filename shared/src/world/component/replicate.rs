@@ -5,7 +5,7 @@ use naia_serde::{BitReader, BitWrite, SerdeErr};
 use crate::world::update::component_update::ComponentUpdate;
 use crate::world::update::diff_mask::DiffMask;
 use crate::{
-    messages::named::Named,
+    named::Named,
     world::{
         component::{
             component_kinds::{ComponentKind, ComponentKinds},

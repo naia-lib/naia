@@ -46,7 +46,9 @@ mod game_time;
 pub mod handshake;
 mod key_generator;
 mod messages;
+mod named;
 mod protocol;
+mod protocol_id;
 mod sequence_list;
 mod types;
 mod world;
@@ -97,11 +99,11 @@ pub use messages::{
     message_container::MessageContainer,
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
-    named::Named,
     request::{
         GlobalRequestId, GlobalResponseId, Request, Response, ResponseReceiveKey, ResponseSendKey,
     },
 };
+pub use named::Named;
 pub use world::{
     component::{
         component_kinds::{ComponentKind, ComponentKinds},
@@ -150,6 +152,7 @@ pub use messages::channels::senders::request_sender::{
     LocalRequestOrResponseId, RequestOrResponse,
 };
 pub use protocol::{Protocol, ProtocolPlugin};
+pub use protocol_id::ProtocolId;
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world::entity_command::EntityCommand;
 pub use world::entity_event::EntityEvent;

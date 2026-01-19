@@ -14,10 +14,11 @@ use std::time::Duration;
 use namako::{given, when, then};
 use namako::codegen::AssertOutcome;
 use naia_test_harness::{
-    protocol, Auth,
+    protocol, Auth, ProtocolId,
     ServerAuthEvent, ServerConnectEvent,
     TrackedServerEvent, TrackedClientEvent,
     ClientConnectEvent, ClientRejectEvent,
+    RejectReason,
 };
 use naia_server::ServerConfig;
 use naia_client::{ClientConfig, JitterBufferType};
@@ -49,9 +50,79 @@ fn given_server_running_with_auth(ctx: &mut TestWorldMut) {
     scenario.clear_event_history();
 }
 
+/// Step: Given a server with protocol version {word}
+#[given("a server with protocol version {word}")]
+fn given_server_with_protocol_version(ctx: &mut TestWorldMut, version: String) {
+    let scenario = ctx.init();
+    let test_protocol = protocol();
+    let server_config = ServerConfig::default();
+    let protocol_id = match version.as_str() {
+        "A" => ProtocolId::new(1),
+        "B" => ProtocolId::new(2),
+        _ => panic!("Unknown protocol version: {}", version),
+    };
+    scenario.server_start_with_protocol_id(server_config, test_protocol, protocol_id);
+    scenario.record_ok();
+}
+
+/// Step: And a client with protocol version {word}
+#[given("a client with protocol version {word}")]
+fn given_client_with_protocol_version(ctx: &mut TestWorldMut, version: String) {
+    let scenario = ctx.scenario_mut();
+    let test_protocol = protocol();
+
+    // Configure client for immediate handshake
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+
+    let protocol_id = match version.as_str() {
+        "A" => ProtocolId::new(1),
+        "B" => ProtocolId::new(2),
+        _ => panic!("Unknown protocol version: {}", version),
+    };
+
+    scenario.client_start_with_protocol_id(
+        "TestClient",
+        Auth::new("test_user", "password"),
+        client_config,
+        test_protocol,
+        protocol_id,
+    );
+    scenario.record_ok();
+}
+
 // ============================================================================
 // When Steps - Client Actions
 // ============================================================================
+
+/// Step: When the client attempts to connect
+#[when("the client attempts to connect")]
+fn when_client_attempts_to_connect(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+
+    // 1. Wait for ServerAuthEvent
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+
+    // 2. Accept connection (this gets us to the Handshake phase where protocol_id is checked)
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+
+    scenario.record_ok();
+}
 
 /// Step: When a client authenticates and connects
 /// Client goes through full auth flow and connects successfully.
@@ -178,6 +249,34 @@ fn when_client_attempts_connection_rejected(ctx: &mut TestWorldMut) {
 // ============================================================================
 // Then Steps - Assertions
 // ============================================================================
+
+/// Step: Then the connection is rejected with ProtocolMismatch
+#[then("the connection is rejected with ProtocolMismatch")]
+fn then_connection_rejected_protocol_mismatch(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+
+    ctx.client(client_key, |client| {
+        if let Some(reason) = client.read_event::<ClientRejectEvent>() {
+            if reason == RejectReason::ProtocolMismatch {
+                return AssertOutcome::Passed(());
+            }
+        }
+        AssertOutcome::Pending
+    })
+}
+
+/// Step: And the server has no connected users
+#[then("the server has no connected users")]
+fn then_server_has_no_connected_users(ctx: &TestWorldRef) {
+    ctx.server(|server| {
+        assert_eq!(
+            server.users_count(),
+            0,
+            "Expected 0 connected users, but found {}",
+            server.users_count()
+        );
+    });
+}
 
 /// Step: Then the server observes AuthEvent before ConnectEvent
 /// Verifies the correct ordering of server-side events per connection-24.

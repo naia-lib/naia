@@ -28,6 +28,7 @@ pub use client_events::{
     ClientSpawnEntityEvent, ClientTickEvent, ClientUnpublishEntityEvent,
 };
 pub use client_entity::{ClientEntityMut, ClientEntityRef};
+pub use client_expect_ctx::ClientExpectCtx;
 pub use expect_ctx::ExpectCtx;
 pub use expect_result::ExpectResult;
 pub use keys::{ClientKey, EntityKey};
@@ -38,6 +39,7 @@ pub use server_events::{
     ServerErrorEvent, ServerPublishEntityEvent, ServerSpawnEntityEvent, ServerTickEvent,
     ServerUnpublishEntityEvent,
 };
+pub use server_expect_ctx::ServerExpectCtx;
 pub use ticks::{Ticks, ToTicks};
 pub use until_ctx::UntilCtx;
 pub use entity_owner::EntityOwner;
