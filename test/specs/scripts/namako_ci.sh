@@ -17,7 +17,7 @@ SPECS_DIR="$(dirname "$SCRIPT_DIR")"
 # Compute absolute paths from SCRIPT_DIR (robust against cwd)
 NAIA_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 NAMAKO_ROOT="$(cd "$NAIA_ROOT/../namako" && pwd)"
-NAIA_NPAP_ROOT="$NAIA_ROOT/test/npap"
+NAIA_NPA_ROOT="$NAIA_ROOT/test/npa"
 ARTIFACTS_DIR="$NAIA_ROOT/target/namako_artifacts"
 mkdir -p "$ARTIFACTS_DIR"
 
@@ -28,14 +28,14 @@ if [[ ! -f "$NAMAKO_ROOT/Cargo.toml" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$NAIA_NPAP_ROOT/Cargo.toml" ]]; then
-    echo "❌ Cannot find naia_npap adapter at: $NAIA_NPAP_ROOT"
-    echo "   Expected location: naia/test/npap/"
+if [[ ! -f "$NAIA_NPA_ROOT/Cargo.toml" ]]; then
+    echo "❌ Cannot find naia_npa adapter at: $NAIA_NPA_ROOT"
+    echo "   Expected location: naia/test/npa/"
     exit 1
 fi
 
 NAMAKO_CLI="cargo run -p namako-cli --manifest-path $NAMAKO_ROOT/Cargo.toml --"
-ADAPTER="cargo run --manifest-path $NAIA_NPAP_ROOT/Cargo.toml --"
+ADAPTER="cargo run --manifest-path $NAIA_NPA_ROOT/Cargo.toml --"
 
 cd "$SPECS_DIR"
 
