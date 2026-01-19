@@ -175,7 +175,6 @@ Feature: Common Definitions and Policies
 
   Rule: User-initiated misuse returns Result::Err
 
-    @Deferred
     Scenario: API misuse returns Err not panic
       Given a test scenario
       And a connected client
@@ -185,7 +184,6 @@ Feature: Common Definitions and Policies
 
   Rule: Remote or untrusted input must never panic
 
-    @Deferred
     Scenario: Malformed inbound packet is dropped without panic
       Given a test scenario
       And a connected client
@@ -193,7 +191,6 @@ Feature: Common Definitions and Policies
       Then the packet is dropped
       And no panic occurs
 
-    @Deferred
     Scenario: Duplicate replication messages do not panic
       Given a test scenario
       And a connected client with replicated entities
@@ -214,7 +211,6 @@ Feature: Common Definitions and Policies
 
   Rule: Determinism under deterministic inputs
 
-    @Deferred
     Scenario: Identical inputs produce identical outputs
       Given a test scenario with deterministic time
       And a deterministic network input sequence
@@ -240,7 +236,6 @@ Feature: Common Definitions and Policies
 
   Rule: Reconnect is a fresh session
 
-    @Deferred
     Scenario: Reconnecting client receives fresh entity spawns
       Given a test scenario
       And a client that was previously connected

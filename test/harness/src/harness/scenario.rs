@@ -95,6 +95,20 @@ pub struct Scenario {
     last_client_key: Option<ClientKey>,
     /// Last room key created (convenience for BDD tests)
     last_room_key: Option<RoomKey>,
+    /// Last operation outcome tracking (for common error/panic assertions)
+    last_operation_result: Option<OperationResult>,
+}
+
+/// Tracks the outcome of the last operation for BDD assertions.
+/// Used by common steps like "Then no panic occurs" and "Then the operation returns Err".
+#[derive(Debug, Clone)]
+pub struct OperationResult {
+    /// Whether the operation returned Ok or Err
+    pub is_ok: bool,
+    /// Error message if the operation returned Err
+    pub error_msg: Option<String>,
+    /// Whether a panic occurred (captured via catch_unwind)
+    pub panic_msg: Option<String>,
 }
 
 impl Scenario {
@@ -121,6 +135,7 @@ impl Scenario {
             client_event_history: HashMap::new(),
             last_client_key: None,
             last_room_key: None,
+            last_operation_result: None,
         }
     }
 
@@ -1030,5 +1045,51 @@ impl Scenario {
     /// Get all client keys in the scenario.
     pub fn client_keys(&self) -> impl Iterator<Item = ClientKey> + '_ {
         self.clients.keys().copied()
+    }
+
+    // ========================================================================
+    // Operation Result Tracking API (for common error/panic assertions)
+    // ========================================================================
+
+    /// Set the last operation result.
+    pub fn set_operation_result(&mut self, result: OperationResult) {
+        self.last_operation_result = Some(result);
+    }
+
+    /// Get the last operation result.
+    pub fn last_operation_result(&self) -> Option<&OperationResult> {
+        self.last_operation_result.as_ref()
+    }
+
+    /// Clear the last operation result.
+    pub fn clear_operation_result(&mut self) {
+        self.last_operation_result = None;
+    }
+
+    /// Record a successful operation.
+    pub fn record_ok(&mut self) {
+        self.set_operation_result(OperationResult {
+            is_ok: true,
+            error_msg: None,
+            panic_msg: None,
+        });
+    }
+
+    /// Record a failed operation with an error message.
+    pub fn record_err(&mut self, msg: impl Into<String>) {
+        self.set_operation_result(OperationResult {
+            is_ok: false,
+            error_msg: Some(msg.into()),
+            panic_msg: None,
+        });
+    }
+
+    /// Record a panic with its message.
+    pub fn record_panic(&mut self, msg: impl Into<String>) {
+        self.set_operation_result(OperationResult {
+            is_ok: false,
+            error_msg: None,
+            panic_msg: Some(msg.into()),
+        });
     }
 }

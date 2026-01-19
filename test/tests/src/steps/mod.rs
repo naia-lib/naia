@@ -5,6 +5,7 @@
 
 pub mod smoke;
 pub mod connection;
+pub mod common;
 
 // ABI proof tests (compile_fail demonstrations - gated with #[cfg(FALSE)])
 #[cfg(FALSE)]
