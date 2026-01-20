@@ -118,6 +118,7 @@ pub struct NamakoGivenTestWorld {
     pub captures_arity: u32,
     pub accepts_docstring: bool,
     pub accepts_datatable: bool,
+    pub source_symbol: &'static str,
     pub regex: namako::codegen::LazyRegex,
     pub func: namako::Step<TestWorld>,
 }
@@ -136,6 +137,7 @@ impl namako::codegen::StepConstructor<TestWorld> for NamakoGivenTestWorld {
             captures_arity: self.captures_arity,
             accepts_docstring: self.accepts_docstring,
             accepts_datatable: self.accepts_datatable,
+            source_symbol: self.source_symbol,
         }
     }
 }
@@ -153,6 +155,7 @@ pub struct NamakoWhenTestWorld {
     pub captures_arity: u32,
     pub accepts_docstring: bool,
     pub accepts_datatable: bool,
+    pub source_symbol: &'static str,
     pub regex: namako::codegen::LazyRegex,
     pub func: namako::Step<TestWorld>,
 }
@@ -171,6 +174,7 @@ impl namako::codegen::StepConstructor<TestWorld> for NamakoWhenTestWorld {
             captures_arity: self.captures_arity,
             accepts_docstring: self.accepts_docstring,
             accepts_datatable: self.accepts_datatable,
+            source_symbol: self.source_symbol,
         }
     }
 }
@@ -188,6 +192,7 @@ pub struct NamakoThenTestWorld {
     pub captures_arity: u32,
     pub accepts_docstring: bool,
     pub accepts_datatable: bool,
+    pub source_symbol: &'static str,
     pub regex: namako::codegen::LazyRegex,
     pub func: namako::Step<TestWorld>,
 }
@@ -206,6 +211,7 @@ impl namako::codegen::StepConstructor<TestWorld> for NamakoThenTestWorld {
             captures_arity: self.captures_arity,
             accepts_docstring: self.accepts_docstring,
             accepts_datatable: self.accepts_datatable,
+            source_symbol: self.source_symbol,
         }
     }
 }

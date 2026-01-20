@@ -88,6 +88,7 @@ fn collect_bindings<W: WorldInventory>() -> Vec<SemanticBinding> {
                 accepts_datatable: meta.accepts_datatable,
             },
             impl_hash: meta.impl_hash.to_string(),
+            source_symbol: Some(meta.source_symbol.to_string()),
         });
     }
 
@@ -103,6 +104,7 @@ fn collect_bindings<W: WorldInventory>() -> Vec<SemanticBinding> {
                 accepts_datatable: meta.accepts_datatable,
             },
             impl_hash: meta.impl_hash.to_string(),
+            source_symbol: Some(meta.source_symbol.to_string()),
         });
     }
 
@@ -118,6 +120,7 @@ fn collect_bindings<W: WorldInventory>() -> Vec<SemanticBinding> {
                 accepts_datatable: meta.accepts_datatable,
             },
             impl_hash: meta.impl_hash.to_string(),
+            source_symbol: Some(meta.source_symbol.to_string()),
         });
     }
 
