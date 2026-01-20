@@ -27,4 +27,5 @@ node_modules
 /demos/socket/client/wasm_bindgen/target/*
 # Namako test artifacts
 test/specs/target/
+test/specs/.tesaki/*
 **/namako_artifacts/
