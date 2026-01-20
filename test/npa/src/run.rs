@@ -7,12 +7,12 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 use clap::Args;
-use namako::npap::{
+use namako_engine::npap::{
     ResolvedPlan, RunReport, ScenarioResult, StepResult,
     StepStatus, ScenarioStatus, SemanticBinding, BindingSignature,
 };
-use namako::codegen::{StepConstructor, WorldInventory, inventory};
-use namako::step::{Step, Context as StepContext};
+use namako_engine::codegen::{StepConstructor, WorldInventory, inventory};
+use namako_engine::step::{Step, Context as StepContext};
 
 use naia_tests::TestWorld;
 
@@ -137,7 +137,7 @@ pub fn run(args: RunArgs) -> Result<()> {
 
     // Step 2: Validate step_registry_hash matches current manifest
     let current_bindings = collect_bindings::<TestWorld>();
-    let current_registry = namako::npap::SemanticStepRegistry::new(current_bindings);
+    let current_registry = namako_engine::npap::SemanticStepRegistry::new(current_bindings);
 
     if plan.header.step_registry_hash != current_registry.step_registry_hash {
         bail!(
@@ -194,19 +194,19 @@ pub fn run(args: RunArgs) -> Result<()> {
                     };
 
                     let context = StepContext {
-                        step: namako::gherkin::Step {
+                        step: namako_engine::gherkin::Step {
                             keyword: step.effective_kind.clone(),
                             ty: match step.effective_kind.as_str() {
-                                "Given" => namako::gherkin::StepType::Given,
-                                "When" => namako::gherkin::StepType::When,
-                                "Then" => namako::gherkin::StepType::Then,
-                                _ => namako::gherkin::StepType::Given,
+                                "Given" => namako_engine::gherkin::StepType::Given,
+                                "When" => namako_engine::gherkin::StepType::When,
+                                "Then" => namako_engine::gherkin::StepType::Then,
+                                _ => namako_engine::gherkin::StepType::Given,
                             },
                             value: step.step_text.clone(),
                             docstring: None,
                             table: None,
-                            span: namako::gherkin::Span { start: 0, end: 0 },
-                            position: namako::gherkin::LineCol { line: 0, col: 1 },
+                            span: namako_engine::gherkin::Span { start: 0, end: 0 },
+                            position: namako_engine::gherkin::LineCol { line: 0, col: 1 },
                         },
                         matches,
                     };

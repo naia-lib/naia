@@ -32,7 +32,7 @@
 
 #[cfg(FALSE)]
 mod proof_1_then_with_mut_ctx {
-    use namako::then;
+    use namako_engine::then;
     use crate::TestWorldMut;
 
     #[then("the proof fails because Then uses TestWorldMut")]
@@ -64,7 +64,7 @@ mod proof_1_then_with_mut_ctx {
 
 #[cfg(FALSE)]
 mod proof_2_given_with_ref_ctx {
-    use namako::given;
+    use namako_engine::given;
     use crate::TestWorldRef;
 
     #[given("the proof fails because Given uses TestWorldRef")]
@@ -91,7 +91,7 @@ mod proof_2_given_with_ref_ctx {
 
 #[cfg(FALSE)]
 mod proof_3_explicit_lifetime {
-    use namako::given;
+    use namako_engine::given;
     use crate::TestWorldMut;
 
     #[given("the proof fails because of explicit lifetime")]
@@ -111,7 +111,7 @@ mod proof_3_explicit_lifetime {
 
 #[cfg(FALSE)]
 mod reference_correct_patterns {
-    use namako::{given, when, then};
+    use namako_engine::{given, when, then};
     use crate::{TestWorldMut, TestWorldRef};
 
     // Given with TestWorldMut - CORRECT

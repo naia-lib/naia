@@ -3,7 +3,7 @@
 
 use std::time::Duration;
 
-use namako::{given, when, then};
+use namako_engine::{given, when, then};
 use naia_test_harness::{
     protocol, Auth,
     ServerAuthEvent, ServerConnectEvent,

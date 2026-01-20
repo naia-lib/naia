@@ -12,7 +12,7 @@
 //! - Given/When steps: `TestWorldMut` (mutation operations only)
 //! - Then steps: `TestWorldRef` (read/assertion operations only, wraps ExpectCtx)
 
-use namako::codegen::{AssertOutcome, StepContext};
+use namako_engine::codegen::{AssertOutcome, StepContext};
 use naia_test_harness::{
     ClientExpectCtx, ClientKey, ExpectCtx, Scenario, ServerExpectCtx, ToTicks, TrackedClientEvent,
     TrackedServerEvent,
@@ -49,9 +49,9 @@ impl TestWorld {
     }
 }
 
-/// Manual implementation of namako::World to provide custom tick-based polling
+/// Manual implementation of namako_engine::World to provide custom tick-based polling
 /// for Then step assertions.
-impl namako::World for TestWorld {
+impl namako_engine::World for TestWorld {
     type Error = std::convert::Infallible;
     type MutCtx<'a> = TestWorldMut<'a>;
     type RefCtx<'a> = TestWorldRef<'a>;
@@ -110,7 +110,7 @@ impl std::fmt::Debug for TestWorld {
 /// Step constructor struct for Given steps.
 #[doc(hidden)]
 pub struct NamakoGivenTestWorld {
-    pub loc: namako::step::Location,
+    pub loc: namako_engine::step::Location,
     pub binding_id: &'static str,
     pub expression: &'static str,
     pub kind: &'static str,
@@ -119,17 +119,17 @@ pub struct NamakoGivenTestWorld {
     pub accepts_docstring: bool,
     pub accepts_datatable: bool,
     pub source_symbol: &'static str,
-    pub regex: namako::codegen::LazyRegex,
-    pub func: namako::Step<TestWorld>,
+    pub regex: namako_engine::codegen::LazyRegex,
+    pub func: namako_engine::Step<TestWorld>,
 }
 
-impl namako::codegen::StepConstructor<TestWorld> for NamakoGivenTestWorld {
-    fn inner(&self) -> (namako::step::Location, namako::codegen::LazyRegex, namako::Step<TestWorld>) {
+impl namako_engine::codegen::StepConstructor<TestWorld> for NamakoGivenTestWorld {
+    fn inner(&self) -> (namako_engine::step::Location, namako_engine::codegen::LazyRegex, namako_engine::Step<TestWorld>) {
         (self.loc, self.regex, self.func)
     }
 
-    fn npap_metadata(&self) -> namako::codegen::NpapBindingMetadata {
-        namako::codegen::NpapBindingMetadata {
+    fn npap_metadata(&self) -> namako_engine::codegen::NpapBindingMetadata {
+        namako_engine::codegen::NpapBindingMetadata {
             binding_id: self.binding_id,
             expression: self.expression,
             kind: self.kind,
@@ -142,12 +142,12 @@ impl namako::codegen::StepConstructor<TestWorld> for NamakoGivenTestWorld {
     }
 }
 
-namako::codegen::collect!(NamakoGivenTestWorld);
+namako_engine::codegen::collect!(NamakoGivenTestWorld);
 
 /// Step constructor struct for When steps.
 #[doc(hidden)]
 pub struct NamakoWhenTestWorld {
-    pub loc: namako::step::Location,
+    pub loc: namako_engine::step::Location,
     pub binding_id: &'static str,
     pub expression: &'static str,
     pub kind: &'static str,
@@ -156,17 +156,17 @@ pub struct NamakoWhenTestWorld {
     pub accepts_docstring: bool,
     pub accepts_datatable: bool,
     pub source_symbol: &'static str,
-    pub regex: namako::codegen::LazyRegex,
-    pub func: namako::Step<TestWorld>,
+    pub regex: namako_engine::codegen::LazyRegex,
+    pub func: namako_engine::Step<TestWorld>,
 }
 
-impl namako::codegen::StepConstructor<TestWorld> for NamakoWhenTestWorld {
-    fn inner(&self) -> (namako::step::Location, namako::codegen::LazyRegex, namako::Step<TestWorld>) {
+impl namako_engine::codegen::StepConstructor<TestWorld> for NamakoWhenTestWorld {
+    fn inner(&self) -> (namako_engine::step::Location, namako_engine::codegen::LazyRegex, namako_engine::Step<TestWorld>) {
         (self.loc, self.regex, self.func)
     }
 
-    fn npap_metadata(&self) -> namako::codegen::NpapBindingMetadata {
-        namako::codegen::NpapBindingMetadata {
+    fn npap_metadata(&self) -> namako_engine::codegen::NpapBindingMetadata {
+        namako_engine::codegen::NpapBindingMetadata {
             binding_id: self.binding_id,
             expression: self.expression,
             kind: self.kind,
@@ -179,12 +179,12 @@ impl namako::codegen::StepConstructor<TestWorld> for NamakoWhenTestWorld {
     }
 }
 
-namako::codegen::collect!(NamakoWhenTestWorld);
+namako_engine::codegen::collect!(NamakoWhenTestWorld);
 
 /// Step constructor struct for Then steps.
 #[doc(hidden)]
 pub struct NamakoThenTestWorld {
-    pub loc: namako::step::Location,
+    pub loc: namako_engine::step::Location,
     pub binding_id: &'static str,
     pub expression: &'static str,
     pub kind: &'static str,
@@ -193,17 +193,17 @@ pub struct NamakoThenTestWorld {
     pub accepts_docstring: bool,
     pub accepts_datatable: bool,
     pub source_symbol: &'static str,
-    pub regex: namako::codegen::LazyRegex,
-    pub func: namako::Step<TestWorld>,
+    pub regex: namako_engine::codegen::LazyRegex,
+    pub func: namako_engine::Step<TestWorld>,
 }
 
-impl namako::codegen::StepConstructor<TestWorld> for NamakoThenTestWorld {
-    fn inner(&self) -> (namako::step::Location, namako::codegen::LazyRegex, namako::Step<TestWorld>) {
+impl namako_engine::codegen::StepConstructor<TestWorld> for NamakoThenTestWorld {
+    fn inner(&self) -> (namako_engine::step::Location, namako_engine::codegen::LazyRegex, namako_engine::Step<TestWorld>) {
         (self.loc, self.regex, self.func)
     }
 
-    fn npap_metadata(&self) -> namako::codegen::NpapBindingMetadata {
-        namako::codegen::NpapBindingMetadata {
+    fn npap_metadata(&self) -> namako_engine::codegen::NpapBindingMetadata {
+        namako_engine::codegen::NpapBindingMetadata {
             binding_id: self.binding_id,
             expression: self.expression,
             kind: self.kind,
@@ -216,9 +216,9 @@ impl namako::codegen::StepConstructor<TestWorld> for NamakoThenTestWorld {
     }
 }
 
-namako::codegen::collect!(NamakoThenTestWorld);
+namako_engine::codegen::collect!(NamakoThenTestWorld);
 
-impl namako::codegen::WorldInventory for TestWorld {
+impl namako_engine::codegen::WorldInventory for TestWorld {
     type Given = NamakoGivenTestWorld;
     type When = NamakoWhenTestWorld;
     type Then = NamakoThenTestWorld;

@@ -11,8 +11,8 @@
 
 use std::time::Duration;
 
-use namako::{given, when, then};
-use namako::codegen::AssertOutcome;
+use namako_engine::{given, when, then};
+use namako_engine::codegen::AssertOutcome;
 use naia_test_harness::{
     protocol, Auth, ProtocolId,
     ServerAuthEvent, ServerConnectEvent,
