@@ -90,7 +90,9 @@
 # ============================================================================
 
 
+@Feature(world_integration)
 Feature: World Integration
 
   # All executable scenarios deferred until step bindings implemented.
+
 

@@ -99,7 +99,9 @@
 # ============================================================================
 
 
+@Feature(entity_publication)
 Feature: Entity Publication
 
   # All executable scenarios deferred until step bindings implemented.
+
 

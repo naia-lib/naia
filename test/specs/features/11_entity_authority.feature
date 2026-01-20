@@ -127,7 +127,9 @@
 # ============================================================================
 
 
+@Feature(entity_authority)
 Feature: Entity Authority
 
   # All executable scenarios deferred until step bindings implemented.
+
 

@@ -115,7 +115,9 @@
 # ============================================================================
 
 
+@Feature(server_events_api)
 Feature: Server Events API
 
   # All executable scenarios deferred until step bindings implemented.
+
 

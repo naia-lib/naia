@@ -102,7 +102,9 @@
 # ============================================================================
 
 
+@Feature(entity_ownership)
 Feature: Entity Ownership
 
   # All executable scenarios deferred until step bindings implemented.
+
 

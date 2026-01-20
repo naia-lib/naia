@@ -188,6 +188,7 @@
 # ============================================================================
 
 
+@Feature(connection_lifecycle)
 Feature: Connection Lifecycle
 
   # --------------------------------------------------------------------------
@@ -195,30 +196,36 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # require_auth=false: ConnectEvent → DisconnectEvent
   # --------------------------------------------------------------------------
+  @Rule_01
   Rule: Event ordering
 
+    @Scenario_01
     Scenario: Server observes ConnectEvent when client connects
       Given a server is running
       When a client connects
       Then the server has observed ConnectEvent
 
+    @Scenario_02
     Scenario: Client observes ConnectEvent when connected
       Given a server is running
       When a client connects
       Then the client has observed ConnectEvent
 
+    @Scenario_03
     Scenario: Client observes DisconnectEvent after disconnect
       Given a server is running
       And a client connects
       When the server disconnects the client
       Then the client has observed DisconnectEvent
 
+    @Scenario_04
     Scenario: DisconnectEvent occurs only after ConnectEvent on server
       Given a server is running
       And a client connects
       When the server disconnects the client
       Then the server observed ConnectEvent before DisconnectEvent
 
+    @Scenario_05
     Scenario: DisconnectEvent occurs only after ConnectEvent on client
       Given a server is running
       And a client connects
@@ -230,14 +237,17 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # DisconnectEvent only after ConnectEvent.
   # --------------------------------------------------------------------------
+  @Rule_02
   Rule: Disconnect semantics
 
+    @Scenario_01
     Scenario: Server observes DisconnectEvent when client disconnects
       Given a server is running
       And a client connects
       When the server disconnects the client
       Then the server has observed DisconnectEvent
 
+    @Scenario_02
     Scenario: Connected client count decreases after disconnect
       Given a server is running
       And a client connects
@@ -245,12 +255,14 @@ Feature: Connection Lifecycle
       When the server disconnects the client
       Then the server has 0 connected clients
 
+    @Scenario_03
     Scenario: Server can connect multiple clients
       Given a server is running
       When a client connects
       And a client connects
       Then the server has 2 connected clients
 
+    @Scenario_04
     Scenario: Server can disconnect one of multiple clients
       Given a server is running
       And a client connects
@@ -258,11 +270,13 @@ Feature: Connection Lifecycle
       When the server disconnects the client
       Then the server has 1 connected client
 
+    @Scenario_05
     Scenario: Client is connected after successful connection
       Given a server is running
       When a client connects
       Then the client is connected
 
+    @Scenario_06
     Scenario: Client is not connected after disconnect
       Given a server is running
       And a client connects
@@ -274,13 +288,16 @@ Feature: Connection Lifecycle
   # --------------------------------------------------------------------------
   # require_auth=true: AuthEvent → ConnectEvent → DisconnectEvent
   # --------------------------------------------------------------------------
+  @Rule_03
   Rule: Auth-required event ordering
 
+    @Scenario_01
     Scenario: Server observes AuthEvent before ConnectEvent
       Given a server is running with auth required
       When a client authenticates and connects
       Then the server observes AuthEvent before ConnectEvent
 
+    @Scenario_02
     Scenario: Rejected client observes RejectEvent not ConnectEvent
       Given a server is running with auth required
       When a client attempts to connect but is rejected
@@ -288,6 +305,7 @@ Feature: Connection Lifecycle
       And the client does not observe ConnectEvent
       And the client does not observe DisconnectEvent
 
+    @Scenario_03
     Scenario: Server full event ordering with disconnect
       Given a server is running with auth required
       When a client authenticates and connects
@@ -301,3 +319,4 @@ Feature: Connection Lifecycle
 # All other scenarios deferred until step bindings are implemented.
 # See contracts/01_connection_lifecycle.spec.md for full scenario list.
 # ============================================================================
+

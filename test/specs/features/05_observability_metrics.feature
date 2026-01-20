@@ -115,7 +115,9 @@
 # ============================================================================
 
 
+@Feature(observability_metrics)
 Feature: Observability Metrics
 
   # All executable scenarios deferred until step bindings implemented.
+
 

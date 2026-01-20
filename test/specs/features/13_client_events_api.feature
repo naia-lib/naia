@@ -112,7 +112,9 @@
 # ============================================================================
 
 
+@Feature(client_events_api)
 Feature: Client Events API
 
   # All executable scenarios deferred until step bindings implemented.
+
 

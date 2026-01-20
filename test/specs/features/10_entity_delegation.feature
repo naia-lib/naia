@@ -104,7 +104,9 @@
 # ============================================================================
 
 
+@Feature(entity_delegation)
 Feature: Entity Delegation
 
   # All executable scenarios deferred until step bindings implemented.
+
 
