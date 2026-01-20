@@ -14,7 +14,7 @@ path = "src/lib.rs"
 
 [dependencies]
 # Namako for step macros and World trait
-namako = { path = "../../../namako", features = ["npap", "macros"] }
+namako = { path = "../../../namako/engine", features = ["npap", "macros"] }
 
 # Naia test harness for Scenario
 naia-test-harness = { path = "../harness" }
