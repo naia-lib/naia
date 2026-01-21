@@ -174,10 +174,10 @@ Feature: Common Definitions and Policies
   # plan but are tracked as promotion candidates by `namako review`.
   # --------------------------------------------------------------------------
 
-  @Rule_01
+  @Rule(01)
   Rule: User-initiated misuse returns Result::Err
 
-    @Scenario_01
+    @Scenario(01)
     Scenario: API misuse returns Err not panic
       Given a test scenario
       And a connected client
@@ -185,10 +185,10 @@ Feature: Common Definitions and Policies
       Then the operation returns an Err result
       And no panic occurs
 
-  @Rule_02
+  @Rule(02)
   Rule: Remote or untrusted input must never panic
 
-    @Scenario_01
+    @Scenario(01)
     Scenario: Malformed inbound packet is dropped without panic
       Given a test scenario
       And a connected client
@@ -196,7 +196,7 @@ Feature: Common Definitions and Policies
       Then the packet is dropped
       And no panic occurs
 
-    @Scenario_02
+    @Scenario(02)
     Scenario: Duplicate replication messages do not panic
       Given a test scenario
       And a connected client with replicated entities
@@ -204,10 +204,10 @@ Feature: Common Definitions and Policies
       Then they are handled idempotently
       And no panic occurs
 
-  @Rule_03
+  @Rule(03)
   Rule: Protocol mismatch is a deployment error not a panic
 
-  @Scenario_01
+  @Scenario(01)
   Scenario: Protocol mismatch produces ProtocolMismatch rejection
       Given a test scenario
       And a server with protocol version A
@@ -216,10 +216,10 @@ Feature: Common Definitions and Policies
       Then the connection is rejected with ProtocolMismatch
       And no panic occurs
 
-  @Rule_04
+  @Rule(04)
   Rule: Determinism under deterministic inputs
 
-    @Scenario_01
+    @Scenario(01)
     Scenario: Identical inputs produce identical outputs
       Given a test scenario with deterministic time
       And a deterministic network input sequence
@@ -227,27 +227,27 @@ Feature: Common Definitions and Policies
       Then the event emission order is identical both times
       And the entity spawn order is identical both times
 
-  @Rule_05
+  @Rule(05)
   Rule: Per-tick determinism for concurrent operations
 
-    @Scenario_01
+    @Scenario(01)
     Scenario: Same-tick scope operations resolve deterministically
       Given a test scenario
       And multiple scope operations queued for the same tick
       When the tick is processed
       Then the final scope state reflects the last API call order
 
-    @Scenario_02
+    @Scenario(02)
     Scenario: Multiple commands for same tick apply in receipt order
       Given a test scenario
       And a server receiving multiple commands for the same tick
       When the tick is processed
       Then commands are applied in receipt order
 
-  @Rule_06
+  @Rule(06)
   Rule: Reconnect is a fresh session
 
-    @Scenario_01
+    @Scenario(01)
     Scenario: Reconnecting client receives fresh entity spawns
       Given a test scenario
       And a client that was previously connected

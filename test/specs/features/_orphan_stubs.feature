@@ -9,31 +9,31 @@ Feature: Orphan Binding Stubs
   Placeholder scenarios for bindings not yet used by real specifications.
 
   @Deferred @Stub
-  @Scenario_01
+  @Scenario(01)
   Scenario: Stub for orphan binding 753af3c79972f493...
     # Expression: "the client observes ConnectEvent"
     Then the client observes ConnectEvent
 
   @Deferred @Stub
-  @Scenario_02
+  @Scenario(02)
   Scenario: Stub for orphan binding 785e108353195a37...
     # Expression: "the system intentionally fails"
     Then the system intentionally fails
 
   @Deferred @Stub
-  @Scenario_03
+  @Scenario(03)
   Scenario: Stub for orphan binding a101f9e2fb16b263...
     # Expression: "the client observes DisconnectEvent after ConnectEvent"
     Then the client observes DisconnectEvent after ConnectEvent
 
   @Deferred @Stub
-  @Scenario_04
+  @Scenario(04)
   Scenario: Stub for orphan binding f3481995313e54f2...
     # Expression: "a connected client"
     When a connected client
 
   @Deferred @Stub
-  @Scenario_05
+  @Scenario(05)
   Scenario: Stub for orphan binding fc2ee3c95c304e20...
     # Expression: "the server has no connected users"
     Then the server has no connected users
