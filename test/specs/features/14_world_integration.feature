@@ -93,6 +93,9 @@
 @Feature(world_integration)
 Feature: World Integration
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: World Integration
+
+    # All executable scenarios deferred until step bindings implemented.
 
 

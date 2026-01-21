@@ -103,6 +103,9 @@
 @Feature(entity_scopes)
 Feature: Entity Scopes
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: Entity Scopes
+
+    # All executable scenarios deferred until step bindings implemented.
 
 

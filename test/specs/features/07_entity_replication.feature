@@ -116,6 +116,9 @@
 @Feature(entity_replication)
 Feature: Entity Replication
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: Entity Replication
+
+    # All executable scenarios deferred until step bindings implemented.
 
 

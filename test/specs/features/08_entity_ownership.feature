@@ -105,6 +105,9 @@
 @Feature(entity_ownership)
 Feature: Entity Ownership
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: Entity Ownership
+
+    # All executable scenarios deferred until step bindings implemented.
 
 

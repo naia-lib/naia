@@ -126,6 +126,9 @@
 @Feature(messaging_channel_semantics)
 Feature: Messaging Channel Semantics
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: Messaging Channel Semantics
+
+    # All executable scenarios deferred until step bindings implemented.
 
 

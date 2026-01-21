@@ -91,6 +91,9 @@
 @Feature(transport_layer_contract)
 Feature: Transport Layer Contract
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: Transport Layer Contract
+
+    # All executable scenarios deferred until step bindings implemented.
 
 

@@ -118,6 +118,9 @@
 @Feature(server_events_api)
 Feature: Server Events API
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: Server Events API
+
+    # All executable scenarios deferred until step bindings implemented.
 
 

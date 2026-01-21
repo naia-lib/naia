@@ -115,6 +115,9 @@
 @Feature(client_events_api)
 Feature: Client Events API
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: Client Events API
+
+    # All executable scenarios deferred until step bindings implemented.
 
 

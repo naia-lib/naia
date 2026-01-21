@@ -136,6 +136,9 @@
 @Feature(time_ticks_and_commands)
 Feature: Time Ticks and Commands
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: Time Ticks and Commands
+
+    # All executable scenarios deferred until step bindings implemented.
 
 

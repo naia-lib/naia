@@ -102,6 +102,9 @@
 @Feature(entity_publication)
 Feature: Entity Publication
 
-  # All executable scenarios deferred until step bindings implemented.
+  @Rule(01)
+  Rule: Entity Publication
+
+    # All executable scenarios deferred until step bindings implemented.
 
 
