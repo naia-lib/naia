@@ -91,9 +91,161 @@
 @Feature(transport_layer_contract)
 Feature: Transport Layer Contract
 
+  # --------------------------------------------------------------------------
+  # Rule: MTU boundary enforcement for outbound packets
+  # --------------------------------------------------------------------------
+  # Naia MUST NOT send packets larger than MTU_SIZE_BYTES.
+  # Attempts to send oversize payloads MUST return Err before calling adapter.
+  # --------------------------------------------------------------------------
   @Rule(01)
-  Rule: Transport Layer Contract
+  Rule: MTU boundary enforcement for outbound packets
 
-    # All executable scenarios deferred until step bindings implemented.
+    @Scenario(01)
+    Scenario: Server can send packet within MTU limit
+      Given a server is running
+      And a client connects
+      When the server sends a packet within the MTU limit
+      Then the operation succeeds
+
+    @Scenario(02)
+    Scenario: Client can send packet within MTU limit
+      Given a server is running
+      And a client connects
+      When the client sends a packet within the MTU limit
+      Then the operation succeeds
+
+    @Scenario(03)
+    Scenario: Server rejects outbound packet exceeding MTU
+      Given a server is running
+      And a client connects
+      When the server attempts to send a packet exceeding MTU
+      Then the operation returns an Err result
+      And the transport adapter is not called
+
+    @Scenario(04)
+    Scenario: Client rejects outbound packet exceeding MTU
+      Given a server is running
+      And a client connects
+      When the client attempts to send a packet exceeding MTU
+      Then the operation returns an Err result
+      And the transport adapter is not called
+
+  # --------------------------------------------------------------------------
+  # Rule: Inbound packet handling for oversize and malformed packets
+  # --------------------------------------------------------------------------
+  # Packets exceeding MTU_SIZE_BYTES or malformed MUST be dropped.
+  # In prod: silent drop. In debug: drop with warning (non-normative text).
+  # --------------------------------------------------------------------------
+  @Rule(02)
+  Rule: Inbound packet handling for oversize and malformed packets
+
+    @Scenario(01)
+    Scenario: Server drops inbound packet exceeding MTU
+      Given a server is running
+      And a client connects
+      When the server receives a packet exceeding MTU
+      Then the packet is dropped
+      And no panic occurs
+      And no connection disruption occurs
+
+    @Scenario(02)
+    Scenario: Client drops inbound packet exceeding MTU
+      Given a server is running
+      And a client connects
+      When the client receives a packet exceeding MTU
+      Then the packet is dropped
+      And no panic occurs
+      And no connection disruption occurs
+
+    @Scenario(03)
+    Scenario: Server drops malformed inbound packet
+      Given a server is running
+      And a client connects
+      When the server receives a malformed packet
+      Then the packet is dropped
+      And no panic occurs
+      And no connection disruption occurs
+
+    @Scenario(04)
+    Scenario: Client drops malformed inbound packet
+      Given a server is running
+      And a client connects
+      When the client receives a malformed packet
+      Then the packet is dropped
+      And no panic occurs
+      And no connection disruption occurs
+
+  # --------------------------------------------------------------------------
+  # Rule: Transport unreliability tolerance
+  # --------------------------------------------------------------------------
+  # Naia MUST tolerate packet loss, duplication, and reordering without panic.
+  # Higher-layer semantics (reliability, ordering) belong to messaging layer.
+  # --------------------------------------------------------------------------
+  @Rule(03)
+  Rule: Transport unreliability tolerance
+
+    @Scenario(01)
+    Scenario: Server tolerates packet loss
+      Given a server is running
+      And a client connects
+      When packets from the client are dropped by the transport
+      Then the server continues operating normally
+      And no panic occurs
+
+    @Scenario(02)
+    Scenario: Client tolerates packet loss
+      Given a server is running
+      And a client connects
+      When packets from the server are dropped by the transport
+      Then the client continues operating normally
+      And no panic occurs
+
+    @Scenario(03)
+    Scenario: Server tolerates duplicate packets
+      Given a server is running
+      And a client connects
+      When the server receives duplicate packets
+      Then the server handles them without panic
+      And no connection disruption occurs
+
+    @Scenario(04)
+    Scenario: Client tolerates duplicate packets
+      Given a server is running
+      And a client connects
+      When the client receives duplicate packets
+      Then the client handles them without panic
+      And no connection disruption occurs
+
+    @Scenario(05)
+    Scenario: Server tolerates reordered packets
+      Given a server is running
+      And a client connects
+      When the server receives packets in a different order than sent
+      Then the server handles them without panic
+      And no connection disruption occurs
+
+    @Scenario(06)
+    Scenario: Client tolerates reordered packets
+      Given a server is running
+      And a client connects
+      When the client receives packets in a different order than sent
+      Then the client handles them without panic
+      And no connection disruption occurs
+
+  # --------------------------------------------------------------------------
+  # Rule: Transport abstraction independence
+  # --------------------------------------------------------------------------
+  # Higher layers MUST behave identically regardless of transport quality.
+  # Transport-specific guarantees MUST NOT leak to application layer.
+  # --------------------------------------------------------------------------
+  @Rule(04)
+  Rule: Transport abstraction independence
+
+    @Scenario(01)
+    Scenario: Application behavior is identical across transport types
+      Given multiple transport adapters with different quality characteristics
+      When the same application logic runs on each transport
+      Then observable application behavior is identical
+      And no transport-specific guarantees are exposed
 
 
