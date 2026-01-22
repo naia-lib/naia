@@ -13,7 +13,6 @@ members = [
     "test/harness",
     "test/npa",
     "test/tests",
-    "tools/legacy_spec_tool",
     "adapters/hecs/client",
     "adapters/hecs/server",
     "adapters/hecs/shared",
