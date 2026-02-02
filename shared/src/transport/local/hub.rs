@@ -133,6 +133,17 @@ impl LocalTransportHub {
         false
     }
 
+    /// Inject a packet from the server to a client (used for testing/fuzzing)
+    /// This bypasses normal server sending and directly injects raw data to the client.
+    pub fn inject_server_packet(&self, client_addr: &SocketAddr, data: Vec<u8>) -> bool {
+        let connections = self.connections.lock().unwrap();
+        if let Some(conn) = connections.get(client_addr) {
+            let _ = conn.server_data_tx.send(data);
+            return true;
+        }
+        false
+    }
+
     /// Try to receive an auth request from any client (returns (client_addr, bytes))
     /// Returns None if traffic is paused (packets are dropped)
     pub fn try_recv_auth_request(&self) -> Option<(SocketAddr, Vec<u8>)> {

@@ -1,0 +1,2247 @@
+{
+  "header": {
+    "npap_version": 1,
+    "hash_contract_version": "namako-v1-json+blake3-256",
+    "feature_fingerprint_hash": "32d3eddc15137a89ce859a8507cf81762e1d4785333c8b48c428805e7f89e373",
+    "step_registry_hash": "e9f2846db81fb264321b1693a75848c97d23859588cbe7455b42982a989ecb37",
+    "resolved_plan_hash": "295e4496529867888b65c574967b1dac1e3a04f30591c6953e725a463e0d76d3"
+  },
+  "scenarios": [
+    {
+      "scenario_key": "common_definitions_and_policies:Rule(01):Scenario(01)",
+      "feature_path": "features/00_common.feature",
+      "scenario_name": "API misuse returns Err not panic",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a test scenario",
+          "binding_id": "5b3d02f62bf77c8c794dc8ab9135486da6d8328aa16197a8c31740ca2d82089d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "98e5696a0037c0e44738e14259833500f00bfa76886fc1883e804090a7dec33b"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a connected client",
+          "binding_id": "c888600a239241764e109ea3f9787b777dce098aa72ba75c6e61b3d4e6cb808f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d35c177cc830f0878f640a42ff6636445ba564e0c78bf27011830323e37628ea"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client attempts an invalid API operation",
+          "binding_id": "b4467d779f05a9a8dea25828faf7fa59da43803481c399e7ed80e521a48beb80",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "119a55915a54625251fe36b972d1c5fa9bf05dc1a93fbeaf7fa10128c099ed13"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the operation returns an Err result",
+          "binding_id": "15454276bdaa895ec98d18e54c015ab2239db51fbfab37580f293a092a4eb0f9",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5f4e0f090f5044d1d7d3d2723529e3f85d171659cd4ea8c600f3bf770e423ac7"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        }
+      ]
+    },
+    {
+      "scenario_key": "common_definitions_and_policies:Rule(02):Scenario(01)",
+      "feature_path": "features/00_common.feature",
+      "scenario_name": "Malformed inbound packet is dropped without panic",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a test scenario",
+          "binding_id": "5b3d02f62bf77c8c794dc8ab9135486da6d8328aa16197a8c31740ca2d82089d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "98e5696a0037c0e44738e14259833500f00bfa76886fc1883e804090a7dec33b"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a connected client",
+          "binding_id": "c888600a239241764e109ea3f9787b777dce098aa72ba75c6e61b3d4e6cb808f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d35c177cc830f0878f640a42ff6636445ba564e0c78bf27011830323e37628ea"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server receives a malformed packet",
+          "binding_id": "78484585acc378508a304855d86b8d9340f48d4ad30ac9df23ff0d56e4bdd741",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ed12b64c3edd5c2136a3045ed31a3c7219dc36a9a406eee398b17de1b00db1e8"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the packet is dropped",
+          "binding_id": "41e978052429512778ccf4a55694cc7a5236f091a9b611ddf90d7b3fa47db538",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "37812b105c7bf9670795527f3af31d3f7ddef7e8d77fb553c391e92c8ca9eb53"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        }
+      ]
+    },
+    {
+      "scenario_key": "common_definitions_and_policies:Rule(02):Scenario(02)",
+      "feature_path": "features/00_common.feature",
+      "scenario_name": "Duplicate replication messages do not panic",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a test scenario",
+          "binding_id": "5b3d02f62bf77c8c794dc8ab9135486da6d8328aa16197a8c31740ca2d82089d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "98e5696a0037c0e44738e14259833500f00bfa76886fc1883e804090a7dec33b"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a connected client with replicated entities",
+          "binding_id": "30197741945b9a01bba30c1ab1ba5699e37015d5e3db329ea51a193bbb0860ea",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "1a397b6e92d230217aa3f90640bad31a78f14152f443fc2fcc45681028c46070"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "duplicate replication messages arrive",
+          "binding_id": "01383894d0ca6170131a64d3568875b5b27498e9a145f27f139a46b7e3edd255",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6afc01e11678ae0bfe4fb310d81243200c4bc9f44beebab1c921047841cade4c"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "they are handled idempotently",
+          "binding_id": "7a79b2d3425ae7c6e13537bb54c00b4b797e4799668497aecc2b6485a3cb733f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "2752d58b034aded20ec277afceff94b98abe31688a2361de7f8961429cf23c39"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        }
+      ]
+    },
+    {
+      "scenario_key": "common_definitions_and_policies:Rule(03):Scenario(01)",
+      "feature_path": "features/00_common.feature",
+      "scenario_name": "Protocol mismatch produces ProtocolMismatch rejection",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a test scenario",
+          "binding_id": "5b3d02f62bf77c8c794dc8ab9135486da6d8328aa16197a8c31740ca2d82089d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "98e5696a0037c0e44738e14259833500f00bfa76886fc1883e804090a7dec33b"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server with protocol version A",
+          "binding_id": "2cb209c0431cff2b09c139097e15f3fd7145c5e57d6b95fdf297ca8c96b8b700",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ad42182724de727d84227569c4965aef16aaffd4b63aedf679b1f0f8126f97a7"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client with protocol version B",
+          "binding_id": "701f7eb4dba55275889fab55580ab9ac9877e54b34ea63081a520b63450d828e",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "afd15332b271739d87155acde7cf3778369fce6e7e5a4963494ed7ac7161b6f1"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client attempts to connect",
+          "binding_id": "dceb6f00991e84e56b44eeab9d555533dfd511ade14e9a26ff59379af60f093b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "faaa8900a5c1924c1d76439f78c48886c0cfaf47e6f73aa0d6d8f448bc70a21a"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the connection is rejected with ProtocolMismatch",
+          "binding_id": "a61162d3185f5c15db9ac77fff64f060fae909b5f5f8b2747bb01bb05f264602",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "653900e037d036d635b13ca56cd382bcb98361921c8d55d17d96f813db06f251"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        }
+      ]
+    },
+    {
+      "scenario_key": "common_definitions_and_policies:Rule(04):Scenario(01)",
+      "feature_path": "features/00_common.feature",
+      "scenario_name": "Identical inputs produce identical outputs",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a test scenario with deterministic time",
+          "binding_id": "a116facaaff078994486f3568251c45648cfbf646019fd6d3344bbfc3e388007",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ec92e4a67e3c092ecae960d27ca46243d514fc6cbcc17a28de602cbd8fd5bc6"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a deterministic network input sequence",
+          "binding_id": "9b21445f29c2e56d41b52d0f2dad03cda9444fccadfecb35cde48631321e43fd",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "03b53aa91381e1334926148d0244c7f8efc79b2722fc8dd61218efdcfc8de613"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the same API call sequence is executed twice",
+          "binding_id": "8f164db5d1bbbf611b25afe66b53fce7e668fc3ff9434a8f70a4453e35734172",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ce061c74519381e56540f4200a665df8efc136f2e6c37c3db7c343c5c27cdbb5"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the event emission order is identical both times",
+          "binding_id": "dedac040fa0989070fbbf1b1cf765e555ec8ea4ba1a38603b4f1eb39598173fa",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3772cb3620205a0a012315bf010dc9d833378ba7955df0034e2c1497bcf5f476"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity spawn order is identical both times",
+          "binding_id": "8e7e1576c137952415a85f5f1d1432295f3c706b22c279583c4bc435b139c764",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ea37d70efeb5885f21c0936a024042c4fc2f11e7c0b777659fc67c846caa8a92"
+        }
+      ]
+    },
+    {
+      "scenario_key": "common_definitions_and_policies:Rule(05):Scenario(01)",
+      "feature_path": "features/00_common.feature",
+      "scenario_name": "Same-tick scope operations resolve deterministically",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a test scenario",
+          "binding_id": "5b3d02f62bf77c8c794dc8ab9135486da6d8328aa16197a8c31740ca2d82089d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "98e5696a0037c0e44738e14259833500f00bfa76886fc1883e804090a7dec33b"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "multiple scope operations queued for the same tick",
+          "binding_id": "2e6def49e57e6ec685def8bf15ec90253fd118c3f19d1718727ce84ba4b56bc2",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7fdd11ebf19039e7e64a84d6f06bd182fbf48de3e227a97870ef2c555bfd628f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the tick is processed",
+          "binding_id": "4103113baa895def37bac9a010ffd5aaaeaebaf57125f1ab40724ee95329375d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "edbc1567161f1029457d31caf2bd792173c6a130d6e3c4021f5c954483721910"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the final scope state reflects the last API call order",
+          "binding_id": "34ab8c801a3d227e1c1622bd34af0b229d7d7eabcd6a86acce17b513c358f7d3",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d1fa4e9069bf557b54ac068d9a37ff1c2c5fa0d145990a2b6e54b27d8e3de966"
+        }
+      ]
+    },
+    {
+      "scenario_key": "common_definitions_and_policies:Rule(05):Scenario(02)",
+      "feature_path": "features/00_common.feature",
+      "scenario_name": "Multiple commands for same tick apply in receipt order",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a test scenario",
+          "binding_id": "5b3d02f62bf77c8c794dc8ab9135486da6d8328aa16197a8c31740ca2d82089d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "98e5696a0037c0e44738e14259833500f00bfa76886fc1883e804090a7dec33b"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server receiving multiple commands for the same tick",
+          "binding_id": "86adb472fa9c84e69a0da845982141817adb59da2e50b2452d874eb03df1b320",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "333c33ab3dd143a683f50c49637898b64782d2186c2f1b0799fe4602cbd30a43"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the tick is processed",
+          "binding_id": "4103113baa895def37bac9a010ffd5aaaeaebaf57125f1ab40724ee95329375d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "edbc1567161f1029457d31caf2bd792173c6a130d6e3c4021f5c954483721910"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "commands are applied in receipt order",
+          "binding_id": "5687923cda075c91a257a58175244bee66d3ebb8d86dd90224d3986646b7a442",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "8d1334ec4febf9f3200baa47524ccf59c99be50c47e82ffc65f1432ea99c8d1b"
+        }
+      ]
+    },
+    {
+      "scenario_key": "common_definitions_and_policies:Rule(06):Scenario(01)",
+      "feature_path": "features/00_common.feature",
+      "scenario_name": "Reconnecting client receives fresh entity spawns",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a test scenario",
+          "binding_id": "5b3d02f62bf77c8c794dc8ab9135486da6d8328aa16197a8c31740ca2d82089d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "98e5696a0037c0e44738e14259833500f00bfa76886fc1883e804090a7dec33b"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client that was previously connected",
+          "binding_id": "ffc279ea3046bd4024b1ff8994df3a2e289664bc29db8dfe1e0acba48c6eaa0a",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "c6750e833a1a1a95251775e10ac3859cbdec88c8d997d39ccf9e47cf9b514fbd"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client disconnected",
+          "binding_id": "664f642ec6eb4b9ab047a9d7ec2eec75cad35539fbec626095a1a5520cc76841",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "c3f4e211d7c841a08b3e95ecd68b5e99ffd466a15776ecab55da83b5eed87143"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client reconnects",
+          "binding_id": "644bcb949da7ef7d6bca6b1e1d26cc3a44521984b0138ce73b171537139d2933",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d0579c733770fc8ad4da85e285689bbe2dcf4dbf542a17740c6903584e516476"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "it receives fresh entity spawns for all in-scope entities",
+          "binding_id": "f3a6d6774d67f4f1bc74e74e26fac586a012b970cbb13bd967461cf5b106866d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4a4c03d8f883cb0baeac7ac6e2806268a0c5f312ae63e0bbd329b874adede440"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no prior session state is retained",
+          "binding_id": "92f330821d0a1f8313e7cf36b2be3dadeb797972dc21b6a14a0eaf3df4f2389c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "cd5c73524e903459e31a1ca0b95f7a8585fbd8710b69529ee61e3d7cdc434502"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(01):Scenario(01)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Server observes ConnectEvent when client connects",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has observed ConnectEvent",
+          "binding_id": "b787abfc08eff3a1717797b4c8ae2fa1ba575e4c9616a5e81e712300f456e8c3",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "1b6b051406e4ef52c4b32937b310d78c6fb7cb6a0298e0624e6f6b7ed8a23b00"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(01):Scenario(02)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Client observes ConnectEvent when connected",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has observed ConnectEvent",
+          "binding_id": "5e0000c8c32aa9572984b03705719078d23c3010685c5ae1c1b229fcfdf21a84",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "f3ef3e5863e574235640ad927df1e1b202214781feef33d5bc6df19ca0676686"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(01):Scenario(03)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Client observes DisconnectEvent after disconnect",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has observed DisconnectEvent",
+          "binding_id": "2cf784e563869c22384815bfd691f2865044a07087413e9d9045c39845e30947",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "522134431e2ed70f65804bb8ef8689eed1767af0eb4f0d1179130fd9e3a69658"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(01):Scenario(04)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "DisconnectEvent occurs only after ConnectEvent on server",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server observed ConnectEvent before DisconnectEvent",
+          "binding_id": "09765601e688b833d6d6ab02d47dd4cdf3f0044993736061731f70d536372b3f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "fc59e6d458141964ac3d44806d71507053fa92e6c1c0afc16e5b5cfda82e3aa9"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(01):Scenario(05)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "DisconnectEvent occurs only after ConnectEvent on client",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client observed ConnectEvent before DisconnectEvent",
+          "binding_id": "7148d889b6227c806d31fe990640a879df90802d3959c7424f8f595764979e47",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0d193f50eda227bf4ab6288104e1cbd3dacbef7732ffae604df6cce348f06b53"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(02):Scenario(01)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Server observes DisconnectEvent when client disconnects",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has observed DisconnectEvent",
+          "binding_id": "1e6430ccc16df0abe8fa9a2ef1ac0fdb9b234d4b1747c331ff1cd06c176c8fc2",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3b82ab5dfdc20a66affaba6083903c870a2bbab49f0c59b2853be192dd24544c"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(02):Scenario(02)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Connected client count decreases after disconnect",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 1 connected client",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "1"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "46e2d246347573fa8d7541e05c1738e2d8f9b17badf5e4edea421243c73b8d1a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 0 connected clients",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "0"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "71e1cfbe81deb801863db51de07fe13ab155b7bc4ce45056bc065852cd074fb7"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(02):Scenario(03)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Server can connect multiple clients",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 2 connected clients",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "2"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d6d2a6711d6443215da91a9b58d5e6a919b5093c8b217f0439491ee9e187d2e2"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(02):Scenario(04)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Server can disconnect one of multiple clients",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 1 connected client",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "1"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "46e2d246347573fa8d7541e05c1738e2d8f9b17badf5e4edea421243c73b8d1a"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(02):Scenario(05)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Client is connected after successful connection",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client is connected",
+          "binding_id": "31c7b7e4992c107d0c01c7e2934755b1fe55e16bc7afe135ffd58e8ef626150f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d9aa4ffb72a6125e12b0fd9d5eb3c8d63befe7ed8f1958b8ec94eadbaad7774f"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(02):Scenario(06)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Client is not connected after disconnect",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client is not connected",
+          "binding_id": "89aff0dee96076fc8ea86e8a050774b8214c182ab42cdadb2b3d96132783ab74",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "317a596dfd9a685a175716350164dccdbdb0fa34ab67767cf689dd6abe1acea8"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(03):Scenario(01)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Server observes AuthEvent before ConnectEvent",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running with auth required",
+          "binding_id": "ee6a9194ad58ed465a9949db3b5491f9743cb81c012fb601c39f4432e0017280",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "aca7fb1036ddb74ec231f4561b9813949e1e6420dabd9e5900ae7bd1e15c1835"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client authenticates and connects",
+          "binding_id": "46a526613a29fcb6cc284cda2dd3291bea437ed114cb7cd29ca508f94ba8a991",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "42771792c692b8c2ef61cb3b52c1adac43903330a3086e28559e330a2104d289"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server observes AuthEvent before ConnectEvent",
+          "binding_id": "15b686ea7f3bed3453997fc0e7dcade46f4fa6fdac2cd9d3daea35b077c410f6",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "2b01ce17142c2aafb3854e3038590df1d8731ed50ee6b46443adf8cc0da5479f"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(03):Scenario(02)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Rejected client observes RejectEvent not ConnectEvent",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running with auth required",
+          "binding_id": "ee6a9194ad58ed465a9949db3b5491f9743cb81c012fb601c39f4432e0017280",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "aca7fb1036ddb74ec231f4561b9813949e1e6420dabd9e5900ae7bd1e15c1835"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client attempts to connect but is rejected",
+          "binding_id": "4e9a8e3fe628ab5871b812fd2471be6782a71648ed24b08e5d59bd3aa28736a5",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5fa495b28182278957ee80147abe3df35ce77deb94dffbb2b4c11aae826d1bc2"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client observes RejectEvent",
+          "binding_id": "70e62c5607cd47b9d06cbd49e2ffc2dfe5588621187b0bcf7b57c3fed6a58371",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4b067146ecee8915b555f87cf23050ac4e9879618b6fac0c129f7bdedb46097e"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client does not observe ConnectEvent",
+          "binding_id": "3ca4cc10a9263defb00cc40c890987c9dcef28d47a72cf461567da806b65ac46",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "e161b72a13f1dee8f34267138c5db13b059179a5b56fff7064572cfc979171bc"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client does not observe DisconnectEvent",
+          "binding_id": "0117ae24baa5ec0f29f4bb4f2f0834cd29891c807113b470b9ea990f885ed9c9",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a3d0aebe214d1716a418ef5666e380f28593498f7de7ef487b671e7ea76e029f"
+        }
+      ]
+    },
+    {
+      "scenario_key": "connection_lifecycle:Rule(03):Scenario(03)",
+      "feature_path": "features/01_connection_lifecycle.feature",
+      "scenario_name": "Server full event ordering with disconnect",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running with auth required",
+          "binding_id": "ee6a9194ad58ed465a9949db3b5491f9743cb81c012fb601c39f4432e0017280",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "aca7fb1036ddb74ec231f4561b9813949e1e6420dabd9e5900ae7bd1e15c1835"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client authenticates and connects",
+          "binding_id": "46a526613a29fcb6cc284cda2dd3291bea437ed114cb7cd29ca508f94ba8a991",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "42771792c692b8c2ef61cb3b52c1adac43903330a3086e28559e330a2104d289"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server observes DisconnectEvent after ConnectEvent",
+          "binding_id": "5e6d181fa7e0410b3e7ab9aafe93a3b2f95b6a8f10be6a5c80ba6366e6e070ce",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6387786d1d4e4ce2a81f56b5e2070a943d10ae21e299e8e352973a12740130ac"
+        }
+      ]
+    },
+    {
+      "scenario_key": "namako_smoke_test:Rule(01):Scenario(01)",
+      "feature_path": "features/smoke.feature",
+      "scenario_name": "Server starts and accepts a connecting client",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 1 connected client",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "1"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "46e2d246347573fa8d7541e05c1738e2d8f9b17badf5e4edea421243c73b8d1a"
+        }
+      ]
+    },
+    {
+      "scenario_key": "namako_smoke_test:Rule(01):Scenario(02)",
+      "feature_path": "features/smoke.feature",
+      "scenario_name": "Server can disconnect a client",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 0 connected clients",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "0"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "71e1cfbe81deb801863db51de07fe13ab155b7bc4ce45056bc065852cd074fb7"
+        }
+      ]
+    },
+    {
+      "scenario_key": "namako_smoke_test:Rule(01):Scenario(03)",
+      "feature_path": "features/smoke.feature",
+      "scenario_name": "Multiple clients can connect to server",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 3 connected clients",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "3"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "af86a6e1a9be8b77cd90333ed686c67b8db4d7a283a638cc9c6a282b81b56bbb"
+        }
+      ]
+    },
+    {
+      "scenario_key": "namako_smoke_test:Rule(01):Scenario(04)",
+      "feature_path": "features/smoke.feature",
+      "scenario_name": "Server tracks client count accurately",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 0 connected clients",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "0"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "71e1cfbe81deb801863db51de07fe13ab155b7bc4ce45056bc065852cd074fb7"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 1 connected client",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "1"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "46e2d246347573fa8d7541e05c1738e2d8f9b17badf5e4edea421243c73b8d1a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has 2 connected clients",
+          "binding_id": "d2a00dc07f4eaa3aaa22a9fe2bc0d78ca54e6e7b51711ac9099232546c970d21",
+          "captures": [
+            "2"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d6d2a6711d6443215da91a9b58d5e6a919b5093c8b217f0439491ee9e187d2e2"
+        }
+      ]
+    },
+    {
+      "scenario_key": "namako_smoke_test:Rule(01):Scenario(05)",
+      "feature_path": "features/smoke.feature",
+      "scenario_name": "Connecting client is in connected state",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client is connected",
+          "binding_id": "31c7b7e4992c107d0c01c7e2934755b1fe55e16bc7afe135ffd58e8ef626150f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d9aa4ffb72a6125e12b0fd9d5eb3c8d63befe7ed8f1958b8ec94eadbaad7774f"
+        }
+      ]
+    },
+    {
+      "scenario_key": "namako_smoke_test:Rule(01):Scenario(06)",
+      "feature_path": "features/smoke.feature",
+      "scenario_name": "Disconnecting client is no longer connected",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client is not connected",
+          "binding_id": "89aff0dee96076fc8ea86e8a050774b8214c182ab42cdadb2b3d96132783ab74",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "317a596dfd9a685a175716350164dccdbdb0fa34ab67767cf689dd6abe1acea8"
+        }
+      ]
+    },
+    {
+      "scenario_key": "namako_smoke_test:Rule(01):Scenario(07)",
+      "feature_path": "features/smoke.feature",
+      "scenario_name": "Server and client observe connect events",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client connects",
+          "binding_id": "f0015e10614aed395827b8fc95cccad53ec0dd0d5ec15fb897e2e1bed8c1a54b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "67642596655a70407a338dc542b8ea9530dc283299812bfbb39650e8a24ded46"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has observed ConnectEvent",
+          "binding_id": "b787abfc08eff3a1717797b4c8ae2fa1ba575e4c9616a5e81e712300f456e8c3",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "1b6b051406e4ef52c4b32937b310d78c6fb7cb6a0298e0624e6f6b7ed8a23b00"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has observed ConnectEvent",
+          "binding_id": "5e0000c8c32aa9572984b03705719078d23c3010685c5ae1c1b229fcfdf21a84",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "f3ef3e5863e574235640ad927df1e1b202214781feef33d5bc6df19ca0676686"
+        }
+      ]
+    },
+    {
+      "scenario_key": "namako_smoke_test:Rule(01):Scenario(08)",
+      "feature_path": "features/smoke.feature",
+      "scenario_name": "Server and client observe disconnect events",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has observed DisconnectEvent",
+          "binding_id": "1e6430ccc16df0abe8fa9a2ef1ac0fdb9b234d4b1747c331ff1cd06c176c8fc2",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3b82ab5dfdc20a66affaba6083903c870a2bbab49f0c59b2853be192dd24544c"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has observed DisconnectEvent",
+          "binding_id": "2cf784e563869c22384815bfd691f2865044a07087413e9d9045c39845e30947",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "522134431e2ed70f65804bb8ef8689eed1767af0eb4f0d1179130fd9e3a69658"
+        }
+      ]
+    },
+    {
+      "scenario_key": "namako_smoke_test:Rule(01):Scenario(09)",
+      "feature_path": "features/smoke.feature",
+      "scenario_name": "Event ordering is correct on disconnect",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disconnects the client",
+          "binding_id": "46ba2c5723ee2e7fd28c9428b645dd8524001403292a0e22132e8e4b1a10bbd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ae7999298f4d488c781ff8e19a67cee5d13774a6da469c54887c92c088deed45"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server observed ConnectEvent before DisconnectEvent",
+          "binding_id": "09765601e688b833d6d6ab02d47dd4cdf3f0044993736061731f70d536372b3f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "fc59e6d458141964ac3d44806d71507053fa92e6c1c0afc16e5b5cfda82e3aa9"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client observed ConnectEvent before DisconnectEvent",
+          "binding_id": "7148d889b6227c806d31fe990640a879df90802d3959c7424f8f595764979e47",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0d193f50eda227bf4ab6288104e1cbd3dacbef7732ffae604df6cce348f06b53"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(01):Scenario(01)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Server can send packet within MTU limit",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server sends a packet within the MTU limit",
+          "binding_id": "be1294789783907b749955785e4d0e3f60be2d30dfa1185a454ea5260f341dd4",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "51e45bae7fcd29fa33d10e7b37763ded98371a07b3d7a92c23a04854e5c99a52"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the operation succeeds",
+          "binding_id": "33fa212b56822868a0aac6cdd6f3f4378101187b070930f78dbb6a6ef9499325",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6ce63aefdd62f7f7cd2d1f74f5ab9cfff54a0d24855b607a4faa7bb1cd11a6ec"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(01):Scenario(02)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Client can send packet within MTU limit",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client sends a packet within the MTU limit",
+          "binding_id": "270c5e40d6ce17ff70b2fcae2973f916ccfa7ecfe63705a6d1c3d5b46ec47587",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "000cd255ed5e3196f2e9239829fb5f11db445e57935100977c0eacb4ca83d890"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the operation succeeds",
+          "binding_id": "33fa212b56822868a0aac6cdd6f3f4378101187b070930f78dbb6a6ef9499325",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6ce63aefdd62f7f7cd2d1f74f5ab9cfff54a0d24855b607a4faa7bb1cd11a6ec"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(01):Scenario(03)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Server rejects outbound packet exceeding MTU",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server attempts to send a packet exceeding MTU",
+          "binding_id": "a452d8a5efe8bb564e9dfc81414bfdd9b69d301dee7d0841da326ed8be689d01",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6b01cfb4d0da06d1503b55b78e20b8826a3af0a77bd0b9518d69e6c7588aa1db"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the operation returns an Err result",
+          "binding_id": "15454276bdaa895ec98d18e54c015ab2239db51fbfab37580f293a092a4eb0f9",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5f4e0f090f5044d1d7d3d2723529e3f85d171659cd4ea8c600f3bf770e423ac7"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the transport adapter is not called",
+          "binding_id": "90a5580adeae60d47e2847991b9f1b2d1fc9241eb7d6d2fa246d0638b31f29da",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3e0efa814a645b7ed6a2a8215e31289274dffc8f3c7a0b3cf665db53071f02b7"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(01):Scenario(04)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Client rejects outbound packet exceeding MTU",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client attempts to send a packet exceeding MTU",
+          "binding_id": "4dcb78d5d16607bc7dcbd2134945602bc12080a6988c1c1fa7fc7c447de7987e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "e9f4999bc97f7bb2d7010f57570ae610572503ca9a74049739b347e8860820b1"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the operation returns an Err result",
+          "binding_id": "15454276bdaa895ec98d18e54c015ab2239db51fbfab37580f293a092a4eb0f9",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5f4e0f090f5044d1d7d3d2723529e3f85d171659cd4ea8c600f3bf770e423ac7"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the transport adapter is not called",
+          "binding_id": "90a5580adeae60d47e2847991b9f1b2d1fc9241eb7d6d2fa246d0638b31f29da",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3e0efa814a645b7ed6a2a8215e31289274dffc8f3c7a0b3cf665db53071f02b7"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(02):Scenario(01)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Server drops inbound packet exceeding MTU",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server receives a packet exceeding MTU",
+          "binding_id": "f1499de6295e8587fc002d32137c124476c6c9632c90e6bb4e2c08f8dcd626a6",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "81e0de23c40fa0049c7f1eb7d52f9857883e1e5b39c0eff5e074fd0f14f22def"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the packet is dropped",
+          "binding_id": "41e978052429512778ccf4a55694cc7a5236f091a9b611ddf90d7b3fa47db538",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "37812b105c7bf9670795527f3af31d3f7ddef7e8d77fb553c391e92c8ca9eb53"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no connection disruption occurs",
+          "binding_id": "874cf86fb8d0fbd2306a796c1d2378d28a9060b830783e7810f025ef8d863e70",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "01638853ad377564f2432a6839420e87aadc08ae773b736b11e11e57c4a76018"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(02):Scenario(02)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Client drops inbound packet exceeding MTU",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client receives a packet exceeding MTU",
+          "binding_id": "1ea5f7847b5d7b4289870d7c83af222b3e98b19c20bef7dc12e29648571c33e3",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d4f166cf9d88fd533d615cea8e4b7ab38960ff9b3e152410e0d7ef75d0e393e6"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the packet is dropped",
+          "binding_id": "41e978052429512778ccf4a55694cc7a5236f091a9b611ddf90d7b3fa47db538",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "37812b105c7bf9670795527f3af31d3f7ddef7e8d77fb553c391e92c8ca9eb53"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no connection disruption occurs",
+          "binding_id": "874cf86fb8d0fbd2306a796c1d2378d28a9060b830783e7810f025ef8d863e70",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "01638853ad377564f2432a6839420e87aadc08ae773b736b11e11e57c4a76018"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(02):Scenario(03)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Server drops malformed inbound packet",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server receives a malformed packet",
+          "binding_id": "78484585acc378508a304855d86b8d9340f48d4ad30ac9df23ff0d56e4bdd741",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ed12b64c3edd5c2136a3045ed31a3c7219dc36a9a406eee398b17de1b00db1e8"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the packet is dropped",
+          "binding_id": "41e978052429512778ccf4a55694cc7a5236f091a9b611ddf90d7b3fa47db538",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "37812b105c7bf9670795527f3af31d3f7ddef7e8d77fb553c391e92c8ca9eb53"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no connection disruption occurs",
+          "binding_id": "874cf86fb8d0fbd2306a796c1d2378d28a9060b830783e7810f025ef8d863e70",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "01638853ad377564f2432a6839420e87aadc08ae773b736b11e11e57c4a76018"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(02):Scenario(04)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Client drops malformed inbound packet",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client receives a malformed packet",
+          "binding_id": "ad00aeedff6ff86ff13e4fe240776bd19628444a44d468cd3afb458d87c08a66",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "33fb31f6d8cbe2ef3e73396d41bd61d32e6f43ed658e4ca1ad529b7281d21682"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the packet is dropped",
+          "binding_id": "41e978052429512778ccf4a55694cc7a5236f091a9b611ddf90d7b3fa47db538",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "37812b105c7bf9670795527f3af31d3f7ddef7e8d77fb553c391e92c8ca9eb53"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no connection disruption occurs",
+          "binding_id": "874cf86fb8d0fbd2306a796c1d2378d28a9060b830783e7810f025ef8d863e70",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "01638853ad377564f2432a6839420e87aadc08ae773b736b11e11e57c4a76018"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(03):Scenario(01)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Server tolerates packet loss",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "packets from the client are dropped by the transport",
+          "binding_id": "1d1c25356fb452969d6a730a1333dbc2db01c9355a505f91f8b834f35181018b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "fa6f5d20dcd05d54b9630ad68e284ec359286bad4896df696cb22ad37d07b4f7"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server continues operating normally",
+          "binding_id": "2c4bba2e8b329ceb3e570beb3753b1ae1ce8aab869b3e639174e7c5364b2832b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0c5d8263d6b638c7fc473b362d984da932ebb95f11411480b3871b63f1ed302e"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(03):Scenario(02)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Client tolerates packet loss",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "packets from the server are dropped by the transport",
+          "binding_id": "d9a46b0e617d413c1de0cfb4dca8edf6b98dab61875a0fd3dc5747e2bbd198ad",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "c66824e72b1c1be85d89339fb695f505930c411ccc1c172d82b986d73d547fe4"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client continues operating normally",
+          "binding_id": "c66b2c7274f072ec65f9b9029026c6f61898c74ae0c158517628f235abb1028a",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "78e3b48b1bd0b85c6e92d536d3b1606ba38cc4c70dac947e62831efa79632597"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(03):Scenario(03)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Server tolerates duplicate packets",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server receives duplicate packets",
+          "binding_id": "17c496ed863224854ef9ba7abb9d46b9f246b7aa9b08c6600aacb4d91aa82b73",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a8a76fce514803dd8e91a847b7ca35f20198dff7e24d80b0dd92c101e2cd5502"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server handles them without panic",
+          "binding_id": "1db04a1fbd8b76f259cdd80665667889495d850be8e1046248a15c8466c85b12",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7179e77ca44e885714161ee148f6e54eed421deba22e6ab76b8cbf849b051256"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no connection disruption occurs",
+          "binding_id": "874cf86fb8d0fbd2306a796c1d2378d28a9060b830783e7810f025ef8d863e70",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "01638853ad377564f2432a6839420e87aadc08ae773b736b11e11e57c4a76018"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(03):Scenario(04)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Client tolerates duplicate packets",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client receives duplicate packets",
+          "binding_id": "1321d3c11d173b7ac8c82bab4e447a99cfc09e2ee58268fd769a9cf1eb611e28",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "01ae09505f44b20ee1212791646f9f420e640818dd7fb985df15e25548aefe8e"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client handles them without panic",
+          "binding_id": "70ab749d1ebf5e158c4c1a01061d0be1f324b9334ea289474390d2ba305d324d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "747975af9a13ede731332164fe400ca44f449315ea9a604cd17c347dd50035e5"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no connection disruption occurs",
+          "binding_id": "874cf86fb8d0fbd2306a796c1d2378d28a9060b830783e7810f025ef8d863e70",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "01638853ad377564f2432a6839420e87aadc08ae773b736b11e11e57c4a76018"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(03):Scenario(05)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Server tolerates reordered packets",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server receives packets in a different order than sent",
+          "binding_id": "f8d943556e465c256703c057140db6d895dbf7fb4e73917e06540456ad0e1ac4",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "774b9d53ab7ca1470b2d727fab46313064026dece8b269e4d50dafb82173b297"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server handles them without panic",
+          "binding_id": "1db04a1fbd8b76f259cdd80665667889495d850be8e1046248a15c8466c85b12",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7179e77ca44e885714161ee148f6e54eed421deba22e6ab76b8cbf849b051256"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no connection disruption occurs",
+          "binding_id": "874cf86fb8d0fbd2306a796c1d2378d28a9060b830783e7810f025ef8d863e70",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "01638853ad377564f2432a6839420e87aadc08ae773b736b11e11e57c4a76018"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(03):Scenario(06)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Client tolerates reordered packets",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client receives packets in a different order than sent",
+          "binding_id": "0270b690e500106a7f8537dea8edd3130ab562489e5efeef1c706a142659a105",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "43a2d4a1ca4f2bf5625a4fef01ff9ebf191fd10c5e1c1f44105e00817b0c005b"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client handles them without panic",
+          "binding_id": "70ab749d1ebf5e158c4c1a01061d0be1f324b9334ea289474390d2ba305d324d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "747975af9a13ede731332164fe400ca44f449315ea9a604cd17c347dd50035e5"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no connection disruption occurs",
+          "binding_id": "874cf86fb8d0fbd2306a796c1d2378d28a9060b830783e7810f025ef8d863e70",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "01638853ad377564f2432a6839420e87aadc08ae773b736b11e11e57c4a76018"
+        }
+      ]
+    },
+    {
+      "scenario_key": "transport_layer_contract:Rule(04):Scenario(01)",
+      "feature_path": "features/02_transport.feature",
+      "scenario_name": "Application behavior is identical across transport types",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "multiple transport adapters with different quality characteristics",
+          "binding_id": "3037d68c54d6680bd2e7af095c26994d88fbd8472a340c03c1de801ebf052471",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d5f990f770959282a7ccb9ea0521422405095eff2d9d04740330a9734e861637"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the same application logic runs on each transport",
+          "binding_id": "ffc93d44fc036562a73acf422f5bd5f55e36fa8222fd0f2ddbaa1fa19e459f8e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ca00abaeddaa60392cc4b58ed963f029b4063ebe68df632e2b238fed7b717086"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "observable application behavior is identical",
+          "binding_id": "81f1127a040f11fc2636488ec1e436ad86098813b795986b8c3ab37cd1acb36e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4252642abec8ce5a4f9cf4387a937184d04ee388dde6e5e36521039f6f071bdc"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no transport-specific guarantees are exposed",
+          "binding_id": "4c90c3e845ea77023b801e2ea5071f127fb69acf024f830025e29ae477ed9d74",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "db0e1d98269794c8d7258b0b023b7f40fa58c6197e9bddcd1cb0be3824358d87"
+        }
+      ]
+    }
+  ]
+}

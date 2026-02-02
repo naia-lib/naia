@@ -6,6 +6,7 @@ pub use harness::{
     ServerExpectCtx, ToTicks, TraceEvent, TrackedClientEvent, TrackedServerEvent,
 };
 pub use naia_shared::handshake::RejectReason;
+pub use naia_shared::LinkConditionerConfig;
 pub use naia_shared::ProtocolId;
 // server events
 pub use harness::{

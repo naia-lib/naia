@@ -403,6 +403,14 @@ impl Scenario {
         false
     }
 
+    /// Inject a raw packet from the server to a client (for testing malformed/oversized data)
+    pub fn inject_server_packet(&mut self, client_key: &ClientKey, data: Vec<u8>) -> bool {
+        if let Some(addr) = self.client_to_addr_map.get(client_key) {
+            return self.hub.inject_server_packet(addr, data);
+        }
+        false
+    }
+
     /// Register a labeled expectation for spec obligation tracing.
     ///
     /// This is the primary API for assertions that verify spec contract obligations.

@@ -208,6 +208,48 @@ fn when_server_receives_malformed_packet(ctx: &mut TestWorldMut) {
     }
 }
 
+/// Step: When the client receives a malformed packet
+/// Sends a malformed packet from server to client to test error handling.
+#[when("the client receives a malformed packet")]
+fn when_client_receives_malformed_packet(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+
+    // Clear any previous operation result
+    scenario.clear_operation_result();
+
+    let client_key = scenario.last_client();
+
+    // Inject a malformed packet (garbage bytes)
+    let malformed_data = vec![0xFF, 0xFE, 0x00, 0x01, 0x02, 0x03, 0xFF, 0xFF];
+
+    // Use catch_unwind to detect any panics during packet processing
+    let _inject_result = scenario.inject_server_packet(&client_key, malformed_data);
+
+    // Tick to process the packet
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|_| {});
+        scenario.mutate(|_| {});
+        scenario.mutate(|_| {});
+    }));
+
+    match result {
+        Ok(()) => {
+            // No panic - packet was handled (dropped) correctly
+            scenario.record_ok();
+        }
+        Err(panic_payload) => {
+            let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+            scenario.record_panic(msg);
+        }
+    }
+}
+
 // ============================================================================
 // Then Steps - Outcome Assertions
 // ============================================================================
@@ -244,6 +286,21 @@ fn then_no_panic_occurs(ctx: &TestWorldRef) {
     );
 }
 
+/// Step: Then the operation succeeds
+/// Verifies that the last operation completed successfully (returned Ok, no panic).
+#[then("the operation succeeds")]
+fn then_operation_succeeds(ctx: &TestWorldRef) {
+    let result = ctx.scenario().last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+
+    assert!(
+        result.is_ok,
+        "Expected operation to succeed, but it failed: error={:?}, panic={:?}",
+        result.error_msg,
+        result.panic_msg
+    );
+}
+
 /// Step: Then the packet is dropped
 /// Verifies that a malformed packet was dropped without affecting the connection.
 #[then("the packet is dropped")]
@@ -265,6 +322,18 @@ fn then_packet_is_dropped(ctx: &TestWorldRef) {
     assert!(
         ctx.client_is_connected(client_key),
         "Client should still be connected after malformed packet was dropped"
+    );
+}
+
+/// Step: And no connection disruption occurs / Then no connection disruption occurs
+/// Verifies that the connection remains intact after the last operation.
+#[then("no connection disruption occurs")]
+fn then_no_connection_disruption_occurs(ctx: &TestWorldRef) {
+    // Verify the client is still connected
+    let client_key = ctx.last_client();
+    assert!(
+        ctx.client_is_connected(client_key),
+        "Expected connection to remain intact, but it was disrupted"
     );
 }
 
