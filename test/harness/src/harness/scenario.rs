@@ -1,4 +1,5 @@
 use std::{
+    any::Any,
     collections::HashMap,
     net::SocketAddr,
     sync::{Arc, Mutex},
@@ -118,6 +119,11 @@ pub struct Scenario {
     /// Ordered trace events for deterministic ordering assertions.
     /// Used by same-tick scheduling tests to verify operation order.
     trace_events: Vec<TraceEvent>,
+    /// Type-erased storage for request/response keys between BDD steps.
+    /// Maps a string key (e.g., "response_receive_key") to a boxed Any value.
+    bdd_storage: HashMap<String, Box<dyn Any + Send + Sync>>,
+    /// Received messages for BDD assertions (type-erased: Vec<u32> for TestMessage values).
+    received_messages: Vec<u32>,
 }
 
 /// Tracks the outcome of the last operation for BDD assertions.
@@ -158,6 +164,8 @@ impl Scenario {
             last_room_key: None,
             last_operation_result: None,
             trace_events: Vec::new(),
+            bdd_storage: HashMap::new(),
+            received_messages: Vec::new(),
         }
     }
 
@@ -1270,6 +1278,48 @@ impl Scenario {
     /// Check if the trace is empty.
     pub fn trace_is_empty(&self) -> bool {
         self.trace_events.is_empty()
+    }
+
+    // ========================================================================
+    // BDD Storage API (for request/response keys between steps)
+    // ========================================================================
+
+    /// Store a value in BDD storage for later retrieval.
+    pub fn bdd_store<T: Any + Send + Sync>(&mut self, key: &str, value: T) {
+        self.bdd_storage.insert(key.to_string(), Box::new(value));
+    }
+
+    /// Retrieve a value from BDD storage.
+    pub fn bdd_get<T: Any + Clone>(&self, key: &str) -> Option<T> {
+        self.bdd_storage.get(key).and_then(|v| {
+            v.downcast_ref::<T>().cloned()
+        })
+    }
+
+    /// Take (remove and return) a value from BDD storage.
+    pub fn bdd_take<T: Any>(&mut self, key: &str) -> Option<T> {
+        self.bdd_storage.remove(key).and_then(|v| {
+            v.downcast::<T>().ok().map(|b| *b)
+        })
+    }
+
+    // ========================================================================
+    // Received Messages API (for message ordering assertions)
+    // ========================================================================
+
+    /// Push a received message value.
+    pub fn push_received_message(&mut self, value: u32) {
+        self.received_messages.push(value);
+    }
+
+    /// Get all received messages.
+    pub fn received_messages(&self) -> &[u32] {
+        &self.received_messages
+    }
+
+    /// Clear received messages.
+    pub fn clear_received_messages(&mut self) {
+        self.received_messages.clear();
     }
 }
 

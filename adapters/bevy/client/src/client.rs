@@ -82,8 +82,8 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
     }
 
     //// Messages ////
-    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
-        self.client.client.send_message::<C, M>(message);
+    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) -> Result<(), NaiaClientError> {
+        self.client.client.send_message::<C, M>(message)
     }
 
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {

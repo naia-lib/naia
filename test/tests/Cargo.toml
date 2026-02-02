@@ -22,3 +22,4 @@ naia-test-harness = { path = "../harness" }
 # Naia core crates for types
 naia-server = { path = "../../server", default-features = false }
 naia-client = { path = "../../client", default-features = false }
+naia-shared = { path = "../../shared", default-features = false }

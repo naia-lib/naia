@@ -116,6 +116,10 @@ pub struct TickBufferedChannel;
 #[derive(Channel)]
 pub struct RequestResponseChannel;
 
+/// Server-to-client only channel for testing direction enforcement
+#[derive(Channel)]
+pub struct ServerToClientChannel;
+
 #[derive(Component, Replicate)]
 pub struct Position {
     pub x: Property<f32>,
@@ -163,6 +167,10 @@ pub fn protocol() -> Protocol {
         )
         .add_channel::<RequestResponseChannel>(
             ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<ServerToClientChannel>(
+            ChannelDirection::ServerToClient,
             ChannelMode::UnorderedReliable(ReliableSettings::default()),
         )
         .enable_client_authoritative_entities()

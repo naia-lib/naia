@@ -124,9 +124,9 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     // Message Operations
 
     /// Send message to server
-    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
+    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) -> Result<(), NaiaClientError> {
         let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
-        state.client_mut().send_message::<C, M>(message);
+        state.client_mut().send_message::<C, M>(message)
     }
 
     /// Send request to server

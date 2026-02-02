@@ -341,19 +341,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) {
+    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) -> Result<(), NaiaClientError> {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(&ChannelKind::of::<C>(), cloned_message);
+        self.send_message_inner(&ChannelKind::of::<C>(), cloned_message)
     }
 
-    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message_box: Box<dyn Message>) {
+    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message_box: Box<dyn Message>) -> Result<(), NaiaClientError> {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
         if !channel_settings.can_send_to_server() {
-            panic!("Cannot send message to Server on this Channel");
+            return Err(NaiaClientError::Message("Cannot send message to Server on this Channel".to_string()));
         }
 
         if channel_settings.tick_buffered() {
-            panic!("Cannot call `Client.send_message()` on a Tick Buffered Channel, use `Client.send_tick_buffered_message()` instead");
+            return Err(NaiaClientError::Message("Cannot call `Client.send_message()` on a Tick Buffered Channel, use `Client.send_tick_buffered_message()` instead".to_string()));
         }
 
         if let Some(connection) = &mut self.server_connection {
@@ -372,6 +372,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             self.waitlist_messages
                 .push_back((channel_kind.clone(), message_box));
         }
+        Ok(())
     }
 
     //
