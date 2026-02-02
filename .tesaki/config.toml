@@ -7,8 +7,11 @@ specs_dir = "test/specs"
 # Adapter command to run the NPA test adapter
 adapter_cmd = "cargo run --manifest-path test/npa/Cargo.toml --"
 
-# Runner backend: mock (for testing), cmd (custom command), or claude (Claude Code)
-runner = "mock"
+# Runner backend: mock (for testing), cmd (custom command), claude (Claude Code), or codex (Codex CLI)
+runner = "codex"
+
+# Planner backend for REPL: mock, codex, claude, or copilot
+planner = "copilot"
 
 # Budget limits
 max_retries = 2
