@@ -13,8 +13,7 @@ This directory contains **normative specifications** that define the expected be
 - Spec validation and quality gates
 
 **Defer to:**
-- `_AGENTS/DEV_PROCESS.md` for human development workflow and SDD phases
-- `_AGENTS/CLAUDE.md` for agent execution protocol (PLAN/OUTPUT convention)
+- `_AGENTS/SYSTEM.md` for agent execution protocol and workflow
 - Individual contract specs in `specs/contracts/` for normative behavior definitions
 
 ---
